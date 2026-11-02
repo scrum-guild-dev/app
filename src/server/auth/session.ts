@@ -121,3 +121,16 @@ export async function deleteSessionsOf(db: CommonDb, accountId: string, checkedA
     ),
   ]);
 }
+
+// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消し、消した行数を返す。
+// 今のセッションと、ほかのアカウントのセッションは残す
+export async function deleteOtherSessionsOf(
+  db: CommonDb,
+  accountId: string,
+  currentTokenHash: string,
+): Promise<number> {
+  void db;
+  void accountId;
+  void currentTokenHash;
+  throw new Error('未実装');
+}

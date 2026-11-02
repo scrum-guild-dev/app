@@ -35,6 +35,7 @@ import {
 import { organizationSettingsUpdateOperation } from './organization-settings.ts';
 import { logoutOperation, meOperation } from './session.ts';
 import { consentRecordOperation, consentStatusOperation } from './consent.ts';
+import { credentialsRevokeAllOperation } from './credentials.ts';
 import { tokenCreateOperation, tokenListOperation, tokenRevokeOperation } from './token.ts';
 import { userAdminUpdateOperation, userDisableOperation, userEnableOperation, userListOperation } from './user.ts';
 import { planSummaryOperation } from './plan-summary.ts';
@@ -142,6 +143,7 @@ const listedOperations: readonly ImplementedOperation[] = [
   tokenCreateOperation,
   tokenListOperation,
   tokenRevokeOperation,
+  credentialsRevokeAllOperation,
   epicCreateOperation,
   epicGetOperation,
   epicDetailOperation,
