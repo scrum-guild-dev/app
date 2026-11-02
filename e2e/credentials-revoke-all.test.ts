@@ -93,7 +93,7 @@ test('確認を経て実行すると、今の画面は使い続けられ、ほ�
     await expect(confirm).toBeVisible();
     await expect(
       confirm.getByText(
-        'この画面以外でログインしているすべての端末はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。',
+        'いま使っているこのブラウザのログインだけが残り、ほかのすべての端末（同じ端末のほかのブラウザを含む）はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。',
         { exact: false },
       ),
     ).toBeVisible();
@@ -147,7 +147,8 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     const section = sectionOf(page);
     await expect(section.getByRole('table', { name: '発行済みの API トークン' })).toBeVisible();
     const rows = section.getByRole('table', { name: '発行済みの API トークン' }).locator('tbody tr');
-    const rowCount = await rows.count();
+    // 行数は共有の admin の並行のテスト（api-tokens.test.ts）が増減させるので、数では比べない
+    await expect(rows.first()).toBeVisible();
     const button = section.getByRole('button', { name: BUTTON });
     const confirm = page.getByRole('dialog', { name: DIALOG });
 
@@ -166,7 +167,7 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     await button.click();
     await confirm.getByRole('button', { name: '締め出す', exact: true }).click();
     await expect(toast(page, '締め出せませんでした。時間をおいて、もう一度試してください')).toBeVisible();
-    await expect(rows).toHaveCount(rowCount);
+    await expect(rows.first()).toBeVisible();
     expect(sent).toBe(1);
     await unroute();
 
@@ -187,5 +188,29 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     await expect(toast(page, 'ほかの端末のセッション0件と、API トークン0件を締め出しました')).toBeVisible();
     expect(sent).toBe(2);
     await unrouteSlow();
+  });
+
+  test('知らせの件数は、セッションとトークンを取り違えない（応答の件数をそのまま差し込む）', async ({ page }) => {
+    await page.goto('/aoba/me');
+    const section = sectionOf(page);
+    await expect(section.getByRole('table', { name: '発行済みの API トークン' })).toBeVisible();
+    const unroute = await routeOperation(page, credentialsRevokeAll, async (call) => {
+      await call.fulfill({ revoked_sessions: 2, revoked_tokens: 5 });
+    });
+    await section.getByRole('button', { name: BUTTON }).click();
+    await page.getByRole('dialog', { name: DIALOG }).getByRole('button', { name: '締め出す', exact: true }).click();
+    await expect(toast(page, 'ほかの端末のセッション2件と、API トークン5件を締め出しました')).toBeVisible();
+    await unroute();
+  });
+
+  test('実行が 401（今のセッションが切れていた）なら、失敗の知らせでなくログインの画面へ移る', async ({ page }) => {
+    await page.goto('/aoba/me');
+    const section = sectionOf(page);
+    await expect(section.getByRole('table', { name: '発行済みの API トークン' })).toBeVisible();
+    const unroute = await failOperation(page, credentialsRevokeAll, 401, 'unauthenticated');
+    await section.getByRole('button', { name: BUTTON }).click();
+    await page.getByRole('dialog', { name: DIALOG }).getByRole('button', { name: '締め出す', exact: true }).click();
+    await expect(page).toHaveURL(/\/login\?return_to=%2Faoba%2Fme$/);
+    await unroute();
   });
 });

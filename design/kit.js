@@ -1434,7 +1434,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     // 「すべての端末とトークンを締め出す」から開く。元に戻せない旨と、この画面は使い続けられる旨を書く
     tokenRevokeAll: () => {
       openDialog("すべての端末とトークンを締め出しますか",
-        `<p>この画面以外でログインしているすべての端末はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。</p>`,
+        `<p>いま使っているこのブラウザのログインだけが残り、ほかのすべての端末（同じ端末のほかのブラウザを含む）はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。</p>`,
         `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="ほかの端末のセッション2件と、API トークン2件を締め出しました">締め出す</button>`);
       document.querySelector(".dialog-sheet").classList.add("is-danger");
     },
