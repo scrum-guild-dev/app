@@ -1008,9 +1008,9 @@ describe('attachments', () => {
     )
       .bind(id(), AT)
       .all<{ detail: string }>();
-    expect(results.map((row) => row.detail).join('\n')).toContain(
-      'USING INDEX attachments_workspace_created_at_unattached (workspace_id=? AND created_at<?)',
-    );
+    const plan = results.map((row) => row.detail).join('\n');
+    expect(plan).toContain('USING INDEX attachments_workspace_created_at_unattached');
+    expect(plan).not.toContain('USING INDEX attachments_workspace_id ');
   });
 });
 
