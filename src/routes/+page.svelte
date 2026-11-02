@@ -24,7 +24,8 @@
   let personalDialog = $state<ReturnType<typeof CreatePersonalOrganizationDialog>>();
   let personalDialogOpen = $state(false);
   // 自分用は1アカウントに1つ。入れる組織にも停止した組織にも無いときだけ、作る入口を出す
-  // （持つが入れない人には出し、押すとサーバーが 409 の personal_limit で断り、ダイアログが示す）。
+  // （どちらの一覧にも出ない自分用を持つ人、たとえばその組織で無効にされた人には出し、
+  // 押すとサーバーが 409 の personal_limit で断り、ダイアログが示す）。
   const canCreatePersonal = $derived(!data.failed && !hasPersonalOrganization([data.organizations, data.suspended]));
 </script>
 
@@ -84,7 +85,7 @@
         <EmptyState
           icon="shield"
           title={t('noOrganizationTitle')}
-          text={t('noOrganizationText', { organization: t('organization') })}
+          text={t('noOrganizationText', { organization: t('organization'), personal: t('personalOrganizationName') })}
         >
           {#snippet actions()}{@render createAction(true)}{@render createPersonalAction()}{/snippet}
         </EmptyState>

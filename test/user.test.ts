@@ -424,6 +424,8 @@ async function runWithRace(
   const context = {
     db: racing,
     actor,
+    // 入るときに引いた組織の行。指名は kind を見て、自分用なら断る。ここはチーム用
+    organization: { kind: 'team' },
     // 指名は人数の上限を数える（readSeats が上限だけを読む）。上限に当たらない値にする
     tools: { readOrganization: async () => ({ memberLimit: 1000 }) },
     input,

@@ -29,7 +29,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await signIn(context, baseURL, 'member');
   });
 
-  test('/ を開くと組織の画面に入り、組織の切り替えには「組織を作る」だけが並ぶ', async ({ page }) => {
+  test('/ を開くと組織の画面に入り、組織の切り替えには「組織を作る」と「自分用を作る」だけが並ぶ', async ({ page }) => {
     const collect = await watchViolations(page);
     await page.goto('/');
     await expect(page).toHaveURL(/\/aoba$/);
@@ -41,7 +41,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await expect(page.locator('.org-menu-invite')).toHaveCount(0);
     await menuButton(page).click();
     await expect(menuLinks(page)).toHaveText(['あおば開発']);
-    await expect(page.locator('.org-menu-list button')).toHaveText(['組織を作る']);
+    await expect(page.locator('.org-menu-list button')).toHaveText(['組織を作る', '自分用を作る']);
     expect(await collect()).toEqual([]);
   });
 

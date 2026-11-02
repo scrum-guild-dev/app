@@ -1167,3 +1167,25 @@ describe('invitation-create と自分用の組織', () => {
     expect(google.status).toBe(200);
   });
 });
+
+// invitee-resolve も、招待の作成と同じく自分用では GitHub に問い合わせる前に 409（personal_organization）で断る（#733）
+describe('invitee-resolve と自分用の組織', () => {
+  test('管理者の解決を、GitHub に問い合わせる前に 409（personal_organization）で断る', async () => {
+    const target = await createPersonalTarget();
+    const user = newUser();
+    const before = github.calls.length;
+    const res = await resolve(target, target.admin, user.login);
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: { code: string; details?: unknown } };
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.details).toEqual({ reason: 'personal_organization' });
+    expect(github.calls.length).toBe(before);
+  });
+
+  test('チーム用の組織では今まで通り解決できる', async () => {
+    const target = await createTarget();
+    const user = newUser();
+    const res = await resolve(target, target.admin, user.login);
+    expect(res.status).toBe(200);
+  });
+});

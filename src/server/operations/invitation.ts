@@ -97,7 +97,9 @@ async function throwIfMemberOrInvited(db: OrganizationDb, workspaceId: string, l
 
 // already_counted は、その人がすでに組織の人数に数えられているか。人数が上限に達していても、数えられている人は招待できるので、
 // 画面が「招待する」を押せるかを決めるのに使う
-export const inviteeResolveOperation = implement(inviteeResolve, async ({ db, tools, input }) => {
+export const inviteeResolveOperation = implement(inviteeResolve, async ({ db, organization, tools, input }) => {
+  // 自分用の組織は1人だけなので、招待の作成と同じく外への問い合わせより前に断る
+  if (organization.kind === 'personal') throw new ApiError(409, 'conflict', { reason: 'personal_organization' });
   const invitee = await resolveGithubUsername(tools.inviteeResolver(input.provider), input.username, 'username', {
     operation: inviteeResolve.name,
     route: 'organization',

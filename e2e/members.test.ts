@@ -586,6 +586,28 @@ test.describe('リーダー（あおば開発のミナト）', () => {
   });
 });
 
+// 自分用の組織（kind が personal）は自分だけで使う。seed に自分用の組織は無いので、組織の応答を書き換えて開く
+// （共有の seed の組織を自分用に変えると、並べて走るほかのテストが崩れる）。サーバーの断りは test/invitation.test.ts
+test('自分用の組織では、「招待する」の節に招待のフォームを出さず、人を招待できない理由を案内する（#733）', async ({
+  context,
+  baseURL,
+  page,
+}) => {
+  await signIn(context, baseURL, 'admin');
+  await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
+    ...output,
+    organization: { ...output.organization, kind: 'personal' as const },
+  }));
+  const collect = await watchViolations(page);
+  await page.goto(MEMBERS_PATH);
+  const section = page.getByRole('region', { name: '招待する' });
+  await expect(section.getByText('自分用の組織は自分だけで使うため、人を招待できません。')).toBeVisible();
+  // 招待のフォーム（ログインの手段、ユーザー名、招待する）は無い
+  await expect(page.getByLabel('GitHub のユーザー名')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '招待する' })).toHaveCount(0);
+  expect(await collect()).toEqual([]);
+});
+
 test.describe('一般のユーザー（あおば開発のハルカ）', () => {
   test.beforeEach(async ({ context, baseURL }) => {
     await signIn(context, baseURL, 'member');

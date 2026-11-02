@@ -2,7 +2,8 @@
 export const organizationKinds = ['team', 'personal'] as const;
 export type OrganizationKind = (typeof organizationKinds)[number];
 
-// 自分用の組織の名前。組織を作るときに固定で入れ、画面は kind が personal の組織をこの名前の辞書の語で出す
+// 自分用の組織の名前。組織を作るときに固定で入れ、画面は kind が personal の組織をこの名前の辞書の語で出す。
+// 値は辞書の personalOrganizationName と同じにする（別々に定義しているので、src/lib/organization-label.test.ts が同じ値であることを縛る）
 export const PERSONAL_ORGANIZATION_NAME = '自分用';
 
 // 自分用の組織の添付ファイルの上限（バイト）。1GB

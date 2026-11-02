@@ -198,8 +198,9 @@ export async function insertPersonalOrganization(
   return { organizationId, db: orgDb(env, issueVerifiedOrganization(organizationId)) };
 }
 
-// insertSelfCreatedOrganization が挿入した組織の行を消す補償。最初の管理者を書けなかったときに、管理者のいない組織と
-// お試しの枠が残らないよう戻す。ID と作ったアカウントで絞るので、他の組織の行は消さない。
+// insertSelfCreatedOrganization か insertPersonalOrganization が挿入した組織の行を消す補償（お試しの組織と自分用の組織の両方で使う）。
+// 最初の管理者を書けなかったときに、管理者のいない組織とお試しの枠（自分用では自分用の枠）が残らないよう戻す。
+// ID と作ったアカウントで絞るので、他の組織の行は消さない。
 // 組織の中の表の行が結んでいれば外部キーが断り、例外を投げる（行は残る）
 export async function deleteSelfCreatedOrganization(
   env: Env,

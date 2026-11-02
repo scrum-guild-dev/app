@@ -20,7 +20,12 @@ export {
   organizationSuspensionUpdate,
   resolveGithubUser,
 };
-export { reassignAdminProblems, type ReassignAdminProblem } from './organization-admin-reassign.ts';
+export {
+  reassignAdminConflictReasonOf,
+  reassignAdminProblems,
+  type ReassignAdminConflictReason,
+  type ReassignAdminProblem,
+} from './organization-admin-reassign.ts';
 export { ATTACHMENT_QUOTA_MAX_BYTES, MEMBER_LIMIT_MAX, QUOTA_GIB, quotaTiers } from './organization-quota-update.ts';
 export {
   isPurgeDue,

@@ -98,6 +98,70 @@ test('入れる組織が1つの会員は、組織の切り替えのメニュー�
   await expect(page).toHaveURL(/\/aoba$/);
 });
 
+// 入れる組織が1つで招待が無い会員（ハルカ）は組織の選択の画面に届かないので、切り替えのメニューの「自分用を作る」が自分用の入口になる（#733）。
+// 作成までは進めず、開いて、やめるで閉じるところまで確かめる（手元の D1 に自分用の組織を残さない）
+test('入れる組織が1つの会員は、組織の切り替えのメニューから「自分用を作る」を開き、閉じるとフォーカスが切り替えのボタンへ戻る', async ({
+  context,
+  baseURL,
+  page,
+}) => {
+  await signIn(context, baseURL, 'member');
+  await page.goto('/');
+  await expect(page).toHaveURL(/\/aoba$/);
+  const menuButton = page.getByRole('button', { name: 'あおば開発。組織を切り替える' });
+  await menuButton.click();
+  await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
+  const list = page.getByRole('list', { name: '入れる組織' });
+  // 「組織を作る」の次に並ぶ
+  await expect(list.getByRole('button')).toHaveText([
+    word('createMyOrganizationAction'),
+    word('createPersonalOrganizationAction'),
+  ]);
+  await list.getByRole('button', { name: word('createPersonalOrganizationAction') }).click();
+
+  const dialog = page.getByRole('dialog', { name: word('createPersonalOrganizationTitle', { organization: '組織' }) });
+  await expect(dialog).toBeVisible();
+  // メニューは閉じて、ダイアログは残っている。入れるのは slug だけ
+  await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(dialog.getByRole('textbox')).toHaveCount(1);
+  await dialog.getByRole('button', { name: word('cancel') }).click();
+  await expect(dialog).toBeHidden();
+  await expectFocusReturned(page, menuButton);
+  await expect(page).toHaveURL(/\/aoba$/);
+});
+
+test('自分用を持つ会員の切り替えのメニューには、名前の代わりに「自分用」が並び、「自分用を作る」は出ない。停止した自分用があるときも出ない', async ({
+  context,
+  baseURL,
+  page,
+}) => {
+  await signIn(context, baseURL, 'member');
+  const team = { slug: 'aoba', name: 'あおば開発', kind: 'team' as const };
+  const personal = { slug: 'mio-solo', name: '自分用', kind: 'personal' as const };
+  const unroute = await rewriteOperation(page, myOrganizations, (output) => ({
+    ...output,
+    organizations: [team, personal],
+  }));
+  await page.goto('/aoba');
+  await page.getByRole('button', { name: 'あおば開発。組織を切り替える' }).click();
+  const list = page.getByRole('list', { name: '入れる組織' });
+  await expect(list.getByRole('link', { name: '自分用' })).toBeVisible();
+  await expect(list.getByRole('button', { name: word('createMyOrganizationAction') })).toBeVisible();
+  await expect(list.getByRole('button', { name: word('createPersonalOrganizationAction') })).toHaveCount(0);
+
+  // 自分用が入れる組織に無く、停止した組織にあるときも出さない
+  await unroute();
+  await rewriteOperation(page, myOrganizations, (output) => ({
+    ...output,
+    organizations: [team],
+    suspended: [{ ...personal, slug: 'mio-stopped' }],
+  }));
+  await page.goto('/aoba');
+  await page.getByRole('button', { name: 'あおば開発。組織を切り替える' }).click();
+  await expect(list.getByRole('button', { name: word('createMyOrganizationAction') })).toBeVisible();
+  await expect(list.getByRole('button', { name: word('createPersonalOrganizationAction') })).toHaveCount(0);
+});
+
 // 自分用（#733）。組織の無い会員（ナギ）が、slug だけを入れて自分用の組織を作る。作った組織は afterEach が消す
 async function openPersonalDialog(page: Page) {
   await page.goto('/');

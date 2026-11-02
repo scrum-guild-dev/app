@@ -3,9 +3,9 @@
   import { invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { userAdminUpdate, userDisable, userEnable, userList } from '../../../shared/operations/organization/index.ts';
-  import { userConflictReasonOf } from '../../../shared/operations/organization/user.ts';
   import type { OutputOf } from '../../../shared/operations/define.ts';
   import { callOperation, type ApiResult } from '../../api.ts';
+  import { userConflictKeyOf } from '../../conflict-keys.ts';
   import { focusPageHeading } from '../../focus-heading.ts';
   import { formatLocalDate } from '../../format.ts';
   import { isUnauthenticated, loginUrl } from '../../login-redirect.ts';
@@ -32,13 +32,17 @@
   //   有効に戻すのが人数の上限で断られた（409 の member_limit_reached）ときだけは、長い理由と対処を表の上のコールアウトに残す
   // 操作は1件ずつ送り、送っている間はどの行の操作も aria-disabled にして押しても無視する。
   // 画面の見出しの集計（無効でないユーザーの数、管理者の数）は oncounts で渡す（読めるまでは null）
+  // 自分用の組織（personal。kind が personal の組織）は管理者が本人1人だけなので、全員の管理者の切り替えを押せなくして理由を添える
+  // （API も 409 の personal_organization で断る）。表の上のコールアウトで、人を増やせないことと理由を案内する
   let {
     slug,
     meId,
+    personal = false,
     oncounts,
   }: {
     slug: string;
     meId: string;
+    personal?: boolean;
     oncounts: (counts: { users: number; admins: number } | null) => void;
   } = $props();
 
@@ -131,12 +135,8 @@
       await tick();
       refusalBox?.scrollIntoView({ block: 'nearest' });
     } else if (result.status === 409 && result.error?.code === 'conflict') {
-      const reason = userConflictReasonOf(result.error.details);
-      if (reason === 'last_admin') showToast(t('userErrorLastAdmin', words), 'alert');
-      else if (reason === 'self') showToast(t('userErrorSelf'), 'alert');
-      else if (reason === 'disabled') showToast(t('userErrorDisabled', words), 'alert');
-      else if (reason === 'member_limit') showToast(t('userErrorMemberLimit', { ...words, name }), 'alert');
-      else showToast(t('userErrorChanged', { name }), 'alert');
+      // 理由ごとの文言は src/lib/conflict-keys.ts。自分用の組織（personal_organization）は再試行を促さない文言
+      showToast(t(userConflictKeyOf(result.error.details), { ...words, name }), 'alert');
     } else if (result.status === 403) {
       showToast(t('userErrorForbidden', words), 'alert');
       await invalidateAll();
@@ -247,6 +247,11 @@
 
 <Setting title={t('userSectionTitle')} description={t('userSectionDesc', words)}>
   <SectionBoundary {section} failedTitle={t('userListLoadFailed')} refreshFailedText={t('userListRefreshFailed')}>
+    {#if personal}
+      <div class="callout is-info">
+        <Icon name="shield" /><span>{t('userAdminPersonalNote', words)}</span>
+      </div>
+    {/if}
     {#if enableRefusal !== null}
       <div class="callout is-warn" role="alert" bind:this={refusalBox}>
         <Icon name="alert" /><span class="wrap-anywhere">{enableRefusal}</span>
@@ -281,15 +286,24 @@
                   <input
                     type="checkbox"
                     checked={user.is_admin}
-                    disabled={user.disabled_at !== null}
+                    disabled={user.disabled_at !== null || personal}
                     aria-disabled={busyId !== null}
                     aria-label={t('userAdminToggleLabel', { name: user.name, admin: t('admin') })}
-                    aria-describedby={user.disabled_at !== null ? `${uid}-disabled-${user.id}` : undefined}
+                    aria-describedby={personal
+                      ? `${uid}-personal-${user.id}`
+                      : user.disabled_at !== null
+                        ? `${uid}-disabled-${user.id}`
+                        : undefined}
                     onclick={(event) => clickToggle(event, user)}
                     onchange={(event) => changeToggle(event, user)}
                   />
                 </label>
-                {#if user.disabled_at !== null}
+                {#if personal}
+                  <!-- 押せない理由。読み上げだけに出す（表の上のコールアウトにも同じ趣旨を目で読める形で出している） -->
+                  <span class="visually-hidden" id={`${uid}-personal-${user.id}`}
+                    >{t('userAdminToggleDisabledPersonalNote', words)}</span
+                  >
+                {:else if user.disabled_at !== null}
                   <!-- 押せない理由。読み上げだけに出す（無効の印は名前の列にある） -->
                   <span class="visually-hidden" id={`${uid}-disabled-${user.id}`}
                     >{t('userAdminToggleDisabledNote', words)}</span

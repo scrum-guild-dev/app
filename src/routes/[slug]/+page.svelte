@@ -13,6 +13,7 @@
   import SprintGoalNotice from '../../lib/components/SprintGoalNotice.svelte';
   import TaskEntry from '../../lib/components/TaskEntry.svelte';
   import WorkspaceCreateDialog from '../../lib/components/WorkspaceCreateDialog.svelte';
+  import { organizationLabel } from '../../lib/organization-label.ts';
   import { completedMessage } from '../../lib/sprint-label.ts';
   import { showToast } from '../../lib/toast.svelte.ts';
   import { todaySections } from '../../lib/today-sections.ts';
@@ -318,7 +319,7 @@
       slug={data.slug}
       role={data.firstSteps.role}
       steps={data.firstSteps.steps}
-      organizationName={data.organization?.organization.name ?? ''}
+      organizationName={data.organization ? organizationLabel(data.organization.organization) : ''}
       onCreateWorkspace={data.organization?.me.is_admin ? (opener) => createDialog?.show(opener) : undefined}
     />
   {/if}

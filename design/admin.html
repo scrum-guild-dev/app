@@ -66,6 +66,16 @@ SQ.mount("admin", () => `
             ? `<button class="btn is-sm is-quiet" type="button" aria-label="${name}を有効に戻す" data-toast="${name}を有効に戻しました。入るには${t("workspace")}への招待が要ります">有効に戻す</button>`
             : self ? "" : `<button class="btn is-sm is-quiet is-danger" type="button" aria-label="${name}を無効にする" data-dialog="disableUser" data-name="${name}" data-admin="${r.admin}">無効にする</button>`}</td></tr>`;
         }).join("")}</tbody></table></div>`)}
+    ${setting("ユーザー（自分用の" + t("organization") + "）", `自分用の${t("organization")}は自分だけで使うため、${t("admin")}は本人1人のままです。`, `
+      <div class="callout is-info">${icon("shield")}<span>自分用の${t("organization")}は自分だけで使うため、${t("admin")}を増やしたり外したりできません。あなたが${t("admin")}のままです。</span></div>
+      <div class="table-wrap"><table class="table is-stacked" aria-label="${t("organization")}のユーザーの一覧"><thead><tr><th class="is-name">名前</th><th>${t("admin")}</th><th class="is-num">所属</th><th>最後に入った日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
+        <tbody><tr>
+          <td class="is-name"><span class="person is-wrap">${avatarOf(D.me)}${esc(user(D.me).name)}</span></td>
+          <td data-label="${t("admin")}"><label class="toggle"><input type="checkbox" checked disabled aria-describedby="u-personal" aria-label="${esc(user(D.me).name)}を${t("admin")}にする"></label><span class="visually-hidden" id="u-personal">自分用の${t("organization")}では、${t("admin")}の指名と解除はできません</span></td>
+          <td class="is-num" data-label="所属">1</td>
+          <td class="mono" data-label="最後に入った日">10/20</td>
+          <td class="is-actions"></td></tr></tbody></table></div>
+      <p class="props-note">自分用の${t("organization")}（<code>kind</code> が <code>personal</code>）の表示の見本です。${t("admin")}の切り替えは全員の行で押せなくし、理由を表の上に出して、読み上げの説明にも結びます。サーバーも指名と解除を 409 の <code>personal_organization</code> で断ります。</p>`)}
     ${setting(t("workspace"), `終了した${t("workspace")}は読み取り専用になり、${t("connection")}はすべて止まります。再開できます。${t("member")}の数は${t("leader")}を含みます。`, !A.workspaces.length
       ? SQ.emptyState("users", `まだ${t("workspace")}がありません`,
           `チームや用途ごとに作ります。${t("member")}の招待は、作った${t("workspace")}の${t("leader")}が行います。`,

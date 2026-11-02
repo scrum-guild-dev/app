@@ -64,6 +64,10 @@ SQ.mount("members", () => {
         </div>
         <p class="props-note">人数が上限に達したときの表示の見本です。人数は${t("admin")}と、いずれかの${t("workspace")}に所属しているか招待されている人を数えます。</p>
       </div>
+    </section>
+    <section class="section"><div class="section-head"><h2 class="section-title">招待する（自分用の${t("organization")}）</h2></div>
+      <div class="callout is-info">${icon("shield")}<span>自分用の${t("organization")}は自分だけで使うため、人を招待できません。</span></div>
+      <p class="props-note">自分用の${t("organization")}（<code>kind</code> が <code>personal</code>）の表示の見本です。招待のフォームも人数の右肩も出さず、理由だけを案内します。サーバーも招待を 409 の <code>personal_organization</code> で断ります。</p>
     </section>`;
 });
 </script>

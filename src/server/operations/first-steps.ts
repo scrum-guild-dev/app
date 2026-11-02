@@ -51,7 +51,10 @@ function leaderWorkspaces(
     .where('w.closed_at', 'is', null);
 }
 
-export const firstStepsOperation = implement(firstSteps, async ({ db, actor }) => {
+// 自分用の組織（kind が personal）は1人だけなので完了できない手順。出力から外す（#733）
+const NEVER_DONE_IN_PERSONAL: ReadonlySet<FirstStepKey> = new Set(['invite_members', 'invite_by_admin']);
+
+export const firstStepsOperation = implement(firstSteps, async ({ db, actor, organization }) => {
   const userId = actor.userId;
   if (userId === null) return empty;
 
@@ -216,12 +219,14 @@ export const firstStepsOperation = implement(firstSteps, async ({ db, actor }) =
     done.set('register_holiday', holidayResult.rows.length > 0);
   }
 
-  const steps: FirstStep[] = STEP_ORDER[role].map(({ key, optional }) => ({
-    key,
-    optional,
-    done: done.get(key) ?? false,
-    workspace: target.get(key) ?? null,
-  }));
+  const steps: FirstStep[] = STEP_ORDER[role]
+    .filter(({ key }) => organization.kind !== 'personal' || !NEVER_DONE_IN_PERSONAL.has(key))
+    .map(({ key, optional }) => ({
+      key,
+      optional,
+      done: done.get(key) ?? false,
+      workspace: target.get(key) ?? null,
+    }));
   // 必須の手順がすべて済んだら出さない（任意の手順は、済んでいなくても消す判定に使わない）。
   // 一般とリーダー（必須はバックログの最初のタスクだけ）は必須が済めば上で返しているので、ここでの確かめは念のため
   if (steps.every((step) => step.done || step.optional)) return empty;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SLUG_MAX_LENGTH } from '../../organization-slug.ts';
+import { conflictReasonOf } from '../conflict-reason.ts';
 import { defineOperation } from '../define.ts';
 import { adminNomineeInput } from './create-organization.ts';
 
@@ -14,6 +15,15 @@ export const reassignAdminProblems = [
 ] as const;
 export type ReassignAdminProblem = (typeof reassignAdminProblems)[number];
 
+// 409 の conflict で断った理由（details.reason）。personal_organization は自分用の組織（持ち主 1 人だけ）。
+// 理由の無い 409 の conflict は、読んでから書くまでに同じ人の行が変わった
+export const reassignAdminConflictReasons = ['personal_organization'] as const;
+export type ReassignAdminConflictReason = (typeof reassignAdminConflictReasons)[number];
+
+export function reassignAdminConflictReasonOf(details: unknown): ReassignAdminConflictReason | undefined {
+  return conflictReasonOf(details, reassignAdminConflictReasons);
+}
+
 // 既にある組織に、管理者を指名し直す（Issue #217）。どの組織にも（管理者の状態が active の組織にも、停止中の組織にも）指名できる。
 // その組織の、まだログインしていない前の指名（account_id が空の users の行）を取り消し（ワークスペースの所属を持つ行は消さずに
 // 管理者の印を外し、ほかは消す）、続けて指名する。ログインした前の管理者の印は外さない。
@@ -21,11 +31,13 @@ export type ReassignAdminProblem = (typeof reassignAdminProblems)[number];
 // 無い slug は 404 の not_found、GitHub に届かないときは 503 の unavailable、競合は 409 の conflict。
 // 解約で消す予定日を過ぎた組織（予定日が今日の UTC の日付より前。境目は organization-resume と同じ）は、消している途中で
 // 組織の中に行を足さないよう 409 の purge_due で断る。GitHub に問い合わせる前、招待の URL を作る前に断る。
+// 自分用の組織（kind が personal。持ち主 1 人だけ）には 2 人目の管理者を足さないので、409 の conflict（details.reason が personal_organization）で
+// 同じく先に断る。
 // 応答に組織の中のデータ（人の名前や ID）を入れない
 export const organizationAdminReassign = defineOperation({
   name: 'organization-admin-reassign',
   description:
-    '既にある組織に管理者を指名し直す。まだログインしていない前の指名は取り消す。解約で消す予定日を過ぎた組織には指名できない（409 の purge_due）',
+    '既にある組織に管理者を指名し直す。まだログインしていない前の指名は取り消す。解約で消す予定日を過ぎた組織と自分用の組織には指名できない（409 の purge_due、personal_organization）',
   mode: 'write',
   permission: 'operator',
   input: z.object({

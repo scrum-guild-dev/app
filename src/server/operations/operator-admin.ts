@@ -23,6 +23,7 @@ async function isOperatorOwnLogin(account: OutsideAccount, operator: OperatorToo
 }
 
 // slug の組織の ID。無ければ 404（別の組織と存在しないものを分けない）。停止中の組織も引く。
+// 自分用の組織（kind が personal）は持ち主 1 人だけなので、2 人目の管理者を足さないよう 409 の conflict（reason: personal_organization）で断る。
 // 解約で消す予定日を過ぎた組織（Worker の now() の UTC の日付か、D1 の date('now') のどちらかで purge_on が今日より前）は、
 // 消している途中で組織の中の表に行を足さないよう 409 の purge_due で断る（境目は再開と同じ。operator-suspension.ts）。
 // 書くのは組織の DB で、organizations とは同じ batch() に混ぜられない（別の DB になりうる）ので、条件にできず、書く前に読んで断る。
@@ -32,18 +33,21 @@ async function organizationIdOf(db: CommonDb, slug: string, at: Date): Promise<s
     db.statement((q) =>
       q
         .selectFrom('organizations')
-        .select(['id', 'suspended_at', 'purge_on', purgeDueInDatabase().as('due_in_database')])
+        .select(['id', 'kind', 'suspended_at', 'purge_on', purgeDueInDatabase().as('due_in_database')])
         .where('slug', '=', slug),
     ),
   );
   if (row === undefined) throw new ApiError(404, 'not_found');
   const due = row.suspended_at !== null && (isPurgeDue(row.purge_on, at) || Number(row.due_in_database) === 1);
   if (due) throw new ApiError(409, 'purge_due');
+  // 自分用の組織は持ち主 1 人だけなので、2 人目の管理者は足さない（#733）。GitHub への問い合わせより前に、何も書かずに断る
+  if (row.kind === 'personal') throw new ApiError(409, 'conflict', { reason: 'personal_organization' });
   return row.id;
 }
 
 // 順:
-//   1. 組織を slug で引く（無ければ 404、消す予定日を過ぎた解約の組織なら 409 の purge_due。どちらも GitHub に問い合わせず、
+//   1. 組織を slug で引く（無ければ 404、消す予定日を過ぎた解約の組織なら 409 の purge_due、自分用なら 409 の personal_organization。
+//      どれも GitHub に問い合わせず、
 //      招待の URL も作らない）
 //   2. GitHub はユーザー名を解決し直して確かめたユーザー ID と一致するか確かめ、アカウントを共通の DB で引く。
 //      Google はメールアドレスをそろえ、待つ行と招待の URL の秘密を作る（組織の作成と同じ。operator-nominee.ts）。

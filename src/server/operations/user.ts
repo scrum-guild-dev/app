@@ -252,8 +252,7 @@ export const userAdminUpdateOperation = implement(
   userAdminUpdate,
   async ({ db, actor, organization, tools, input }) => {
     // 自分用の組織は管理者が本人1人だけなので、指名も解除も（すでにその状態でも）断る。何も読まず、何も書かない。
-    // 読んでから書くまでの競合のテスト（test/user.test.ts）は処理を直に呼び、organization を渡さないので、無いときはチーム用として進める
-    if ((organization as typeof organization | undefined)?.kind === 'personal') throw conflict('personal_organization');
+    if (organization.kind === 'personal') throw conflict('personal_organization');
     const actorUserId = actorUserIdOf(actor);
     const organizationId = db.organizationId;
     const userId = input.user_id;

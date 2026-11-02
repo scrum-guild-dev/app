@@ -578,7 +578,7 @@ export const dictionary = defineDictionary({
   invitationsReceived: '招待が届いています',
   noOrganizationTitle: '入れる組織がありません',
   noOrganizationText:
-    '管理者から招待が届くと、ここに出ます。自分で{organization}を作って、30日間のお試しで始めることもできます。自分だけで使う「自分用」を作ることもできます。',
+    '管理者から招待が届くと、ここに出ます。自分で{organization}を作って、30日間のお試しで始めることもできます。自分だけで使う「{personal}」を作ることもできます。',
   // 入れる組織も招待も無く、停止していなければ入れた{organization}だけがある人
   noOrganizationSuspendedText:
     '停止している{organization}があります。下の「停止している{organization}」を見てください。',
@@ -860,6 +860,9 @@ export const dictionary = defineDictionary({
   // 指名し直しの失敗。409 は、読んでから書くまでに同じ人の行が変わった（何も書かれていない）
   operatorReassignConflict:
     '指名している間に、この{organization}の人の状態が変わりました。一覧を確かめてから、もう一度試してください。',
+  // 自分用の{organization}（持ち主1人だけ）。{admin}は増やせないので、もう一度試すよう促さない
+  operatorReassignPersonal:
+    '自分用の{organization}には{admin}を指名し直せません。持ち主1人だけで使う{organization}です。',
   // GitHub で解決した人が、操作している運用者自身（運用者のアカウントに結んだログイン）だった
   operatorErrorNomineeIsOperator:
     'この GitHub のユーザーは、あなた（運用者）のログインです。運用者は{organization}の中を見ないので、{organization}の人か、{admin}になる人を指名してください。',
@@ -1071,6 +1074,11 @@ export const dictionary = defineDictionary({
   inviteErrorUnreachable: 'サーバーに届きませんでした。',
   inviteErrorVerifyFailed: 'ユーザー名を確かめられませんでした。もう一度試してください。',
   inviteErrorFailed: '招待できませんでした。もう一度試してください。',
+  // 自分用の{organization}（kind が personal）は1人だけで使う。招待の入口（「招待する」の節）の代わりに理由を出し、
+  // 画面の状態がずれて 409 の personal_organization で断られたときも、再試行を促さない文言で伝える
+  invitePersonalNote: '自分用の{organization}は自分だけで使うため、人を招待できません。',
+  invitePersonalRefused:
+    '自分用の{organization}は自分だけで使うため、人を招待できません。もう一度試しても招待できません。',
   // 招待の URL を開く画面（/invite）。組織の名前は、秘密を API に送る前なので出さない
   inviteTitle: '{app} への招待',
   inviteLead: '招待されたメールアドレスの Google アカウントでログインしてください。',
@@ -1224,6 +1232,12 @@ export const dictionary = defineDictionary({
   userErrorLastAdmin: '最後の{admin}は解除も無効にもできません。先にほかの人を{admin}に指名してください',
   userErrorSelf: '自分は無効にできません',
   userErrorDisabled: '無効の人は{admin}に指名できません。先に有効に戻してください',
+  // 自分用の{organization}（kind が personal）は{admin}が本人1人だけ。節に理由を出し、切り替えは押せなくする。
+  // 画面の状態がずれて 409 の personal_organization で断られたときも、再試行を促さない文言で伝える
+  userAdminPersonalNote:
+    '自分用の{organization}は自分だけで使うため、{admin}を増やしたり外したりできません。あなたが{admin}のままです。',
+  userAdminToggleDisabledPersonalNote: '自分用の{organization}では、{admin}の指名と解除はできません',
+  userErrorPersonalOrganization: '自分用の{organization}では、{admin}の指名と解除はできません',
   userErrorMemberLimit:
     '{organization}の人数が上限に達しているため、{name}を{admin}に指名できません。上限を上げるには運用者に相談してください',
   // 有効に戻すのが人数の上限で断られた（409 の member_limit_reached）。表の上のコールアウトに出して残す。
