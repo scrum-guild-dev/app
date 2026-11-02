@@ -608,6 +608,8 @@ test('自分用の組織では、「招待する」の節に招待のフォー�
   // 招待を受けないので、承諾待ちの招待の節と「招待中」の数も出さない
   await expect(page.getByRole('heading', { level: 2, name: '承諾待ちの招待' })).toHaveCount(0);
   await expect(page.getByRole('table', { name: '承諾待ちの招待の一覧' })).toHaveCount(0);
+  // 同じ頭の数字には「所属」が出ている（ロケーターの取り違えで通らないように先に確かめる）
+  await expect(page.locator('.tally').getByText('所属')).toBeVisible();
   await expect(page.locator('.tally').getByText('招待中')).toHaveCount(0);
   expect(await collect()).toEqual([]);
 });
