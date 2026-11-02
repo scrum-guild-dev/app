@@ -31,10 +31,16 @@
 
 添付ファイルの中身を置く本番のバケットは、人がダッシュボードで用意する。R2 binding を含む版のマージはバケットを作った後で、バケットが無いままマージすると Workers Builds のデプロイが失敗する。
 
-1. Cloudflare のダッシュボードで ucan-lab のアカウントを選び、R2 Object Storage の Overview →「Create bucket」を開く
+本番のバケット `scrum-guild-attachments` は 2026-11-02 に作った（#743）。作り直すときの手順:
+
+1. Cloudflare のダッシュボードで ucan-lab のアカウントを選び、R2 Object Storage の Overview →「Create bucket」を開く。R2 を有効にしていないアカウントでは、先に有効にする（支払い方法の登録を求められる）
 2. バケット名を `scrum-guild-attachments` にし、地域（Location）は自動（Automatic、地域の指定なし）のまま作る（[地域の選び方](https://developers.cloudflare.com/r2/reference/data-location/)）
 3. 公開アクセスは有効にしない。Settings の Public Development URL（`r2.dev`）は無効のままにし、Custom Domains もつながない。添付ファイルは Worker が権限を確かめて返す（[公開アクセスの設定](https://developers.cloudflare.com/r2/buckets/public-buckets/)）
 4. バケットができたことと名前を確かめてから、`wrangler.jsonc` の `r2_buckets` に binding `ATTACHMENTS` とバケット名 `scrum-guild-attachments` を含む版をマージする。binding はデプロイが設定するので、ダッシュボードで Worker に足す必要はない
+
+人の端末の `pnpm exec wrangler r2 bucket create scrum-guild-attachments` でも作れる。続けて「設定に binding を足すか」を聞かれたら断る（足すと、打ったディレクトリの `wrangler.jsonc` を書き換え、別名の binding が増える）。「手元の dev を本番のバケットにつなぐか」も断る。
+
+ビルド用のトークン（下の「API トークン」）には R2 の権限を足さない。wrangler 4.153.0 は、デプロイのときに binding のバケットがあるかを R2 の API で確かめるが、403 で断られたら確かめを飛ばしてデプロイを続ける（`collectPendingResources` が 403 を受け流す）。最初のデプロイが R2 の権限で落ちたら、`Workers R2 Storage: Read` だけを足し、Edit は足さない。Edit を持たせると、乗っ取られた依存が全組織の添付ファイルを読み書きし、消せるため。
 
 手元の `wrangler dev` と vitest の Workers の実行環境は R2 を模擬する。本番のバケットには触らず、手元用のバケットを Cloudflare に作る必要はない。
 
@@ -74,7 +80,7 @@ Workers Builds が使えるのは、Builds が自分で作ったトークンだ�
 
 - 作られたときは、Workers AI、Queues、Containers、Secrets Store、R2、KV、AI Gateway などの編集と、全アカウントの全ゾーンの Email Routing Rules、Workers Routes、SSL and Certificates の編集まで、30 の権限を持っていた
 - マイグレーション（`d1 time-travel info`、`d1 migrations apply`）は D1: Edit で動く見込みで、最初のマイグレーションのデプロイで確かめる
-- 機能を足して権限が要るようになったら（R2 の添付ファイル、Queues など）、そのときに足す
+- 機能を足して権限が要るようになったら（Queues など）、そのときに足す。R2 の添付ファイルは権限を足さずにデプロイする見込みで、扱いは上の「R2」
 
 権限を変える手順:
 

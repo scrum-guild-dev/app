@@ -1014,10 +1014,10 @@
 | story_id | TEXT | FK stories | |
 | epic_id | TEXT | FK epics | |
 | comment_id | TEXT | FK comments | |
-| object_key | TEXT | NOT NULL、UNIQUE | R2 のキー。`<organization_id>/<workspace_id>/<id>` |
-| file_name | TEXT | NOT NULL | 上げたときのファイル名。255字まで |
-| content_type | TEXT | NOT NULL | 中身の先頭のバイトで確かめた種類。分からなければ `application/octet-stream` |
-| size_bytes | INTEGER | NOT NULL、`CHECK (size_bytes BETWEEN 1 AND 52428800)` | |
+| object_key | TEXT | NOT NULL、UNIQUE、`CHECK (object_key <> '')` | R2 のキー。`<organization_id>/<workspace_id>/<id>` |
+| file_name | TEXT | NOT NULL、`CHECK (length(file_name) BETWEEN 1 AND 255)` | 上げたときのファイル名。255字まで |
+| content_type | TEXT | NOT NULL、`CHECK (content_type <> '')` | 中身の先頭のバイトで確かめた種類。分からなければ `application/octet-stream` |
+| size_bytes | INTEGER | NOT NULL、`CHECK (typeof(size_bytes) = 'integer' AND size_bytes BETWEEN 1 AND 52428800)` | 整数に直せない値（`1.5`）は INTEGER の列でも REAL のまま入るので、型も確かめる |
 | uploaded_by | TEXT | NOT NULL、FK users | 消す権限に使う |
 | attached_at | TEXT | | 付く先が決まった日時。空なら書いている途中で上げたもの |
 | created_at | TEXT | NOT NULL | |
@@ -1035,7 +1035,7 @@
 - 組織の合計は、組織のワークスペースの `size_bytes` の合計を上げるたびに計算する。集計は保存しない。同時に上げたときに少し超えることは許す。上げたことで80%を超え、`organizations.attachment_quota_warned_at` が空なら、管理者全員に通知し、その日時を入れる。
 - 添付ファイルの一覧は、付く先ごとに画像と動画を含むすべての行を返す。一覧の行に出す容量は `size_bytes`、上げた人は `uploaded_by`、上げた日時は `created_at`（書いている途中で上げたものが後で付く先に付いても、上げた日時は変わらない。`attached_at` は出さない）。本文に差し込んだ画像も、一覧の行として残る。
 - 画面と Markdown からは `/api/<slug>/attachments/<id>` で参照する。本文への画像の差し込みは Markdown の `![説明](…)` だけで、`<img>` タグは使えない（`(…)` に入れる参照の書き方は、差し込みの実装で、この URL とそろえて決める）。返すときは権限を確かめ、`X-Content-Type-Options: nosniff` と `Cache-Control: private` を付ける。画像として出す4種類（PNG、JPEG、GIF、WebP）と動画として再生する2種類（MP4、WebM）以外は `Content-Disposition: attachment` で返す。動画は Range リクエストに応える。
-- 索引: `(task_id)`、`(story_id)`、`(epic_id)`、`(comment_id)` をそれぞれ NOT NULL の部分索引で、`(workspace_id)`、`(created_at) WHERE attached_at IS NULL`、`(uploaded_by)`（外部キーの検査）。
+- 索引: `(task_id)`、`(story_id)`、`(epic_id)`、`(comment_id)` をそれぞれ NOT NULL の部分索引で、`(workspace_id)`（外部キーの検査）、`(workspace_id, created_at) WHERE attached_at IS NULL`（付く先のない行を消す定期処理。組織のワークスペースで絞るので `workspace_id` を先頭にする）、`(uploaded_by)`（外部キーの検査）。
 
 ### sprints
 

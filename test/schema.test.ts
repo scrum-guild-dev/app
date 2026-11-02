@@ -897,14 +897,16 @@ describe('attachments', () => {
     function attachment(
       columns: Partial<Record<(typeof targetColumns)[number], string | null>> & {
         attached_at?: string | null;
-        size_bytes?: number;
+        size_bytes?: number | string;
         object_key?: string;
+        file_name?: string;
+        content_type?: string;
       } = {},
     ) {
       const attachmentId = id();
       return run(
         `INSERT INTO attachments (id, workspace_id, task_id, story_id, epic_id, comment_id, object_key, file_name, content_type, size_bytes, uploaded_by, attached_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, '手順.txt', 'text/plain', ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         attachmentId,
         ws.id,
         columns.task_id ?? null,
@@ -912,6 +914,8 @@ describe('attachments', () => {
         columns.epic_id ?? null,
         columns.comment_id ?? null,
         columns.object_key ?? `${org.id}/${ws.id}/${attachmentId}`,
+        columns.file_name ?? '手順.txt',
+        columns.content_type ?? 'text/plain',
         columns.size_bytes ?? 1,
         uploader.id,
         columns.attached_at ?? null,
@@ -952,6 +956,35 @@ describe('attachments', () => {
     await expect(attachment({ size_bytes })).rejects.toThrow(/CHECK/);
   });
 
+  // INTEGER の列は整数に直せない値をそのまま REAL か TEXT で持つので、型も CHECK で断る
+  test.each([1.5, '1.5'])('size_bytes の整数でない値 %s は保存できない', async (size_bytes) => {
+    const { attachment } = await setup();
+    await expect(attachment({ size_bytes })).rejects.toThrow(/CHECK/);
+  });
+
+  test.each(['a', 'あ'.repeat(255)])('file_name は 1〜255 字なら保存できる（%#）', async (file_name) => {
+    const { attachment } = await setup();
+    await expect(attachment({ file_name })).resolves.toBeTruthy();
+  });
+
+  test.each(['', 'あ'.repeat(256)])('file_name は空と 256 字以上を保存できない（%#）', async (file_name) => {
+    const { attachment } = await setup();
+    await expect(attachment({ file_name })).rejects.toThrow(/CHECK/);
+  });
+
+  test('content_type と object_key は空文字を保存できない', async () => {
+    const { attachment } = await setup();
+    await expect(attachment({ content_type: '' })).rejects.toThrow(/CHECK/);
+    await expect(attachment({ object_key: '' })).rejects.toThrow(/CHECK/);
+  });
+
+  test.each(['workspace_id', 'uploaded_by'])('外部キーの検査の %s は索引で引く', async (column) => {
+    const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN SELECT id FROM attachments WHERE ${column} = ?`)
+      .bind(id())
+      .all<{ detail: string }>();
+    expect(results.map((row) => row.detail).join('\n')).toContain(`USING INDEX attachments_${column}`);
+  });
+
   test('object_key は、別の ID の添付でも重ねられない', async () => {
     const { attachment } = await setup();
     const object_key = `organization/workspace/${id()}`;
@@ -967,13 +1000,17 @@ describe('attachments', () => {
     expect(results.map((row) => row.detail).join('\n')).toContain(`USING INDEX attachments_${column}`);
   });
 
-  test('付く先のない期限切れの行は created_at の部分索引で引く', async () => {
+  // docs/data-model.md の「付く先のない行を消す定期処理」の文の内側の SELECT。組織のワークスペースで絞るので、
+  // 部分索引の先頭は workspace_id にする（created_at だけだと workspace_id の索引が選ばれ、付いた行までなめる）
+  test('付く先のない期限切れの行は、組織のワークスペースごとに部分索引で引く', async () => {
     const { results } = await env.DB.prepare(
-      `EXPLAIN QUERY PLAN SELECT id FROM attachments WHERE attached_at IS NULL AND created_at < ? LIMIT 50`,
+      `EXPLAIN QUERY PLAN SELECT id FROM attachments WHERE workspace_id IN (SELECT id FROM workspaces WHERE organization_id = ?) AND attached_at IS NULL AND created_at < ? LIMIT 50`,
     )
-      .bind(AT)
+      .bind(id(), AT)
       .all<{ detail: string }>();
-    expect(results.map((row) => row.detail).join('\n')).toContain('USING INDEX attachments_created_at_unattached');
+    expect(results.map((row) => row.detail).join('\n')).toContain(
+      'USING INDEX attachments_workspace_created_at_unattached (workspace_id=? AND created_at<?)',
+    );
   });
 });
 
