@@ -1075,3 +1075,126 @@ describe('xp_grants.dedupe_key', () => {
     await expect(grant()).rejects.toThrow(/UNIQUE/);
   });
 });
+
+// organizations.kind（'team' | 'personal'）と、自分用の組織が1アカウントに1つだけの部分 UNIQUE 索引（#733）
+describe('organizations.kind', () => {
+  async function account(): Promise<string> {
+    const accountId = id();
+    await run(`INSERT INTO accounts (id, created_at, updated_at) VALUES (?, ?, ?)`, accountId, AT, AT);
+    return accountId;
+  }
+
+  async function insertOrganization(options: { kind?: string; createdBy?: string | null; slug?: string }) {
+    const slug = options.slug ?? `org-${id().slice(0, 8)}`;
+    const columns = ['id', 'slug', 'name', 'created_by_operator', 'created_by_account_id', 'created_at', 'updated_at'];
+    const values: unknown[] = [id(), slug, '組織', 'self-service', options.createdBy ?? null, AT, AT];
+    if (options.kind !== undefined) {
+      columns.push('kind');
+      values.push(options.kind);
+    }
+    await run(
+      `INSERT INTO organizations (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+      ...values,
+    );
+    return slug;
+  }
+
+  async function kindOf(slug: string): Promise<unknown> {
+    const row = await env.DB.prepare(`SELECT kind FROM organizations WHERE slug = ?`)
+      .bind(slug)
+      .first<{ kind: string }>();
+    return row?.kind;
+  }
+
+  test('kind を省くと team になる', async () => {
+    expect(await kindOf(await insertOrganization({}))).toBe('team');
+  });
+
+  test.each(['team', 'personal'])('%s は通る', async (kind) => {
+    expect(await kindOf(await insertOrganization({ kind }))).toBe(kind);
+  });
+
+  test.each(['', 'Team', 'PERSONAL', 'personal ', 'solo', 'enterprise'])('%j は CHECK に当たる', async (kind) => {
+    await expect(insertOrganization({ kind })).rejects.toThrow(/CHECK/);
+  });
+
+  test('NULL は NOT NULL に当たる', async () => {
+    await expect(
+      run(
+        `INSERT INTO organizations (id, slug, name, kind, created_by_operator, created_at, updated_at) VALUES (?, ?, '組織', NULL, 'self-service', ?, ?)`,
+        id(),
+        `org-${id().slice(0, 8)}`,
+        AT,
+        AT,
+      ),
+    ).rejects.toThrow(/NOT NULL/);
+  });
+
+  test('列の定義は TEXT NOT NULL で、既定は team', async () => {
+    const { results } = await env.DB.prepare(
+      `SELECT name, type, "notnull", dflt_value FROM pragma_table_info('organizations') WHERE name = 'kind'`,
+    ).all<{
+      type: string;
+      notnull: number;
+      dflt_value: string | null;
+    }>();
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ type: 'TEXT', notnull: 1 });
+    expect(results[0]!.dflt_value).toContain('team');
+  });
+
+  test('同じ作成者の自分用の2つ目は UNIQUE に当たる', async () => {
+    const owner = await account();
+    await insertOrganization({ kind: 'personal', createdBy: owner });
+    await expect(insertOrganization({ kind: 'personal', createdBy: owner })).rejects.toThrow(/UNIQUE/);
+  });
+
+  test('作成者が違えば、自分用は何人分でも入る', async () => {
+    await insertOrganization({ kind: 'personal', createdBy: await account() });
+    await expect(insertOrganization({ kind: 'personal', createdBy: await account() })).resolves.toBeTypeOf('string');
+  });
+
+  test('同じ作成者でも、team は何件でも入る（お試しの上限は処理が守る）', async () => {
+    const owner = await account();
+    await insertOrganization({ kind: 'team', createdBy: owner });
+    await insertOrganization({ kind: 'team', createdBy: owner });
+    await expect(insertOrganization({ createdBy: owner })).resolves.toBeTypeOf('string');
+  });
+
+  test('同じ作成者が自分用と team を1つずつ持てる（順序によらない）', async () => {
+    const first = await account();
+    await insertOrganization({ kind: 'personal', createdBy: first });
+    await expect(insertOrganization({ kind: 'team', createdBy: first })).resolves.toBeTypeOf('string');
+    const second = await account();
+    await insertOrganization({ kind: 'team', createdBy: second });
+    await expect(insertOrganization({ kind: 'personal', createdBy: second })).resolves.toBeTypeOf('string');
+  });
+
+  test('既存の行（kind を省いた行）は team で、同じ作成者の自分用を妨げない', async () => {
+    const owner = await account();
+    await insertOrganization({ createdBy: owner });
+    await expect(insertOrganization({ kind: 'personal', createdBy: owner })).resolves.toBeTypeOf('string');
+  });
+
+  test('自分用の行を team に直すと、同じ作成者の自分用をもう1つ作れる（索引は kind が personal の行だけ）', async () => {
+    const owner = await account();
+    const slug = await insertOrganization({ kind: 'personal', createdBy: owner });
+    await run(`UPDATE organizations SET kind = 'team' WHERE slug = ?`, slug);
+    await expect(insertOrganization({ kind: 'personal', createdBy: owner })).resolves.toBeTypeOf('string');
+  });
+
+  test('team の行を personal に直すとき、同じ作成者の自分用が既にあれば UNIQUE に当たる', async () => {
+    const owner = await account();
+    await insertOrganization({ kind: 'personal', createdBy: owner });
+    const slug = await insertOrganization({ kind: 'team', createdBy: owner });
+    await expect(run(`UPDATE organizations SET kind = 'personal' WHERE slug = ?`, slug)).rejects.toThrow(/UNIQUE/);
+  });
+
+  test('部分索引は kind が personal の行だけを対象にする', async () => {
+    const { results } = await env.DB.prepare(
+      `SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'organizations' AND sql LIKE '%created_by_account_id%' AND sql LIKE '%UNIQUE%'`,
+    ).all<{ sql: string }>();
+    expect(results).toHaveLength(1);
+    expect(results[0]!.sql).toMatch(/WHERE\s+kind\s*=\s*'personal'/i);
+  });
+});

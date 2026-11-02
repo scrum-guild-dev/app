@@ -1,6 +1,7 @@
 // 組織に入れるかの判定と、ワークスペースが組織のものかの判定（docs/requirements.md の「メンバーと権限」）。
 // リクエストのたびに行う。共通の表（organizations）と組織の中の表（users、memberships、invitations）は別の問い合わせで引き、
 // 1つの SQL で結合しない（docs/data-model.md の「データベースの分け方」）
+import type { OrganizationKind } from '../../shared/organization-kind.ts';
 import type { Theme } from '../../shared/theme.ts';
 import { commonDb, orgDb, type OrganizationDb } from './entries.ts';
 import { issueVerifiedOrganization } from './verify-organization.ts';
@@ -23,6 +24,7 @@ export type OrganizationActor = {
 export type OrganizationSummary = {
   readonly slug: string;
   readonly name: string;
+  readonly kind: OrganizationKind;
   readonly theme: Theme;
   readonly trial_ends_on: string | null;
 };
@@ -57,7 +59,7 @@ export async function enterOrganization(
     common.statement((q) =>
       q
         .selectFrom('organizations')
-        .select(['id', 'suspended_at', 'slug', 'name', 'theme', 'trial_ends_on'])
+        .select(['id', 'suspended_at', 'slug', 'name', 'kind', 'theme', 'trial_ends_on'])
         .where('slug', '=', slug),
     ),
   );
@@ -91,6 +93,8 @@ export async function enterOrganization(
           organization: {
             slug: organization.slug,
             name: organization.name,
+            // 列の CHECK が守る値
+            kind: organization.kind as OrganizationKind,
             // 列の CHECK が守る値。列挙に無い値が来ても、操作の出力のスキーマ（z.enum）が 500 で止める
             theme: organization.theme as Theme,
             trial_ends_on: organization.trial_ends_on,

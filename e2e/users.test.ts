@@ -5,6 +5,7 @@
 // ファイルの中のテストは順に走る（集計の数を見るため）
 import type { Page } from '@playwright/test';
 import type { OutputOf } from '../src/shared/operations/define.ts';
+import { organizationInfo } from '../src/shared/operations/organization/index.ts';
 import { userEnable, userList } from '../src/shared/operations/organization/user.ts';
 import { expect, test } from './fixtures.ts';
 import { expectFocusReturned, signIn, watchViolations } from './helpers.ts';
@@ -23,6 +24,39 @@ function rowOf(page: Page, name: string) {
 function toast(page: Page, text: string) {
   return page.getByRole('status').filter({ hasText: text });
 }
+
+// 自分用の組織（kind が personal）は管理者が本人1人だけ。seed に自分用の組織は無いので、組織の応答を書き換えて開く
+// （共有の seed の組織を自分用に変えると、並べて走るほかのテストが崩れる）。サーバーの断りは test/user.test.ts
+test.describe('自分用の組織の管理者の切り替え（#733）', () => {
+  test('管理者の切り替えは押せず、表の上と読み上げの説明に理由が出る', async ({ context, baseURL, page }) => {
+    await signIn(context, baseURL, 'admin');
+    await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
+      ...output,
+      organization: { ...output.organization, kind: 'personal' as const },
+    }));
+    const collect = await watchViolations(page);
+    await page.goto('/aoba/admin');
+    await expect(
+      sectionOf(page).getByText('自分用の組織は自分だけで使うため、管理者を増やしたり外したりできません。', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    const toggle = rowOf(page, 'ミナト').getByRole('checkbox', { name: 'ミナトを管理者にする' });
+    await expect(toggle).toBeDisabled();
+    await expect(toggle).toBeChecked();
+    await expect(toggle).toHaveAccessibleDescription('自分用の組織では、管理者の指名と解除はできません');
+    // どの行の切り替えも押せない
+    for (const checkbox of await sectionOf(page).getByRole('checkbox').all()) await expect(checkbox).toBeDisabled();
+    expect(await collect()).toEqual([]);
+  });
+
+  test('チーム用の組織には、案内を出さず、切り替えは押せる', async ({ context, baseURL, page }) => {
+    await signIn(context, baseURL, 'admin');
+    await page.goto('/aoba/admin');
+    await expect(sectionOf(page).getByText('自分だけで使うため', { exact: false })).toHaveCount(0);
+    await expect(rowOf(page, 'ハルカ').getByRole('checkbox', { name: 'ハルカを管理者にする' })).toBeEnabled();
+  });
+});
 
 test.describe('管理者（あおば開発のミナト）', () => {
   test.beforeEach(async ({ context, baseURL }) => {

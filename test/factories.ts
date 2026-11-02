@@ -48,6 +48,7 @@ export async function createOrganization(overrides: Partial<Row<CommonTables, 'o
     id,
     slug: `org-${id.slice(-8)}`,
     name: '青葉工房',
+    kind: 'team',
     // 列は残っているので、言葉づかいを選べた頃の 'game' の行を模す（画面も API もこの値を読まない）
     vocabulary: 'game',
     theme: 'simple',
@@ -713,4 +714,21 @@ export async function createThanks(
   const db = orgDb(env, organization.verified);
   await db.run(db.statement((q) => q.insertInto('thanks').values(row)));
   return row;
+}
+
+// 自分用（kind = 'personal'）の組織。1人だけの組織なので member_limit は 1、添付は 1GB、作った人は本人（セルフサービス）
+export async function createPersonalOrganizationRow(
+  createdByAccountId: string,
+  overrides: Partial<Row<CommonTables, 'organizations'>> = {},
+) {
+  return createOrganization({
+    kind: 'personal',
+    name: '自分用',
+    member_limit: 1,
+    attachment_quota_bytes: 1073741824,
+    created_by_operator: 'self-service',
+    created_by_account_id: createdByAccountId,
+    trial_ends_on: null,
+    ...overrides,
+  });
 }

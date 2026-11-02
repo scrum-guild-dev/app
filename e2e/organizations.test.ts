@@ -29,7 +29,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await signIn(context, baseURL, 'member');
   });
 
-  test('/ を開くと組織の画面に入り、組織の切り替えには「組織を作る」だけが並ぶ', async ({ page }) => {
+  test('/ を開くと組織の画面に入り、組織の切り替えには「組織を作る」と「自分用を作る」だけが並ぶ', async ({ page }) => {
     const collect = await watchViolations(page);
     await page.goto('/');
     await expect(page).toHaveURL(/\/aoba$/);
@@ -41,7 +41,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await expect(page.locator('.org-menu-invite')).toHaveCount(0);
     await menuButton(page).click();
     await expect(menuLinks(page)).toHaveText(['あおば開発']);
-    await expect(page.locator('.org-menu-list button')).toHaveText(['組織を作る']);
+    await expect(page.locator('.org-menu-list button')).toHaveText(['組織を作る', '自分用を作る']);
     expect(await collect()).toEqual([]);
   });
 
@@ -280,8 +280,9 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発' }],
+          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -303,8 +304,9 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発' }],
+          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -429,8 +431,8 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await menuButton(page).focus();
     await page.keyboard.press('Enter');
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'true');
-    // 3つのリンクと「組織を作る」のボタンを通り過ぎて、メニューの外（左のメニューの項目）へ出る
-    for (let index = 0; index < 5; index++) await page.keyboard.press('Tab');
+    // 3つのリンクと「組織を作る」「自分用を作る」のボタンを通り過ぎて、メニューの外（左のメニューの項目）へ出る
+    for (let index = 0; index < 6; index++) await page.keyboard.press('Tab');
     await expect(page.locator('.nav-item').first()).toBeFocused();
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'false');
   });
@@ -449,10 +451,11 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
       route.fulfill({
         json: {
           organizations: [
-            { slug: 'aoba', name: 'あおば開発' },
-            ...Array.from({ length: 14 }, (_, index) => ({ slug: `k${index}`, name: `組織${index}` })),
+            { slug: 'aoba', name: 'あおば開発', kind: 'team' },
+            ...Array.from({ length: 14 }, (_, index) => ({ slug: `k${index}`, name: `組織${index}`, kind: 'team' })),
           ],
           invitations: [],
+          suspended: [],
           operator: false,
         },
       }),
@@ -478,8 +481,9 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発' }],
+          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -507,8 +511,9 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'hibari', name: 'ひばり工房' }],
+          organizations: [{ slug: 'hibari', name: 'ひばり工房', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -581,10 +586,11 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
       route.fulfill({
         json: {
           organizations: [
-            { slug: longSlug, name: longName },
-            { slug: 'aoba', name: 'あおば開発' },
+            { slug: longSlug, name: longName, kind: 'team' },
+            { slug: 'aoba', name: 'あおば開発', kind: 'team' },
           ],
           invitations: [{ organization_name: longName, slug: longSlug }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -633,7 +639,7 @@ test.describe('ログインしていない人と、組織が無い人', () => {
   test('入れる組織が無い運用者は、運用の画面へ移す', async ({ page, context, baseURL }) => {
     await signIn(context, baseURL, 'operator');
     await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({ json: { organizations: [], invitations: [], operator: true } }),
+      route.fulfill({ json: { organizations: [], invitations: [], suspended: [], operator: true } }),
     );
     // e2e の Worker には運用者の一覧が無いので、運用の画面が取る組織の一覧も差し替える（e2e/operator.test.ts）
     await page.route('**/api/list-organizations', (route) => route.fulfill({ json: { organizations: [] } }));
@@ -652,8 +658,9 @@ test.describe('ログインしていない人と、組織が無い人', () => {
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発' }],
+          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -678,6 +685,7 @@ test.describe('ログインしていない人と、組織が無い人', () => {
         json: {
           organizations: [],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -691,7 +699,7 @@ test.describe('ログインしていない人と、組織が無い人', () => {
   test('入れる組織も招待も無い人には、空の状態を出す', async ({ page, context, baseURL }) => {
     await signIn(context, baseURL, 'member');
     await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({ json: { organizations: [], invitations: [], operator: false } }),
+      route.fulfill({ json: { organizations: [], invitations: [], suspended: [], operator: false } }),
     );
     await page.goto('/');
     await expect(page.getByText('入れる組織がありません')).toBeVisible();
@@ -767,7 +775,7 @@ test.describe('すべてのワークスペースから外れた人（ツバサ�
           ...output,
           organizations: [],
           invitations: [],
-          suspended: [{ slug: 'kamome', name: 'かもめ社' }],
+          suspended: [{ slug: 'kamome', name: 'かもめ社', kind: 'team' }],
         }) as typeof output,
     );
     const collect = await watchViolations(page);

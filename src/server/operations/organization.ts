@@ -74,6 +74,7 @@ export const organizationInfoOperation = implement(organizationInfo, async ({ db
     // theme の形は出力のスキーマ（z.enum）が検証する
     organization: {
       name: organization.name,
+      kind: organization.kind,
       theme: organization.theme,
       has_workspaces: anyWorkspaceResult.rows.length > 0,
     },

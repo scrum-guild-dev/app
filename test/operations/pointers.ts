@@ -244,6 +244,20 @@ export const pointers: Pointers = {
     );
     return { slug: `mine-${crypto.randomUUID().slice(0, 8)}`, name: '分離の検査の組織' };
   },
+  // 自分用は1アカウントに1つ（部分 UNIQUE 索引）なので、同じ運用者が一覧の検査で何度も成功させられるよう、
+  // 呼ぶ前にその人が作った組織の作成者を外す（NULL は索引で重ならない）。slug は呼ぶたびに別の値にする
+  'create-personal-organization': async (_target, caller) => {
+    const db = commonDb(env);
+    await db.run(
+      db.statement((q) =>
+        q
+          .updateTable('organizations')
+          .set({ created_by_account_id: null })
+          .where('created_by_account_id', '=', caller.accountId),
+      ),
+    );
+    return { slug: `mine-${crypto.randomUUID().slice(0, 8)}` };
+  },
   // 停止と再開は、呼ぶたびに別の組織を作る（対象の組織を停止すると、同じ describe の運用者でない人の検査が、組織の停止の 403 や 404 になるため。
   // 停止済みの組織を停止する、停止していない組織を再開するのは 409 になる）
   'organization-suspend': async () => ({ slug: (await createOrganization()).slug, kind: 'temporary' }),

@@ -50,6 +50,7 @@ async function stubInvitedOnly(page: Page, state: { invitations: InboxInvitation
           json: {
             organizations: [],
             invitations: [{ organization_name: 'ひばり工房', slug: 'hibari' }],
+            suspended: [],
             operator: false,
           },
         })

@@ -450,7 +450,7 @@ describe('入れる組織が無くてもアカウントがある人と、停止�
     expect(browser.sessionToken).toBeDefined();
     const listed = await myOrganizationsOf(browser);
     expect(listed.organizations).toEqual([]);
-    expect(listed.suspended).toEqual([{ slug: organization.slug, name: organization.name }]);
+    expect(listed.suspended).toEqual([{ slug: organization.slug, name: organization.name, kind: 'team' }]);
     // 組織の中は今どおり 403 の organization_suspended で、セッションは残る
     const inside = await post(app, organizationInfo, { slug: organization.slug, token: browser.sessionToken! });
     expect(inside.status).toBe(403);
@@ -478,14 +478,14 @@ describe('入れる組織が無くてもアカウントがある人と、停止�
     expect(await countAccounts()).toBe(before + 1);
     expect(await sessionRowsOf(login!.account_id)).toHaveLength(1);
     expect((await myOrganizationsOf(browser)).suspended).toEqual([
-      { slug: organization.slug, name: organization.name },
+      { slug: organization.slug, name: organization.name, kind: 'team' },
     ]);
 
     // 再開すれば、結んだ行で組織に入れる
     await resumeOrganization(organization.id);
     expect((await userRow(organization.id, user))?.account_id).toBe(login!.account_id);
     const listed = await myOrganizationsOf(browser);
-    expect(listed.organizations).toEqual([{ slug: organization.slug, name: organization.name }]);
+    expect(listed.organizations).toEqual([{ slug: organization.slug, name: organization.name, kind: 'team' }]);
     expect(listed.suspended).toEqual([]);
   });
 
@@ -501,7 +501,7 @@ describe('入れる組織が無くてもアカウントがある人と、停止�
     expect(await accountLoginOf(invited)).toBeDefined();
     const listed = await myOrganizationsOf(browser);
     expect(listed.invitations).toEqual([]);
-    expect(listed.suspended).toEqual([{ slug: organization.slug, name: organization.name }]);
+    expect(listed.suspended).toEqual([{ slug: organization.slug, name: organization.name, kind: 'team' }]);
   });
 });
 

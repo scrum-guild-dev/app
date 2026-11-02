@@ -3,6 +3,7 @@
 // 組織を確かめた結果（VerifiedOrganization）を発行するのは、この関数が organizations に挿入した組織の ID に限る。
 // 任意の組織の ID を受けて確かめた結果を発行する関数は、db/ の外へ出さない（index.ts は値を出さない）。
 // 共通の表と組織の中の表は別の batch() で書く（docs/data-model.md の「書き込みの単位」）
+import { PERSONAL_ATTACHMENT_QUOTA_BYTES } from '../../shared/organization-kind.ts';
 import { uuidv7 } from '../uuid.ts';
 import { commonDb, orgDb, type OrganizationDb } from './entries.ts';
 import { issueVerifiedOrganization } from './verify-organization.ts';
@@ -97,8 +98,109 @@ export async function insertSelfCreatedOrganization(
   return { organizationId, db: orgDb(env, issueVerifiedOrganization(organizationId)) };
 }
 
-// insertSelfCreatedOrganization が挿入した組織の行を消す補償。最初の管理者を書けなかったときに、管理者のいない組織と
-// お試しの枠が残らないよう戻す。ID と作ったアカウントで絞るので、他の組織の行は消さない。
+export type NewPersonalOrganization = {
+  slug: string;
+  name: string;
+  accountId: string;
+  now: Date;
+};
+
+// 自分用の組織（kind = 'personal'）。1アカウントに1つで、お試しの期限は付けない（期限のない無料）。
+// 人数は本人だけ（member_limit 1）、添付ファイルは 1GB。このアカウントが自分用をすでに持てば 'personal_limit'、slug が重なれば 'slug_taken'。
+// 上限の確かめと INSERT を1文にする（insertSelfCreatedOrganization と同じ。同じアカウントの同時の作成が揃って通らない）。
+// 部分 UNIQUE 索引（organizations_personal_owner）は、それでも重なったときの最後の守り
+export async function insertPersonalOrganization(
+  env: Env,
+  input: NewPersonalOrganization,
+): Promise<CreatedOrganization | 'slug_taken' | 'personal_limit'> {
+  const organizationId = uuidv7(input.now.getTime());
+  const at = input.now.toISOString();
+  const common = commonDb(env);
+  const hasPersonal = () =>
+    common.first(
+      common.statement((q) =>
+        q
+          .selectFrom('organizations')
+          .select('id')
+          .where('created_by_account_id', '=', input.accountId)
+          .where('kind', '=', 'personal'),
+      ),
+    );
+  try {
+    const [result] = await common.batch([
+      common.statement((q) =>
+        q
+          .insertInto('organizations')
+          .columns([
+            'id',
+            'slug',
+            'name',
+            'kind',
+            'vocabulary',
+            'member_limit',
+            'attachment_quota_bytes',
+            'created_by_operator',
+            'created_by_account_id',
+            'created_at',
+            'updated_at',
+          ])
+          .expression(
+            q
+              .selectNoFrom((eb) => [
+                eb.val(organizationId).as('id'),
+                eb.val(input.slug).as('slug'),
+                eb.val(input.name).as('name'),
+                eb.val('personal').as('kind'),
+                eb.val(VOCABULARY_COLUMN_VALUE).as('vocabulary'),
+                eb.val(1).as('member_limit'),
+                eb.val(PERSONAL_ATTACHMENT_QUOTA_BYTES).as('attachment_quota_bytes'),
+                eb.val(SELF_SERVICE_CREATOR).as('created_by_operator'),
+                eb.val(input.accountId).as('created_by_account_id'),
+                eb.val(at).as('created_at'),
+                eb.val(at).as('updated_at'),
+              ])
+              .where((eb) =>
+                eb.not(
+                  eb.exists(
+                    eb
+                      .selectFrom('organizations')
+                      .select('id')
+                      .where('created_by_account_id', '=', input.accountId)
+                      .where('kind', '=', 'personal'),
+                  ),
+                ),
+              ),
+          ),
+      ),
+    ] as const);
+    if (result.changes === 0) return 'personal_limit';
+  } catch (err) {
+    // UNIQUE に当たったかは例外の文面でなく、行を読み直して見分ける。自分の INSERT がコミットされた後に応答だけ失敗した場合は、
+    // slug の行の ID が自分の ID なので、成功として続ける
+    let existing: { id: string } | undefined;
+    let owned: { id: string } | undefined;
+    try {
+      existing = await common.first(
+        common.statement((q) => q.selectFrom('organizations').select('id').where('slug', '=', input.slug)),
+      );
+      if (existing === undefined) owned = await hasPersonal();
+    } catch {
+      throw new Error('組織の行を読み直せなかったので、組織を作れたか分からない', { cause: err });
+    }
+    if (existing !== undefined) {
+      if (existing.id !== organizationId) return 'slug_taken';
+    } else if (owned !== undefined) {
+      return 'personal_limit';
+    } else {
+      throw err;
+    }
+  }
+  return { organizationId, db: orgDb(env, issueVerifiedOrganization(organizationId)) };
+}
+
+// insertSelfCreatedOrganization か insertPersonalOrganization が挿入した組織の行を消す補償（お試しの組織と自分用の組織の両方で使う）。
+// 最初の管理者を書けなかったときに、管理者のいない組織とお試しの枠（自分用では自分用の枠）が残らないよう戻す。
+// ID と作ったアカウントで絞るので、他の組織の行は消さない。
 // 組織の中の表の行が結んでいれば外部キーが断り、例外を投げる（行は残る）
 export async function deleteSelfCreatedOrganization(
   env: Env,

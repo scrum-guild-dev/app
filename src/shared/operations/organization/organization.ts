@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { organizationKinds } from '../../organization-kind.ts';
 import { themes } from '../../theme.ts';
 import { defineOperation } from '../define.ts';
 
@@ -17,6 +18,8 @@ export const organizationInfo = defineOperation({
   output: z.object({
     organization: z.object({
       name: z.string(),
+      // team はチーム用、personal は自分用（1人だけ。招待と管理者の指名はできない）
+      kind: z.enum(organizationKinds),
       theme,
       // 組織にワークスペースが1つでもあるか（所属していないものと、閉じたものを含む）。最初のワークスペースを作る案内の判定に使う
       has_workspaces: z.boolean(),

@@ -19,7 +19,16 @@ import { implementedOperations } from '../src/server/operations/index.ts';
 import { userAdminUpdateOperation, userDisableOperation } from '../src/server/operations/user.ts';
 import { createInvitation, createMembership, createTask, createUser, createWorkspace, hash64 } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
-import { admitElsewhere, createPerson, createTarget, testEnv, type Person, type Target } from './operations/world.ts';
+import { bearerFor } from './operations/api-token.ts';
+import {
+  admitElsewhere,
+  createPerson,
+  createPersonalTarget,
+  createTarget,
+  testEnv,
+  type Person,
+  type Target,
+} from './operations/world.ts';
 
 const app = createApp(implementedOperations);
 
@@ -415,6 +424,8 @@ async function runWithRace(
   const context = {
     db: racing,
     actor,
+    // 入るときに引いた組織の行。指名は kind を見て、自分用なら断る。ここはチーム用
+    organization: { kind: 'team' },
     // 指名は人数の上限を数える（readSeats が上限だけを読む）。上限に当たらない値にする
     tools: { readOrganization: async () => ({ memberLimit: 1000 }) },
     input,
@@ -840,5 +851,94 @@ describe('組織の変更の履歴', () => {
       { kind: 'admin_revoked', name: '星野 澪' },
       { kind: 'admin_designated', name: '星野 澪' },
     ]);
+  });
+});
+
+// 自分用の組織（kind = personal）は1人だけなので、管理者の指名と解除を 409 の conflict（reason: personal_organization）で断る。チーム用は今まで通り（#733）
+describe('user-admin-update と自分用の組織', () => {
+  async function adminFlags(target: Target): Promise<Record<string, number>> {
+    const db = dbOf(target);
+    const rows = await db.rows(db.statement((q) => q.selectFrom('users').select(['id', 'is_admin'])));
+    return Object.fromEntries(rows.map((row) => [row.id, row.is_admin]));
+  }
+
+  test('自分用では、管理者でない人の指名を 409（personal_organization）で断り、行は変わらない', async () => {
+    const target = await createPersonalTarget();
+    const before = await adminFlags(target);
+    const res = await setAdmin(target, target.admin, target.extra.userId!, true);
+    expect(res.status).toBe(409);
+    expect(await errorOf(res)).toEqual({ code: 'conflict', reason: 'personal_organization' });
+    expect(await adminFlags(target)).toEqual(before);
+  });
+
+  test('自分用では、自分自身への指名と解除も 409（personal_organization）', async () => {
+    const target = await createPersonalTarget();
+    const before = await adminFlags(target);
+    for (const isAdmin of [true, false]) {
+      const res = await setAdmin(target, target.admin, target.admin.userId!, isAdmin);
+      expect(res.status).toBe(409);
+      expect(await errorOf(res)).toEqual({ code: 'conflict', reason: 'personal_organization' });
+    }
+    expect(await adminFlags(target)).toEqual(before);
+  });
+
+  test('自分用では、変更の履歴にも何も書かない', async () => {
+    const target = await createPersonalTarget();
+    await setAdmin(target, target.admin, target.extra.userId!, true);
+    const db = dbOf(target);
+    const logs = await db.rows(
+      db.statement((q) =>
+        q
+          .selectFrom('change_logs')
+          .selectAll()
+          .where('organization_id', '=', target.organization.id)
+          .where('entity_id', '=', target.extra.userId!),
+      ),
+    );
+    expect(logs).toEqual([]);
+  });
+
+  test('自分用では、API トークン（write）で呼んでも 409（personal_organization）', async () => {
+    const target = await createPersonalTarget();
+    const res = await post(app, userAdminUpdate, {
+      slug: target.slug,
+      bearer: await bearerFor(target.admin, 'write'),
+      body: { user_id: target.extra.userId!, is_admin: true },
+    });
+    expect(res.status).toBe(409);
+    expect(await errorOf(res)).toEqual({ code: 'conflict', reason: 'personal_organization' });
+  });
+
+  test('自分用では、管理者でない人が呼んでも指名できない（権限の 403 か 409。200 にならない）', async () => {
+    const target = await createPersonalTarget();
+    const res = await setAdmin(target, target.extra, target.extra.userId!, true);
+    expect(res.status).not.toBe(200);
+    expect((await adminFlags(target))[target.extra.userId!]).toBe(0);
+  });
+
+  test('停止した自分用でも、指名はできない（停止したチーム用と同じ断り方）', async () => {
+    const suspendedPersonal = await createPersonalTarget({ suspended: true });
+    const suspendedTeam = await createTarget({ suspended: true });
+    const personal = await setAdmin(suspendedPersonal, suspendedPersonal.admin, suspendedPersonal.extra.userId!, true);
+    const team = await setAdmin(suspendedTeam, suspendedTeam.admin, suspendedTeam.member.userId!, true);
+    expect(personal.status).toBe(team.status);
+    expect(personal.status).not.toBe(200);
+    expect((await adminFlags(suspendedPersonal))[suspendedPersonal.extra.userId!]).toBe(0);
+  });
+
+  test('チーム用の組織では今まで通り、指名も解除もできる', async () => {
+    const target = await createTarget();
+    const userId = target.member.userId!;
+    const designated = await setAdmin(target, target.admin, userId, true);
+    expect(designated.status).toBe(200);
+    expect(await designated.json()).toEqual({ user_id: userId, is_admin: true, disabled_at: null });
+    const revoked = await setAdmin(target, target.admin, userId, false);
+    expect(revoked.status).toBe(200);
+  });
+
+  test('チーム用の組織で、自分の解除は最後の管理者でなければできる（今まで通り）', async () => {
+    const target = await createTarget();
+    expect((await setAdmin(target, target.admin, target.member.userId!, true)).status).toBe(200);
+    expect((await setAdmin(target, target.admin, target.admin.userId!, false)).status).toBe(200);
   });
 });

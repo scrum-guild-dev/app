@@ -5,6 +5,7 @@
   import AccountMenu from '../../lib/components/AccountMenu.svelte';
   import AppShell from '../../lib/components/AppShell.svelte';
   import CreateMyOrganizationDialog from '../../lib/components/CreateMyOrganizationDialog.svelte';
+  import CreatePersonalOrganizationDialog from '../../lib/components/CreatePersonalOrganizationDialog.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Gate from '../../lib/components/Gate.svelte';
   import GateSheet from '../../lib/components/GateSheet.svelte';
@@ -12,6 +13,7 @@
   import LoadFailed from '../../lib/components/LoadFailed.svelte';
   import OrganizationSwitcher from '../../lib/components/OrganizationSwitcher.svelte';
   import WorkspaceSwitcher from '../../lib/components/WorkspaceSwitcher.svelte';
+  import { hasPersonalOrganization, organizationLabel } from '../../lib/organization-label.ts';
   import { applyOrganization } from '../../lib/organization.svelte.ts';
   import { t } from '../../lib/vocabulary.svelte.ts';
   import { workspaceViewOf } from '../../lib/workspace.ts';
@@ -40,12 +42,20 @@
     if (organization) applyOrganization(organization);
   });
 
-  // 切り替えは、入れる組織の一覧が読めたときに出す。入れる組織が1つで招待が無い人も、ここから「組織を作る」を開く
+  // 切り替えは、入れる組織の一覧が読めたときに出す。入れる組織が1つで招待が無い人も、ここから「組織を作る」と「自分用を作る」を開く
   // （その人は / を開くとこの組織へ移り、組織の選択の画面に届かない）。
   // ダイアログは、メニューを閉じても残るよう、切り替えの外（枠）に置く
   const switcherOrganizations = $derived(data.organizations !== null ? data.organizations.organizations : null);
+  // 「自分用を作る」も同じ理由でここが入口になる。入れる組織にも停止した組織にも自分用が無い人にだけ出す
+  // （組織の選択の画面と同じ条件。持つが一覧に出ない人は、押すとサーバーが 409 の personal_limit で断り、ダイアログが伝える）
+  const canCreatePersonal = $derived(
+    data.organizations !== null &&
+      !hasPersonalOrganization([data.organizations.organizations, data.organizations.suspended]),
+  );
   let createDialog = $state<ReturnType<typeof CreateMyOrganizationDialog>>();
   let createDialogOpen = $state(false);
+  let createPersonalDialog = $state<ReturnType<typeof CreatePersonalOrganizationDialog>>();
+  let createPersonalDialogOpen = $state(false);
 </script>
 
 <!-- 組織の中の画面は、それぞれの題名を持つ。見つからない画面だけが、ここで題名を決める -->
@@ -67,9 +77,11 @@
       <OrganizationSwitcher
         organizations={switcherOrganizations}
         currentSlug={data.slug}
-        fallbackName={organization.organization.name}
+        fallbackName={organizationLabel(organization.organization)}
         invited={(data.organizations?.invitations.length ?? 0) > 0}
+        {canCreatePersonal}
         oncreate={(trigger) => createDialog?.show(trigger)}
+        oncreatepersonal={(trigger) => createPersonalDialog?.show(trigger)}
       />
     {/if}
   {/snippet}
@@ -106,6 +118,7 @@
   </AppShell>
   {#if switcherOrganizations}
     <CreateMyOrganizationDialog bind:this={createDialog} bind:open={createDialogOpen} />
+    <CreatePersonalOrganizationDialog bind:this={createPersonalDialog} bind:open={createPersonalDialogOpen} />
   {/if}
 {:else if notFound}
   <Gate>

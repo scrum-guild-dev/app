@@ -10,7 +10,8 @@ export const inviteProviderSchema = z.enum(['github']);
 // 組織の人数にすでに数えられているか（already_counted）を足したもの。
 // 見つからない人と個人のアカウントでない人は 400 の invalid_input（details の code が github_user_not_found、github_not_a_user）、
 // GitHub に届かないときは 503 の unavailable。GitHub に問い合わせるので、アカウントと操作ごとに回数を数える
-// （ログインの枠とは別。超えたら 429 の rate_limited）
+// （ログインの枠とは別。超えたら 429 の rate_limited）。
+// 自分用の組織（1人だけ）では、invitation-create と同じく GitHub に問い合わせる前に 409 の conflict（details.reason が personal_organization）で断る
 export const inviteeResolve = defineOperation({
   name: 'invitee-resolve',
   description:

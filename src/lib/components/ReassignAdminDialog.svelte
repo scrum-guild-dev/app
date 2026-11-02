@@ -3,6 +3,7 @@
   import { invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { callOperation, type ApiResult } from '../api.ts';
+  import { reassignConflictKeyOf } from '../conflict-keys.ts';
   import { formatDateTime } from '../format-datetime.ts';
   import { isUnauthenticated, loginUrl } from '../login-redirect.ts';
   import { showToast } from '../toast.svelte.ts';
@@ -176,7 +177,10 @@
       return { field, key: result.status === 0 ? 'operatorErrorUnreachable' : 'operatorErrorVerifyFailed' };
     }
     if (result.status === 404 && result.error?.code === 'not_found') return { field, key: 'operatorReassignNotFound' };
-    if (result.status === 409 && result.error?.code === 'conflict') return { field, key: 'operatorReassignConflict' };
+    if (result.status === 409 && result.error?.code === 'conflict') {
+      // 自分用の組織は、もう一度試しても指名し直せない（再試行を促さない文言）
+      return { field, key: reassignConflictKeyOf(result.error.details) };
+    }
     // 書かれたか分からない失敗（5xx、通信の切れ）と、書く前に断られた失敗（回数の上限などの 4xx）で文言を分ける
     return { field, key: mayHaveChanged(result) ? 'operatorReassignFailed' : 'operatorReassignRejected' };
   }

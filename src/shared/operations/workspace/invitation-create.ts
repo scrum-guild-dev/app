@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { EMAIL_MAX_LENGTH } from '../../email.ts';
 import { idSchema } from '../../id.ts';
+import { conflictReasonOf } from '../conflict-reason.ts';
 import { defineOperation } from '../define.ts';
 import { GITHUB_USERNAME_MAX_LENGTH } from '../operator/resolve-github-user.ts';
 
@@ -27,7 +28,16 @@ const googleInvitee = z.object({
 export const invitationCreateProblems = ['email_invalid'] as const;
 export type InvitationCreateProblem = (typeof invitationCreateProblems)[number];
 
-// ワークスペースに人を招待する。
+// 409 の conflict で断った理由（details.reason）。personal_organization は自分用の組織（1人だけ）への招待。
+// ほかの 409（member_limit_reached など）は、code で分ける
+export const invitationCreateConflictReasons = ['personal_organization'] as const;
+export type InvitationCreateConflictReason = (typeof invitationCreateConflictReasons)[number];
+
+export function invitationCreateConflictReasonOf(details: unknown): InvitationCreateConflictReason | undefined {
+  return conflictReasonOf(details, invitationCreateConflictReasons);
+}
+
+// ワークスペースに人を招待する。自分用の組織では、どの招待も 409 の conflict（reason が personal_organization）で最初に断る。
 // GitHub の断る順は、解決できない（400 の invalid_input。理由は invitee-resolve と同じ）、ID の違い、今所属している（409 の already_member）、
 // 同じワークスペースに承諾待ちの招待がある（409 の already_invited）、組織の人数が上限以上で、招待する人がまだ数えられていない
 // （409 の member_limit_reached。すでに数えられている人は上限でも招待できる）。無効にされた人であることでは断らない（人数に数えないので、上限では新しい人と同じく断る）。

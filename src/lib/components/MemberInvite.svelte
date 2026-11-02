@@ -4,7 +4,8 @@
   import { tick, untrack } from 'svelte';
   import { callOperation, type ApiResult } from '../api.ts';
   import { formatDateTime } from '../format-datetime.ts';
-  import { isUnauthenticated, loginUrl } from '../login-redirect.ts';
+  import { classifyInviteFailure } from '../invite-failure.ts';
+  import { loginUrl } from '../login-redirect.ts';
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { EMAIL_MAX_LENGTH } from '../../shared/email.ts';
@@ -106,49 +107,26 @@
             : '',
   );
 
-  // 入力の誤りの理由（details の code）と、409 の code を、辞書のキーに写す
-  const problemKeys: Record<string, DictionaryKey> = {
-    github_user_not_found: 'inviteErrorUserNotFound',
-    github_not_a_user: 'inviteErrorNotUser',
-    email_invalid: 'inviteErrorEmailInvalid',
-  };
-  const conflictKeys: Record<string, DictionaryKey> = {
-    invitee_changed: 'inviteErrorUserChanged',
-    already_member: 'inviteErrorAlreadyMember',
-    already_invited: 'inviteErrorAlreadyInvited',
-  };
-
-  function problemCodeOf(result: FailedResult): string | undefined {
-    const details = result.error?.details;
-    if (!Array.isArray(details)) return undefined;
-    for (const item of details as unknown[]) {
-      if (typeof item === 'object' && item !== null && 'code' in item && typeof item.code === 'string') {
-        if (Object.hasOwn(problemKeys, item.code)) return item.code;
-      }
-    }
-    return undefined;
-  }
-
-  // 失敗を、どの欄にどの文言を出すかに写す。画面ごと読み直す失敗は、トーストで知らせて null を返す。
+  // 失敗を、どの欄にどの文言を出すかに写す（分類は src/lib/invite-failure.ts）。画面ごと読み直す失敗は、トーストで知らせて null を返す。
   // context は、ユーザー名を確かめる（verify）か、招待する（invite）か
   async function failureOf(
     result: FailedResult,
     context: 'verify' | 'invite',
   ): Promise<{ field: Field; key: DictionaryKey } | null> {
-    if (isUnauthenticated(result)) {
+    const failure = classifyInviteFailure(result, context, github);
+    if (failure.kind === 'login') {
       window.location.assign(loginUrl(page.url));
       return null;
     }
-    const code = result.error?.code;
     // 閉じた、権限を失った、ワークスペースが見つからない: 節ごと消えることがあるので、トーストで知らせて画面を読み直す
-    if (code === 'workspace_closed' || result.status === 403 || result.status === 404) {
-      showToast(t(code === 'workspace_closed' ? 'inviteErrorClosed' : 'inviteErrorForbidden', words), 'alert');
+    if (failure.kind === 'reload') {
+      showToast(t(failure.toast, words), 'alert');
       await invalidate('app:workspace');
       await onchanged();
       return null;
     }
     // 人数が上限に達していて、この人はまだ数えられていない: 上限の枠を alert で出し、人数を読み直す
-    if (code === 'member_limit_reached') {
+    if (failure.kind === 'limit') {
       limitAlert = true;
       // GitHub で確かめた人の結果だけを直す（Google で断られても、GitHub で確かめた人が数えられていることは変わらない）
       if (github && resolved !== null) resolved = { ...resolved, alreadyCounted: false };
@@ -157,35 +135,9 @@
       limitCallout?.focus();
       return null;
     }
-    // 人を指す欄の誤り。Google ではユーザー名の欄が無いので、メールアドレスの欄に出す（出す場所が無いまま消さない）
-    const inputField: Field = github ? 'username' : 'email';
-    const problem = problemCodeOf(result);
-    if (problem !== undefined) {
-      return { field: problem === 'email_invalid' ? 'email' : inputField, key: problemKeys[problem]! };
-    }
-    if (code !== undefined && Object.hasOwn(conflictKeys, code)) {
-      // 別のリーダーが先に招待したか、承諾されたときは、一覧を読み直して今の所属と招待を出す
-      if (code === 'already_member' || code === 'already_invited') await onchanged();
-      return { field: inputField, key: conflictKeys[code]! };
-    }
-    // 回数の上限。招待の送信では、確かめた結果を残したまま、しばらく後に押し直せるようにする
-    if (code === 'rate_limited') {
-      return context === 'verify'
-        ? { field: 'username', key: 'inviteErrorTooMany' }
-        : { field: 'form', key: 'inviteErrorTooManyInvites' };
-    }
-    // GitHub に届かない（Google の招待は GitHub に問い合わせないので、ほかの失敗と同じに扱う）
-    if (result.status === 503 && github) {
-      return { field: context === 'verify' ? 'username' : 'form', key: 'inviteErrorGithubUnavailable' };
-    }
-    if (context === 'verify') {
-      return { field: 'username', key: result.status === 0 ? 'inviteErrorUnreachable' : 'inviteErrorVerifyFailed' };
-    }
-    // 招待できたか分からない失敗（通信の切れ、5xx）。一覧を読み直して、入っていれば見えるようにする。
-    // Google では、書かれていても招待の URL はもう出せないので、招待し直すと新しい URL が出ることを添える
-    await onchanged();
-    if (!github) return { field: 'form', key: 'inviteErrorUnknownGoogle' };
-    return { field: 'form', key: result.status === 0 ? 'inviteErrorUnreachable' : 'inviteErrorFailed' };
+    // 別のリーダーが先に招待したか、承諾されたとき、招待できたか分からない失敗は、一覧を読み直して今の所属と招待を出す
+    if (failure.refresh) await onchanged();
+    return { field: failure.field, key: failure.key };
   }
 
   // 失敗した欄へフォーカスを移す。欄に紐づかない失敗は、誤りを出した枠（callout）へ移す

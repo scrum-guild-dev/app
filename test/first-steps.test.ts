@@ -11,6 +11,7 @@ import {
   createMembership,
   createOrganization,
   createOrganizationHoliday,
+  createPersonalOrganizationRow,
   createSprint,
   createTask,
   createUser,
@@ -512,5 +513,48 @@ describe('first-steps: 読み取りの文', () => {
     expect(sqls.some((sql) => sql.includes('"sprints"'))).toBe(true);
     expect(sqls.some((sql) => sql.includes('"invitations"'))).toBe(true);
     expect(sqls.some((sql) => sql.includes('distinct'))).toBe(false);
+  });
+});
+
+// 自分用の組織（kind = personal）は1人だけなので、人を招く手順（リーダーの invite_members、管理者の invite_by_admin）は完了できない。
+// 自分用の出力には含めない。チーム用は今まで通り（#733）
+describe('first-steps: 自分用の組織', () => {
+  async function personalWorld() {
+    const owner = await createPerson();
+    const organization = await createPersonalOrganizationRow(owner.accountId);
+    const admin = await createPerson({ organization, admin: true });
+    return { organization, slug: organization.slug, admin };
+  }
+
+  test('管理者の手順に、招待（invite_by_admin）を含めない。ほかの手順は今まで通り', async () => {
+    const world = await personalWorld();
+
+    const view = await read(world.slug, world.admin);
+
+    expect(view.role).toBe('admin');
+    expect(keysOf(view)).toEqual(['became_admin', 'create_workspace', 'register_holiday']);
+  });
+
+  test('リーダーの手順に、招待（invite_members）を含めない。ほかの手順は今まで通り', async () => {
+    const world = await personalWorld();
+    const workspace = await createWorkspace(world.organization, world.admin.userId!);
+    const leader = await createPerson({
+      organization: world.organization,
+      membership: { workspaceId: workspace.id, role: 'leader' },
+    });
+
+    const view = await read(world.slug, leader);
+
+    expect(view.role).toBe('leader');
+    expect(keysOf(view)).toEqual(['became_leader', 'first_backlog_task', 'start_sprint']);
+  });
+
+  test('チーム用の組織は、招待の手順（管理者の invite_by_admin、リーダーの invite_members）を今まで通り含める', async () => {
+    const team = await createWorld();
+    const adminOnly = await createOrganization();
+    const admin = await createPerson({ organization: adminOnly, admin: true });
+
+    expect(keysOf(await read(adminOnly.slug, admin))).toContain('invite_by_admin');
+    expect(keysOf(await read(team.slug, team.leader))).toContain('invite_members');
   });
 });

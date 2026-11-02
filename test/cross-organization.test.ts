@@ -171,7 +171,7 @@ describe('hasLoginAccess', () => {
     expect(await listAccountOrganizations(env, admin.who)).toEqual({
       organizations: [],
       invitations: [],
-      suspended: [{ slug: adminOf.slug, name: adminOf.name }],
+      suspended: [{ slug: adminOf.slug, name: adminOf.name, kind: 'team' }],
     });
 
     const invited = await visitor();
@@ -182,7 +182,7 @@ describe('hasLoginAccess', () => {
       db.statement((q) => q.updateTable('organizations').set({ suspended_at: AT }).where('id', '=', organization.id)),
     ]);
     expect((await listAccountOrganizations(env, invited.who)).suspended).toEqual([
-      { slug: organization.slug, name: organization.name },
+      { slug: organization.slug, name: organization.name, kind: 'team' },
     ]);
 
     // 停止した組織で無効にされた人は、停止していなければ入れた人ではない
@@ -197,7 +197,7 @@ describe('hasLoginAccess', () => {
     await both.join(await createOrganization(), { is_admin: 1 });
     const listed = await listAccountOrganizations(env, both.who);
     expect(listed.organizations).toHaveLength(1);
-    expect(listed.suspended).toEqual([{ slug: paused.slug, name: paused.name }]);
+    expect(listed.suspended).toEqual([{ slug: paused.slug, name: paused.name, kind: 'team' }]);
   });
 });
 

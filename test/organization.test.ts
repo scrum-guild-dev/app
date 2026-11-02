@@ -57,10 +57,10 @@ async function createVisitor(options: { extraLogin?: boolean } = {}) {
 }
 
 type Listed = {
-  organizations: { slug: string; name: string }[];
+  organizations: { slug: string; name: string; kind: string }[];
   invitations: { organization_name: string; slug: string }[];
   // #639 で足す。停止していなければ入れた組織（管理者、所属、承諾待ちの招待）のうち、停止したもの。organizations と同じ名前順
-  suspended: { slug: string; name: string }[];
+  suspended: { slug: string; name: string; kind: string }[];
   operator: boolean;
 };
 
@@ -100,8 +100,8 @@ describe('my-organizations', () => {
 
     const result = await listOrganizations(visitor.token);
     expect(result.organizations).toEqual([
-      { slug: aoba.slug, name: 'あおば開発' },
-      { slug: hibari.slug, name: 'ひばり工房' },
+      { slug: aoba.slug, name: 'あおば開発', kind: 'team' },
+      { slug: hibari.slug, name: 'ひばり工房', kind: 'team' },
     ]);
     expect(result.invitations).toEqual([]);
     expect(result.operator).toBe(false);
@@ -174,7 +174,7 @@ describe('my-organizations', () => {
     expect(await listOrganizations(visitor.token)).toEqual({
       organizations: [],
       invitations: [],
-      suspended: [{ slug: suspended.slug, name: suspended.name }],
+      suspended: [{ slug: suspended.slug, name: suspended.name, kind: 'team' }],
       operator: false,
     });
   });
@@ -352,9 +352,9 @@ describe('my-organizations の suspended', () => {
     // 名前順（管理 < 招待 < 所属。コードポイント順）
     expect(result.suspended).toEqual(
       [
-        { slug: adminOf.slug, name: '停止した管理の工房' },
-        { slug: memberOf.organization.slug, name: '停止した所属の工房' },
-        { slug: invitedTo.organization.slug, name: '停止した招待の工房' },
+        { slug: adminOf.slug, name: '停止した管理の工房', kind: 'team' },
+        { slug: memberOf.organization.slug, name: '停止した所属の工房', kind: 'team' },
+        { slug: invitedTo.organization.slug, name: '停止した招待の工房', kind: 'team' },
       ].sort((a, b) => (a.name < b.name ? -1 : 1)),
     );
     // 組織の中の値（ワークスペースや管理者の ID）は出さない
@@ -375,7 +375,7 @@ describe('my-organizations の suspended', () => {
     await visitor.join(twins[0]!, { is_admin: 1 });
     const result = await listOrganizations(visitor.token);
     const expected = [...created, ...twins]
-      .map(({ slug, name }) => ({ slug, name }))
+      .map(({ slug, name }) => ({ slug, name, kind: 'team' }))
       .sort((a, b) => (a.name === b.name ? (a.slug < b.slug ? -1 : 1) : a.name < b.name ? -1 : 1));
     expect(result.suspended).toEqual(expected);
   });
@@ -387,8 +387,8 @@ describe('my-organizations の suspended', () => {
     await visitor.join(active, { is_admin: 1 });
     await visitor.join(paused, { is_admin: 1 });
     const result = await listOrganizations(visitor.token);
-    expect(result.organizations).toEqual([{ slug: active.slug, name: '動いている工房' }]);
-    expect(result.suspended).toEqual([{ slug: paused.slug, name: '止まっている工房' }]);
+    expect(result.organizations).toEqual([{ slug: active.slug, name: '動いている工房', kind: 'team' }]);
+    expect(result.suspended).toEqual([{ slug: paused.slug, name: '止まっている工房', kind: 'team' }]);
   });
 
   test('所属も招待も無い組織、終わった所属だけの組織、無効にされた組織、別の人宛の招待の組織は、停止していても出さない', async () => {
@@ -445,7 +445,9 @@ describe('my-organizations の suspended', () => {
     const outsiderHome = await createOrganization({ name: '外の人の工房' });
     await outsider.join(outsiderHome, { is_admin: 1 });
 
-    expect((await listOrganizations(insider.token)).suspended).toEqual([{ slug: paused.slug, name: '分離の工房' }]);
+    expect((await listOrganizations(insider.token)).suspended).toEqual([
+      { slug: paused.slug, name: '分離の工房', kind: 'team' },
+    ]);
     const seen = await listOrganizations(outsider.token);
     expect(seen.suspended).toEqual([]);
     expect(JSON.stringify(seen)).not.toContain(paused.slug);
@@ -465,7 +467,7 @@ describe('my-organizations の suspended', () => {
     await suspend(invitedTo.organization, null);
     const result = await listOrganizations(visitor.token);
     expect(result.suspended).toEqual([]);
-    expect(result.organizations).toEqual([{ slug: adminOf.slug, name: '戻る管理の工房' }]);
+    expect(result.organizations).toEqual([{ slug: adminOf.slug, name: '戻る管理の工房', kind: 'team' }]);
     expect(result.invitations).toEqual([{ organization_name: '戻る招待の工房', slug: invitedTo.organization.slug }]);
   });
 
@@ -565,6 +567,7 @@ describe('organization', () => {
     const result = await readOrganization(organization.slug, person.token);
     expect(result.organization).toEqual({
       name: '青葉工房',
+      kind: 'team',
       theme: 'medieval',
       has_workspaces: true,
     });

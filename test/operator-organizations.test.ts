@@ -577,6 +577,7 @@ describe('組織の一覧', () => {
     expect(item).toEqual({
       slug: organization.slug,
       name: '一覧の工房',
+      kind: 'team',
       suspended_at: '2026-10-20T00:00:00.000Z',
       purge_on: null,
       purge_due: false,
@@ -838,6 +839,7 @@ describe('組織ごとの集計', () => {
       'admin_status',
       'attachment_quota_bytes',
       'created_at',
+      'kind',
       'last_used_at',
       'name',
       'purge_due',

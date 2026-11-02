@@ -5,6 +5,7 @@ import { accountLogins } from '../auth/account-logins.ts';
 import { isOperatorLogin, operatorLoginIdOf } from '../auth/operators.ts';
 import {
   deleteSelfCreatedOrganization,
+  insertPersonalOrganization,
   insertSelfCreatedOrganization,
   listAccountOrganizations,
   type AccountOrganizations,
@@ -20,7 +21,14 @@ export type OutsideAccount = {
     name: string;
     now: Date;
   }): Promise<CreatedOrganization | 'slug_taken' | 'trial_limit'>;
-  // createOrganization で挿入した組織の行を消す補償（最初の管理者を書けなかったとき）。組織の中の表の行があれば外部キーが断り、投げる
+  // このアカウントが自分用の組織を作る最初の書き込み。slug が重なれば 'slug_taken'、自分用をすでに持つなら 'personal_limit'。
+  // お試しの上限（createOrganization の 'trial_limit'）とは数えが別。作った人の users と change_logs は、返る組織の入口に呼び出し側が書く
+  createPersonalOrganization(input: {
+    slug: string;
+    name: string;
+    now: Date;
+  }): Promise<CreatedOrganization | 'slug_taken' | 'personal_limit'>;
+  // createOrganization か createPersonalOrganization で挿入した組織の行を消す補償（最初の管理者を書けなかったとき）。組織の中の表の行があれば外部キーが断り、投げる
   abandonOrganization(organizationId: string): Promise<void>;
   // 入れる組織と、承諾待ちの招待だけがある組織（組織をまたいで読む関数を通す）。アカウントに結ばれる前の行は数えない
   organizations(): Promise<AccountOrganizations>;
@@ -38,6 +46,7 @@ export function outsideAccount(env: Env, accountId: string): OutsideAccount {
   let organizations: Promise<AccountOrganizations> | undefined;
   return {
     createOrganization: (input) => insertSelfCreatedOrganization(env, { ...input, accountId }),
+    createPersonalOrganization: (input) => insertPersonalOrganization(env, { ...input, accountId }),
     abandonOrganization: (organizationId) => deleteSelfCreatedOrganization(env, { organizationId, accountId }),
     logins: loadLogins,
     organizations: () =>

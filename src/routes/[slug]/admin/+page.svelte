@@ -61,7 +61,12 @@
 
   <div class="settings">
     {#if organization.trial !== null}<TrialSetting trial={organization.trial} />{/if}
-    <UsersSetting slug={data.slug} meId={organization.me.id} oncounts={(counts) => (userCounts = counts)} />
+    <UsersSetting
+      slug={data.slug}
+      meId={organization.me.id}
+      personal={organization.organization.kind === 'personal'}
+      oncounts={(counts) => (userCounts = counts)}
+    />
     <WorkspacesSetting
       bind:this={workspacesSetting}
       onopencount={(count) => (openCount = count)}

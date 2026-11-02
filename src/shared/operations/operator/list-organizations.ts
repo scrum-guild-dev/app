@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { organizationKinds } from '../../organization-kind.ts';
 import { defineOperation } from '../define.ts';
 
 // 組織の管理者の状態。運用者が組織の中を見ずに、管理者のいない組織と、指名した人のログイン待ちの組織を見分けるのに使う。
@@ -23,6 +24,8 @@ export const listOrganizations = defineOperation({
       z.object({
         slug: z.string(),
         name: z.string(),
+        // team はチーム用、personal は自分用
+        kind: z.enum(organizationKinds),
         self_created: z.boolean(),
         trial_ends_on: z.string().nullable(),
         trial_expired: z.boolean(),

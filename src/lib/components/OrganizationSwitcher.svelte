@@ -1,6 +1,8 @@
 <script lang="ts">
   import { navigating } from '$app/state';
   import { resolve } from '$app/paths';
+  import type { OrganizationKind } from '../../shared/organization-kind.ts';
+  import { organizationLabel } from '../organization-label.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
   import { SwitcherMenu } from './switcher-menu.svelte.ts';
@@ -14,25 +16,35 @@
   // 最後に「組織を作る」を置く。入れる組織が1つで招待が無い人は / を開くとその組織へ移り、組織の選択の画面の「組織を作る」に届かないので、
   // ここが入口になる。押すとメニューを閉じてから oncreate に押したボタンを渡す（ダイアログは、メニューを閉じても残る枠の側が持つ。
   // フォーカスは、閉じたメニューのボタンへ戻る）。
+  // 続けて「自分用を作る」を、自分用を持たない人（入れる組織にも停止した組織にも自分用が無い人）にだけ置く。同じ理由で、ここも入口になる。
+  // 押すと同じようにメニューを閉じてから oncreatepersonal に押したボタンを渡す。
   // 「組織の一覧へ」は、/ が今の組織へ戻すだけのとき（入れる組織が1つで招待が無い）は出さない（landingFor と同じ条件）
   let {
     organizations,
     currentSlug,
     fallbackName,
     invited,
+    canCreatePersonal,
     oncreate,
+    oncreatepersonal,
   }: {
-    organizations: readonly { slug: string; name: string }[];
+    organizations: readonly { slug: string; name: string; kind: OrganizationKind }[];
     currentSlug: string;
     fallbackName: string;
     invited: boolean;
+    // 入れる組織にも停止した組織にも自分用が無い人か（組織の選択の画面の「自分用を作る」と同じ条件。hasPersonalOrganization）
+    canCreatePersonal: boolean;
     oncreate: (trigger: HTMLElement | null) => void;
+    oncreatepersonal: (trigger: HTMLElement | null) => void;
   } = $props();
 
   const listId = $props.id();
   const menu = new SwitcherMenu();
 
-  const currentName = $derived(organizations.find((item) => item.slug === currentSlug)?.name ?? fallbackName);
+  const currentName = $derived.by(() => {
+    const current = organizations.find((item) => item.slug === currentSlug);
+    return current === undefined ? fallbackName : organizationLabel(current);
+  });
   // 今の組織から離れる移動（別の組織、組織の選択の画面）の最中
   const moving = $derived(
     navigating.to !== null && (navigating.to.route.id === '/' || navigating.to.params?.slug !== currentSlug),
@@ -48,6 +60,11 @@
   function create(): void {
     menu.close();
     oncreate(menu.button ?? null);
+  }
+
+  function createPersonal(): void {
+    menu.close();
+    oncreatepersonal(menu.button ?? null);
   }
 </script>
 
@@ -87,7 +104,7 @@
           aria-current={current ? 'page' : undefined}
           onclick={menu.close}
         >
-          <span class="org-menu-name">{organization.name}</span>
+          <span class="org-menu-name">{organizationLabel(organization)}</span>
           {#if current}<Icon name="check" />{/if}
         </a>
       </li>
@@ -105,5 +122,12 @@
         <span class="org-menu-name">{t('createMyOrganizationAction')}</span>
       </button>
     </li>
+    {#if canCreatePersonal}
+      <li class="is-aside">
+        <button type="button" onclick={createPersonal}>
+          <span class="org-menu-name">{t('createPersonalOrganizationAction')}</span>
+        </button>
+      </li>
+    {/if}
   </ul>
 </div>
