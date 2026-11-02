@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scrum Guild Wiki</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Zen+Old+Mincho:wght@700;900&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="icons.js"></script>
+<script src="art.js"></script>
+<script src="sample-data.js"></script>
+<script src="kit.js"></script>
+<script>
+"use strict";
+// Wiki（ワークスペースの Wiki と組織の Wiki）。左に木、右にページ。読む、編集する、版の一覧、前の版を見て戻す、
+// 親を移す、消す、.md をまとめて上げる、題と本文で探す。?scope=organization で組織の Wiki。
+// 例のページはこの画面の中に持つ（すべて架空）。保存、移動、削除はこの画面の中の値だけを書き換える。
+const { D, t, icon, esc, pageHead, user, avatarOf, emptyState, wikiTree, wikiCrumbs, openDialog, toast } = SQ;
+
+const isOrg = new URLSearchParams(location.search).get("scope") === "organization";
+const NOW = "2026-10-20 10:05";
+const fmt = (s) => s.slice(5).replace("-", "/");
+const MAX_VERSIONS = 100;
+const MAX_DEPTH = 10;
+const MAX_UPLOAD = 20;
+
+// ---- 例のデータ ----
+// pages の並びが兄弟の並び（position の順）。by は最後に保存した人、created は作った人、history は前の版（新しい順）
+const WS = { name: D.workspaces.wa.name, pages: [
+  { id: "w1", parent: null, title: "リリースの手順", created: "u2", by: "u2", at: "2026-10-12 10:20", ver: 1, md: [
+    "# リリースの手順", "", "本番へ出す日の流れ。出す前の確認は子のページにまとめてある。", "",
+    "1. 出す前の確認を済ませる", "2. マイグレーションを当ててから、デプロイする", "3. 画面と API の版がずれていないかを確かめる"].join("\n") },
+  { id: "w2", parent: "w1", title: "本番へ出す前の確認", created: "u2", by: "u1", at: "2026-10-18 09:12", ver: 4, md: [
+    "---", "title: 本番へ出す前の確認", "owner: ハルカ", "reviewed_on: 2026-10-14", "applies_to: shop, shop-admin", "---",
+    "# 本番へ出す前の確認", "", "リリースの前に、次を上から順に確かめる。", "",
+    "## 確かめること", "",
+    "- [x] マイグレーションを、本番と同じ版の D1 に当てた",
+    "- [x] テストが CI で通っている",
+    "- [ ] 管理画面で会員ポイントの付与を1件試した", "",
+    "## 戻すとき", "",
+    "問題が見つかったら、[ロールバックの手順](https://scrum-guild.dev/aoba/w/wa/wiki/w3)に従う。判断に迷うときは、**出さずに**リーダーへ聞く。"].join("\n"),
+    history: [
+      { v: 3, by: "u3", at: "2026-10-14 17:42", title: "本番へ出す前の確認", md: [
+        "---", "title: 本番へ出す前の確認", "owner: ハルカ", "reviewed_on: 2026-10-14", "---",
+        "# 本番へ出す前の確認", "", "リリースの前に、次を上から順に確かめる。", "",
+        "## 確かめること", "",
+        "- [x] マイグレーションを、本番と同じ版の D1 に当てた",
+        "- [x] テストが CI で通っている", "",
+        "## 戻すとき", "", "問題が見つかったら、ロールバックの手順に従う。"].join("\n") },
+      { v: 2, by: "u3", at: "2026-10-13 11:05", title: "リリース前の確認", md: [
+        "# リリース前の確認", "", "出す前に、テストが CI で通っていることを確かめる。", "",
+        "- [x] テストが CI で通っている"].join("\n") },
+      { v: 1, by: "u2", at: "2026-10-12 10:20", title: "リリース前の確認", md: ["# リリース前の確認", "", "（下書き）"].join("\n") },
+    ] },
+  { id: "w3", parent: "w1", title: "ロールバックの手順", created: "u1", by: "u1", at: "2026-10-15 16:30", ver: 1, md: [
+    "# ロールバックの手順", "", "出した版を戻すときの手順。データベースは戻さず、画面と API だけを前の版に戻す。", "",
+    "1. 戻す版を決める", "2. 前の版を出し直す", "3. 戻した理由を障害の記録に書く"].join("\n") },
+  { id: "w4", parent: null, title: "障害対応", created: "u1", by: "u1", at: "2026-10-09 13:00", ver: 1, md: [
+    "# 障害対応", "", "障害が起きたときに、最初に見る場所。連絡先と記録の書き方は子のページにある。"].join("\n") },
+  { id: "w5", parent: "w4", title: "連絡先と当番", created: "u4", by: "u4", at: "2026-10-09 13:40", ver: 1, md: [
+    "---", "title: 連絡先と当番", "owner: リン", "updated_on: 2026-10-09", "---",
+    "## 今月の当番", "", "- 平日の昼: ソウタ", "- 夜と休日: リン"].join("\n") },
+  { id: "w6", parent: "w4", title: "障害の記録の書き方", created: "u2", by: "u2", at: "2026-10-10 15:10", ver: 1, md: [
+    "# 障害の記録の書き方", "", "起きたこと、影響、直したこと、次に防ぐことの4つを、短く書く。例は子のページ。"].join("\n") },
+  { id: "w7", parent: "w6", title: "記録の例", created: "u2", by: "u2", at: "2026-10-10 15:30", ver: 1, md: [
+    "## 例: 会員ポイントの付与が二重になった", "",
+    "- 起きたこと: 同じ購入に、ポイントが2回付いた", "- 影響: 14 件", "- 直したこと: 付与の処理に重複の検査を足した"].join("\n") },
+  { id: "w8", parent: null, title: "レビューの決まり", created: "u3", by: "u3", at: "2026-10-05 09:50", ver: 1, md: [
+    "# レビューの決まり", "", "- 1人以上が通してから、マージする", "- 画面を変えたときは、スクリーンショットを貼る"].join("\n") },
+  { id: "w9", parent: null, title: "新しく入った人へ", created: "u2", by: "u2", at: "2026-10-01 10:00", ver: 1, md: [
+    "# 新しく入った人へ", "", "最初の1週間でやることの一覧。分からないことは、この Wiki で探してから聞いてほしい。"].join("\n") },
+] };
+WS.pages.find((p) => p.id === "w3").ver = 2;
+WS.pages.find((p) => p.id === "w3").history = [{ v: 1, by: "u1", at: "2026-10-15 16:10", title: "ロールバックの手順", md: ["# ロールバックの手順", "", "（下書き）"].join("\n") }];
+
+const ORG = { name: D.organizations[0].name, pages: [
+  { id: "o1", parent: null, title: "社内の決まり", created: "u2", by: "u2", at: "2026-09-28 10:00", ver: 1, md: [
+    "# 社内の決まり", "", "働き方とお金の決まり。細かい手順は、子のページにある。"].join("\n") },
+  { id: "o2", parent: "o1", title: "休みの申請", created: "u4", by: "u4", at: "2026-09-29 11:20", ver: 1, md: [
+    "---", "title: 休みの申請", "owner: リン", "reviewed_on: 2026-09-29", "---",
+    "## 申請の流れ", "", "1. 前の週までに、カレンダーに休みを入れる", "2. 担当のスプリントがあれば、リーダーに伝える"].join("\n") },
+  { id: "o3", parent: "o1", title: "経費の精算", created: "u2", by: "u2", at: "2026-09-30 14:45", ver: 1, md: [
+    "# 経費の精算", "", "月末までに、領収書を添えて申請する。1件 3万円を超えるときは、先にリーダーに聞く。"].join("\n") },
+  { id: "o4", parent: null, title: "情報の扱い", created: "u1", by: "u1", at: "2026-10-02 09:30", ver: 1, md: [
+    "# 情報の扱い", "", "お客様のデータは、手元の端末に置かない。持ち出すときは、必ず理由を残す。"].join("\n") },
+  { id: "o5", parent: null, title: "入社したら最初にやること", created: "u2", by: "u2", at: "2026-10-03 16:00", ver: 1, md: [
+    "# 入社したら最初にやること", "", "- アカウントを作る", "- 自分のワークスペースの Wiki を読む"].join("\n") },
+] };
+
+const store = isOrg ? ORG : WS;
+const S = { page: isOrg ? "o2" : "w2", mode: "read", ver: null, open: new Set(store.pages.map((p) => p.parent).filter(Boolean)), reorder: false, query: "", newParent: null, upload: null, focus: null };
+const me = D.me; // ミナト。ワークスペースのリーダーで、組織の管理者
+const scopeName = isOrg ? "組織の Wiki" : "ワークスペースの Wiki";
+
+// ---- 木の引き方 ----
+const byId = (id) => store.pages.find((p) => p.id === id);
+const kids = (id) => store.pages.filter((p) => p.parent === id);
+const tree = (parent = null) => kids(parent).map((p) => ({ id: p.id, title: p.title, children: tree(p.id) }));
+const ancestors = (id) => { const out = []; let p = byId(id); while (p && p.parent) { p = byId(p.parent); out.unshift(p); } return out; };
+const depthOf = (id) => ancestors(id).length + 1;
+const descendants = (id) => kids(id).flatMap((k) => [k.id, ...descendants(k.id)]);
+
+// ---- frontmatter と Markdown（見本の簡易版。本番は src/shared の関数を Worker と画面で共有する） ----
+// 先頭の --- で囲んだ行を「キー: 値」として読む。読めない行があれば読めないものとして、全文を本文にする
+function splitMd(md) {
+  const m = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(md);
+  if (!m) return { rows: null, bad: false, body: md };
+  const rows = [];
+  for (const line of m[1].split("\n")) {
+    if (!line.trim()) continue;
+    const kv = /^([^\s:#][^:]*):\s*(.*)$/.exec(line);
+    if (!kv) return { rows: null, bad: true, body: md };
+    rows.push([kv[1].trim(), kv[2].trim()]);
+  }
+  return { rows, bad: false, body: md.slice(m[0].length) };
+}
+// 題に使う title（1〜100 字の文字列）。なければ null
+function fmTitle(md) {
+  const { rows } = splitMd(md);
+  const v = rows && rows.find(([k]) => k === "title");
+  return v && v[1].length >= 1 && v[1].length <= 100 ? v[1] : null;
+}
+const titleOf = (md, fallback) => fmTitle(md) ?? fallback.trim();
+let uid = 0;
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, text, url) => {
+      const page = /^https:\/\/scrum-guild\.dev\/aoba\/(?:w\/wa\/)?wiki\/(\w+)$/.exec(url);
+      return `<a href="${url}" rel="noopener noreferrer" target="_blank" aria-describedby="wiki-newtab"${page ? ` data-wiki-url="${page[1]}"` : ""}>${text}</a>`;
+    });
+}
+function renderMd(src) {
+  const lines = src.split("\n");
+  const out = [];
+  const isItem = (l) => /^\s*(?:[-*]|\d+\.)\s/.test(l);
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i];
+    let m;
+    if (!line.trim()) { i++; continue; }
+    if ((m = /^(#{1,3})\s+(.*)$/.exec(line))) { out.push(`<h${m[1].length + 2} class="doc-h${m[1].length}">${inline(m[2])}</h${m[1].length + 2}>`); i++; continue; }
+    if (isItem(line)) {
+      const ordered = /^\s*\d+\./.test(line);
+      const items = [];
+      while (i < lines.length && isItem(lines[i])) { items.push(lines[i].replace(/^\s*(?:[-*]|\d+\.)\s+/, "")); i++; }
+      const task = items.some((x) => /^\[[ x]\]\s/.test(x));
+      const li = items.map((x) => {
+        const c = /^\[([ x])\]\s+(.*)$/.exec(x);
+        if (!c) return `<li>${inline(x)}</li>`;
+        const id = `wiki-task-${uid++}`;
+        return `<li class="is-task"><input type="checkbox" ${c[1] === "x" ? "checked" : ""} disabled aria-labelledby="${id}"><div id="${id}">${inline(c[2])}</div></li>`;
+      }).join("");
+      out.push(`<${ordered ? "ol" : "ul"}${task ? ' role="list"' : ""}>${li}</${ordered ? "ol" : "ul"}>`);
+      continue;
+    }
+    const para = [];
+    while (i < lines.length && lines[i].trim() && !isItem(lines[i]) && !/^#{1,3}\s/.test(lines[i])) { para.push(lines[i]); i++; }
+    out.push(`<p>${inline(para.join(" "))}</p>`);
+  }
+  return out.join("");
+}
+
+// ---- 部分の HTML ----
+const person = (id) => `<span class="person">${avatarOf(id)}${esc(user(id).name)}</span>`;
+const fmTable = (rows) => `<div class="table-wrap"><table class="table"><caption class="visually-hidden">ページの frontmatter（題を除く）</caption>
+  <thead><tr><th scope="col">キー</th><th scope="col">値</th></tr></thead>
+  <tbody>${rows.map(([k, v]) => `<tr><th scope="row" class="mono">${esc(k)}</th><td class="is-wrap">${esc(v) || '<span class="props-note">（空）</span>'}</td></tr>`).join("")}</tbody></table></div>`;
+// ページの頭の表と本文。題に使った title は表に出さない。読めない frontmatter は、表を出さずに知らせ、全文を本文として描く
+function pageBody(md) {
+  const { rows, bad, body } = splitMd(md);
+  const shown = rows ? rows.filter(([k]) => !(k === "title" && fmTitle(md) !== null)) : [];
+  return `<span id="wiki-newtab" hidden>${t("markdownNewTab")}</span>
+    ${bad ? `<div class="callout is-warn">${icon("alert")}<span>frontmatter を読めません。本文として表示しています。</span></div>` : ""}
+    ${shown.length ? fmTable(shown) : ""}
+    <div class="doc-box">${renderMd(bad ? md : body) || '<p class="props-note">本文はまだありません。</p>'}</div>`;
+}
+const metaLine = (p) => `<p class="props-note">作った人 ${esc(user(p.created).name)}・最後に保存した人 ${esc(user(p.by).name)}・<span class="mono">${fmt(p.at)}</span>・版 <span class="mono">${p.ver}</span></p>`;
+function parentOptions(selected, exclude = []) {
+  const walk = (id, depth) => kids(id).filter((k) => !exclude.includes(k.id)).flatMap((k) => [`<option value="${k.id}" ${k.id === selected ? "selected" : ""}>${"　".repeat(depth)}${esc(k.title)}</option>`, ...walk(k.id, depth + 1)]);
+  return `<option value="" ${selected ? "" : "selected"}>最上段（親なし）</option>${walk(null, 0).join("")}`;
+}
+
+// ---- 左の欄: 検索と木 ----
+function listHtml() {
+  const q = S.query.trim();
+  if (!q) {
+    return store.pages.length
+      ? `<nav aria-label="${scopeName}のページ">${wikiTree(tree(), { current: S.mode === "new" ? null : S.page, open: [...S.open], reorder: S.reorder, key: "wk" })}</nav>`
+      : `<p class="props-note">ページはまだありません。</p>`;
+  }
+  const words = q.split(/[\s　]+/).filter(Boolean).slice(0, 5);
+  const hits = store.pages.map((p) => {
+    const inTitle = words.every((w) => p.title.toLowerCase().includes(w.toLowerCase()));
+    const inAll = words.every((w) => (p.title + "\n" + p.md).toLowerCase().includes(w.toLowerCase()));
+    return inAll ? { p, inTitle } : null;
+  }).filter(Boolean);
+  const status = `<p class="props-note" role="status">${hits.length ? `${hits.length} 件のページが見つかりました` : `「${esc(q)}」に当たるページはありません。語を減らすか、別の語で探してください。`}</p>`;
+  return `${status}<ul class="wiki-tree">${hits.map(({ p, inTitle }) => {
+    const path = [...ancestors(p.id), p].map((x) => x.title).join(" › ");
+    return `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"><span>${esc(p.title)}<span class="chip">${inTitle ? "題に一致" : "本文に一致"}</span></span><span class="props-note">${esc(path)}</span></a></li>`;
+  }).join("")}</ul>`;
+}
+function sideHtml() {
+  return `<aside class="wiki-side" aria-label="${scopeName}の検索とページの木">
+    <div class="field"><label class="search">${icon("search")}<input type="search" id="wiki-q" aria-label="題と本文でページを探す" placeholder="題と本文で探す" value="${esc(S.query)}" aria-describedby="wiki-q-hint"></label>
+      <span class="field-hint" id="wiki-q-hint">この Wiki の中だけを探します。</span></div>
+    <div class="panel">
+      <div class="panel-title"><b>ページ</b><span class="props-note">${store.pages.length} 件</span>
+        <button class="btn is-sm is-quiet toolbar-end" type="button" data-wiki="reorder" aria-pressed="${S.reorder}">${icon("swap")}${S.reorder ? "並べ替えを終える" : "並べ替える"}</button></div>
+      <div id="wiki-list">${listHtml()}</div>
+    </div></aside>`;
+}
+
+// ---- 右の欄 ----
+function topHtml() {
+  const top = kids(null);
+  return `<section class="section" aria-labelledby="wiki-main-title">
+    <div class="section-head"><h2 class="section-title" id="wiki-main-title" tabindex="-1">最上段のページ</h2><span class="section-count">${top.length} 件</span></div>
+    ${top.length ? `<ul class="wiki-tree panel">${top.map((p) => `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"><span>${esc(p.title)}</span><span class="props-note">${kids(p.id).length ? `子のページ ${kids(p.id).length} 件・` : ""}${esc(user(p.by).name)}が ${fmt(p.at)} に保存</span></a></li>`).join("")}</ul>`
+      : emptyState("file", "ページはまだありません", "手順書や決まりを、最初のページとして書きましょう。", `<button class="btn is-primary" type="button" data-wiki="new-root">${icon("plus")}ページを足す</button>`)}
+    <p class="props-note">左の木からページを選ぶと、ここに開きます。</p></section>`;
+}
+function readHtml(p) {
+  const children = kids(p.id);
+  return `${wikiCrumbs("Wiki", ancestors(p.id), p.title)}
+    <header class="wiki-head">
+      <h2 class="section-title" id="wiki-main-title" tabindex="-1">${esc(p.title)}</h2>
+      ${metaLine(p)}
+      <div class="toolbar">
+        <button class="btn is-primary" type="button" data-wiki="edit">${icon("pen")}編集する</button>
+        <button class="btn" type="button" data-wiki="versions">${icon("clock")}版の一覧</button>
+        <button class="btn" type="button" data-wiki="download">${icon("download")}.md で落とす</button>
+        <button class="btn is-sm is-quiet" type="button" data-wiki="new-child">${icon("plus")}子のページを足す</button>
+        <button class="btn is-sm is-quiet" type="button" data-wiki="move">${icon("swap")}親を移す</button>
+        <button class="btn is-sm is-quiet is-danger" type="button" data-wiki="delete">${icon("trash")}消す</button>
+      </div>
+    </header>
+    ${pageBody(p.md)}
+    <section class="section" aria-labelledby="wiki-children-title">
+      <div class="section-head"><h3 class="section-title" id="wiki-children-title">子のページ</h3><span class="section-count">${children.length} 件</span></div>
+      ${children.length ? `<ul class="wiki-tree panel">${children.map((c) => `<li><a class="wiki-link" href="#${c.id}" data-wiki-page="${c.id}">${esc(c.title)}</a></li>`).join("")}</ul>`
+        : `<p class="props-note">子のページはありません。「子のページを足す」で、このページの下に足せます。</p>`}
+    </section>`;
+}
+function versionsHtml(p) {
+  const rows = [{ v: p.ver, by: p.by, at: p.at, title: p.title, current: true }, ...(p.history || [])];
+  return `${wikiCrumbs("Wiki", ancestors(p.id), p.title)}
+    <header class="wiki-head">
+      <h2 class="section-title" id="wiki-main-title" tabindex="-1">版の一覧</h2>
+      <p class="props-note">「${esc(p.title)}」の版。保存のたびに1つ増え、${MAX_VERSIONS} 版まで残します。</p>
+      <div class="toolbar"><button class="btn" type="button" data-wiki="read">${icon("left")}ページへ戻る</button></div>
+    </header>
+    <div class="table-wrap"><table class="table is-stacked"><caption class="visually-hidden">ページの版の一覧（新しい順）</caption>
+      <thead><tr><th class="is-num" scope="col">版</th><th scope="col">題</th><th scope="col">保存した人</th><th scope="col">保存した日時</th><th class="is-actions" scope="col"><span class="visually-hidden">操作</span></th></tr></thead>
+      <tbody>${rows.map((r) => `<tr>
+        <td class="is-num" data-label="版">${r.v}</td>
+        <td class="is-name" data-label="題">${esc(r.title)}${r.current ? ` <span class="chip is-ok">今の版</span>` : ""}</td>
+        <td data-label="保存した人">${person(r.by)}</td>
+        <td class="is-num" data-label="保存した日時">${fmt(r.at)}</td>
+        <td class="is-actions">${r.current
+          ? `<button class="btn is-sm" type="button" data-wiki="read" aria-label="今の版（第 ${r.v} 版）を開く">開く</button>`
+          : `<button class="btn is-sm" type="button" data-wiki="old:${r.v}" aria-label="第 ${r.v} 版を見る">この版を見る</button>`}</td></tr>`).join("")}</tbody></table></div>
+    <p class="action-note">前の版に戻すには、その版を開いて「この版に戻す」を押します。戻すと、その版の題と本文で保存し、新しい版になります（今の版も、版の一覧に残ります）。差分は表示しません。</p>`;
+}
+function oldHtml(p) {
+  const r = (p.history || []).find((x) => x.v === S.ver);
+  if (!r) return readHtml(p);
+  return `${wikiCrumbs("Wiki", ancestors(p.id), p.title)}
+    <header class="wiki-head">
+      <h2 class="section-title" id="wiki-main-title" tabindex="-1">${esc(r.title)}</h2>
+      <div class="callout is-info">${icon("clock")}<span>第 ${r.v} 版を見ています（${esc(user(r.by).name)}・${fmt(r.at)}）。今の版は第 ${p.ver} 版です。</span>
+        <div class="callout-actions"><button class="btn is-primary" type="button" data-wiki="restore">${icon("redo")}この版に戻す</button><button class="btn" type="button" data-wiki="versions">版の一覧へ</button></div></div>
+    </header>
+    ${pageBody(r.md)}`;
+}
+function editHtml(p) {
+  const isNew = S.mode === "new";
+  const md = isNew ? "" : p.md;
+  const fixed = fmTitle(md);
+  return `${isNew ? "" : wikiCrumbs("Wiki", ancestors(p.id), p.title)}
+    <header class="wiki-head"><h2 class="section-title" id="wiki-main-title" tabindex="-1">${isNew ? "新しいページ" : "ページを編集する"}</h2></header>
+    <form class="panel" data-wiki-form>
+      ${isNew ? `<div class="field"><label class="field-label" for="wk-parent">親のページ</label><select class="select" id="wk-parent">${parentOptions(S.newParent)}</select></div>` : ""}
+      <div class="field"><label class="field-label" for="wk-title">題</label>
+        <input class="input" id="wk-title" maxlength="100" value="${esc(fixed ?? (isNew ? "" : p.title))}" ${fixed ? "readonly" : ""} aria-describedby="wk-title-hint">
+        <span class="field-hint" id="wk-title-hint">${fixed ? "本文の frontmatter の title が題です。変えるときは本文を直します。" : "1〜100 字。本文の先頭の frontmatter に title を書くと、そちらが題になります。"}</span>
+        <span class="field-error" id="wk-title-error" role="alert" hidden>${icon("alert")}題は 1〜100 字で入れてください。</span></div>
+      <div class="field"><label class="field-label" for="wk-body">本文（Markdown）</label>
+        <textarea class="textarea" id="wk-body" rows="16" spellcheck="false" aria-describedby="wk-body-hint">${esc(md)}</textarea>
+        <span class="field-hint" id="wk-body-hint">10 万字まで。先頭に --- で囲んだ frontmatter を書けます。キーは自由で、title 以外はページの頭に表で出ます。</span></div>
+      <div class="form-actions"><button class="btn is-primary" type="submit">${isNew ? "ページを足す" : "保存する"}</button><button class="btn is-quiet" type="button" data-wiki="cancel">やめる</button></div>
+      ${isNew ? "" : `<span class="field-hint">読んだ版: 第 ${p.ver} 版。保存までに他の人が先に保存すると、上書きせずに断り、書いていた題と本文を残します。</span>`}
+    </form>`;
+}
+function mainHtml() {
+  const p = S.page ? byId(S.page) : null;
+  if (S.mode === "new") return editHtml(p);
+  if (!p) return topHtml();
+  if (S.mode === "edit") return editHtml(p);
+  if (S.mode === "versions") return versionsHtml(p);
+  if (S.mode === "old") return oldHtml(p);
+  return readHtml(p);
+}
+
+// ---- 状態の見本（動かさない） ----
+function statesHtml() {
+  const cur = byId(S.page) || store.pages[0];
+  const badMd = ["---", "title: 連絡先と当番", "owner リン", "---", "## 今月の当番", "", "- 平日の昼: ソウタ"].join("\n");
+  const draft = ["---", "title: 本番へ出す前の確認", "owner: ハルカ", "---", "# 本番へ出す前の確認", "", "- [x] マイグレーションを当てた", "- [x] 管理画面で付与を試した（書きかけ）"].join("\n");
+  const delWho = isOrg ? `作った人と${t("admin")}` : `作った人と${t("leader")}`;
+  return `<section class="section" aria-labelledby="wiki-states"><div class="section-head"><h2 class="section-title" id="wiki-states">状態の見本</h2><span class="section-hint">動かない表示の見本です</span></div>
+    <div class="grid-2">
+      <div class="panel"><div class="panel-title"><b>同時に直されて、保存を断られたとき</b></div>
+        <div class="callout is-warn">${icon("alert")}<span>他の人が先に保存したため、保存できませんでした。書いていた題と本文は、この画面に残してあります。今の版（第 5 版・${esc(user("u2").name)}・10/20 09:41）を見比べて、直してからもう一度保存してください。</span>
+          <div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、読み直しません">今の版を読み直す</button></div></div>
+        <div class="field"><label class="field-label" for="wk-draft">書いていた本文（そのまま残る）</label><textarea class="textarea" id="wk-draft" rows="6" spellcheck="false">${esc(draft)}</textarea></div>
+        <details class="section is-folded"><summary class="section-head"><span class="field-label">今の版を見る</span><span class="section-hint">第 5 版・開くと本文を表示</span></summary>
+          <div class="doc-box"><h3 class="doc-h1">本番へ出す前の確認</h3><p>管理画面での確認を、付与と取り消しの2つに分けた。</p></div></details></div>
+      <div class="panel"><div class="panel-title"><b>frontmatter を読めないとき</b></div>
+        ${pageBody(badMd)}
+        <p class="props-note">YAML が読めなくても、保存は断りません。表を出さず、全文を本文として描きます。</p></div>
+      <div class="panel"><div class="panel-title"><b>${isOrg ? "消せないとき" : "終了した" + t("workspace") + "の Wiki"}</b></div>
+        ${isOrg
+          ? `<p class="field-hint">消せるのは${delWho}です。</p>
+             <div class="toolbar"><button class="btn is-sm is-quiet is-danger" type="button" aria-disabled="true">${icon("trash")}消す</button></div>
+             <p class="props-note">作った人でも${t("admin")}でもない人には、「消す」を押せなくして、消せる人を添えます。</p>`
+          : `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の Wiki は、読み取りだけできます。</span></div>
+             <div class="toolbar"><button class="btn is-primary" type="button" aria-disabled="true">${icon("pen")}編集する</button><button class="btn" type="button" aria-disabled="true">${icon("clock")}版の一覧</button></div>
+             <p class="props-note">書く操作（足す、編集、移す、消す、上げる）は出さないか押せなくし、読む操作（開く、版を見る、.md で落とす、探す）は使えます。API は 409 の workspace_closed で断ります。</p>`}
+        ${isOrg ? "" : `<p class="field-hint">消せるのは${delWho}です。作った人でも${t("leader")}でもない人には、「消す」を押せなくして、消せる人を添えます。</p>`}</div>
+      <div class="panel"><div class="panel-title"><b>親を移すとき、深さが上限に届くとき</b></div>
+        <div class="field"><label class="field-label" for="wk-deep">親のページ</label><select class="select" id="wk-deep" aria-describedby="wk-deep-hint">
+          <option>最上段（親なし）</option><option>${esc(cur.title)}</option><option disabled>　　　　　　　　　深さ 10 段のページ（11 段目になるため選べません）</option></select>
+          <span class="field-hint" id="wk-deep-hint">深さは 10 段まで。移すと 11 段目ができる親と、自分の子孫は、理由を添えて選べなくします。</span></div></div>
+      <div class="panel"><div class="panel-title"><b>ページがまだないとき</b></div>
+        ${emptyState("file", "ページはまだありません", `手順書や決まりを、最初のページとして書きましょう。.md がすでにあるときは、まとめて上げられます。`,
+          `<button class="btn is-primary" type="button" data-toast="見本のため、足しません">${icon("plus")}ページを足す</button><button class="btn" type="button" data-wiki="upload">${icon("upload")}.md をアップロード</button>`)}</div>
+    </div></section>`;
+}
+
+function render() {
+  const head = pageHead(store.name, "Wiki", [["", "file", "ページ", store.pages.length]],
+    `<button class="btn is-primary" type="button" data-wiki="new-root">${icon("plus")}ページを足す</button><button class="btn" type="button" data-wiki="upload">${icon("upload")}.md をアップロード</button>`,
+    `<p class="props-note">${isOrg ? `${t("organization")}の Wiki。${t("organization")}のユーザーの全員が見て、全員が書けます。` : `${t("workspace")}の Wiki。メンバー全員（${t("admin")}を含む）が見て、全員が書けます。`}</p>`);
+  return `${head}<div class="layout-wiki">${sideHtml()}<div class="wiki-main" id="wiki-main">${mainHtml()}</div></div>${statesHtml()}`;
+}
+
+// ---- 動き ----
+function redraw(focusSel) {
+  SQ.redraw();
+  const el = document.querySelector(focusSel || "#wiki-main-title");
+  if (el) el.focus();
+}
+function savePage(p, title, md) {
+  p.history = [{ v: p.ver, by: p.by, at: p.at, title: p.title, md: p.md }, ...(p.history || [])].slice(0, MAX_VERSIONS - 1);
+  p.ver += 1; p.title = titleOf(md, title); p.md = md; p.by = me; p.at = NOW;
+}
+function openPage(id, mode = "read") {
+  S.page = id || null; S.mode = mode; S.ver = null;
+  for (const a of id ? ancestors(id) : []) S.open.add(a.id);
+}
+function removePage(p) {
+  const lifted = kids(p.id);
+  store.pages = store.pages.filter((x) => x !== p && !lifted.includes(x));
+  for (const c of lifted) { c.parent = p.parent; store.pages.push(c); } // 子は消したページの親の下の末尾へ、元の並びで上がる
+}
+function moveDialog(p) {
+  const ex = [p.id, ...descendants(p.id)];
+  openDialog("親を移す",
+    `<p class="wrap-anywhere">「${esc(p.title)}」を、同じ ${isOrg ? "組織の" : t("workspace") + "の"} Wiki の中の別のページの下へ移します。子のページは一緒に動きます。</p>
+     <div class="field"><label class="field-label" for="wk-move">移す先の親</label><select class="select" id="wk-move">${parentOptions(p.parent, ex)}</select>
+       <span class="field-hint">自分と子孫は選べません。深さは 10 段までです。${isOrg ? "" : `${t("workspace")}の外や、組織の Wiki へは移せません。`}</span></div>`,
+    `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-wiki="move-do">移す</button>`);
+}
+function deleteDialog(p) {
+  const n = kids(p.id).length;
+  const up = p.parent ? `「${esc(byId(p.parent).title)}」` : "最上段";
+  openDialog("ページを消す",
+    `<p class="wrap-anywhere">「${esc(p.title)}」を消します。消したページは画面から消え、この版では戻せません。</p>
+     <p>${n ? `子のページ ${n} 件は、消したページの親の下（${up}）へ上がります。` : "子のページはありません。"}</p>
+     <p class="field-hint">消せるのは、作った人と${isOrg ? t("admin") : t("leader")}です。</p>`,
+    `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-wiki="delete-do">消す</button>`);
+  document.querySelector(".dialog-sheet").classList.add("is-danger");
+}
+function restoreDialog(p) {
+  openDialog(`第 ${S.ver} 版に戻す`,
+    `<p class="wrap-anywhere">第 ${S.ver} 版の題と本文で保存します。第 ${p.ver + 1} 版として足され、今の第 ${p.ver} 版も版の一覧に残ります。</p>`,
+    `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-wiki="restore-do">戻す</button>`);
+}
+// 上げる .md の例。足りない題は、frontmatter の title、無ければファイル名（.md を除く）。本文が 10 万字を超えるものは足せない
+const SAMPLE_FILES = [
+  { name: "リリース後の振り返り.md", md: "# リリース後の振り返り\n\n出した版で気づいたことを書く。", chars: 1240 },
+  { name: "連絡網.md", md: "---\ntitle: 障害対応の連絡網\nowner: リン\n---\n## 連絡の順\n\n1. 当番\n2. リーダー", chars: 860 },
+  { name: "全議事録まとめ.md", md: "# 議事録", chars: 148000 },
+];
+function uploadDialog() {
+  const u = S.upload;
+  const bad = (f) => (f.chars > 100000 ? "本文が 10 万字を超えています。上げるときに外してください。" : /\.md$/i.test(f.name) ? "" : ".md ではありません。");
+  const ok = u.files.length > 0 && u.files.length <= MAX_UPLOAD && u.files.every((f) => !bad(f));
+  openDialog(".md をページとして足す",
+    `<div class="field"><label class="field-label" for="wk-up-parent">足す場所（親のページ）</label><select class="select" id="wk-up-parent">${parentOptions(u.parent)}</select>
+       <span class="field-hint">選んだ親の下に、1ファイルを1つの新しいページとして足します。既にあるページは上書きしません。</span></div>
+     <div class="dropzone">${icon("upload")}<span class="dropzone-text"><b>ここに .md をドラッグ</b><span>複数をまとめて選べます。一度に ${MAX_UPLOAD} ファイルまで。フォルダと zip は受け付けません。</span></span>
+       <button class="btn is-sm" type="button" data-wiki="upload-pick">${icon("clip")}ファイルを選ぶ</button></div>
+     ${u.files.length ? `<div class="files" role="group" aria-label="上げるファイル">${u.files.map((f, i) => {
+       const why = bad(f);
+       const heading = fmTitle(f.md);
+       return `<div class="file-row${why ? " is-error" : ""}">${icon(why ? "alert" : "file")}<div class="file-main"><span class="file-name">${esc(f.name)}</span>
+         <span class="file-meta">${why ? esc(why) : `題: ${esc(heading ?? f.name.replace(/\.md$/i, ""))}（${heading ? "frontmatter の title" : "ファイル名"}）・${f.chars.toLocaleString("ja-JP")} 字`}</span></div>
+         <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-wiki="upload-remove:${i}" aria-label="${esc(f.name)}を外す">外す</button></div></div>`;
+     }).join("")}</div>
+     <p class="props-note" role="status">${u.files.length} / ${MAX_UPLOAD} ファイル${ok ? "" : "。足せないファイルを外すと足せます。"}</p>` : ""}
+     <p class="field-hint">題は frontmatter の title、無ければファイル名（.md を除く）。上げた .md を落として上げ直すと、題と frontmatter と本文が同じページができます。</p>`,
+    `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" ${ok ? 'data-close-dialog data-wiki="upload-do"' : 'aria-disabled="true"'}>${u.files.length ? `${u.files.length} 件をページとして足す` : "足す"}</button>`);
+}
+
+document.addEventListener("click", (ev) => {
+  const link = ev.target.closest("[data-wiki-page]");
+  if (link) { ev.preventDefault(); openPage(link.dataset.wikiPage); redraw(); return; }
+  const url = ev.target.closest("[data-wiki-url]");
+  if (url) { ev.preventDefault(); if (byId(url.dataset.wikiUrl)) { openPage(url.dataset.wikiUrl); redraw(); } return; }
+  const mv = ev.target.closest("[data-wiki-move]");
+  if (mv) {
+    if (mv.getAttribute("aria-disabled") === "true") return;
+    const [id, dir] = mv.dataset.wikiMove.split(":");
+    const p = byId(id), sibs = kids(p.parent), j = sibs.indexOf(p) + (dir === "up" ? -1 : 1);
+    if (j < 0 || j >= sibs.length) return;
+    const a = store.pages.indexOf(p), b = store.pages.indexOf(sibs[j]);
+    [store.pages[a], store.pages[b]] = [store.pages[b], store.pages[a]];
+    SQ.redraw();
+    document.querySelector(`[data-wiki-move="${id}:${dir}"]:not([aria-disabled])`)?.focus() ?? document.querySelector(`[data-wiki-move="${id}:${dir === "up" ? "down" : "up"}"]`)?.focus();
+    toast(`${icon("check")}「${esc(p.title)}」を${dir === "up" ? "上へ" : "下へ"}移しました`);
+    return;
+  }
+  const el = ev.target.closest("[data-wiki]");
+  if (!el || el.getAttribute("aria-disabled") === "true") return;
+  const [act, arg] = el.dataset.wiki.split(":");
+  const p = S.page ? byId(S.page) : null;
+  if (act === "reorder") { S.reorder = !S.reorder; SQ.redraw(); document.querySelector('[data-wiki="reorder"]')?.focus(); }
+  else if (act === "edit") { S.mode = "edit"; redraw("#wk-title"); }
+  else if (act === "cancel" || act === "read") { S.mode = "read"; S.ver = null; redraw(); }
+  else if (act === "versions") { S.mode = "versions"; S.ver = null; redraw(); }
+  else if (act === "old") { S.mode = "old"; S.ver = Number(arg); redraw(); }
+  else if (act === "new-root") { S.mode = "new"; S.newParent = null; redraw("#wk-title"); }
+  else if (act === "new-child") { S.mode = "new"; S.newParent = S.page; redraw("#wk-title"); }
+  else if (act === "download") toast(`${icon("check")}「${esc(p.title)}.md」を落としました${fmTitle(p.md) ? "" : "（frontmatter に title が無いので、題を足して書き出しています）"}`);
+  else if (act === "move") moveDialog(p);
+  else if (act === "move-do") {
+    const to = document.getElementById("wk-move")?.value || null;
+    if (to !== p.parent && !(to && [p.id, ...descendants(p.id)].includes(to))) {
+      store.pages = store.pages.filter((x) => x !== p); p.parent = to; store.pages.push(p);
+      if (to) S.open.add(to);
+      redraw(); toast(`${icon("check")}「${esc(p.title)}」を移しました`);
+    }
+  }
+  else if (act === "delete") deleteDialog(p);
+  else if (act === "delete-do") { const title = p.title; const up = p.parent; removePage(p); openPage(up); redraw(); toast(`${icon("check")}「${esc(title)}」を消しました`); }
+  else if (act === "restore") restoreDialog(p);
+  else if (act === "restore-do") {
+    const r = p.history.find((x) => x.v === S.ver);
+    savePage(p, r.title, r.md); const v = S.ver; S.mode = "read"; S.ver = null; redraw();
+    toast(`${icon("check")}第 ${v} 版の題と本文で保存しました（第 ${p.ver} 版）`);
+  }
+  else if (act === "upload") { S.upload = { files: [], parent: S.page }; uploadDialog(); }
+  else if (act === "upload-pick") { S.upload.parent = document.getElementById("wk-up-parent")?.value || null; S.upload.files = [...S.upload.files, ...SAMPLE_FILES.slice(S.upload.files.length)]; uploadDialog(); }
+  else if (act === "upload-remove") { S.upload.parent = document.getElementById("wk-up-parent")?.value || null; S.upload.files.splice(Number(arg), 1); uploadDialog(); }
+  else if (act === "upload-do") {
+    const parent = document.getElementById("wk-up-parent")?.value || null;
+    for (const f of S.upload.files) store.pages.push({ id: `n${Date.now()}${store.pages.length}`, parent, title: titleOf(f.md, f.name.replace(/\.md$/i, "")), created: me, by: me, at: NOW, ver: 1, md: f.md });
+    if (parent) S.open.add(parent);
+    const n = S.upload.files.length; S.upload = null; redraw(); toast(`${icon("check")}${n} 件のページを足しました`);
+  }
+});
+document.addEventListener("submit", (ev) => {
+  if (!ev.target.matches("[data-wiki-form]")) return;
+  ev.preventDefault();
+  const body = document.getElementById("wk-body").value.replace(/\r\n?/g, "\n");
+  const title = titleOf(body, document.getElementById("wk-title").value);
+  const bad = title.length < 1 || title.length > 100 || body.length > 100000;
+  document.getElementById("wk-title-error").hidden = !bad;
+  if (bad) { document.getElementById("wk-title").setAttribute("aria-invalid", "true"); document.getElementById("wk-title").focus(); return; }
+  if (S.mode === "new") {
+    const parent = document.getElementById("wk-parent").value || null;
+    const page = { id: `n${Date.now()}`, parent, title, created: me, by: me, at: NOW, ver: 1, md: body };
+    store.pages.push(page);
+    if (parent) S.open.add(parent);
+    openPage(page.id); redraw(); toast(`${icon("check")}ページを足しました`);
+  } else {
+    const p = byId(S.page);
+    if (title === p.title && body === p.md) { S.mode = "read"; redraw(); toast(`${icon("check")}変わっていないので、版は足していません`); return; }
+    savePage(p, title, body); S.mode = "read"; redraw(); toast(`${icon("check")}保存しました（第 ${p.ver} 版）`);
+  }
+});
+document.addEventListener("input", (ev) => {
+  if (ev.target.id === "wiki-q") { S.query = ev.target.value; document.getElementById("wiki-list").innerHTML = listHtml(); return; }
+  if (ev.target.id === "wk-body") {
+    // frontmatter の title があれば、それが題になる。題の欄は読み取りだけにして、値を映す
+    const fixed = fmTitle(ev.target.value.replace(/\r\n?/g, "\n"));
+    const input = document.getElementById("wk-title");
+    input.readOnly = fixed !== null;
+    if (fixed !== null) input.value = fixed;
+    document.getElementById("wk-title-hint").textContent = fixed !== null ? "本文の frontmatter の title が題です。変えるときは本文を直します。" : "1〜100 字。本文の先頭の frontmatter に title を書くと、そちらが題になります。";
+  }
+});
+
+SQ.mount(isOrg ? "orgwiki" : "wiki", render);
+</script>
+</body>
+</html>

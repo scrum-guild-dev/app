@@ -1729,6 +1729,46 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   .topbar .assist-launch .kbd { display: none; }
 }
 
+/* ===== Wiki（左の木とページ） =====
+   左に木、右にページ。左のメニューのある幅でも 1080px 以下になると1列にし、木をページの上に置く（脇の .layout-aside と同じ幅で畳む）。
+   木は入れ子の箇条書き（nav の中の ul）で、枝の開閉は .tree-caret のボタン（aria-expanded と aria-controls）が受け持つ。
+   今開いているページは aria-current="page" で、色に加えて太字と左の線で示す。ARIA の tree の役割は使わない（矢印キーの移動を持たず、
+   行は Tab で移る普通のリンクのため）。並べ替えは、「並べ替える」を押している間だけ行に出る .order-actions のボタンで行う */
+.layout-wiki { display: grid; grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); gap: var(--space-8); align-items: start; }
+.wiki-side { display: grid; gap: var(--space-3); min-width: 0; align-content: start; }
+.wiki-main { display: grid; gap: var(--space-5); min-width: 0; align-content: start; }
+.wiki-head { display: grid; gap: var(--space-3); min-width: 0; }
+.wiki-tree, .wiki-tree ul { list-style: none; margin: 0; padding: 0; }
+.wiki-tree ul { margin-left: 12px; padding-left: var(--space-1); border-left: 1px solid var(--color-rule); }
+.wiki-node { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; }
+.wiki-node > .tree-caret { width: 24px; height: 28px; }
+.wiki-slot { width: 24px; }
+.wiki-link { display: block; padding: 5px var(--space-2); border-radius: var(--radius-1); color: var(--color-fg); text-decoration: none; font-size: var(--text-sm); line-height: var(--leading-tight); overflow-wrap: anywhere; }
+.wiki-link:hover { background: color-mix(in srgb, var(--color-accent-soft) 45%, transparent); text-decoration: underline; text-underline-offset: 3px; }
+.wiki-link[aria-current="page"] { background: var(--color-accent-soft); font-weight: 700; box-shadow: inset 3px 0 0 var(--color-accent); }
+/* 探した結果の行。題の下に、そのページの道筋と、当たった場所（題か本文）を添える */
+.wiki-link .props-note { display: block; font-weight: 400; }
+.wiki-link .chip { margin-left: var(--space-1); vertical-align: 0.1em; }
+.wiki-node .order-actions { padding-right: var(--space-1); }
+/* ページの道筋（最上段から今のページまで）。区切りは見た目だけの文字で、読み上げには出さない（対応しない環境では区切りも読まれるだけ） */
+.crumbs ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); font-size: var(--text-sm); color: var(--color-muted); }
+.crumbs li { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
+.crumbs li + li::before { content: "›"; content: "›" / ""; color: var(--color-muted); }
+.crumbs a { color: var(--color-muted); text-underline-offset: 3px; }
+.crumbs [aria-current="page"] { color: var(--color-fg); font-weight: 700; }
+@media (max-width: 1080px) {
+  .layout-wiki { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .wiki-node { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .wiki-node > .tree-caret { width: 44px; height: 44px; }
+  .wiki-slot { width: 44px; }
+  .wiki-link { display: flex; flex-wrap: wrap; align-items: center; min-height: 44px; }
+  .wiki-link .props-note { flex-basis: 100%; }
+  .wiki-node .order-actions .icon-btn { width: 44px; height: 44px; }
+  .crumbs a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+
 /* ===== テーマの飾り =====
  * テーマの違いは tokens.css の変数で表す。変数で表せない飾りだけをここに置き、この一覧から増やさない。
  * 完了の印、依頼主の印、クリアの演出、現代風の光。

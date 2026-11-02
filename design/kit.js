@@ -374,6 +374,30 @@
   function foldedSection(id, title, count, body) {
     return `<details class="section is-folded"><summary class="section-head"><h2 class="section-title" id="${id}">${title}</h2><span class="section-count">${count} 件</span><span class="section-hint">開くと一覧を表示</span></summary>${body}</details>`;
   }
+  // ---- Wiki ----
+  // ページの木（左の欄の nav の中身）。nodes は { id, title, children } の木、current は今開いているページの ID、
+  // open は開いている枝の ID の配列（null ならすべて開く）。reorder が真なら、行ごとに「上へ」「下へ」を出す（兄弟の中の並べ替え。
+  // 先頭の「上へ」と末尾の「下へ」は aria-disabled）。枝の開閉はバックログの木と同じ data-tree-toggle。
+  // key は同じ画面に木を並べるときの id の接頭辞。リンクは data-wiki-page（画面が受ける）、並べ替えは data-wiki-move="<ID>:up|down"
+  function wikiTree(nodes, { current = null, open = null, reorder = false, key = "wiki" } = {}) {
+    const isOpen = (n) => open === null || open.includes(n.id);
+    const row = (n, i, list) => {
+      const kids = n.children || [];
+      const cid = `${key}-c-${n.id}`;
+      const opened = isOpen(n);
+      const caret = kids.length
+        ? `<button class="tree-caret" type="button" data-tree-toggle="${cid}" data-tree-title="${esc(n.title)}" aria-expanded="${opened}" aria-controls="${cid}" aria-label="${esc(n.title)}${opened ? "を閉じる" : "を開く"}">${icon("chevron")}</button>`
+        : `<span class="wiki-slot" aria-hidden="true"></span>`;
+      const move = (dir, label, ic, off) => `<button class="icon-btn" type="button" data-wiki-move="${n.id}:${dir}" aria-label="${esc(n.title)}を${label}" title="${label}" ${off ? 'aria-disabled="true"' : ""}>${icon(ic)}</button>`;
+      const moves = reorder ? `<span class="order-actions">${move("up", "上へ", "up", i === 0)}${move("down", "下へ", "down", i === list.length - 1)}</span>` : "";
+      return `<li><div class="wiki-node">${caret}<a class="wiki-link" href="#${n.id}" data-wiki-page="${n.id}"${n.id === current ? ' aria-current="page"' : ""}>${esc(n.title)}</a>${moves}</div>${kids.length ? `<ul id="${cid}" ${opened ? "" : "hidden"}>${kids.map(row).join("")}</ul>` : ""}</li>`;
+    };
+    return `<ul class="wiki-tree">${nodes.map(row).join("")}</ul>`;
+  }
+  // ページの道筋。rootLabel は最上段（Wiki 全体）へのリンク、ancestors は { id, title } の配列（最上段から親まで）、最後に今のページの題を文字で置く
+  function wikiCrumbs(rootLabel, ancestors, currentTitle) {
+    return `<nav class="crumbs" aria-label="ページの道筋"><ol><li><a href="#" data-wiki-page="">${esc(rootLabel)}</a></li>${ancestors.map((p) => `<li><a href="#${p.id}" data-wiki-page="${p.id}">${esc(p.title)}</a></li>`).join("")}<li><span aria-current="page">${esc(currentTitle)}</span></li></ol></nav>`;
+  }
   // meta は集計の下に置く1行（バックログの画面のチーム全体の経験値 teamXp など）
   function pageHead(eyebrow, title, tallies = [], actions = "", meta = "") {
     const tally = tallies.length
@@ -1979,12 +2003,14 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     "organization",
     ["today", "sun", () => "今日やること", "today.html"],
     ["notifications", "bell", () => "通知", "notifications.html", 3],
+    ["orgwiki", "file", () => `${t("organization")}の Wiki`, "wiki.html?scope=organization"],
     "workspace",
     ["inbox", "inbox", () => t("inbox"), "inbox.html", 4],
     ["backlog", "board", () => t("backlog"), "backlog.html"],
     ["sprint", "columns", () => t("sprint"), "sprint.html"],
     ["plan", "calendar", () => t("plan"), "plan.html"],
     ["epic", "flag", () => t("epic"), "epic.html"],
+    ["wiki", "file", () => "Wiki", "wiki.html"],
     "記録",
     ["capacity", "trend", () => t("capacity"), "capacity.html"],
     ["records", "check", () => "完了の記録", "records.html"],
@@ -2006,7 +2032,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       // 組織の切り替えは、メニューの外（ブランドの下）の orgMenuHtml
       if (p === "organization") return "";
       if (p === "workspace") return `<div class="nav-group"><span class="nav-group-label">${t("workspace")}</span></div>
-        ${["today", "notifications", "me", "admin", "operator"].includes(current) ? "" : `<div id="ws-menu-slot">${workspaceMenuHtml()}</div>`}`;
+        ${["today", "notifications", "orgwiki", "me", "admin", "operator"].includes(current) ? "" : `<div id="ws-menu-slot">${workspaceMenuHtml()}</div>`}`;
       if (typeof p === "string") return `<div class="nav-group"><span class="nav-group-label">${p}</span></div>`;
       const [id, ic, label, href, badge] = p;
       return `<a class="nav-item" href="${firstHref(href)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
@@ -2663,7 +2689,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
-    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, pageHead,
+    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, wikiTree, wikiCrumbs, pageHead,
     card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, mdBody, markdownSample, meter,
