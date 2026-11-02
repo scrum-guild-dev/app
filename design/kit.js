@@ -2594,14 +2594,16 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   picker.addEventListener("change", () => { if (pickerKey && picker.files.length) fakeUpload(pickerKey, picker.files); picker.value = ""; });
   document.body.appendChild(picker);
   function pickFiles(key) { pickerKey = key; picker.click(); }
+  // 並べ替えの行も data-drop（落とす位置の印）を持つので、ファイルを受けるのは .dropzone に絞る。
+  // 行で preventDefault すると drop が受けられず、ブラウザがファイルを開いてページが離れるため
   document.addEventListener("dragover", (ev) => {
-    const zone = ev.target.closest && ev.target.closest("[data-drop]");
+    const zone = ev.target.closest && ev.target.closest(".dropzone[data-drop]");
     document.querySelectorAll(".dropzone.is-over").forEach((z) => z !== zone && z.classList.remove("is-over"));
     if (!zone) return;
     ev.preventDefault(); zone.classList.add("is-over");
   });
   document.addEventListener("dragleave", (ev) => {
-    const zone = ev.target.closest && ev.target.closest("[data-drop]");
+    const zone = ev.target.closest && ev.target.closest(".dropzone[data-drop]");
     if (zone && !zone.contains(ev.relatedTarget)) zone.classList.remove("is-over");
   });
   document.addEventListener("drop", (ev) => {

@@ -1023,6 +1023,11 @@
 
 - 付く先は4つの列のうち多くても1つ: `CHECK ((task_id IS NOT NULL) + (story_id IS NOT NULL) + (epic_id IS NOT NULL) + (comment_id IS NOT NULL) <= 1)`。付く先が決まったら `attached_at` を入れる: `CHECK ((attached_at IS NULL) = (task_id IS NULL AND story_id IS NULL AND epic_id IS NULL AND comment_id IS NULL))`。
 - 起票の画面やコメントの欄では、保存する前に上げるため、付く先のない行を先に作る。保存したときに、保存の操作が持つ添付の ID の行（本文に差し込んだ画像と、差し込まない画像でないファイルの両方。本文の参照の有無には頼らない）へ、付く先を入れる。上げた人が呼んだ人で、同じワークスペースの、付く先のない行だけを付ける。付く先のないまま1日たった行とファイルは定期処理で消す。
+  - 付ける文: 付く先の列と `attached_at` を入れる `UPDATE` を、保存の操作（タスク、ストーリー、エピック、コメントの作成と変更）と同じ `batch()` に入れる（「書き込みの単位」の付ける文）。条件は `id IN (渡した ID)`、`workspace_id`、`uploaded_by = :呼んだ人`、`attached_at IS NULL`。付く先の行が書けたことも条件にし（作成は作った行の `EXISTS`、変更はこの要求の履歴の行の `EXISTS`）、付く先が書けずに添付だけが付くことを起こさない。
+  - 全部か何もしないか: 保存の主な文（作成の `INSERT ... SELECT`、変更の `UPDATE`）の条件に、渡した ID のうち上の4つの条件に合う行の数が渡した ID の数と等しいことを足す。1つでも合わなければ何も書かない（付く先も添付も）。変更で欄が変わらず付ける ID だけがあるときは、付ける `UPDATE` 自身が同じ件数の条件と、付く先が削除されていないこと、閉じていないワークスペースの条件を持ち、続く `change_logs` を直前の文に結ぶ。
+  - 断り方: 条件に合わない ID は黙って読み飛ばさず、決まった形で断る。先に渡した ID の行をワークスペースで絞って読み、合わなければ何も書かずに断る。読んでから書くまでに変わったとき（定期処理が消した、別の保存が付けた）は、件数の条件で何も書かず、読み直して同じ順で断る。無い ID、別の組織か別のワークスペースの ID、他の人が上げて付く先のない ID（付く先のない行は上げた本人にしか見えない）は、どれも存在しないときと同じ 404（`not_found`）。付く先のある ID（同じ付く先に付いたものも）は 409（`conflict`、`details.reason` が `attachment_attached`）。ほかの理由（閉じたワークスペース、親が完了しているなど）は、その操作の今の順で先に返す。
+  - 件数の上限: 1回の保存で付ける ID は20件まで（`ATTACHMENTS_PER_SAVE`）。21件以上と、同じ ID を重ねて送ったものは 400（`invalid_input`）。D1 の1文の束縛は100個までで、ID は件数の条件と付ける `UPDATE` の2か所に入るので、20件なら40個に条件の値を足しても収まる（組織の休日の登録が1文20行に区切るのと同じ目安）。画面は、書いている途中で上げた添付が20件に達したら、それ以上を上げずに上限を知らせる。
+  - 付く先のない行を消す定期処理: 組織ごとの入口で、`attached_at IS NULL` で `created_at` が1日より前の行を読み、`DELETE ... WHERE id IN (読んだ ID) AND attached_at IS NULL ... RETURNING object_key` で消す。R2 からは `RETURNING` が返したファイルだけを消す。読んでから消すまでに保存が付けた行は `attached_at IS NULL` に当たらず残る（付けたほうを残す）。先に消された行を付けようとした保存は、上の件数の条件で何も書かず 404 で断る。
 - 消すときは行を物理削除する。論理削除にしないのは、戻す手段がなく、残すと容量の上限に数え続けるため。消したことは付く先の `change_logs` に残す。
 - 組織の合計は、組織のワークスペースの `size_bytes` の合計を上げるたびに計算する。集計は保存しない。同時に上げたときに少し超えることは許す。上げたことで80%を超え、`organizations.attachment_quota_warned_at` が空なら、管理者全員に通知し、その日時を入れる。
 - 添付ファイルの一覧は、付く先ごとに画像と動画を含むすべての行を返す。一覧の行に出す容量は `size_bytes`、上げた人は `uploaded_by`、上げた日時は `created_at`（書いている途中で上げたものが後で付く先に付いても、上げた日時は変わらない。`attached_at` は出さない）。本文に差し込んだ画像も、一覧の行として残る。
@@ -1333,6 +1338,8 @@ D1 は対話的なトランザクションを持たない。まとめて書く�
 | Google の招待の URL から結ぶ | 組織の DB の `users` か `invitations`、`change_logs`（「メールアドレスで待つ指名と招待」の 6）、続けて共通の DB の `accounts` と `account_logins` |
 | 初めてのログイン | 共通の DB の `accounts` と `account_logins`、続けて組織の DB の `users.account_id`（指名で待っていた行に結ぶ）、続けて共通の DB の `sessions`。2回目以降は `account_logins` と `accounts.last_login_at` の書き直し、`users.account_id` を結び直す書き込み、`sessions` の順 |
 | 添付ファイルを上げる | R2 にファイルを書き、続けて `attachments` |
+| 書いている途中で上げた添付を付ける | タスク、ストーリー、エピック、コメントの作成と変更の `batch()` に、`attachments`（付く先の列、`attached_at`）の `UPDATE` を足す。別の `batch()` に分けない。保存の主な文は、渡した ID がすべて付けられることを件数で条件にし、付ける文は付く先の行が書けたことを条件にする。ID は1回20件まで。断り方と定期処理との競合は `attachments` の節 |
+| 付く先のない添付を消す（定期処理） | `attachments` の `DELETE`（`attached_at IS NULL` を条件にし、`RETURNING object_key`）、続けて返したファイルだけを R2 から消す |
 | 添付ファイルを消す | `attachments` の削除と `change_logs`、続けて R2 のファイルの削除 |
 | コメントの作成 | `comments`。`comment-create` が `INSERT ... SELECT ... WHERE EXISTS (そのワークスペースの削除していないタスク) AND EXISTS (閉じていないワークスペース)` の1文で入れ、`change_logs` は書かない（行そのものが記録）。何も入らなければ、閉じていれば 409（`workspace_closed`）、そうでなければ 404 |
 | コメントの編集 | `comments`（`body_md`、`edited_at`）、`change_logs`（`entity_type = 'comment'`、`action = 'update'`。形は `change_logs` の節）。先にコメントを読み（ワークスペースで絞り、削除していないタスクのコメントだけ。無ければ 404）、書いた本人でなければ 403（`forbidden`）、消えていれば 409（`conflict`、`deleted`）、整えた本文が今と同じなら何も書かない。`comments` の文の条件は `id`、`workspace_id`、`author_user_id = :呼んだ人`、`deleted_at IS NULL`、`EXISTS (削除していないタスク)`、閉じていないワークスペースで、`change_logs` は直前の `UPDATE` が行を変えたときだけ入れる（下の「直前の文に結ぶ」）。何も変わらなければ、存在を先に決め、読み直してコメントかタスクが無ければ（読んでから書くまでにタスクが削除された）404、閉じていれば 409（`workspace_closed`）、消されていれば 409（`conflict`、`deleted`。読んでから書くまでにリーダーが消した）。先に読んだ時点でも、無いコメントは閉じたワークスペースでも 404 で、あるコメントへの書き込みだけが `workspace_closed` になる（同じ本文の更新も、閉じていれば `workspace_closed`） |
