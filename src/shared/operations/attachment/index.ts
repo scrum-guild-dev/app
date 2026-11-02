@@ -12,6 +12,13 @@ export const ATTACHMENT_MAX_BYTES = 52_428_800;
 
 const fileNameSchema = z
   .string()
+  // 片割れのサロゲートは UTF-8 にできず、R2 のヘッダーや D1 で U+FFFD に置き換わって応答と行が食い違う。
+  .refine((name) => name.isWellFormed(), { message: 'ファイル名が使えない（片割れのサロゲート）' })
+  // trim() が BOM などの禁止文字まで落とす前に検査する。長さは空白を除いた後で数える。
+  .superRefine((name, ctx) => {
+    const problem = shortTextProblem(name, Infinity);
+    if (problem !== null) ctx.addIssue({ code: 'custom', message: `ファイル名が使えない（${problem}）` });
+  })
   .trim()
   .superRefine((name, ctx) => {
     const problem = shortTextProblem(name, ATTACHMENT_FILE_NAME_MAX_LENGTH);

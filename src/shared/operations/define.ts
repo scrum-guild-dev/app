@@ -105,6 +105,12 @@ export function assertOperationDefinition(definition: AnyOperationDefinition): v
   if (definition.skipsConsent !== undefined && (definition.skipsConsent !== true || permission !== 'login')) {
     throw new Error(`操作 ${name} の skipsConsent は、権限 login の操作に true だけ付けられる`);
   }
+  if (
+    definition.body !== undefined &&
+    (definition.body !== 'binary' || scope === 'outside' || definition.mode !== 'write')
+  ) {
+    throw new Error(`操作 ${name} の body は、組織の中の write の操作に 'binary' だけ付けられる`);
+  }
   const rateLimit = definition.rateLimit;
   if (rateLimit !== undefined && !(Number.isInteger(rateLimit.max) && rateLimit.max > 0)) {
     throw new Error(`操作 ${name} の rateLimit.max は 1 以上の整数`);
