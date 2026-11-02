@@ -342,6 +342,7 @@ h1, h2, h3 { text-wrap: balance; }
 .btn.is-quiet { border-color: transparent; background: transparent; color: var(--color-muted); }
 .btn.is-quiet:hover { color: var(--color-fg); background: var(--color-rule); }
 .btn.is-danger { color: var(--color-danger); border-color: currentColor; }
+.btn.is-quiet.is-danger:hover { color: var(--color-danger); }
 .btn.is-sm { padding: 3px 10px; font-size: var(--text-xs); }
 /* Google のボタン（Google のブランドの決まり）。ロゴは公式の4色の G で変えない。地と枠と文字は Google のブランドの固定色なので、
    トークンを通さず色を直に書く。明暗はアプリのテーマに合わせる: テーマの指定が無い既定とシンプル（自動）だけ OS の明暗に従い、
@@ -1224,9 +1225,11 @@ dialog.dialog::backdrop { background: none; }
      （.entry-title）、完了の一覧の「さらに見る」と「もう一度試す」（.completed-status .btn.is-sm）、
      上の帯の小さな切り替え（.pill。引き出しの閉じるも。.pill は元から position: relative） */
   .tree-caret, button.tree-link, .tree-row .btn.is-sm, .form-actions .btn.is-sm, .callout-actions .btn.is-sm, .toolbar-end .btn.is-sm,
+  .toolbar .btn.is-sm, .dropzone .btn.is-sm, .file-actions .btn.is-sm,
   .completed-status .btn.is-sm, a.entry-title, button.entry-title { position: relative; }
   .tree-caret::after, button.tree-link::after, .tree-row .btn.is-sm::after, .form-actions .btn.is-sm::after, .callout-actions .btn.is-sm::after,
-  .toolbar-end .btn.is-sm::after, .completed-status .btn.is-sm::after, a.entry-title::after, button.entry-title::after, .pill::after {
+  .toolbar-end .btn.is-sm::after, .toolbar .btn.is-sm::after, .dropzone .btn.is-sm::after, .file-actions .btn.is-sm::after,
+  .completed-status .btn.is-sm::after, a.entry-title::after, button.entry-title::after, .pill::after {
     content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
   }
   /* 完了の折りたたみの開閉は行いっぱいのボタンなので、行の高さごと 44px にする */
@@ -1738,8 +1741,12 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .wiki-side { display: grid; gap: var(--space-3); min-width: 0; align-content: start; }
 .wiki-main { display: grid; gap: var(--space-5); min-width: 0; align-content: start; }
 .wiki-head { display: grid; gap: var(--space-3); min-width: 0; }
-.wiki-tree, .wiki-tree ul { list-style: none; margin: 0; padding: 0; }
+.wiki-tree:not(.panel), .wiki-tree ul { list-style: none; margin: 0; padding: 0; }
+.wiki-tree.panel { list-style: none; margin: 0; }
 .wiki-tree ul { margin-left: 12px; padding-left: var(--space-1); border-left: 1px solid var(--color-rule); }
+/* 4段目からは字下げを増やさない（深さは10段までで、字下げを重ねると題の幅が数文字に潰れる） */
+.wiki-tree ul ul ul { margin-left: 0; padding-left: 0; border-left: 0; }
+.wiki-head .section-title { overflow-wrap: anywhere; min-width: 0; }
 .wiki-node { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; }
 .wiki-node > .tree-caret { width: 24px; height: 28px; }
 .wiki-slot { width: 24px; }
@@ -1756,6 +1763,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .crumbs li + li::before { content: "›"; content: "›" / ""; color: var(--color-muted); }
 .crumbs a { color: var(--color-muted); text-underline-offset: 3px; }
 .crumbs [aria-current="page"] { color: var(--color-fg); font-weight: 700; }
+.crumbs .link-btn { color: var(--color-muted); }
 @media (max-width: 1080px) {
   .layout-wiki { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
 }
@@ -1766,7 +1774,8 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   .wiki-link { display: flex; flex-wrap: wrap; align-items: center; min-height: 44px; }
   .wiki-link .props-note { flex-basis: 100%; }
   .wiki-node .order-actions .icon-btn { width: 44px; height: 44px; }
-  .crumbs a { display: inline-flex; align-items: center; min-height: 44px; }
+  .crumbs a, .crumbs .link-btn { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+  .wiki-side .search { min-height: 44px; }
 }
 
 /* ===== テーマの飾り =====

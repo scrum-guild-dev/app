@@ -394,9 +394,18 @@
     };
     return `<ul class="wiki-tree">${nodes.map(row).join("")}</ul>`;
   }
-  // ページの道筋。rootLabel は最上段（Wiki 全体）へのリンク、ancestors は { id, title } の配列（最上段から親まで）、最後に今のページの題を文字で置く
+  // ページの道筋。rootLabel は最上段（Wiki 全体）へのリンク、ancestors は { id, title } の配列（最上段から親まで）、最後に今のページの題を文字で置く。
+  // 祖先が3つ以上のときは、最上段と親と今のページだけを見せ、途中は「…」のボタン（data-crumbs-more。画面が受けて、隠した行を出す）に畳む
   function wikiCrumbs(rootLabel, ancestors, currentTitle) {
-    return `<nav class="crumbs" aria-label="ページの道筋"><ol><li><a href="#" data-wiki-page="">${esc(rootLabel)}</a></li>${ancestors.map((p) => `<li><a href="#${p.id}" data-wiki-page="${p.id}">${esc(p.title)}</a></li>`).join("")}<li><span aria-current="page">${esc(currentTitle)}</span></li></ol></nav>`;
+    const link = (p, hidden) => `<li${hidden ? " hidden data-crumb-mid" : ""}><a href="#${p.id}" data-wiki-page="${p.id}">${esc(p.title)}</a></li>`;
+    const fold = ancestors.length > 2;
+    const mid = fold ? ancestors.slice(0, -1) : [];
+    const shown = fold ? ancestors.slice(-1) : ancestors;
+    return `<nav class="crumbs" aria-label="ページの道筋"><ol><li><a href="#" data-wiki-page="">${esc(rootLabel)}</a></li>${fold ? `<li><button class="link-btn" type="button" data-crumbs-more aria-label="途中のページ ${mid.length} 件を表示">…</button></li>${mid.map((p) => link(p, true)).join("")}` : ""}${shown.map((p) => link(p, false)).join("")}<li><span aria-current="page">${esc(currentTitle)}</span></li></ol></nav>`;
+  }
+  // 探した結果の1行。where は当たった場所（"title" か "body"）、path は親の題を「›」でつないだ道筋。今開いているページには aria-current
+  function wikiHit(p, path, where, current = false) {
+    return `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"${current ? ' aria-current="page"' : ""}><span>${esc(p.title)}<span class="chip">${where === "title" ? "題に一致" : "本文に一致"}</span></span><span class="props-note">${esc(path)}</span></a></li>`;
   }
   // meta は集計の下に置く1行（バックログの画面のチーム全体の経験値 teamXp など）
   function pageHead(eyebrow, title, tallies = [], actions = "", meta = "") {
@@ -2689,7 +2698,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
-    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, wikiTree, wikiCrumbs, pageHead,
+    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
     card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, mdBody, markdownSample, meter,

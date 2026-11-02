@@ -381,7 +381,8 @@ const SECTIONS = [
      <div class="panel"><div class="panel-title"><b>並べ替える（行ごとに「上へ」「下へ」）</b></div><nav aria-label="並べ替えの見本">${SQ.wikiTree([
       { id: "e1", title: "リリースの手順", children: [{ id: "e2", title: "本番へ出す前の確認" }, { id: "e3", title: "ロールバックの手順" }] },
       { id: "e4", title: "障害対応" }], { current: "e1", reorder: true, key: "cat-wiki-order" })}</nav></div></div>
-     ${SQ.wikiCrumbs("Wiki", [{ id: "d1", title: "リリースの手順" }], "本番へ出す前の確認")}`,
+     ${SQ.wikiCrumbs("Wiki", [{ id: "d1", title: "リリースの手順" }], "本番へ出す前の確認")}
+     <div class="field"><span class="field-label">探した結果の行（題、道筋、当たった場所。今開いているページは aria-current）</span><ul class="wiki-tree panel">${SQ.wikiHit({ id: "d2", title: "本番へ出す前の確認" }, "リリースの手順 › 本番へ出す前の確認", "title", true)}${SQ.wikiHit({ id: "d3", title: "ロールバックの手順" }, "リリースの手順 › ロールバックの手順", "body")}</ul></div>`,
     ["木は nav の中の入れ子の ul。ARIA の tree の役割は使わず（矢印キーの移動を持たない）、行は Tab で移る普通のリンクにする。枝の開閉は .tree-caret（aria-expanded と aria-controls）だけが受け持つ。", "並べ替えは、「並べ替える」を押している間だけ行に出る .order-actions のボタン（ドラッグの代わりにもなる）。先頭の「上へ」と末尾の「下へ」は aria-disabled。親を変えるときは、ページの「親を移す」のダイアログで同じ Wiki の中のページを選ぶ（自分と子孫、11 段目になる親は選べない理由を添える）。", "狭い幅（1080px 以下）では1列にして木をページの上に置き、760px 以下と指で押す画面では caret と行を 44px 以上にする。", "ページの頭の frontmatter は、題に使った title を除いた表（.table。キーは .mono）で出す。読めないときは表を出さず、警告の囲みで知らせて全文を本文として描く。"],
     ".layout-wiki .wiki-side .wiki-main .wiki-head / .wiki-tree .wiki-node .wiki-link[aria-current] .wiki-slot / .crumbs / .tree-caret / .order-actions")],
   ["completed", "完了の一覧", () => block("completed", "完了の一覧（バックログの折りたたみ）", "完了にしたタスクの「完了 N 件を折りたたんでいます」の行を、開閉のボタンにした部品。開くと完了した行を新しい順に並べる。",
