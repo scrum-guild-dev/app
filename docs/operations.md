@@ -40,7 +40,7 @@
 
 人の端末の `pnpm exec wrangler r2 bucket create scrum-guild-attachments` でも作れる。続けて「設定に binding を足すか」を聞かれたら断る（足すと、打ったディレクトリの `wrangler.jsonc` を書き換え、別名の binding が増える）。「手元の dev を本番のバケットにつなぐか」も断る。
 
-ビルド用のトークン（下の「API トークン」）には R2 の権限を足さない。wrangler 4.153.0 は、デプロイのときに binding のバケットがあるかを R2 の API で確かめるが、403 で断られたら確かめを飛ばしてデプロイを続ける（`collectPendingResources` が 403 を受け流す）。最初のデプロイが R2 の権限で落ちたら、`Workers R2 Storage: Read` だけを足し、Edit は足さない。Edit を持たせると、乗っ取られた依存が全組織の添付ファイルを読み書きし、消せるため。
+ビルド用のトークン（下の「API トークン」）には R2 の権限を足さない。wrangler 4.153.0 は、デプロイのときに binding のバケットがあるかを R2 の API で確かめるが、403 で断られたら確かめを飛ばしてデプロイを続ける（`collectPendingResources` が 403 を受け流す）。最初のデプロイか、wrangler を上げた後のデプロイが R2 の権限で落ちたら、`Workers R2 Storage: Read` だけを足し、Edit は足さない（`package.json` は `^4.153.0` なので、版が上がるとこの挙動が変わりうる）。Read を足したトークンは、REST API で全組織の添付ファイルを読める権限として扱う。Edit を持たせると、書き換えと削除までできる。もっとも、トークンは Workers Scripts: Edit を持ち、`ATTACHMENTS` の binding を持つ Worker を上げられるので、R2 の権限を絞っても、乗っ取られた依存への守りは限られる。
 
 手元の `wrangler dev` と vitest の Workers の実行環境は R2 を模擬する。本番のバケットには触らず、手元用のバケットを Cloudflare に作る必要はない。
 
