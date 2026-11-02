@@ -101,7 +101,15 @@ describe('needs-human の .claude/ の規則', () => {
   });
 
   test('マージの判定の本文と、本番に出る利用規約とプライバシーポリシーは守る', () => {
-    for (const path of ['docs/development.md', 'src/lib/legal/terms.md', 'src/lib/legal/privacy.md']) {
+    for (const path of [
+      'docs/development.md',
+      'src/lib/legal/terms.md',
+      'src/lib/legal/privacy.md',
+      'docs/Development.md',
+      'DOCS/DEVELOPMENT.MD',
+      'src/lib/Legal/terms.md',
+      'Src/Lib/Legal/privacy.md',
+    ]) {
       assert.equal(needsHuman(path), true, path);
     }
   });
