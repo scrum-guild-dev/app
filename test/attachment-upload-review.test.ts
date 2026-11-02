@@ -5,6 +5,7 @@ import { sniffContentType } from '../src/server/attachments/sniff.ts';
 import { setFixedNow } from '../src/shared/clock.ts';
 import { attachmentUpload } from '../src/shared/operations/attachment/index.ts';
 import { attachmentRows, objectKeysOf, recordingBucket, upload, type UploadOutput } from './attachment-helpers.ts';
+import { errorCodeOf } from './operations/harness.ts';
 import { createTarget, testEnv } from './operations/world.ts';
 
 // version が 7、variant が 10xx の UUID（docs/data-model.md の「主キーは UUIDv7」）
@@ -86,7 +87,14 @@ describe('種類の判定は先頭の 64 バイトまで', () => {
 
 describe('仮の回数の上限', () => {
   // 組織の合計の上限（#68 のストーリー E）と付く先のない行の掃除（#746）が入るまでの蓋
-  test('アカウントごとに 10 分に 60 回まで', () => {
+  test('同じアカウントは 10 分に 60 回まで上げられ、61 回目は 429 の rate_limited で、行も R2 のファイルも増えない', async () => {
     expect(attachmentUpload.rateLimit).toEqual({ max: 60, windowSeconds: 600 });
+    const target = await createTarget();
+    for (let i = 0; i < 60; i++) expect((await upload(target)).status).toBe(200);
+    const res = await upload(target);
+    expect(res.status).toBe(429);
+    expect(await errorCodeOf(res)).toBe('rate_limited');
+    expect(await attachmentRows(target)).toHaveLength(60);
+    expect(await objectKeysOf(target.organization.id)).toHaveLength(60);
   });
 });
