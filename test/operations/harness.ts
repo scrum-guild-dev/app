@@ -207,9 +207,10 @@ export function defineOperationChecks(
 ): void {
   const credential = options.credential ?? 'cookie';
   const app = createApp(operations, options);
-  // API トークンでは呼べない操作（運用者の操作と cookieOnly）。どの人が呼んでも 403
+  // API トークンでは呼べない操作（運用者の操作、cookieOnly、本文がバイナリの操作）。どの人が呼んでも 403
   const refusesToken = (definition: AnyOperationDefinition) =>
-    credential === 'bearer' && (definition.permission === 'operator' || definition.cookieOnly === true);
+    credential === 'bearer' &&
+    (definition.permission === 'operator' || definition.cookieOnly === true || definition.body === 'binary');
   const as = (person: Person) => credentialOf(person, credential);
 
   describe.each(operations.map((operation) => operation.definition))('$name（$permission）', (definition) => {

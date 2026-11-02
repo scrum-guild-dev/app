@@ -139,7 +139,9 @@ describe('上げると、付く先のない行と R2 のファイルができる
     expect(body).toMatchObject({ size_bytes: 1, content_type: 'application/octet-stream' });
   });
 
-  test('書き込みの API トークンでも上げられ、Origin が無くてもよい', async () => {
+  // 一覧（operation-list）に出ない操作はトークンで呼べない（#582 の、一覧と呼び出しの可否を食い違わせない決まり）
+  test('書き込みの API トークンでは 403 で、何も書かない', async () => {
+    const before = (await attachmentRows(target)).length;
     const res = await post(app, attachmentUpload, {
       slug: target.slug,
       bearer: await bearerFor(target.member, 'write'),
@@ -147,9 +149,8 @@ describe('上げると、付く先のない行と R2 のファイルができる
       body: { workspace_id: target.workspace.id, file_name: 'トークン.png' },
       file: pngFile(),
     });
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as UploadOutput;
-    expect((await attachmentRows(target)).find((item) => item.id === body.id)?.uploaded_by).toBe(target.member.userId);
+    expect(res.status).toBe(403);
+    expect((await attachmentRows(target)).length).toBe(before);
   });
 
   test('同じファイルを2回上げると、別の ID と別のキーの行が2つできる', async () => {
@@ -227,17 +228,22 @@ describe('ヘッダーの入力が無いか壊れていると、何も書かず�
     target = await createTarget();
   });
 
-  // ヘッダーの値を直に決めて送る（null は付けない）
-  async function sendWithInputHeader(value: string | null, extraHeaders: Record<string, string> = {}) {
+  // ヘッダーの値を直に決めて送る（null は付けない）。成功する呼び出しは into に別の組織を渡し、
+  // この describe の「何も書かない」の確かめが数える組織に行を残さない
+  async function sendWithInputHeader(
+    value: string | null,
+    extraHeaders: Record<string, string> = {},
+    into: Target = target,
+  ) {
     const file = pngFile();
     const headers = new Headers({
       Origin: testEnv.PUBLIC_ORIGIN,
-      Cookie: `${sessionCookieName(testEnv.PUBLIC_ORIGIN)}=${target.member.token}`,
+      Cookie: `${sessionCookieName(testEnv.PUBLIC_ORIGIN)}=${into.member.token}`,
       'Content-Length': String(file.byteLength),
       ...extraHeaders,
     });
     if (value !== null) headers.set('X-Operation-Input', value);
-    return app.request(`/api/${target.slug}/attachment-upload`, { method: 'POST', headers, body: file }, testEnv);
+    return app.request(`/api/${into.slug}/attachment-upload`, { method: 'POST', headers, body: file }, testEnv);
   }
 
   const valid = () => ({ workspace_id: target.workspace.id, file_name: '画面の案.png' });
@@ -284,7 +290,12 @@ describe('ヘッダーの入力が無いか壊れていると、何も書かず�
   });
 
   test('日本語のファイル名を encodeURIComponent したヘッダーは、復号して読む', async () => {
-    const res = await sendWithInputHeader(operationInputHeader(valid()));
+    const other = await createTarget();
+    const res = await sendWithInputHeader(
+      operationInputHeader({ workspace_id: other.workspace.id, file_name: '画面の案.png' }),
+      {},
+      other,
+    );
     expect(res.status).toBe(200);
     expect(((await res.json()) as UploadOutput).file_name).toBe('画面の案.png');
   });

@@ -98,8 +98,8 @@ describe('attachment-upload の定義と登録', () => {
     expect(implementedOperations.map((operation) => operation.definition)).toContain(attachmentUpload);
   });
 
-  test('書き込みの API トークンでは呼べ、読み取りのトークンでは呼べない（一覧に出ないことと別）', () => {
-    expect(tokenAllows(attachmentUpload, 'write')).toBe(true);
+  test('API トークンでは書き込みでも読み取りでも呼べない（一覧に出ないことと同じ判定）', () => {
+    expect(tokenAllows(attachmentUpload, 'write')).toBe(false);
     expect(tokenAllows(attachmentUpload, 'read')).toBe(false);
   });
 
