@@ -227,7 +227,7 @@
 
 ### rate_limits
 
-ログイン（OAuth の手段とパスワード）、画面のエラーの送信（`POST /api/client-errors`）、手動の同期、招待（GitHub に問い合わせる `invitee-resolve` と `invitation-create`。`invitation-create` は GitHub に問い合わせない Google の招待も同じ枠で数える）、完成の定義の変更（`workspace-dod-update`。10 万字の本文を書く）、コメントの作成と編集（`comment-create`、`comment-update`。10 万字の本文を何件でも足せる。どれも 10 分に 30 回）、Wiki のページの作成、保存、アップロード（`org-wiki-page-create`、`org-wiki-page-update`、`org-wiki-upload` と、`workspace-wiki-` で始まる同じ3つ。保存のたびに版を残し、1ページが最悪で約 40MB になる。どれも 10 分に 30 回。`upload` はファイル数ぶんを数える）のレート制限。
+ログイン（OAuth の手段とパスワード）、画面のエラーの送信（`POST /api/client-errors`）、手動の同期、招待（GitHub に問い合わせる `invitee-resolve` と `invitation-create`。`invitation-create` は GitHub に問い合わせない Google の招待も同じ枠で数える）、完成の定義の変更（`workspace-dod-update`。10 万字の本文を書く）、コメントの作成と編集（`comment-create`、`comment-update`。10 万字の本文を何件でも足せる。どれも 10 分に 30 回）、Wiki のページの作成、保存、アップロード（`org-wiki-page-create`、`org-wiki-page-update`、`org-wiki-upload` と、`workspace-wiki-` で始まる同じ3つ。保存のたびに版を残し、1ページが最悪で約 40MB になる。どれも 10 分に 30 回。`upload` はファイル数ぶんを数える）、添付ファイルを上げる操作（`attachment-upload`。組織の合計の上限と掃除が入るまでの仮の蓋で、10 分に 60 回）のレート制限。
 
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
@@ -1024,6 +1024,11 @@
 | attached_at | TEXT | | 付く先が決まった日時。空なら書いている途中で上げたもの |
 | created_at | TEXT | NOT NULL | |
 
+- 上げる操作は `POST /api/<slug>/attachment-upload`（`member`、`workspace: true`、`write`、`body: 'binary'`）。入力 `{ workspace_id, file_name }` の JSON を `encodeURIComponent` してヘッダー `X-Operation-Input` に入れ、本文はファイルのバイトにする。ファイル名は制御文字と見えない文字（BOM を含む）を断り、片割れのサロゲートを含む文字列は 400 の `invalid_input` で断り、前後の空白を除いて `shortTextProblem(name, 255)` で検査する。字数はコードポイントで数える。
+  - 断る順は、登録の今の順（認証、同意、組織、権限、API トークンの範囲、回数の上限）→ ヘッダーの入力 → `Content-Length` → ワークスペースの確かめ。ヘッダーが無い、URL の復号や JSON の解析に失敗、スキーマに合わないときは 400 の `invalid_input`。`Content-Length` が無い、10進の整数でない、0 のときも 400。52428800 を超えると 413 の `invalid_input`。別の組織と存在しないワークスペースは 404、同じ組織の所属していないワークスペースは 403（管理者は通る）、閉じていれば 409 の `workspace_closed`。ここまで本文を読まずに断る。
+  - 種類は先頭の最大 64 バイトで決め、拡張子と申告の `Content-Type` は使わない。PNG（`89 50 4E 47 0D 0A 1A 0A`）、JPEG（`FF D8 FF`）、GIF（`GIF87a` / `GIF89a`）、WebP（`RIFF` と8バイト目から `WEBP`）を、それぞれ `image/png`、`image/jpeg`、`image/gif`、`image/webp` にする。4バイト目から `ftyp` があり、major brand が `isom`、`iso2`、`iso4`、`iso5`、`iso6`、`mp41`、`mp42`、`avc1`、`dash`、`M4V ` のどれかなら `video/mp4`。EBML（`1A 45 DF A3`）のヘッダーの DocType が `webm` なら `video/webm`。それ以外（HEIC、AVIF、QuickTime、DocType が `matroska` のものを含む）は `application/octet-stream`。
+  - 本文を丸ごとメモリに読まず、`FixedLengthStream(Content-Length)` を通して R2 に流す。宣言した長さと実際の本文が違えば保存に失敗する。キーは確かめた組織とワークスペースの ID と新しい行の ID から `<organization_id>/<workspace_id>/<id>` にする。R2 に書いた後、Kysely の組織の入口の `batch()` で付く先のない行を入れる。`attached_at` は空、`uploaded_by` は呼んだ人、`size_bytes` は `Content-Length`、`content_type` は判定した種類。
+  - R2 への書き込みか行の挿入に失敗したら、そのキーを R2 から消してから 500 の `internal` を返す。削除にも失敗したら、キーを出さずに、消せなかった件数を `level`、`code`（`internal`）、`requestId` とともにログに出す（残りは運用の削除手順で確かめる）。応答は `{ id, file_name, content_type, size_bytes, created_at }`。行の `id` は UUIDv7 で、`created_at` は R2 に書き終えた後の時刻（`now()`）。回数の上限は、仮にアカウントごとに 10 分に 60 回（組織の合計の上限（#68 のストーリー E）と付く先のない行の掃除（#746）が入るまで、1人が R2 に積む速さを抑える。両方が入ったら外す）。枠はアカウントごとで、組織をまたいで同じ枠を使う。登録の関数が入力を読む前に数えるので、400 と 413 で断った呼び出しも1回に数える（ほかの回数の上限と同じ数え方で、蓋の目的は1人が送る回数を抑えることにある）。所属、閉じたこと、組織の停止は本文を流す前に1回だけ確かめ、`INSERT` には条件を付けない。流している間に外されたか閉じられたときも行が入るが、付く先のない行は上げた本人にしか見えず、付ける操作が権限を確かめ直し、掃除で消える。R2 に書いた後で Worker が止まった（`catch` まで届かない）ときは、行の無いファイルが残り、掃除（行を起点にする）では消えない。生きている組織では拾わず、解約した組織を消すときにまとめて消える（`docs/operations.md` の「解約した組織のデータを消す」の手順 7）。`operation-list` から外す。API トークンでは呼べない（403。一覧に出ない操作をトークンで呼べないのと同じ判定）。
 - 付く先は4つの列のうち多くても1つ: `CHECK ((task_id IS NOT NULL) + (story_id IS NOT NULL) + (epic_id IS NOT NULL) + (comment_id IS NOT NULL) <= 1)`。付く先が決まったら `attached_at` を入れる: `CHECK ((attached_at IS NULL) = (task_id IS NULL AND story_id IS NULL AND epic_id IS NULL AND comment_id IS NULL))`。
 - 起票の画面やコメントの欄では、保存する前に上げるため、付く先のない行を先に作る。保存したときに、保存の操作が持つ添付の ID の行（本文に差し込んだ画像と、差し込まない画像でないファイルの両方。本文の参照の有無には頼らない）へ、付く先を入れる。上げた人が呼んだ人で、同じワークスペースの、付く先のない行だけを付ける。付く先のないまま1日たった行とファイルは定期処理で消す。
   - 付ける文: 付く先の列と `attached_at` を入れる `UPDATE` を、保存の操作（タスク、ストーリー、エピック、コメントの作成と変更）と同じ `batch()` の最後に入れる（「書き込みの単位」の付ける文）。別の `batch()` に分けない。条件は `id IN (渡した ID)`、`workspace_id`、`uploaded_by = :呼んだ人`、`attached_at IS NULL`。付く先の行が書けたことも条件にし（作成は作った行の `EXISTS`、変更はこの要求が書いた行の `EXISTS`）、付く先が書けずに添付だけが付くことを起こさない。渡した ID が0件なら、付ける文も下の件数の条件も足さない。
@@ -1428,7 +1433,7 @@ D1 は対話的なトランザクションを持たない。まとめて書く�
 | 組織の休日の削除 | `organization_holidays`（組織と日付で絞る1行）。消えた行が無ければ 404。`change_logs` は書かない |
 | Google の招待の URL から結ぶ | 組織の DB の `users` か `invitations`、`change_logs`（「メールアドレスで待つ指名と招待」の 6）、続けて共通の DB の `accounts` と `account_logins` |
 | 初めてのログイン | 共通の DB の `accounts` と `account_logins`、続けて組織の DB の `users.account_id`（指名で待っていた行に結ぶ）、続けて共通の DB の `sessions`。2回目以降は `account_logins` と `accounts.last_login_at` の書き直し、`users.account_id` を結び直す書き込み、`sessions` の順 |
-| 添付ファイルを上げる | R2 にファイルを書き、続けて `attachments` |
+| 添付ファイルを上げる | `attachment-upload`。入力は `X-Operation-Input` の URL エンコードした JSON。認証、同意、組織、権限、トークンの範囲の後、入力（400）→ `Content-Length`（400 / 413）→ ワークスペース（404 / 403 / 409）の順で本文を読む前に断る。先頭64バイトで種類を判定し、`FixedLengthStream` を通して R2 の `<organization_id>/<workspace_id>/<id>` に書き、続けて組織の入口の `batch()` で付く先のない `attachments` を入れる。応答は `{ id, file_name, content_type, size_bytes, created_at }`。入力、判定、失敗したときの削除の詳細は `attachments` の節 |
 | 書いている途中で上げた添付を付ける | タスク、ストーリー、エピック、コメントの作成と変更の `batch()` の最後に、`attachments`（付く先の列、`attached_at`）の `UPDATE` を足す。別の `batch()` に分けない。保存の主な文は、渡した ID がすべて付けられることを件数で条件にし、付ける文は付く先の行が書けたことを条件にする。ID は1回20件まで。断る順と定期処理との競合は `attachments` の節 |
 | 付く先のない添付を消す（定期処理） | 毎時0分に、停止していない組織ごとに、`attachments` の `DELETE`（その組織のワークスペースで絞り、`workspace_id IN (SELECT id FROM workspaces WHERE organization_id = :組織)`、`id IN (SELECT ... LIMIT 50)` と `attached_at IS NULL` を条件にし、`RETURNING object_key`）、続けて返したキーのうち組織の ID で始まるものを R2 からまとめて消す。50件に届いたら繰り返し、1組織20回まで、定期処理の開始から20秒まで。形は `attachments` の節 |
 | 添付ファイルを消す | `attachments` の削除と `change_logs`、続けて R2 のファイルの削除 |

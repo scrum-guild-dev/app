@@ -478,6 +478,8 @@ export const pointers: Pointers = {
     workspace_id: target.workspace.id,
     task_id: (await createTask(target.organization, target.workspace.id, target.member.userId!)).id,
   }),
+  // 本文のファイルは harness の post() が送る（body: 'binary'。入力はヘッダー X-Operation-Input）
+  'attachment-upload': async (target) => ({ workspace_id: target.workspace.id, file_name: '画面の案.png' }),
   'comment-list': async (target) => ({
     workspace_id: target.workspace.id,
     task_id: (await createTask(target.organization, target.workspace.id, target.admin.userId!)).id,
