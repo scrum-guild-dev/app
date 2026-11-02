@@ -253,7 +253,7 @@
   const tallies = $derived([
     { label: t('membersTallyBelonging'), count: members?.length ?? 0, icon: 'users' as const },
     { label: t('leader'), count: leaderCount },
-    ...(invitations === null
+    ...(invitations === null || personal
       ? []
       : [
           {
@@ -429,7 +429,8 @@
     {/if}
   {/if}
 
-  {#if invitations !== null}
+  <!-- 自分用の組織は招待を受けないので、承諾待ちの招待の節と「招待中」の数も出さない -->
+  {#if invitations !== null && !personal}
     <Section
       id="members-invitations"
       title={t('invitationsSectionTitle')}
