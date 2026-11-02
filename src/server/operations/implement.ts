@@ -57,13 +57,25 @@ export type OrganizationContext<Input> = {
 };
 export type WorkspaceContext<Input> = OrganizationContext<Input> & { workspace: VerifiedWorkspace };
 
-export type ContextOf<D extends AnyOperationDefinition> = D extends OutsideOperationDefinition
+// binary の操作だけに渡す。binding はリクエストの env から取り、本文は未読のまま渡す。
+export type BinaryBody = {
+  body: ReadableStream<Uint8Array>;
+  contentLength: number;
+  bucket: R2Bucket;
+};
+
+type BaseContextOf<D extends AnyOperationDefinition> = D extends OutsideOperationDefinition
   ? D['permission'] extends 'operator'
     ? OperatorContext<z.output<D['input']>>
     : OutsideContext<z.output<D['input']>>
   : D extends WorkspaceOperationDefinition
     ? WorkspaceContext<z.output<D['input']>>
     : OrganizationContext<z.output<D['input']>>;
+
+export type ContextOf<D extends AnyOperationDefinition> = BaseContextOf<D> &
+  (D extends { readonly body: 'binary' }
+    ? { binary: BinaryBody; requestId: string } // requestId は失敗のログ用（deferrer のログと同じ値）
+    : unknown);
 
 // 処理の戻り値は出力のスキーマで検証し、スキーマに無い項目は落とす（行をそのまま返しても余計な列が出ない）
 export type HandlerOf<D extends AnyOperationDefinition> = (context: ContextOf<D>) => Promise<z.input<D['output']>>;
