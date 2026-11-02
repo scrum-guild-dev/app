@@ -423,7 +423,7 @@ fails=0; while :; do s=$(gh api "repos/{owner}/{repo}/pulls/<number>" --jq .stat
 - 非対話の実行（`claude -p`、CI の中）。フックが環境変数で見て確認に回すが、確認を出せないので止まる。スキルでも、非対話と分かっていればマージしない
 
 ```bash
-gh api "repos/{owner}/{repo}/pulls/<number>" --jq '{labels: [.labels[].name], head: .head.sha, base: .base.ref}'
+gh api "repos/{owner}/{repo}/pulls/<number>" --jq '{labels: [.labels[].name], head: .head.sha, head_ref: .head.ref, head_repo: .head.repo.full_name, base: .base.ref, base_repo: .base.repo.full_name}'
 gh api "repos/{owner}/{repo}/commits/<head>/check-runs" --paginate --jq '.check_runs[] | {name, status, conclusion}'
 ```
 
