@@ -147,8 +147,9 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     const section = sectionOf(page);
     await expect(section.getByRole('table', { name: '発行済みの API トークン' })).toBeVisible();
     const rows = section.getByRole('table', { name: '発行済みの API トークン' }).locator('tbody tr');
-    // 行数は共有の admin の並行のテスト（api-tokens.test.ts）が増減させるので、数では比べない
+    // 行数は共有の admin の並行のテスト（api-tokens.test.ts）が増減させるので、数では比べず、実行の前の最初の行の名前が残るかで見る
     await expect(rows.first()).toBeVisible();
+    const firstName = (await rows.first().locator('td.is-name').innerText()).trim();
     const button = section.getByRole('button', { name: BUTTON });
     const confirm = page.getByRole('dialog', { name: DIALOG });
 
@@ -167,7 +168,7 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     await button.click();
     await confirm.getByRole('button', { name: '締め出す', exact: true }).click();
     await expect(toast(page, '締め出せませんでした。時間をおいて、もう一度試してください')).toBeVisible();
-    await expect(rows.first()).toBeVisible();
+    await expect(rows.filter({ hasText: firstName }).first()).toBeVisible();
     expect(sent).toBe(1);
     await unroute();
 
