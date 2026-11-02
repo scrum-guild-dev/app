@@ -1,16 +1,19 @@
 // done-check のレビューで見つかった筋を止めるテスト（Issue #744）。
 // 行の ID の採番（UUIDv7）、時計（now()）、種類の判定の 64 バイトの上限、仮の回数の上限を見る
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { sniffContentType } from '../src/server/attachments/sniff.ts';
 import { setFixedNow } from '../src/shared/clock.ts';
 import { attachmentUpload } from '../src/shared/operations/attachment/index.ts';
-import { attachmentRows, objectKeysOf, upload, type UploadOutput } from './attachment-helpers.ts';
+import { attachmentRows, objectKeysOf, recordingBucket, upload, type UploadOutput } from './attachment-helpers.ts';
 import { createTarget, testEnv } from './operations/world.ts';
 
 // version が 7、variant が 10xx の UUID（docs/data-model.md の「主キーは UUIDv7」）
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-afterEach(() => setFixedNow(undefined));
+afterEach(() => {
+  setFixedNow(undefined);
+  vi.restoreAllMocks();
+});
 
 describe('行の ID と時刻', () => {
   test('応答、行、R2 のキーの末尾の ID は同じ UUIDv7', async () => {
@@ -36,6 +39,27 @@ describe('行の ID と時刻', () => {
     expect(body.created_at).toBe(at.toISOString());
     const [row] = await attachmentRows(target);
     expect(row?.created_at).toBe(at.toISOString());
+  });
+});
+
+describe('保存できなかったときのログ', () => {
+  test('R2 の put が先に失敗したら、ログの error は流し込みの中止（AbortError）でなく put の例外の名前', async () => {
+    const target = await createTarget();
+    const { env: recording } = recordingBucket({
+      put: async () => {
+        throw new TypeError('R2 の書き込みに失敗した');
+      },
+    });
+    const logged: unknown[] = [];
+    vi.spyOn(console, 'error').mockImplementation((line: unknown) => {
+      logged.push(line);
+    });
+    const res = await upload(target, { env: recording });
+    expect(res.status).toBe(500);
+    const reasons = logged
+      .filter((line): line is string => typeof line === 'string' && line.includes('添付ファイルを保存できなかった'))
+      .map((line) => (JSON.parse(line) as { error: string }).error);
+    expect(reasons).toEqual(['TypeError']);
   });
 });
 

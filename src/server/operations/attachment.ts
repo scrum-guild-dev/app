@@ -26,8 +26,9 @@ export const attachmentUploadOperation = implement(
       // R2 は JS の ReadableStream の長さを知らない。FixedLengthStream で長さを伝え、実際のバイト数も確かめる。
       // 送る側が先に失敗しても put の決着を待つ（待たずに消すと、後から put が確定してファイルが残りうる）
       const [pumped, put] = await Promise.allSettled([pumping, putting]);
-      if (pumped.status === 'rejected') throw pumped.reason;
+      // put の失敗を先に見る。put が失敗すると 24 行目が流し込みを止め、pumping は AbortError になるので、原因は put の側
       if (put.status === 'rejected') throw put.reason;
+      if (pumped.status === 'rejected') throw pumped.reason;
       // 上げ終えた時刻にする。付く先のない行の掃除（#746）は created_at の古さで消すので、上げ始めの時刻にしない
       createdAt = now().toISOString();
       await db.batch([
