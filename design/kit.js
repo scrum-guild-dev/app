@@ -516,6 +516,29 @@
   function treeCaret(bodyId, title) {
     return `<button class="tree-caret" type="button" aria-expanded="true" aria-controls="${bodyId}" aria-label="${esc(title)}を閉じる" data-tree-toggle="${bodyId}" data-tree-title="${esc(title)}">${icon("chevron")}</button>`;
   }
+  // Wiki のページの木（本番の PageTree）。pages は { id, parent, title } の平らな配列で、兄弟の並びは配列の順（親が空なら最上位）。
+  // 開いているページ（current）の祖先と、current 自身の枝を開き、ほかの枝は閉じる。開閉は tree-caret のボタン（data-tree-toggle）、
+  // 題は a（開いているページは aria-current="page"）。order を渡すと、開いているページの行の右端に「上へ」「下へ」「親を移す」を出す
+  // （ドラッグの代わりのボタン。端の向きは aria-disabled にしてフォーカスを失わない）。href はページごとのリンク先を作る関数
+  function pageTree(pages, { current = "", label = "ページの木", ids = "pt", href = () => "#", order = null, emptyText = "ページはまだありません" } = {}) {
+    const kids = (id) => pages.filter((p) => p.parent === id);
+    const trail = new Set();
+    for (let p = pages.find((x) => x.id === current); p && p.parent; p = pages.find((x) => x.id === p.parent)) trail.add(p.parent);
+    const act = (name, text, title, extra) => `<button class="icon-btn" type="button" aria-label="${text}: ${esc(title)}" title="${text}" ${extra}>${icon(name)}</button>`;
+    const walk = (parent) => `<ul>${kids(parent).map((p) => {
+      const sub = kids(p.id);
+      const here = p.id === current;
+      const open = sub.length > 0 && (trail.has(p.id) || here);
+      const tools = here && order
+        ? `<span class="order-actions">${act("up", "上へ", p.title, `aria-disabled="${Boolean(order.first)}" data-toast="「${esc(p.title)}」を一つ上へ並べました"`)}${act("down", "下へ", p.title, `aria-disabled="${Boolean(order.last)}" data-toast="「${esc(p.title)}」を一つ下へ並べました"`)}${act("swap", "親を移す", p.title, `data-dialog="wikiMove" data-scope="${order.scope || "ws"}"`)}</span>`
+        : "";
+      return `<li><div class="page-tree-row${here ? " is-current" : ""}">
+        ${sub.length ? `<button class="tree-caret" type="button" aria-expanded="${open}" aria-controls="${ids}-${p.id}" aria-label="${esc(p.title)}を${open ? "閉じる" : "開く"}" data-tree-toggle="${ids}-${p.id}" data-tree-title="${esc(p.title)}">${icon("chevron")}</button>` : `<span aria-hidden="true"></span>`}
+        <a class="page-tree-link" href="${href(p)}"${here ? ' aria-current="page"' : ""}>${esc(p.title)}</a>${tools}</div>
+        ${sub.length ? `<div id="${ids}-${p.id}"${open ? "" : " hidden"}>${walk(p.id)}</div>` : ""}</li>`;
+    }).join("")}</ul>`;
+    return `<nav class="page-tree" aria-label="${esc(label)}">${pages.length ? walk("") : `<p class="page-tree-empty">${emptyText}</p>`}</nav>`;
+  }
   // エピックの行（本番の TreeEpic）。題はエピックのダイアログを開くボタン。opts.order を渡すと、エピックの行の先頭につまみを、
   // 配下のストーリーの行に並べ替えと「親を移す」を出す。opts.order が { first, last } なら、エピックの行の右端にも「上へ」「下へ」を出す
   // （エピックは親を持たないので「親を移す」は無い）。opts.mark はドラッグの印で、前後の線（before / after）は配下を含めた塊
@@ -1378,7 +1401,84 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ? `<button class="btn is-primary" type="button" data-close-dialog>閉じる</button>`
         : `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${e ? `${t("epic")}を保存しました` : `${t("epic")}を作りました`}">${e ? "保存する" : "作る"}</button>`);
   }
+  // ---- Wiki のダイアログの部品 ----
+  // ページの段（最上位が 1）。移す先の選択肢の字下げと、10 段の上限の説明に使う
+  const wikiDepth = (pages, p) => { let n = 1; for (let x = p; x.parent; x = pages.find((y) => y.id === x.parent)) n += 1; return n; };
+  // ページとその配下の ID。自分と配下は、移す先に選べない（循環になる）
+  const wikiBranch = (pages, id) => { const ids = [id]; for (let i = 0; i < ids.length; i++) pages.filter((p) => p.parent === ids[i]).forEach((p) => ids.push(p.id)); return ids; };
+  // 親にするページの選択肢。段ごとに全角の空白で字下げする
+  const wikiOptions = (pages, skip = [], selected = "") => pages.filter((p) => !skip.includes(p.id)).map((p) => `<option${p.id === selected ? " selected" : ""}>${"　".repeat(wikiDepth(pages, p) - 1)}${esc(p.title)}</option>`).join("");
+  // Markdown のアップロード（本番の WikiUploadDialog）。.md を複数まとめて選び、選んだ親の下に新しいページとして足す。
+  // 1件でも足せないファイルがあれば、全部を足さない（足すのは1回の batch() なので、全部か何もしないか）
+  function wikiUploadDialog(scope, files) {
+    const pages = D.wiki[scope];
+    const bad = files.filter((f) => f.error).length;
+    const rows = files.map((f) => f.error
+      ? `<div class="file-row is-error" role="alert">${icon("alert")}<div class="file-main"><span class="file-name">${esc(f.name)}</span><span class="file-meta">${esc(f.error)}</span></div>
+          <div class="file-actions"><button class="btn is-sm is-quiet" type="button" aria-label="${esc(f.name)} を外す">外す</button></div></div>`
+      : `<div class="file-row">${icon("file")}<div class="file-main"><span class="file-name">${esc(f.name)}</span>
+          <span class="file-meta"><span class="mono">${f.size}</span>・題: ${esc(f.title)}（${f.from}）</span></div>
+          <div class="file-actions"><button class="btn is-sm is-quiet" type="button" aria-label="${esc(f.name)} を外す">外す</button></div></div>`).join("");
+    openDialog("Markdown をアップロード",
+      `<div class="field"><label class="field-label" for="d-wu-parent">足す先（親のページ）</label>
+         <select class="select" id="d-wu-parent" aria-describedby="d-wu-parent-hint"><option>最上位</option>${wikiOptions(pages)}</select>
+         <span class="field-hint" id="d-wu-parent-hint">選んだページの子として、末尾に足します。階層は 10 段までです。</span></div>
+       <div class="dropzone">${icon("upload")}<span class="dropzone-text"><b>.md のファイルを、複数まとめて選べます</b><span>一度に 20 ファイルまで。1 ファイル 10 万字までの UTF-8 の Markdown です</span></span>
+         <input type="file" id="d-wu-files" accept=".md,text/markdown" multiple aria-label="アップロードする .md のファイル"></div>
+       <p class="props-note">見本のため、選んだことにした例のファイルを並べています。</p>
+       <div class="files" aria-label="選んだファイル">${rows}</div>
+       <p class="field-hint">題は、本文の frontmatter の title にします。無ければファイル名（.md を除く）にします。新しいページとして足すだけで、同じ題のページがあっても上書きしません。</p>
+       ${bad ? `<div class="callout is-warn" id="d-wu-block">${icon("alert")}<span>足せないファイルが ${bad} 件あります。外すか、直して選び直してください。1 件でも足せないと、ページは 1 件も足されません。</span></div>` : ""}`,
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" ${bad ? 'aria-disabled="true" aria-describedby="d-wu-block"' : `data-close-dialog data-toast="${files.length} 件のページを足しました"`}>${files.length - bad} 件のページを足す</button>`);
+  }
+
   const DIALOGS = {
+    // Wiki に Markdown をアップロードする。足せないファイルがある形は wikiUploadError。el の data-scope が org なら組織の Wiki
+    wikiUpload: (el) => wikiUploadDialog(el?.dataset?.scope === "org" ? "org" : "ws", [
+      { name: "デプロイの手順.md", size: "3.2 KB", title: "デプロイの手順", from: "ファイル名" },
+      { name: "障害対応.md", size: "5.8 KB", title: "障害対応の流れ", from: "frontmatter の title" },
+    ]),
+    wikiUploadError: (el) => wikiUploadDialog(el?.dataset?.scope === "org" ? "org" : "ws", [
+      { name: "デプロイの手順.md", size: "3.2 KB", title: "デプロイの手順", from: "ファイル名" },
+      { name: "長すぎるメモ.md", size: "412 KB", error: "本文が 10 万字を超えています（41 万字）" },
+      { name: "手順.txt", size: "1.1 KB", error: ".md のファイルではありません" },
+    ]),
+    // ページの親を移す（本番の WikiMoveDialog）。移す先はこの Wiki の最上位と、自分と配下を除くページ。移す先の末尾に置く
+    wikiMove: (el) => {
+      const scope = el?.dataset?.scope === "org" ? "org" : "ws";
+      const pages = D.wiki[scope];
+      const me = pages.find((p) => p.id === (scope === "org" ? "o2" : "w2"));
+      openDialog(`「${esc(me.title)}」の親を移す`,
+        `<label class="field" for="d-wm"><span class="field-label">移す先</span>
+           <select class="select" id="d-wm" aria-describedby="d-wm-hint"><option>最上位</option>${wikiOptions(pages, wikiBranch(pages, me.id).concat(me.parent))}</select>
+           <span class="field-hint" id="d-wm-hint">移す先の末尾に置きます。子のページも一緒に移ります。移せるのはこの Wiki の中だけで、階層は 10 段までです。</span></label>`,
+        `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="親を移しました">移す</button>`);
+    },
+    // ページの削除の確認（本番の WikiDeleteDialog）。子のページは、消すページの親の下へ上がる。削除したページを戻す画面は無い
+    wikiDelete: (el) => {
+      const scope = el?.dataset?.scope === "org" ? "org" : "ws";
+      const pages = D.wiki[scope];
+      const me = pages.find((p) => p.id === (scope === "org" ? "o2" : "w2"));
+      const kids = pages.filter((p) => p.parent === me.id);
+      const up = pages.find((p) => p.id === me.parent);
+      openDialog("ページを削除する",
+        `<p class="wrap-anywhere">「${esc(me.title)}」を削除します。削除したページと版の履歴は画面から消え、この版では戻せません。</p>
+         ${kids.length
+           ? `<p>子のページ ${kids.length} 件（${kids.map((k) => `「${esc(k.title)}」`).join("")}）は、${up ? `「${esc(up.title)}」の下` : "最上位"}へ上がります。</p>`
+           : `<p class="field-hint">子のページはありません。</p>`}`,
+        `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="ページを削除しました">削除する</button>`);
+      document.querySelector(".dialog-sheet").classList.add("is-danger");
+    },
+    // 前の版に戻す（本番の WikiRestoreDialog）。戻す専用の操作は無く、その版の題と本文で普通に保存する（新しい版になる）
+    wikiRestore: () => {
+      const d = D.wiki.detail;
+      const old = d.revisions.find((r) => r.no === 9);
+      const now = d.revisions[0];
+      openDialog(`版 ${old.no} に戻す`,
+        `<p>版 ${old.no}（${esc(user(old.by).name)}・${old.at}）の題と本文で、新しい版 ${now.no + 1} として保存します。</p>
+         <p class="field-hint">今の版 ${now.no} も、前の版として版の一覧に残ります。</p>`,
+        `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="版 ${old.no} の内容を、版 ${now.no + 1} として保存しました">戻す</button>`);
+    },
     // 先のスプリントに入れる（本番の SprintTaskPicker）。計画の画面の「<バックログ>から入れる」から開く。
     // ストーリーを見出しにして配下の未完了のタスクを並べ、見出しのチェックで配下をまとめて選び、1件ずつ外せる（一部だけなら indeterminate）。
     // 親のないタスクは別の見出し。タイトルで絞る検索欄、高さに上限のある一覧、足元に選んだ件数と主ボタン
@@ -1979,12 +2079,15 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     "organization",
     ["today", "sun", () => "今日やること", "today.html"],
     ["notifications", "bell", () => "通知", "notifications.html", 3],
+    // 組織の Wiki は組織の中の画面で、ワークスペースがまだない管理者にも出る（ワークスペースの見出しより前に置く）
+    ["orgWiki", "file", () => `${t("organization")}の Wiki`, "wiki.html?scope=org"],
     "workspace",
     ["inbox", "inbox", () => t("inbox"), "inbox.html", 4],
     ["backlog", "board", () => t("backlog"), "backlog.html"],
     ["sprint", "columns", () => t("sprint"), "sprint.html"],
     ["plan", "calendar", () => t("plan"), "plan.html"],
     ["epic", "flag", () => t("epic"), "epic.html"],
+    ["wiki", "file", () => "Wiki", "wiki.html"],
     "記録",
     ["capacity", "trend", () => t("capacity"), "capacity.html"],
     ["records", "check", () => "完了の記録", "records.html"],
@@ -2006,7 +2109,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       // 組織の切り替えは、メニューの外（ブランドの下）の orgMenuHtml
       if (p === "organization") return "";
       if (p === "workspace") return `<div class="nav-group"><span class="nav-group-label">${t("workspace")}</span></div>
-        ${["today", "notifications", "me", "admin", "operator"].includes(current) ? "" : `<div id="ws-menu-slot">${workspaceMenuHtml()}</div>`}`;
+        ${["today", "notifications", "orgWiki", "me", "admin", "operator"].includes(current) ? "" : `<div id="ws-menu-slot">${workspaceMenuHtml()}</div>`}`;
       if (typeof p === "string") return `<div class="nav-group"><span class="nav-group-label">${p}</span></div>`;
       const [id, ic, label, href, badge] = p;
       return `<a class="nav-item" href="${firstHref(href)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
@@ -2664,7 +2767,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
     avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, pageHead,
-    card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
+    card, board, treeStory, treeEpic, pageTree, wikiOptions, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, mdBody, markdownSample, meter,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,

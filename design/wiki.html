@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scrum Guild Wiki</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Zen+Old+Mincho:wght@700;900&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="icons.js"></script>
+<script src="art.js"></script>
+<script src="sample-data.js"></script>
+<script src="kit.js"></script>
+<script>
+"use strict";
+// Wiki: 左にページの木と検索、右にページ。組織の Wiki（?scope=org）とワークスペースの Wiki（既定）は同じ作り。
+// 状態は URL で選ぶ: view（page、edit、new、conflict、history、revision、search、empty）、page（ページの ID）、rev（前の版の番号）、
+// q（探す語）、closed=1（終了したワークスペース。読むだけ）、fm=broken（frontmatter を読めないページ）。
+// アップロード、親を移す、削除、前の版に戻すはダイアログ（kit.js の DIALOGS.wikiUpload ほか）
+const { D, t, icon, esc, pageHead, avatarOf, user, pageTree, wikiOptions, emptyState } = SQ;
+
+const params = new URLSearchParams(location.search);
+const scope = params.get("scope") === "org" ? "org" : "ws";
+const VIEWS = ["page", "edit", "new", "conflict", "history", "revision", "search", "empty"];
+const view = VIEWS.includes(params.get("view")) ? params.get("view") : "page";
+const closed = scope === "ws" && params.get("closed") === "1";
+const brokenFm = params.get("fm") === "broken";
+const detail = D.wiki.detail;
+const all = D.wiki[scope];
+const pages = view === "empty" ? [] : all;
+const currentId = all.some((p) => p.id === params.get("page")) ? params.get("page") : scope === "org" ? "o2" : detail.id;
+const current = all.find((p) => p.id === currentId);
+const wikiName = scope === "org" ? `${t("organization")}の Wiki` : `${esc(D.workspaces.wa.name)}の Wiki`;
+// ページの URL。変わらない番号（ID）で指すので、題を変えても親を移しても同じ（組織の Wiki は /<slug>/wiki/<ID>）
+const WS_ID = "019a7d10-8b2c-7e44-a1f0-3c5d9e6b2f08";
+const pageUrl = (p) => `https://scrum-guild.dev/${D.organization}/${scope === "org" ? "" : `w/${WS_ID}/`}wiki/${p.id === detail.id ? detail.uuid : `019a8c3e-52f4-7b1a-9d20-${String(all.indexOf(p) + 1).padStart(12, "0")}`}`;
+
+// この見本の中の移動。終了、組織の Wiki の別は引き継ぐ
+const to = (extra = {}) => {
+  const q = new URLSearchParams();
+  if (scope === "org") q.set("scope", "org");
+  if (closed) q.set("closed", "1");
+  for (const [k, v] of Object.entries(extra)) if (v) q.set(k, v);
+  const s = q.toString();
+  return s ? `wiki.html?${s}` : "wiki.html";
+};
+
+// ---- 本文 ----
+// frontmatter（先頭の --- で囲んだ YAML）と本文に分ける。見本は「キー: 値」の行だけを読む
+function split(source) {
+  const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(source);
+  if (!m) return { fm: [], body: source };
+  const fm = m[1].split("\n").map((l) => { const i = l.indexOf(":"); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; });
+  return { fm, body: m[2].replace(/^\n+/, "") };
+}
+const sourceOf = (p, rev) => p.id === detail.id
+  ? (rev && rev !== p.rev ? detail.oldSource : detail.source)
+  : `---\ntitle: ${p.title}\n---\n\n${p.summary}`;
+// Markdown の一部（## 見出し、段落、番号付きと箇条書き、コード、外部へのリンク）を、無害化した HTML にする。生の HTML は文字のまま出る（esc）。
+// 本文の見出しは h2 から始める（h1 はページの題）
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" rel="noopener noreferrer" target="_blank" aria-describedby="wk-newtab">$1</a>');
+}
+function render(body) {
+  const out = [];
+  let list = null;
+  const flush = () => { if (list) { out.push(`<${list.tag}>${list.items.map((i) => `<li>${inline(i)}</li>`).join("")}</${list.tag}>`); list = null; } };
+  for (const line of body.split("\n")) {
+    let m;
+    if ((m = /^## (.*)$/.exec(line))) { flush(); out.push(`<h2 class="doc-h1">${inline(m[1])}</h2>`); }
+    else if ((m = /^\d+\. (.*)$/.exec(line))) { if (!list || list.tag !== "ol") { flush(); list = { tag: "ol", items: [] }; } list.items.push(m[1]); }
+    else if ((m = /^- (.*)$/.exec(line))) { if (!list || list.tag !== "ul") { flush(); list = { tag: "ul", items: [] }; } list.items.push(m[1]); }
+    else if (line.trim() === "") flush();
+    else { flush(); out.push(`<p>${inline(line)}</p>`); }
+  }
+  flush();
+  return `<div class="doc-box">${out.join("")}</div><span id="wk-newtab" hidden>${t("markdownNewTab")}</span>`;
+}
+// title 以外の項目を、ページの頭に表で出す。title のほかに項目が無ければ出さない
+function fmTable(fm) {
+  const rows = fm.filter(([k]) => k !== "title");
+  if (!rows.length) return "";
+  return `<section class="section" aria-labelledby="wk-fm"><h2 class="visually-hidden" id="wk-fm">ページの項目</h2>
+    <div class="table-wrap"><table class="table"><thead><tr><th scope="col">項目</th><th scope="col">値</th></tr></thead>
+      <tbody>${rows.map(([k, v]) => `<tr><th scope="row" class="mono">${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table></div></section>`;
+}
+// 本文の欄。frontmatter を読めないときは、表を出さずに本文として描き、読めないことを示す
+function bodyOf(p, rev) {
+  const src = sourceOf(p, rev);
+  if (brokenFm && p.id === detail.id) {
+    return `<div class="callout is-warn" role="status">${icon("alert")}<span>frontmatter を読めません。先頭の囲みも含めて、本文として表示しています。直すには、編集で先頭の <code>---</code> の囲みを見てください。</span></div>
+      <div class="doc-box is-plain">${esc(src.replace("owner: ハルカ", "owner: [ハルカ"))}</div>`;
+  }
+  const { fm, body } = split(src);
+  return `${fmTable(fm)}${render(body)}`;
+}
+
+// ---- 見出しの上の道筋（祖先のページ） ----
+function eyebrowOf(p) {
+  const trail = [];
+  for (let x = p && all.find((y) => y.id === p.parent); x; x = all.find((y) => y.id === x.parent)) trail.unshift(x);
+  return `<span class="visually-hidden">場所: </span>${wikiName}${trail.map((x) => ` / <a href="${to({ page: x.id })}">${esc(x.title)}</a>`).join("")}`;
+}
+
+// ---- 左の列: 検索と木と、ページを足す入口 ----
+function side() {
+  const q = params.get("q") || "";
+  return `<aside class="split-side" aria-label="${scope === "org" ? t("organization") : esc(D.workspaces.wa.name)}の Wiki の検索とページの木">
+    <form method="get" action="wiki.html" role="search" aria-label="Wiki を探す">
+      ${scope === "org" ? '<input type="hidden" name="scope" value="org">' : ""}${closed ? '<input type="hidden" name="closed" value="1">' : ""}<input type="hidden" name="view" value="search">
+      <label class="search">${icon("search")}<input type="search" name="q" value="${esc(q)}" aria-label="題と本文で探す" placeholder="題と本文で探す"></label>
+    </form>
+    ${pageTree(pages, { current: view === "empty" ? "" : currentId, label: `${scope === "org" ? t("organization") : esc(D.workspaces.wa.name)}の Wiki のページ`, ids: "wk", href: (p) => to({ page: p.id }),
+      order: closed || view !== "page" ? null : { scope, first: pages.filter((p) => p.parent === current.parent)[0].id === currentId, last: pages.filter((p) => p.parent === current.parent).slice(-1)[0].id === currentId } })}
+    ${closed ? "" : `<div class="form-actions">
+      <a class="btn is-sm" href="${to({ view: "new", page: currentId })}">${icon("plus")}ページを作る</a>
+      <button class="btn is-sm" type="button" data-dialog="wikiUpload" data-scope="${scope}">${icon("upload")}アップロード</button></div>`}
+  </aside>`;
+}
+
+// ---- 右の列 ----
+const closedNote = `<div class="callout is-info">${icon("archive")}<span>${esc(D.workspaces.wa.name)}は終了しているため、Wiki は読むだけです。<a href="admin.html">組織の管理で再開する</a></span></div>`;
+const canDelete = true; // 見本の自分（ミナト）は、リーダーで管理者
+const kidsOf = (p) => all.filter((x) => x.parent === p.id);
+const who = (id) => `<span class="person">${avatarOf(id)}${esc(user(id).name)}</span>`;
+
+function pageView() {
+  const kids = kidsOf(current);
+  const actions = `${closed ? "" : `<a class="btn is-primary" href="${to({ view: "edit", page: currentId })}">${icon("pen")}編集</a>`}
+    <a class="btn" href="${to({ view: "history", page: currentId })}">${icon("clock")}版の一覧</a>
+    <button class="btn" type="button" data-toast="「${esc(current.title)}.md」をダウンロードしました">${icon("download")}ダウンロード</button>
+    ${closed || !canDelete ? "" : `<button class="btn is-quiet is-danger" type="button" data-dialog="wikiDelete" data-scope="${scope}">${icon("trash")}削除</button>`}`;
+  return `
+    ${pageHead(eyebrowOf(current), esc(current.title), [["", "clock", "版", current.rev], ["", "", "子のページ", kids.length]], actions)}
+    ${closed ? closedNote : ""}
+    ${bodyOf(current)}
+    <section class="section" aria-labelledby="wk-kids"><div class="section-head"><h2 class="section-title" id="wk-kids">子のページ</h2><span class="section-count">${kids.length} 件</span></div>
+      ${kids.length
+        ? `<ul class="party-list">${kids.map((k) => `<li><a class="party-list-text" href="${to({ page: k.id })}">${esc(k.title)}</a><span class="mono party-list-end">${esc(user(k.by).name)}・${k.at}</span></li>`).join("")}</ul>`
+        : `<p class="props-note">子のページはありません。「ページを作る」で、このページの下に足せます。</p>`}
+    </section>
+    <section class="section" aria-labelledby="wk-url"><div class="section-head"><h2 class="section-title" id="wk-url">このページの URL</h2></div>
+      <div class="input-row"><input class="input mono" readonly value="${pageUrl(current)}" aria-label="このページの URL"><button class="btn" type="button" data-toast="URL をコピーしました">${icon("link")}コピー</button></div>
+      <p class="field-hint">ページを移しても、題を変えても、この URL は変わりません。タスクや別のページからは、この URL を貼ってつなぎます。</p>
+    </section>
+    <dl class="facts"><div><dt>作った人</dt><dd>${who(current.id === detail.id ? detail.createdBy : current.by)}</dd></div>
+      <div><dt>最後に保存した人</dt><dd>${who(current.by)}</dd></div><div><dt>保存した日時</dt><dd class="mono">${current.at}</dd></div><div><dt>今の版</dt><dd class="mono">版 ${current.rev}</dd></div></dl>
+    <p class="action-note">削除できるのは、ページを作った人${scope === "org" ? "" : `と${t("leader")}`}と${t("admin")}です。子のページは、削除したページの親の下へ上がります。</p>`;
+}
+
+// 編集と新しいページ。題は1〜100字。保存は、読んだ版の番号を添えて送る。ほかの人が先に保存していたら断り、書いていた本文はここに残す
+function editView(mode) {
+  const isNew = mode === "new";
+  const conflict = mode === "conflict";
+  const src = isNew ? "" : conflict ? `${sourceOf(current)}\n- マージ後は、作業用のブランチを消す` : sourceOf(current);
+  // 読んだ版の次の番号。ほかの人が先に保存した版でも、これから保存する版でも同じ番号になる
+  const latest = current.rev + 1;
+  return `
+    ${pageHead(eyebrowOf(isNew ? { parent: currentId } : current), isNew ? "ページを作る" : `「${esc(current.title)}」を編集`)}
+    ${conflict ? `<div class="callout is-danger" role="alert">${icon("alert")}<span>${esc(user("u3").name)}が 10/14 16:41 に版 ${latest} を保存したため、保存できませんでした。書いていた本文は、下の欄に残しています。</span>
+      <span class="callout-actions"><a class="btn is-sm" href="${to({ page: currentId })}" target="_blank" rel="noopener noreferrer" aria-describedby="wk-newtab">最新の版を開く</a>
+        <button class="btn is-sm" type="button" data-toast="基にする版を ${latest} に替えました。本文はそのままです">版 ${latest} を基にする</button></span></div><span id="wk-newtab" hidden>${t("markdownNewTab")}</span>` : ""}
+    <form class="form" action="${to({ page: currentId })}">
+      <fieldset class="form-fields">
+        ${isNew ? `<div class="field"><label class="field-label" for="wk-parent">親のページ</label>
+          <select class="select" id="wk-parent" aria-describedby="wk-parent-hint"><option>最上位</option>${wikiOptions(all, [], currentId)}</select>
+          <span class="field-hint" id="wk-parent-hint">選んだページの子として、末尾に足します。階層は 10 段までです。</span></div>` : ""}
+        <div class="field"><label class="field-label" for="wk-title">題</label>
+          <input class="input" id="wk-title" maxlength="100" value="${isNew ? "" : esc(current.title)}" aria-describedby="wk-title-hint">
+          <span class="field-hint" id="wk-title-hint">1〜100 字。本文の frontmatter に <code>title</code> があるときは、そちらが題になります。</span></div>
+        <div class="field"><label class="field-label" for="wk-body">本文（Markdown）</label>
+          <textarea class="textarea mono" id="wk-body" rows="16" aria-describedby="wk-body-hint" placeholder="ここに Markdown を書きます。先頭に frontmatter（--- で囲んだ YAML）も書けます。">${esc(src)}</textarea>
+          <span class="field-hint" id="wk-body-hint">frontmatter も、この欄に書きます。10 万字まで${isNew ? "" : `（今は ${[...src].length} 字）`}。生の HTML は文字のまま出ます。画像は、ファイル管理の機能ができるまで、リンクで出ます。</span></div>
+        ${isNew ? "" : `<p class="props-note">版 ${current.rev} を読んで直しています。保存の前にほかの人が保存していたときは、保存を断り、書いた本文を残します。</p>`}
+      </fieldset>
+      <div class="form-actions">
+        <button class="btn is-primary" type="button" data-toast="${isNew ? "ページを作りました" : `保存しました（版 ${latest}）`}">${icon("check")}${isNew ? "ページを作る" : "保存する"}</button>
+        <a class="btn is-quiet" href="${to({ page: currentId })}">やめる</a>
+      </div>
+    </form>`;
+}
+
+// 版の一覧。保存ごとに版が足され、100 版まで残す。前の版を開いて、その版に戻せる
+function revisionsOf(p) {
+  return p.id === detail.id ? detail.revisions : [{ no: p.rev, by: p.by, at: p.at, title: p.title }];
+}
+function historyView() {
+  const list = revisionsOf(current);
+  return `
+    ${pageHead(eyebrowOf(current), `「${esc(current.title)}」の版`, [["", "clock", "今の版", current.rev], ["", "", "残っている版", Math.min(current.rev, 100)]],
+      `<a class="btn" href="${to({ page: currentId })}">ページへ戻る</a>`)}
+    <div class="table-wrap"><table class="table is-stacked">
+      <thead><tr><th class="is-num">版</th><th>保存した人</th><th>保存した日時</th><th>題</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
+      <tbody>${list.map((r, i) => `<tr>
+        <td class="is-num" data-label="版">${r.no}</td>
+        <td data-label="保存した人">${who(r.by)}</td>
+        <td class="mono" data-label="保存した日時">${r.at}</td>
+        <td class="is-name" data-label="題">${esc(r.title)}${i === 0 ? ' <span class="chip">今の版</span>' : ""}</td>
+        <td class="is-actions">${i === 0 ? '<span class="props-note">今開いている版です</span>' : `<a class="btn is-sm" href="${to({ view: "revision", page: currentId, rev: String(r.no) })}" aria-label="版 ${r.no} を開く">開く</a>`}</td></tr>`).join("")}</tbody>
+    </table></div>
+    <p class="action-note">版は保存のたびに足され、100 版まで残します。101 版目を保存すると、いちばん古い版から消えます。前の版に戻すと、その版の題と本文が新しい版として保存されます（今の版も、前の版として残ります）。版どうしの違いを並べて見る画面はありません。</p>`;
+}
+function revisionView() {
+  const no = Number(params.get("rev")) || 9;
+  const rev = revisionsOf(current).find((r) => r.no === no) || revisionsOf(current)[3] || revisionsOf(current)[0];
+  const isCurrent = rev.no === current.rev;
+  return `
+    ${pageHead(eyebrowOf(current), `「${esc(rev.title)}」の版 ${rev.no}`, [["", "clock", "今の版", current.rev]],
+      `<a class="btn" href="${to({ view: "history", page: currentId })}">版の一覧へ</a><a class="btn" href="${to({ page: currentId })}">今の版を開く</a>${closed || isCurrent ? "" : `<button class="btn is-primary" type="button" data-dialog="wikiRestore">${icon("redo")}この版に戻す</button>`}`)}
+    <div class="callout is-info">${icon("clock")}<span>版 ${rev.no} を読んでいます。${esc(user(rev.by).name)}が ${rev.at} に保存しました。${isCurrent ? "これが今の版です。" : `今の版は ${current.rev} です。`}</span></div>
+    ${bodyOf(current, rev.no)}`;
+}
+
+// 検索。開いている1つの Wiki の中の、題と本文を探す。空白で分けた語をすべて含むページが当たる（最大 50 件）
+function searchView() {
+  const q = (params.get("q") || "レビュー").trim();
+  const terms = q.split(/[\s　]+/).filter(Boolean).slice(0, 5).map((s) => s.toLowerCase());
+  const text = (p) => `${p.title}\n${p.id === detail.id ? detail.source : p.summary}`.toLowerCase();
+  const hits = all.filter((p) => terms.every((w) => text(p).includes(w))).slice(0, 50);
+  const path = (p) => { const names = []; for (let x = all.find((y) => y.id === p.parent); x; x = all.find((y) => y.id === x.parent)) names.unshift(x.title); return names; };
+  const excerpt = (p) => {
+    // 見出しや箇条書きの印を除き、最初の語の少し前から短く切る
+    const body = (p.id === detail.id ? split(detail.source).body : p.summary).replace(/^(#+|-|\d+\.)\s+/gm, "").replace(/\s+/g, " ");
+    const i = Math.max(0, body.toLowerCase().indexOf(terms[0] || "") - 8);
+    return `${i ? "…" : ""}${esc(body.slice(i, i + 44))}${body.length > i + 44 ? "…" : ""}`;
+  };
+  return `
+    ${pageHead(eyebrowOf(null), `「${esc(q)}」の検索`, [["", "search", "当たったページ", hits.length]])}
+    <p class="action-note">この Wiki の題と本文を探しています。ほかの Wiki は探しません。空白で分けた語を、すべて含むページが当たります。</p>
+    ${hits.length
+      ? `<div class="table-wrap"><table class="table is-stacked"><thead><tr><th>ページ</th><th>場所</th><th>本文の一部</th></tr></thead>
+        <tbody>${hits.map((p) => `<tr><td class="is-name"><a href="${to({ page: p.id })}">${esc(p.title)}</a></td>
+          <td data-label="場所" class="is-wrap">${path(p).length ? path(p).map(esc).join(" / ") : '<span class="props-note">最上位</span>'}</td>
+          <td data-label="本文の一部" class="is-wrap">${excerpt(p)}</td></tr>`).join("")}</tbody></table></div>`
+      : emptyState("search", `「${esc(q)}」に当たるページはありません`, "題と本文を探しています。語を減らすか、別の語で試してください。")}`;
+}
+
+function emptyView() {
+  return `
+    ${pageHead(wikiName, "Wiki")}
+    ${emptyState("file", "まだページがありません",
+      scope === "org" ? `${t("organization")}の全員で読み書きするページを、ここに置けます。手順や決まりを書いてください。`
+        : `${t("workspace")}のメンバーで読み書きするページを、ここに置けます。手順や決まりを書いてください。`,
+      `<a class="btn is-primary" href="${to({ view: "new" })}">${icon("plus")}最初のページを作る</a><button class="btn" type="button" data-dialog="wikiUpload" data-scope="${scope}">${icon("upload")}Markdown をアップロード</button>`)}`;
+}
+
+SQ.mount(scope === "org" ? "orgWiki" : "wiki", () => `
+  <div class="split">
+    ${side()}
+    <div class="split-main">${{ page: pageView, edit: () => editView("edit"), new: () => editView("new"), conflict: () => editView("conflict"), history: historyView, revision: revisionView, search: searchView, empty: emptyView }[view]()}</div>
+  </div>`);
+</script>
+</body>
+</html>

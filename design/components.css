@@ -873,6 +873,38 @@ button.tree-folded[aria-expanded="true"] .ico { transform: rotate(90deg); }
   .tree-ratio, .tree-end { grid-column: -2; }
 }
 
+/* ===== 木と本文の二面（Wiki のページの木） ===== */
+/* 左に検索と木、右に本文。左は画面の高さに収まる範囲で中をスクロールし、本文が長くても木が見える。
+   1080px 以下では木が本文の上に積まれ、高さに上限を付けて中でスクロールする（本文を押し下げすぎない） */
+.split { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+.split-side { position: sticky; top: var(--space-4); display: grid; gap: var(--space-3); align-content: start; max-height: calc(100vh - var(--space-8)); overflow-y: auto; padding: 2px; }
+.split-main { display: grid; gap: var(--space-5); min-width: 0; }
+@media (max-width: 1080px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .split-side { position: static; max-height: min(60vh, 28rem); }
+}
+/* ページの木（ネストした ul）。題は a、開閉は tree-caret のボタン（aria-expanded と aria-controls）。開いているページは
+   aria-current="page" で、太字と左の帯でも示す（色だけに頼らない）。段ごとの字下げは 12px で、10 段でも 108px に収まる */
+.page-tree { background: var(--color-surface); border: 1px solid var(--color-line); border-left: var(--rule-double); border-radius: var(--radius-1); padding: var(--space-1); font-size: var(--text-sm); }
+.page-tree ul { list-style: none; margin: 0; padding: 0; }
+.page-tree ul ul { margin-left: var(--space-3); border-left: 1px solid var(--color-rule); }
+.page-tree-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; border-radius: var(--radius-1); }
+.page-tree-row:hover { background: color-mix(in srgb, var(--color-accent-soft) 45%, transparent); }
+.page-tree-row.is-current { background: var(--color-accent-soft); box-shadow: inset 3px 0 0 var(--color-accent); }
+.page-tree .tree-caret { width: 100%; align-self: stretch; }
+.page-tree-link { min-width: 0; overflow-wrap: anywhere; padding: 6px var(--space-2) 6px 0; color: inherit; text-decoration: none; }
+.page-tree-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.page-tree-row.is-current .page-tree-link { font-weight: 700; }
+.page-tree-empty { padding: var(--space-3); font-size: var(--text-xs); color: var(--color-muted); }
+/* 見出しの上の道筋（ページの祖先）。リンクは文字の色のまま、下線で示す */
+.page-eyebrow a { color: inherit; text-underline-offset: 2px; }
+/* 一覧の行の題がリンクのとき（子のページ）は、文字の色のまま、下線で示す */
+.party-list a { color: inherit; text-underline-offset: 3px; }
+@media (max-width: 760px), (pointer: coarse) {
+  .page-tree-row { grid-template-columns: 44px minmax(0, 1fr) auto; min-height: 44px; }
+  .page-tree-link { padding-block: 12px; }
+}
+
 /* ===== 計画: 横に並ぶスプリント（レーン） ===== */
 .lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
 .lane { background: var(--color-surface); border: 1px solid var(--color-line); border-top: 5px solid var(--color-line); border-radius: var(--radius-1); padding: var(--space-3) var(--space-4) var(--space-4); display: grid; gap: var(--space-2); }

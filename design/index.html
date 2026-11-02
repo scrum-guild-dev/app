@@ -116,6 +116,12 @@ const SCREENS = [
   ["members.html", "メンバー", "ロール、配分、招待"],
   ["settings.html", "設定", "列、決まった欄、完成の定義、区分ほか"],
   ["history.html", "変更の履歴", "権限、配分、接続などの変更"],
+  ["wiki.html", "Wiki（ワークスペース）", "ページの木、ページ、編集、版の一覧、前の版、検索、アップロード"],
+  ["wiki.html?scope=org", "Wiki（組織）", "組織の人の全員で読み書きするページの木"],
+  ["wiki.html?view=conflict", "Wiki・同時に直したとき", "ほかの人が先に保存したため断られ、書いていた本文が残る"],
+  ["wiki.html?closed=1", "Wiki・終了したワークスペース", "読むだけ。直す入口を出さない"],
+  ["wiki.html?fm=broken", "Wiki・frontmatter を読めない", "表を出さず、本文として描いて知らせる"],
+  ["wiki.html?view=empty", "Wiki・ページがまだない", "最初のページを作るか、Markdown をアップロード"],
   ["today.html?first=member", "最初の日・一般", "招待を承諾した直後。最初にやることと空の状態"],
   ["today.html?first=leader", "最初の日・リーダー", "ワークスペースを任された直後"],
   ["today.html?first=admin", "最初の日・管理者", "組織を作ってもらった直後。ワークスペースがまだない"],
@@ -372,6 +378,13 @@ const SECTIONS = [
     `<div class="cat-row"><span class="order-actions"><button class="icon-btn" type="button" aria-label="上へ" title="上へ" aria-disabled="true">${icon("up")}</button><button class="icon-btn" type="button" aria-label="下へ" title="下へ">${icon("down")}</button><button class="icon-btn" type="button" aria-label="親を移す" title="親を移す">${icon("swap")}</button></span><span class="field-hint">行の並べ替えと親の移動。先頭の行の「上へ」は aria-disabled</span></div>`,
     ["最上段はエピック、親のないストーリー、親のないタスクの順。エピックの行の題はエピックの画面へのリンク（a.tree-link）。配下が無いエピックには「ストーリーはまだありません」の1行を出す。", "右端の数は「完了 / 全体」のポイント。エピックの行は、配下のストーリーの合計。", "完了したタスクは折りたたみ、件数だけ出す。", "ストーリーの行の右端に「完了にする」（.btn.is-sm）を置く。配下に未完了のタスクが残るあいだは、押してもフォーカスが残るよう aria-disabled にし、横に「残り N 件のタスク」（.tree-note）と、見えない文字の押せない理由を置き、どちらも aria-describedby で結ぶ。完了したストーリー（1つ目の木の下の行）は、「＋タスク」を出さず、完了の印（.hanko）と「取り消す」（.btn.is-sm.is-quiet）を置く。", "2つ目の木は、完了したエピック（.chip.is-done。完了の印と同じ役の色）、中止したエピック（.chip）、配下の無いエピック。完了か中止したエピックの期日には色を付けず、配下の「取り消す」は必ず断られるので aria-disabled にして、理由（.tree-note）を横に出す。エピックの行には区分の印を出さない（本番と同じ）。", "ストーリーの行の「親を移す」は、親なしと、完了も中止もしていないエピックから選ぶ（タスクの「親を移す」と同じダイアログ）。", "行は普通の要素（div）で、開閉は左端の caret のボタン（button.tree-caret の aria-expanded と aria-controls）だけが受け持つ。details と summary は使わない（行の中のボタンと開閉がぶつかるため）。", "ストーリーの題はボタン（button.tree-link）で、押すとダイアログが開く。行の右端の「＋タスク」（.tree-end）は、親を選んだ状態でタスクのダイアログを開く。caret、題、「＋タスク」は独立したボタンで、狭い幅（760px 以下）と指で押す画面では、見た目は変えず押せる範囲を 44px 四方以上に広げる。", "書き込めるときは、タスクの行（.entry-end）とストーリーとエピックの行（.tree-end）の右に .order-actions の「上へ」「下へ」を置き（エピックは親を持たないので「親を移す」は無い）、タスクの行には「親を移す」も添える。行の中で Alt と ↑ ↓ を押しても同じ。端の向きは、押した後もフォーカスが残るよう disabled でなく aria-disabled にする。狭い幅と指で押す画面では、ボタンを 44px 四方にする。"],
     ".tree .tree-group .tree-row .is-epic .is-story .is-root .tree-caret .tree-title .tree-ratio .tree-note .tree-end .tree-children .tree-folded / .chip.is-done / a.tree-link / button.tree-link / button.tree-caret[aria-expanded] / .order-actions .icon-btn[aria-disabled]")],
+  ["page-tree", "ページの木", () => block("page-tree", "ページの木と二面（Wiki）", "左に検索と木、右に本文。木は入れ子のリストで、階層は 10 段まで。ページの親子を表し、エピック、ストーリー、タスクの木（上の「木」）とは別の部品。",
+    `<div class="split"><aside class="split-side" aria-label="ページの木の見本">${SQ.pageTree(D.wiki.ws, { current: "w2", ids: "cat-pt", label: "ページの木の見本", order: { scope: "ws", first: true, last: false } })}</aside>` +
+    `<div class="split-main"><div class="panel"><div class="panel-title"><b>本文の列</b></div><p class="panel-note">木の右に、ページの本文と操作を置く。</p></div></div></div>` +
+    `<div class="two"><div>${SQ.pageTree(Array.from({ length: 10 }, (_, i) => ({ id: "d" + i, parent: i ? "d" + (i - 1) : "", title: "段 " + (i + 1) + (i === 9 ? "（これより深くは作れない）" : "") })), { current: "d9", ids: "cat-deep", label: "10 段の木の見本" })}</div>` +
+    `<div>${SQ.pageTree([], { label: "空の木の見本" })}</div></div>`,
+    ["題は a.page-tree-link。子のあるページの左に tree-caret のボタン（aria-expanded と aria-controls。開閉は data-tree-toggle）を置き、子の無いページは空の枠で題をそろえる。", "開いているページは aria-current=\"page\" で、太字と左の帯でも示す（色だけに頼らない）。開いているページの祖先と、そのページ自身の枝を開き、ほかの枝は閉じる。", "段ごとの字下げは 12px。10 段でも 108px に収まり、幅 220px の木に題の列が残る。長い題は折り返す。", "書き込めるときだけ、開いているページの行の右端に「上へ」「下へ」「親を移す」（.order-actions .icon-btn）を置く。ドラッグの代わりのボタンで、端の向きは aria-disabled にしてフォーカスを失わない。", "1080px 以下では木が本文の上に積まれ、高さに上限を付けて中でスクロールする。760px 以下と指で押す画面では、行を 44px 以上にする。"],
+    ".split .split-side .split-main / .page-tree .page-tree-row .page-tree-link .page-tree-empty .is-current / .tree-caret / .page-eyebrow a")],
   ["completed", "完了の一覧", () => block("completed", "完了の一覧（バックログの折りたたみ）", "完了にしたタスクの「完了 N 件を折りたたんでいます」の行を、開閉のボタンにした部品。開くと完了した行を新しい順に並べる。",
     `<div class="tree">${completedTasks("catalog-open", SQ.tasksWhere((x) => x.story === "s3" && x.doneAt), { open: true, title: SQ.D.stories.s3.title, status: "more" })}</div>` +
     `<div class="cat-row"><span class="field-hint">開いた状態。末尾に「さらに見る」（20 件ずつ読む）。chevron は開くと 90 度回る</span></div>` +
@@ -462,6 +475,11 @@ const SECTIONS = [
       <button class="btn" type="button" data-dialog="createTask">${t("create")}</button>
       <button class="btn" type="button" data-dialog="moveTask">親を移す</button>
       <button class="btn" type="button" data-dialog="moveStory">${t("story")}の親を移す</button>
+      <button class="btn" type="button" data-dialog="wikiUpload">Wiki に Markdown をアップロード</button>
+      <button class="btn" type="button" data-dialog="wikiUploadError">Wiki に Markdown をアップロード（足せないファイルがある）</button>
+      <button class="btn" type="button" data-dialog="wikiMove">Wiki のページの親を移す</button>
+      <button class="btn" type="button" data-dialog="wikiDelete">Wiki のページを削除する</button>
+      <button class="btn" type="button" data-dialog="wikiRestore">Wiki の前の版に戻す</button>
       <button class="btn" type="button" data-dialog="createEpic">${t("epic")}を作る</button>
       <button class="btn" type="button" data-dialog="editEpic">${t("epic")}を直す</button>
       <button class="btn" type="button" data-dialog="viewEpic">${t("epic")}（終了した${t("workspace")}）</button>

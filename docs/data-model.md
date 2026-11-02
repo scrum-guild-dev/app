@@ -1,6 +1,6 @@
 # Scrum Guild データモデル
 
-状態: 確定。要件定義（`requirements.md`）を D1（SQLite）のテーブルに落としたもの。最初のマイグレーション（`migrations/0001_create_initial_tables.sql`）で、共通の6表と、一本道に要る組織の中の16表を作った。`organization_holidays` は `migrations/0004_add_organization_holidays.sql` で、`comments` は `migrations/0006_add_comments.sql` で、`sprint_entries` と `completions.previous_column_id` は `migrations/0008_add_sprint_entries.sql` で、`epic_party_members` と `thanks` は `migrations/0009_add_epic_party_members_and_thanks.sql` で、共通の表の `password_credentials` は `migrations/0010_add_password_credentials.sql`、`api_tokens` は `migrations/0012_add_api_tokens.sql`、`account_consents` は `migrations/0013_add_account_consents.sql` で足した（共通の表は9表になった）。残りの表は、使う機能の Issue でマイグレーションを足して作る
+状態: 確定。要件定義（`requirements.md`）を D1（SQLite）のテーブルに落としたもの。最初のマイグレーション（`migrations/0001_create_initial_tables.sql`）で、共通の6表と、一本道に要る組織の中の16表を作った。`organization_holidays` は `migrations/0004_add_organization_holidays.sql` で、`comments` は `migrations/0006_add_comments.sql` で、`sprint_entries` と `completions.previous_column_id` は `migrations/0008_add_sprint_entries.sql` で、`epic_party_members` と `thanks` は `migrations/0009_add_epic_party_members_and_thanks.sql` で、共通の表の `password_credentials` は `migrations/0010_add_password_credentials.sql`、`api_tokens` は `migrations/0012_add_api_tokens.sql`、`account_consents` は `migrations/0013_add_account_consents.sql` で足した（共通の表は9表になった）。残りの表は、使う機能の Issue でマイグレーションを足して作る（Wiki の `wiki_pages` と `wiki_page_revisions` は、決めたところで、マイグレーションはまだ無い）
 
 ## 決まりごと
 
@@ -34,6 +34,7 @@
 | ワークスペースの定義 | `board_columns`、`detail_fields`、`categories`、`repositories` |
 | 接続 | `connections`、`connection_scopes`、`connection_status_mappings` |
 | 計画と作業 | `epics`、`epic_party_members`、`stories`、`tasks`、`task_sources`、`task_source_payloads`、`task_field_values`、`comments`、`attachments`、`sprints`、`sprint_entries` |
+| Wiki | `wiki_pages`、`wiki_page_revisions` |
 | 記録 | `completions`、`thanks`、`xp_grants`、`notifications`、`change_logs` |
 
 親子の向きの要点。
@@ -42,8 +43,9 @@
 - 人は、ログインの手段（`login_provider`）と手段の中の不変の ID（`login_subject`）の組で見分ける。GitHub では `github` とユーザー ID、Google では `google` と `sub`、パスワードでは `password` と発行した UUID（`password_credentials.login_subject`）。アカウントができる前の管理者の指名と招待も、この組で持つ。
 - Google の人への指名と招待は、`sub` が分からないうちはメールアドレス（`login_email`）と招待の URL の秘密のハッシュ（`claim_token_hash`）で持ち、`login_subject` を空にしておく。本人が招待の URL から Google でログインしたときに、その行へ `sub` を埋める（下の「メールアドレスで待つ指名と招待」）。
 - ユーザーは組織ごとの人で、アカウントと組織の組に1行。組織の中の表はすべてユーザーを指し、アカウントは指さない。
-- 組織の直下のもの（`users`、`workspaces`、`organization_holidays`、`change_logs`）は `organization_id` を持つ。
+- 組織の直下のもの（`users`、`workspaces`、`organization_holidays`、`change_logs`、組織の Wiki のページ `wiki_pages`）は `organization_id` を持つ。
 - ワークスペースの中のものは、すべて `workspace_id` を持つ。権限の検査と絞り込みを1つの列で行うため、親から辿れるものにも持たせる。`organization_id` は持たせず、`workspaces.organization_id` で組織を確かめる。
+- Wiki のページ（`wiki_pages`）は、組織の Wiki のものが `organization_id` を、ワークスペースの Wiki のものが `workspace_id` だけを持ち（どちらか一方だけ。`CHECK`）、ページの親子は `parent_id` で持つ。版（`wiki_page_revisions`）は ID も `organization_id` も `workspace_id` も持たず、ページに結ぶ（`task_field_values` と同じ）。
 - タスクの親はストーリーだけ（`tasks.story_id`）、ストーリーの親はエピックだけ（`stories.epic_id`）。
 - 取り込んだタスクは `tasks` の1行に `task_sources` の1行が付く。手で作ったタスクには付かない。
 
@@ -61,7 +63,7 @@
 添付ファイルの中身は D1 ではなく R2 に置く。`wrangler.jsonc` の binding は `ATTACHMENTS`、本番のバケット名は `scrum-guild-attachments`。R2 のキーの先頭は組織の ID なので、D1 を分けても R2 は分けずに済む。
 
 - 共通の表から組織の中の表へは外部キーを張らない。
-- 組織の中の表から共通の表へ張る外部キーは、`users.account_id` と、`users`、`workspaces`、`organization_holidays`、`change_logs` の `organization_id` だけにする。分けるときはこれらを外し、アプリの検査に替える。
+- 組織の中の表から共通の表へ張る外部キーは、`users.account_id` と、`users`、`workspaces`、`organization_holidays`、`change_logs`、`wiki_pages`（組織の Wiki のページ。ワークスペースの Wiki のページは空）の `organization_id` だけにする。分けるときはこれらを外し、アプリの検査に替える。
 - 共通の表と組織の中の表を1つの SQL で結合しない。`users` にログイン名とアバターを添えるときも、`accounts` と `account_logins` を別に引いてアプリで合わせる。例外は、運用者が手で流す、解約した組織のデータを消す SQL だけ（`organizations` の節）。
 
 ### 読み書きの入口
@@ -225,7 +227,7 @@
 
 ### rate_limits
 
-ログイン（OAuth の手段とパスワード）、画面のエラーの送信（`POST /api/client-errors`）、手動の同期、招待（GitHub に問い合わせる `invitee-resolve` と `invitation-create`。`invitation-create` は GitHub に問い合わせない Google の招待も同じ枠で数える）、完成の定義の変更（`workspace-dod-update`。10 万字の本文を書く）、コメントの作成と編集（`comment-create`、`comment-update`。10 万字の本文を何件でも足せる。どれも 10 分に 30 回）のレート制限。
+ログイン（OAuth の手段とパスワード）、画面のエラーの送信（`POST /api/client-errors`）、手動の同期、招待（GitHub に問い合わせる `invitee-resolve` と `invitation-create`。`invitation-create` は GitHub に問い合わせない Google の招待も同じ枠で数える）、完成の定義の変更（`workspace-dod-update`。10 万字の本文を書く）、コメントの作成と編集（`comment-create`、`comment-update`。10 万字の本文を何件でも足せる。どれも 10 分に 30 回）、Wiki のページの作成と保存とアップロード（`org-wiki-create`、`org-wiki-save`、`org-wiki-import`、`workspace-wiki-create`、`workspace-wiki-save`、`workspace-wiki-import`。10 万字の本文を、版として100まで残せる。どれも操作ごとに 10 分に 30 回。「Wiki」の節）のレート制限。
 
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
@@ -1106,6 +1108,114 @@
 - スプリントを削除したら、入っていた行を `removed` で閉じ、タスクの `sprint_id`、`column_id`、`column_position` を空にする（「書き込みの単位」の「スプリントの削除」）。
 - タスクを削除したら（エピックとストーリーの配下ごとの削除を含む）、入っていた行を `removed` で閉じ、タスクの `sprint_id`、`column_id`、`column_position` を空にする。取り込んだタスクをアーカイブへ移すときも同じ。
 
+## Wiki
+
+チームの手順や決まりを置く Markdown のページ。組織の Wiki とワークスペースの Wiki は、ページの表と版の表を1つずつ共有する（Wiki ごとに表を分けると、マイグレーションと処理が2倍になり、得るものが無いため採らない）。決まりの全体は `requirements.md` の「機能」の「Wiki」、画面は `design.md` の「Wiki の画面」。表と操作はまだ作っていない（マイグレーションは #750 で足す）。
+
+### wiki_pages
+
+| 列 | 型 | 制約 | 説明 |
+| --- | --- | --- | --- |
+| id | TEXT | PK | ページの URL に使う、変わらない番号 |
+| organization_id | TEXT | FK organizations | 組織の Wiki のページ。ワークスペースの Wiki のページでは空 |
+| workspace_id | TEXT | FK workspaces | ワークスペースの Wiki のページ。組織の Wiki のページでは空 |
+| parent_id | TEXT | FK wiki_pages | 親のページ。空なら最上位。親は同じ Wiki の、削除していないページだけ |
+| title | TEXT | NOT NULL、`CHECK (length(title) BETWEEN 1 AND 100)` | 題。本文の frontmatter に `title` があればそれ、無ければ保存の入力の題 |
+| body_md | TEXT | NOT NULL、`CHECK (length(body_md) <= 100000)` | frontmatter を含む本文（Markdown）。空文字でもよい |
+| position | TEXT | NOT NULL | 兄弟の並び（fractional-indexing） |
+| revision_no | INTEGER | NOT NULL、`CHECK (revision_no >= 1)` | 今の版の番号。作ると 1、保存のたびに 1 増える |
+| created_by | TEXT | NOT NULL、FK users | 作った人。削除できる人の判定に使う |
+| updated_by | TEXT | NOT NULL、FK users | 最後に保存した人 |
+| deleted_at | TEXT | | 入っていれば論理削除。画面から隠す |
+| deleted_by | TEXT | FK users | 消した人 |
+| created_at、updated_at | TEXT | NOT NULL | `updated_at` は保存したときに書く（親の移動と並べ替えでは動かさない） |
+
+- 組織の Wiki のページは `organization_id` だけを、ワークスペースの Wiki のページは `workspace_id` だけを持つ: `CHECK ((organization_id IS NULL) <> (workspace_id IS NULL))`（「決まりごと」の、組織直下は `organization_id`、ワークスペースの中は `workspace_id` だけ、の決まりに合わせる）。ワークスペースのページに `organization_id` は持たせず、`workspaces.organization_id` で組織を確かめる。
+- `CHECK ((deleted_at IS NULL) = (deleted_by IS NULL))`。
+- 同じ Wiki の中の親か（`parent_id` の行が同じ `organization_id` か同じ `workspace_id` か）は、`CHECK` で書けない（別の行を見る）ので、作る文と移す文の条件にする。
+- 索引: `wiki_pages_organization`（`organization_id`、`parent_id`、`position`、`id`。`WHERE organization_id IS NOT NULL`）と `wiki_pages_workspace`（`workspace_id`、`parent_id`、`position`、`id`。`WHERE workspace_id IS NOT NULL`）。Wiki の木を読む索引で、組織とワークスペースへの外部キーの検査にも使う（条件を `IS NOT NULL` だけにして、検査に使える形にする）。削除したページも索引に残るので、読む文は `deleted_at IS NULL` で読み飛ばす。
+- 索引（外部キーの検査）: `(parent_id) WHERE parent_id IS NOT NULL`（子のページを引くときにも使う）、`(created_by)`、`(updated_by)`、`(deleted_by) WHERE deleted_by IS NOT NULL`。
+- `depth`（段）の列は持たない。持つと、部分木を移すたびに配下の全行を書き直すため。移すときと作るときに、祖先と部分木の高さを `WITH RECURSIVE`（10 段で打ち切る）でたどり、循環と 11 段目を、書く文の `WHERE` で断る。
+  - 作る: 親の祖先をたどって、親が 10 段目でなければ書く。10 段目なら何も書かず、409（`conflict`、`details.reason` は `too_deep`）で断る。
+  - 移す: 移し先が移すページ自身かその配下なら（循環）、移し先の段に移すページの部分木の高さを足して 10 を超えるなら、書かない。どちらも 409（`conflict`、`details.reason` は `cycle`、`too_deep`）。
+- 組織の中の表で、組織を消すときは、`organization_id` の行と、組織のワークスペースの `workspace_id` の行を、どちらも消す（`scripts/purge-organization-sql.ts` に、この表と版の表の文を足す。`docs/operations.md` の「解約した組織のデータを消す」）。ページは自分の表を指す（`parent_id`）が、組織の行を1文でまとめて消すので、文の終わりの検査に当たらない（`xp_grants` と同じ）。
+- 共通の表を指す外部キーは `wiki_pages.organization_id` だけ。組織の Wiki のページは組織の直下のものなので、`users`、`workspaces`、`organization_holidays`、`change_logs` と並べて、「データベースの分け方」の外部キーの一覧に足した。
+
+### wiki_page_revisions
+
+保存ごとの版。今の版も1行として持つ（版の一覧が1つの表で済み、前の版を開くのも同じ読み方になる）。
+
+| 列 | 型 | 制約 | 説明 |
+| --- | --- | --- | --- |
+| page_id | TEXT | PK、FK wiki_pages | |
+| revision_no | INTEGER | PK、`CHECK (revision_no >= 1)` | 版の番号。ページごとに 1 から増え、消した版の番号は使い回さない |
+| title | TEXT | NOT NULL、`CHECK (length(title) BETWEEN 1 AND 100)` | その版の題 |
+| body_md | TEXT | NOT NULL、`CHECK (length(body_md) <= 100000)` | その版の本文 |
+| created_by | TEXT | NOT NULL、FK users | その版を保存した人 |
+| created_at | TEXT | NOT NULL | 保存した日時 |
+
+- ID を持たず、主キーは `(page_id, revision_no)`。`workspace_id` も `organization_id` も持たない（`task_field_values` と同じ。ページを通して Wiki に結ぶ）。読む文も書く文も、必ずページを組織かワークスペースで絞って確かめてから触る。組織を消すときは `page_id` からページを通して消す。
+- 索引: 主キーの先頭の `page_id` が、ページへの外部キーの検査と、ページごとの版の一覧を引く。`(created_by)` は外部キーの検査。
+- 版は 100 まで。101 版目を足すときに、`revision_no <= 新しい版の番号 - 100` の版を、同じ `batch()` で消す。1ページが最悪で約 40MB（100 版 × 10 万字 × 4 バイト）になる。
+- 前の版に戻すのは、その版の題と本文で、普通の保存（`-wiki-save`）を呼ぶこと。新しい版になり、戻す専用の操作は持たない。ページを削除しても版の行は残す（論理削除。ページと一緒に画面から隠れる）。
+
+### Wiki の操作
+
+操作は、組織の Wiki の `org-wiki-*`（権限 `organization`）と、ワークスペースの Wiki の `workspace-wiki-*`（権限 `member`、`workspace: true`）の2系統にし、処理は共有する（`define.ts` が、1つの操作に組織とワークスペースの両方の権限を持たせられないため）。名前は下の表の `*` を `org-wiki` か `workspace-wiki` に替えたもの。
+
+| 操作 | 種類 | 中身 |
+| --- | --- | --- |
+| `*-tree` | 読み取り | 削除していないページの `id`、`parent_id`、`title`、`position` を、`position`、`id` の順に返す（本文は返さない）。全ページを1回で返し、重くなれば、子を開いたときに読む形に変える（バックログの木と同じ、測ってから決める） |
+| `*-page` | 読み取り | 1ページ（題、本文、`revision_no`、作った人と最後に保存した人の今の名前、日時、祖先の道筋、子のページ、呼んだ人が削除できるか `can_delete`）。削除したページ、別の Wiki、別のワークスペースと別の組織のページは 404 |
+| `*-revision-list` | 読み取り | 1ページの版を新しい順に（番号、題、保存した人、日時。本文は返さない）。多くて 100 件なので、1回で返す |
+| `*-revision` | 読み取り | 1つの版（本文つき） |
+| `*-search` | 読み取り | 開いている1つの Wiki の、題と本文を探す（下の「検索」） |
+| `*-create` | 書き込み | `parent_id`（空なら最上位）、`title`、`body_md`。親の下の末尾に作る |
+| `*-save` | 書き込み | `page_id`、`read_revision_no`、`title`、`body_md`。版を1つ足す（下の「保存」） |
+| `*-move` | 書き込み | `page_id`、`parent_id`（空なら最上位）、並べる位置。兄弟の並べ替えと親の移動を1つの操作で行う。`tasks` の「並べ替えと親の移動」と同じ決まりで `position` を取り、版は足さない |
+| `*-delete` | 書き込み | `page_id`。削除し、子のページを1段上げる（下の「削除」） |
+| `*-import` | 書き込み | `parent_id`、`files`（`{ name, text }` を 20 件まで）。新しいページを足す（下の「アップロード」） |
+
+- ダウンロードは専用の操作を持たず、画面が `*-page` の本文から .md を組み立てる。frontmatter に `title` が無ければ題を足し、読めない frontmatter には足さない。組み立ては、アップロードの題の決め方と対にして `src/shared` に置き、往復（落として上げ直すと、題と frontmatter と本文が同じ）をテストで確かめる。
+- 読み取りは、閉じたワークスペースでもできる。書き込みは、閉じたワークスペースなら 409 の `workspace_closed`。組織の Wiki には閉じた状態が無い。
+- `*-create`、`*-save`、`*-import` は、操作の定義の `rateLimit` を付ける。コメントと同じ、アカウントと操作ごとに 10 分に 30 回まで（`rate_limits` の節）。`*-import` は1回で最大 20 ページを足すので、最悪でも1人が10分に 600 ページを、操作ごとの枠で足せる。
+- どの書き込みも `change_logs` に書かず、通知も出さず、経験値も付けない。版の表と、ページの `created_by`、`updated_by`、`deleted_by` で足りるため。組織の Wiki の行はワークスペースが空で、組織の変更の履歴に混ざってしまう。
+
+#### 題と本文
+
+- 題は `title` の列に持つ。保存した本文の frontmatter に `title`（空でない文字列）があれば、それを題にし、無ければ、`*-create` と `*-save` は入力の `title` を、`*-import` はファイル名（`.md` を除く）を題にする。題が 1〜100 字でなければ 400（`invalid_input`）。
+- frontmatter の YAML が読めないときは、保存を断らず、本文のまま保存する。題は本文から取れないので、入力の `title` かファイル名を使う。画面は表を出さず、「frontmatter を読めません」と示す。
+- 本文は、改行を `\n` にそろえ、末尾の空白を落とす（`tasks.body_md` と同じ整え方）。10 万字（コードポイント）を超えるか、見えない文字を含めば 400。空の本文は許す。
+- 同じ親の下に、同じ題のページを並べてよい（一意制約を持たない。ページは `id` で指す）。
+
+#### 保存
+
+- 先にページを読み（組織かワークスペースで絞る。削除していなければ）、無ければ 404。整えた題と本文が今と同じなら、何も書かず、今の行を返す（版を足さない）。
+- 1回の `batch()` に、次の3文を並べる。
+  1. `UPDATE wiki_pages SET title、body_md、revision_no = revision_no + 1、updated_by、updated_at WHERE id AND <組織かワークスペース> AND deleted_at IS NULL AND revision_no = :読んだ版 AND 閉じていないワークスペース（`EXISTS`）`。
+  2. `INSERT INTO wiki_page_revisions SELECT ... FROM wiki_pages WHERE id = :id AND revision_no = :読んだ版 + 1 AND changes() > 0`（直前の文が行を変えたときだけ。「直前の文に結ぶ」）。
+  3. `DELETE FROM wiki_page_revisions WHERE page_id = :id AND revision_no <= :読んだ版 + 1 - 100 AND changes() > 0`（直前の `INSERT` が行を足したときだけ。101 版目で版 1 が消える）。
+- 1の文が0行なら、読み直して理由を決める。ページが無いか削除していれば 404、閉じていれば 409 の `workspace_closed`、`revision_no` が読んだ版と違えば 409 の `conflict`（`details.reason` は `changed`、`details.revision_no` は今の版の番号）。上書きはしない。画面は書いていた本文を残す（`design.md` の「Wiki の画面」）。同時に同じ版から保存すると、先に通った1つだけが書く。
+
+#### 作成とアップロード
+
+- 作成（`*-create`）は、1回の `batch()` に2文を並べる。`INSERT INTO wiki_pages ... SELECT ... WHERE` の条件は、閉じていないワークスペース、親が空か（同じ Wiki の削除していないページで、10 段目でないこと）。`position` は、親の下の最後の値の次（`fractional-indexing`）。続けて `wiki_page_revisions` の版 1 を、直前の文が行を足したときだけ入れる。何も入らなければ、閉じていれば 409 の `workspace_closed`、親が無ければ 404、10 段目の親なら 409 の `too_deep`。
+- アップロード（`*-import`）は、ファイルごとに作成と同じ2文を、1回の `batch()` に並べる（全部か何もしないか）。ファイルの題の決め方は上の「題と本文」。1ファイルでも題や本文の大きさが合わなければ、何も書かずに 400（`details` に、合わないファイルの名前と理由）。ファイルは 20 件まで（21 件以上は 400）。ページは親の下の末尾に、選んだ順で並べる。1回の `batch()` が書くのは最大 20 ページと20版（本文の最大は各 400KB）で、1回に運べる大きさの上限に収まるかは、実装のストーリーで測る。
+
+#### 削除
+
+- 削除できるのは、ページを作った人（`created_by`）と、ワークスペースのリーダーと管理者。組織の Wiki にリーダーは居ないので、作った人と管理者。それ以外は 403（`forbidden`）。判定は `mayDeleteOwned` と同じ形で、ハンドラが読んだ値で行う。
+- 1回の `batch()` に2文を並べる。
+  1. 子のページを、削除するページの親の下（親が空なら最上位）の末尾へ、元の並びのまま移す。`UPDATE wiki_pages SET parent_id、position WHERE parent_id = :削除するページ AND deleted_at IS NULL AND EXISTS (削除するページ、削除していない、閉じていないワークスペース)`。`position` は、エピックとストーリーの削除と同じ末尾の値（`src/server/db/tail-position.ts` の `tailPosition`）。
+  2. `UPDATE wiki_pages SET deleted_at、deleted_by WHERE id = :id AND <組織かワークスペース> AND deleted_at IS NULL AND 閉じていないワークスペース`。
+- 何も削除できなければ、読み直して、無ければ 404、閉じていれば 409 の `workspace_closed`。子を1段上げるので、段は増えない。
+
+#### 検索
+
+- 検索（`*-search`）は、`wiki_pages_organization` か `wiki_pages_workspace` の索引で Wiki のページを引き、`deleted_at IS NULL` で絞って、語ごとに `instr(lower(title), lower(語)) > 0 OR instr(lower(body_md), lower(語)) > 0` を `AND` でつなぐ。前後の空白を外し、半角と全角の空白で語に分ける。語は 5 つまで、検索の文字は 100 字まで。`%` と `_` は普通の文字として探す（`LIKE` を使わない）。英字の大文字と小文字は区別せず、全角と半角はそろえない（`tasks` の検索と同じ）。
+- 返すのは `id`、`title`、道筋の元になる `parent_id`、本文の一部（最初の語の少し前から `substr` で切り出す。全文を Worker へ運ばない）で、全語が題に当たるものを先に、次に `updated_at` の新しい順、`id` の順に 50 件まで。
+- FTS5 は足さない。`tasks` の検索と同じく、遅ければ測ってから足す。D1 の書き出し（`wrangler d1 export`）が仮想表を扱えない点も避けられる。ただしタスクの題と違って本文（最大 10 万字）を読むので、ページ数と本文の大きさに比例して重くなる。実装のストーリー（#757）で、`pnpm bench:backlog` と同じ形で測る。
+
 ## 記録
 
 ### completions
@@ -1346,6 +1456,10 @@ D1 は対話的なトランザクションを持たない。まとめて書く�
 | 添付ファイルを消す | `attachments` の削除と `change_logs`、続けて R2 のファイルの削除 |
 | コメントの作成 | `comments`。`comment-create` が `INSERT ... SELECT ... WHERE EXISTS (そのワークスペースの削除していないタスク) AND EXISTS (閉じていないワークスペース)` の1文で入れ、`change_logs` は書かない（行そのものが記録）。何も入らなければ、閉じていれば 409（`workspace_closed`）、そうでなければ 404 |
 | コメントの編集 | `comments`（`body_md`、`edited_at`）、`change_logs`（`entity_type = 'comment'`、`action = 'update'`。形は `change_logs` の節）。先にコメントを読み（ワークスペースで絞り、削除していないタスクのコメントだけ。無ければ 404）、書いた本人でなければ 403（`forbidden`）、消えていれば 409（`conflict`、`deleted`）、整えた本文が今と同じなら何も書かない。`comments` の文の条件は `id`、`workspace_id`、`author_user_id = :呼んだ人`、`deleted_at IS NULL`、`EXISTS (削除していないタスク)`、閉じていないワークスペースで、`change_logs` は直前の `UPDATE` が行を変えたときだけ入れる（下の「直前の文に結ぶ」）。何も変わらなければ、存在を先に決め、読み直してコメントかタスクが無ければ（読んでから書くまでにタスクが削除された）404、閉じていれば 409（`workspace_closed`）、消されていれば 409（`conflict`、`deleted`。読んでから書くまでにリーダーが消した）。先に読んだ時点でも、無いコメントは閉じたワークスペースでも 404 で、あるコメントへの書き込みだけが `workspace_closed` になる（同じ本文の更新も、閉じていれば `workspace_closed`） |
+| Wiki のページの作成、アップロード | `wiki_pages`、`wiki_page_revisions`（版 1）。ファイルごとに2文を、1回の `batch()` に並べる。`change_logs` は書かない。文と条件は「Wiki」の「作成とアップロード」 |
+| Wiki のページの保存 | `wiki_pages`（`revision_no` を読んだ版の次へ）、`wiki_page_revisions`（版を1つ足し、101 版目で一番古い版を消す）。`revision_no = :読んだ版` を条件にして、違えば何も書かず 409 の `conflict`。文と条件は「Wiki」の「保存」 |
+| Wiki のページの移動と並べ替え | `wiki_pages`（`parent_id`、`position`）。版は足さず、`updated_at` も動かさない。循環と 10 段を超える移動は、書く文の `WHERE`（`WITH RECURSIVE`）で断る |
+| Wiki のページの削除 | `wiki_pages`。子のページを削除するページの親の下の末尾へ上げる文と、`deleted_at`、`deleted_by` を書く文。文と条件は「Wiki」の「削除」 |
 | コメントの削除 | `comments`（`body_md` を空文字、`deleted_at`、`deleted_by`）、`change_logs`（`entity_type = 'comment'`、`action = 'delete'`。形は `change_logs` の節）。編集と同じく、先に読んで、無ければ 404、書いた本人でもリーダー（管理者を含む）でもなければ 403、消えていれば 409（`conflict`、`deleted`）。`comments` の文の条件は `id`、`workspace_id`、`deleted_at IS NULL`、`EXISTS (削除していないタスク)`、閉じていないワークスペースで、`change_logs` は直前の `UPDATE` が行を変えたときだけ入れる。何も変わらなければ、編集と同じ順で理由を返す（先に別の要求が消していれば 409 の `deleted` で、履歴は1行だけ）。コメントの添付ファイル（#68）が入ったら、そのコメントの `attachments` の削除をこの `batch()` に足し、続けて R2 のファイルを消す |
 
 先に読んだ値で判定してから書く操作（最後の管理者、完了の可否など）は、書く文の `WHERE` に同じ条件を入れ、影響した行の数で競合を見つける。
