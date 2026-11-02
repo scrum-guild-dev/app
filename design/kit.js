@@ -661,7 +661,8 @@
 
   // ---- 添付ファイル ----
   // 付く先のキー（タスク、ストーリー、エピックの ID、コメントは "comment:<タスク>:<番号>"）ごとに D.files に持つ。
-  // 画像と動画は縮小した絵を並べ、それ以外は1行ずつ。押すとプレビューが開く
+  // 画像も動画もそれ以外も、1行ずつ並べる（容量、上げた人、上げた日時が読める）。名前を押すとプレビューが開く。
+  // 本文に差し込んだ画像だけは、縮小した絵（fileThumb）で出す
   const FILE_ICON = { image: "image", video: "play", file: "file" };
   const FILE_KIND = { image: "画像", video: "動画", file: "ファイル" };
   const filesOf = (key) => D.files[key] || [];
@@ -690,8 +691,9 @@
       return `<div class="file-row is-error" role="alert">${icon("alert")}<div class="file-main"><span class="file-name">${esc(f.name)}</span><span class="file-meta">${esc(f.error)}</span></div>
         <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-cancel-file="${f.id}">閉じる</button></div></div>`;
     }
-    return `<div class="file-row">${icon(FILE_ICON[f.type])}<div class="file-main"><button class="file-name" type="button" data-file="${f.id}">${esc(f.name)}</button>
-      <span class="file-meta">${f.size}・${esc(user(f.who).name)}・${f.at}</span></div>
+    const nb = (s) => String(s).replace(/ /g, " ");
+    return `<div class="file-row">${icon(FILE_ICON[f.type])}<div class="file-main"><button class="file-name" type="button" data-file="${f.id}" aria-label="${esc(f.name)}（${FILE_KIND[f.type]}）を開く">${esc(f.name)}</button>
+      <span class="file-meta"><span class="mono">${nb(f.size)}</span>・${esc(user(f.who).name)}・<span class="mono">${nb(f.at)}</span>${f.length ? `・${f.length}` : ""}</span></div>
       <div class="file-actions"><button class="icon-btn" type="button" data-toast="ダウンロードを始めました" aria-label="${esc(f.name)} をダウンロード" title="ダウンロード">${icon("download")}</button>
         <button class="icon-btn is-danger" type="button" data-delete-file="${f.id}" aria-label="${esc(f.name)} を消す" title="消す">${icon("trash")}</button></div></div>`;
   }
@@ -702,17 +704,14 @@
     }
     if (opts.button) return `<div><button class="btn is-sm is-quiet" type="button" data-pick-file="${key}">${icon("clip")}ファイルを添付</button></div>`;
     return `<div class="dropzone ${opts.over ? "is-over" : ""}" data-drop="${key}">${icon("upload")}
-      <span class="dropzone-text"><b>${opts.over ? "離すと添付します" : "ここにファイルをドラッグして添付"}</b><span>1 ファイル 50 MB まで。画像は本文やコメントに貼り付けても添付できます</span></span>
+      <span class="dropzone-text"><b>${opts.over ? "離すと添付します" : "ここにファイルをドラッグして添付"}</b><span>1 ファイル 50 MB まで。複数をまとめて選べます。画像は本文やコメントに貼り付けても添付できます</span></span>
       <button class="btn is-sm" type="button" data-pick-file="${key}">${icon("clip")}ファイルを選ぶ</button></div>`;
   }
   // 添付ファイルの一覧と上げる場所。opts.noDrop なら一覧だけ。上げると data-files-for の中だけを描き直す
   function attachments(key, opts = {}) {
     const list = filesOf(key);
-    const media = list.filter((f) => f.type !== "file" && !f.state);
-    const rest = list.filter((f) => f.type === "file" || f.state);
     return `<div class="files" data-files-for="${key}" data-files-opts='${JSON.stringify(opts)}'>
-      ${media.length ? `<div class="file-thumbs">${media.map(fileThumb).join("")}</div>` : ""}
-      ${rest.map(fileRow).join("")}
+      ${list.map(fileRow).join("")}
       ${opts.noDrop ? "" : dropzone(key, opts)}</div>`;
   }
   // Markdown に差し込んだ画像。消したファイルは「見つかりません」と出す
@@ -984,7 +983,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ? `<p class="comment-body">${deletedText}</p>`
         : `<div class="comment-body"><div class="doc-box">${mdBody([c.body])}</div></div>`;
     const files = !c.deleted && filesOf(`comment:${x.id}:${i}`).length
-      ? `<div class="comment-files">${filesOf(`comment:${x.id}:${i}`).map((f) => (f.type === "file" ? fileRow(f) : fileThumb(f))).join("")}</div>` : "";
+      ? `<div class="comment-files">${filesOf(`comment:${x.id}:${i}`).map(fileRow).join("")}</div>` : "";
     return `<div class="comment${c.deleted ? " is-deleted" : ""}">${avatarOf(c.who)}<div>
       <div class="comment-head"><b>${esc(user(c.who).name)}</b><span class="mono">${c.at}</span>${c.edited ? "<span>編集済み</span>" : ""}${actions ? `<span class="comment-actions">${actions}</span>` : ""}</div>
       ${body}${files}</div></div>`;
@@ -2444,7 +2443,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       if (found) D.files[found.key] = D.files[found.key].filter((x) => x !== found.f);
       closeDialog(); redrawAll(); toast(`${icon("check")}添付ファイルを消しました`); return;
     }
-    if ((el = hit("data-pick-file"))) { fakeUpload(el.dataset.pickFile); return; }
+    if ((el = hit("data-pick-file"))) { pickFiles(el.dataset.pickFile); return; }
     if ((el = hit("data-cancel-file"))) {
       const found = findFile(el.dataset.cancelFile);
       if (found) { D.files[found.key] = D.files[found.key].filter((x) => x !== found.f); redrawFiles(found.key); }
@@ -2549,21 +2548,40 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       el.outerHTML = attachments(key, opts);
     });
   }
-  function fakeUpload(key) {
-    uploads += 1;
-    const f = uploads % 3 === 0
-      ? { id: `n${uploads}`, name: "画面の録画 2026-10-20 11.52.mov", type: "video", size: "82.1 MB", state: "error", error: "50 MB を超えているため添付できません（82.1 MB）" }
-      : { id: `n${uploads}`, name: `スクリーンショット 2026-10-20 11.4${uploads}.png`, type: "image", size: "1.8 MB", who: D.me, at: "10/20 11:4" + uploads, state: "uploading", pct: 0 };
-    (D.files[key] = D.files[key] || []).push(f);
-    redrawFiles(key);
-    if (f.state !== "uploading") return;
-    const timer = setInterval(() => {
-      if (!findFile(f.id)) { clearInterval(timer); return; }
-      f.pct = Math.min(100, f.pct + 25);
-      if (f.pct === 100) { clearInterval(timer); delete f.state; toast(`${icon("check")}添付しました`); }
+  // 選んだ（またはドラッグした）ファイルを1つずつ加える。files が無ければ見本の作り物を1つ加える（3つ目ごとに大きすぎる録画）
+  const fmtSize = (n) => (n >= 1048576 ? `${(Math.ceil(n / 104857.6) / 10).toFixed(1)} MB` : `${Math.min(1023, Math.max(1, Math.ceil(n / 1024)))} KB`);
+  const fileKind = (mime) => (/^image\/(png|jpeg|gif|webp)$/.test(mime) ? "image" : /^video\/(mp4|webm)$/.test(mime) ? "video" : "file");
+  const nowLabel = () => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+  function fakeUpload(key, files) {
+    if (!files || !files.length) return; // ファイルでないものを落としたときは何もしない
+    const picked = Array.from(files);
+    let pending = picked.length, done = 0;
+    const finish = () => { if (--pending === 0 && done) toast(`${icon("check")}${done} 件を添付しました`); };
+    picked.forEach((file) => {
+      uploads += 1;
+      const base = { name: file.name, type: fileKind(file.type), size: fmtSize(file.size) };
+      const reject = file.size === 0 ? "空のファイルは添付できません" : file.size > 52428800 ? `50 MB を超えているため添付できません（${base.size}）` : null;
+      const f = reject
+        ? { id: `n${uploads}`, ...base, state: "error", error: reject }
+        : { id: `n${uploads}`, ...base, who: D.me, at: nowLabel(), state: "uploading", pct: 0 };
+      (D.files[key] = D.files[key] || []).push(f);
       redrawFiles(key);
-    }, 350);
+      if (f.state !== "uploading") { finish(); return; }
+      const timer = setInterval(() => {
+        if (!findFile(f.id)) { clearInterval(timer); finish(); return; }
+        f.pct = Math.min(100, f.pct + 25);
+        if (f.pct === 100) { clearInterval(timer); delete f.state; done += 1; finish(); }
+        redrawFiles(key);
+      }, 350);
+    });
   }
+  // 「ファイルを選ぶ」は、複数を選べる選択欄を開く
+  const picker = document.createElement("input");
+  picker.type = "file"; picker.multiple = true; picker.hidden = true; picker.tabIndex = -1;
+  let pickerKey = null;
+  picker.addEventListener("change", () => { if (pickerKey && picker.files.length) fakeUpload(pickerKey, picker.files); picker.value = ""; });
+  document.body.appendChild(picker);
+  function pickFiles(key) { pickerKey = key; picker.click(); }
   document.addEventListener("dragover", (ev) => {
     const zone = ev.target.closest && ev.target.closest("[data-drop]");
     document.querySelectorAll(".dropzone.is-over").forEach((z) => z !== zone && z.classList.remove("is-over"));
@@ -2575,9 +2593,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (zone && !zone.contains(ev.relatedTarget)) zone.classList.remove("is-over");
   });
   document.addEventListener("drop", (ev) => {
-    const zone = ev.target.closest && ev.target.closest("[data-drop]");
+    const zone = ev.target.closest && ev.target.closest(".dropzone[data-drop]");
     if (!zone) return;
-    ev.preventDefault(); fakeUpload(zone.dataset.drop);
+    ev.preventDefault(); fakeUpload(zone.dataset.drop, ev.dataTransfer && ev.dataTransfer.files);
   });
 
   const extraRedraws = [];
