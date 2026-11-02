@@ -212,6 +212,8 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     await section.getByRole('button', { name: BUTTON }).click();
     await page.getByRole('dialog', { name: DIALOG }).getByRole('button', { name: '締め出す', exact: true }).click();
     await expect(page).toHaveURL(/\/login\?return_to=%2Faoba%2Fme$/);
+    // 失敗の知らせは出ない（401 は失敗でなく、ログインの画面へ移す）
+    await expect(toast(page, '締め出せませんでした。時間をおいて、もう一度試してください')).toHaveCount(0);
     await unroute();
   });
 });
