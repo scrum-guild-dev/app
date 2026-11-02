@@ -86,6 +86,8 @@ describe('needs-human の .claude/ の規則', () => {
     for (const path of [
       'Claude.md',
       'claude.md',
+      'CLAUDE.local.md',
+      'src/Claude.Local.md',
       'src/claude.md',
       '.Claude/skills/evil/SKILL.md',
       '.CLAUDE/settings.local.json',
