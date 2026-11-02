@@ -1569,6 +1569,9 @@ describe('bash-rules: 確認を挟む', () => {
     `gh pr merge --match-head-commit ${SHA} --squash`,
     `gh pr merge --squash --match-head-commit=${SHA}`,
     `gh pr merge --squash --match-head-commit ${SHA.toUpperCase()}`,
+    // 標準エラーを標準出力へ流すだけの 2>&1 と、末尾のコメントは固定の形のまま
+    `gh pr merge --squash --match-head-commit ${SHA} 2>&1`,
+    `gh pr merge --squash --match-head-commit ${SHA} # 確かめた head`,
   ]) {
     test(`確認を挟まず、許可ルールに任せる: ${command}`, () => {
       assert.equal(mergeVerdict(command), null);
@@ -1650,6 +1653,20 @@ describe('bash-rules: 確認を挟む', () => {
     `gh pr merge --squash --match-head-commit ${SHA} | cat`,
     `gh pr merge --squash --match-head-commit ${SHA} && git push origin x`,
     `gh pr merge --squash --match-head-commit ${SHA}\nls`,
+    // リダイレクトは宛先を先に空にするので、固定の形に数えない
+    `gh pr merge --squash --match-head-commit ${SHA} > ~/.gitconfig`,
+    `gh pr merge --squash --match-head-commit ${SHA} > /tmp/x`,
+    `gh pr merge --squash --match-head-commit ${SHA} >> /tmp/x`,
+    `gh pr merge --squash --match-head-commit ${SHA} 2> /tmp/x`,
+    // 入れ子は、外側の区切りの数を引き継ぐので固定の形に数えない
+    `bash -c 'gh pr merge --squash --match-head-commit ${SHA}'`,
+    `pnpm exec gh pr merge --squash --match-head-commit ${SHA}`,
+    `find . -maxdepth 0 -exec gh pr merge --squash --match-head-commit ${SHA} \\;`,
+    `xargs gh pr merge --squash --match-head-commit ${SHA}`,
+    `eval "gh pr merge --squash --match-head-commit ${SHA}"`,
+    // -R は pr の前でも後ろでも止める
+    `gh pr -R o/r merge --squash --match-head-commit ${SHA}`,
+    `gh -R o/r pr merge --squash --match-head-commit ${SHA}`,
     // --auto と --admin
     `gh pr merge --squash --admin --match-head-commit ${SHA}`,
     `gh pr merge --squash --auto --match-head-commit ${SHA}`,
@@ -1697,7 +1714,7 @@ describe('bash-rules: 確認を挟む', () => {
   test('.claude/settings.json の許可は gh pr merge だけに絞り、ほかの gh を許さない', () => {
     const settings = JSON.parse(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'settings.json'), 'utf8'));
     const ghRules = settings.permissions.allow.filter((rule) => /^Bash\(gh\b/.test(rule));
-    assert.deepEqual(ghRules, ['Bash(gh pr merge *)']);
+    assert.deepEqual(ghRules, ['Bash(gh pr merge --squash --match-head-commit *)']);
   });
 
   test('止めるものと確認を挟むものが並んだら止める', () => {
@@ -4217,8 +4234,9 @@ describe('入口', () => {
 
   describe('ワークツリーの中のフックの書き換え', () => {
     // CLAUDE_CODE_REMOTE はクラウドのセッションで true になり、guard-files.mjs が本体の detached を通すので、要るテストだけが明示して渡す
+    // GH_REPO、GH_HOST、CI、GITHUB_ACTIONS は、gh pr merge の判定が宛先と非対話を見分けるのに使うので、手元の値を引き継がない
     const cleanEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && key !== 'CLAUDE_CODE_REMOTE'),
+      Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && !['CLAUDE_CODE_REMOTE', 'GH_REPO', 'GH_HOST', 'CI', 'GITHUB_ACTIONS'].includes(key)),
     );
     const main = path.join(tmp, 'repo');
     const worktree = path.join(main, 'worktrees/1-x');

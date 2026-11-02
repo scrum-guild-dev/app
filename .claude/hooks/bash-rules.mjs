@@ -767,7 +767,7 @@ function judgeGh(args, stdinContext, merge = {}) {
     new Set(['-R', '--repo', '-X', '--method', '-H', '--header', '-f', '-F', '--field', '--raw-field', '--input', '--jq', '-q', '--template', '-t', '--hostname', '--cache', '-p', '--preview']),
   );
   // needs-human のラベルはフックから見えないので、マージするかの判定はスキル（pr-feedback）が行う。
-  // 拒否する形だけここで止め、残りは判定せず、.claude/settings.json の許可ルール（Bash(gh pr merge *)）に任せる
+  // 拒否する形だけここで止め、残りは判定せず、.claude/settings.json の許可ルール（Bash(gh pr merge --squash --match-head-commit *)）に任せる
   if (pos[0] === 'pr' && pos[1] === 'merge') {
     // --auto は確認の後に条件がそろった時点でマージし、--admin は条件を飛ばす
     if (args.some((a) => /^--(auto|admin)(=|$)/.test(a))) return [DENY, 'gh pr merge の --auto と --admin は使わない'];
@@ -2794,7 +2794,8 @@ function judgeSegment(words, ctx) {
     // gh の宛先と現在のブランチは、GH_REPO、GH_HOST、GIT_DIR、GIT_WORK_TREE、GIT_CONFIG_* で替わる。道具の前の代入、前の区切りの export、起動元の環境（guard-bash.mjs が渡す）で見る。
     // 素の gh を最初の語に置いた単独の区切りだけを、固定の形として扱う
     const redirectsRepo = GH_TARGET_VARIABLES.some((name) => ctx.env?.[name]);
-    const plain = ci === 0 && words[0] === 'gh' && ctx.segmentCount === 1;
+    // リダイレクト（> ~/.gitconfig）は宛先を先に空にするので、入れ子（bash -c、pnpm exec、find -exec）は外側の区切りの数を引き継ぐので、どちらも固定の形に数えない
+    const plain = ci === 0 && words[0] === 'gh' && ctx.segmentCount === 1 && ctx.depth === 0 && redirectsOf(words).length === 0;
     results.push(judgeGh(args, ctx.stdinContext, { dir: ctx.dir, branchOf: ctx.branchOf, redirectsRepo, plain }));
   }
   if (['curl', 'wget', 'http', 'https'].includes(tool)) results.push(judgeHttpClient(tool, args, ctx.stdinContext));

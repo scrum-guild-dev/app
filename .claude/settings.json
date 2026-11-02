@@ -11,7 +11,7 @@
   },
   "permissions": {
     "allow": [
-      "Bash(gh pr merge *)",
+      "Bash(gh pr merge --squash --match-head-commit *)",
       "mcp__github__issue_read",
       "mcp__github__pull_request_read",
       "mcp__github__list_issues",
