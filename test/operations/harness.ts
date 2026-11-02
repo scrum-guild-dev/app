@@ -363,8 +363,12 @@ export function defineOperationChecks(
       expect(res.status).toBe(404);
     });
 
-    test('自分の組織の行を指す入力は成功し、別の組織の行を指す入力は 404', () =>
-      checkRowIsolation(app, definition, pointers, own, other, credential));
+    // トークンで呼べない操作は、組織の確かめの後のトークンの範囲の検査で 403 になる（上の Origin の検査が確かめる）。
+    // 成功を前提にする検査（行の分離、役割、閉じたワークスペース）は Cookie の周で確かめる
+    if (!refusesToken(definition)) {
+      test('自分の組織の行を指す入力は成功し、別の組織の行を指す入力は 404', () =>
+        checkRowIsolation(app, definition, pointers, own, other, credential));
+    }
 
     // 停止した組織は、停止していなければ入れた人（管理者、所属、承諾待ちの招待）にだけ停止を伝え、入れない人は組織が無いときと同じ 404。
     // 権限の検査より前なので、権限の種類によらず同じ結果になる
@@ -407,6 +411,8 @@ export function defineOperationChecks(
         expect(await errorCodeOf(res)).toBe('not_found');
       }
     });
+
+    if (refusesToken(definition)) return;
 
     const permission = definition.permission;
     switch (permission) {
