@@ -1016,7 +1016,7 @@ describe('attachments', () => {
       .all<{ detail: string }>();
     const plan = results.map((row) => row.detail).join('\n');
     expect(plan).toContain('USING INDEX attachments_workspace_created_at_unattached');
-    expect(plan).not.toContain('USING INDEX attachments_workspace_id ');
+    expect(plan).not.toMatch(/INDEX attachments_workspace_id\b/);
   });
 });
 
