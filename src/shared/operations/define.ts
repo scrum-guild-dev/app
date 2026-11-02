@@ -49,6 +49,8 @@ type Common<Input, Output> = {
   readonly cookieOnly?: true;
   // 同意していない人にも通す（同意の検査を飛ばす）。permission: 'login' の操作だけ
   readonly skipsConsent?: true;
+  // 本文がファイルのバイトの操作。入力の JSON はヘッダー X-Operation-Input で運ぶ。組織の中の write の操作だけ
+  readonly body?: 'binary';
 };
 
 // ワークスペースの下の操作は、入力に workspace_id を持つ。無いと型で落ちる
