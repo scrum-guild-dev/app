@@ -27,6 +27,17 @@
 2. D1 の ID を `wrangler.jsonc` の `d1_databases` の `database_id` に入れ、PR で `main` に入れる
 3. マイグレーションは手で当てない。次のデプロイが `migrations/` の全部を当てる
 
+### R2
+
+添付ファイルの中身を置く本番のバケットは、人がダッシュボードで用意する。R2 binding を含む版のマージはバケットを作った後で、バケットが無いままマージすると Workers Builds のデプロイが失敗する。
+
+1. Cloudflare のダッシュボードで ucan-lab のアカウントを選び、R2 Object Storage の Overview →「Create bucket」を開く
+2. バケット名を `scrum-guild-attachments` にし、地域（Location）は自動（Automatic、地域の指定なし）のまま作る（[地域の選び方](https://developers.cloudflare.com/r2/reference/data-location/)）
+3. 公開アクセスは有効にしない。Settings の Public Development URL（`r2.dev`）は無効のままにし、Custom Domains もつながない。添付ファイルは Worker が権限を確かめて返す（[公開アクセスの設定](https://developers.cloudflare.com/r2/buckets/public-buckets/)）
+4. バケットができたことと名前を確かめてから、`wrangler.jsonc` の `r2_buckets` に binding `ATTACHMENTS` とバケット名 `scrum-guild-attachments` を含む版をマージする。binding はデプロイが設定するので、ダッシュボードで Worker に足す必要はない
+
+手元の `wrangler dev` と vitest の Workers の実行環境は R2 を模擬する。本番のバケットには触らず、手元用のバケットを Cloudflare に作る必要はない。
+
 ### Workers Builds の接続
 
 Workers & Pages の「Create application」→「Continue with GitHub」で、リポジトリ `ucan-lab/scrum-guild` を選び、Project name を `scrum-guild`（`wrangler.jsonc` の `name` と同じ）にして作る。Worker が既にあるときは、その Worker の Settings の Builds でつなぐ。GitHub の Cloudflare のアプリには、このリポジトリだけを許可してある。

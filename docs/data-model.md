@@ -58,7 +58,7 @@
 | 共通 | `accounts`、`account_logins`、`password_credentials`、`sessions`、`api_tokens`、`account_consents`、`oauth_states`、`rate_limits`、`organizations` | 共通の DB に1つだけ |
 | 組織の中 | それ以外のすべて | 組織が置かれた DB |
 
-添付ファイルの中身は D1 ではなく R2 に置く。R2 のキーの先頭は組織の ID なので、D1 を分けても R2 は分けずに済む。
+添付ファイルの中身は D1 ではなく R2 に置く。`wrangler.jsonc` の binding は `ATTACHMENTS`、本番のバケット名は `scrum-guild-attachments`。R2 のキーの先頭は組織の ID なので、D1 を分けても R2 は分けずに済む。
 
 - 共通の表から組織の中の表へは外部キーを張らない。
 - 組織の中の表から共通の表へ張る外部キーは、`users.account_id` と、`users`、`workspaces`、`organization_holidays`、`change_logs` の `organization_id` だけにする。分けるときはこれらを外し、アプリの検査に替える。
@@ -1004,7 +1004,7 @@
 
 ### attachments
 
-添付ファイルの情報。ファイルの中身は R2 に置く。
+添付ファイルの情報。`migrations/0018_add_attachments.sql` で作る組織の中の表。ファイルの中身は R2 に置く。
 
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |

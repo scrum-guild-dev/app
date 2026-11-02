@@ -14,6 +14,7 @@ import {
   AT,
   createAccount,
   createAccountLogin,
+  createAttachment,
   createBoardColumn,
   createCategory,
   createChangeLog,
@@ -112,7 +113,16 @@ async function fillOrganization(organization: Awaited<ReturnType<typeof createOr
     amount: -10,
     reverses_grant_id: grant.id,
   });
-  await createComment(organization, ws, task.id, member.id);
+  const comment = await createComment(organization, ws, task.id, member.id);
+  for (const target of [
+    {},
+    { task_id: task.id, attached_at: AT },
+    { story_id: story.id, attached_at: AT },
+    { epic_id: epic.id, attached_at: AT },
+    { comment_id: comment.id, attached_at: AT },
+  ]) {
+    await createAttachment(organization, ws, member.id, target);
+  }
   await createChangeLog(organization, {
     workspace_id: ws,
     actor_user_id: admin.id,

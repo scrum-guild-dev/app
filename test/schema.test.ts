@@ -12,6 +12,15 @@ import {
 } from '../src/server/operations/experience.ts';
 import { revokeSameEmailStatements } from '../src/server/operations/invitation.ts';
 import { todayOperation } from '../src/server/operations/today.ts';
+import {
+  createComment,
+  createEpic,
+  createOrganization,
+  createStory,
+  createTask,
+  createUser,
+  createWorkspace,
+} from './factories.ts';
 
 const AT = '2026-10-20T00:00:00.000Z';
 const CLAIM_EXPIRES_AT = '2026-11-03T00:00:00.000Z';
@@ -869,6 +878,102 @@ describe('comments', () => {
   test('消した日時と消した人は、両方入るか両方空', async () => {
     await expect(comment({ body: '', deletedAt: AT, deletedBy: null })).rejects.toThrow(/CHECK/);
     await expect(comment({ body: '本文', deletedAt: null, deletedBy: 'self' })).rejects.toThrow(/CHECK/);
+  });
+});
+
+describe('attachments', () => {
+  const targetColumns = ['task_id', 'story_id', 'epic_id', 'comment_id'] as const;
+
+  async function setup() {
+    const org = await createOrganization();
+    const uploader = await createUser(org);
+    const ws = await createWorkspace(org, uploader.id);
+    const epic = await createEpic(org, ws.id, uploader.id);
+    const story = await createStory(org, ws.id, uploader.id, { epic_id: epic.id });
+    const task = await createTask(org, ws.id, uploader.id, { story_id: story.id });
+    const comment = await createComment(org, ws.id, task.id, uploader.id);
+    const targets = { task_id: task.id, story_id: story.id, epic_id: epic.id, comment_id: comment.id };
+
+    function attachment(
+      columns: Partial<Record<(typeof targetColumns)[number], string | null>> & {
+        attached_at?: string | null;
+        size_bytes?: number;
+        object_key?: string;
+      } = {},
+    ) {
+      const attachmentId = id();
+      return run(
+        `INSERT INTO attachments (id, workspace_id, task_id, story_id, epic_id, comment_id, object_key, file_name, content_type, size_bytes, uploaded_by, attached_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, '手順.txt', 'text/plain', ?, ?, ?, ?)`,
+        attachmentId,
+        ws.id,
+        columns.task_id ?? null,
+        columns.story_id ?? null,
+        columns.epic_id ?? null,
+        columns.comment_id ?? null,
+        columns.object_key ?? `${org.id}/${ws.id}/${attachmentId}`,
+        columns.size_bytes ?? 1,
+        uploader.id,
+        columns.attached_at ?? null,
+        AT,
+      );
+    }
+    return { attachment, targets };
+  }
+
+  test.each(Array.from({ length: 16 }, (_, mask) => mask))(
+    '付く先の組み合わせ %i は、多くても1つのときだけ保存できる',
+    async (mask) => {
+      const { attachment, targets } = await setup();
+      const selected = targetColumns.filter((_, index) => mask & (1 << index));
+      const columns = Object.fromEntries(selected.map((column) => [column, targets[column]]));
+      const result = attachment({ ...columns, attached_at: selected.length ? AT : null });
+      await (selected.length <= 1 ? expect(result).resolves.toBeTruthy() : expect(result).rejects.toThrow(/CHECK/));
+    },
+  );
+
+  test.each(targetColumns)('%s があるとき attached_at を空にできない', async (column) => {
+    const { attachment, targets } = await setup();
+    await expect(attachment({ [column]: targets[column], attached_at: null })).rejects.toThrow(/CHECK/);
+  });
+
+  test('付く先のない行に attached_at を入れられない', async () => {
+    const { attachment } = await setup();
+    await expect(attachment({ attached_at: AT })).rejects.toThrow(/CHECK/);
+  });
+
+  test.each([1, 52428800])('size_bytes の境界 %i は保存できる', async (size_bytes) => {
+    const { attachment } = await setup();
+    await expect(attachment({ size_bytes })).resolves.toBeTruthy();
+  });
+
+  test.each([-1, 0, 52428801])('size_bytes の範囲外 %i は保存できない', async (size_bytes) => {
+    const { attachment } = await setup();
+    await expect(attachment({ size_bytes })).rejects.toThrow(/CHECK/);
+  });
+
+  test('object_key は、別の ID の添付でも重ねられない', async () => {
+    const { attachment } = await setup();
+    const object_key = `organization/workspace/${id()}`;
+    await expect(attachment({ object_key })).resolves.toBeTruthy();
+    await expect(attachment({ object_key })).rejects.toThrow(/UNIQUE/);
+    await expect(attachment()).resolves.toBeTruthy();
+  });
+
+  test.each(targetColumns)('%s ごとの一覧は索引で引く', async (column) => {
+    const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN SELECT id FROM attachments WHERE ${column} = ?`)
+      .bind(id())
+      .all<{ detail: string }>();
+    expect(results.map((row) => row.detail).join('\n')).toContain(`USING INDEX attachments_${column}`);
+  });
+
+  test('付く先のない期限切れの行は created_at の部分索引で引く', async () => {
+    const { results } = await env.DB.prepare(
+      `EXPLAIN QUERY PLAN SELECT id FROM attachments WHERE attached_at IS NULL AND created_at < ? LIMIT 50`,
+    )
+      .bind(AT)
+      .all<{ detail: string }>();
+    expect(results.map((row) => row.detail).join('\n')).toContain('USING INDEX attachments_created_at_unattached');
   });
 });
 

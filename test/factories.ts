@@ -478,6 +478,35 @@ export async function createComment(
   return row;
 }
 
+// 添付ファイルの情報。既定は付く先のない行。中身を R2 へ上げる操作は行わない
+export async function createAttachment(
+  organization: OrganizationFixture,
+  workspaceId: string,
+  uploadedBy: string,
+  overrides: Partial<Row<OrganizationTables, 'attachments'>> = {},
+) {
+  const id = uuidv7();
+  const row: Row<OrganizationTables, 'attachments'> = {
+    id,
+    workspace_id: workspaceId,
+    task_id: null,
+    story_id: null,
+    epic_id: null,
+    comment_id: null,
+    object_key: `${organization.id}/${workspaceId}/${id}`,
+    file_name: '手順.txt',
+    content_type: 'text/plain',
+    size_bytes: 1,
+    uploaded_by: uploadedBy,
+    attached_at: null,
+    created_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('attachments').values(row)));
+  return row;
+}
+
 // 先のスプリント（planned）。期間の重なりは操作が断るもので、ここでは確かめない（重ねたいテストは期間を渡す）
 export async function createSprint(
   organization: OrganizationFixture,
