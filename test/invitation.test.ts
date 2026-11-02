@@ -26,7 +26,15 @@ import {
   type OrganizationFixture,
 } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
-import { createPerson, createTarget, testEnv, type Person, type Target } from './operations/world.ts';
+import { bearerFor } from './operations/api-token.ts';
+import {
+  createPerson,
+  createPersonalTarget,
+  createTarget,
+  testEnv,
+  type Person,
+  type Target,
+} from './operations/world.ts';
 
 const github = createFakeGithub();
 const app = createApp(implementedOperations, { fetcher: github.fetcher });
@@ -1062,5 +1070,91 @@ describe('invitation-revoke', () => {
     const blocked = await revoke(closed, closed.admin, pending.id);
     expect(blocked.status).toBe(409);
     expect(await errorCodeOf(blocked)).toBe('workspace_closed');
+  });
+});
+
+// 自分用の組織（kind = personal）は1人だけなので、招待を 409 の conflict（reason: personal_organization）で断る。
+// 招待は組織にしてから。チーム用は今まで通り（#733）
+describe('invitation-create と自分用の組織', () => {
+  async function invitationCount(target: Target): Promise<number> {
+    const db = orgDb(env, target.organization.verified);
+    const rows = await db.rows(db.statement((q) => q.selectFrom('invitations').select('id')));
+    return rows.length;
+  }
+
+  async function expectPersonalRefusal(res: Response) {
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: { code: string; details?: unknown } };
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.details).toEqual({ reason: 'personal_organization' });
+  }
+
+  test('管理者の GitHub の招待を断り、招待の行を書かない', async () => {
+    const target = await createPersonalTarget();
+    const before = await invitationCount(target);
+    await expectPersonalRefusal(await invite(target, target.admin, newUser()));
+    expect(await invitationCount(target)).toBe(before);
+  });
+
+  test('管理者の Google の招待を断り、招待の行も招待の URL も作らない', async () => {
+    const target = await createPersonalTarget();
+    const before = await invitationCount(target);
+    await expectPersonalRefusal(await inviteGoogle(target, target.admin, 'haruka-aoi@example.com'));
+    expect(await invitationCount(target)).toBe(before);
+  });
+
+  test('リーダー（管理者ではない）の招待も断る（管理者以外のルート）', async () => {
+    const target = await createPersonalTarget();
+    const before = await invitationCount(target);
+    await expectPersonalRefusal(await invite(target, target.extra, newUser()));
+    await expectPersonalRefusal(await inviteGoogle(target, target.extra, 'ren-kudo@example.com'));
+    expect(await invitationCount(target)).toBe(before);
+  });
+
+  test('ロールが leader の招待も断る', async () => {
+    const target = await createPersonalTarget();
+    await expectPersonalRefusal(await invite(target, target.admin, newUser(), { role: 'leader' }));
+  });
+
+  test('別のワークスペースを指しても断る', async () => {
+    const target = await createPersonalTarget();
+    await expectPersonalRefusal(
+      await invite(target, target.admin, newUser(), { workspaceId: target.otherWorkspace.id }),
+    );
+  });
+
+  test('API トークン（write）から呼んでも断る', async () => {
+    const target = await createPersonalTarget();
+    const user = newUser();
+    const res = await post(app, invitationCreate, {
+      slug: target.slug,
+      bearer: await bearerFor(target.admin, 'write'),
+      body: {
+        workspace_id: target.workspace.id,
+        provider: 'github',
+        username: user.login,
+        login_subject: String(user.id),
+        role: 'member',
+      },
+    });
+    await expectPersonalRefusal(res);
+  });
+
+  test('停止した自分用でも、招待は作れない（停止したチーム用と同じ断り方）', async () => {
+    const personal = await createPersonalTarget({ suspended: true });
+    const team = await createTarget({ suspended: true });
+    const personalRes = await invite(personal, personal.admin, newUser());
+    const teamRes = await invite(team, team.admin, newUser());
+    expect(personalRes.status).toBe(teamRes.status);
+    expect(personalRes.status).not.toBe(200);
+    expect(await invitationCount(personal)).toBe(0);
+  });
+
+  test('チーム用の組織では今まで通り招待できる', async () => {
+    const target = await createTarget();
+    const res = await invite(target, target.admin, newUser());
+    expect(res.status).toBe(200);
+    const google = await inviteGoogle(target, target.admin, 'sora-minami@example.com');
+    expect(google.status).toBe(200);
   });
 });

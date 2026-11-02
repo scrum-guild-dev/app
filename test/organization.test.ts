@@ -100,8 +100,8 @@ describe('my-organizations', () => {
 
     const result = await listOrganizations(visitor.token);
     expect(result.organizations).toEqual([
-      { slug: aoba.slug, name: 'あおば開発' },
-      { slug: hibari.slug, name: 'ひばり工房' },
+      { slug: aoba.slug, name: 'あおば開発', kind: 'team' },
+      { slug: hibari.slug, name: 'ひばり工房', kind: 'team' },
     ]);
     expect(result.invitations).toEqual([]);
     expect(result.operator).toBe(false);

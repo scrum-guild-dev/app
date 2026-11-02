@@ -6,6 +6,7 @@ import {
   createInvitation,
   createMembership,
   createOrganization,
+  createPersonalOrganizationRow,
   createSessionWithToken,
   createUser,
   createWorkspace,
@@ -179,5 +180,43 @@ export async function createTarget(options: { closed?: boolean; suspended?: bool
     member,
     bystander,
     invitee,
+  };
+}
+
+// 自分用の組織。作った本人が管理者の1人だけ（製品の道ではこの形になる）。
+// 断る検査のために、製品の道では起きない行（管理者でないリーダー、もう1人の users の行）も持つ
+export type PersonalTarget = Target & {
+  // 管理者のほかに users に入れた人。リーダーで、管理者ではない
+  extra: Person;
+};
+
+export async function createPersonalTarget(options: { suspended?: boolean } = {}): Promise<PersonalTarget> {
+  const owner = await createPerson();
+  const organization = await createPersonalOrganizationRow(
+    owner.accountId,
+    options.suspended ? { suspended_at: SUSPENDED_AT } : {},
+  );
+  const user = await createUser(organization, {
+    account_id: owner.accountId,
+    login_provider: owner.login.provider,
+    login_subject: owner.login.subject,
+    is_admin: 1,
+  });
+  const admin: Person = { ...owner, userId: user.id };
+  const workspace = await createWorkspace(organization, user.id);
+  const otherWorkspace = await createWorkspace(organization, user.id);
+  const extra = await createPerson({ organization, membership: { workspaceId: workspace.id, role: 'leader' } });
+  const invitee = await createPerson();
+  return {
+    organization,
+    slug: organization.slug,
+    workspace,
+    otherWorkspace,
+    admin,
+    leader: extra,
+    member: extra,
+    bystander: extra,
+    invitee,
+    extra,
   };
 }

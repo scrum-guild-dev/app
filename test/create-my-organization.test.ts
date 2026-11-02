@@ -224,7 +224,7 @@ describe('組織の無い会員が作る', () => {
     const res = await post(app, myOrganizations, { token: member.token });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { organizations: { slug: string; name: string }[] };
-    expect(body.organizations).toEqual([{ slug, name: '青葉工房' }]);
+    expect(body.organizations).toEqual([{ slug, name: '青葉工房', kind: 'team' }]);
   });
 
   test('他の組織の人は、作った組織の slug で 404', async () => {

@@ -714,3 +714,22 @@ export async function createThanks(
   await db.run(db.statement((q) => q.insertInto('thanks').values(row)));
   return row;
 }
+
+// 自分用（kind = 'personal'）の組織。kind の列は型に無い（マイグレーションが入るまで）ので、行を書いた後に直に更新する。
+// 1人だけの組織なので member_limit は 1、添付は 1GB、作った人は本人（セルフサービス）
+export async function createPersonalOrganizationRow(
+  createdByAccountId: string,
+  overrides: Partial<Row<CommonTables, 'organizations'>> = {},
+) {
+  const organization = await createOrganization({
+    name: '自分用',
+    member_limit: 1,
+    attachment_quota_bytes: 1073741824,
+    created_by_operator: 'self-service',
+    created_by_account_id: createdByAccountId,
+    trial_ends_on: null,
+    ...overrides,
+  });
+  await env.DB.prepare(`UPDATE organizations SET kind = 'personal' WHERE id = ?`).bind(organization.id).run();
+  return organization;
+}

@@ -638,7 +638,7 @@ describe('停止中の組織に入る人', () => {
       };
       expect(body.organizations).toEqual([]);
       expect(body.invitations).toEqual([]);
-      expect(body.suspended).toEqual([{ slug: target.slug, name: target.organization.name }]);
+      expect(body.suspended).toEqual([{ slug: target.slug, name: target.organization.name, kind: 'team' }]);
       // 組織の中は 403 のままで、セッションは残る（次の呼び出しも 403）
       for (let i = 0; i < 2; i++) {
         const inside = await post(app, organizationInfo, { slug: target.slug, token: person.token });

@@ -309,7 +309,15 @@ describe('cookieOnly の logout', () => {
         .filter((definition) => definition.cookieOnly === true)
         .map((definition) => definition.name)
         .sort(),
-    ).toEqual(['consent-record', 'create-my-organization', 'logout', 'token-create', 'token-list', 'token-revoke']);
+    ).toEqual([
+      'consent-record',
+      'create-my-organization',
+      'create-personal-organization',
+      'logout',
+      'token-create',
+      'token-list',
+      'token-revoke',
+    ]);
   });
 
   test('トークンから呼ぶと 403 の forbidden で、トークンもセッションも残る', async () => {

@@ -6,6 +6,12 @@ import {
   createMyOrganizationConflictReasons,
   type CreateMyOrganizationConflictReason,
 } from './create-my-organization.ts';
+import {
+  createPersonalOrganization,
+  createPersonalOrganizationConflictReasonOf,
+  createPersonalOrganizationConflictReasons,
+  type CreatePersonalOrganizationConflictReason,
+} from './create-personal-organization.ts';
 import { firstSteps } from './first-steps.ts';
 import { meThemeUpdate } from './me-theme-update.ts';
 import { myOrganizations } from './my-organizations.ts';
@@ -21,6 +27,10 @@ export {
   createMyOrganizationConflictReasonOf,
   createMyOrganizationConflictReasons,
   type CreateMyOrganizationConflictReason,
+  createPersonalOrganization,
+  createPersonalOrganizationConflictReasonOf,
+  createPersonalOrganizationConflictReasons,
+  type CreatePersonalOrganizationConflictReason,
   firstSteps,
   meThemeUpdate,
   myOrganizations,
@@ -40,6 +50,7 @@ export {
 export const organizationOperations: readonly AnyOperationDefinition[] = [
   myOrganizations,
   createMyOrganization,
+  createPersonalOrganization,
   organizationInfo,
   meThemeUpdate,
   organizationHolidayList,
