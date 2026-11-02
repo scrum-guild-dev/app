@@ -14,6 +14,7 @@
   import { callOperation } from '../api.ts';
   import { focusPageHeading } from '../focus-heading.ts';
   import { browserTimezone } from '../format.ts';
+  import { workspaceLimitDetailsOf } from '../workspace-limit-details.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Dialog from './Dialog.svelte';
   import Icon from './Icon.svelte';
@@ -28,6 +29,7 @@
   // 作れた時点で oncreated で画面に知らせる（管理の画面は一覧だけ読み直す）。
   // 「続けて作る」は開いたときと同じ空のフォームに戻して名前の欄へ、「開く」は閉じてそのワークスペースの画面へ移り見出しにフォーカスを置く。
   // 完了の表示を×、Esc、背景で閉じたら、今の画面に残る。
+  // 自分用の組織の個数の上限（409 の workspace_limit_reached）で断られたら、上限と今の個数を、ダイアログの中の警告（callout is-warn）に出す。
   // 送り始めた後に部品が外れた（画面を離れた、組織が替わった）ときは、古い応答で完了の表示にせず、状態も更新しない（generation）
   let { slug, meId, oncreated }: { slug: string; meId: string; oncreated?: (workspaceId: string) => void } = $props();
 
@@ -55,6 +57,8 @@
   let candidatesFailedBefore = $state(false);
   let nameError = $state<string | null>(null);
   let submitError = $state<string | null>(null);
+  // 個数の上限で断られた理由。送り直す、開き直す、「続けて作る」で消す
+  let limitMessage = $state<string | null>(null);
   let submitting = $state(false);
   // 作れたワークスペース。あれば完了の表示。組織は送り始めたときのもの
   let created = $state<{ id: string; name: string; slug: string } | null>(null);
@@ -106,6 +110,7 @@
     name = '';
     nameError = null;
     submitError = null;
+    limitMessage = null;
     submitting = false;
     created = null;
     candidatesFailedBefore = false;
@@ -215,6 +220,7 @@
     const sentTimezone = timezone;
     submitting = true;
     submitError = null;
+    limitMessage = null;
     // 欄が disabled になるので、Enter で送ったときもフォーカスを失わないよう、「作る」へ移す
     submitButton?.focus();
     // 名前が断られたときに名前の欄へ戻す。送っている間は欄が disabled でフォーカスを受けないので、戻すのは disabled を外した後
@@ -236,6 +242,14 @@
           submitError = t('workspaceLeaderRejected', { leader: leaderWord });
           // 候補を取り直して、選び直せるようにする
           void loadCandidates();
+        } else if (result.status === 409 && result.error?.code === 'workspace_limit_reached') {
+          // 数が読めない応答（details が無いか不正）は、数を含まない文言にする
+          const limit = workspaceLimitDetailsOf(result.error.details);
+          const common = { workspace: t('workspace') };
+          limitMessage =
+            limit === undefined
+              ? t('workspaceLimitReachedUnknown', common)
+              : t('workspaceLimitReached', { ...common, limit: limit.limit, used: limit.used });
         } else if (result.status === 400 && rejectedFields(result.error?.details).includes('timezone')) {
           // ブラウザの値は直せない。理由を伝える
           submitError = t('workspaceTimezoneRejected', { timezone: sentTimezone });
@@ -358,6 +372,9 @@
         <p class="field-hint">{defaultsNote}</p>
       </fieldset>
 
+      {#if limitMessage !== null}
+        <div class="callout is-warn" role="alert"><Icon name="alert" /><span>{limitMessage}</span></div>
+      {/if}
       {#if submitError !== null}
         <div class="callout is-danger" role="alert"><Icon name="alert" /><span>{submitError}</span></div>
       {/if}

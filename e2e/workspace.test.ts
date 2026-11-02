@@ -2,10 +2,11 @@
 // あおば開発の管理者はミナト、一般のユーザーはハルカ。ひばり工房のワークスペースの ID は seed/data.sql の値
 import type { Page } from '@playwright/test';
 import { firstSteps } from '../src/shared/operations/organization/index.ts';
+import { workspaceCreate } from '../src/shared/operations/workspace/index.ts';
 import type { FirstStep } from '../src/shared/operations/organization/first-steps.ts';
 import { expect, test } from './fixtures.ts';
 import { expectFocusReturned, signIn, watchViolations } from './helpers.ts';
-import { mockOperation } from './operations.ts';
+import { failOperation, mockOperation } from './operations.ts';
 
 // この回の印。作る行の名前に混ぜる（作ったワークスペースは消せずに残るので、繰り返しとやり直しの回で名前を分ける）
 function runMark(): string {
@@ -104,6 +105,48 @@ test.describe('管理者（あおば開発のミナト）', () => {
     const row = workspaceRow(page, '保守チーム');
     await expect(row.locator('td').nth(1)).toHaveText('1');
     await expect(row.locator('td').nth(2)).toHaveText('1');
+  });
+
+  // 自分用の組織の個数の上限（#734）。サーバーの判定（4個目の拒否、閉じたものも数える、同時の作成）は test/workspace-limit.test.ts が確かめる。
+  // ここは応答を書き換えて、画面の出し方だけを確かめる（自分用の組織を作ると、作った組織を後で消せないため）
+  test('個数の上限で断られると、ダイアログの中に上限と今の個数が出て、閉じずに入力も残り、作った表示にはならない', async ({
+    page,
+  }) => {
+    await failOperation(page, workspaceCreate, { slug: 'aoba' }, 409, 'workspace_limit_reached', {
+      details: { used: 3, limit: 3 },
+    });
+    await page.goto('/aoba/admin');
+    await page.getByRole('button', { name: 'ワークスペースを作る' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'ワークスペースを作る' });
+    await expect(dialog.getByRole('combobox')).toBeEnabled();
+    await dialog.getByLabel('名前').fill('四つ目の置き場');
+    await dialog.getByRole('button', { name: '作る' }).click();
+
+    const alert = dialog.getByRole('alert').filter({ hasText: '自分用' });
+    await expect(alert).toHaveText(
+      '自分用のワークスペースは、終了したものも含めて3個までです（今3個）。これ以上は作れないので、今あるワークスペースを使うか、終了したワークスペースがあれば再開してください。',
+    );
+    await expect(alert).toHaveClass(/is-warn/);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('名前')).toHaveValue('四つ目の置き場');
+    await expect(page.getByRole('dialog', { name: 'ワークスペースを作りました' })).toHaveCount(0);
+
+    // やめるで閉じられる
+    await dialog.getByRole('button', { name: 'やめる' }).click();
+    await expect(dialog).toBeHidden();
+  });
+
+  test('上限の応答に数が無いときは、数を含まない文言を出す', async ({ page }) => {
+    await failOperation(page, workspaceCreate, { slug: 'aoba' }, 409, 'workspace_limit_reached');
+    await page.goto('/aoba/admin');
+    await page.getByRole('button', { name: 'ワークスペースを作る' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'ワークスペースを作る' });
+    await expect(dialog.getByRole('combobox')).toBeEnabled();
+    await dialog.getByLabel('名前').fill('四つ目の置き場');
+    await dialog.getByRole('button', { name: '作る' }).click();
+    await expect(dialog.getByRole('alert')).toHaveText(
+      '自分用のワークスペースの個数が、終了したものも含めて上限に達しています。これ以上は作れないので、今あるワークスペースを使うか、終了したワークスペースがあれば再開してください。',
+    );
   });
 
   test('別の人をリーダーに作ると、所属していない印が出る', async ({ page }) => {
