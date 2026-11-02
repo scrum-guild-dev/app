@@ -30,6 +30,8 @@
       "migrations_dir": "migrations"
     }
   ],
+  // 添付ファイルの中身を置く。手元の dev とテストは R2 を模擬し、本番のバケットには触らない
+  "r2_buckets": [{ "binding": "ATTACHMENTS", "bucket_name": "scrum-guild-attachments" }],
   "workers_dev": true,
   // 毎分、期限を過ぎた行を消し、毎時 0 分に、お試しの期限を過ぎた組織を一時停止にする（src/server/scheduled/）
   "triggers": { "crons": ["* * * * *", "0 * * * *"] },

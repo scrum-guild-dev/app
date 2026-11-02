@@ -24,6 +24,7 @@ type Scope = 'organization' | 'workspace' | 'epic' | 'task';
 const TABLES: readonly (readonly [table: string, scope: Scope])[] = [
   ['xp_grants', 'workspace'],
   ['thanks', 'workspace'],
+  ['attachments', 'workspace'],
   ['comments', 'workspace'],
   ['completions', 'workspace'],
   ['change_logs', 'organization'],

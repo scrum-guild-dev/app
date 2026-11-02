@@ -1,4 +1,4 @@
-// 29表の列。migrations/ の全マイグレーションを当てた後の写しで、列名は DB と同じスネークケースのまま持つ。
+// 30表の列。migrations/ の全マイグレーションを当てた後の写しで、列名は DB と同じスネークケースのまま持つ。
 // 共通の表と組織の中の表の区分は docs/data-model.md の「共通の表と組織の中の表」。表を足すときは、
 // マイグレーションと同じ PR でここに足す（足し忘れと列のずれは test/table-columns.test.ts が落とす）
 import {
@@ -306,6 +306,22 @@ export const organizationTableColumns = {
     edited_at: textOrNull,
     deleted_at: textOrNull,
     deleted_by: textOrNull,
+    created_at: text,
+  },
+  // migrations/0018_add_attachments.sql で足した
+  attachments: {
+    id: text,
+    workspace_id: text,
+    task_id: textOrNull,
+    story_id: textOrNull,
+    epic_id: textOrNull,
+    comment_id: textOrNull,
+    object_key: text,
+    file_name: text,
+    content_type: text,
+    size_bytes: integer,
+    uploaded_by: text,
+    attached_at: textOrNull,
     created_at: text,
   },
   completions: {
