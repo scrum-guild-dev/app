@@ -431,8 +431,8 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await menuButton(page).focus();
     await page.keyboard.press('Enter');
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'true');
-    // 3つのリンクと「組織を作る」のボタンを通り過ぎて、メニューの外（左のメニューの項目）へ出る
-    for (let index = 0; index < 5; index++) await page.keyboard.press('Tab');
+    // 3つのリンクと「組織を作る」「自分用を作る」のボタンを通り過ぎて、メニューの外（左のメニューの項目）へ出る
+    for (let index = 0; index < 6; index++) await page.keyboard.press('Tab');
     await expect(page.locator('.nav-item').first()).toBeFocused();
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'false');
   });
