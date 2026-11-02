@@ -198,9 +198,10 @@ function parentOptions(selected, { exclude = [], height = 1 } = {}) {
   const walk = (id, depth) => kids(id).filter((k) => !exclude.includes(k.id)).flatMap((k) => {
     const tooDeep = depthOf(k.id) + height > MAX_DEPTH;
     if (tooDeep) over++;
-    return [`<option value="${k.id}" ${k.id === selected ? "selected" : ""} ${tooDeep ? "disabled" : ""}>${"　".repeat(depth)}${esc(k.title)}${tooDeep ? "（10 段を超えるため選べません）" : ""}</option>`, ...walk(k.id, depth + 1)];
+    return [`<option value="${k.id}" ${k.id === selected && !tooDeep ? "selected" : ""} ${tooDeep ? "disabled" : ""}>${"　".repeat(depth)}${esc(k.title)}${tooDeep ? "（10 段を超えるため選べません）" : ""}</option>`, ...walk(k.id, depth + 1)];
   });
-  const html = `<option value="" ${selected ? "" : "selected"}>最上段（親なし）</option>${walk(null, 0).join("")}`;
+  const rest = walk(null, 0).join("");
+  const html = `<option value="" ${rest.includes(' selected ') ? "" : "selected"}>最上段（親なし）</option>${rest}`;
   return { html, over };
 }
 const parentHint = (id, over) => `<span class="field-hint" id="${id}">深さは ${MAX_DEPTH} 段までです。${over ? `${MAX_DEPTH} 段を超える親（${over} 件）は、選べないようにしています。` : ""}</span>`;
@@ -265,7 +266,7 @@ function readHtml(p) {
         <button class="btn is-primary" type="button" data-wiki="edit">${icon("pen")}編集する</button>
         <button class="btn" type="button" data-wiki="versions">${icon("clock")}版の一覧</button>
         <button class="btn" type="button" data-wiki="download">${icon("download")}.md で落とす</button>
-        <button class="btn is-sm is-quiet" type="button" data-wiki="new-child">${icon("plus")}子のページを足す</button>
+        <button class="btn is-sm is-quiet" type="button" data-wiki="new-child" ${depthOf(p.id) + 1 > MAX_DEPTH ? `aria-disabled="true" aria-describedby="wiki-child-hint"` : ""}>${icon("plus")}子のページを足す</button>${depthOf(p.id) + 1 > MAX_DEPTH ? `<span class="props-note" id="wiki-child-hint">深さは ${MAX_DEPTH} 段までなので、このページに子のページは足せません。</span>` : ""}
         <button class="btn is-sm is-quiet" type="button" data-wiki="move">${icon("swap")}親を移す</button>
         <button class="btn is-sm is-quiet is-danger" type="button" data-wiki="delete">${icon("trash")}消す</button>
       </div>
@@ -567,7 +568,7 @@ document.addEventListener("click", (ev) => {
     savePage(p, r.title, r.md); const v = S.ver; S.mode = "read"; S.ver = null; redraw();
     toast(`${icon("check")}第 ${v} 版の題と本文で保存しました（第 ${p.ver} 版）`);
   }
-  else if (act === "upload") { S.upload = { files: [], parent: S.page }; uploadDialog(); }
+  else if (act === "upload") { S.upload = { files: [], parent: S.page && depthOf(S.page) + 1 <= MAX_DEPTH ? S.page : null }; uploadDialog(); }
   else if (act === "upload-pick") {
     S.upload.parent = readParent("wk-up-parent");
     const have = new Set(S.upload.files.map((f) => f.name));
@@ -580,6 +581,7 @@ document.addEventListener("click", (ev) => {
   else if (act === "upload-do") {
     const parent = readParent("wk-up-parent"); // 値は閉じる前に読む
     const files = S.upload.files;
+    if (parent && depthOf(parent) + 1 > MAX_DEPTH) return;
     closeDialog();
     for (const f of files) store.pages.push({ id: `n${Date.now()}${store.pages.length}`, parent, title: uploadTitle(f), created: me, by: me, at: NOW, ver: 1, md: f.md });
     if (parent) S.open.add(parent);
@@ -597,6 +599,9 @@ document.addEventListener("submit", (ev) => {
   const badTitle = problem(titleEl, "wk-title-error", cpLen(title) < 1 || cpLen(title) > 100 || title.includes("\u0000") ? "題は、前後の空白を除いて 1〜100 字で入れてください。" : "");
   const badBody = problem(bodyEl, "wk-body-error", cpLen(body) > 100000 ? `本文は 10 万字までです（今は ${cpLen(body).toLocaleString("ja-JP")} 字）。` : body.includes("\u0000") ? "本文に使えない文字（NUL）が含まれています。" : "");
   if (badTitle || badBody) { (badTitle ? titleEl : bodyEl).focus(); return; }
+  // 本番でも API が 409 too_deep で断る。見本は選べない親を送らせない
+  const newParent = S.mode === "new" ? readParent("wk-parent") : null;
+  if (newParent && depthOf(newParent) + 1 > MAX_DEPTH) { toast(`${icon("alert")}深さは ${MAX_DEPTH} 段までです。親を選び直してください。`); return; }
   // 送っている間は、保存とやめるを押せなくする（二重に送らない）
   S.saving = true;
   const submit = document.getElementById("wk-submit");
