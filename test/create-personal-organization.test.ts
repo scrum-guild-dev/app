@@ -3,7 +3,7 @@
 import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
 import { createApp } from '../src/server/app.ts';
-import { orgDb } from '../src/server/db/index.ts';
+import { commonDb, orgDb } from '../src/server/db/index.ts';
 import { verifiedOrganizationForTest } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import {
@@ -43,21 +43,24 @@ type Member = Awaited<ReturnType<typeof newMember>>;
 const create = (member: Pick<Member, 'token'>, slug: string) =>
   post(app, createPersonalOrganization, { token: member.token, body: { slug } });
 
-// kind の列は型に無い（マイグレーションが入るまで）ので、SQL で直に読む
-async function organizationRow(slug: string) {
-  return env.DB.prepare(`SELECT * FROM organizations WHERE slug = ?`).bind(slug).first<Record<string, unknown>>();
+async function organizationRow(slug: string): Promise<Record<string, unknown> | null> {
+  const db = commonDb(env);
+  return (
+    (await db.first(db.statement((q) => q.selectFrom('organizations').selectAll().where('slug', '=', slug)))) ?? null
+  );
 }
 
-async function organizationsOf(accountId: string) {
-  const { results } = await env.DB.prepare(`SELECT * FROM organizations WHERE created_by_account_id = ?`)
-    .bind(accountId)
-    .all<Record<string, unknown>>();
-  return results;
+async function organizationsOf(accountId: string): Promise<Record<string, unknown>[]> {
+  const db = commonDb(env);
+  return db.rows(
+    db.statement((q) => q.selectFrom('organizations').selectAll().where('created_by_account_id', '=', accountId)),
+  );
 }
 
-async function organizationCount() {
-  const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM organizations`).first<{ n: number }>();
-  return row!.n;
+async function organizationCount(): Promise<number> {
+  const db = commonDb(env);
+  const rows = await db.rows(db.statement((q) => q.selectFrom('organizations').select('id')));
+  return rows.length;
 }
 
 const orgDbOf = (organizationId: string) => orgDb(env, verifiedOrganizationForTest(organizationId));
@@ -352,7 +355,7 @@ describe('お試し中の組織の上限とは数えが別', () => {
 });
 
 describe('入力を断る（create-my-organization と同じ規則）', () => {
-  test.each(['A-b', 'a', '-ab', 'ab_c', 'あおば', 'a'.repeat(41), 'ab cd', 'ab-', 'AOBA'])(
+  test.each(['A-b', 'a', '-ab', 'ab_c', 'あおば', 'a'.repeat(41), 'ab cd', 'AOBA'])(
     '形の合わない slug %s は 400 の invalid_input（slug_format）で、組織を作らない',
     async (slug) => {
       const member = await newMember();

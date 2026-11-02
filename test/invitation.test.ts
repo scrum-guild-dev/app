@@ -1078,7 +1078,16 @@ describe('invitation-revoke', () => {
 describe('invitation-create と自分用の組織', () => {
   async function invitationCount(target: Target): Promise<number> {
     const db = orgDb(env, target.organization.verified);
-    const rows = await db.rows(db.statement((q) => q.selectFrom('invitations').select('id')));
+    const rows = await db.rows(
+      db.statement((q) =>
+        q
+          .selectFrom('invitations')
+          .select('id')
+          .where('workspace_id', 'in', (eb) =>
+            eb.selectFrom('workspaces').select('id').where('organization_id', '=', db.organizationId),
+          ),
+      ),
+    );
     return rows.length;
   }
 
