@@ -2,7 +2,7 @@
   import { tick, untrack } from 'svelte';
   import { page } from '$app/state';
   import type { OutputOf } from '../../shared/operations/define.ts';
-  import { tokenCreate, tokenList, tokenRevoke } from '../../shared/operations/session/index.ts';
+  import { credentialsRevokeAll, tokenCreate, tokenList, tokenRevoke } from '../../shared/operations/session/index.ts';
   import { API_TOKEN_NAME_MAX_LENGTH } from '../../shared/operations/session/token.ts';
   import {
     API_TOKEN_LIMIT_REASON,
@@ -38,6 +38,9 @@
   //   allowedToCreate が true なら nameInput、false なら reauthLink にフォーカスを戻す
   // - 一覧が読めなければ、この節にだけ失敗と「もう一度試す」を出す（画面のほかの節は生かす）。読み直せたら節の題へフォーカスを移す。
   //   読み直しの失敗は、今の一覧を残して知らせる
+  // - 節の末尾の「すべての端末とトークンを締め出す」（危険な操作。見本は design/me.html）は、確認のダイアログを経て、今のセッション以外の
+  //   すべてのセッションと、取り消していないすべてのトークンを無効にする。今の画面は使い続けられる（移動しない）。
+  //   できたら、消した数と取り消した数をトーストで知らせ、一覧を読み直す（空になる）。失敗したら知らせて、一覧も読み直す
   // 操作は1件ずつ送り、送っている間はどの操作も aria-disabled にして押しても無視する
   type Token = OutputOf<typeof tokenList>['tokens'][number];
   type FieldName = 'name' | 'lifetime';
@@ -120,6 +123,7 @@
 
   let revokeDialog = $state<ReturnType<typeof ConfirmDialog>>();
   let revokeTarget = $state<Token | null>(null);
+  let revokeAllDialog = $state<ReturnType<typeof ConfirmDialog>>();
 
   function toLogin(): void {
     window.location.assign(loginUrl(page.url));
@@ -322,6 +326,39 @@
     else reauthLink?.focus();
   }
 
+  // 今のセッション以外のすべてのセッションと、すべてのトークンを無効にする。今の画面は使い続けられるので、成功しても移動しない。
+  // 押したボタンは残るので、確認のダイアログが戻したフォーカスのままにする。失敗しても、一覧は今の状態に合わせて読み直す
+  async function revokeAll(trigger: HTMLElement): Promise<void> {
+    if (busy !== null) return;
+    if (!((await revokeAllDialog?.ask(trigger)) ?? false)) return;
+    busy = 'revoke';
+    status = t('apiTokenRevokingAll');
+    try {
+      const result = await callOperation(credentialsRevokeAll, {});
+      if (!result.ok && isUnauthenticated(result)) {
+        toLogin();
+        return;
+      }
+      if (result.ok) {
+        showToast(
+          t('apiTokenRevokedAll', {
+            sessions: String(result.data.revoked_sessions),
+            tokens: String(result.data.revoked_tokens),
+          }),
+          'check',
+        );
+        // 上限の知らせは「取り消してください」と促すので、全部取り消せたら消す
+        if (fieldError?.field === 'form') fieldError = null;
+      } else {
+        showToast(t('apiTokenRevokeAllFailed'), 'alert');
+      }
+      await reload();
+    } finally {
+      busy = null;
+      status = '';
+    }
+  }
+
   const scopeLabel = (value: ApiTokenScope): string => t(value === 'read' ? 'apiTokenScopeRead' : 'apiTokenScopeWrite');
   const describedBy = (...ids: (string | null)[]): string => ids.filter((id) => id !== null).join(' ');
 </script>
@@ -501,6 +538,18 @@
       </div>
     {/if}
   {/if}
+
+  <!-- 危険な操作。トークンの一覧の読み込みに失敗していても、セッションを締め出す側は使える -->
+  <h3 class="field-label">{t('apiTokenRevokeAllTitle')}</h3>
+  <p class="action-note">{t('apiTokenRevokeAllDesc')}</p>
+  <div class="form-actions">
+    <button
+      class="btn is-danger"
+      type="button"
+      aria-disabled={busy !== null}
+      onclick={(event) => void revokeAll(event.currentTarget)}>{t('apiTokenRevokeAll')}</button
+    >
+  </div>
 </Section>
 
 <Dialog bind:this={issuedDialog} bind:open={issuedOpen} outsideDismiss={false} title={t('apiTokenIssuedTitle')}>
@@ -539,4 +588,14 @@
   danger
 >
   <p>{t('apiTokenRevokeText')}</p>
+</ConfirmDialog>
+
+<ConfirmDialog
+  bind:this={revokeAllDialog}
+  title={t('apiTokenRevokeAllDialogTitle')}
+  confirmLabel={t('apiTokenRevokeAllConfirm')}
+  cancelLabel={t('cancel')}
+  danger
+>
+  <p>{t('apiTokenRevokeAllText')}</p>
 </ConfirmDialog>

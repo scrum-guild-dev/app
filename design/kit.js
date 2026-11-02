@@ -1430,6 +1430,14 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="「手元の CLI」を取り消しました">取り消す</button>`);
       document.querySelector(".dialog-sheet").classList.add("is-danger");
     },
+    // 今のセッション以外のすべてのセッションと、すべての API トークンを無効にする確認（本番は ConfirmDialog）。API トークンの節の末尾の
+    // 「すべての端末とトークンを締め出す」から開く。元に戻せない旨と、この画面は使い続けられる旨を書く
+    tokenRevokeAll: () => {
+      openDialog("すべての端末とトークンを締め出しますか",
+        `<p>この画面以外でログインしているすべての端末はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。</p>`,
+        `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="ほかの端末のセッション2件と、API トークン2件を締め出しました">締め出す</button>`);
+      document.querySelector(".dialog-sheet").classList.add("is-danger");
+    },
     // スプリントを始めるダイアログ（本番は SprintStartDialog）。押したボタンの data-state で状態を替える。
     // active: 進行中のスプリントが既にある（開いた時点から理由を出し、「始める」を押せなくする）、
     // ended: 最終日が今日より前（押した後に理由を出して開いたまま）、toolong: ゴールが 200 字を超えた（欄の下に理由）

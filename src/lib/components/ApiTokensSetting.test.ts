@@ -118,6 +118,49 @@ test('一覧が読めなくても発行の欄を出す', () => {
   expect(renderWith(null)).toContain('<form');
 });
 
+// 危険な操作「すべての端末とトークンを締め出す」。押す先の確認のダイアログと、成功と失敗の知らせの文は辞書から出す
+test('節の末尾に、危険な操作の小見出しと説明とボタンを辞書の文言で出す（一覧が空でも、行があっても、読めなくても）', () => {
+  for (const initial of [[], [token], null]) {
+    const body = renderWith(initial);
+    expect(body).toContain(`<h3 class="field-label">${dictionary.apiTokenRevokeAllTitle}</h3>`);
+    expect(body).toContain(dictionary.apiTokenRevokeAllDesc);
+    expect(body).toMatch(/<button[^>]*class="btn is-danger"[^>]*>すべての端末とトークンを締め出す<\/button>/);
+    // 一覧より後ろ（節の末尾）に置く
+    expect(body.indexOf(dictionary.apiTokenRevokeAllTitle)).toBeGreaterThan(body.indexOf('<form'));
+  }
+  const withRow = renderWith([token]);
+  expect(withRow.lastIndexOf('</table>')).toBeLessThan(withRow.indexOf(dictionary.apiTokenRevokeAllTitle));
+});
+
+test('再認証が必要で発行の欄が無いときも、締め出すボタンは出す（セッションの締め出しは再認証を求めない）', () => {
+  const body = render(ApiTokensSetting, {
+    props: { initial: [token], canCreate: false, loginProvider: 'github', slug: 'aoba' },
+  }).body;
+  expect(body).not.toContain('<form');
+  expect(body).toContain('すべての端末とトークンを締め出す</button>');
+});
+
+test('確認のダイアログは、元に戻せないことと、この画面は使えることを辞書の文言で書き、やめるを主ボタン、締め出すを危険のボタンにする', () => {
+  const body = renderWith([token]);
+  expect(body).toContain(dictionary.apiTokenRevokeAllDialogTitle);
+  expect(body).toContain(dictionary.apiTokenRevokeAllText);
+  expect(dictionary.apiTokenRevokeAllText).toContain('元に戻せません');
+  expect(body).toMatch(/<button[^>]*class="btn is-primary"[^>]*>やめる<\/button>/);
+  expect(body).toMatch(/<button[^>]*class="btn is-danger"[^>]*>締め出す<\/button>/);
+});
+
+test('件数の知らせは、消したセッションと取り消したトークンの数を差し込み、「{sessions}」「{tokens}」を残さない', () => {
+  const text = dictionary.apiTokenRevokedAll;
+  expect(text).toContain('{sessions}');
+  expect(text).toContain('{tokens}');
+  expect(text.replace('{sessions}', '2').replace('{tokens}', '3')).toBe(
+    'ほかの端末のセッション2件と、API トークン3件を締め出しました',
+  );
+  for (const key of ['apiTokenRevokingAll', 'apiTokenRevokeAllFailed'] as const) {
+    expect(dictionary[key].length, key).toBeGreaterThan(0);
+  }
+});
+
 test('ログインの手段が読めなければ、戻り先を保ったログイン画面へ案内する', () => {
   const body = render(ApiTokensSetting, {
     props: { initial: [], canCreate: false, loginProvider: null, slug: 'aoba' },

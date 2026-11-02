@@ -163,7 +163,7 @@
 | last_used_at | TEXT | NOT NULL | 使うたびに書き直す |
 | expires_at | TEXT | NOT NULL | `last_used_at` の30日後 |
 
-- 索引: `(account_id)`。ログアウトは今のセッションの行だけを消す。入れる組織を失ったことでは行を消さない（すべてのワークスペースから外れた人、停止した組織にしか入れない人、運用者の一覧から外れた人も、アカウントがあればセッションは残る）。行が消えるのは、ログアウト、ログインし直したときの古い行の置き換え、期限切れ。
+- 索引: `(account_id)`。ログアウトは今のセッションの行だけを消す。入れる組織を失ったことでは行を消さない（すべてのワークスペースから外れた人、停止した組織にしか入れない人、運用者の一覧から外れた人も、アカウントがあればセッションは残る）。行が消えるのは、ログアウト、ログインし直したときの古い行の置き換え、設定の全失効（`credentials-revoke-all`。今のセッション以外のそのアカウントの行を消す。「書き込みの単位」）、期限切れ。
 - 組織に入れるかは、リクエストのたびにその組織の `users`、`memberships`、`invitations` で確かめる。1つの組織で無効にされたり外れたりしても、セッションは消さない。
 - 書き込みを減らすため、`last_used_at` は前回から1時間以上たったときだけ書き直す。
 - `expires_at <= 定期処理の基準の時刻` の行を、毎分の定期処理で消す（「期限切れの行の掃除」）。
@@ -185,7 +185,7 @@
 
 - 索引: `(account_id)`。その人のトークンを取り消すときと、一覧が引く。
 - 読めるのは、`token_hash` の行があり、`revoked_at` が空で、`expires_at` が基準の時刻より後のとき。形が違う値（`API_TOKEN_PATTERN` に合わない）は DB を引かずに断る。
-- 入れる組織を失ったことでは取り消さない（`sessions` と同じ。アカウントがあれば、組織の外の操作で使える）。`revoked_at` を書くのは、本人が取り消したときだけ。取り消したトークンは戻さない。
+- 入れる組織を失ったことでは取り消さない（`sessions` と同じ。アカウントがあれば、組織の外の操作で使える）。`revoked_at` を書くのは、本人が取り消したときと、設定の全失効（`credentials-revoke-all`。「書き込みの単位」）を実行したときだけ。取り消したトークンは戻さない。
 - 行数の上限: 1アカウントの有効な行（`revoked_at` が空で、`expires_at` が基準の時刻より後）は20件まで（`API_TOKEN_MAX_ACTIVE`）。発行の `INSERT` を `INSERT ... SELECT ... WHERE (有効な行の数) < 20` の1文にして守り、同時に発行しても超えない。入らなかったとき（`changes` が 0）は 409 の `conflict`（`details.reason` は `limit`）。取り消し済みと期限切れの行は数えない。一覧は上限と同じ件数までを返す（超えないはずの保険）。
 - 取り消し済みの行も、`expires_at` を過ぎるまで残す。期限を過ぎた行（`expires_at <= 定期処理の基準の時刻`）を、毎分の定期処理で消す（「期限切れの行の掃除」）。
 - 発行、一覧、取り消しは、マイプロフィールの画面から行う操作（`token-create`、`token-list`、`token-revoke`。どれも Cookie のセッションだけ）。発行は 1 行を `INSERT` し、生の値は応答で1回だけ返す。一覧は呼んだ人の、`revoked_at` が空で `expires_at` が今より後の行を、`created_at` の新しい順に返し、値は返さない（`id` は `token_hash`）。取り消しは呼んだ人の行だけを指し、他人の行と存在しない行は同じ 404。先に行を読んで 404 と成功を分け、書く文は `revoked_at IS NULL` の行だけを `UPDATE` するので、取り消し済みの行の `revoked_at` は書き直さない。
@@ -1318,6 +1318,7 @@ D1 は対話的なトランザクションを持たない。まとめて書く�
 | ユーザーの有効化 | `users`（`disabled_at` を空に、`updated_at`）、`change_logs`（`{"disabled_at": [前の日時, null]}`、`workspace_id` は空）、無効にする前に作った招待の取り消しの `change_logs` と `invitations` を1回の `batch()` で書く。招待の2文は、無効化の 3 と 4 と同じ形で、その人の `login_provider` と `login_subject` への承諾待ちの招待のうち `created_at` が読んだ `disabled_at` より前のものに当て、「この要求で有効に戻した（`updated_at` がこの要求の時刻で `disabled_at` が空）」を条件にする（`users` の節の限界も参照）。操作は `user-enable`（管理者）で、入力は `user_id`。相手は管理者の指名と同じで、有効な人なら何も書かずに今の値を返す。その次に、書く前に人数の上限を見る（`organizations` の「人数」）。無効にした日時以後に招待し直した承諾待ちの招待（開いたワークスペース）があって新しく数えられる人 `adding` が 1 で、今の人数に足すと `member_limit` を超えるときは、何も書かずに 409（`member_limit_reached`、`details` は `{ used, limit, adding }`。無効の間に作った招待は残す）。`adding` が 0 の有効化は通す。人数は書く文の条件に入れない。`users` の条件は ID、組織、`login_subject IS NOT NULL`、読んだ `disabled_at` のまま、呼んだ人が今も無効でない管理者である `EXISTS`。記録は直前の文が行を変えたときだけ入れる。所属と管理者の指名は戻さない（入るには招待し直すか、指名し直す）。書けなければ読み直し、相手が無ければ 404、呼んだ人がもう管理者でなければ 403、既に有効なら今の値を返し、そうでなければ 409（`conflict`） |
 | 取り込み（1件） | `tasks`（結ばれたリポジトリがあれば `repository_id` も）、`task_sources`、`task_source_payloads` |
 | API トークンの発行と取り消し | 共通の DB の `api_tokens` だけ（組織の中の表は触らない）。`token-create` は 1 行の `INSERT`、`token-revoke` は呼んだ人の行を読んでから、`token_hash`、`account_id`、`revoked_at IS NULL` で絞る `UPDATE`（`revoked_at`）を `batch()` で送る |
+| 設定からの全失効（`credentials-revoke-all`） | 共通の DB の `sessions` と `api_tokens` だけ（組織の中の表は触らない）を、1回の `batch()` で書く。`sessions` は呼んだアカウントの行のうち `token_hash` が今のセッション以外を `DELETE`（期限切れも含む）、`api_tokens` は呼んだアカウントの `revoked_at IS NULL` の行の `revoked_at` を今で `UPDATE`（期限切れも含み、取り消し済みの行は書き直さない）。応答の件数は2文の `changes`。今のセッションと、ほかのアカウントの行は触らない |
 | 組織の作成（運用者） | 共通の DB の `organizations`、続けて組織の DB の最初の管理者の `users` と `change_logs` の2行（組織の作成と管理者の指名） |
 | 組織の作成（会員。`create-my-organization`） | 先にアカウントの最も早いログイン（`account_logins` を `created_at`、`login_provider`、`login_subject` の順に並べた先頭）を読み、無ければ組織を書かずに 500 で止める。次に共通の DB の `organizations` を `INSERT … SELECT … WHERE NOT EXISTS` の1文で書く。条件は、同じアカウントが作った `trial_ends_on` が空でない組織が無いこと。`created_by_operator` は `'self-service'`、`created_by_account_id` は呼んだアカウント、`trial_ends_on` は作った日の UTC の日付の30日後。`changes = 0` なら `trial_limit`（409）、`slug` の UNIQUE に当たれば `slug` の行を読み直して `slug_taken`（409）。続けて組織の DB の `users`（作った人。`is_admin = 1`、`name` は最も早いログインの `login_name`、`account_id` は呼んだアカウント）と `change_logs`（組織の作成。操作した人は作った人の `users`、`operator` は空）を1回の `batch()` で書く |
 | 自分用の組織の作成（会員。`create-personal-organization`） | 入力は slug だけ（形と予約した名前は `create-my-organization` と同じ）。先にアカウントの最も早いログインを読み、次に共通の DB の `organizations` を `INSERT … SELECT … WHERE NOT EXISTS` の1文で書く。条件は、同じアカウントが作った `kind = 'personal'` の組織が無いこと。`kind` は `personal`、`name` は固定の「自分用」、`member_limit` は 1、`attachment_quota_bytes` は 1073741824、`trial_ends_on` は空、`created_by_operator` は `'self-service'`、`created_by_account_id` は呼んだアカウント。`changes = 0` なら `personal_limit`（409）、UNIQUE（`slug` か `organizations_personal_owner`）に当たれば `slug` の行を読み直し、自分の行なら成功、ほかの行なら `slug_taken`（409）、行が無く本人の自分用があれば `personal_limit`（409）。続けて組織の DB の `users` と `change_logs`（`changes_json` は `slug`、`name` に加えて `kind: [null, 'personal']`）を、`create-my-organization` と同じに1回の `batch()` で書き、失敗したら同じ補償で行を戻す。お試し中の組織の上限（`trial_limit`）の検査には数えない |

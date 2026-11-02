@@ -1893,6 +1893,18 @@ export const dictionary = defineDictionary({
   apiTokenRevoking: '取り消しています',
   apiTokenRevoked: '「{name}」を取り消しました',
   apiTokenRevokeFailed: '取り消せませんでした。時間をおいて、もう一度試してください',
+  // 節の末尾の危険な操作。今のセッション以外のすべてのセッションと、すべてのトークンを無効にする。{sessions} と {tokens} は件数
+  apiTokenRevokeAllTitle: 'すべての端末とトークンを締め出す',
+  apiTokenRevokeAllDesc:
+    '端末をなくしたときや、値が漏れたかもしれないときに使います。この画面以外でログインしているすべての端末と、発行済みのすべての API トークンを、まとめて使えなくします。この画面は、そのまま使えます。',
+  apiTokenRevokeAll: 'すべての端末とトークンを締め出す',
+  apiTokenRevokeAllDialogTitle: 'すべての端末とトークンを締め出しますか',
+  apiTokenRevokeAllText:
+    'この画面以外でログインしているすべての端末はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。',
+  apiTokenRevokeAllConfirm: '締め出す',
+  apiTokenRevokingAll: '締め出しています',
+  apiTokenRevokedAll: 'ほかの端末のセッション{sessions}件と、API トークン{tokens}件を締め出しました',
+  apiTokenRevokeAllFailed: '締め出せませんでした。時間をおいて、もう一度試してください',
   apiTokenEmptyTitle: '発行済みの API トークンはありません',
   apiTokenEmptyText: '発行すると、ここに並びます。',
   apiTokenLoadFailed: 'API トークンを読み込めませんでした',
