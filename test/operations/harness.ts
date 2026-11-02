@@ -78,24 +78,61 @@ type PostOptions = {
   bearer?: string;
   // null は Origin を付けない。省略は公開する URL
   origin?: string | null;
+  // 入力。body: 'binary' の操作では、JSON を encodeURIComponent してヘッダー X-Operation-Input で送る
   body?: unknown;
-  rawBody?: string | ReadableStream<Uint8Array>;
+  // 本文をそのまま送る。body: 'binary' の操作ではファイルのバイトで、X-Operation-Input を付けない
+  rawBody?: string | Uint8Array | ReadableStream<Uint8Array>;
+  // body: 'binary' の操作で、body の入力と一緒に送るファイルのバイト（省略は SMALL_FILE）
+  file?: string | Uint8Array | ReadableStream<Uint8Array>;
+  // body: 'binary' の操作の Content-Length。省略は本文の長さ（ReadableStream なら付けない）、null は付けない
+  contentLength?: string | null;
   headers?: Record<string, string>;
   env?: Env;
   // 渡すと、本番と同じ waitUntil の経路を通る（省略は ExecutionContext の無い呼び出し）
   executionCtx?: ExecutionContext;
 };
 
+// body: 'binary' の操作の一覧の検査で送る小さなファイル（PNG の先頭の8バイトと4バイト）
+export const SMALL_FILE = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+
+// 入力のヘッダーの値（body: 'binary' の操作）
+export function operationInputHeader(input: unknown): string {
+  return encodeURIComponent(JSON.stringify(input));
+}
+
+function byteLengthOf(body: string | Uint8Array | ReadableStream<Uint8Array>): number | undefined {
+  if (typeof body === 'string') return new TextEncoder().encode(body).byteLength;
+  if (body instanceof Uint8Array) return body.byteLength;
+  return undefined;
+}
+
+// body: 'binary' の操作の本文とヘッダー。app.request は文字列やバイトの本文にも Content-Length を付けないので、
+// ブラウザが File の本文に付けるのと同じく、ここで付ける（test/attachment-upload-runtime.test.ts が確かめる）
+function binaryRequest(options: PostOptions, headers: Headers): string | Uint8Array | ReadableStream<Uint8Array> {
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/octet-stream');
+  let body: string | Uint8Array | ReadableStream<Uint8Array>;
+  if (options.rawBody !== undefined) {
+    body = options.rawBody;
+  } else {
+    headers.set('X-Operation-Input', operationInputHeader(options.body ?? {}));
+    body = options.file ?? SMALL_FILE;
+  }
+  const length = options.contentLength === undefined ? byteLengthOf(body)?.toString() : options.contentLength;
+  if (length !== null && length !== undefined && !headers.has('Content-Length')) headers.set('Content-Length', length);
+  return body;
+}
+
 export async function post(app: App, definition: AnyOperationDefinition, options: PostOptions = {}): Promise<Response> {
   const env = options.env ?? testEnv;
-  const headers = new Headers({ 'Content-Type': 'application/json', ...options.headers });
+  const binary = definition.body === 'binary';
+  const headers = new Headers(binary ? options.headers : { 'Content-Type': 'application/json', ...options.headers });
   const origin = options.origin === undefined ? env.PUBLIC_ORIGIN : options.origin;
   if (origin !== null) headers.set('Origin', origin);
   if (options.token !== undefined) {
     headers.set('Cookie', `${sessionCookieName(env.PUBLIC_ORIGIN)}=${options.token}`);
   }
   if (options.bearer !== undefined) headers.set('Authorization', `Bearer ${options.bearer}`);
-  const body = options.rawBody ?? JSON.stringify(options.body ?? {});
+  const body = binary ? binaryRequest(options, headers) : (options.rawBody ?? JSON.stringify(options.body ?? {}));
   return app.request(
     operationPath(definition, options.slug),
     // 本文が ReadableStream のときは Content-Length が付かない（chunked と同じ）
@@ -170,9 +207,10 @@ export function defineOperationChecks(
 ): void {
   const credential = options.credential ?? 'cookie';
   const app = createApp(operations, options);
-  // API トークンでは呼べない操作（運用者の操作と cookieOnly）。どの人が呼んでも 403
+  // API トークンでは呼べない操作（運用者の操作、cookieOnly、本文がバイナリの操作）。どの人が呼んでも 403
   const refusesToken = (definition: AnyOperationDefinition) =>
-    credential === 'bearer' && (definition.permission === 'operator' || definition.cookieOnly === true);
+    credential === 'bearer' &&
+    (definition.permission === 'operator' || definition.cookieOnly === true || definition.body === 'binary');
   const as = (person: Person) => credentialOf(person, credential);
 
   describe.each(operations.map((operation) => operation.definition))('$name（$permission）', (definition) => {
@@ -325,8 +363,12 @@ export function defineOperationChecks(
       expect(res.status).toBe(404);
     });
 
-    test('自分の組織の行を指す入力は成功し、別の組織の行を指す入力は 404', () =>
-      checkRowIsolation(app, definition, pointers, own, other, credential));
+    // トークンで呼べない操作は、組織の確かめの後のトークンの範囲の検査で 403 になる（上の Origin の検査が確かめる）。
+    // 成功を前提にする検査（行の分離、役割、閉じたワークスペース）は Cookie の周で確かめる
+    if (!refusesToken(definition)) {
+      test('自分の組織の行を指す入力は成功し、別の組織の行を指す入力は 404', () =>
+        checkRowIsolation(app, definition, pointers, own, other, credential));
+    }
 
     // 停止した組織は、停止していなければ入れた人（管理者、所属、承諾待ちの招待）にだけ停止を伝え、入れない人は組織が無いときと同じ 404。
     // 権限の検査より前なので、権限の種類によらず同じ結果になる
@@ -369,6 +411,8 @@ export function defineOperationChecks(
         expect(await errorCodeOf(res)).toBe('not_found');
       }
     });
+
+    if (refusesToken(definition)) return;
 
     const permission = definition.permission;
     switch (permission) {

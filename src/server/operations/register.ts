@@ -34,7 +34,7 @@ import { ApiError, knownError } from '../errors.ts';
 import { executionContextOf } from '../execution-context.ts';
 import { outsideAccount } from './account.ts';
 import { isCurrentConsent, latestConsentOf } from './consent.ts';
-import { readInput, requireOrigin } from './guards.ts';
+import { readBinaryBody, readInput, requireOrigin } from './guards.ts';
 import type { CurrentSession, Defer, ImplementedOperation } from './implement.ts';
 import { operatorTools, type OperatorTools } from './operator-tools.ts';
 import { organizationTools } from './organization-tools.ts';
@@ -329,7 +329,8 @@ async function execute(
     checkTokenScope(definition, apiToken);
     await enforceRateLimit(c, definition, accountId);
 
-    const input = await readInput(c, definition.input);
+    const input = await readInput(c, definition.input, definition.body);
+    const binary = definition.body === 'binary' ? { binary: readBinaryBody(c), requestId: c.get('requestId') } : {};
     if (isWorkspaceOperation(definition)) {
       // 別の組織のワークスペースは、存在しないときと同じ 404
       const workspace = await verifyWorkspace(db, actor, (input as { workspace_id: string }).workspace_id);
@@ -340,9 +341,9 @@ async function execute(
         throw new ApiError(409, 'workspace_closed');
       }
       assertVerifiedWorkspace(workspace);
-      result = await handler({ db, actor, organization, tools, input, workspace, defer: deferred.defer });
+      result = await handler({ db, actor, organization, tools, input, workspace, defer: deferred.defer, ...binary });
     } else {
-      result = await handler({ db, actor, organization, tools, input, defer: deferred.defer });
+      result = await handler({ db, actor, organization, tools, input, defer: deferred.defer, ...binary });
     }
   }
 
