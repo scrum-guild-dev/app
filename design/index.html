@@ -645,7 +645,7 @@ const SECTIONS = [
       "横と真ん中は <code>aria-modal=\"true\"</code> で外側を操作できなくする。ページ全体は通常の領域として出し、引き出しの外（左のメニューなど）にフォーカスがあるときの Esc では閉じない。終了したワークスペースでは直す口と削除を出さず、読み取り専用で開く。",
       "下の「コメント N」と「変更の履歴」はタブ（<code>role=\"tablist\"</code>、左右の矢印キーで移る）。N は消していないコメントの数。コメントは書いた順に並べ、50 件より前は上の「前のコメントを読む」で足す。本文は Markdown の <code>.doc-box</code> を枠なしで描く。見出し（名前、日時、編集済み）の右（<code>.comment-actions</code>）には、許された操作だけを <code>.btn.is-sm.is-quiet</code> の「編集」「削除」で出す（自分のコメントは両方、" + t("leader") + "は人のコメントの「削除」）。「編集」は本文がその場で書く欄に替わり、「削除」は確かめのダイアログを挟む。消したものは「削除されました」、本人以外が消したら「〇〇が削除しました」と残る。新しいコメントの欄と、直している途中のコメントは書きかけに数え、タブを切り替えても残す。終了した" + t("workspace") + "では、書く欄と操作を出さない。"],
     ".drawer .is-center .is-page .scrim .drawer-top .drawer-tools .drawer-steps .drawer-mode .drawer-close .drawer-title / .edit-trigger .is-empty .edit-form .edit-actions .field-head / .props .props-note / .doc-box .is-empty / .done-bar .done-bar-done .done-bar-dod .done-bar-dod-title .done-bar-dod-body /.thanks / .tabs .tab / .thread .comment .comment-head .comment-actions .comment-body .is-deleted .composer-foot / .history .history-changes")],
-  ["files", "添付ファイル", () => block("files", "添付ファイル", "タスク、ストーリー、エピック、コメントに付ける。画像と動画は縮小した絵、それ以外は1行。押すとプレビューが開く。「ファイルを選ぶ」で上げる動きを試せる（3回目は大きすぎて失敗する）。",
+  ["files", "添付ファイル", () => block("files", "添付ファイル", "タスク、ストーリー、エピック、コメントに付ける。画像も動画もそれ以外も1行ずつ並べ、容量、上げた人、上げた日時を横に出す。名前を押すとプレビューが開く。「ファイルを選ぶ」は複数を選べて、選んだ数だけ行が増える（ドラッグでも同じ）。",
     `<div class="field"><span class="field-label">一覧と上げる場所</span>${SQ.attachments("t1")}</div>
      <div class="field"><span class="field-label">上げている途中と失敗</span>
        ${SQ.fileRow({ id: "x1", name: "スクリーンショット 2026-10-20 11.41.png", type: "image", size: "1.8 MB", state: "uploading", pct: 60 })}
@@ -654,7 +654,7 @@ const SECTIONS = [
      <div class="field"><span class="field-label">小さなボタン（${t("story")}、起票、コメント）</span>${SQ.dropzone("demo", { button: true, full: false })}</div>
      <div class="field"><span class="field-label">使っている量と上限</span><div class="grid-2">${SQ.meter(3.1, 10)}${SQ.meter(8.3, 10)}${SQ.meter(10, 10)}<div class="panel">${SQ.meter(21.7, 50, { small: true })}</div></div></div>`,
     ["画像（PNG、JPEG、GIF、WebP）と動画（MP4、WebM）は画面で見せる。それ以外はダウンロードだけ。", "失敗は理由と数字を出す（何 MB を超えたか）。上限に達したら、上げる場所を止めて、誰が何をすれば添付できるかを書く。", "量の色は 80% を超えたら警告、上限で危険。色だけでなく、割合と文字を添える。", "消すときは、戻せないことと、差し込んだ所がどうなるかを確認のダイアログで伝える。"],
-    ".files .file-thumbs .file-thumb .file-thumb-label .file-art .is-video / .file-row .file-main .file-name .file-meta .file-actions .is-error .file-bar / .dropzone .is-over .is-disabled / .md-figure .comment-files .composer-foot / .preview .dialog-sheet.is-wide / .meter .meter-small .is-warn .is-full")],
+    ".files .file-thumb .file-thumb-label .file-art .is-video / .file-row .file-main .file-name .file-meta .file-actions .is-error .file-bar / .dropzone .is-over .is-disabled / .md-figure .comment-files .composer-foot / .preview .dialog-sheet.is-wide / .meter .meter-small .is-warn .is-full")],
   ["markdown", "Markdown の本文", () => block("markdown", "Markdown の本文", "タスクの本文、コメント、決まった欄、ストーリーとエピックの本文を描く。生の HTML は文字で出し、リンクは http と https の絶対 URL だけにする。",
     `<div class="field"><span class="field-label">見出し、段落、リスト、チェックリスト、引用、コード、区切り線、表</span>${SQ.markdownSample()}</div>
      <div class="field"><span class="field-label">リンクにしないもの（HTML、相対リンク、mailto:、外部の画像）</span>${SQ.markdownSample("unsafe")}</div>

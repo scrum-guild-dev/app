@@ -1022,7 +1022,8 @@
 - 起票の画面やコメントの欄では、保存する前に上げるため、付く先のない行を先に作る。保存したときに、本文やコメントが参照する行へ付く先を入れる。付く先のないまま1日たった行とファイルは定期処理で消す。
 - 消すときは行を物理削除する。論理削除にしないのは、戻す手段がなく、残すと容量の上限に数え続けるため。消したことは付く先の `change_logs` に残す。
 - 組織の合計は、組織のワークスペースの `size_bytes` の合計を上げるたびに計算する。集計は保存しない。同時に上げたときに少し超えることは許す。上げたことで80%を超え、`organizations.attachment_quota_warned_at` が空なら、管理者全員に通知し、その日時を入れる。
-- 画面と Markdown からは `/api/<slug>/attachments/<id>` で参照する。返すときは権限を確かめ、`X-Content-Type-Options: nosniff` と `Cache-Control: private` を付ける。画像として出す4種類（PNG、JPEG、GIF、WebP）と動画として再生する2種類（MP4、WebM）以外は `Content-Disposition: attachment` で返す。動画は Range リクエストに応える。
+- 添付ファイルの一覧は、付く先ごとに画像と動画を含むすべての行を返す。一覧の行に出す容量は `size_bytes`、上げた人は `uploaded_by`、上げた日時は `created_at`（書いている途中で上げたものが後で付く先に付いても、上げた日時は変わらない。`attached_at` は出さない）。本文に差し込んだ画像も、一覧の行として残る。
+- 画面と Markdown からは `/api/<slug>/attachments/<id>` で参照する。本文への画像の差し込みは Markdown の `![説明](…)` だけで、`<img>` タグは使えない（`(…)` に入れる参照の書き方は、差し込みの実装で、この URL とそろえて決める）。返すときは権限を確かめ、`X-Content-Type-Options: nosniff` と `Cache-Control: private` を付ける。画像として出す4種類（PNG、JPEG、GIF、WebP）と動画として再生する2種類（MP4、WebM）以外は `Content-Disposition: attachment` で返す。動画は Range リクエストに応える。
 - 索引: `(task_id)`、`(story_id)`、`(epic_id)`、`(comment_id)` をそれぞれ NOT NULL の部分索引で、`(workspace_id)`、`(created_at) WHERE attached_at IS NULL`、`(uploaded_by)`（外部キーの検査）。
 
 ### sprints
