@@ -225,7 +225,7 @@
 
 ### rate_limits
 
-ログイン（OAuth の手段とパスワード）、画面のエラーの送信（`POST /api/client-errors`）、手動の同期、招待（GitHub に問い合わせる `invitee-resolve` と `invitation-create`。`invitation-create` は GitHub に問い合わせない Google の招待も同じ枠で数える）、完成の定義の変更（`workspace-dod-update`。10 万字の本文を書く）、コメントの作成と編集（`comment-create`、`comment-update`。10 万字の本文を何件でも足せる。どれも 10 分に 30 回）のレート制限。
+ログイン（OAuth の手段とパスワード）、画面のエラーの送信（`POST /api/client-errors`）、手動の同期、招待（GitHub に問い合わせる `invitee-resolve` と `invitation-create`。`invitation-create` は GitHub に問い合わせない Google の招待も同じ枠で数える）、完成の定義の変更（`workspace-dod-update`。10 万字の本文を書く）、コメントの作成と編集（`comment-create`、`comment-update`。10 万字の本文を何件でも足せる。どれも 10 分に 30 回）、添付ファイルを上げる操作（`attachment-upload`。組織の合計の上限と掃除が入るまでの仮の蓋で、10 分に 60 回）のレート制限。
 
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
