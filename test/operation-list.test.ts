@@ -88,11 +88,15 @@ function objectBranchesOf(schema: unknown): SchemaBranch[] {
 // Issue の決まりで、一覧に載るはずの名前。Cookie は write のトークンと同じ
 function expectedNames(definitions: readonly AnyOperationDefinition[], credential: Credential): string[] {
   const scope = credential === 'cookie' ? 'write' : credential;
-  return definitions
-    .filter((definition) => definition.permission !== 'operator' && definition.cookieOnly !== true)
-    .filter((definition) => scope === 'write' || definition.mode === 'read')
-    .map((definition) => definition.name)
-    .sort();
+  return (
+    definitions
+      .filter((definition) => definition.permission !== 'operator' && definition.cookieOnly !== true)
+      // 本文がファイルのバイトの操作は、CLI と MCP が JSON で呼べないので載せない（Issue #744）
+      .filter((definition) => definition.body !== 'binary')
+      .filter((definition) => scope === 'write' || definition.mode === 'read')
+      .map((definition) => definition.name)
+      .sort()
+  );
 }
 
 const provisionalDefinitions = [...provisional.map((operation) => operation.definition), operationList];
