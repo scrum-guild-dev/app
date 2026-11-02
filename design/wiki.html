@@ -194,14 +194,16 @@ function pageBody(md) {
 const metaLine = (p) => `<p class="props-note">作った人 ${esc(user(p.created).name)}・最後に保存した人 ${esc(user(p.by).name)}・<span class="mono">${fmt(p.at)}</span>・版 <span class="mono">${p.ver}</span></p>`;
 // 親の選択欄。height は動かす部分木の高さ（新しいページとアップロードは 1）。親の深さ + height が 10 段を超える親は選べなくして、理由を添える
 function parentOptions(selected, { exclude = [], height = 1 } = {}) {
-  let over = 0;
+  let over = 0, chosen = false;
   const walk = (id, depth) => kids(id).filter((k) => !exclude.includes(k.id)).flatMap((k) => {
     const tooDeep = depthOf(k.id) + height > MAX_DEPTH;
     if (tooDeep) over++;
-    return [`<option value="${k.id}" ${k.id === selected && !tooDeep ? "selected" : ""} ${tooDeep ? "disabled" : ""}>${"　".repeat(depth)}${esc(k.title)}${tooDeep ? "（10 段を超えるため選べません）" : ""}</option>`, ...walk(k.id, depth + 1)];
+    const isSel = k.id === selected && !tooDeep;
+    if (isSel) chosen = true;
+    return [`<option value="${k.id}" ${isSel ? "selected" : ""} ${tooDeep ? "disabled" : ""}>${"　".repeat(depth)}${esc(k.title)}${tooDeep ? "（10 段を超えるため選べません）" : ""}</option>`, ...walk(k.id, depth + 1)];
   });
   const rest = walk(null, 0).join("");
-  const html = `<option value="" ${rest.includes(' selected ') ? "" : "selected"}>最上段（親なし）</option>${rest}`;
+  const html = `<option value="" ${chosen ? "" : "selected"}>最上段（親なし）</option>${rest}`;
   return { html, over };
 }
 const parentHint = (id, over) => `<span class="field-hint" id="${id}">深さは ${MAX_DEPTH} 段までです。${over ? `${MAX_DEPTH} 段を超える親（${over} 件）は、選べないようにしています。` : ""}</span>`;
@@ -266,7 +268,7 @@ function readHtml(p) {
         <button class="btn is-primary" type="button" data-wiki="edit">${icon("pen")}編集する</button>
         <button class="btn" type="button" data-wiki="versions">${icon("clock")}版の一覧</button>
         <button class="btn" type="button" data-wiki="download">${icon("download")}.md で落とす</button>
-        <button class="btn is-sm is-quiet" type="button" data-wiki="new-child" ${depthOf(p.id) + 1 > MAX_DEPTH ? `aria-disabled="true" aria-describedby="wiki-child-hint"` : ""}>${icon("plus")}子のページを足す</button>${depthOf(p.id) + 1 > MAX_DEPTH ? `<span class="props-note" id="wiki-child-hint">深さは ${MAX_DEPTH} 段までなので、このページに子のページは足せません。</span>` : ""}
+        <button class="btn is-sm is-quiet" type="button" data-wiki="new-child" ${depthOf(p.id) + 1 > MAX_DEPTH ? `aria-disabled="true" aria-describedby="wiki-child-hint"` : ""}>${icon("plus")}子のページを足す</button>${depthOf(p.id) + 1 > MAX_DEPTH ? `<span class="props-note toolbar-note" id="wiki-child-hint">深さは ${MAX_DEPTH} 段までなので、このページに子のページは足せません。</span>` : ""}
         <button class="btn is-sm is-quiet" type="button" data-wiki="move">${icon("swap")}親を移す</button>
         <button class="btn is-sm is-quiet is-danger" type="button" data-wiki="delete">${icon("trash")}消す</button>
       </div>
@@ -581,7 +583,7 @@ document.addEventListener("click", (ev) => {
   else if (act === "upload-do") {
     const parent = readParent("wk-up-parent"); // 値は閉じる前に読む
     const files = S.upload.files;
-    if (parent && depthOf(parent) + 1 > MAX_DEPTH) return;
+    if (parent && depthOf(parent) + 1 > MAX_DEPTH) { toast(`${icon("alert")}深さは ${MAX_DEPTH} 段までです。足す場所を選び直してください。`); return; }
     closeDialog();
     for (const f of files) store.pages.push({ id: `n${Date.now()}${store.pages.length}`, parent, title: uploadTitle(f), created: me, by: me, at: NOW, ver: 1, md: f.md });
     if (parent) S.open.add(parent);
