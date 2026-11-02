@@ -1558,7 +1558,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .table td.is-wrap { overflow-wrap: anywhere; min-width: 12ch; }
 
 /* ===== 添付ファイル ===== */
-/* 添付ファイルの一覧は、画像も動画もそれ以外も1行ずつ（容量、上げた人、日時）。縮小した絵（.file-thumb）は本文に差し込んだ画像と、プレビューにだけ使う */
+/* 添付ファイルの一覧は、画像も動画もそれ以外も1行ずつ（容量、上げた人、日時）。縮小した絵（.file-thumb）は本文に差し込んだ画像にだけ使う */
 .files { display: grid; gap: var(--space-2); }
 .file-thumb { display: grid; gap: 4px; padding: 0; border: 1px solid var(--color-line); border-radius: var(--radius-1); background: var(--color-surface); text-align: left; overflow: hidden; }
 .file-thumb:hover { border-color: var(--color-muted); }
@@ -1578,7 +1578,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .file-name { overflow-wrap: anywhere; }
 button.file-name { border: 0; background: none; padding: 0; text-align: left; color: var(--color-fg); text-decoration: underline; text-decoration-color: var(--color-line); text-underline-offset: 3px; }
 button.file-name:hover { text-decoration-color: currentColor; }
-.file-meta { font-size: var(--text-xs); color: var(--color-muted); }
+.file-meta { font-size: var(--text-xs); color: var(--color-muted); overflow-wrap: anywhere; }
 .file-actions { display: flex; gap: var(--space-1); }
 .file-row.is-error { border-color: var(--color-danger); }
 .file-row.is-error > .ico, .file-row.is-error .file-meta { color: var(--color-danger); }

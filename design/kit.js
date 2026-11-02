@@ -691,8 +691,9 @@
       return `<div class="file-row is-error" role="alert">${icon("alert")}<div class="file-main"><span class="file-name">${esc(f.name)}</span><span class="file-meta">${esc(f.error)}</span></div>
         <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-cancel-file="${f.id}">閉じる</button></div></div>`;
     }
-    return `<div class="file-row">${icon(FILE_ICON[f.type])}<div class="file-main"><button class="file-name" type="button" data-file="${f.id}">${esc(f.name)}</button>
-      <span class="file-meta">${f.size}・${esc(user(f.who).name)}・${f.at}</span></div>
+    const nb = (s) => String(s).replace(/ /g, " ");
+    return `<div class="file-row">${icon(FILE_ICON[f.type])}<div class="file-main"><button class="file-name" type="button" data-file="${f.id}" aria-label="${esc(f.name)}（${FILE_KIND[f.type]}）を開く">${esc(f.name)}</button>
+      <span class="file-meta"><span class="mono">${nb(f.size)}</span>・${esc(user(f.who).name)}・<span class="mono">${nb(f.at)}</span>${f.length ? `・${f.length}` : ""}</span></div>
       <div class="file-actions"><button class="icon-btn" type="button" data-toast="ダウンロードを始めました" aria-label="${esc(f.name)} をダウンロード" title="ダウンロード">${icon("download")}</button>
         <button class="icon-btn is-danger" type="button" data-delete-file="${f.id}" aria-label="${esc(f.name)} を消す" title="消す">${icon("trash")}</button></div></div>`;
   }
@@ -2548,29 +2549,28 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     });
   }
   // 選んだ（またはドラッグした）ファイルを1つずつ加える。files が無ければ見本の作り物を1つ加える（3つ目ごとに大きすぎる録画）
-  const fmtSize = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  const fmtSize = (n) => (n >= 1048576 ? `${(Math.ceil(n / 104857.6) / 10).toFixed(1)} MB` : `${Math.min(1023, Math.max(1, Math.ceil(n / 1024)))} KB`);
   const fileKind = (mime) => (/^image\/(png|jpeg|gif|webp)$/.test(mime) ? "image" : /^video\/(mp4|webm)$/.test(mime) ? "video" : "file");
   const nowLabel = () => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
   function fakeUpload(key, files) {
-    const picked = files && files.length ? Array.from(files) : [null];
+    if (!files || !files.length) return; // ファイルでないものを落としたときは何もしない
+    const picked = Array.from(files);
+    let pending = picked.length, done = 0;
+    const finish = () => { if (--pending === 0 && done) toast(`${icon("check")}${done} 件を添付しました`); };
     picked.forEach((file) => {
       uploads += 1;
-      const base = file
-        ? { name: file.name, type: fileKind(file.type), size: fmtSize(file.size) }
-        : uploads % 3 === 0
-          ? { name: "画面の録画 2026-10-20 11.52.mov", type: "video", size: "82.1 MB" }
-          : { name: `スクリーンショット 2026-10-20 11.4${uploads % 10}.png`, type: "image", size: "1.8 MB" };
-      const tooBig = file ? file.size > 52428800 : uploads % 3 === 0;
-      const f = tooBig
-        ? { id: `n${uploads}`, ...base, state: "error", error: `50 MB を超えているため添付できません（${base.size}）` }
+      const base = { name: file.name, type: fileKind(file.type), size: fmtSize(file.size) };
+      const reject = file.size === 0 ? "空のファイルは添付できません" : file.size > 52428800 ? `50 MB を超えているため添付できません（${base.size}）` : null;
+      const f = reject
+        ? { id: `n${uploads}`, ...base, state: "error", error: reject }
         : { id: `n${uploads}`, ...base, who: D.me, at: nowLabel(), state: "uploading", pct: 0 };
       (D.files[key] = D.files[key] || []).push(f);
       redrawFiles(key);
-      if (f.state !== "uploading") return;
+      if (f.state !== "uploading") { finish(); return; }
       const timer = setInterval(() => {
-        if (!findFile(f.id)) { clearInterval(timer); return; }
+        if (!findFile(f.id)) { clearInterval(timer); finish(); return; }
         f.pct = Math.min(100, f.pct + 25);
-        if (f.pct === 100) { clearInterval(timer); delete f.state; toast(`${icon("check")}添付しました`); }
+        if (f.pct === 100) { clearInterval(timer); delete f.state; done += 1; finish(); }
         redrawFiles(key);
       }, 350);
     });
@@ -2593,7 +2593,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (zone && !zone.contains(ev.relatedTarget)) zone.classList.remove("is-over");
   });
   document.addEventListener("drop", (ev) => {
-    const zone = ev.target.closest && ev.target.closest("[data-drop]");
+    const zone = ev.target.closest && ev.target.closest(".dropzone[data-drop]");
     if (!zone) return;
     ev.preventDefault(); fakeUpload(zone.dataset.drop, ev.dataTransfer && ev.dataTransfer.files);
   });
