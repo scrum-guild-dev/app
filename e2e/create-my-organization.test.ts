@@ -249,7 +249,8 @@ test.describe('組織の選択の「自分用を作る」の出し分け', () =>
     await signIn(context, baseURL, 'createOrg');
     await rewriteOperation(page, myOrganizations, (output) => ({
       ...output,
-      organizations: [team],
+      // 入れる組織が1つだと組織へ直に移るので、選択の画面を出すために2つにする
+      organizations: [team, { ...team, slug: 'other-team', name: 'もう一つのチーム' }],
       suspended: [{ ...personal, slug: 'mio-stopped' }],
     }));
     await page.goto('/');
