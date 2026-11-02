@@ -462,10 +462,17 @@ cron は、止める文が失敗すると例外で終わり、次の回（1時�
    D1 の行を消す前に、その組織の添付ファイルのキーも `/tmp` に書き出す。失敗したら先へ進まない。途中から再開するときは、最初に書き出したファイルを上書きせず保持する（行を消した後はキーを引けない）。
 
    ```bash
-   [ -e "/tmp/purge-$id.attachments.json" ] && echo "書き出し済み。上書きしない" || pnpm exec wrangler d1 execute scrum-guild --remote --json --command "SELECT object_key FROM attachments WHERE workspace_id IN (SELECT id FROM workspaces WHERE organization_id = '$id')" > "/tmp/purge-$id.attachments.json"
+   if [ -e "/tmp/purge-$id.attachments.json" ]; then
+     echo "書き出し済み。上書きしない"
+   else
+     pnpm exec wrangler d1 execute scrum-guild --remote --json --command "SELECT object_key FROM attachments WHERE workspace_id IN (SELECT id FROM workspaces WHERE organization_id = '$id')" > "/tmp/purge-$id.attachments.tmp" &&
+       jq -e '.[0].success == true and (.[0].results | type == "array")' "/tmp/purge-$id.attachments.tmp" &&
+       mv "/tmp/purge-$id.attachments.tmp" "/tmp/purge-$id.attachments.json"
+   fi
+   jq '.[0].results | length' "/tmp/purge-$id.attachments.json"
    ```
 
-   ファイルが既にあれば書き出さない（流し直しで、行を消した後の空の結果に上書きしないため）。出力は1要素の配列で、`jq '.[0].success, (.[0].results | length)' "/tmp/purge-$id.attachments.json"` が `true` とキーの数（添付が無ければ 0）を返すことを確かめる。
+   本来の名前（`.json`）のファイルは、`wrangler` が成功を返し、`jq` で `success` が真で `results` が配列だと確かめた後にだけできる。`wrangler` か `jq` が失敗したら `.json` はできず、最後の `jq` が誤りで止まる。そのときは `/tmp/purge-$id.attachments.tmp` を消してから、この段を流し直す。`.json` が既にあれば書き出さない（流し直しで、行を消した後の空の結果に上書きしないため）。最後の `jq` が返す数（添付が無ければ 0）を控える。
 4. 流す前の数を控える。`--count` は、組織の slug と停止の状態（`suspended_at`、`purge_on`）と、`organizations` と消す表ごとの、その組織の行の数を返す1行の `SELECT` を書き出す。出力の `slug` が手順 1 で控えた slug と同じであることを確かめる（違えば ID を取り違えているので、ここで止まる）。出力を手元に残し、手順 6 で比べる
 
    ```bash
@@ -507,7 +514,7 @@ cron は、止める文が失敗すると例外で終わり、次の回（1時�
 
    Cloudflare のダッシュボードで R2 のバケット `scrum-guild-attachments` のオブジェクトの一覧を開き、`<組織の ID>/` の前方一致で絞る。残り（D1 に行の無いファイルを含む）があれば消し、一覧を再読み込みして残りが無いことを確かめる。wrangler 4.153 には R2 の一覧のコマンドが無いので、この最後の確認にはダッシュボードを使う。ここまで人が手元で行い、セッションは実行しない。
 8. 消したことを #220 にコメントで残す。書くのは、消した日（UTC）と組織の ID。このリポジトリは公開なので、slug と組織の名前（顧客を表しうる）と、実在の個人名は書かない
-9. 書き出したファイル（`/tmp/purge-$id.sql`、`/tmp/purge-$id.before.json`、`/tmp/purge-$id.attachments.json`）を消す
+9. 書き出したファイル（`/tmp/purge-$id.sql`、`/tmp/purge-$id.before.json`、`/tmp/purge-$id.attachments.json`、残っていれば `/tmp/purge-$id.attachments.tmp`）を消す
 
 - 途中で止まったら（通信が切れた、D1 が誤りを返した）、手順 5 を同じファイルでもう一度流す。どの文にも条件が付き、`organizations` の行を最後に消すので、条件は最後の文まで当たり続け、残った行から消える。消し終えた後にもう一度流しても誤りにならない
 - 1文は D1 の1クエリとして動き、1クエリの時間の上限（30秒）を超えると、その文は何も消さずに誤りを返す。親の行を消す文は、外部キーの検査で子の表をほかの組織の分まで読むので、時間は消す組織の大きさでなく DB 全体の大きさで決まる。索引（#406 で足す）が揃うまでは、DB が大きいと1文が上限に当たりうる。同じ文で繰り返し止まるなら、流し直しを続けず、#406 を待つ
