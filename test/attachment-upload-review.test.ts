@@ -96,5 +96,6 @@ describe('仮の回数の上限', () => {
     expect(await errorCodeOf(res)).toBe('rate_limited');
     expect(await attachmentRows(target)).toHaveLength(60);
     expect(await objectKeysOf(target.organization.id)).toHaveLength(60);
-  });
+    // 61 回上げるので、全体で走らせて混んだときに既定の 5 秒で切れないよう延ばす
+  }, 60_000);
 });
