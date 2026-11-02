@@ -441,8 +441,9 @@ test.describe('組織が2つの人（ミナト）', () => {
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発' }],
+          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
