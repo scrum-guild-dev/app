@@ -2594,20 +2594,33 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   picker.addEventListener("change", () => { if (pickerKey && picker.files.length) fakeUpload(pickerKey, picker.files); picker.value = ""; });
   document.body.appendChild(picker);
   function pickFiles(key) { pickerKey = key; picker.click(); }
+  // ファイルのドラッグだけを扱う（行やカードの並べ替えのドラッグには触れない）。受けるのは .dropzone[data-drop] だけ。
+  // 並べ替えの行も data-drop（落とす位置の印）を持つので、[data-drop] だけでは拾わない。
+  // 落とし先の外では dropEffect を none にして落とせないことを示し、それでも落とされたら drop を打ち消す。
+  // ページが受けないと、ブラウザが落としたファイルを開いてページが離れるため
+  const isFileDrag = (ev) => Boolean(ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes("Files"));
+  const fileZone = (ev) => (ev.target.closest ? ev.target.closest(".dropzone[data-drop]") : null);
+  let overZone = null;
   document.addEventListener("dragover", (ev) => {
-    const zone = ev.target.closest && ev.target.closest("[data-drop]");
-    document.querySelectorAll(".dropzone.is-over").forEach((z) => z !== zone && z.classList.remove("is-over"));
-    if (!zone) return;
-    ev.preventDefault(); zone.classList.add("is-over");
+    if (!isFileDrag(ev)) return;
+    ev.preventDefault();
+    const zone = fileZone(ev);
+    if (overZone && overZone !== zone) overZone.classList.remove("is-over");
+    overZone = zone;
+    if (!zone) { ev.dataTransfer.dropEffect = "none"; return; }
+    ev.dataTransfer.dropEffect = "copy"; zone.classList.add("is-over");
   });
   document.addEventListener("dragleave", (ev) => {
-    const zone = ev.target.closest && ev.target.closest("[data-drop]");
-    if (zone && !zone.contains(ev.relatedTarget)) zone.classList.remove("is-over");
+    if (!isFileDrag(ev)) return;
+    const zone = fileZone(ev);
+    if (zone && !zone.contains(ev.relatedTarget)) { zone.classList.remove("is-over"); if (overZone === zone) overZone = null; }
   });
   document.addEventListener("drop", (ev) => {
-    const zone = ev.target.closest && ev.target.closest(".dropzone[data-drop]");
-    if (!zone) return;
-    ev.preventDefault(); fakeUpload(zone.dataset.drop, ev.dataTransfer && ev.dataTransfer.files);
+    if (!isFileDrag(ev)) return;
+    ev.preventDefault();
+    const zone = fileZone(ev);
+    if (overZone) { overZone.classList.remove("is-over"); overZone = null; }
+    if (zone) fakeUpload(zone.dataset.drop, ev.dataTransfer.files);
   });
 
   const extraRedraws = [];
