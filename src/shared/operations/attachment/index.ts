@@ -33,6 +33,8 @@ export const attachmentUpload = defineOperation({
   workspace: true,
   mode: 'write',
   body: 'binary',
+  // 仮の蓋。組織の合計の上限（#68 のストーリー E）と付く先のない行の掃除（#746）が入るまで、1人が R2 に積む速さを抑える
+  rateLimit: { max: 60, windowSeconds: 600 },
   input: z.object({ workspace_id: idSchema, file_name: fileNameSchema }),
   output: z.object({
     id: z.string(),

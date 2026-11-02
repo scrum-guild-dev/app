@@ -1,22 +1,35 @@
 // 添付ファイルの操作の処理（定義は src/shared/operations/attachment/index.ts）
+import { now } from '../../shared/clock.ts';
 import { attachmentUpload } from '../../shared/operations/attachment/index.ts';
+import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
+import { actorUserIdOf } from './write-guards.ts';
 import { sniffContentType } from '../attachments/sniff.ts';
 
 export const attachmentUploadOperation = implement(
   attachmentUpload,
   async ({ db, workspace, actor, input, binary, requestId }) => {
-    const id = crypto.randomUUID();
+    // R2 に書く前に閉じる（書いた後の NOT NULL 違反で、消すだけの書き込みをしない）
+    const uploadedBy = actorUserIdOf(actor);
+    const id = uuidv7(now());
     const objectKey = `${db.organizationId}/${workspace.workspaceId}/${id}`;
-    const createdAt = new Date().toISOString();
+    let createdAt = '';
     const { head, stream } = await peekHead(binary.body);
     const contentType = sniffContentType(head);
     const fixed = new FixedLengthStream(binary.contentLength);
     const abort = new AbortController();
     const pumping = stream.pipeTo(fixed.writable, { signal: abort.signal });
+    const putting = binary.bucket.put(objectKey, fixed.readable, { httpMetadata: { contentType } });
+    // put が先に失敗すると fixed.readable を読む側がいなくなり、pipeTo が決着しない。流すのを止めて決着させる
+    putting.catch(() => abort.abort());
     try {
       // R2 は JS の ReadableStream の長さを知らない。FixedLengthStream で長さを伝え、実際のバイト数も確かめる。
-      await Promise.all([pumping, binary.bucket.put(objectKey, fixed.readable, { httpMetadata: { contentType } })]);
+      // 送る側が先に失敗しても put の決着を待つ（待たずに消すと、後から put が確定してファイルが残りうる）
+      const [pumped, put] = await Promise.allSettled([pumping, putting]);
+      if (pumped.status === 'rejected') throw pumped.reason;
+      if (put.status === 'rejected') throw put.reason;
+      // 上げ終えた時刻にする。付く先のない行の掃除（#746）は created_at の古さで消すので、上げ始めの時刻にしない
+      createdAt = now().toISOString();
       await db.batch([
         db.statement((q) =>
           q.insertInto('attachments').values({
@@ -30,15 +43,15 @@ export const attachmentUploadOperation = implement(
             file_name: input.file_name,
             content_type: contentType,
             size_bytes: binary.contentLength,
-            uploaded_by: actor.userId!,
+            uploaded_by: uploadedBy,
             attached_at: null,
             created_at: createdAt,
           }),
         ),
       ]);
-    } catch {
+    } catch (error) {
       abort.abort();
-      await pumping.catch(() => {});
+      await Promise.allSettled([pumping, putting]);
       try {
         await binary.bucket.delete(objectKey);
       } catch {
@@ -53,7 +66,17 @@ export const attachmentUploadOperation = implement(
           }),
         );
       }
-      throw new Error('添付ファイルの保存に失敗した');
+      // どこで落ちたか（R2、長さの食い違い、D1 の制約）を追えるよう、例外の名前だけを残す（メッセージはキーを含みうる）
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          code: 'internal',
+          requestId,
+          reason: '添付ファイルを保存できなかった',
+          error: error instanceof Error ? error.name : typeof error,
+        }),
+      );
+      throw new Error('添付ファイルの保存に失敗した', { cause: error });
     }
     return {
       id,

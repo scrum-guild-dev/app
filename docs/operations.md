@@ -462,10 +462,10 @@ cron は、止める文が失敗すると例外で終わり、次の回（1時�
    D1 の行を消す前に、その組織の添付ファイルのキーも `/tmp` に書き出す。失敗したら先へ進まない。途中から再開するときは、最初に書き出したファイルを上書きせず保持する（行を消した後はキーを引けない）。
 
    ```bash
-   pnpm exec wrangler d1 execute scrum-guild --remote --json --command "SELECT object_key FROM attachments WHERE workspace_id IN (SELECT id FROM workspaces WHERE organization_id = '$id')" > "/tmp/purge-$id.attachments.json"
+   [ -e "/tmp/purge-$id.attachments.json" ] && echo "書き出し済み。上書きしない" || pnpm exec wrangler d1 execute scrum-guild --remote --json --command "SELECT object_key FROM attachments WHERE workspace_id IN (SELECT id FROM workspaces WHERE organization_id = '$id')" > "/tmp/purge-$id.attachments.json"
    ```
 
-   JSON の `success` が真であることと、`results` にキーが入っていること（添付が無ければ空の配列）を確かめる。
+   ファイルが既にあれば書き出さない（流し直しで、行を消した後の空の結果に上書きしないため）。出力は1要素の配列で、`jq '.[0].success, (.[0].results | length)' "/tmp/purge-$id.attachments.json"` が `true` とキーの数（添付が無ければ 0）を返すことを確かめる。
 4. 流す前の数を控える。`--count` は、組織の slug と停止の状態（`suspended_at`、`purge_on`）と、`organizations` と消す表ごとの、その組織の行の数を返す1行の `SELECT` を書き出す。出力の `slug` が手順 1 で控えた slug と同じであることを確かめる（違えば ID を取り違えているので、ここで止まる）。出力を手元に残し、手順 6 で比べる
 
    ```bash
