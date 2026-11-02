@@ -8,3 +8,10 @@ export const PERSONAL_ORGANIZATION_NAME = '自分用';
 
 // 自分用の組織の添付ファイルの上限（バイト）。1GB
 export const PERSONAL_ATTACHMENT_QUOTA_BYTES = 1073741824;
+
+// 種類ごとのワークスペースの個数の上限（閉じたものも数える）。null は無制限。
+// 自分用は無料なので3個まで（将来のプランで増やす）
+export const WORKSPACE_LIMITS: Record<OrganizationKind, number | null> = {
+  personal: 3,
+  team: null,
+};
