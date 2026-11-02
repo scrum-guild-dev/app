@@ -1014,9 +1014,9 @@
 | story_id | TEXT | FK stories | |
 | epic_id | TEXT | FK epics | |
 | comment_id | TEXT | FK comments | |
-| object_key | TEXT | NOT NULL、UNIQUE、`CHECK (object_key <> '')` | R2 のキー。`<organization_id>/<workspace_id>/<id>` |
-| file_name | TEXT | NOT NULL、`CHECK (length(file_name) BETWEEN 1 AND 255)` | 上げたときのファイル名。255字まで |
-| content_type | TEXT | NOT NULL、`CHECK (content_type <> '')` | 中身の先頭のバイトで確かめた種類。分からなければ `application/octet-stream` |
+| object_key | TEXT | NOT NULL、UNIQUE、`CHECK (typeof(object_key) = 'text' AND object_key <> '')` | R2 のキー。`<organization_id>/<workspace_id>/<id>` |
+| file_name | TEXT | NOT NULL、`CHECK (typeof(file_name) = 'text' AND length(file_name) BETWEEN 1 AND 255)` | 上げたときのファイル名。255字まで（コードポイントで数える。JS の `.length` の UTF-16 の数とは違う）。SQLite の `length` は最初の NUL の手前までしか数えないので、NUL と制御文字は上げる操作の入口で 400 にする |
+| content_type | TEXT | NOT NULL、`CHECK (typeof(content_type) = 'text' AND content_type <> '')` | 中身の先頭のバイトで確かめた種類。分からなければ `application/octet-stream` |
 | size_bytes | INTEGER | NOT NULL、`CHECK (typeof(size_bytes) = 'integer' AND size_bytes BETWEEN 1 AND 52428800)` | 整数に直せない値（`1.5`）は INTEGER の列でも REAL のまま入るので、型も確かめる |
 | uploaded_by | TEXT | NOT NULL、FK users | 消す権限に使う |
 | attached_at | TEXT | | 付く先が決まった日時。空なら書いている途中で上げたもの |

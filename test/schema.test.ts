@@ -898,9 +898,9 @@ describe('attachments', () => {
       columns: Partial<Record<(typeof targetColumns)[number], string | null>> & {
         attached_at?: string | null;
         size_bytes?: number | string;
-        object_key?: string;
-        file_name?: string;
-        content_type?: string;
+        object_key?: string | Uint8Array;
+        file_name?: string | Uint8Array;
+        content_type?: string | Uint8Array;
       } = {},
     ) {
       const attachmentId = id();
@@ -976,6 +976,12 @@ describe('attachments', () => {
     const { attachment } = await setup();
     await expect(attachment({ content_type: '' })).rejects.toThrow(/CHECK/);
     await expect(attachment({ object_key: '' })).rejects.toThrow(/CHECK/);
+  });
+
+  // BLOB で渡すと length がバイト数を数え、空文字の比較もすり抜けるので、TEXT の型も CHECK で断る
+  test.each(['file_name', 'content_type', 'object_key'] as const)('%s は BLOB で保存できない', async (column) => {
+    const { attachment } = await setup();
+    await expect(attachment({ [column]: new TextEncoder().encode('手順.txt') })).rejects.toThrow(/CHECK/);
   });
 
   test.each(['workspace_id', 'uploaded_by'])('外部キーの検査の %s は索引で引く', async (column) => {

@@ -4,7 +4,8 @@
 -- 付く先と uploaded_by の外部キーは親の物理削除を止める。組織を消す SQL は、この表を親より先に消す。
 -- 付く先のない行は attached_at も空にする。期限切れの掃除は組織のワークスペースで絞るので、部分索引の先頭は workspace_id にする。
 -- workspace_id だけの索引は、ワークスペースの物理削除での外部キーの検査（付いた行も含む）に残す。
--- INTEGER の列は整数に直せない値（1.5）を REAL のまま持つので、size_bytes は型も確かめる。length は文字数を数える。
+-- INTEGER の列は整数に直せない値（1.5）を REAL のまま持ち、TEXT の列も BLOB をそのまま持つので、型も確かめる。
+-- length は TEXT のコードポイントを、最初の NUL の手前まで数える。NUL と制御文字は上げる操作の入口で断る（#744）。
 
 CREATE TABLE attachments (
   id TEXT PRIMARY KEY NOT NULL,
@@ -13,9 +14,9 @@ CREATE TABLE attachments (
   story_id TEXT REFERENCES stories (id),
   epic_id TEXT REFERENCES epics (id),
   comment_id TEXT REFERENCES comments (id),
-  object_key TEXT NOT NULL UNIQUE CHECK (object_key <> ''),
-  file_name TEXT NOT NULL CHECK (length(file_name) BETWEEN 1 AND 255),
-  content_type TEXT NOT NULL CHECK (content_type <> ''),
+  object_key TEXT NOT NULL UNIQUE CHECK (typeof(object_key) = 'text' AND object_key <> ''),
+  file_name TEXT NOT NULL CHECK (typeof(file_name) = 'text' AND length(file_name) BETWEEN 1 AND 255),
+  content_type TEXT NOT NULL CHECK (typeof(content_type) = 'text' AND content_type <> ''),
   size_bytes INTEGER NOT NULL CHECK (typeof(size_bytes) = 'integer' AND size_bytes BETWEEN 1 AND 52428800),
   uploaded_by TEXT NOT NULL REFERENCES users (id),
   attached_at TEXT,
