@@ -276,7 +276,7 @@ describe('応答の件数', () => {
 });
 
 describe('完了条件3: 今のセッションは使える。ほかのアカウントには何も起きない', () => {
-  test('実行の後も、今のセッションの Cookie で呼べて、行の last_used_at などは変わらない', async () => {
+  test('実行の後も、今のセッションの Cookie で呼べて、行の持ち主と作成の時刻は変わらない', async () => {
     const person = await createLoginPerson();
     await otherSession(person);
     const hash = await hashSessionToken(person.token);
@@ -286,7 +286,8 @@ describe('完了条件3: 今のセッションは使える。ほかのアカウ�
     const after = (await sessionRowsOf(person.accountId)).find((row) => row.token_hash === hash)!;
     expect(after.account_id).toBe(before.account_id);
     expect(after.created_at).toBe(before.created_at);
-    expect(after.expires_at).toBe(before.expires_at);
+    // last_used_at と expires_at は比べない。呼び出しの認証（readSession）が、1時間以上使っていないセッションの2つを
+    // 書き直すため（docs/data-model.md の `sessions`）。実行が書き換えないことの確かめにならない
   });
 
   test('今のセッションで、そのまま続けてトークンの一覧や次の実行ができる', async () => {
