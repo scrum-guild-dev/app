@@ -35,6 +35,7 @@ export {
 export {
   deleteSelfCreatedOrganization,
   insertOrganization,
+  insertPersonalOrganization,
   insertSelfCreatedOrganization,
   SELF_SERVICE_CREATOR,
   type CreatedOrganization,

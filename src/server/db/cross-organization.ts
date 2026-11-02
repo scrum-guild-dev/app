@@ -17,6 +17,7 @@
 //   - claimPendingLogin: 招待の URL の秘密のハッシュで引いた1行の組織の ID（と、招待ならその組織のワークスペース）で絞って書く
 import { sql, type Expression, type ExpressionBuilder, type SqlBool } from 'kysely';
 import { WAITING_USER_NAME_IN_LOG } from '../../shared/claim-token.ts';
+import type { OrganizationKind } from '../../shared/organization-kind.ts';
 import type { AdminStatus } from '../../shared/operations/operator/list-organizations.ts';
 import { uuidv7 } from '../uuid.ts';
 import { chunksOf } from './chunks.ts';
@@ -33,9 +34,9 @@ import type { OrganizationTables } from './tables.ts';
 // 組織の一覧と招待の一覧には停止した組織を出さず、組織の選択の画面（/）に「停止している」ことを伝えるのに使う。
 // 無効にされた人と、入れたはずでない組織は含めない（停止した組織を、入れない人に漏らさない）
 export type AccountOrganizations = {
-  readonly organizations: readonly { readonly slug: string; readonly name: string }[];
+  readonly organizations: readonly { readonly slug: string; readonly name: string; readonly kind: OrganizationKind }[];
   readonly invitations: readonly { readonly organization_name: string; readonly slug: string }[];
-  readonly suspended: readonly { readonly slug: string; readonly name: string }[];
+  readonly suspended: readonly { readonly slug: string; readonly name: string; readonly kind: OrganizationKind }[];
 };
 
 type Account = { accountId: string; logins: readonly LoginId[] };
@@ -212,7 +213,7 @@ async function readAccountOrganizations(
     rows.push(
       ...(await common.rows(
         common.statement((q) =>
-          q.selectFrom('organizations').select(['id', 'slug', 'name', 'suspended_at']).where('id', 'in', chunk),
+          q.selectFrom('organizations').select(['id', 'slug', 'name', 'kind', 'suspended_at']).where('id', 'in', chunk),
         ),
       )),
     );
@@ -225,12 +226,17 @@ async function readAccountOrganizations(
 
   const shown = new Set(invitedShown);
   return {
-    organizations: active.filter((row) => enterable.has(row.id)).map(({ slug, name }) => ({ slug, name })),
+    organizations: active.filter((row) => enterable.has(row.id)).map(kindedOrganization),
     invitations: active
       .filter((row) => shown.has(row.id))
       .map((row) => ({ organization_name: row.name, slug: row.slug })),
-    suspended: paused.map(({ slug, name }) => ({ slug, name })),
+    suspended: paused.map(kindedOrganization),
   };
+}
+
+// 列の CHECK が守る値（'team' か 'personal'）。組織の一覧と suspended の各行の形
+function kindedOrganization(row: { slug: string; name: string; kind: string }) {
+  return { slug: row.slug, name: row.name, kind: row.kind as OrganizationKind };
 }
 
 // 指名で待っていた users の行（account_id が空で、ログインの手段と ID が同じ）にアカウントを結ぶ。

@@ -556,6 +556,17 @@ export const dictionary = defineDictionary({
   createMyOrganizationFailed: '{organization}を作れませんでした。もう一度試してください。',
   createMyOrganizationSubmit: '{organization}を作る',
   createMyOrganizationSubmitting: '{organization}を作っています',
+  // 自分用の組織（kind が personal。1人だけで、招待も{admin}の指名もできない）。名前は固定で、画面はこの語で出す
+  personalOrganizationName: '自分用',
+  createPersonalOrganizationAction: '自分用を作る',
+  createPersonalOrganizationTitle: '自分用の{organization}を作る',
+  createPersonalOrganizationLead:
+    '自分だけで使う{organization}を作ります。あなたが{admin}になります。期限はなく無料で使えますが、人を招待したり、{admin}を増やしたりはできません。1つのアカウントにつき1つまでです。',
+  createPersonalOrganizationLimit:
+    '自分用の{organization}は、1つのアカウントにつき1つまでです。入れる{organization}は「{organization}の一覧へ」から開けます（停止している{organization}には入れません）。',
+  createPersonalOrganizationFailed: '自分用の{organization}を作れませんでした。もう一度試してください。',
+  createPersonalOrganizationSubmit: '自分用を作る',
+  createPersonalOrganizationSubmitting: '自分用の{organization}を作っています',
   organizationList: '組織の一覧へ',
   // 組織の切り替えのボタンと一覧の読み上げの名前。{name} は今の組織の名前
   organizationSwitchLabel: '{name}。組織を切り替える',
@@ -567,7 +578,7 @@ export const dictionary = defineDictionary({
   invitationsReceived: '招待が届いています',
   noOrganizationTitle: '入れる組織がありません',
   noOrganizationText:
-    '管理者から招待が届くと、ここに出ます。自分で{organization}を作って、30日間のお試しで始めることもできます。',
+    '管理者から招待が届くと、ここに出ます。自分で{organization}を作って、30日間のお試しで始めることもできます。自分だけで使う「自分用」を作ることもできます。',
   // 入れる組織も招待も無く、停止していなければ入れた{organization}だけがある人
   noOrganizationSuspendedText:
     '停止している{organization}があります。下の「停止している{organization}」を見てください。',

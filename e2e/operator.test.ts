@@ -28,6 +28,7 @@ type ListedOrganization = OutputOf<typeof listOrganizations>['organizations'][nu
 const organization = (overrides: Partial<ListedOrganization>): ListedOrganization => ({
   slug: 'aoba',
   name: 'あおば開発',
+  kind: 'team',
   suspended_at: null,
   purge_on: null,
   purge_due: false,

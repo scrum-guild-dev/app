@@ -767,7 +767,7 @@ test.describe('すべてのワークスペースから外れた人（ツバサ�
           ...output,
           organizations: [],
           invitations: [],
-          suspended: [{ slug: 'kamome', name: 'かもめ社' }],
+          suspended: [{ slug: 'kamome', name: 'かもめ社', kind: 'team' }],
         }) as typeof output,
     );
     const collect = await watchViolations(page);

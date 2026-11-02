@@ -7,6 +7,7 @@ import {
   listOrganizations,
   resolveGithubUser,
 } from '../../shared/operations/operator/index.ts';
+import type { OrganizationKind } from '../../shared/organization-kind.ts';
 import { slugProblem } from '../../shared/organization-slug.ts';
 import type { CreatedOrganization, Statement } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
@@ -37,6 +38,7 @@ export const listOrganizationsOperation = implement(listOrganizations, async ({ 
           'id',
           'slug',
           'name',
+          'kind',
           'created_by_account_id',
           'suspended_at',
           'purge_on',
@@ -57,6 +59,8 @@ export const listOrganizationsOperation = implement(listOrganizations, async ({ 
     organizations: rows.map((row) => ({
       slug: row.slug,
       name: row.name,
+      // 列の CHECK が守る値
+      kind: row.kind as OrganizationKind,
       self_created: row.created_by_account_id !== null,
       trial_ends_on: row.trial_ends_on,
       trial_expired: row.trial_ends_on !== null && row.trial_ends_on < at.toISOString().slice(0, 10),

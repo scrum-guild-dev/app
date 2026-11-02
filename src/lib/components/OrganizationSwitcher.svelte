@@ -1,6 +1,8 @@
 <script lang="ts">
   import { navigating } from '$app/state';
   import { resolve } from '$app/paths';
+  import type { OrganizationKind } from '../../shared/organization-kind.ts';
+  import { organizationLabel } from '../organization-label.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
   import { SwitcherMenu } from './switcher-menu.svelte.ts';
@@ -22,7 +24,7 @@
     invited,
     oncreate,
   }: {
-    organizations: readonly { slug: string; name: string }[];
+    organizations: readonly { slug: string; name: string; kind: OrganizationKind }[];
     currentSlug: string;
     fallbackName: string;
     invited: boolean;
@@ -32,7 +34,10 @@
   const listId = $props.id();
   const menu = new SwitcherMenu();
 
-  const currentName = $derived(organizations.find((item) => item.slug === currentSlug)?.name ?? fallbackName);
+  const currentName = $derived.by(() => {
+    const current = organizations.find((item) => item.slug === currentSlug);
+    return current === undefined ? fallbackName : organizationLabel(current);
+  });
   // 今の組織から離れる移動（別の組織、組織の選択の画面）の最中
   const moving = $derived(
     navigating.to !== null && (navigating.to.route.id === '/' || navigating.to.params?.slug !== currentSlug),
@@ -87,7 +92,7 @@
           aria-current={current ? 'page' : undefined}
           onclick={menu.close}
         >
-          <span class="org-menu-name">{organization.name}</span>
+          <span class="org-menu-name">{organizationLabel(organization)}</span>
           {#if current}<Icon name="check" />{/if}
         </a>
       </li>

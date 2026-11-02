@@ -12,6 +12,7 @@
   import LoadFailed from '../../lib/components/LoadFailed.svelte';
   import OrganizationSwitcher from '../../lib/components/OrganizationSwitcher.svelte';
   import WorkspaceSwitcher from '../../lib/components/WorkspaceSwitcher.svelte';
+  import { organizationLabel } from '../../lib/organization-label.ts';
   import { applyOrganization } from '../../lib/organization.svelte.ts';
   import { t } from '../../lib/vocabulary.svelte.ts';
   import { workspaceViewOf } from '../../lib/workspace.ts';
@@ -67,7 +68,7 @@
       <OrganizationSwitcher
         organizations={switcherOrganizations}
         currentSlug={data.slug}
-        fallbackName={organization.organization.name}
+        fallbackName={organizationLabel(organization.organization)}
         invited={(data.organizations?.invitations.length ?? 0) > 0}
         oncreate={(trigger) => createDialog?.show(trigger)}
       />

@@ -248,57 +248,63 @@ export const userListOperation = implement(userList, async ({ db, tools }) => {
 // 指名では、管理者は組織の人数に数えるので、招待の作成と同じ関数（readSeats）で人数を数え、相手がまだ数えられておらず、
 // 人数が member_limit 以上なら 409（member_limit）で断る。招待の作成と同じく人数は書く文の条件に入れない
 // （数えてから書くまでの間に同時に指名か招待をして超えたときは、そのまま認める。超えるのは同時に送った数まで）
-export const userAdminUpdateOperation = implement(userAdminUpdate, async ({ db, actor, tools, input }) => {
-  const actorUserId = actorUserIdOf(actor);
-  const organizationId = db.organizationId;
-  const userId = input.user_id;
-  const next = input.is_admin ? 1 : 0;
+export const userAdminUpdateOperation = implement(
+  userAdminUpdate,
+  async ({ db, actor, organization, tools, input }) => {
+    // 自分用の組織は管理者が本人1人だけなので、指名も解除も（すでにその状態でも）断る。何も読まず、何も書かない。
+    // 読んでから書くまでの競合のテスト（test/user.test.ts）は処理を直に呼び、organization を渡さないので、無いときはチーム用として進める
+    if ((organization as typeof organization | undefined)?.kind === 'personal') throw conflict('personal_organization');
+    const actorUserId = actorUserIdOf(actor);
+    const organizationId = db.organizationId;
+    const userId = input.user_id;
+    const next = input.is_admin ? 1 : 0;
 
-  const current = await readUser(db, userId);
-  if (current === undefined) throw new ApiError(404, 'not_found');
-  if (current.is_admin === next) return stateOf(current);
-  if (next === 1 && current.disabled_at !== null) throw conflict('disabled');
-  if (next === 1) {
-    const seats = await readSeats(db, tools, { provider: current.login_provider, subject: current.login_subject });
-    if (!seats.counted && seats.used >= seats.limit) throw conflict('member_limit');
-  }
+    const current = await readUser(db, userId);
+    if (current === undefined) throw new ApiError(404, 'not_found');
+    if (current.is_admin === next) return stateOf(current);
+    if (next === 1 && current.disabled_at !== null) throw conflict('disabled');
+    if (next === 1) {
+      const seats = await readSeats(db, tools, { provider: current.login_provider, subject: current.login_subject });
+      if (!seats.counted && seats.used >= seats.limit) throw conflict('member_limit');
+    }
 
-  const at = now();
-  const stamp = at.toISOString();
-  const results = await db.batch([
-    db.statement((q) =>
-      q
-        .updateTable('users')
-        .set({ is_admin: next, updated_at: stamp })
-        .where((eb) =>
-          eb.and([
-            eb('id', '=', userId),
-            eb('organization_id', '=', organizationId),
-            eb('login_subject', 'is not', null),
-            eb('is_admin', '=', current.is_admin),
-            ...(next === 1 ? [eb('disabled_at', 'is', null)] : [eb.exists(otherAdmins(q, organizationId, userId))]),
-            eb.exists(activeAdmin(q, organizationId, actorUserId)),
-          ]),
-        ),
-    ),
-    userChangeLog(db, { actorUserId, userId, changes: { is_admin: [current.is_admin, next] }, at }),
-  ]);
-  if ((results[0]?.changes ?? 0) > 0)
-    return { user_id: userId, is_admin: next === 1, disabled_at: current.disabled_at };
+    const at = now();
+    const stamp = at.toISOString();
+    const results = await db.batch([
+      db.statement((q) =>
+        q
+          .updateTable('users')
+          .set({ is_admin: next, updated_at: stamp })
+          .where((eb) =>
+            eb.and([
+              eb('id', '=', userId),
+              eb('organization_id', '=', organizationId),
+              eb('login_subject', 'is not', null),
+              eb('is_admin', '=', current.is_admin),
+              ...(next === 1 ? [eb('disabled_at', 'is', null)] : [eb.exists(otherAdmins(q, organizationId, userId))]),
+              eb.exists(activeAdmin(q, organizationId, actorUserId)),
+            ]),
+          ),
+      ),
+      userChangeLog(db, { actorUserId, userId, changes: { is_admin: [current.is_admin, next] }, at }),
+    ]);
+    if ((results[0]?.changes ?? 0) > 0)
+      return { user_id: userId, is_admin: next === 1, disabled_at: current.disabled_at };
 
-  // 読んでから書くまでに、相手が変わったか、呼んだ人が権限を失った。
-  // 最後の管理者は、呼んだ人の権限より先に見る（2人が同時にお互いを解除したとき、後の要求は呼んだ人も解除されているが、
-  // 断る理由は「最後の管理者」として返す）
-  const after = await readUser(db, userId);
-  if (after === undefined) throw new ApiError(404, 'not_found');
-  if (next === 0 && after.is_admin === 1 && !(await hasOtherAdmins(db, userId))) {
-    throw conflict('last_admin');
-  }
-  if (!(await isActiveAdmin(db, actorUserId))) throw new ApiError(403, 'forbidden');
-  if (after.is_admin === next) return stateOf(after);
-  if (next === 1 && after.disabled_at !== null) throw conflict('disabled');
-  throw new ApiError(409, 'conflict');
-});
+    // 読んでから書くまでに、相手が変わったか、呼んだ人が権限を失った。
+    // 最後の管理者は、呼んだ人の権限より先に見る（2人が同時にお互いを解除したとき、後の要求は呼んだ人も解除されているが、
+    // 断る理由は「最後の管理者」として返す）
+    const after = await readUser(db, userId);
+    if (after === undefined) throw new ApiError(404, 'not_found');
+    if (next === 0 && after.is_admin === 1 && !(await hasOtherAdmins(db, userId))) {
+      throw conflict('last_admin');
+    }
+    if (!(await isActiveAdmin(db, actorUserId))) throw new ApiError(403, 'forbidden');
+    if (after.is_admin === next) return stateOf(after);
+    if (next === 1 && after.disabled_at !== null) throw conflict('disabled');
+    throw new ApiError(409, 'conflict');
+  },
+);
 
 // 無効化。書く順（1回の batch）:
 // 1. users（disabled_at、管理者なら is_admin = 0、updated_at）。条件は、同じ組織の login_subject のある行で、無効でなく、

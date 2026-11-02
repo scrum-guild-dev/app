@@ -9,8 +9,9 @@ import { defineOperation } from '../define.ts';
 // 409 の conflict で断った理由（details.reason）。
 // last_admin は最後の管理者（ほかに無効でなく login_subject のある管理者がいない人）を解除か無効にしようとした、
 // self は自分を無効にしようとした、disabled は無効の人を管理者に指名しようとした、
-// member_limit は組織の人数が上限（member_limit）に達していて、まだ人数に数えられていない人を管理者に指名しようとした
-export const userConflictReasons = ['last_admin', 'self', 'disabled', 'member_limit'] as const;
+// member_limit は組織の人数が上限（member_limit）に達していて、まだ人数に数えられていない人を管理者に指名しようとした、
+// personal_organization は自分用の組織（1人だけ）で管理者の指名か解除をしようとした（user-admin-update。他の操作では出ない）
+export const userConflictReasons = ['last_admin', 'self', 'disabled', 'member_limit', 'personal_organization'] as const;
 export type UserConflictReason = (typeof userConflictReasons)[number];
 
 export function userConflictReasonOf(details: unknown): UserConflictReason | undefined {

@@ -48,6 +48,7 @@ export async function createOrganization(overrides: Partial<Row<CommonTables, 'o
     id,
     slug: `org-${id.slice(-8)}`,
     name: '青葉工房',
+    kind: 'team',
     // 列は残っているので、言葉づかいを選べた頃の 'game' の行を模す（画面も API もこの値を読まない）
     vocabulary: 'game',
     theme: 'simple',
@@ -715,13 +716,13 @@ export async function createThanks(
   return row;
 }
 
-// 自分用（kind = 'personal'）の組織。kind の列は型に無い（マイグレーションが入るまで）ので、行を書いた後に直に更新する。
-// 1人だけの組織なので member_limit は 1、添付は 1GB、作った人は本人（セルフサービス）
+// 自分用（kind = 'personal'）の組織。1人だけの組織なので member_limit は 1、添付は 1GB、作った人は本人（セルフサービス）
 export async function createPersonalOrganizationRow(
   createdByAccountId: string,
   overrides: Partial<Row<CommonTables, 'organizations'>> = {},
 ) {
-  const organization = await createOrganization({
+  return createOrganization({
+    kind: 'personal',
     name: '自分用',
     member_limit: 1,
     attachment_quota_bytes: 1073741824,
@@ -730,6 +731,4 @@ export async function createPersonalOrganizationRow(
     trial_ends_on: null,
     ...overrides,
   });
-  await env.DB.prepare(`UPDATE organizations SET kind = 'personal' WHERE id = ?`).bind(organization.id).run();
-  return organization;
 }

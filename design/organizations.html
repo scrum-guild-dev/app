@@ -35,7 +35,7 @@ function render() {
           ${k.admin ? `<span class="chip">${t("admin")}</span>` : ""}${emblem(k.level, true)}</a>`).join("")}
       </div>
       <p class="gate-note">あとから、メニューの上の${t("organization")}の切り替えで選び直せます。</p>
-      <div class="form-actions"><button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button></div>
+      <div class="form-actions"><button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button><button class="btn is-sm" type="button" data-dialog="createPersonalOrganization">自分用を作る</button></div>
       <div class="form-actions"><button class="btn is-sm is-quiet" type="button" data-toast="見本のため、ログアウトしません">${t("logout")}</button></div>
     </section>
     <section class="gate-sheet">
@@ -50,13 +50,22 @@ function render() {
     </section>
     <section class="gate-sheet">
       <h2 class="dialog-title">入れる${t("organization")}が無い人</h2>
-      ${SQ.emptyState("shield", `入れる${t("organization")}がありません`, `${t("admin")}から招待が届くと、ここに出ます。自分で${t("organization")}を作って、30日間のお試しで始めることもできます。`, `<button class="btn is-primary" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button>`)}
-      <p class="gate-note">招待を待つほかに道が無いので、「${t("organization")}を作る」を主ボタンにする。</p>
+      ${SQ.emptyState("shield", `入れる${t("organization")}がありません`, `${t("admin")}から招待が届くと、ここに出ます。自分で${t("organization")}を作って、30日間のお試しで始めることもできます。自分だけで使う「自分用」を作ることもできます。`, `<button class="btn is-primary" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button><button class="btn is-sm" type="button" data-dialog="createPersonalOrganization">自分用を作る</button>`)}
+      <p class="gate-note">招待を待つほかに道が無いので、「${t("organization")}を作る」を主ボタンにし、「自分用を作る」は is-sm の副の大きさで隣に置く。</p>
     </section>
     <section class="gate-sheet">
       <h2 class="dialog-title">停止している${t("organization")}だけがある人</h2>
-      ${SQ.emptyState("shield", `入れる${t("organization")}がありません`, `停止している${t("organization")}があります。下の「停止している${t("organization")}」を見てください。`, `<button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button>`)}
+      ${SQ.emptyState("shield", `入れる${t("organization")}がありません`, `停止している${t("organization")}があります。下の「停止している${t("organization")}」を見てください。`, `<button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button><button class="btn is-sm" type="button" data-dialog="createPersonalOrganization">自分用を作る</button>`)}
       <p class="gate-note">再開を待つ道があるので、「${t("organization")}を作る」は主ボタンにせず、一覧の下と同じ is-sm にそろえる。</p>
+    </section>
+    <section class="gate-sheet">
+      <h2 class="dialog-title">自分用の${t("organization")}を持つ人</h2>
+      <div class="choice-list">
+        <a class="choice" href="today.html"><div><b>自分用</b><span class="mono">scrum-guild.dev/mio-solo/</span></div></a>
+        ${D.organizations.map((k) => `<a class="choice" href="today.html"><div><b>${esc(k.name)}</b><span class="mono">scrum-guild.dev/${esc(k.slug)}/</span></div></a>`).join("")}
+      </div>
+      <div class="form-actions"><button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button></div>
+      <p class="gate-note">自分用の${t("organization")}（1アカウントに1つ）は、名前の代わりに「自分用」と出して、チーム用の${t("organization")}と並べて選べるようにする。持つ人には「自分用を作る」を出さない（入れない${t("organization")}にあるときも出さない）。</p>
     </section>
     <p class="gate-note" style="text-align:center"><a href="index.html">デザインシステムのカタログへ戻る</a></p>
   </div></div>`;
