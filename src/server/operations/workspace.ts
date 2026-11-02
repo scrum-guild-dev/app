@@ -111,10 +111,11 @@ function insertWhenAllowed<T extends keyof Tables>(
   );
 }
 
-// 今のワークスペースの数（閉じたものも含む）
-async function readWorkspaceCount(db: OrganizationDb): Promise<number> {
+// 今のワークスペースの数（閉じたものも含む）を読み、上限なら 409 の workspace_limit_reached で断る
+async function throwIfWorkspaceLimitReached(db: OrganizationDb, max: number): Promise<void> {
   const row = await db.first(db.statement((q) => workspaceCount(q, db.organizationId)));
-  return Number(row?.n ?? 0);
+  const used = Number(row?.n ?? 0);
+  if (used >= max) throw new ApiError(409, 'workspace_limit_reached', { used, limit: max });
 }
 
 export const workspaceCreateOperation = implement(workspaceCreate, async ({ db, actor, organization, input }) => {
@@ -133,10 +134,7 @@ export const workspaceCreateOperation = implement(workspaceCreate, async ({ db, 
   if (leader === undefined) throw new ApiError(404, 'not_found');
 
   // 上限なら書かずに 409
-  if (max !== null) {
-    const used = await readWorkspaceCount(db);
-    if (used >= max) throw new ApiError(409, 'workspace_limit_reached', { used, limit: max });
-  }
+  if (max !== null) await throwIfWorkspaceLimitReached(db, max);
 
   const rows = newWorkspaceRows({
     at: now(),
@@ -161,10 +159,7 @@ export const workspaceCreateOperation = implement(workspaceCreate, async ({ db, 
   // どの文も同じ条件を持つので、先頭が入らなければ何も入っていない（読んだ後に条件が崩れた場合）。
   // 上限のある組織は数を読み直し、上限なら 409、そうでなければ（候補か管理者でなくなった）404
   if ((results[0]?.changes ?? 0) === 0) {
-    if (max !== null) {
-      const used = await readWorkspaceCount(db);
-      if (used >= max) throw new ApiError(409, 'workspace_limit_reached', { used, limit: max });
-    }
+    if (max !== null) await throwIfWorkspaceLimitReached(db, max);
     throw new ApiError(404, 'not_found');
   }
   return { workspace_id: rows.workspaceId };

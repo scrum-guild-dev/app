@@ -154,6 +154,18 @@ describe('workspace-create の個数の上限', () => {
     });
   });
 
+  // 書く前の読みは両方とも2個を見て通るので、上限を守るのは書く文の個数の条件だけ。その条件が閉じたものも数えることを固定する
+  test('閉じたものがあっても、上限の1つ手前から2つを同時に作ると、片方だけが通る', async () => {
+    const target = await createPersonalTarget();
+    expect((await close(target, target.workspace.id)).status).toBe(200);
+    expect((await countRows(target.organization)).workspaces).toBe(2);
+
+    const results = await Promise.all([create(target), create(target)]);
+    expect(results.map((res) => res.status).sort()).toEqual([200, 409]);
+    expect(await errorCodeOf(results.find((res) => res.status === 409)!)).toBe('workspace_limit_reached');
+    expect((await countRows(target.organization)).workspaces).toBe(3);
+  });
+
   test('チーム用は4個以上作れ、制限されない', async () => {
     const target = await createTarget();
     expect((await countRows(target.organization)).workspaces).toBe(2);

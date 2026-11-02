@@ -124,7 +124,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
 
     const alert = dialog.getByRole('alert').filter({ hasText: '自分用' });
     await expect(alert).toHaveText(
-      '自分用のワークスペースは、終了したものも含めて3個までです（今3個）。これ以上は作れません。',
+      '自分用のワークスペースは、終了したものも含めて3個までです（今3個）。これ以上は作れないので、今あるワークスペースを使ってください。',
     );
     await expect(alert).toHaveClass(/is-warn/);
     await expect(dialog).toBeVisible();
@@ -145,7 +145,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await dialog.getByLabel('名前').fill('四つ目の置き場');
     await dialog.getByRole('button', { name: '作る' }).click();
     await expect(dialog.getByRole('alert')).toHaveText(
-      '自分用のワークスペースの個数が、終了したものも含めて上限に達しています。これ以上は作れません。',
+      '自分用のワークスペースの個数が、終了したものも含めて上限に達しています。これ以上は作れないので、今あるワークスペースを使ってください。',
     );
   });
 
