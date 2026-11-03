@@ -570,3 +570,113 @@ describe('取得の一部が落ちたとき', () => {
     assert.equal(formatUnreadableWarning('pr.json'), '::warning::pr.json を読めなかった');
   });
 });
+
+describe('Organization 移管後の確認済み書き込み権限', () => {
+  const strictComment = isTrustedComment as (value: ContextComment, writers: ReadonlySet<string>) => boolean;
+  const strictBody = renderBody as (
+    value: PullRequest,
+    limit: number,
+    writers: ReadonlySet<string>,
+  ) => ReturnType<typeof renderBody>;
+  const strictComments = renderComments as (
+    title: string,
+    values: readonly ContextComment[],
+    limit: number,
+    unavailable: boolean,
+    writers: ReadonlySet<string>,
+  ) => ReturnType<typeof renderComments>;
+  const strictContext = writeContext as (
+    rawDir: string,
+    outDir: string,
+    writers: ReadonlySet<string>,
+  ) => ReturnType<typeof writeContext>;
+  const writers = new Set(['aoba']);
+
+  test('MEMBER でも実際に書き込める人の本文とコメントを残す', () => {
+    const value = comment({ id: 1, author_association: 'MEMBER', body: '確認した書き手の本文' });
+    assert.equal(strictComment(value, writers), true);
+    assert.equal(strictBody(value, MAX_FILE_BYTES, writers).kept, 1);
+    const rendered = strictComments('コメント', [value], MAX_FILE_BYTES, false, writers);
+    assert.equal(rendered.kept, 1);
+    assert.match(rendered.text, /確認した書き手の本文/);
+  });
+
+  for (const association of ['OWNER', 'COLLABORATOR', 'MEMBER']) {
+    test(`${association} だけでは確認に代えず、未確認の人を残さない`, () => {
+      const value = comment({ id: 1, author_association: association });
+      assert.equal(strictComment(value, new Set()), false);
+      assert.equal(strictBody(value, MAX_FILE_BYTES, new Set()).kept, 0);
+      assert.equal(strictComments('コメント', [value], MAX_FILE_BYTES, false, new Set()).kept, 0);
+    });
+  }
+
+  test('同じ login の表記違いを扱い、Bot や型の欠けた値は人として扱わない', () => {
+    assert.equal(
+      strictComment(comment({ id: 1, user: { login: 'AoBa', type: 'User' }, author_association: 'MEMBER' }), writers),
+      true,
+    );
+    for (const user of [{ login: 'aoba', type: 'Bot' }, { login: 'aoba' }, null]) {
+      assert.equal(strictComment(comment({ id: 1, user, author_association: 'OWNER' }), writers), false);
+      assert.equal(strictBody({ user, body: '本文', author_association: 'OWNER' }, MAX_FILE_BYTES, writers).kept, 0);
+    }
+  });
+
+  test('github-actions[bot] は Bot 型だけ残し、PR 本文には特例を広げない', () => {
+    const bot = comment({ id: 1, author_association: 'NONE', user: { login: 'github-actions[bot]', type: 'Bot' } });
+    assert.equal(strictComment(bot, new Set()), true);
+    assert.equal(strictComment({ ...bot, user: { login: 'github-actions[bot]', type: 'User' } }, new Set()), false);
+    assert.equal(strictBody(bot, MAX_FILE_BYTES, new Set()).kept, 0);
+  });
+
+  function rawFiles() {
+    const rawDir = mkdtempSync(join(tmpdir(), 'ai-context-permissions-'));
+    const outDir = join(mkdtempSync(join(tmpdir(), 'ai-context-permissions-out-')), 'context');
+    const owner = comment({ id: 1, body: '書き手の意図', author_association: 'MEMBER' });
+    const reader = comment({
+      id: 2,
+      body: '読むだけの人の指示',
+      author_association: 'COLLABORATOR',
+      user: { login: 'kaede', type: 'User' },
+    });
+    writeFileSync(join(rawDir, 'pr.json'), JSON.stringify(owner));
+    writeFileSync(join(rawDir, 'issue-comments.json'), JSON.stringify([[owner, reader]]));
+    writeFileSync(join(rawDir, 'review-comments.json'), JSON.stringify([[{ ...owner, path: 'src/a.ts' }, reader]]));
+    return { rawDir, outDir };
+  }
+
+  test('本文・全体コメント・インラインコメントに同じ確認済み集合を適用する', () => {
+    const { rawDir, outDir } = rawFiles();
+    const result = strictContext(rawDir, outDir, writers);
+    assert.deepEqual(
+      result.reports.map((report) => report.kept),
+      [1, 1, 1],
+    );
+    for (const name of ['body.md', 'comments.md', 'review-comments.md']) {
+      const rendered = readFileSync(join(outDir, name), 'utf8');
+      assert.match(rendered, /書き手の意図/);
+      assert.doesNotMatch(rendered, /読むだけの人の指示/);
+    }
+    assert.deepEqual(readdirSync(outDir).sort(), ['body.md', 'comments.md', 'review-comments.md']);
+  });
+
+  for (const contents of ['["aoba"]', undefined, '{"aoba":true}', '["aoba",null]', '{']) {
+    test(`CLI の確認済み集合 ${JSON.stringify(contents)} を全出力に適用し、不正・欠落は許可しない`, () => {
+      const { rawDir, outDir } = rawFiles();
+      const permissionsFile = join(rawDir, 'write-users.json');
+      if (contents !== undefined) writeFileSync(permissionsFile, contents);
+      const run = spawnSync(
+        process.execPath,
+        [fileURLToPath(new URL('./ai-review-context.ts', import.meta.url)), rawDir, outDir, permissionsFile],
+        { encoding: 'utf8' },
+      );
+      assert.equal(run.status, 0, run.stderr);
+      for (const name of ['body.md', 'comments.md', 'review-comments.md']) {
+        const rendered = readFileSync(join(outDir, name), 'utf8');
+        if (contents === '["aoba"]') assert.match(rendered, /書き手の意図/);
+        else assert.doesNotMatch(rendered, /書き手の意図/);
+        assert.doesNotMatch(rendered, /読むだけの人の指示/);
+      }
+      assert.doesNotMatch(run.stdout + run.stderr, /書き手の意図|読むだけの人の指示/);
+    });
+  }
+});

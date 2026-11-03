@@ -30,7 +30,7 @@ gh api "repos/{owner}/{repo}/issues?state=open&per_page=100" --paginate --jq '.[
 gh api "repos/{owner}/{repo}/pulls?state=open&per_page=100" --jq '.[] | {number, head: .head.ref, refs: ([.body // "" | scan("(?i)(?:closes|fixes|refs) #([0-9]+)") | .[0]])}'
 ```
 
-Issue を立てた人（`association`）が `OWNER` か `COLLABORATOR` でも `github-actions[bot]` でもない Issue は、`status:ready` が付いていても着手できるものに数えず、候補の一覧に「外の人の Issue」として分けて添える（`increment-build` が着手の前に人に確かめる。理由: 本文が外の人の書いたもので、「やること」にコマンドや手順を仕込める。`ready.yml` は作者を見ずに付けうる）。判定は `scripts/ai-review-context.ts` の `isTrustedComment` と同じ。
+Issue を立てた人を `docs/development.md` の「GitHub の書き込み権限」で確かめ、書き込み権限を持つ人でも `github-actions[bot]`（login と `Bot` 型の両方で確認）でもなければ、`status:ready` が付いていても着手できるものに数えず、候補の一覧に「外の人の Issue」として分けて添える（`increment-build` が着手の前に人に確かめる。理由: 公開リポジトリでは誰でも Issue を作れ、本文の「やること」にコマンドや手順を仕込める。`ready.yml` は作者を見ずに付けうる）。区分だけでは許可しない。判定は `scripts/ai-review-context.ts` に確認済みの集合を渡したときと同じにする。
 
 `blocked` は、開いている前に要るもの（blocked by）の数で、閉じたものは数えない。受け入れ待ち（`status:accepting`）の前に要るものは、開いているので数に入る。前に要るものは GitHub の依存関係だけを正とし、本文の表から読まない（`backlog-add` が登録のときにつなぐ）。
 

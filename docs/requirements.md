@@ -4,7 +4,7 @@
 
 ## 名前
 
-Scrum Guild（スクラムギルド）。画面の見出しや文書では `Scrum Guild`、リポジトリ、パッケージ、ドメイン（`scrum-guild.dev`）やコードの中では `scrum-guild` と書く。
+Scrum Guild（スクラムギルド）。画面の見出しや文書では `Scrum Guild`、パッケージ、ドメイン（`scrum-guild.dev`）やコードの中では `scrum-guild` と書く。GitHub の Organization は `scrum-guild-dev`、アプリのリポジトリは `scrum-guild-dev/app`。
 
 scrum-quest、Scrum Guild と改めてきた。経緯、決めた理由、重なりの確認は `naming.md` に残した。
 

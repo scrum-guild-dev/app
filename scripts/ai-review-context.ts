@@ -1,10 +1,12 @@
 // CI の AI レビュー（.github/workflows/ai-review.yml）に渡す PR の本文とコメントを、Markdown に整える。
-// 通信はしない。ワークフローの段が gh api で落とした JSON を読み、別のディレクトリに書く。判定と整形は export した関数にして node --test にかける。
+// 通信はしない。ワークフローの段が gh api で落とした JSON と確認済みの書き手の集合を読み、別のディレクトリに書く。
+// 判定と整形は export した関数にして node --test にかける。
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { normalizeLogin } from './github-write-permissions.ts';
 
 // 公開リポジトリでは誰でもコメントできる。Claude に渡すのは、書き込みの権限を持つ人と、このワークフローの bot のものだけにする。
-// MEMBER は組織に入っていることしか表さず、このリポジトリへの書き込みの権限を保証しないので含めない
+// CI は確認済み集合を必ず渡す。この区分の判定は、引数を省いた手元の既存呼び出しとの互換用。
 const TRUSTED_ASSOCIATIONS: ReadonlySet<string> = new Set(['OWNER', 'COLLABORATOR']);
 const TRUSTED_BOT_LOGIN = 'github-actions[bot]';
 
@@ -45,11 +47,21 @@ function limitLabel(limit: number): string {
 }
 
 // bot の author_association は区分の判定に使えない（bot 名を名乗る User と見分けられない）ので、login と type の両方で見る
-export function isTrustedComment(comment: ContextComment): boolean {
+export function isTrustedComment(comment: ContextComment, writers?: ReadonlySet<string>): boolean {
   if (comment.user?.login === TRUSTED_BOT_LOGIN && comment.user.type === 'Bot') {
     return true;
   }
-  return TRUSTED_ASSOCIATIONS.has(comment.author_association ?? '');
+  return isTrustedWriter(comment, writers);
+}
+
+function isTrustedWriter(value: PullRequest, writers?: ReadonlySet<string>): boolean {
+  // 第3引数を渡す CI の呼び出しでは、区分を権限確認の代わりにしない。
+  if (writers !== undefined) {
+    const login = normalizeLogin(value.user?.login);
+    return value.user?.type === 'User' && login !== undefined && writers.has(login);
+  }
+  // 手元の既存の2引数 CLI と純粋な関数の呼び出しは、従来の挙動を保つ。
+  return TRUSTED_ASSOCIATIONS.has(value.author_association ?? '');
 }
 
 // 古い順。同時刻は id で決め、実行ごとに並びが変わらないようにする
@@ -158,8 +170,9 @@ export function renderComments(
   comments: readonly ContextComment[],
   limit: number = MAX_FILE_BYTES,
   unavailable = false,
+  writers?: ReadonlySet<string>,
 ): CommentRender {
-  const trusted = sortByCreatedAt(comments.filter(isTrustedComment));
+  const trusted = sortByCreatedAt(comments.filter((comment) => isTrustedComment(comment, writers)));
   const droppedByAssociation = comments.length - trusted.length;
   const maxBodyBytes = Math.floor(limit / COMMENT_BODY_LIMIT_DIVISOR);
   const entries = trusted.map((comment) => commentEntry(comment, maxBodyBytes));
@@ -198,11 +211,11 @@ function bodyHeader(login: string, kept: number, droppedByAssociation: number, t
   ].join('\n');
 }
 
-// 同じリポジトリのブランチの PR は、書き込みの権限を持たない人も開ける。作成者が OWNER か COLLABORATOR でなければ、
-// 本文は書き換えられるものとして渡さない。渡すときも、見出しを偽装されないよう全行を引用にする
-export function renderBody(pr: PullRequest, limit: number = MAX_FILE_BYTES): BodyRender {
+// 同じリポジトリのブランチの PR は、書き込みの権限を持たない人も開ける。
+// 確認できた書き手の本文だけを渡し、見出しを偽装されないよう全行を引用にする。
+export function renderBody(pr: PullRequest, limit: number = MAX_FILE_BYTES, writers?: ReadonlySet<string>): BodyRender {
   const login = pr.user?.login ?? '(不明)';
-  if (!TRUSTED_ASSOCIATIONS.has(pr.author_association ?? '')) {
+  if (!isTrustedWriter(pr, writers)) {
     const text = `${bodyHeader(login, 0, 1, 'なし')}作成者が書き込みの権限を持たないので本文を渡さない\n`;
     return { text, truncated: false, kept: 0, droppedByAssociation: 1 };
   }
@@ -276,19 +289,26 @@ function asPullRequest(json: unknown): PullRequest {
 // rawDir の pr.json、issue-comments.json、review-comments.json を読み、outDir に body.md、comments.md、review-comments.md を書く。
 // 絞る前の JSON を Claude が読む outDir に置かないため、2つのディレクトリを分ける。
 // 読めなかったものは空として扱い、読めたものだけで書く（取得の一部が落ちても、AI レビューは差分と残りで続けるため）
-export function writeContext(rawDir: string, outDir: string): ContextResult {
+export function writeContext(rawDir: string, outDir: string, writers?: ReadonlySet<string>): ContextResult {
   const pr = readJson(rawDir, 'pr.json', asPullRequest);
   const issueComments = readJson(rawDir, 'issue-comments.json', flattenPages);
   const reviewComments = readJson(rawDir, 'review-comments.json', flattenPages);
 
   mkdirSync(outDir, { recursive: true });
-  const body = pr === undefined ? renderBodyUnavailable() : renderBody(pr);
-  const issue = renderComments('PR 全体のコメント', issueComments ?? [], MAX_FILE_BYTES, issueComments === undefined);
+  const body = pr === undefined ? renderBodyUnavailable() : renderBody(pr, MAX_FILE_BYTES, writers);
+  const issue = renderComments(
+    'PR 全体のコメント',
+    issueComments ?? [],
+    MAX_FILE_BYTES,
+    issueComments === undefined,
+    writers,
+  );
   const review = renderComments(
     'インラインのレビューコメント',
     reviewComments ?? [],
     MAX_FILE_BYTES,
     reviewComments === undefined,
+    writers,
   );
   writeFileSync(join(outDir, 'body.md'), body.text);
   writeFileSync(join(outDir, 'comments.md'), issue.text);
@@ -317,12 +337,24 @@ export function writeContext(rawDir: string, outDir: string): ContextResult {
 }
 
 if (import.meta.main) {
-  const [rawDir, outDir] = process.argv.slice(2);
+  const [rawDir, outDir, writersFile] = process.argv.slice(2);
   if (!rawDir || !outDir) {
     console.error('使い方: node scripts/ai-review-context.ts <取得した JSON のディレクトリ> <書き出すディレクトリ>');
     process.exit(1);
   }
-  const { reports, unreadable } = writeContext(rawDir, outDir);
+  let writers: ReadonlySet<string> | undefined;
+  if (writersFile !== undefined) {
+    writers = new Set<string>();
+    try {
+      const raw: unknown = JSON.parse(readFileSync(writersFile, 'utf8'));
+      if (Array.isArray(raw) && raw.every((value) => normalizeLogin(value) !== undefined)) {
+        writers = new Set(raw.map((value) => normalizeLogin(value)!));
+      }
+    } catch {
+      // CI の確認済み集合が無い・壊れているときは、誰も確認できなかったものとして扱う。
+    }
+  }
+  const { reports, unreadable } = writeContext(rawDir, outDir, writers);
   for (const source of unreadable) {
     console.log(formatUnreadableWarning(source));
   }
