@@ -2,7 +2,6 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { commonDb } from '../src/server/db/index.ts';
-import { sessionCookieName } from '../src/shared/session-cookie.ts';
 import { download, expectDownloadHeaders, storedFile } from './attachment-download-helpers.ts';
 import { createSessionWithToken } from './factories.ts';
 import { createTarget, testEnv } from './operations/world.ts';
@@ -34,7 +33,8 @@ describe.each(['https://guild.example', 'http://127.0.0.1:5173'])('配信時の 
     expect(response.status).toBe(status);
     const cookies = response.headers.getSetCookie();
     expect(cookies).toHaveLength(1);
-    expect(cookies[0]).toContain(`${sessionCookieName(origin)}=${session.token};`);
+    const expectedCookieName = origin.startsWith('https:') ? '__Host-sg_session' : 'sg_session';
+    expect(cookies[0]!.split(';')[0]).toBe(`${expectedCookieName}=${session.token}`);
     expect(cookies[0]).toContain('Max-Age=2592000');
     expect(cookies[0]).toContain('Path=/');
     expect(cookies[0]).toContain('HttpOnly');
