@@ -135,7 +135,33 @@ export const orgWikiUpdate = defineOperation({
     .superRefine(validateContent),
   output: z.object({ page: wikiPageSchema }),
 });
+// after_page_id: null は先頭、省略は末尾。同じ Wiki の移動先の兄弟だけを指せる。
+const moveInput = {
+  page_id: idSchema,
+  parent_id: idSchema.nullable(),
+  after_page_id: idSchema.nullable().optional(),
+};
+export const orgWikiMove = defineOperation({
+  name: 'org-wiki-move',
+  description: '組織の Wiki のページを並べ替えるか、同じ Wiki の親へ移す',
+  mode: 'write',
+  permission: 'organization',
+  input: z.object(moveInput),
+  output: z.object({ page_id: z.string(), parent_id: z.string().nullable() }),
+});
+export const workspaceWikiMove = defineOperation({
+  name: 'workspace-wiki-move',
+  description: 'ワークスペースの Wiki のページを並べ替えるか、同じ Wiki の親へ移す',
+  mode: 'write',
+  permission: 'member',
+  workspace: true,
+  hideForbiddenWorkspace: true,
+  input: z.object({ workspace_id: idSchema, ...moveInput }),
+  output: z.object({ page_id: z.string(), parent_id: z.string().nullable() }),
+});
 export const wikiOperations = [
+  orgWikiMove,
+  workspaceWikiMove,
   workspaceWikiTree,
   workspaceWikiPage,
   workspaceWikiCreate,

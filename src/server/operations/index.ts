@@ -1,3 +1,4 @@
+import { orgWikiMoveOperation, workspaceWikiMoveOperation } from './wiki-move.ts';
 import {
   orgWikiSearchOperation,
   workspaceWikiSearchOperation,
@@ -127,6 +128,8 @@ import {
 const listedOperations: readonly ImplementedOperation[] = [
   orgWikiSearchOperation,
   workspaceWikiSearchOperation,
+  orgWikiMoveOperation,
+  workspaceWikiMoveOperation,
   orgWikiTreeOperation,
   orgWikiPageOperation,
   orgWikiCreateOperation,

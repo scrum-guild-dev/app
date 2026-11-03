@@ -274,3 +274,72 @@ export async function cleanupDeletedWiki(
   }
   return deleted;
 }
+
+// 移す先の祖先と移す部分木をそれぞれ10段で打ち切り、書き込み時にも循環と深さを検証する。
+function moveTree(scope: WikiScope, pageId: string, parentId: string | null) {
+  return sql`${ancestors(scope, parentId)}, subtree(id, depth) AS (
+    SELECT p.id, 1 FROM wiki_pages p WHERE p.id = ${pageId} AND ${scopeOf('p', scope)} AND p.deleted_at IS NULL
+    UNION ALL
+    SELECT p.id, s.depth + 1 FROM subtree s CROSS JOIN wiki_pages p ON p.parent_id = s.id
+    WHERE ${scopeOf('p', scope)} AND p.deleted_at IS NULL AND s.depth < 10
+  )`;
+}
+function treeFits(parentId: string | null, pageId: string) {
+  return sql<boolean>`NOT EXISTS (SELECT 1 FROM ancestors WHERE id = ${pageId})
+    AND (${parentId} IS NULL OR EXISTS (SELECT 1 FROM ancestors WHERE parent_id IS NULL))
+    AND coalesce((SELECT max(depth) FROM ancestors), 0) + (SELECT max(depth) FROM subtree) <= 10`;
+}
+export async function wikiMoveProblem(db: OrganizationDb, scope: WikiScope, pageId: string, parentId: string | null) {
+  const row = await db.first(
+    raw(
+      db,
+      sql<{ cycle: number; fits: number }>`${moveTree(scope, pageId, parentId)}
+    SELECT EXISTS (SELECT 1 FROM ancestors WHERE id = ${pageId}) AS cycle, ${treeFits(parentId, pageId)} AS fits`,
+    ),
+  );
+  return row?.cycle ? 'cycle' : row?.fits ? null : 'too_deep';
+}
+type MoveSnapshot = { id: string; parent_id: string | null; position: string };
+export function wikiMoveStatement(
+  db: OrganizationDb,
+  scope: WikiScope,
+  current: MoveSnapshot,
+  parentId: string | null,
+  position: string,
+  snapshots: readonly MoveSnapshot[],
+) {
+  const guards = sql<boolean>`NOT EXISTS (SELECT 1 FROM json_each(${JSON.stringify(snapshots)}) snapshot
+    WHERE NOT EXISTS (SELECT 1 FROM wiki_pages g WHERE g.id = json_extract(snapshot.value, '$.id')
+      AND ${scopeOf('g', scope)} AND g.deleted_at IS NULL
+      AND g.parent_id IS json_extract(snapshot.value, '$.parent_id') AND g.position = json_extract(snapshot.value, '$.position')))`;
+  return raw(
+    db,
+    sql`${moveTree(scope, current.id, parentId)}
+    UPDATE wiki_pages AS p SET parent_id = ${parentId}, position = ${position}
+    WHERE p.id = ${current.id} AND ${scopeOf('p', scope)} AND p.deleted_at IS NULL
+      AND p.parent_id IS ${current.parent_id} AND p.position = ${current.position}
+      AND ${openScope(db, scope)} AND ${treeFits(parentId, current.id)}
+      AND ${guards}`,
+  );
+}
+export async function writeWikiMove(
+  db: OrganizationDb,
+  scope: WikiScope,
+  current: MoveSnapshot,
+  parentId: string | null,
+  plan: { position: string; renumber: { id: string; from: string; to: string }[] },
+  snapshots: readonly MoveSnapshot[],
+) {
+  const [moved] = await db.batch([
+    wikiMoveStatement(db, scope, current, parentId, plan.position, snapshots),
+    ...plan.renumber.map((row) =>
+      raw(
+        db,
+        sql`UPDATE wiki_pages AS p SET position = ${row.to}
+      WHERE p.id = ${row.id} AND ${scopeOf('p', scope)} AND p.parent_id IS ${parentId}
+        AND p.deleted_at IS NULL AND p.position = ${row.from} AND changes() > 0`,
+      ),
+    ),
+  ]);
+  return moved.changes > 0;
+}

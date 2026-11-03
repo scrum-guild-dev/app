@@ -1,17 +1,18 @@
 // 定期処理の表。wrangler.jsonc の triggers.crons の式から処理を引く。表に無い式で起きたら、設定の食い違いなので例外にする
 import { cleanupWiki } from './cleanup-wiki.ts';
+import { cleanupAttachments } from './cleanup-attachments.ts';
 import { cleanupApiTokens } from './cleanup-api-tokens.ts';
 import { cleanupExpired } from './cleanup-expired.ts';
 import { suspendExpiredTrialsJob } from './suspend-expired-trials.ts';
 
 type ScheduledJob = (env: Env, scheduledTime: Date) => Promise<void>;
 
-// 片方が失敗しても、もう片方は消す。最初の失敗を、全部を終えてから投げる（cron の失敗として残る）
-async function cleanupAll(env: Env, scheduledTime: Date): Promise<void> {
+// 1つが失敗しても残りを実行する。最初の失敗を、全部を終えてから投げる（cron の失敗として残る）
+async function runJobs(jobs: readonly ScheduledJob[], env: Env, scheduledTime: Date): Promise<void> {
   const failures: unknown[] = [];
-  for (const cleanup of [cleanupExpired, cleanupApiTokens, cleanupWiki]) {
+  for (const job of jobs) {
     try {
-      await cleanup(env, scheduledTime);
+      await job(env, scheduledTime);
     } catch (err) {
       failures.push(err);
     }
@@ -21,9 +22,9 @@ async function cleanupAll(env: Env, scheduledTime: Date): Promise<void> {
 
 const scheduledJobs: ReadonlyMap<string, ScheduledJob> = new Map<string, ScheduledJob>([
   // 毎分: 期限を過ぎた行を消す（oauth_states、sessions、rate_limits と、api_tokens）
-  ['* * * * *', cleanupAll],
-  // 毎時 0 分: お試しの期限を過ぎた組織を一時的な停止にする
-  ['0 * * * *', suspendExpiredTrialsJob],
+  ['* * * * *', (env, at) => runJobs([cleanupExpired, cleanupApiTokens, cleanupWiki], env, at)],
+  // 毎時 0 分: お試しの期限切れを止め、停止していない組織の未添付のファイルを消す
+  ['0 * * * *', (env, at) => runJobs([suspendExpiredTrialsJob, cleanupAttachments], env, at)],
 ]);
 
 export async function runScheduled(controller: ScheduledController, env: Env): Promise<void> {

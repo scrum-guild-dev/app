@@ -298,3 +298,6 @@ export async function tableInfo(env: Env, table: string): Promise<TableInfoRow[]
     ),
   );
 }
+
+// Wiki の移動の書き込みを EXPLAIN QUERY PLAN で検査するための口。
+export { wikiMoveStatement as wikiMoveStatementForTest } from './wiki.ts';

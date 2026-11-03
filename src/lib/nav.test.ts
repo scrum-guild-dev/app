@@ -4,17 +4,17 @@ import { visibleNav } from './nav.ts';
 test.each([false, true])(
   'ワークスペースの有無（%s）によらず、左のメニューにアカウントと組織の入口を出さない',
   (hasWorkspace) => {
-    for (const inWorkspaceScreen of [false, true]) {
+    for (const hasWorkspaceMenu of [false, true]) {
       for (const isAdmin of [false, true]) {
         const labels = visibleNav(undefined, {
           hasWorkspace,
-          inWorkspaceScreen,
+          hasWorkspaceMenu,
           isAdmin,
           workspaceId: 'w1',
         }).flatMap((section) => section.items.map((item) => item.label));
         expect(labels).not.toContain('pageMe');
         expect(labels).not.toContain('pageOrgAdmin');
-        if (!inWorkspaceScreen) expect(labels).toEqual(['pageToday', 'orgWiki']);
+        if (!hasWorkspaceMenu) expect(labels).toEqual(['pageToday', 'orgWiki']);
       }
     }
   },
@@ -24,7 +24,7 @@ test('ワークスペースの設定は、管理者かリーダーのときだ�
   const labels = (options: { isAdmin?: boolean; isLeader?: boolean }) =>
     visibleNav(undefined, {
       hasWorkspace: false,
-      inWorkspaceScreen: true,
+      hasWorkspaceMenu: true,
       workspaceId: 'w1',
       ...options,
     }).flatMap((section) => section.items.map((item) => item.label));

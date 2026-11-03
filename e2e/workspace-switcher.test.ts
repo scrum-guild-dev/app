@@ -16,11 +16,7 @@ async function oneWorkspace(page: Page) {
   }));
 }
 
-test('一般のメンバーが別の所属先を選ぶと、終了したワークスペースのバックログへ移る', async ({
-  page,
-  context,
-  baseURL,
-}) => {
+test('今日やることから一般のメンバーが所属先を切り替え、戻っても対象を保つ', async ({ page, context, baseURL }) => {
   // seed を変えず、この回だけの移動先を作る。一般のユーザーのハルカを最初のリーダーにする。
   await signIn(context, baseURL, 'admin');
   const name = `架空の切り替え先 ${test.info().repeatEachIndex}-${test.info().retry}`;
@@ -53,12 +49,27 @@ test('一般のメンバーが別の所属先を選ぶと、終了したワー�
 
   await signIn(context, baseURL, 'member');
   const collect = await watchViolations(page);
-  await page.goto(`${backlog}/members`);
-  await expect(page.getByRole('heading', { level: 1, name: 'メンバー', exact: true })).toBeVisible();
+  await page.goto('/aoba');
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること', exact: true })).toBeVisible();
+  const todayTasks = await page.locator('.content .entry-title').allTextContents();
+  const nav = page.locator('#app-nav');
+  await expect(nav.getByRole('link', { name: '今日やること', exact: true })).toHaveAttribute('aria-current', 'page');
+  for (const [label, suffix] of [
+    ['バックログ', ''],
+    ['スプリント', '/sprint'],
+    ['計画', '/plan'],
+    ['Wiki', '/wiki'],
+    ['メンバー', '/members'],
+  ]) {
+    const link = nav.getByRole('link', { name: label, exact: true });
+    await expect(link).toHaveAttribute('href', `${backlog}${suffix}`);
+    await expect(link).not.toHaveAttribute('aria-current');
+  }
+  await expect(nav.getByRole('link', { name: '設定', exact: true })).toHaveCount(0);
   await expect(page.locator('.nav-item', { hasText: '組織の管理' })).toHaveCount(0);
   await buttonOf(page).click();
   const current = listOf(page).getByRole('link', { name: '受託開発チーム', exact: true });
-  await expect(current).toHaveAttribute('aria-current', 'page');
+  await expect(current).not.toHaveAttribute('aria-current');
   await expect(current.locator('use')).toHaveAttribute('href', '#i-check');
   const destination = listOf(page).getByRole('link', { name, exact: true });
   await expect(destination).toHaveAttribute('href', target);
@@ -71,6 +82,15 @@ test('一般のメンバーが別の所属先を選ぶと、終了したワー�
   await expect(page.getByText(/に終了しました。読み取り専用です。/).first()).toBeVisible();
   await buttonOf(page).click();
   await expect(listOf(page).getByRole('link', { name, exact: true })).toHaveAttribute('aria-current', 'page');
+  await page.keyboard.press('Escape');
+  await nav.getByRole('link', { name: '今日やること', exact: true }).click();
+  await expect(page).toHaveURL(/\/aoba$/);
+  await expect(buttonOf(page)).toContainText(name);
+  await expect(page.locator('.content .entry-title')).toHaveText(todayTasks);
+  await expect(nav.getByRole('link', { name: '設定', exact: true })).toHaveAttribute('href', `${target}/settings`);
+  await expect(nav.getByRole('link', { name: 'メンバー', exact: true })).toHaveAttribute('href', `${target}/members`);
+  await nav.getByRole('link', { name: 'メンバー', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${target}/members$`));
   expect(await collect()).toEqual([]);
 });
 
@@ -136,9 +156,9 @@ test.describe('所属が1つの一般のメンバー', () => {
     await expect(listOf(page)).toBeHidden();
   });
 
-  test('畳んだ列と760px以下とワークスペースの外には切り替えを出さない', async ({ page }) => {
+  test('今日やることにも切り替えがあり、畳んだ列と760px以下では隠す', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(backlog);
+    await page.goto('/aoba');
     await expect(buttonOf(page)).toBeVisible();
     await page.getByRole('button', { name: 'メニューを畳む' }).click();
     await expect(buttonOf(page)).toBeHidden();
@@ -150,8 +170,32 @@ test.describe('所属が1つの一般のメンバー', () => {
     }
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/aoba');
-    await expect(buttonOf(page)).toHaveCount(0);
+    await expect(buttonOf(page)).toBeVisible();
   });
+
+  test('今日やることからキーボードで開閉し、対象のバックログを開ける', async ({ page }) => {
+    await page.goto('/aoba');
+    const button = buttonOf(page);
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await expect(listOf(page)).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expect(listOf(page).getByRole('link')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(listOf(page)).toBeHidden();
+    await expectFocusReturned(page, button);
+    await page.locator('#app-nav').getByRole('link', { name: 'バックログ', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${backlog}$`));
+  });
+});
+
+test('所属0件の今日やることには切り替えや行き先のないメニューを出さない', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'admin');
+  await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (body) => ({ ...body, workspaces: [] }));
+  await page.goto('/aoba');
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること', exact: true })).toBeVisible();
+  await expect(buttonOf(page)).toHaveCount(0);
+  await expect(page.locator('#app-nav a[href*="/w/"]')).toHaveCount(0);
 });
 
 for (const width of [1280, 1024]) {
