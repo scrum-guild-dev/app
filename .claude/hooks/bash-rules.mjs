@@ -6,7 +6,7 @@
 // 場所か package.json を判定できないパッケージマネージャーのスクリプトの実行、npm が知らないコマンド、展開で決まるスクリプトの名前、
 // 表に無いフラグの読み方が多すぎるコマンド、読めない短いフラグのまとめ、
 // 守る先とリポジトリの根とその祖先の削除と移動（rm、rmdir、mv、find -delete）、git clean の -x と -X では人の確認を挟む。
-// e2e を走らせるコマンド（playwright test。pnpm e2e もスクリプトの中身として）は deny にする。
+// e2e を走らせるコマンドは、フック自身の環境がクラウドを示すときだけ許可する。
 // gh pr merge は、<番号>-… の作業ブランチの中で打つ --squash --match-head-commit <40桁の SHA> の固定の形だけを判定せず（.claude/settings.json の許可ルールに任せる）、ほかの形は deny にする。非対話の実行は確認に回す。
 // find の -exec 系は {} を起点に置き換えて同じ規則に掛け直す（docs/development.md の「Claude の設定とフック」）。
 // permissions.deny の前方一致では npx wrangler や pnpm exec wrangler の言い換えを取りこぼすので、語に分けて判定する。
@@ -110,10 +110,45 @@ function findPlaywright(words, ci) {
   return words.findIndex((w, i) => i > ci && isPlaywright(w));
 }
 
-const E2E_REASON = 'e2e は手元で走らせず、CI（ci-ok）で確かめる。docs/development.md の「開発の流れ」';
+const E2E_REASON = 'e2e はローカルのセッションで走らせず、クラウドの事前検査か CI（ci-ok）で確かめる。docs/development.md の「開発の流れ」';
+
+// コマンド内の代入や export はクラウドの証拠にしない。フックを起動した環境だけを見る。
+function canRunE2e() {
+  return process.env.CLAUDE_CODE_REMOTE === 'true';
+}
+
+function findE2eRunner(words, ci, dir) {
+  const tool = baseName(words[ci]);
+  // e2e の入口を引数に取る整形・静的検査は実行ではない。他の保護の判定には影響させない。
+  if (isNonExecuting(tool) || tool === 'prettier' || tool === 'eslint') return -1;
+  const args = sliceWords(words, ci + 1);
+  const syntaxOnly = ['--check', '-c'].includes(args[0]) && (args.length === 2 || (args.length === 3 && args[1] === '--'));
+  if ((tool === 'node' || tool === 'nodejs') && syntaxOnly) return -1;
+  const corepack = tool === 'corepack' ? 1 : 0;
+  const manager = managerOf(corepack ? (words[ci + 1] ?? '') : words[ci]);
+  // exec/dlx と package.json のスクリプトは経由先へ同じ判定を掛け直す。ここで引数を走査すると prettier の対象まで止める。
+  if (manager) return -1;
+  const entries = ['scripts/e2e-preflight.ts', 'scripts/e2e-run.ts'];
+  const isRunner = (word) => {
+    const written = withoutGlobGroup(word);
+    const absolute = dir ? path.resolve(dir, written) : null;
+    const names = [path.posix.normalize(written), absolute].filter(Boolean);
+    if (names.some((name) => /(^|\/)scripts\/e2e-(preflight|run)\.ts$/.test(name))) return true;
+    if (!GLOB_CHARS.test(written)) return false;
+    // 大きすぎる展開は実行口と断定せず、既存の glob 判定による確認を残す。
+    if (expansionSize(written) > MAX_BRACE_EXPANSION) return false;
+    // ファイル名に当たらない glob は、深い作業場所の絶対パスを照合する前に外す。
+    // {1..256} のような find の起点まで長いパスの glob として照合すると、既存の性能上限を超える。
+    if (!expandBraces(written).some((pattern) => entries.some((entry) => matchesGlob(path.basename(entry), path.posix.basename(pattern))))) return false;
+    const root = dir && (repoRootOf(dir) ?? (path.basename(dir) === 'scripts' ? path.dirname(dir) : dir));
+    return entries.some((entry) => matchesGlob(root ? path.join(root, entry) : entry, absolute ?? written));
+  };
+  return words.findIndex((word, i) => i >= ci && isRunner(word));
+}
 // playwright の最初の位置引数が test なら e2e の実行。show-trace、install、--version などは通す。
 // その語が展開で決まる（playwright $X、"$X"、$(echo test)）と test になりうるので、wrangler の引用符の外の展開と同じく止める
 function judgePlaywright(args) {
+  if (canRunE2e()) return null;
   const at = args.findIndex((a) => !a.startsWith('-'));
   if (at === -1) return null;
   return args[at] === 'test' || expandsAt(args, at) || shapeAt(args, at).includes(DYNAMIC) ? [DENY, E2E_REASON] : null;
@@ -2739,6 +2774,23 @@ function judgeSegment(words, ctx) {
     else results.push(...judgeSegment(concatWords(sliceWords(words, 0, ci), args), { ...ctx, envFrom: ci, depth: ctx.depth + 1 }));
   }
 
+  // Node の --run も package.json の pre/post を含め、既存のスクリプト判定へ渡す。
+  if (tool === 'node' || tool === 'nodejs') {
+    const separator = args.indexOf('--');
+    const before = separator === -1 ? args : sliceWords(args, 0, separator);
+    const runAt = before.findIndex((arg) => arg === '--run' || arg.startsWith('--run='));
+    if (runAt !== -1) {
+      const flag = before[runAt];
+      const name = flag === '--run' ? before[runAt + 1] : flag.slice('--run='.length);
+      const nameAt = flag === '--run' ? runAt + 1 : runAt;
+      if (isUnresolved(before, nameAt)) results.push([ASK, NAME_EXPANDS_REASON]);
+      else if (name) {
+        const extra = separator === -1 ? [] : sliceWords(args, separator + 1);
+        results.push(...judgeScripts([name], extra, { dir: ctx.dir, place: ctx.place }, ctx));
+      }
+    }
+  }
+
   // find の -exec 系は、{} を起点に置き換えたコマンドを同じ規則で見る（find .claude/hooks -exec rm {} \; は rm .claude/hooks）
   // 入れ子の find は起点の数の深さ乗に増えるので、コマンドぜんたいで掛け直す数を MAX_FIND_COMMANDS までにする
   if (tool === 'find' || tool === 'gfind') {
@@ -2768,6 +2820,8 @@ function judgeSegment(words, ctx) {
   const wrangler = findWrangler(words, ci);
   if (wrangler !== -1 && isCfWrangler(words[wrangler])) results.push([DENY, CF_WRANGLER_REASON]);
   else if (wrangler !== -1) results.push(expandsAt(words, wrangler) ? UNQUOTED_REASON : judgeWrangler(sliceWords(words, wrangler + 1)));
+
+  if (!canRunE2e() && findE2eRunner(words, ci, ctx.dir) !== -1) results.push([DENY, E2E_REASON]);
 
   const playwright = findPlaywright(words, ci);
   if (playwright !== -1) results.push(judgePlaywright(sliceWords(words, playwright + 1)));

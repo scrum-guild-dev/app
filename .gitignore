@@ -20,6 +20,7 @@ vite.config.ts.timestamp-*
 # e2e の結果（pnpm e2e）
 test-results/
 playwright-report/
+.e2e-preflight/
 # wrangler types が作る（scripts/prepare.ts）
 worker-configuration.d.ts
 # daily-scrum が毎回作る開発ボードのデータ（scripts/progress-data.ts）

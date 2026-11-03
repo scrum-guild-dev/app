@@ -53,7 +53,7 @@ gh api "repos/{owner}/{repo}/commits/<head_sha>/check-runs" --jq '.check_runs[] 
 `review` は AI レビュー（`.github/workflows/ai-review.yml`）のチェックで、助言なので `ci-ok` に含めず、落ちてもマージの判定を止めない（`docs/development.md` の「CI」）。
 `review` の `status` と `conclusion` が何でも、この前提は満たすものとして扱う（理由: 回した先の pr も `review` の失敗は直さないので、数に入れると done-check が先へ進めない）。
 実行中の `review` が後から付ける指摘は、pr/feedback.md の手順 1 が完了を待って拾う。
-PR 作成後の段では、`e2e`、`e2e-dev`、`e2e-repeat` の結果も確かめる。e2e はセッションが手元で走らせないので、これが e2e の確かめになる。この 3 つは `ci-ok` に含まれ、上の表の「CI が成功」で見る。落ちていたら手元で再現せず、回した先の pr/feedback.md の手順 5 が、ログと trace で直す（`docs/development.md` の「CI の e2e が落ちたとき」）。
+PR 作成後の段では、`e2e`、`e2e-dev`、`e2e-repeat` の結果も確かめる。e2e はセッションが手元で走らせないので、これが e2e の確かめになる。この 3 つは `ci-ok` に含まれ、上の表の「CI が成功」で見る。落ちていたら、ローカルでは再現せずログと trace で直し、クラウドでは関連ファイルで再現して修正後に事前検査を通す。回した先の pr/feedback.md の手順 5 に従う（`docs/development.md` の「CI の e2e が落ちたとき」）。
 
 ```bash
 gh api graphql -f query='{ repository(owner:"<owner>", name:"<repo>") { pullRequest(number:<number>) { author { login } reviewThreads(first:100) { nodes { isResolved path comments(first:1) { nodes { body author { login } } } } } } } }'
@@ -95,7 +95,7 @@ git diff <base>...HEAD
 
 ### 5. 動かして確かめる
 
-共通の点検基準の「動かして確かめる」に従う。手元の画面確認には terminal-browser を使い、e2e は CI に任せる。
+共通の点検基準の「動かして確かめる」に従う。ローカルの画面確認には terminal-browser を使い、e2e は CI に任せる。クラウドでは PR 前に `pnpm e2e:preflight [base-ref]` を通し、対象コードと記録を確認する。CI も省略しない。
 
 ### 6. レビューエージェントに渡す
 

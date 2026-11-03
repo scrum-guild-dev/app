@@ -46,6 +46,10 @@ gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=open" --jq '.[0]'
 
 done-check でコミットが増えたら、push してから Step 1 に進む。
 
+### クラウドの PR 前検査
+
+クラウドでは、作成前の最終コードで `pnpm e2e:preflight <base-ref>` を通す（通常は `origin/main`、スタックは PR の base）。詳細は `docs/development.md` の「クラウドで PR 前に e2e を確かめる」。結果の `success`、対象コードの fingerprint、base と HEAD を確認し、結果と未検証事項を本文に書く。検査後のコード変更は影響する検査をやり直し、必要な検査が失敗・未実施なら PR 作成を止めて理由を報告する。ローカルでは実行せず、PR の CI で確かめる。
+
 ## Step 1: リポジトリの慣習を収集
 
 設定ファイルではなく実績を見る。ラベルは定義だけあって使われていないことが多いため。

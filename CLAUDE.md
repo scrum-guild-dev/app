@@ -31,7 +31,7 @@ Node は `.node-version`（26）、pnpm は `package.json` の `packageManager` 
 - build: `pnpm build`（`build/` に書き出し、`build/_headers` を作る）
 - フックのテスト: `node --test .claude/hooks/*.test.mjs`
 - CLI: `pnpm -s sg ops`、`pnpm -s sg call <操作名>`（API トークンで操作を呼ぶ。設定と手元のサーバーへの向け方は `docs/development.md` の「CLI（sg）」）、`pnpm -s sg mcp`（MCP の stdio サーバー。登録は `docs/development.md` の「MCP（sg mcp）」）
-- e2e: Claude のセッション（手元でもクラウドでも）は手元で走らせない（`pnpm e2e`、`playwright test` はフックが止める）。PR の CI の `e2e`、`e2e-dev`、`e2e-repeat` が確かめ、落ちたらジョブのログと成果物の trace で直す（`docs/development.md` の「CI の e2e が落ちたとき」）。人が自分の端末で調べるときは `pnpm e2e`（build し直してサーバーを立て、手元の D1 を seed で入れ直してから Playwright で確かめる。手元の D1 の行は消える。初めは `pnpm exec playwright install chromium`）で、`pnpm e2e e2e/members.test.ts` のようにファイルを渡せる。サーバーの扱い、`--workers`、`expect` の待ち、`E2E_DEV_BUILD=1` は `docs/development.md` の「e2e のサーバー」「e2e の書き方」
+- e2e: ローカルのセッションでは走らせない（フックが止める）。クラウドでは PR 作成前に `pnpm e2e:preflight [base-ref]` を通す（既定は `origin/main`。手順は `docs/development.md` の「クラウドで PR 前に e2e を確かめる」）。PR の CI の `e2e`、`e2e-dev`、`e2e-repeat` が確かめ、落ちたらジョブのログと成果物の trace で直す（`docs/development.md` の「CI の e2e が落ちたとき」）。人が自分の端末で調べるときは `pnpm e2e`（build し直してサーバーを立て、手元の D1 を seed で入れ直してから Playwright で確かめる。手元の D1 の行は消える。初めは `pnpm exec playwright install chromium`）で、`pnpm e2e e2e/members.test.ts` のようにファイルを渡せる。サーバーの扱い、`--workers`、`expect` の待ち、`E2E_DEV_BUILD=1` は `docs/development.md` の「e2e のサーバー」「e2e の書き方」
 - 空の D1 に全マイグレーションを当て、seed を2回流して確かめる: `pnpm db:migrate:fresh`
 - Wiki の検索を測る: `pnpm exec node scripts/wiki-search-bench.ts`（使い捨てのローカルD1で5,000ページの検索と走査上限の拒否を測る。`docs/development.md` の「Wiki の検索を測る」）
 - バックログの木を 5 万件で測る: `pnpm bench:backlog`（使い捨ての D1 で `wrangler dev --local` を立てて測る。`docs/development.md` の「バックログの木を 5 万件で測る」）
@@ -45,7 +45,7 @@ Node は `.node-version`（26）、pnpm は `package.json` の `packageManager` 
 - `main` に直接コミットも push もしない。文書だけの変更も PR を通す。1 Issue に 1 ブランチ、1 PR。ブランチ名は `<Issue番号>-<短い名前>`（クラウドのセッションの `claude/*` はそのまま）。手元では同じ名前のワークツリー（`./worktrees/<ブランチ名>`）を切って作業する（`docs/development.md` の「ワークツリーで作業する」）。`main` の作業コピーのファイルは Write と Edit をフックが止めるので、書く前にワークツリーを切る。Bash で書いて迂回しない。マージは squash で行う。手元の対話のセッションは、`needs-human` の無い PR で `label` と `ci-ok` が成功し、AI レビューの CRITICAL と HIGH が残っていなければ、人に聞かずにマージする。`needs-human` の PR と確かめを満たさない PR、クラウドのセッション、非対話の実行（`claude -p`、CI の中）は人に任せる（`docs/development.md` の「マージの判定」）。GitHub のブランチ保護は無く、`.claude/` のフックと `.githooks/` は踏み線にすぎないので、この決まりは自分で守る
 - 実装を終えたら、確認を取らずにコミットし、`done-check` を通して PR を作る。`pr` も承認を取らずに作成まで進め、作った後に内容を報告する（作業ブランチのコミットと PR は後から直せるため）。承認を取るのは `pr/create.md` の Step 4 に挙げた場合（直さなかった CRITICAL か HIGH が残る、done-check を省いた、既存の PR を書き換える）だけ。マージはこの決まりと別で、`pr` の確かめを満たせば承認を取らずに行う
 - AI レビューの指摘は全件、対応方針と結果を返信し、インラインのスレッドは解決済みを確認して対応完了とする。修正・検査・必要なベース取り込みを済ませ、ローカルのコミットをまとめて1回で push する。指摘ごと・コミットごとに push しない（詳細は `docs/development.md` の「AI レビューへの対応と push」）
-- セッションは手元で e2e を走らせない（フックが止める。例外も認めない）。変えた画面を開く e2e のテストを差分に足し、PR の CI に任せる。落ちたときの直し方は `docs/development.md` の「CI の e2e が落ちたとき」と「開発の流れ」
+- ローカルのセッションは e2e を走らせない。クラウドは変更に関わる e2e で修正を確かめ、PR 作成前に `pnpm e2e:preflight` を通す。変えた画面を開く e2e のテストを差分に足し、PR の CI も通す。落ちたときの直し方は `docs/development.md` の「CI の e2e が落ちたとき」と「開発の流れ」
 - 本番に触らない。`wrangler deploy`、`wrangler versions deploy`、`wrangler rollback`、`--remote` を付けた `wrangler d1` は Cloudflare の Workers Builds だけが実行する
 - 組織の中の表を読み書きするときは、必ず組織で絞る。共通の表と組織の中の表を結合せず、1回の `batch()` に混ぜない（`docs/data-model.md` の「データベースの分け方」）
 - DB への書き込みは、文を並べて `batch()` で1つのトランザクションとして送る
