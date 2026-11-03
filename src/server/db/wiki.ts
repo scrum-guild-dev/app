@@ -94,7 +94,8 @@ export async function readWikiRevisions(db: OrganizationDb, scope: WikiScope, pa
         .where('p.id', '=', pageId)
         .where(scopeOf('p', scope))
         .where('p.deleted_at', 'is', null)
-        .orderBy('r.version', 'desc'),
+        .orderBy('r.version', 'desc')
+        .limit(100),
     ),
   );
 }

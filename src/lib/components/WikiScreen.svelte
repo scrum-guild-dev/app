@@ -86,7 +86,10 @@
     );
   }
   beforeNavigate((navigation) => {
-    if (!dirty && !saving && !historyBusy) return;
+    if (!dirty && !saving && !historyBusy) {
+      historyPage = null;
+      return;
+    }
     if (navigation.type === 'leave') {
       navigation.cancel();
       return;
@@ -317,7 +320,7 @@
               wiki.updatePage(page_id, read_version, { title, body_md })}
             onrestored={async (saved) => {
               historyPage = null;
-              notice = t(saved.version === current.version ? 'wikiUnchanged' : 'wikiRestored', {
+              notice = t(saved.version === current.version ? 'wikiRestoreUnchanged' : 'wikiRestored', {
                 version: saved.version,
               });
               await invalidate('app:wiki');
@@ -329,19 +332,21 @@
       {:else if current}
         <div class="wiki-head">
           <h2 id="wiki-page-title" tabindex="-1" class="section-title wrap-anywhere">{current.title}</h2>
-          <button
-            class="btn"
-            type="button"
-            onclick={() => {
-              historyPage = current.id;
-            }}>{t('wikiHistory')}</button
-          >
-          {#if canWrite}<div class="form-actions">
+          <div class="form-actions">
+            <button
+              class="btn"
+              type="button"
+              onclick={() => {
+                historyPage = current.id;
+              }}>{t('wikiHistory')}</button
+            >
+            {#if canWrite}
               <button class="btn" type="button" onclick={() => begin(false)}>{t('wikiEdit')}</button
               >{#if depth < 10}<button class="btn" type="button" onclick={() => begin(true, current.id)}
                   >{t('wikiAddChild')}</button
                 >{:else}<p class="field-hint">{t('wikiDepth')}</p>{/if}
-            </div>{/if}
+            {/if}
+          </div>
         </div>
         <WikiContent source={current.body_md} internalLinkPrefix={`${page.url.origin}${wiki.rootHref}/`} />
       {:else if pages.length}
