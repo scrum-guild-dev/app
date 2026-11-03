@@ -38,7 +38,7 @@ describe('needs-human の .claude/ の規則', () => {
     for (const path of [
       '.claude/settings.json',
       '.claude/hooks/guard-bash.mjs',
-      '.claude/skills/pr-create/run.py',
+      '.claude/skills/pr/run.py',
       '.claude/skills/sprint-review/check-criterion.py',
       '.claude/checklists/run.sh',
       '.claude/skills/x/SKILL.MD',
@@ -71,8 +71,8 @@ describe('needs-human の .claude/ の規則', () => {
   test('スキルとチェックリストの .md と CLAUDE.md は守る（セッションが人に聞かずにマージするため）', () => {
     for (const path of [
       '.claude/skills/retro/SKILL.md',
-      '.claude/skills/pr-feedback/SKILL.md',
-      '.claude/skills/pr-create/github-mcp.md',
+      '.claude/skills/pr/feedback.md',
+      '.claude/skills/pr/github-mcp.md',
       '.claude/checklists/multi-tenant.md',
       '.claude/checklists/languages/typescript.md',
       'CLAUDE.md',

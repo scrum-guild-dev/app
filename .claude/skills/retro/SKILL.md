@@ -26,12 +26,12 @@ description: このセッションのやりとりを振り返り、次も効く�
 | 材料 | 取り方 |
 | --- | --- |
 | ユーザーの訂正 | 方針、直し方、文面、手順について、ユーザーが Claude の案を変えさせた指示 |
-| 下書きと実物の差 | `pr-create` の草案と作られた PR（`gh api repos/{owner}/{repo}/pulls/<n> --jq '{title, body, labels: [.labels[].name]}'`）、`pr-feedback` のスクラッチパッドの `pr-feedback-<number>-drafts.json` と投稿済みのリプライ（`gh api "repos/{owner}/{repo}/pulls/<n>/comments" --paginate` の、自分が書いて `in_reply_to_id` が下書きのコメント ID と一致するもの） |
+| 下書きと実物の差 | `pr` の草案と作られた PR（`gh api repos/{owner}/{repo}/pulls/<n> --jq '{title, body, labels: [.labels[].name]}'`）、`pr` のスクラッチパッドの `pr-<number>-drafts.json` と投稿済みのリプライ（`gh api "repos/{owner}/{repo}/pulls/<n>/comments" --paginate` の、自分が書いて `in_reply_to_id` が下書きのコメント ID と一致するもの） |
 | つまずき | 失敗したコマンド、返ってきた API のエラー、やり直した手順、スキルに書かれていない判断を迫られた場面 |
 | スプリントの結果 | `sprint-plan` で締めた後に頼まれたときだけ。締めた記録の Issue（`sprint-log`）の締めのコメント（引き方は `sprint-plan` の手順 1）から、計画と済みの差、持ち越し、取り下げ、途中で足した分、受け入れを見送ったか。持ち越しと取り下げの Issue は、コメントと PR の指摘から理由を読む |
 
 bot へのリプライはユーザーが見ないまま投稿されるので、下書きと実物の差の材料は人へのリプライと PR の本文だけになる。
-`gh` が無いか認証で失敗するときは、`pr-create/github-mcp.md` に従い、GitHub の MCP ツールで代える。
+`gh` が無いか認証で失敗するときは、`pr/github-mcp.md` に従い、GitHub の MCP ツールで代える。
 
 完了条件: 材料の全件に目を通し、下書きは「そのまま」「書き換え」「削除（投稿されなかった）」のどれかに分け、人が足したものは「追加」として拾っている。
 
@@ -46,7 +46,7 @@ bot へのリプライはユーザーが見ないまま投稿されるので、�
 | 学びの型 | 行き先 |
 | --- | --- |
 | スキルの手順の不備、書式、決め方 | そのスキルの `.claude/skills/<名前>/SKILL.md` |
-| レビューで見逃した問題 | `.claude/checklists/`（人の指摘からは `pr-feedback` の手順 9 でも足す） |
+| レビューで見逃した問題 | `.claude/checklists/`（人の指摘からは `pr/feedback.md` の手順 9 でも足す） |
 | リポジトリの決まり、事実 | `CLAUDE.md` か `docs/development.md` |
 | 環境やツールの落とし穴（sandbox で失敗したコマンド、`gh` の TLS エラーなど） | 手元のグローバルの `CLAUDE.md` の落とし穴の節。既に書いてあれば候補にしない |
 
