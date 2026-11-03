@@ -10,6 +10,7 @@ import {
 import { sessionCookieName } from '../../src/shared/session-cookie.ts';
 import { createApp } from '../../src/server/app.ts';
 import type { ImplementedOperation } from '../../src/server/operations/implement.ts';
+import { bearerFor, type TokenScope } from './api-token.ts';
 import {
   admitElsewhere,
   createPerson,
@@ -73,25 +74,65 @@ export function assertPointersCover(operations: readonly ImplementedOperation[],
 type PostOptions = {
   slug?: string;
   token?: string;
+  // API トークンの生の値。Authorization: Bearer で送る（token の Cookie とは別に付けられる）
+  bearer?: string;
   // null は Origin を付けない。省略は公開する URL
   origin?: string | null;
+  // 入力。body: 'binary' の操作では、JSON を encodeURIComponent してヘッダー X-Operation-Input で送る
   body?: unknown;
-  rawBody?: string | ReadableStream<Uint8Array>;
+  // 本文をそのまま送る。body: 'binary' の操作ではファイルのバイトで、X-Operation-Input を付けない
+  rawBody?: string | Uint8Array | ReadableStream<Uint8Array>;
+  // body: 'binary' の操作で、body の入力と一緒に送るファイルのバイト（省略は SMALL_FILE）
+  file?: string | Uint8Array | ReadableStream<Uint8Array>;
+  // body: 'binary' の操作の Content-Length。省略は本文の長さ（ReadableStream なら付けない）、null は付けない
+  contentLength?: string | null;
   headers?: Record<string, string>;
   env?: Env;
   // 渡すと、本番と同じ waitUntil の経路を通る（省略は ExecutionContext の無い呼び出し）
   executionCtx?: ExecutionContext;
 };
 
+// body: 'binary' の操作の一覧の検査で送る小さなファイル（PNG の先頭の8バイトと4バイト）
+export const SMALL_FILE = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+
+// 入力のヘッダーの値（body: 'binary' の操作）
+export function operationInputHeader(input: unknown): string {
+  return encodeURIComponent(JSON.stringify(input));
+}
+
+function byteLengthOf(body: string | Uint8Array | ReadableStream<Uint8Array>): number | undefined {
+  if (typeof body === 'string') return new TextEncoder().encode(body).byteLength;
+  if (body instanceof Uint8Array) return body.byteLength;
+  return undefined;
+}
+
+// body: 'binary' の操作の本文とヘッダー。app.request は文字列やバイトの本文にも Content-Length を付けないので、
+// ブラウザが File の本文に付けるのと同じく、ここで付ける（test/attachment-upload-runtime.test.ts が確かめる）
+function binaryRequest(options: PostOptions, headers: Headers): string | Uint8Array | ReadableStream<Uint8Array> {
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/octet-stream');
+  let body: string | Uint8Array | ReadableStream<Uint8Array>;
+  if (options.rawBody !== undefined) {
+    body = options.rawBody;
+  } else {
+    headers.set('X-Operation-Input', operationInputHeader(options.body ?? {}));
+    body = options.file ?? SMALL_FILE;
+  }
+  const length = options.contentLength === undefined ? byteLengthOf(body)?.toString() : options.contentLength;
+  if (length !== null && length !== undefined && !headers.has('Content-Length')) headers.set('Content-Length', length);
+  return body;
+}
+
 export async function post(app: App, definition: AnyOperationDefinition, options: PostOptions = {}): Promise<Response> {
   const env = options.env ?? testEnv;
-  const headers = new Headers({ 'Content-Type': 'application/json', ...options.headers });
+  const binary = definition.body === 'binary';
+  const headers = new Headers(binary ? options.headers : { 'Content-Type': 'application/json', ...options.headers });
   const origin = options.origin === undefined ? env.PUBLIC_ORIGIN : options.origin;
   if (origin !== null) headers.set('Origin', origin);
   if (options.token !== undefined) {
     headers.set('Cookie', `${sessionCookieName(env.PUBLIC_ORIGIN)}=${options.token}`);
   }
-  const body = options.rawBody ?? JSON.stringify(options.body ?? {});
+  if (options.bearer !== undefined) headers.set('Authorization', `Bearer ${options.bearer}`);
+  const body = binary ? binaryRequest(options, headers) : (options.rawBody ?? JSON.stringify(options.body ?? {}));
   return app.request(
     operationPath(definition, options.slug),
     // 本文が ReadableStream のときは Content-Length が付かない（chunked と同じ）
@@ -99,6 +140,17 @@ export async function post(app: App, definition: AnyOperationDefinition, options
     env,
     options.executionCtx,
   );
+}
+
+// 一覧を回す検査が、人を何で認証して呼ぶか。bearer は、その人の API トークン（Origin も Cookie も付けない呼び出しに使う）
+export type Credential = 'cookie' | 'bearer';
+
+export async function credentialOf(
+  person: Person,
+  credential: Credential,
+  scope: TokenScope = 'write',
+): Promise<Pick<PostOptions, 'token' | 'bearer'>> {
+  return credential === 'cookie' ? { token: person.token } : { bearer: await bearerFor(person, scope) };
 }
 
 export async function errorCodeOf(res: Response): Promise<string | undefined> {
@@ -126,10 +178,12 @@ export async function checkRowIsolation(
   pointers: Pointers,
   own: Target,
   other: Target,
+  credential: Credential = 'cookie',
 ): Promise<void> {
+  const caller = await credentialOf(own.admin, credential);
   const ok = await post(app, definition, {
     slug: own.slug,
-    token: own.admin.token,
+    ...caller,
     body: await inputFor(pointers, definition, own, own.admin),
   });
   expect(ok.status, '自分の組織の行を指す入力').toBe(200);
@@ -137,7 +191,7 @@ export async function checkRowIsolation(
   if (typeof pointer !== 'function') return;
   const res = await post(app, definition, {
     slug: own.slug,
-    token: own.admin.token,
+    ...caller,
     body: await inputFor(pointers, definition, other, own.admin),
   });
   expect(res.status, '別の組織の行を指す入力').toBe(404);
@@ -148,9 +202,16 @@ export async function checkRowIsolation(
 export function defineOperationChecks(
   operations: readonly ImplementedOperation[],
   pointers: Pointers,
-  options: { fetcher?: typeof fetch } = {},
+  // credential は、人を何で認証して呼ぶか。省略は Cookie。bearer は同じ検査を API トークンで回す
+  options: { fetcher?: typeof fetch; credential?: Credential } = {},
 ): void {
+  const credential = options.credential ?? 'cookie';
   const app = createApp(operations, options);
+  // API トークンでは呼べない操作（運用者の操作、cookieOnly、本文がバイナリの操作）。どの人が呼んでも 403
+  const refusesToken = (definition: AnyOperationDefinition) =>
+    credential === 'bearer' &&
+    (definition.permission === 'operator' || definition.cookieOnly === true || definition.body === 'binary');
+  const as = (person: Person) => credentialOf(person, credential);
 
   describe.each(operations.map((operation) => operation.definition))('$name（$permission）', (definition) => {
     let own: Target;
@@ -166,7 +227,7 @@ export function defineOperationChecks(
         createTarget({ suspended: true }),
         getOperator().then(withNewSession),
       ]);
-      // 停止した組織にしか入れない人は、403 の前にセッションを消されて 401 になる。ほかの組織にも入れる人にして、403 を見る
+      // 停止した組織にしか入れない人も、403 の organization_suspended を受ける（セッションは消えない）。ほかの組織にも入れる人にして、403 を見る
       await Promise.all(
         [suspended.admin, suspended.leader, suspended.member, suspended.bystander, suspended.invitee].map(
           admitElsewhere,
@@ -179,17 +240,49 @@ export function defineOperationChecks(
       expect(res.status).toBe(200);
       expect(definition.output.safeParse(await res.json()).success).toBe(true);
     };
-    const input = (target: Target, caller?: Person) => inputFor(pointers, definition, target, caller);
+    // 組織の外の操作は運用者が呼ぶので、入力が呼ぶ人の行を指す操作（token-revoke）には運用者を渡す
+    const input = (target: Target, caller?: Person) =>
+      inputFor(pointers, definition, target, caller ?? (isOutsideOperation(definition) ? operator : undefined));
 
-    test('Origin が公開する URL と違う、または無いと 403', async () => {
-      const token = (isOutsideOperation(definition) ? operator : own.admin).token;
-      const body = await input(own);
-      for (const origin of ['https://evil.example', `${testEnv.PUBLIC_ORIGIN}.evil.example`, null]) {
-        const res = await post(app, definition, { slug: own.slug, token, origin, body });
-        expect(res.status, String(origin)).toBe(403);
-        expect(await errorCodeOf(res)).toBe('forbidden');
-      }
-    });
+    const caller = () => as(isOutsideOperation(definition) ? operator : own.admin);
+
+    if (credential === 'cookie') {
+      test('Origin が公開する URL と違う、または無いと 403', async () => {
+        const body = await input(own);
+        for (const origin of ['https://evil.example', `${testEnv.PUBLIC_ORIGIN}.evil.example`, null]) {
+          const res = await post(app, definition, { slug: own.slug, ...(await caller()), origin, body });
+          expect(res.status, String(origin)).toBe(403);
+          expect(await errorCodeOf(res)).toBe('forbidden');
+        }
+      });
+    } else if (refusesToken(definition)) {
+      test('API トークンでは、Origin によらず 403', async () => {
+        for (const origin of [testEnv.PUBLIC_ORIGIN, 'https://evil.example', null]) {
+          const res = await post(app, definition, {
+            slug: own.slug,
+            ...(await caller()),
+            origin,
+            body: await input(own),
+          });
+          expect(res.status, String(origin)).toBe(403);
+          expect(await errorCodeOf(res)).toBe('forbidden');
+        }
+      });
+    } else {
+      // ブラウザは Authorization を勝手に付けないので、Origin の検査は要らない（CSRF が成り立たない）
+      test('Origin が違う、または無くても、API トークンなら成功する', async () => {
+        for (const origin of ['https://evil.example', null]) {
+          await expectOk(
+            await post(app, definition, {
+              slug: own.slug,
+              ...(await caller()),
+              origin,
+              body: await input(own),
+            }),
+          );
+        }
+      });
+    }
 
     test('ログインしていないと 401 の unauthenticated', async () => {
       const res = await post(app, definition, { slug: own.slug, body: await input(own) });
@@ -197,13 +290,52 @@ export function defineOperationChecks(
       expect(await errorCodeOf(res)).toBe('unauthenticated');
     });
 
-    if (isOutsideOperation(definition)) {
-      test('ログインしている運用者は成功する', async () => {
-        await expectOk(await post(app, definition, { token: operator.token, body: await input(own) }));
+    if (credential === 'bearer') {
+      test('無効な API トークンは、有効な Cookie があっても 401（Cookie に落とさない）', async () => {
+        const session = isOutsideOperation(definition) ? operator : own.admin;
+        for (const bearer of [`sgp_${'A'.repeat(43)}`, 'invalid']) {
+          const res = await post(app, definition, {
+            slug: own.slug,
+            token: session.token,
+            bearer,
+            body: await input(own),
+          });
+          expect(res.status, bearer).toBe(401);
+          expect(await errorCodeOf(res)).toBe('unauthenticated');
+        }
       });
+
+      // 範囲の検査は権限の検査の後、入力を読む前。本文が壊れていても、範囲の足りない呼び出しは 400 でなく 403
+      test('読み取りのトークンは、書き込みの操作を 403 で断り、読み取りの操作は通す', async () => {
+        const person = isOutsideOperation(definition) ? operator : own.admin;
+        const readOnly = await credentialOf(person, 'bearer', 'read');
+        if (refusesToken(definition)) return;
+        if (definition.mode === 'write') {
+          const res = await post(app, definition, { slug: own.slug, ...readOnly, rawBody: '{broken' });
+          expect(res.status).toBe(403);
+          expect(await errorCodeOf(res)).toBe('forbidden');
+        } else {
+          await expectOk(await post(app, definition, { slug: own.slug, ...readOnly, body: await input(own) }));
+        }
+      });
+    }
+
+    if (isOutsideOperation(definition)) {
+      test(
+        refusesToken(definition) ? 'API トークンでは運用者でも 403' : 'ログインしている運用者は成功する',
+        async () => {
+          const res = await post(app, definition, { ...(await as(operator)), body: await input(own) });
+          if (refusesToken(definition)) {
+            expect(res.status).toBe(403);
+            expect(await errorCodeOf(res)).toBe('forbidden');
+          } else {
+            await expectOk(res);
+          }
+        },
+      );
       if (definition.permission === 'operator') {
         test('運用者でない人は 403', async () => {
-          const res = await post(app, definition, { token: own.admin.token, body: await input(own) });
+          const res = await post(app, definition, { ...(await as(own.admin)), body: await input(own) });
           expect(res.status).toBe(403);
           expect(await errorCodeOf(res)).toBe('forbidden');
         });
@@ -212,7 +344,7 @@ export function defineOperationChecks(
     }
 
     test('別の組織の人は、その組織の slug で 404', async () => {
-      const res = await post(app, definition, { slug: own.slug, token: other.admin.token, body: await input(own) });
+      const res = await post(app, definition, { slug: own.slug, ...(await as(other.admin)), body: await input(own) });
       expect(res.status).toBe(404);
       expect(await errorCodeOf(res)).toBe('not_found');
     });
@@ -220,19 +352,23 @@ export function defineOperationChecks(
     test('存在しない slug は 404', async () => {
       const res = await post(app, definition, {
         slug: 'no-such-organization',
-        token: own.admin.token,
+        ...(await as(own.admin)),
         body: await input(own),
       });
       expect(res.status).toBe(404);
     });
 
     test('組織に属さない運用者は組織の中の操作に入れず 404', async () => {
-      const res = await post(app, definition, { slug: own.slug, token: operator.token, body: await input(own) });
+      const res = await post(app, definition, { slug: own.slug, ...(await as(operator)), body: await input(own) });
       expect(res.status).toBe(404);
     });
 
-    test('自分の組織の行を指す入力は成功し、別の組織の行を指す入力は 404', () =>
-      checkRowIsolation(app, definition, pointers, own, other));
+    // トークンで呼べない操作は、組織の確かめの後のトークンの範囲の検査で 403 になる（上の Origin の検査が確かめる）。
+    // 成功を前提にする検査（行の分離、役割、閉じたワークスペース）は Cookie の周で確かめる
+    if (!refusesToken(definition)) {
+      test('自分の組織の行を指す入力は成功し、別の組織の行を指す入力は 404', () =>
+        checkRowIsolation(app, definition, pointers, own, other, credential));
+    }
 
     // 停止した組織は、停止していなければ入れた人（管理者、所属、承諾待ちの招待）にだけ停止を伝え、入れない人は組織が無いときと同じ 404。
     // 権限の検査より前なので、権限の種類によらず同じ結果になる
@@ -245,17 +381,17 @@ export function defineOperationChecks(
         suspended.bystander,
         suspended.invitee,
       ]) {
-        const res = await post(app, definition, { slug: suspended.slug, token: person.token, body });
+        const res = await post(app, definition, { slug: suspended.slug, ...(await as(person)), body });
         expect(res.status).toBe(403);
         expect(await errorCodeOf(res)).toBe('organization_suspended');
       }
       // 入れない人。別の組織の管理者と、この組織で無効にされた管理者（ほかの組織には入れる）。
-      // どの組織にも入れない人は、ログインできる条件を失って 401 になるので、ほかの組織に入れる人で見る
+      // どの組織にも入れない人も、404 を受ける（セッションは消えない）。ここでは、ほかの組織に入れる人で見る
       const disabledAdmin = await admitElsewhere(
         await createPerson({ organization: suspended.organization, admin: true, disabled: true }),
       );
       for (const person of [other.admin, disabledAdmin]) {
-        const res = await post(app, definition, { slug: suspended.slug, token: person.token, body });
+        const res = await post(app, definition, { slug: suspended.slug, ...(await as(person)), body });
         expect(res.status).toBe(404);
         expect(await errorCodeOf(res)).toBe('not_found');
       }
@@ -265,7 +401,7 @@ export function defineOperationChecks(
     test('承諾待ちの招待だけの人は、invitee の操作だけに通る', async () => {
       const res = await post(app, definition, {
         slug: own.slug,
-        token: own.invitee.token,
+        ...(await as(own.invitee)),
         body: await input(own, own.invitee),
       });
       if (definition.permission === 'invitee') {
@@ -276,6 +412,8 @@ export function defineOperationChecks(
       }
     });
 
+    if (refusesToken(definition)) return;
+
     const permission = definition.permission;
     switch (permission) {
       case 'invitee':
@@ -284,7 +422,7 @@ export function defineOperationChecks(
         test('組織に入れる人は、所属がなくても成功する', async () => {
           for (const person of [own.admin, own.leader, own.member, own.bystander]) {
             await expectOk(
-              await post(app, definition, { slug: own.slug, token: person.token, body: await input(own, person) }),
+              await post(app, definition, { slug: own.slug, ...(await as(person)), body: await input(own, person) }),
             );
           }
         });
@@ -293,7 +431,7 @@ export function defineOperationChecks(
         test('管理者でなければ 403', async () => {
           const body = await input(own);
           for (const person of [own.leader, own.member, own.bystander]) {
-            const res = await post(app, definition, { slug: own.slug, token: person.token, body });
+            const res = await post(app, definition, { slug: own.slug, ...(await as(person)), body });
             expect(res.status).toBe(403);
             expect(await errorCodeOf(res)).toBe('forbidden');
           }
@@ -303,13 +441,13 @@ export function defineOperationChecks(
       case 'leader':
         test('一般のメンバーと所属していない人は 403、リーダーと管理者は成功する', async () => {
           for (const person of [own.member, own.bystander]) {
-            const res = await post(app, definition, { slug: own.slug, token: person.token, body: await input(own) });
+            const res = await post(app, definition, { slug: own.slug, ...(await as(person)), body: await input(own) });
             expect(res.status).toBe(403);
             expect(await errorCodeOf(res)).toBe('forbidden');
           }
           for (const person of [own.leader, own.admin]) {
             await expectOk(
-              await post(app, definition, { slug: own.slug, token: person.token, body: await input(own) }),
+              await post(app, definition, { slug: own.slug, ...(await as(person)), body: await input(own) }),
             );
           }
         });
@@ -318,7 +456,7 @@ export function defineOperationChecks(
         test('所属していない人は 403、メンバーと管理者は成功する', async () => {
           const res = await post(app, definition, {
             slug: own.slug,
-            token: own.bystander.token,
+            ...(await as(own.bystander)),
             body: await input(own),
           });
           expect(res.status).toBe(403);
@@ -326,7 +464,7 @@ export function defineOperationChecks(
           // 入力は呼ぶ人ごとに作る（自分のコメントを直すように、呼んだ人の行を指す操作のため）
           for (const person of [own.member, own.leader, own.admin]) {
             await expectOk(
-              await post(app, definition, { slug: own.slug, token: person.token, body: await input(own, person) }),
+              await post(app, definition, { slug: own.slug, ...(await as(person)), body: await input(own, person) }),
             );
           }
         });
@@ -341,7 +479,7 @@ export function defineOperationChecks(
       test('閉じたワークスペースへの書き込みは 409 の workspace_closed、読み取りと開き直す操作は成功する', async () => {
         const res = await post(app, definition, {
           slug: closed.slug,
-          token: closed.admin.token,
+          ...(await as(closed.admin)),
           body: await input(closed),
         });
         if (definition.mode === 'write' && definition.allowClosed !== true) {

@@ -1,8 +1,11 @@
-// アプリ側のレート制限（docs/data-model.md の `rate_limits`）。設けるのは、ログイン、手動の同期、招待（GitHub に問い合わせる
-// invitee-resolve と invitation-create）、長い本文を書く操作（workspace-dod-update、comment-create、comment-update）だけ。
+// アプリ側のレート制限（docs/data-model.md の `rate_limits`）。設けるのは、ログイン、画面のエラーの送信（POST /api/client-errors）、
+// 手動の同期、招待（GitHub に問い合わせる invitee-resolve と invitation-create。invitation-create は GitHub に問い合わせない Google の招待も同じ枠で数える）、長い本文を書く操作（workspace-dod-update、
+// comment-create、comment-update）、添付ファイルを上げる操作（attachment-upload。組織の合計の上限と掃除が入るまでの仮の蓋）だけ。
+// 並びの正は docs/requirements.md の「運用」。
 // 窓の最初の呼び出しから windowMs の間に max 回まで。1文の upsert で数えるので、並行した呼び出しも取りこぼさず、
-// 窓を過ぎた最初の呼び出しが数え直す。断った呼び出しも数える。ログインだけは、数える前に覗いて、上限に届いた枠を
-// 数えずに断る（未ログインの人が、叩く速さに比例して行を書き換えさせられないため。窓は固定なので、断る効き目は同じ）
+// 窓を過ぎた最初の呼び出しが数え直す。断った呼び出しも数える。ログインと画面のエラーの送信だけは、数える前に覗いて、
+// 上限に届いた枠を数えずに断る（未ログインの人が、叩く速さに比例して行を書き換えさせられないため。窓は固定なので、
+// 断る効き目は同じ）
 import type { AnyOperationDefinition } from '../../shared/operations/define.ts';
 import { operations } from '../../shared/operations/index.ts';
 import { commonDb } from '../db/index.ts';
@@ -35,13 +38,45 @@ export const LOGIN_GLOBAL_RATE_LIMIT_KEY = 'login:global';
 
 export const LOGIN_RATE_LIMIT_POLICIES: readonly RateLimitPolicy[] = Object.values(LOGIN_RATE_LIMITS);
 
-// consumeRateLimit に渡る全部の枠（ログインの枠と、操作の定義の rateLimit）のうち、最長の窓。
+// 画面のエラーの送信（POST /api/client-errors、Issue #376）で数える枠。キーはログインと分ける
+// （`client-error:<IP>`、`client-error48:<…>`、`client-error:global`）。誰でも呼べる口なので、ログインより小さくし、
+// 全体の枠で1日に出る行を約4万行までに抑える。全体の枠を埋められると、その10分は他の人のエラーが落ちる（ログインは止まらない）
+export const CLIENT_ERROR_RATE_LIMITS = {
+  network: { max: 20, windowMs: 10 * 60 * 1000 },
+  ipv6Site: { max: 40, windowMs: 10 * 60 * 1000 },
+  global: { max: 300, windowMs: 10 * 60 * 1000 },
+} as const satisfies Record<string, RateLimitPolicy>;
+
+const CLIENT_ERROR_GLOBAL_RATE_LIMIT_KEY = 'client-error:global';
+
+// パスワードでのログインの枠（Issue #256）。意味は consumePasswordLoginRateLimits の上
+export const PASSWORD_LOGIN_RATE_LIMITS = {
+  network: { max: 30, windowMs: 10 * 60 * 1000 },
+  ipv6Site: { max: 60, windowMs: 10 * 60 * 1000 },
+  email: { max: 10, windowMs: 10 * 60 * 1000 },
+} as const satisfies Record<string, RateLimitPolicy>;
+
+// 上限の内なら true。ログインの開始と同じく、全体の枠を覗き → IP の枠を覗いて広い枠から数え → 通った呼び出しだけ
+// 全体の枠を数える（consumeWithGlobalRateLimit）
+export async function consumeClientErrorRateLimits(env: Env, ip: string | undefined, now: Date): Promise<boolean> {
+  const result = await consumeWithGlobalRateLimit(
+    env,
+    ipRateLimits(ip, { network: 'client-error', ipv6Site: 'client-error48' }, CLIENT_ERROR_RATE_LIMITS),
+    { key: CLIENT_ERROR_GLOBAL_RATE_LIMIT_KEY, policy: CLIENT_ERROR_RATE_LIMITS.global },
+    now,
+  );
+  return result.allowed;
+}
+
+// consumeRateLimit に渡る全部の枠（ログインと画面のエラーの送信の枠と、操作の定義の rateLimit）のうち、最長の窓。
 // この窓を過ぎた行は、どの枠から見ても数え直しになるので消してよい（src/server/scheduled/cleanup-expired.ts）。
 // 操作の定義は src/shared/operations の operations（sessionOperations を含む全部）。register.ts の enforceRateLimit が
 // windowSeconds * 1000 で使う
 export function longestRateLimitWindowMs(definitions: readonly AnyOperationDefinition[] = operations): number {
   const windows = [
     ...LOGIN_RATE_LIMIT_POLICIES.map((policy) => policy.windowMs),
+    ...Object.values(CLIENT_ERROR_RATE_LIMITS).map((policy) => policy.windowMs),
+    ...Object.values(PASSWORD_LOGIN_RATE_LIMITS).map((policy) => policy.windowMs),
     ...definitions.flatMap((definition) =>
       definition.rateLimit === undefined ? [] : [definition.rateLimit.windowSeconds * 1000],
     ),
@@ -57,18 +92,27 @@ export type LoginRateLimit = { key: string; policy: RateLimitPolicy };
 // 数える枠。IPv4 は `login:<IP>`、IPv6 は `login:<上位64ビット>::/64` と `login48:<上位48ビット>::/48`、
 // 解釈できない値と IP の無いリクエスト（手元の開発）は `login:unknown`。本番は Cloudflare が必ず IP を付ける
 export function loginRateLimits(ip: string | undefined): LoginRateLimit[] {
+  return ipRateLimits(ip, { network: 'login', ipv6Site: 'login48' }, LOGIN_RATE_LIMITS);
+}
+
+// IP の枠を、キーの前置き（IP と /64 の枠、/48 の枠）と上限から作る。ログインと画面のエラーの送信で使う
+function ipRateLimits(
+  ip: string | undefined,
+  prefixes: { network: string; ipv6Site: string },
+  policies: { network: RateLimitPolicy; ipv6Site: RateLimitPolicy },
+): LoginRateLimit[] {
   const units = clientIpUnits(ip);
   switch (units.kind) {
     case 'v4':
-      return [{ key: `login:${units.address}`, policy: LOGIN_RATE_LIMITS.network }];
+      return [{ key: `${prefixes.network}:${units.address}`, policy: policies.network }];
     case 'v6':
       // 広い /48 の枠を先に数える。/48 を超えた後に /64 を変えて叩かれても、/64 の行を増やさないため
       return [
-        { key: `login48:${units.network48}`, policy: LOGIN_RATE_LIMITS.ipv6Site },
-        { key: `login:${units.network64}`, policy: LOGIN_RATE_LIMITS.network },
+        { key: `${prefixes.ipv6Site}:${units.network48}`, policy: policies.ipv6Site },
+        { key: `${prefixes.network}:${units.network64}`, policy: policies.network },
       ];
     case 'unknown':
-      return [{ key: 'login:unknown', policy: LOGIN_RATE_LIMITS.network }];
+      return [{ key: `${prefixes.network}:unknown`, policy: policies.network }];
   }
 }
 
@@ -126,7 +170,11 @@ export async function isRateLimitExceeded(env: Env, key: string, policy: RateLim
 // 通ったら広い枠から順に数え、並行した呼び出しで上限を超えた枠があればそこで止め、残りの枠は数えない
 // （断った呼び出しで、狭い枠の行を作らない）。戻り先はこの枠だけを数える
 export async function consumeLoginRateLimits(env: Env, ip: string | undefined, now: Date): Promise<boolean> {
-  const limits = loginRateLimits(ip);
+  return consumePeekedRateLimits(env, loginRateLimits(ip), now);
+}
+
+// 先に全部の枠を覗き、上限に届いた枠が1つでもあれば、どの行も書かずに false。通ったら並びの順に数える
+async function consumePeekedRateLimits(env: Env, limits: readonly LoginRateLimit[], now: Date): Promise<boolean> {
   for (const { key, policy } of limits) {
     if (await isRateLimitExceeded(env, key, policy, now)) return false;
   }
@@ -134,6 +182,29 @@ export async function consumeLoginRateLimits(env: Env, ip: string | undefined, n
     if (!(await consumeRateLimit(env, key, policy, now))) return false;
   }
   return true;
+}
+
+// パスワードでのログイン（POST /api/auth/password/login、Issue #256）の枠。OAuth のログインの枠とは分ける。
+// キーは `password:<IPv4 か /64>`、`password48:<…/48>`、`password-email:<そろえたメールアドレスの SHA-256>`。
+//   network と ipv6Site: 1つの IP（/64、/48）から試せる回数。OAuth より小さくする（1回のログインで1回だけ数える）
+//   email: 1つのメールアドレスに向けて、IP を変えても試せる回数。アカウントは締め出さず、窓が過ぎれば通る
+// 全体の枠は置かない。書かせられる行は IP の枠で抑えられ、照合の CPU は1回 約 12ms。
+// 枠の値（PASSWORD_LOGIN_RATE_LIMITS）は、掃除の境目の最長の窓に含めるため、ファイルの上のほうに置く
+
+// 上限の内なら true。先に全部の枠を覗き、上限に届いた枠があれば行を書かずに false。通ったら IP の枠（広い /48 から）、
+// メールアドレスの枠の順に数える。照合の前に呼び、成功も含めて試みをすべて数える。
+// emailHash はそろえたメールアドレスの SHA-256。そろえられないアドレスは undefined で、IP の枠だけを数える
+export async function consumePasswordLoginRateLimits(
+  env: Env,
+  ip: string | undefined,
+  emailHash: string | undefined,
+  now: Date,
+): Promise<boolean> {
+  const limits = ipRateLimits(ip, { network: 'password', ipv6Site: 'password48' }, PASSWORD_LOGIN_RATE_LIMITS);
+  if (emailHash !== undefined) {
+    limits.push({ key: `password-email:${emailHash}`, policy: PASSWORD_LOGIN_RATE_LIMITS.email });
+  }
+  return consumePeekedRateLimits(env, limits, now);
 }
 
 export type LoginStartRateLimit = { allowed: true } | { allowed: false; limitedBy: 'ip' | 'global' };
@@ -149,12 +220,23 @@ export async function consumeLoginStartRateLimits(
   ip: string | undefined,
   now: Date,
 ): Promise<LoginStartRateLimit> {
-  if (await isRateLimitExceeded(env, LOGIN_GLOBAL_RATE_LIMIT_KEY, LOGIN_RATE_LIMIT_GLOBAL, now)) {
-    return { allowed: false, limitedBy: 'global' };
-  }
-  if (!(await consumeLoginRateLimits(env, ip, now))) return { allowed: false, limitedBy: 'ip' };
-  if (!(await consumeRateLimit(env, LOGIN_GLOBAL_RATE_LIMIT_KEY, LOGIN_RATE_LIMIT_GLOBAL, now))) {
-    return { allowed: false, limitedBy: 'global' };
-  }
+  return consumeWithGlobalRateLimit(
+    env,
+    loginRateLimits(ip),
+    { key: LOGIN_GLOBAL_RATE_LIMIT_KEY, policy: LOGIN_RATE_LIMIT_GLOBAL },
+    now,
+  );
+}
+
+// 全体の枠を読むだけで覗き → IP の枠を覗いてから数え → 通った呼び出しだけ全体の枠を数える（理由は上の consumeLoginStartRateLimits）
+async function consumeWithGlobalRateLimit(
+  env: Env,
+  ipLimits: readonly LoginRateLimit[],
+  global: LoginRateLimit,
+  now: Date,
+): Promise<LoginStartRateLimit> {
+  if (await isRateLimitExceeded(env, global.key, global.policy, now)) return { allowed: false, limitedBy: 'global' };
+  if (!(await consumePeekedRateLimits(env, ipLimits, now))) return { allowed: false, limitedBy: 'ip' };
+  if (!(await consumeRateLimit(env, global.key, global.policy, now))) return { allowed: false, limitedBy: 'global' };
   return { allowed: true };
 }

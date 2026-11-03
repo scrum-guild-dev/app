@@ -20,6 +20,8 @@ needs-human:
           # 応答の形とヘッダー（app.ts、errors.ts）、ログの項目（operation-log.ts）も、権限の検査が頼る
           - "src/server/operations/register.ts"
           - "src/server/operations/guards.ts"
+          # API トークンで呼べるかの判定（register.ts の範囲の検査と operation-list の絞りが使う）
+          - "src/server/operations/token-scope.ts"
           - "src/server/operations/implement.ts"
           - "src/server/operations/operation-log.ts"
           - "src/server/app.ts"
@@ -47,4 +49,28 @@ needs-human:
           - ".githooks/**"
           - ".claude/settings.json"
           - ".claude/hooks/**"
+          # CI の ai-review が書き込みのトークンを持って読むスキルとエージェント（frontmatter で道具の許可を広げ、フックを走らせられる）
+          - ".claude/skills/ai-review/**"
+          - ".claude/agents/**"
           - ".mcp.json"
+          # Codex のエージェントと設定（sandbox とネットワークを変えられる）、Codex が読む決まりとスキル
+          # （入れ子の AGENTS.md と、AGENTS.md より先に読まれる AGENTS.override.md も含む）。
+          # macOS の clone は大文字小文字を区別しないので、Claude と Codex の決まりのパスは大文字小文字によらずに拾う
+          # （Claude.md が CLAUDE.md に、.Agents/ が .agents/ に入り込む。評価は scripts/labeler.test.ts）
+          - "**/.[Cc][Oo][Dd][Ee][Xx]/**"
+          - "**/.[Aa][Gg][Ee][Nn][Tt][Ss]/**"
+          - "**/[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]"
+          - "**/[Aa][Gg][Ee][Nn][Tt][Ss].[Oo][Vv][Ee][Rr][Rr][Ii][Dd][Ee].[Mm][Dd]"
+          # Claude が読む決まり。マージの判定を担うスキルと同じく、セッションが人に聞かずにマージするので人が差分を読む
+          - "**/[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]"
+          # Claude Code が読む個人用の CLAUDE.local.md も同じ
+          - "**/[Cc][Ll][Aa][Uu][Dd][Ee].[Ll][Oo][Cc][Aa][Ll].[Mm][Dd]"
+          # マージの判定の本文と、本番に出る利用規約とプライバシーポリシー。.md だけの PR には ai-review が走らず、人が読まなければ誰も確かめない
+          # 大文字小文字によらずに拾う（docs/Development.md が docs/development.md に入り込むため）
+          - "[Dd][Oo][Cc][Ss]/[Dd][Ee][Vv][Ee][Ll][Oo][Pp][Mm][Ee][Nn][Tt].[Mm][Dd]"
+          - "[Ss][Rr][Cc]/[Ll][Ii][Bb]/[Ll][Ee][Gg][Aa][Ll]/**"
+  # .claude/ の下のファイル（CI が書き込みのトークンを持って走らせるスクリプトと、スキルとチェックリストの .md も含む。入れ子の .claude/ も）。
+  # 評価は scripts/labeler.test.ts で確かめる
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/.[Cc][Ll][Aa][Uu][Dd][Ee]/**"

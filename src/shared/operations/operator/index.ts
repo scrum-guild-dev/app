@@ -3,6 +3,8 @@
 import type { AnyOperationDefinition } from '../define.ts';
 import { createOrganization } from './create-organization.ts';
 import { listOrganizations } from './list-organizations.ts';
+import { organizationAdminReassign } from './organization-admin-reassign.ts';
+import { organizationQuotaUpdate } from './organization-quota-update.ts';
 import { organizationResume } from './organization-resume.ts';
 import { organizationSuspend } from './organization-suspend.ts';
 import { organizationSuspensionUpdate } from './organization-suspension-update.ts';
@@ -11,13 +13,30 @@ import { resolveGithubUser } from './resolve-github-user.ts';
 export {
   createOrganization,
   listOrganizations,
+  organizationAdminReassign,
+  organizationQuotaUpdate,
   organizationResume,
   organizationSuspend,
   organizationSuspensionUpdate,
   resolveGithubUser,
 };
-export { PURGE_AFTER_DAYS, purgeDateOf, suspensionKinds, type SuspensionKind } from './organization-suspend.ts';
 export {
+  reassignAdminConflictReasonOf,
+  reassignAdminProblems,
+  type ReassignAdminConflictReason,
+  type ReassignAdminProblem,
+} from './organization-admin-reassign.ts';
+export { ATTACHMENT_QUOTA_MAX_BYTES, MEMBER_LIMIT_MAX, QUOTA_GIB, quotaTiers } from './organization-quota-update.ts';
+export {
+  isPurgeDue,
+  PURGE_AFTER_DAYS,
+  purgeDateOf,
+  suspensionKinds,
+  utcDateOf,
+  type SuspensionKind,
+} from './organization-suspend.ts';
+export {
+  adminNomineeInput,
   createOrganizationProblems,
   hasHiddenCharacter,
   ORGANIZATION_NAME_MAX_LENGTH,
@@ -33,4 +52,6 @@ export const operatorOperations: readonly AnyOperationDefinition[] = [
   organizationSuspend,
   organizationSuspensionUpdate,
   organizationResume,
+  organizationAdminReassign,
+  organizationQuotaUpdate,
 ];

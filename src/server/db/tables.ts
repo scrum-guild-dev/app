@@ -1,4 +1,4 @@
-// 24表の列。migrations/ の全マイグレーションを当てた後の写しで、列名は DB と同じスネークケースのまま持つ。
+// 30表の列。migrations/ の全マイグレーションを当てた後の写しで、列名は DB と同じスネークケースのまま持つ。
 // 共通の表と組織の中の表の区分は docs/data-model.md の「共通の表と組織の中の表」。表を足すときは、
 // マイグレーションと同じ PR でここに足す（足し忘れと列のずれは test/table-columns.test.ts が落とす）
 import {
@@ -25,6 +25,18 @@ export const commonTableColumns = {
     updated_at: text,
   },
   sessions: { token_hash: text, account_id: text, created_at: text, last_used_at: text, expires_at: text },
+  // migrations/0012_add_api_tokens.sql で足した
+  api_tokens: {
+    token_hash: text,
+    account_id: text,
+    name: text,
+    scope: text,
+    created_at: text,
+    last_used_at: textOrNull,
+    expires_at: text,
+    revoked_at: textOrNull,
+  },
+  account_consents: { account_id: text, terms_version: text, privacy_version: text, consented_at: text },
   oauth_states: {
     state: text,
     login_provider: text,
@@ -33,14 +45,28 @@ export const commonTableColumns = {
     claim_token_hash: textOrNull,
     return_to: textOrNull,
     expires_at: text,
+    // migrations/0015_add_oauth_states_signup.sql で足した。会員登録の往復なら 1
+    is_signup: integerDefault,
   },
   rate_limits: { key: text, window_start_at: text, count: integer },
+  // migrations/0010_add_password_credentials.sql で足した
+  password_credentials: {
+    login_subject: text,
+    email: text,
+    password_hash: text,
+    display_name: text,
+    password_changed_at: text,
+    created_at: text,
+    updated_at: text,
+  },
   organizations: {
     id: text,
     slug: text,
     name: text,
     vocabulary: textDefault,
     theme: textDefault,
+    // migrations/0017_add_organization_kind.sql で足す。'team' か 'personal'（自分用）
+    kind: textDefault,
     suspended_at: textOrNull,
     purge_on: textOrNull,
     member_limit: integerDefault,
@@ -48,6 +74,9 @@ export const commonTableColumns = {
     attachment_quota_warned_at: textOrNull,
     stores_source_payload: integerDefault,
     created_by_operator: text,
+    // migrations/0014_add_organization_trial.sql で足す。運用者が作る組織は両方 NULL
+    created_by_account_id: textOrNull,
+    trial_ends_on: textOrNull,
     created_at: text,
     updated_at: text,
   },
@@ -181,6 +210,13 @@ export const organizationTableColumns = {
     created_at: text,
     updated_at: text,
   },
+  epic_party_members: {
+    epic_id: text,
+    user_id: text,
+    joined_via: text,
+    added_by: text,
+    joined_at: text,
+  },
   stories: {
     id: text,
     workspace_id: text,
@@ -243,6 +279,24 @@ export const organizationTableColumns = {
     updated_at: text,
     deleted_at: textOrNull,
   },
+  // migrations/0016_add_task_field_values.sql で足した
+  task_field_values: {
+    task_id: text,
+    field_id: text,
+    value_md: text,
+    updated_by: text,
+    updated_at: text,
+  },
+  sprint_entries: {
+    id: text,
+    workspace_id: text,
+    sprint_id: text,
+    task_id: text,
+    added_at: text,
+    added_by: text,
+    ended_at: textOrNull,
+    outcome: textOrNull,
+  },
   comments: {
     id: text,
     workspace_id: text,
@@ -252,6 +306,22 @@ export const organizationTableColumns = {
     edited_at: textOrNull,
     deleted_at: textOrNull,
     deleted_by: textOrNull,
+    created_at: text,
+  },
+  // migrations/0018_add_attachments.sql で足した
+  attachments: {
+    id: text,
+    workspace_id: text,
+    task_id: textOrNull,
+    story_id: textOrNull,
+    epic_id: textOrNull,
+    comment_id: textOrNull,
+    object_key: text,
+    file_name: text,
+    content_type: text,
+    size_bytes: integer,
+    uploaded_by: text,
+    attached_at: textOrNull,
     created_at: text,
   },
   completions: {
@@ -267,6 +337,15 @@ export const organizationTableColumns = {
     billing_month: textOrNull,
     created_at: text,
     updated_at: text,
+    previous_column_id: textOrNull,
+  },
+  thanks: {
+    id: text,
+    workspace_id: text,
+    task_id: text,
+    sender_user_id: text,
+    recipient_user_id: text,
+    created_at: text,
   },
   xp_grants: {
     id: text,

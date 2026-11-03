@@ -16,13 +16,12 @@ let known: KnownWorkspace | null = null;
 export const load: LayoutLoad = async ({ params, fetch, url, depends }) => {
   depends('app:workspace');
   const result = await callOperation(workspaceInfo, { workspace_id: params.id }, { slug: params.slug, fetcher: fetch });
-  if (isUnauthenticated(result) && url.pathname !== loginPath) redirect(307, loginUrl(url, result));
+  if (isUnauthenticated(result) && url.pathname !== loginPath) redirect(307, loginUrl(url));
 
   const loaded: WorkspaceView | null = result.ok
     ? {
         id: params.id,
         name: result.data.name,
-        vocabulary: result.data.vocabulary,
         closedAt: result.data.closed_at,
         definitionOfDone: result.data.definition_of_done_md,
         role: result.data.role,

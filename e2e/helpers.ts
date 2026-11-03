@@ -1,11 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type BrowserContext, type Locator, type Page, type Response } from '@playwright/test';
 import { SEED_SESSIONS } from '../seed/sessions.ts';
-import { organizationInfo } from '../src/shared/operations/organization/organization.ts';
-import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
+import { userList } from '../src/shared/operations/organization/user.ts';
+import { workspaceList } from '../src/shared/operations/workspace/workspace-list.ts';
 import { sessionCookieName } from '../src/shared/session-cookie.ts';
-import { word, type DictionaryKey, type TemplateParams, type Vocabulary } from '../src/shared/vocabulary.ts';
-import { rewriteOperation } from './operations.ts';
+import { word, type DictionaryKey, type TemplateParams } from '../src/shared/vocabulary.ts';
+import { mockOperation } from './operations.ts';
+import { refreshSeedSessionCreatedAt } from './local-d1.ts';
 import {
   exclusionsFor,
   formatStaleExclusions,
@@ -106,7 +107,7 @@ export async function expectNoA11yViolations(page: Page, screen: UiScreen): Prom
   if (remaining.length > 0) throw new Error(formatA11yViolations(remaining));
 }
 
-// axe で確かめるテーマ。コントラストはテーマで変わり、言葉ではほぼ変わらないので、言葉はゲームの言葉だけにする（docs/design.md）
+// axe で確かめるテーマ。コントラストはテーマで変わり、言葉では変わらないので、言葉はスクラムの言葉だけにする（docs/design.md）
 export const A11Y_THEMES = ['simple_light', 'simple_dark', 'medieval', 'modern'] as const;
 
 // 落ち着いた画面に4つのテーマを順に当てて axe を走らせ、違反の無いことと、その画面の除外がどれかのテーマで当たったことを確かめる。
@@ -433,33 +434,29 @@ async function measureLayout(
 // シンプルのダークはライトと書体が同じなので回さない（docs/design.md の「狭い幅と押せる範囲を機械で確かめる」）
 export const LAYOUT_THEMES = ['simple_light', 'medieval', 'modern'] as const;
 
-// 言葉づかい。文言の長さで折り返しとはみ出しが変わるので、両方を回す
-export const LAYOUT_VOCABULARIES = ['game', 'scrum'] as const satisfies readonly Vocabulary[];
-const VOCABULARY_LABEL: Record<Vocabulary, string> = { game: 'ゲーム', scrum: 'スクラム' };
-
 type LayoutFound = LayoutViolation & { combinations: string[] };
 
-// 1つの画面の狭い幅の検査。テーマと言葉の組み合わせを重ねて測り、最後に finish で、残った違反と当たらなくなった除外で落とす。
-// 同じ要素の同じ違反は、出た組み合わせをまとめて1件にする。exclusions は、壊した HTML で確かめるときだけ差し替える
+// 1つの画面の狭い幅の検査。テーマごとに重ねて測り、最後に finish で、残った違反と当たらなくなった除外で落とす。
+// 同じ要素の同じ違反は、出たテーマをまとめて1件にする。exclusions は、壊した HTML で確かめるときだけ差し替える
 export function createLayoutCheck(
   screen: UiScreen,
   exclusions: readonly UiExclusion[] = exclusionsFor(screen, isLayoutCheck),
-): { inThemes: (page: Page, label: string) => Promise<void>; finish: () => void } {
+): { inThemes: (page: Page) => Promise<void>; finish: () => void } {
   const used = new Set<UiExclusion>();
   const found = new Map<string, LayoutFound>();
   // 押せる要素か文字を持つ要素を1つも数えなかった組み合わせ。画面が描けていないまま測ると、違反が0件で通ってしまう
   const noTargets: string[] = [];
   const noText: string[] = [];
   return {
-    // 落ち着いた画面に3つのテーマを順に当て、はみ出しと 44px を測る。label は言葉づかいの名前（落ちたときの文に出す）
-    async inThemes(page, label) {
+    // 落ち着いた画面に3つのテーマを順に当て、はみ出しと 44px を測る
+    async inThemes(page) {
       for (const theme of LAYOUT_THEMES) {
         await applyTheme(page, theme);
         const overflow = await measureLayout(page, 'overflow');
         const targets = await measureLayout(page, 'target-44');
         const violations = [...overflow.violations, ...targets.violations];
-        if (overflow.counted === 0) noText.push(`${theme}・${label}`);
-        if (targets.counted === 0) noTargets.push(`${theme}・${label}`);
+        if (overflow.counted === 0) noText.push(theme);
+        if (targets.counted === 0) noTargets.push(theme);
         // 画面の読み直し（組織の枠の applyOrganization）で DB のテーマに戻っていたら、別のテーマを測ったことになる
         const applied = await page.evaluate(() => document.documentElement.dataset.theme);
         if (applied !== theme)
@@ -468,10 +465,9 @@ export function createLayoutCheck(
         for (const exclusion of result.used) used.add(exclusion);
         for (const violation of result.remaining) {
           const key = `${violation.rule} ${violation.target}`;
-          const combination = `${theme}・${label}`;
           const known = found.get(key);
-          if (known) known.combinations.push(combination);
-          else found.set(key, { ...violation, combinations: [combination] });
+          if (known) known.combinations.push(theme);
+          else found.set(key, { ...violation, combinations: [theme] });
         }
       }
     },
@@ -502,29 +498,9 @@ export function formatLayoutViolations(violations: readonly (LayoutViolation & {
   ].join('\n');
 }
 
-// 組織とワークスペースの言葉づかいを、organization と workspace の操作の応答の書き換えで当てる（DB は書き換えない。
-// ほかのファイルと並べて走るため）。張った route を外す関数を返す。画面を開く前に呼ぶ
-export async function useVocabulary(page: Page, slug: string, vocabulary: Vocabulary): Promise<() => Promise<void>> {
-  const unrouteOrganization = await rewriteOperation(page, organizationInfo, { slug }, (output) => ({
-    ...output,
-    organization: { ...output.organization, vocabulary },
-  }));
-  const unrouteWorkspace = await rewriteOperation(page, workspaceInfo, { slug }, (output) => ({
-    ...output,
-    vocabulary,
-  }));
-  return async () => {
-    await unrouteOrganization();
-    await unrouteWorkspace();
-  };
-}
-
-// 狭い幅の検査で開く組織（seed のあおば開発）。主な画面はどれもこの組織の中にある
-const NARROW_LAYOUT_SLUG = 'aoba';
-
-// 主な画面を幅 390px で、言葉2つ × テーマ3つの組み合わせで開き、横のはみ出しと 44px の押せる範囲を確かめる。
-// open は画面を開き、落ち着いたとみなす要素を待つ。w はその言葉づかいの辞書の文言（見出しの名前などに使う）。
-// 開いた後、要求が止み、見えている所の読み込みが終わり、上の帯の組織の言葉が当てた言葉づかいになってから測る
+// 主な画面を幅 390px で、3つのテーマ × スクラムの言葉で開き、横のはみ出しと 44px の押せる範囲を確かめる。
+// open は画面を開き、落ち着いたとみなす要素を待つ。w は辞書の文言（見出しの名前などに使う）。
+// 開いた後、要求が止み、見えている所の読み込みが終わり、上の帯の組織の言葉が出てから測る
 export async function expectNarrowLayout(
   page: Page,
   screen: UiScreen,
@@ -532,17 +508,11 @@ export async function expectNarrowLayout(
 ): Promise<void> {
   await page.setViewportSize(NARROW_VIEWPORT);
   const check = createLayoutCheck(screen);
-  for (const vocabulary of LAYOUT_VOCABULARIES) {
-    const unroute = await useVocabulary(page, NARROW_LAYOUT_SLUG, vocabulary);
-    const vocabularies = { workspace: vocabulary, organization: vocabulary };
-    await open((key, params) => word(key, vocabularies, params));
-    await page.waitForLoadState('networkidle');
-    await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
-    // 書き換えが効かずにゲームの言葉のまま測ると、スクラムの言葉を測ったことにならない
-    await expect(page.locator('.org-menu-label')).toHaveText(word('organization', vocabularies));
-    await check.inThemes(page, VOCABULARY_LABEL[vocabulary]);
-    await unroute();
-  }
+  await open((key, params) => word(key, params));
+  await page.waitForLoadState('networkidle');
+  await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
+  await expect(page.locator('.org-menu-label')).toHaveText(word('organization'));
+  await check.inThemes(page);
   check.finish();
 }
 
@@ -581,10 +551,38 @@ export async function watchViolations(page: Page): Promise<() => Promise<string[
 }
 
 // 開いた画面の読み込みが終わるまで待つ。読み込みで行が動いている間に押すと、Playwright は押し直す前に画面をスクロールするので、
-// 撮る画像のスクロールの位置が実行ごとに変わる（#354）。テストの終わりに背景の画面が写るとき（ダイアログを開くなど）は、押す前に呼ぶ
+// 背景の画面のスクロールの位置が実行ごとに変わる（#354）。ダイアログを開くなど、背景の画面が残るときは、押す前に呼ぶ
 export async function waitForSettled(page: Page): Promise<void> {
   await page.waitForLoadState('networkidle');
   await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
+}
+
+// 書体の読み込みが終わり、続けて2回の描画で縦のスクロールの位置が変わらなくなってから、その位置を返す。
+// 書体は font-display: swap で、読み込み中は代わりの書体で組む。IBM Plex Mono の latin が届く前と後で、バックログのページの高さが
+// 1px 違い、一番下まで送った位置が書体の差し替えだけで 1px 動く（#428。向きは実行する環境の代わりの書体による）。
+// 開く前と後の位置を比べるときは、どちらもこれで読む。新しい文字で後から始まる読み込みも待つよう、回るたびに fonts.ready を待ち直す。
+// 描画が止まったページで待ち続けないよう、1回の描画の待ちと全体を時間で切り、落ち着かなければ最後の値を添えて落とす
+export async function settledScrollY(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const deadline = performance.now() + 5000;
+    const frame = () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(resolve);
+        setTimeout(resolve, 100);
+      });
+    let previous = window.scrollY;
+    while (performance.now() < deadline) {
+      await Promise.race([
+        document.fonts.ready,
+        new Promise((resolve) => setTimeout(resolve, Math.max(0, deadline - performance.now()))),
+      ]);
+      await frame();
+      await frame();
+      if (window.scrollY === previous && document.fonts.status === 'loaded') return previous;
+      previous = window.scrollY;
+    }
+    throw new Error(`スクロールの位置が 5 秒で落ち着かない（最後の値は ${window.scrollY}）`);
+  });
 }
 
 // seed のセッション（seed/sessions.ts）の Cookie を置いて、ログインした状態にする。
@@ -595,33 +593,109 @@ export async function signIn(
   who: keyof typeof SEED_SESSIONS,
 ): Promise<void> {
   if (baseURL === undefined) throw new Error('baseURL が無い');
+  await refreshSeedSessionCreatedAt(who);
   await context.addCookies([
     { name: sessionCookieName(baseURL), value: SEED_SESSIONS[who].token, url: baseURL, httpOnly: true },
   ]);
 }
 
-// 管理の画面から、自分をリーダーにワークスペースを作り、その画面へ移る（admin でログインしている前提）
-export async function createWorkspace(page: Page, name: string, vocabulary: 'game' | 'scrum'): Promise<void> {
-  await page.goto('/aoba/admin');
-  await page.getByRole('button', { name: 'パーティを作る' }).first().click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('combobox')).toBeEnabled();
-  await dialog.getByRole('radio', { name: vocabulary === 'game' ? /ゲームの言葉/ : /スクラムの言葉/ }).check();
-  await dialog.getByLabel('名前').fill(name);
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(page).toHaveURL(/\/aoba\/w\/[0-9a-f-]{36}$/);
-  // 見出しは画面の名前（掲示板／バックログ）、小見出しがワークスペースの名前
-  const backlog = vocabulary === 'game' ? '掲示板' : 'バックログ';
-  await expect(page.getByRole('heading', { level: 1, name: backlog })).toBeVisible();
-  await expect(page.locator('.page-eyebrow')).toHaveText(name);
-  await expect(page).toHaveTitle(`${backlog}・${name} - Scrum Guild`);
+// 組織の管理の画面の上の2つの節（ユーザーとワークスペースの一覧）を、あおば開発の seed（seed/data.sql）の行に固定する。
+// 並べて走るほかのテストが作ったワークスペースと所属で、ワークスペースの行の数とミナトの所属の数が実行ごとに変わり、
+// 下の節の中身と位置がずれるため（#509）。最後に入った日時だけは seed に無い値を置く。ログインで入り、
+// サーバーの今日で変わるので、ミナトは決まった日（2026-10-20 の UTC の正午。UTC±11 時間のどのタイムゾーンでも同じ日）にする。seed のユーザーとワークスペースを変えたら、ここも直す
+export async function mockSeedAdminLists(page: Page): Promise<void> {
+  await mockOperation(
+    page,
+    userList,
+    { slug: 'aoba' },
+    {
+      users: [
+        {
+          id: '019a0000-0000-7000-8000-000000000308',
+          name: 'ソラ',
+          avatar_url: null,
+          is_admin: false,
+          disabled_at: null,
+          workspace_count: 0,
+          last_seen_at: '2026-10-12T01:00:00.000Z',
+        },
+        {
+          id: '019a0000-0000-7000-8000-000000000302',
+          name: 'ハルカ',
+          avatar_url: null,
+          is_admin: false,
+          disabled_at: null,
+          workspace_count: 1,
+          last_seen_at: null,
+        },
+        {
+          id: '019a0000-0000-7000-8000-000000000301',
+          name: 'ミナト',
+          avatar_url: null,
+          is_admin: true,
+          disabled_at: null,
+          workspace_count: 1,
+          last_seen_at: '2026-10-20T12:00:00.000Z',
+        },
+        {
+          id: '019a0000-0000-7000-8000-000000000309',
+          name: 'ユイ',
+          avatar_url: null,
+          is_admin: false,
+          disabled_at: null,
+          workspace_count: 0,
+          last_seen_at: null,
+        },
+      ],
+    },
+  );
+  await mockOperation(
+    page,
+    workspaceList,
+    { slug: 'aoba' },
+    {
+      workspaces: [
+        {
+          id: '019a0000-0000-7000-8000-000000000401',
+          name: '受託開発チーム',
+          member_count: 2,
+          leader_count: 1,
+          created_on: '2026-10-01',
+          closed_at: null,
+        },
+      ],
+    },
+  );
 }
 
+// 管理の画面から、自分をリーダーにワークスペースを作り、完了の表示で「開く」を押してその画面へ移る（admin でログインしている前提）
+export async function createWorkspace(page: Page, name: string): Promise<void> {
+  await page.goto('/aoba/admin');
+  await page.getByRole('button', { name: 'ワークスペースを作る' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('combobox')).toBeEnabled();
+  await dialog.getByLabel('名前').fill(name);
+  await dialog.getByRole('button', { name: '作る' }).click();
+  await expect(dialog.getByRole('heading', { name: 'ワークスペースを作りました' })).toBeVisible();
+  await dialog.getByRole('button', { name: '開く' }).click();
+  await expect(page).toHaveURL(/\/aoba\/w\/[0-9a-f-]{36}$/);
+  // 見出しは画面の名前（バックログ）、小見出しがワークスペースの名前
+  await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
+  await expect(page.locator('.page-eyebrow')).toHaveText(name);
+  await expect(page).toHaveTitle(`バックログ・${name} - Scrum Guild`);
+}
+
+type ModalFocusStage = 'hidden' | 'open' | 'focusIn' | 'close' | 'return';
+
 // ダイアログと引き出しのフォーカスの決まりを確かめる。opener を押すと modal が開いて中にフォーカスが入り、Esc で閉じ、
-// 閉じたらフォーカスが returnTo（無ければ opener）にある。空振りしないよう、開く前に modal が見えていないことから確かめ、
-// どの段も待ってから確かめる（e2e/modal-focus.test.ts が、壊れたダイアログでそれぞれの段が落ちることを確かめる）。
+// 閉じたらフォーカスが returnTo（無ければ opener）にあり、2回描画した後も留まる。空振りしないよう、開く前に modal が見えていないことから確かめ、
+// 最後の留まる確かめを除き、どの段も待ってから確かめる（e2e/modal-focus.test.ts が、壊れたダイアログでそれぞれの段が落ちることを確かめる。
+// 開かない段（モーダルが開かない）だけは、壊れたダイアログを置いておらず確かめていない）。
+// 2回の描画より長く留まってから外れるフォーカスは捕まえない。
 // press を渡すと、opener にフォーカスを置いてそのキーで開く（キーボードだけで開く確かめ）。
-// whileOpen は、開いている間に足して確かめるもの。timeout は各段の待ち（既定は expect の既定）
+// whileOpen は、開いている間に足して確かめるもの。timeouts は段ごとの待ちで、渡さない段は expect の既定。
+// 落ちるはずの確かめで、落とすつもりの段だけを短くする（前の段まで短くすると、混んだマシンで別の段が時間切れになる）。
+// 最後の留まる段は待たずに確かめるので、渡せない（描画の待ちの上限を短くしても速くならず、描画より先に切れると空振りする）
 export async function expectModalFocus(
   page: Page,
   {
@@ -630,34 +704,61 @@ export async function expectModalFocus(
     returnTo,
     press,
     whileOpen,
-    timeout,
+    timeouts = {},
   }: {
     opener: Locator;
     modal: Locator;
     returnTo?: Locator;
     press?: string;
     whileOpen?: () => Promise<void>;
-    timeout?: number;
+    timeouts?: Partial<Record<ModalFocusStage, number>>;
   },
 ): Promise<void> {
-  await expect(modal, '開く前からモーダルが見えている').toBeHidden({ timeout });
+  await expect(modal, '開く前からモーダルが見えている').toBeHidden({ timeout: timeouts.hidden });
   if (press === undefined) {
-    await opener.click({ timeout });
+    await opener.click({ timeout: timeouts.open });
   } else {
-    await opener.focus({ timeout });
+    await opener.focus({ timeout: timeouts.open });
     await page.keyboard.press(press);
   }
-  await expect(modal, 'モーダルが開かない').toBeVisible({ timeout });
+  await expect(modal, 'モーダルが開かない').toBeVisible({ timeout: timeouts.open });
   await expect
     .poll(() => modal.evaluate((element) => element.contains(document.activeElement)), {
       message: 'モーダルの中にフォーカスが入らない',
-      timeout,
+      timeout: timeouts.focusIn,
     })
     .toBe(true);
   await whileOpen?.();
   await page.keyboard.press('Escape');
-  await expect(modal, 'Esc で閉じない').toBeHidden({ timeout });
-  await expect(returnTo ?? opener, '閉じたらフォーカスが戻らない').toBeFocused({ timeout });
+  await expect(modal, 'Esc で閉じない').toBeHidden({ timeout: timeouts.close });
+  await expectFocusReturned(page, returnTo ?? opener, { timeout: timeouts.return });
+}
+
+// ダイアログや引き出しを閉じた後、フォーカスが target へ戻り、そこに留まることを確かめる。
+// Esc 以外（ボタン、外側のクリック、戻る）で閉じたときに使う。Esc で開閉するなら expectModalFocus を使う。
+// timeout は戻るのを待つ段の待ち。留まる段は待たずに確かめるので効かない（expectModalFocus の timeouts.return と同じ）
+export async function expectFocusReturned(
+  page: Page,
+  target: Locator,
+  { timeout }: { timeout?: number } = {},
+): Promise<void> {
+  await expect(target, '閉じたらフォーカスが戻らない').toBeFocused({ timeout });
+  // Chromium の <dialog> は close() の中で開いたボタンへフォーカスを戻し、close イベントは後のタスクで出す。
+  // close イベントで別の場所へ移すダイアログでも、その前の一瞬は戻る先にフォーカスがあり、上の確かめが通ってしまう。
+  // 2回描画を待った後に、まだ戻る先にあることを待たずに確かめる。描画が止まったページで待ち続けないよう、
+  // 5 秒で待ちを切る（CI の expect の既定と同じ。手元の既定の 15 秒には合わせない）
+  await page.evaluate(
+    (limit) =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+        setTimeout(resolve, limit);
+      }),
+    5000,
+  );
+  expect(
+    await target.evaluate((element) => element === document.activeElement),
+    '閉じたらフォーカスが戻らない（一瞬戻ってすぐ外れる）',
+  ).toBe(true);
 }
 
 // 行の先頭のつまみ（handle）をマウスで押し、row の上端寄り（top）、下端寄り（bottom）、真ん中（middle）まで動かして離す。

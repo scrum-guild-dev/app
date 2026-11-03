@@ -1,7 +1,26 @@
 // スキーマの CHECK と一意のうち、壊れると事故になるもの（docs/data-model.md）。
 // 確かめたいのは SQL の制約そのものなので、Kysely の入口を通さず D1 の binding に直に書く
+// （索引の実行計画のうち、処理が組み立てる文そのものを見るものは、その文を queryPlanForTest に渡す）
 import { env } from 'cloudflare:workers';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
+import { orgDb } from '../src/server/db/index.ts';
+import { compiledQueryForTest, queryPlanForTest, verifiedOrganizationForTest } from '../src/server/db/testing.ts';
+import {
+  experienceGrantsOperation,
+  experienceSummaryOperation,
+  userExperienceTotalStatement,
+} from '../src/server/operations/experience.ts';
+import { revokeSameEmailStatements } from '../src/server/operations/invitation.ts';
+import { todayOperation } from '../src/server/operations/today.ts';
+import {
+  createComment,
+  createEpic,
+  createOrganization,
+  createStory,
+  createTask,
+  createUser,
+  createWorkspace,
+} from './factories.ts';
 
 const AT = '2026-10-20T00:00:00.000Z';
 const CLAIM_EXPIRES_AT = '2026-11-03T00:00:00.000Z';
@@ -122,7 +141,7 @@ describe('外部キー', () => {
     expect(searched.sort()).toEqual(children.sort());
   });
 
-  // 外部キーの検査の索引が、担当の未完了のタスク（自分の今日、積載量）も引く。完了した行と消した行を読まないこと
+  // 外部キーの検査の索引が、担当の未完了のタスク（今日やること、積載量）も引く。完了した行と消した行を読まないこと
   test('担当の未完了のタスクを引く文は、tasks_assignee_user の3列で絞る', async () => {
     const { results: plan } = await env.DB.prepare(
       `EXPLAIN QUERY PLAN SELECT id FROM tasks WHERE assignee_user_id = ? AND deleted_at IS NULL AND completed_at IS NULL`,
@@ -137,6 +156,91 @@ describe('外部キー', () => {
     expect(details).not.toMatch(/^SCAN tasks\b/m);
   });
 
+  // 今日やること（today）は未完了と完了を別の文にして、どちらも tasks_assignee_user の範囲で引く。
+  // memberships、workspaces、tasks を結合する本物の文で、別の索引が選ばれて tasks を全件走査していないこと
+  test('今日やることの未完了と完了の文は、tasks_assignee_user で引き、tasks を SCAN しない', async () => {
+    const db = orgDb(env, verifiedOrganizationForTest(id()));
+    const batch = vi.spyOn(db, 'batch');
+    try {
+      await todayOperation.handler({ db, actor: { userId: id() }, input: {} } as never);
+      const statements = batch.mock.calls[0][0].filter((candidate) =>
+        compiledQueryForTest(candidate).sql.includes('"tasks" as "t"'),
+      );
+      // 未完了と完了の2文。位置でなく、絞り込みの条件で見分ける
+      expect(statements).toHaveLength(2);
+      const open = statements.find((candidate) =>
+        compiledQueryForTest(candidate).sql.includes('"completed_at" is null'),
+      );
+      const completed = statements.find((candidate) =>
+        compiledQueryForTest(candidate).sql.includes('"completed_at" >= ?'),
+      );
+      expect(open).toBeDefined();
+      expect(completed).toBeDefined();
+      for (const statement of [open!, completed!]) {
+        const details = await queryPlanForTest(env, statement);
+        const text = details.join('\n');
+        // 未完了は completed_at=?（IS NULL）、完了は completed_at>?（範囲）まで索引に乗る
+        expect(text).toMatch(
+          /SEARCH t USING INDEX tasks_assignee_user \(assignee_user_id=\? AND deleted_at=\? AND completed_at[=>]\?\)/,
+        );
+        expect(
+          details.filter((detail) => /^SCAN (tasks|t)\b/.test(detail)),
+          text,
+        ).toEqual([]);
+      }
+    } finally {
+      batch.mockRestore();
+    }
+  });
+
+  // 進行中のスプリントを引く文（activeSprintRowFilter）は、'active' を束縛せず文字のまま書くので、部分索引 sprints_active を使う。
+  // 束縛の値（?）で書くと、SQLite は索引の条件を含むと示せず、使わない
+  test('進行中のスプリントを引く文は、部分索引 sprints_active を使う', async () => {
+    const plan = async (sql: string) => {
+      const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(id()).all<{ detail: string }>();
+      return results.map((row) => row.detail).join('\n');
+    };
+
+    expect(
+      await plan(
+        `SELECT act.id FROM sprints AS act WHERE act.workspace_id = ? AND (act.status = 'active' AND act.deleted_at IS NULL)`,
+      ),
+    ).toContain('USING INDEX sprints_active');
+    expect(
+      await plan(
+        `SELECT act.id FROM sprints AS act WHERE act.workspace_id = ? AND act.status = 'active' AND act.deleted_at IS NULL`,
+      ),
+    ).toContain('USING INDEX sprints_active');
+  });
+
+  // Google で招待し直すときの取り消しの2文（記録と UPDATE）は、'pending' を束縛せず文字のまま書くので、
+  // 部分索引 invitations_pending_email（WHERE status = 'pending' AND login_subject IS NULL）を使い、invitations を SCAN しない
+  test('Google の招待し直しの取り消しの文は、部分索引 invitations_pending_email を使う', async () => {
+    const db = orgDb(env, verifiedOrganizationForTest(id()));
+    const statements = revokeSameEmailStatements(db, {
+      workspaceId: id(),
+      email: 'mio.hoshino@example.com',
+      actorUserId: id(),
+      at: new Date(AT),
+    });
+    expect(statements).toHaveLength(2);
+    for (const statement of statements) {
+      const details = await queryPlanForTest(env, statement);
+      // 索引の条件は、束縛でなく文字のまま書く（値を見て計画し直す SQLite の働きに頼らない）
+      expect(compiledQueryForTest(statement).sql).toContain(`"status" = 'pending' AND`);
+      const invitations = details.filter((detail) => /^(SEARCH|SCAN) (invitations|i)\b/.test(detail));
+      expect(invitations.length, details.join('\n')).toBeGreaterThan(0);
+      expect(
+        invitations.every((detail) => detail.includes('USING INDEX invitations_pending_email')),
+        details.join('\n'),
+      ).toBe(true);
+      expect(
+        details.filter((detail) => detail.startsWith('SCAN ')),
+        details.join('\n'),
+      ).toEqual([]);
+    }
+  });
+
   // 使わない索引も書くたびに更新され、D1 の書いた行数に数えられる。統計の無い空の表では計画が変わらないので、残っていないことを直に見る
   test('外部キーの検査の索引と重なる部分索引は残っていない', async () => {
     const { results } = await env.DB.prepare(
@@ -144,6 +248,60 @@ describe('外部キー', () => {
     ).all<{ name: string }>();
 
     expect(results).toEqual([]);
+  });
+});
+
+describe('経験値の読み取りの索引', () => {
+  test.each([undefined, { confirmed_at: AT, id: 'cursor' }])(
+    '明細の頁送り（before: %j）は索引の順で読み、並べ替えない',
+    async (before) => {
+      const db = orgDb(env, verifiedOrganizationForTest(id()));
+      // 処理が実際に作った文を捕まえる。結合、カーソル、LIMIT も本番と同じ文で確かめる
+      const rows = vi.spyOn(db, 'rows');
+      try {
+        await experienceGrantsOperation.handler({ db, actor: { userId: id() }, input: { before } } as never);
+        expect(rows).toHaveBeenCalledTimes(1);
+        const statement = rows.mock.calls[0][0];
+        const query = compiledQueryForTest(statement);
+        expect(query.sql).toMatch(/order by "g"\."confirmed_at" desc, "g"\."id" desc limit \?$/);
+        expect(query.parameters.at(-1)).toBe(51);
+        const details = (await queryPlanForTest(env, statement)).join('\n');
+        // 続きの頁は、カーソルの位置を索引の範囲にして、新しい側の項目を読まない
+        expect(details).toContain(
+          before === undefined
+            ? 'SEARCH g USING INDEX xp_grants_user_confirmed (user_id=?)'
+            : 'SEARCH g USING INDEX xp_grants_user_confirmed (user_id=? AND (confirmed_at,id)<(?,?))',
+        );
+        // 索引に id が無いと「LAST TERM OF ORDER BY」の一時 B-tree が出るので、種類を問わず出ないことを見る
+        expect(details).not.toContain('TEMP B-TREE');
+      } finally {
+        rows.mockRestore();
+      }
+    },
+  );
+
+  test('経験値の見込みは、部分索引 tasks_created_by_open で本人の未完了のタスクだけを引く', async () => {
+    const db = orgDb(env, verifiedOrganizationForTest(id()));
+    // 処理が実際に作った3つ目の文（見込み）を捕まえる
+    const batch = vi.spyOn(db, 'batch');
+    try {
+      await experienceSummaryOperation.handler({ db, actor: { userId: id() }, input: {} } as never);
+      // 位置でなく、tasks を引いている文として選ぶ（文の順が変わっても別の文を見ない）
+      const statement = batch.mock.calls[0][0].find((candidate) =>
+        compiledQueryForTest(candidate).sql.includes('"tasks" as "t"'),
+      );
+      expect(statement).toBeDefined();
+      const details = (await queryPlanForTest(env, statement!)).join('\n');
+      expect(details).toContain('SEARCH t USING INDEX tasks_created_by_open (created_by=? AND completed_at=?)');
+    } finally {
+      batch.mockRestore();
+    }
+  });
+
+  test('組織の経験値の合計は、xp_grants の表の行を引かず索引だけで読む', async () => {
+    const db = orgDb(env, verifiedOrganizationForTest(id()));
+    const details = (await queryPlanForTest(env, userExperienceTotalStatement(db, id()))).join('\n');
+    expect(details).toContain('SEARCH g USING COVERING INDEX xp_grants_user_workspace_amount (user_id=?)');
   });
 });
 
@@ -197,6 +355,33 @@ describe('セッションとログインの途中の状態', () => {
   ])('%sは当たる', async (_, tokenHash) => {
     await expect(session(await account(), tokenHash)).rejects.toThrow(/CHECK/);
     await expect(oauthState({ claimTokenHash: tokenHash })).rejects.toThrow(/CHECK/);
+  });
+
+  const oauthStateWithSignup = (signup: number) =>
+    run(
+      `INSERT INTO oauth_states (state, login_provider, code_verifier, expires_at, is_signup) VALUES (?, 'google', 'v', ?, ?)`,
+      id(),
+      AT,
+      signup,
+    );
+
+  test.each([0, 1])('会員登録の印 signup=%i は通る（#640）', async (signup) => {
+    await expect(oauthStateWithSignup(signup)).resolves.toBeTruthy();
+  });
+
+  test.each([2, -1])('会員登録の印 signup=%i は当たる（#640）', async (signup) => {
+    await expect(oauthStateWithSignup(signup)).rejects.toThrow(/CHECK/);
+  });
+
+  test('会員登録の印の列を省くと 0 になる（#640）', async () => {
+    const state = id();
+    await run(
+      `INSERT INTO oauth_states (state, login_provider, code_verifier, expires_at) VALUES (?, 'google', 'v', ?)`,
+      state,
+      AT,
+    );
+    const row = await env.DB.prepare('SELECT is_signup FROM oauth_states WHERE state = ?').bind(state).first();
+    expect(row).toEqual({ is_signup: 0 });
   });
 
   test.each(['/aoba', '/invite', '/'])('戻り先 %s は通る', async (returnTo) => {
@@ -696,6 +881,332 @@ describe('comments', () => {
   });
 });
 
+describe('attachments', () => {
+  const targetColumns = ['task_id', 'story_id', 'epic_id', 'comment_id'] as const;
+
+  async function setup() {
+    const org = await createOrganization();
+    const uploader = await createUser(org);
+    const ws = await createWorkspace(org, uploader.id);
+    const epic = await createEpic(org, ws.id, uploader.id);
+    const story = await createStory(org, ws.id, uploader.id, { epic_id: epic.id });
+    const task = await createTask(org, ws.id, uploader.id, { story_id: story.id });
+    const comment = await createComment(org, ws.id, task.id, uploader.id);
+    const targets = { task_id: task.id, story_id: story.id, epic_id: epic.id, comment_id: comment.id };
+
+    function attachment(
+      columns: Partial<Record<(typeof targetColumns)[number], string | null>> & {
+        attached_at?: string | null;
+        size_bytes?: number | string;
+        object_key?: string | Uint8Array;
+        file_name?: string | Uint8Array;
+        content_type?: string | Uint8Array;
+      } = {},
+    ) {
+      const attachmentId = id();
+      return run(
+        `INSERT INTO attachments (id, workspace_id, task_id, story_id, epic_id, comment_id, object_key, file_name, content_type, size_bytes, uploaded_by, attached_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        attachmentId,
+        ws.id,
+        columns.task_id ?? null,
+        columns.story_id ?? null,
+        columns.epic_id ?? null,
+        columns.comment_id ?? null,
+        columns.object_key ?? `${org.id}/${ws.id}/${attachmentId}`,
+        columns.file_name ?? '手順.txt',
+        columns.content_type ?? 'text/plain',
+        columns.size_bytes ?? 1,
+        uploader.id,
+        columns.attached_at ?? null,
+        AT,
+      );
+    }
+    return { attachment, targets };
+  }
+
+  test.each(Array.from({ length: 16 }, (_, mask) => mask))(
+    '付く先の組み合わせ %i は、多くても1つのときだけ保存できる',
+    async (mask) => {
+      const { attachment, targets } = await setup();
+      const selected = targetColumns.filter((_, index) => mask & (1 << index));
+      const columns = Object.fromEntries(selected.map((column) => [column, targets[column]]));
+      const result = attachment({ ...columns, attached_at: selected.length ? AT : null });
+      await (selected.length <= 1 ? expect(result).resolves.toBeTruthy() : expect(result).rejects.toThrow(/CHECK/));
+    },
+  );
+
+  test.each(targetColumns)('%s があるとき attached_at を空にできない', async (column) => {
+    const { attachment, targets } = await setup();
+    await expect(attachment({ [column]: targets[column], attached_at: null })).rejects.toThrow(/CHECK/);
+  });
+
+  test('付く先のない行に attached_at を入れられない', async () => {
+    const { attachment } = await setup();
+    await expect(attachment({ attached_at: AT })).rejects.toThrow(/CHECK/);
+  });
+
+  test.each([1, 52428800])('size_bytes の境界 %i は保存できる', async (size_bytes) => {
+    const { attachment } = await setup();
+    await expect(attachment({ size_bytes })).resolves.toBeTruthy();
+  });
+
+  test.each([-1, 0, 52428801])('size_bytes の範囲外 %i は保存できない', async (size_bytes) => {
+    const { attachment } = await setup();
+    await expect(attachment({ size_bytes })).rejects.toThrow(/CHECK/);
+  });
+
+  // INTEGER の列は整数に直せない値をそのまま REAL か TEXT で持つので、型も CHECK で断る
+  test.each([1.5, '1.5'])('size_bytes の整数でない値 %s は保存できない', async (size_bytes) => {
+    const { attachment } = await setup();
+    await expect(attachment({ size_bytes })).rejects.toThrow(/CHECK/);
+  });
+
+  test.each(['a', 'あ'.repeat(255)])('file_name は 1〜255 字なら保存できる（%#）', async (file_name) => {
+    const { attachment } = await setup();
+    await expect(attachment({ file_name })).resolves.toBeTruthy();
+  });
+
+  test.each(['', 'あ'.repeat(256)])('file_name は空と 256 字以上を保存できない（%#）', async (file_name) => {
+    const { attachment } = await setup();
+    await expect(attachment({ file_name })).rejects.toThrow(/CHECK/);
+  });
+
+  test('content_type と object_key は空文字を保存できない', async () => {
+    const { attachment } = await setup();
+    await expect(attachment({ content_type: '' })).rejects.toThrow(/CHECK/);
+    await expect(attachment({ object_key: '' })).rejects.toThrow(/CHECK/);
+  });
+
+  // BLOB で渡すと length がバイト数を数え、空文字の比較もすり抜けるので、TEXT の型も CHECK で断る
+  test.each(['file_name', 'content_type', 'object_key'] as const)('%s は BLOB で保存できない', async (column) => {
+    const { attachment } = await setup();
+    await expect(attachment({ [column]: new TextEncoder().encode('手順.txt') })).rejects.toThrow(/CHECK/);
+  });
+
+  test.each(['workspace_id', 'uploaded_by'])('外部キーの検査の %s は索引で引く', async (column) => {
+    const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN SELECT id FROM attachments WHERE ${column} = ?`)
+      .bind(id())
+      .all<{ detail: string }>();
+    expect(results.map((row) => row.detail).join('\n')).toContain(`USING INDEX attachments_${column}`);
+  });
+
+  test('object_key は、別の ID の添付でも重ねられない', async () => {
+    const { attachment } = await setup();
+    const object_key = `organization/workspace/${id()}`;
+    await expect(attachment({ object_key })).resolves.toBeTruthy();
+    await expect(attachment({ object_key })).rejects.toThrow(/UNIQUE/);
+    await expect(attachment()).resolves.toBeTruthy();
+  });
+
+  test.each(targetColumns)('%s ごとの一覧は索引で引く', async (column) => {
+    const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN SELECT id FROM attachments WHERE ${column} = ?`)
+      .bind(id())
+      .all<{ detail: string }>();
+    expect(results.map((row) => row.detail).join('\n')).toContain(`USING INDEX attachments_${column}`);
+  });
+
+  // docs/data-model.md の「付く先のない行を消す定期処理」の文の内側の SELECT。組織のワークスペースで絞るので、
+  // 部分索引の先頭は workspace_id にする（created_at だけだと workspace_id の索引が選ばれ、付いた行までなめる）
+  test('付く先のない期限切れの行は、組織のワークスペースごとに部分索引で引く', async () => {
+    const { results } = await env.DB.prepare(
+      `EXPLAIN QUERY PLAN SELECT id FROM attachments WHERE workspace_id IN (SELECT id FROM workspaces WHERE organization_id = ?) AND attached_at IS NULL AND created_at < ? LIMIT 50`,
+    )
+      .bind(id(), AT)
+      .all<{ detail: string }>();
+    const plan = results.map((row) => row.detail).join('\n');
+    expect(plan).toContain('USING INDEX attachments_workspace_created_at_unattached');
+    expect(plan).not.toMatch(/INDEX attachments_workspace_id\b/);
+  });
+});
+
+describe('task_field_values', () => {
+  async function setup() {
+    const { userId, workspaceId } = await workspace();
+    const taskId = id();
+    await run(
+      `INSERT INTO tasks (id, workspace_id, is_imported, tray, title, position, created_by, created_at, updated_at) VALUES (?, ?, 0, 'backlog', 'タスク', 'a0', ?, ?, ?)`,
+      taskId,
+      workspaceId,
+      userId,
+      AT,
+      AT,
+    );
+    const fieldId = id();
+    await run(
+      `INSERT INTO detail_fields (id, workspace_id, name, position, created_at, updated_at) VALUES (?, ?, '受け入れ基準', 'a0', ?, ?)`,
+      fieldId,
+      workspaceId,
+      AT,
+      AT,
+    );
+    return { userId, taskId, fieldId };
+  }
+
+  function value(columns: { taskId: string; fieldId: string; userId: string; body?: string }) {
+    return run(
+      `INSERT INTO task_field_values (task_id, field_id, value_md, updated_by, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      columns.taskId,
+      columns.fieldId,
+      columns.body ?? '- 確かめる手順がある',
+      columns.userId,
+      AT,
+    );
+  }
+
+  test('1 タスクの 1 つの欄に値は 1 行。別の欄は書ける', async () => {
+    const { userId, taskId, fieldId } = await setup();
+    await expect(value({ taskId, fieldId, userId })).resolves.toBeTruthy();
+    await expect(value({ taskId, fieldId, userId })).rejects.toThrow(/UNIQUE|PRIMARY/);
+  });
+
+  test('値は空にできず（空は行を消す）、10 万字まで。字数はコードポイントで数える', async () => {
+    const { userId, taskId, fieldId } = await setup();
+    await expect(value({ taskId, fieldId, userId, body: '' })).rejects.toThrow(/CHECK/);
+    await expect(value({ taskId, fieldId, userId, body: 'あ'.repeat(100_001) })).rejects.toThrow(/CHECK/);
+    await expect(value({ taskId, fieldId, userId, body: '😀'.repeat(100_000) })).resolves.toBeTruthy();
+  });
+
+  test('無いタスク、無い欄、無い人を指せない', async () => {
+    const { userId, taskId, fieldId } = await setup();
+    await expect(value({ taskId: id(), fieldId, userId })).rejects.toThrow(/FOREIGN KEY/);
+    await expect(value({ taskId, fieldId: id(), userId })).rejects.toThrow(/FOREIGN KEY/);
+    await expect(value({ taskId, fieldId, userId: id() })).rejects.toThrow(/FOREIGN KEY/);
+  });
+});
+
+describe('sprint_entries', () => {
+  async function taskAndSprint() {
+    const { userId, workspaceId } = await workspace();
+    const taskId = id();
+    const sprintId = id();
+    await run(
+      `INSERT INTO tasks (id, workspace_id, is_imported, tray, title, position, created_by, created_at, updated_at) VALUES (?, ?, 0, 'backlog', 'タスク', 'a0', ?, ?, ?)`,
+      taskId,
+      workspaceId,
+      userId,
+      AT,
+      AT,
+    );
+    await run(
+      `INSERT INTO sprints (id, workspace_id, start_on, end_on, status, created_at, updated_at) VALUES (?, ?, '2026-11-02', '2026-11-15', 'planned', ?, ?)`,
+      sprintId,
+      workspaceId,
+      AT,
+      AT,
+    );
+    const entry = (endedAt: string | null, outcome: string | null) =>
+      run(
+        `INSERT INTO sprint_entries (id, workspace_id, sprint_id, task_id, added_at, added_by, ended_at, outcome) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        id(),
+        workspaceId,
+        sprintId,
+        taskId,
+        AT,
+        userId,
+        endedAt,
+        outcome,
+      );
+    return { entry };
+  }
+
+  test('1つのタスクが入っている行（ended_at が空）は1つ。出た行はいくつでも持てる', async () => {
+    const { entry } = await taskAndSprint();
+    await expect(entry(AT, 'removed')).resolves.toBeTruthy();
+    await expect(entry(AT, 'removed')).resolves.toBeTruthy();
+    await expect(entry(null, null)).resolves.toBeTruthy();
+    await expect(entry(null, null)).rejects.toThrow(/UNIQUE/);
+  });
+
+  test('出た日時と出方は、両方入るか両方空。出方は completed、carried_over、removed のどれか', async () => {
+    const { entry } = await taskAndSprint();
+    await expect(entry(AT, null)).rejects.toThrow(/CHECK/);
+    await expect(entry(null, 'removed')).rejects.toThrow(/CHECK/);
+    await expect(entry(AT, 'deleted')).rejects.toThrow(/CHECK/);
+    await expect(entry(AT, 'completed')).resolves.toBeTruthy();
+    await expect(entry(AT, 'carried_over')).resolves.toBeTruthy();
+  });
+});
+
+describe('epic_party_members', () => {
+  async function epicAndUsers() {
+    const { orgId, userId, workspaceId } = await workspace();
+    const otherUserId = await user(orgId);
+    const epicId = id();
+    await run(
+      `INSERT INTO epics (id, workspace_id, title, reward_tier, requester_user_id, created_by, position, created_at, updated_at) VALUES (?, ?, 'エピック', 'medium', ?, ?, 'a0', ?, ?)`,
+      epicId,
+      workspaceId,
+      userId,
+      userId,
+      AT,
+      AT,
+    );
+    const join = (user: string, joinedVia: string) =>
+      run(
+        `INSERT INTO epic_party_members (epic_id, user_id, joined_via, added_by, joined_at) VALUES (?, ?, ?, ?, ?)`,
+        epicId,
+        user,
+        joinedVia,
+        userId,
+        AT,
+      );
+    return { userId, otherUserId, join };
+  }
+
+  test('同じエピックに同じ人は1回だけ入れる', async () => {
+    const { userId, otherUserId, join } = await epicAndUsers();
+    await expect(join(userId, 'self')).resolves.toBeTruthy();
+    await expect(join(otherUserId, 'assigned')).resolves.toBeTruthy();
+    await expect(join(userId, 'self')).rejects.toThrow(/UNIQUE|PRIMARY KEY/);
+  });
+
+  test('入り方は self、assigned、task_assignee のどれか', async () => {
+    const { userId, otherUserId, join } = await epicAndUsers();
+    await expect(join(userId, 'task_assignee')).resolves.toBeTruthy();
+    await expect(join(otherUserId, 'invited')).rejects.toThrow(/CHECK/);
+  });
+});
+
+describe('thanks', () => {
+  async function taskAndUsers() {
+    const { orgId, userId, workspaceId } = await workspace();
+    const recipientId = await user(orgId);
+    const taskId = id();
+    await run(
+      `INSERT INTO tasks (id, workspace_id, is_imported, tray, title, position, created_by, created_at, updated_at) VALUES (?, ?, 0, 'backlog', 'タスク', 'a0', ?, ?, ?)`,
+      taskId,
+      workspaceId,
+      userId,
+      AT,
+      AT,
+    );
+    const thank = (sender: string, recipient: string) =>
+      run(
+        `INSERT INTO thanks (id, workspace_id, task_id, sender_user_id, recipient_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        id(),
+        workspaceId,
+        taskId,
+        sender,
+        recipient,
+        AT,
+      );
+    return { userId, recipientId, thank };
+  }
+
+  test('自分には送れない', async () => {
+    const { userId, thank } = await taskAndUsers();
+    await expect(thank(userId, userId)).rejects.toThrow(/CHECK/);
+  });
+
+  test('同じタスクで同じ相手への感謝は1回。相手が違えば別に送れる', async () => {
+    const { userId, recipientId, thank } = await taskAndUsers();
+    await expect(thank(userId, recipientId)).resolves.toBeTruthy();
+    await expect(thank(userId, recipientId)).rejects.toThrow(/UNIQUE/);
+    await expect(thank(recipientId, userId)).resolves.toBeTruthy();
+  });
+});
+
 describe('xp_grants.dedupe_key', () => {
   test('同じキーの付与は2つ作れない', async () => {
     const { userId, workspaceId } = await workspace();
@@ -710,5 +1221,128 @@ describe('xp_grants.dedupe_key', () => {
       );
     await grant();
     await expect(grant()).rejects.toThrow(/UNIQUE/);
+  });
+});
+
+// organizations.kind（'team' | 'personal'）と、自分用の組織が1アカウントに1つだけの部分 UNIQUE 索引（#733）
+describe('organizations.kind', () => {
+  async function account(): Promise<string> {
+    const accountId = id();
+    await run(`INSERT INTO accounts (id, created_at, updated_at) VALUES (?, ?, ?)`, accountId, AT, AT);
+    return accountId;
+  }
+
+  async function insertOrganization(options: { kind?: string; createdBy?: string | null; slug?: string }) {
+    const slug = options.slug ?? `org-${id().slice(0, 8)}`;
+    const columns = ['id', 'slug', 'name', 'created_by_operator', 'created_by_account_id', 'created_at', 'updated_at'];
+    const values: unknown[] = [id(), slug, '組織', 'self-service', options.createdBy ?? null, AT, AT];
+    if (options.kind !== undefined) {
+      columns.push('kind');
+      values.push(options.kind);
+    }
+    await run(
+      `INSERT INTO organizations (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+      ...values,
+    );
+    return slug;
+  }
+
+  async function kindOf(slug: string): Promise<unknown> {
+    const row = await env.DB.prepare(`SELECT kind FROM organizations WHERE slug = ?`)
+      .bind(slug)
+      .first<{ kind: string }>();
+    return row?.kind;
+  }
+
+  test('kind を省くと team になる', async () => {
+    expect(await kindOf(await insertOrganization({}))).toBe('team');
+  });
+
+  test.each(['team', 'personal'])('%s は通る', async (kind) => {
+    expect(await kindOf(await insertOrganization({ kind }))).toBe(kind);
+  });
+
+  test.each(['', 'Team', 'PERSONAL', 'personal ', 'solo', 'enterprise'])('%j は CHECK に当たる', async (kind) => {
+    await expect(insertOrganization({ kind })).rejects.toThrow(/CHECK/);
+  });
+
+  test('NULL は NOT NULL に当たる', async () => {
+    await expect(
+      run(
+        `INSERT INTO organizations (id, slug, name, kind, created_by_operator, created_at, updated_at) VALUES (?, ?, '組織', NULL, 'self-service', ?, ?)`,
+        id(),
+        `org-${id().slice(0, 8)}`,
+        AT,
+        AT,
+      ),
+    ).rejects.toThrow(/NOT NULL/);
+  });
+
+  test('列の定義は TEXT NOT NULL で、既定は team', async () => {
+    const { results } = await env.DB.prepare(
+      `SELECT name, type, "notnull", dflt_value FROM pragma_table_info('organizations') WHERE name = 'kind'`,
+    ).all<{
+      type: string;
+      notnull: number;
+      dflt_value: string | null;
+    }>();
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ type: 'TEXT', notnull: 1 });
+    expect(results[0]!.dflt_value).toContain('team');
+  });
+
+  test('同じ作成者の自分用の2つ目は UNIQUE に当たる', async () => {
+    const owner = await account();
+    await insertOrganization({ kind: 'personal', createdBy: owner });
+    await expect(insertOrganization({ kind: 'personal', createdBy: owner })).rejects.toThrow(/UNIQUE/);
+  });
+
+  test('作成者が違えば、自分用は何人分でも入る', async () => {
+    await insertOrganization({ kind: 'personal', createdBy: await account() });
+    await expect(insertOrganization({ kind: 'personal', createdBy: await account() })).resolves.toBeTypeOf('string');
+  });
+
+  test('同じ作成者でも、team は何件でも入る（お試しの上限は処理が守る）', async () => {
+    const owner = await account();
+    await insertOrganization({ kind: 'team', createdBy: owner });
+    await insertOrganization({ kind: 'team', createdBy: owner });
+    await expect(insertOrganization({ createdBy: owner })).resolves.toBeTypeOf('string');
+  });
+
+  test('同じ作成者が自分用と team を1つずつ持てる（順序によらない）', async () => {
+    const first = await account();
+    await insertOrganization({ kind: 'personal', createdBy: first });
+    await expect(insertOrganization({ kind: 'team', createdBy: first })).resolves.toBeTypeOf('string');
+    const second = await account();
+    await insertOrganization({ kind: 'team', createdBy: second });
+    await expect(insertOrganization({ kind: 'personal', createdBy: second })).resolves.toBeTypeOf('string');
+  });
+
+  test('既存の行（kind を省いた行）は team で、同じ作成者の自分用を妨げない', async () => {
+    const owner = await account();
+    await insertOrganization({ createdBy: owner });
+    await expect(insertOrganization({ kind: 'personal', createdBy: owner })).resolves.toBeTypeOf('string');
+  });
+
+  test('自分用の行を team に直すと、同じ作成者の自分用をもう1つ作れる（索引は kind が personal の行だけ）', async () => {
+    const owner = await account();
+    const slug = await insertOrganization({ kind: 'personal', createdBy: owner });
+    await run(`UPDATE organizations SET kind = 'team' WHERE slug = ?`, slug);
+    await expect(insertOrganization({ kind: 'personal', createdBy: owner })).resolves.toBeTypeOf('string');
+  });
+
+  test('team の行を personal に直すとき、同じ作成者の自分用が既にあれば UNIQUE に当たる', async () => {
+    const owner = await account();
+    await insertOrganization({ kind: 'personal', createdBy: owner });
+    const slug = await insertOrganization({ kind: 'team', createdBy: owner });
+    await expect(run(`UPDATE organizations SET kind = 'personal' WHERE slug = ?`, slug)).rejects.toThrow(/UNIQUE/);
+  });
+
+  test('部分索引は kind が personal の行だけを対象にする', async () => {
+    const { results } = await env.DB.prepare(
+      `SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'organizations' AND sql LIKE '%created_by_account_id%' AND sql LIKE '%UNIQUE%'`,
+    ).all<{ sql: string }>();
+    expect(results).toHaveLength(1);
+    expect(results[0]!.sql).toMatch(/WHERE\s+kind\s*=\s*'personal'/i);
   });
 });

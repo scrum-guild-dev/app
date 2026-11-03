@@ -4,6 +4,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { callOperation } from '../api.ts';
+  import { invitationErrorText, invitationRoleLabel } from '../invitation-text.ts';
   import { isUnauthenticated, loginUrl } from '../login-redirect.ts';
   import { applyInvitedOrganization } from '../organization.svelte.ts';
   import { showToast } from '../toast.svelte.ts';
@@ -18,7 +19,7 @@
 
   // 招待の画面（見本は design/login.html の「届いた招待」）。組織の枠の外の、枠の無い画面で、この組織に自分宛てに届いた
   // 承諾待ちの招待を並べ、承諾と辞退を送る。/<slug>/invitations のページと、組織に入れず招待だけがある人の組織の枠が使う。
-  // member は組織に入れる人か。入れない人（招待だけの人）には、invitation-list が返す組織の言葉づかいとテーマを当てる
+  // member は組織に入れる人か。入れない人（招待だけの人）には、invitation-list が返す組織のテーマを当てる
   // （入れる人には、組織の枠が organization の操作の結果を当てている）。
   // 結果はトーストで知らせる。トーストは root のレイアウトにあるので、画面が移った後も残る。
   // 承諾したらそのワークスペースへ移る。辞退して招待が残らなければ、招待だけの人は組織の選択へ、入れる人は組織の画面へ移る。
@@ -38,31 +39,13 @@
     if (!member) applyInvitedOrganization(list.organization);
   });
 
-  function roleLabel(role: Invitation['role']): string {
-    return role === 'leader' ? t('leader') : t('roleMember');
-  }
+  const roleLabel = invitationRoleLabel;
 
   function isSending(invitation: Invitation, action: 'accept' | 'decline'): boolean {
     return sending?.id === invitation.invitation_id && sending.action === action;
   }
 
-  // 失敗の理由
-  function errorText(result: { status: number; error?: { code: string } | null }): string {
-    const words = { workspace: t('workspace') };
-    if (result.status === 0) return t('invitationErrorUnreachable');
-    switch (result.error?.code) {
-      case 'not_found':
-        return t('invitationErrorNotFound');
-      case 'conflict':
-        return t('invitationErrorChanged');
-      case 'workspace_closed':
-        return t('invitationErrorClosed', words);
-      case 'already_member':
-        return t('invitationErrorAlreadyMember', words);
-      default:
-        return t('invitationErrorFailed');
-    }
-  }
+  const errorText = invitationErrorText;
 
   // 招待だけの人の招待が残っていないか。残っていなければ、読み直すと組織に入れず「見つからない」になる
   async function noInvitationLeft(): Promise<boolean> {
@@ -152,7 +135,12 @@
       <div class="callout is-warn" role="alert"><Icon name="alert" /><span>{error}</span></div>
     {/if}
     {#if list.invitations.length === 0}
-      <EmptyState icon="mail" title={t('invitationInboxEmptyTitle')} text={t('invitationInboxEmptyText')} />
+      <EmptyState
+        icon="mail"
+        art="notice"
+        title={t('invitationInboxEmptyTitle')}
+        text={t('invitationInboxEmptyText')}
+      />
     {:else}
       <div class="choice-list">
         {#each list.invitations as invitation (invitation.invitation_id)}

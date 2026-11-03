@@ -33,6 +33,32 @@ export const SEED_SESSIONS = {
     accountId: '019a0000-0000-7000-8000-000000000108',
     description: 'どの組織にも属さず、ひばり工房のデザイン相談室への承諾待ちの招待だけが届いた人（ヒナタ）',
   },
+  leftAll: {
+    token: 'dev-seed-left-all-0000000000000000000000000',
+    accountId: '019a0000-0000-7000-8000-000000000110',
+    description:
+      'あおば開発に users の行だけを持ち、すべてのワークスペースから外れた人（ツバサ）。管理者でなく、招待も無い。入れる組織が無くてもログインできる',
+  },
+  unconsented: {
+    token: 'dev-seed-unconsented-0000000000000000000000',
+    accountId: '019a0000-0000-7000-8000-000000000111',
+    description: '今の版の規約に同意していない人（同意の行を持たない）。どの組織にも属さない',
+  },
+  createOrg: {
+    token: 'dev-seed-create-org-00000000000000000000000',
+    accountId: '019a0000-0000-7000-8000-000000000112',
+    description: 'どの組織にも属さず、自分の組織を作る会員（ナギ）',
+  },
+  trialAdmin: {
+    token: 'dev-seed-trial-admin-0000000000000000000000',
+    accountId: '019a0000-0000-7000-8000-000000000113',
+    description: 'かぜラボのお試しの管理者（イツキ）',
+  },
+  trialMember: {
+    token: 'dev-seed-trial-member-000000000000000000000',
+    accountId: '019a0000-0000-7000-8000-000000000114',
+    description: 'かぜラボのお試しのメンバー（フウカ）',
+  },
   // e2e のログアウトが消すための2本目。e2e は上のセッションを全ファイルで共有して並列に走るので、共有のものはログアウトしない
   adminLogout: {
     token: 'dev-seed-admin-logout-000000000000000000000',
@@ -44,11 +70,11 @@ export const SEED_SESSIONS = {
     accountId: '019a0000-0000-7000-8000-000000000104',
     description: 'operator と同じアカウントの2本目（e2e のログアウトが消す）',
   },
-  // くもラボ（e2e の組織の言葉づかいと既定のテーマだけが使い、組織の値を書き換える組織）の3人。ほかの組織には入らない
+  // くもラボ（e2e の組織の既定のテーマだけが使い、組織の値を書き換える組織）の3人。ほかの組織には入らない
   lookAdmin: {
     token: 'dev-seed-look-admin-00000000000000000000000',
     accountId: '019a0000-0000-7000-8000-000000000105',
-    description: 'くもラボの管理者（カイ）。e2e の組織の言葉づかいと既定のテーマが使う',
+    description: 'くもラボの管理者（カイ）。e2e の組織の既定のテーマが使う',
   },
   lookMember: {
     token: 'dev-seed-look-member-0000000000000000000000',

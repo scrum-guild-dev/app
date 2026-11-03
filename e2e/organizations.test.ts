@@ -2,8 +2,9 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import type { OutputOf } from '../src/shared/operations/define.ts';
-import type { organizationInfo } from '../src/shared/operations/organization/index.ts';
-import { signIn, watchViolations } from './helpers.ts';
+import { myOrganizations, type organizationInfo } from '../src/shared/operations/organization/index.ts';
+import { findA11yViolations, signIn, watchViolations } from './helpers.ts';
+import { rewriteOperation } from './operations.ts';
 
 // 組織の操作の応答を書き換える。サーバーの応答をそのまま取り、必要な項目だけ上書きして返す
 async function patchOrganization(page: Page, slug: string, patch: (body: OutputOf<typeof organizationInfo>) => void) {
@@ -28,14 +29,19 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await signIn(context, baseURL, 'member');
   });
 
-  test('/ を開くと組織の画面に入り、組織の切り替えは出ない', async ({ page }) => {
+  test('/ を開くと組織の画面に入り、組織の切り替えには「組織を作る」と「自分用を作る」だけが並ぶ', async ({ page }) => {
     const collect = await watchViolations(page);
     await page.goto('/');
     await expect(page).toHaveURL(/\/aoba$/);
-    await expect(page.getByRole('heading', { level: 1, name: '自分の今日' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
     await expect(page.locator('.me')).toContainText('ハルカ');
     await expect(page.locator('.me .chip')).toHaveCount(0);
-    await expect(menuButton(page)).toHaveCount(0);
+    // / は今の組織へ戻すだけなので、組織の一覧へ戻る行は出さない。招待も無いので印も出ない
+    await expect(menuButton(page)).toHaveAttribute('aria-label', 'あおば開発。組織を切り替える');
+    await expect(page.locator('.org-menu-invite')).toHaveCount(0);
+    await menuButton(page).click();
+    await expect(menuLinks(page)).toHaveText(['あおば開発']);
+    await expect(page.locator('.org-menu-list button')).toHaveText(['組織を作る', '自分用を作る']);
     expect(await collect()).toEqual([]);
   });
 
@@ -58,9 +64,8 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     expect(await page.evaluate(() => localStorage.getItem('sg-theme'))).toBe('modern');
   });
 
-  test('組織の言葉づかいを当てる（スクラムの言葉では管理者の印が「管理者」になる）', async ({ page }) => {
+  test('管理者の印は、スクラムの言葉の「管理者」になる', async ({ page }) => {
     await patchOrganization(page, 'aoba', (body) => {
-      body.organization.vocabulary = 'scrum';
       body.me.is_admin = true;
     });
     await page.goto('/aoba');
@@ -76,10 +81,10 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
       body.workspaces = [];
     });
     await page.goto('/aoba');
-    await expect(page.getByText('まだパーティがありません')).toBeVisible();
-    await expect(page.getByText('最初のパーティを作ります。')).toBeVisible();
+    await expect(page.getByText('まだワークスペースがありません')).toBeVisible();
+    await expect(page.getByText('最初のワークスペースを作ります。')).toBeVisible();
     await expect(page.locator('.empty a')).toHaveCount(0);
-    await expect(page.locator('.empty button')).toHaveText('パーティを作る');
+    await expect(page.locator('.empty button')).toHaveText('ワークスペースを作る');
     await expect(page.locator('.nav-group')).toHaveCount(0);
   });
 
@@ -90,16 +95,16 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
       body.workspaces = [];
     });
     await page.goto('/aoba');
-    await expect(page.getByText('どのパーティにも所属していません')).toBeVisible();
-    await expect(page.getByText('まだパーティがありません')).toHaveCount(0);
+    await expect(page.getByText('どのワークスペースにも所属していません')).toBeVisible();
+    await expect(page.getByText('まだワークスペースがありません')).toHaveCount(0);
     await expect(page.locator('.empty a, .empty button')).toHaveCount(0);
   });
 
   test('所属のある人には、ワークスペースの案内を出さない', async ({ page }) => {
     await page.goto('/aoba');
-    await expect(page.getByRole('heading', { level: 1, name: '自分の今日' })).toBeVisible();
-    await expect(page.getByText('まだパーティがありません')).toHaveCount(0);
-    await expect(page.getByText('どのパーティにも所属していません')).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+    await expect(page.getByText('まだワークスペースがありません')).toHaveCount(0);
+    await expect(page.getByText('どのワークスペースにも所属していません')).toHaveCount(0);
   });
 
   test('入れない組織の slug と存在しない slug は、同じ「見つからない」の画面になり、API はどちらも 404', async ({
@@ -109,8 +114,8 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     const screens: string[] = [];
     for (const slug of ['hibari', 'no-such-organization']) {
       await page.goto(`/${slug}`);
-      await expect(page.getByRole('heading', { level: 1, name: '冒険者ギルドが見つかりません' })).toBeVisible();
-      await expect(page).toHaveTitle('冒険者ギルドが見つかりません - Scrum Guild');
+      await expect(page.getByRole('heading', { level: 1, name: '組織が見つかりません' })).toBeVisible();
+      await expect(page).toHaveTitle('組織が見つかりません - Scrum Guild');
       await expect(page.locator('.nav')).toHaveCount(0);
       screens.push(await page.locator('body').innerText());
     }
@@ -130,7 +135,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
 
   test('見つからない画面の「一覧へ」で、入れる組織の画面に戻る', async ({ page }) => {
     await page.goto('/hibari');
-    await page.getByRole('link', { name: '冒険者ギルドの一覧へ' }).click();
+    await page.getByRole('link', { name: '組織の一覧へ' }).click();
     await expect(page).toHaveURL(/\/aoba$/);
   });
 
@@ -145,7 +150,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
       await page.route('**/api/aoba/organization', (route) => route.fulfill(response));
       await page.goto('/aoba');
       await expect(page.getByRole('heading', { level: 1, name: '読み込めませんでした' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: '冒険者ギルドが見つかりません' })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: '組織が見つかりません' })).toHaveCount(0);
     });
   }
 
@@ -159,20 +164,19 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     );
     const collect = await watchViolations(page);
     await page.goto('/aoba');
-    await expect(page.getByRole('heading', { level: 1, name: '冒険者ギルドは停止しています' })).toBeVisible();
-    await expect(page).toHaveTitle('冒険者ギルドは停止しています - Scrum Guild');
-    await expect(page.getByText('この冒険者ギルドは停止しています。運用者に問い合わせてください。')).toBeVisible();
-    await expect(page.getByRole('heading', { name: '冒険者ギルドが見つかりません' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: '組織は停止しています' })).toBeVisible();
+    await expect(page).toHaveTitle('組織は停止しています - Scrum Guild');
+    await expect(page.getByText('この組織は停止しています。運用者に問い合わせてください。')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '組織が見つかりません' })).toHaveCount(0);
     await expect(page.locator('.nav')).toHaveCount(0);
-    await page.getByRole('link', { name: '冒険者ギルドの一覧へ' }).click();
+    await page.getByRole('link', { name: '組織の一覧へ' }).click();
     await expect(page).toHaveURL(/\/aoba$/);
     // 差し替えた 403 の読み込みの失敗をブラウザがコンソールに出す。それ以外（CSP の違反など）が無いことを見る
     expect((await collect()).filter((entry) => !entry.includes('403 (Forbidden)'))).toEqual([]);
   });
 
-  test('停止した組織にしか入れない人の 401（理由 suspended）は、ログインの画面の suspended へ移す', async ({
-    page,
-  }) => {
+  // #639: サーバーは理由付きの 401 を返さなくなった。届いても、理由を付けずにログインの画面へ移し、何も出さない
+  test('理由（suspended）を持つ 401 も、理由なしでログインの画面へ移す', async ({ page }) => {
     await page.route('**/api/aoba/organization', (route) =>
       route.fulfill({ status: 403, json: { error: { code: 'organization_suspended', message: 'x' } } }),
     );
@@ -183,10 +187,8 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
       }),
     );
     await page.goto('/aoba');
-    await expect(page).toHaveURL('/login?return_to=%2Faoba&error=suspended');
-    await expect(page.getByRole('alert')).toHaveText(
-      'ログインできませんでした。所属しているか招待されている冒険者ギルドは停止しています。運用者に問い合わせてください。',
-    );
+    await expect(page).toHaveURL('/login?return_to=%2Faoba');
+    await expect(page.getByRole('alert')).toHaveCount(0);
   });
 
   test('理由を持たない 401 は、理由なしでログインの画面へ移す', async ({ page }) => {
@@ -231,23 +233,44 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     expect(calls).toBe(2);
 
     await retry.click();
-    await expect(page.getByRole('heading', { level: 1, name: '自分の今日' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
   });
 
-  test('組織の外の画面は、テーマと言葉づかいを既定に戻し、覚えたテーマも消す', async ({ page }) => {
+  test('組織の外の画面は、テーマを既定に戻し、覚えたテーマも消す', async ({ page }) => {
     await patchOrganization(page, 'aoba', (body) => {
       body.organization.theme = 'medieval';
-      body.organization.vocabulary = 'scrum';
     });
     await page.goto('/aoba');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'medieval');
     expect(await page.evaluate(() => localStorage.getItem('sg-theme'))).toBe('medieval');
 
-    // 見つからない画面（組織の外）
+    // 見つからない画面（組織の外）。文書ごと読み直すので、確かめるのはテーマの属性と localStorage
     await page.goto('/hibari');
-    await expect(page.getByRole('heading', { level: 1, name: '冒険者ギルドが見つかりません' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '組織が見つかりません' })).toBeVisible();
     await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.*/);
     expect(await page.evaluate(() => localStorage.getItem('sg-theme'))).toBeNull();
+  });
+
+  test('言葉づかいは覚えない。前に覚えていた値（sg-vocabulary）が残っていても、最初の描画からスクラムの言葉で出る', async ({
+    page,
+  }) => {
+    await patchOrganization(page, 'aoba', (body) => {
+      body.me.is_admin = true;
+    });
+    // 描画のたびに、管理者の印の文字を集める。ゲームの用語の「ギルドマスター」が一度も出ない
+    await page.addInitScript(() => {
+      localStorage.setItem('sg-vocabulary', 'game:aoba');
+      const seen: string[] = [];
+      (window as unknown as { __chipTexts: string[] }).__chipTexts = seen;
+      new MutationObserver(() => {
+        for (const chip of document.querySelectorAll('.me .chip')) seen.push(chip.textContent ?? '');
+      }).observe(document, { childList: true, subtree: true, characterData: true });
+    });
+    await page.goto('/aoba');
+    await expect(page.locator('.me .chip')).toHaveText('管理者');
+    const seen = await page.evaluate(() => (window as unknown as { __chipTexts: string[] }).__chipTexts);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen).not.toContain('ギルドマスター');
   });
 
   test('組織の外から組織へ移る間は読み込み中を出し、移ったら組織の値を当てる', async ({ page }) => {
@@ -257,8 +280,9 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発' }],
+          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -273,15 +297,16 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await expect(page.getByRole('heading', { level: 1, name: '読み込んでいます' })).toBeVisible();
     await expect(page).toHaveTitle('読み込んでいます - Scrum Guild');
     await expect(page.locator('[role="status"].visually-hidden').first()).toHaveText('読み込んでいます');
-    await expect(page.getByRole('heading', { level: 1, name: '自分の今日' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
   });
 
   test('読み込み中の表示は、移り始めてから 300ms たつまで出さない', async ({ page }) => {
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発' }],
+          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -299,7 +324,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
       }).observe(document.body, { childList: true, subtree: true, characterData: true });
     });
     await page.getByRole('link', { name: /あおば開発/ }).click();
-    await expect(page.getByRole('heading', { level: 1, name: '自分の今日' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
     const seen = await page.evaluate(
       () => (window as unknown as { __seen: { clickedAt: number | null; shownAt: number | null } }).__seen,
     );
@@ -317,13 +342,13 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     const collect = await watchViolations(page);
     await page.goto('/');
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('heading', { level: 1, name: '冒険者ギルドを選ぶ' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '組織を選ぶ' })).toBeVisible();
     await expect(page.locator('.nav')).toHaveCount(0);
     await expect(page.locator('a.choice')).toHaveText([/あおば開発/, /ひばり工房/]);
 
     await page.getByRole('link', { name: /あおば開発/ }).click();
     await expect(page).toHaveURL(/\/aoba$/);
-    await expect(page.getByRole('heading', { level: 1, name: '自分の今日' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
     expect(await collect()).toEqual([]);
   });
 
@@ -338,7 +363,7 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     });
     await page.goto('/aoba');
     await expect(page.locator('.me')).toContainText('ミナト（あおば）');
-    await expect(page.locator('.me .chip')).toHaveText('ギルドマスター');
+    await expect(page.locator('.me .chip')).toHaveText('管理者');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'medieval');
 
     // 閉じているときは、今の組織の名前だけを出す。開くと各組織へのリンクと、最後に一覧へ戻るリンク
@@ -347,13 +372,13 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await expect(page.locator('.org-menu-list')).toBeHidden();
     await menuButton(page).click();
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'true');
-    await expect(menuLinks(page)).toHaveText(['あおば開発', 'ひばり工房', '冒険者ギルドの一覧へ']);
+    await expect(menuLinks(page)).toHaveText(['あおば開発', 'ひばり工房', '組織の一覧へ']);
     await expect(menuLinks(page).nth(0)).toHaveAttribute('aria-current', 'page');
     await expect(menuLinks(page).nth(0).locator('svg')).toHaveCount(1);
     await expect(menuLinks(page).nth(1)).not.toHaveAttribute('aria-current', /.*/);
     // ボタンとリストには、読み上げの名前がある
-    await expect(menuButton(page)).toHaveAttribute('aria-label', 'あおば開発。冒険者ギルドを切り替える');
-    await expect(page.getByRole('list', { name: '入れる冒険者ギルド' })).toBeVisible();
+    await expect(menuButton(page)).toHaveAttribute('aria-label', 'あおば開発。組織を切り替える');
+    await expect(page.getByRole('list', { name: '入れる組織' })).toBeVisible();
     await menuLinks(page).nth(1).click();
 
     await expect(page).toHaveURL(/\/hibari$/);
@@ -397,7 +422,7 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await page.goto('/aoba');
     await menuButton(page).click();
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'true');
-    await page.getByRole('heading', { level: 1, name: '自分の今日' }).click();
+    await page.getByRole('heading', { level: 1, name: '今日やること' }).click();
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -406,8 +431,8 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await menuButton(page).focus();
     await page.keyboard.press('Enter');
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'true');
-    // 3つのリンクを通り過ぎて、メニューの外（左のメニューの項目）へ出る
-    for (let index = 0; index < 4; index++) await page.keyboard.press('Tab');
+    // 3つのリンクと「組織を作る」「自分用を作る」のボタンを通り過ぎて、メニューの外（左のメニューの項目）へ出る
+    for (let index = 0; index < 6; index++) await page.keyboard.press('Tab');
     await expect(page.locator('.nav-item').first()).toBeFocused();
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'false');
   });
@@ -426,10 +451,11 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
       route.fulfill({
         json: {
           organizations: [
-            { slug: 'aoba', name: 'あおば開発' },
-            ...Array.from({ length: 14 }, (_, index) => ({ slug: `k${index}`, name: `組織${index}` })),
+            { slug: 'aoba', name: 'あおば開発', kind: 'team' },
+            ...Array.from({ length: 14 }, (_, index) => ({ slug: `k${index}`, name: `組織${index}`, kind: 'team' })),
           ],
           invitations: [],
+          suspended: [],
           operator: false,
         },
       }),
@@ -455,8 +481,9 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発' }],
+          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -484,8 +511,9 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'hibari', name: 'ひばり工房' }],
+          organizations: [{ slug: 'hibari', name: 'ひばり工房', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -527,7 +555,7 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await menuButton(page).click();
     await menuLinks(page).last().click();
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('heading', { level: 1, name: '冒険者ギルドを選ぶ' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '組織を選ぶ' })).toBeVisible();
   });
 
   test('390px の幅でも、組織の切り替えが出て、各組織へ移れ、一覧に戻れる', async ({ page }) => {
@@ -535,7 +563,7 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await page.goto('/aoba');
     await expect(menuButton(page)).toBeVisible();
     await menuButton(page).click();
-    await expect(menuLinks(page)).toHaveText(['あおば開発', 'ひばり工房', '冒険者ギルドの一覧へ']);
+    await expect(menuLinks(page)).toHaveText(['あおば開発', 'ひばり工房', '組織の一覧へ']);
     for (const link of await menuLinks(page).all()) await expect(link).toBeVisible();
     const closed = await overflowOf(page);
     expect(closed.scroll).toBeLessThanOrEqual(closed.inner);
@@ -545,7 +573,7 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await menuButton(page).click();
     await menuLinks(page).last().click();
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('heading', { level: 1, name: '冒険者ギルドを選ぶ' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '組織を選ぶ' })).toBeVisible();
   });
 
   test('長い組織名、slug、ユーザー名でも、横にはみ出さない', async ({ page }) => {
@@ -558,10 +586,11 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
       route.fulfill({
         json: {
           organizations: [
-            { slug: longSlug, name: longName },
-            { slug: 'aoba', name: 'あおば開発' },
+            { slug: longSlug, name: longName, kind: 'team' },
+            { slug: 'aoba', name: 'あおば開発', kind: 'team' },
           ],
           invitations: [{ organization_name: longName, slug: longSlug }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -581,6 +610,8 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await menuButton(page).click();
     const shell = await overflowOf(page);
     expect(shell.scroll).toBeLessThanOrEqual(shell.inner);
+    // 押した位置に残るマウスで、組織の切り替えのボタンの枠がホバーの色になるかが実行ごとに変わるので、隅へ動かす（#491）
+    await page.mouse.move(0, 0);
   });
 });
 
@@ -590,10 +621,10 @@ test.describe('ひばり工房だけの管理者（リン）', () => {
     await page.goto('/');
     await expect(page).toHaveURL(/\/hibari$/);
     await expect(page.locator('.me')).toContainText('リン');
-    await expect(page.locator('.me .chip')).toHaveText('ギルドマスター');
+    await expect(page.locator('.me .chip')).toHaveText('管理者');
 
     await page.goto('/aoba');
-    await expect(page.getByRole('heading', { level: 1, name: '冒険者ギルドが見つかりません' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '組織が見つかりません' })).toBeVisible();
   });
 });
 
@@ -608,7 +639,7 @@ test.describe('ログインしていない人と、組織が無い人', () => {
   test('入れる組織が無い運用者は、運用の画面へ移す', async ({ page, context, baseURL }) => {
     await signIn(context, baseURL, 'operator');
     await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({ json: { organizations: [], invitations: [], operator: true } }),
+      route.fulfill({ json: { organizations: [], invitations: [], suspended: [], operator: true } }),
     );
     // e2e の Worker には運用者の一覧が無いので、運用の画面が取る組織の一覧も差し替える（e2e/operator.test.ts）
     await page.route('**/api/list-organizations', (route) => route.fulfill({ json: { organizations: [] } }));
@@ -627,8 +658,9 @@ test.describe('ログインしていない人と、組織が無い人', () => {
     await page.route('**/api/my-organizations', (route) =>
       route.fulfill({
         json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発' }],
+          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
@@ -653,23 +685,24 @@ test.describe('ログインしていない人と、組織が無い人', () => {
         json: {
           organizations: [],
           invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+          suspended: [],
           operator: false,
         },
       }),
     );
     await page.goto('/');
-    await expect(page.getByText('まだ入れる冒険者ギルドがありません')).toBeVisible();
-    await expect(page.getByText('下の届いた招待から冒険者ギルドを選び、招待を承諾すると入れます。')).toBeVisible();
+    await expect(page.getByText('まだ入れる組織がありません')).toBeVisible();
+    await expect(page.getByText('下の届いた招待から組織を選び、招待を承諾すると入れます。')).toBeVisible();
     await expect(page.getByText('招待が届くと、ここに出ます')).toHaveCount(0);
   });
 
   test('入れる組織も招待も無い人には、空の状態を出す', async ({ page, context, baseURL }) => {
     await signIn(context, baseURL, 'member');
     await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({ json: { organizations: [], invitations: [], operator: false } }),
+      route.fulfill({ json: { organizations: [], invitations: [], suspended: [], operator: false } }),
     );
     await page.goto('/');
-    await expect(page.getByText('入れる冒険者ギルドがありません')).toBeVisible();
+    await expect(page.getByText('入れる組織がありません')).toBeVisible();
   });
 
   test('組織の選択の読み込みに失敗したときは、「読み込めませんでした」と「もう一度試す」を出す', async ({
@@ -686,12 +719,78 @@ test.describe('ログインしていない人と、組織が無い人', () => {
     await expect(page.getByRole('button', { name: 'もう一度試す' })).toBeEnabled();
   });
 
-  test('組織の選択の画面は、テーマと言葉づかいを既定に戻す', async ({ page, context, baseURL }) => {
+  test('組織の選択の画面は、テーマを既定に戻す', async ({ page, context, baseURL }) => {
     await signIn(context, baseURL, 'admin');
     await page.addInitScript(() => localStorage.setItem('sg-theme', 'medieval'));
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1, name: '冒険者ギルドを選ぶ' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '組織を選ぶ' })).toBeVisible();
     await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.*/);
     expect(await page.evaluate(() => localStorage.getItem('sg-theme'))).toBeNull();
+  });
+});
+
+// #639: すべてのワークスペースから外れた人（seed の leftAll、あおば開発のツバサ）。入れる組織が無くてもセッションは消えず、
+// 組織の選択の画面で招待を待つ。共有の seed の行は変えない（読むだけ。停止は応答の書き換えで作る）
+test.describe('すべてのワークスペースから外れた人（ツバサ）', () => {
+  test.beforeEach(async ({ context, baseURL }) => {
+    await signIn(context, baseURL, 'leftAll');
+  });
+
+  test('/ を開くと、ログインの画面へ移らず、「入れる組織がありません」と招待を待つ案内が出る', async ({ page }) => {
+    const collect = await watchViolations(page);
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('heading', { level: 1, name: '組織を選ぶ' })).toBeVisible();
+    await expect(page.getByText('入れる組織がありません', { exact: true })).toBeVisible();
+    await expect(page.getByText('管理者から招待が届くと、ここに出ます。')).toBeVisible();
+    // 入れる組織の一覧も、届いた招待も出ない
+    await expect(page.locator('.choice')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '届いた招待' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
+    expect(await findA11yViolations(page)).toEqual([]);
+    expect(await collect()).toEqual([]);
+  });
+
+  test('外れた組織の画面は、ログインの画面へ移らず「組織が見つかりません」で、そのあと / を開いても同じ案内が出る', async ({
+    page,
+  }) => {
+    await page.goto('/aoba');
+    await expect(page).toHaveURL(/\/aoba$/);
+    await expect(page.getByRole('heading', { level: 1, name: '組織が見つかりません' })).toBeVisible();
+    // セッションは消えていない（使い続けても、ログインの画面へ落ちない）
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByText('入れる組織がありません', { exact: true })).toBeVisible();
+  });
+
+  // 停止は応答の書き換えで作る（共有の seed の組織を停止すると、並べて走るほかのテストが落ちるため）。サーバーの判定は test/organization.test.ts
+  test('停止していなければ入れた組織が停止しているときは、/ にその組織が停止していることと、運用者に問い合わせることが出る', async ({
+    page,
+  }) => {
+    await rewriteOperation(
+      page,
+      myOrganizations,
+      (output) =>
+        ({
+          ...output,
+          organizations: [],
+          invitations: [],
+          suspended: [{ slug: 'kamome', name: 'かもめ社', kind: 'team' }],
+        }) as typeof output,
+    );
+    const collect = await watchViolations(page);
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByText('かもめ社')).toBeVisible();
+    await expect(page.getByText(/停止/).first()).toBeVisible();
+    await expect(page.getByText(/運用者に問い合わせ/).first()).toBeVisible();
+    // 招待を待つ案内の代わりに、停止した組織の案内を指す文を出す（停止した組織の人に、招待を待てと伝えない）
+    await expect(page.getByText('入れる組織がありません', { exact: true })).toBeVisible();
+    await expect(page.getByText('停止している組織があります。下の「停止している組織」を見てください。')).toBeVisible();
+    await expect(page.getByText('管理者から招待が届くと、ここに出ます。')).toHaveCount(0);
+    // 停止した組織へは入れないので、組織の画面へのリンクにしない
+    await expect(page.getByRole('link', { name: /かもめ社/ })).toHaveCount(0);
+    expect(await findA11yViolations(page)).toEqual([]);
+    expect(await collect()).toEqual([]);
   });
 });

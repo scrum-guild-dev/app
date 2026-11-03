@@ -1,5 +1,7 @@
 // 操作の一覧を Hono のルートに登録する1つの関数。順に行うこと（docs/development.md の「操作の定義」）:
-// Origin の検査 → セッションの読み取り → 組織の確かめと権限の検査（ログインできる条件の確かめを含む）→ 回数の上限 →
+// 認証（Authorization: Bearer があれば API トークンの読み取り、無ければ Origin の検査とセッションの読み取り）→
+// 同意の検査（今の版に同意していなければ 403 の terms_required。skipsConsent の操作は飛ばす）→
+// 組織の確かめと権限の検査 → API トークンの範囲の検査 → 回数の上限 →
 // 入力の検証 → ワークスペースの確かめと権限の検査 → 処理 → 出力の検証。
 // 入力に workspace_id がある操作では、ワークスペースの確かめは入力の検証の後になる。
 // 処理に渡す道具は、運用者の操作には運用者を確かめた後の運用者の道具、組織の中の操作には組織に入れた後の、その組織に結んだ組織の道具
@@ -12,13 +14,13 @@ import {
   type AnyOperationDefinition,
   type Permission,
 } from '../../shared/operations/define.ts';
-import { UNAUTHENTICATED_SUSPENDED } from '../../shared/errors.ts';
+import { readApiToken, type ApiToken } from '../auth/api-token.ts';
 import { sessionCookieClearOptions, sessionCookieName, sessionCookieOptions } from '../../shared/session-cookie.ts';
 import type { AppEnv } from '../app-env.ts';
 import type { InviteeResolver } from '../auth/login-method.ts';
 import { githubMethod } from '../auth/login-routes.ts';
 import { consumeRateLimit } from '../auth/rate-limit.ts';
-import { deleteSessionsOf, readSession } from '../auth/session.ts';
+import { readSession } from '../auth/session.ts';
 import {
   assertVerifiedWorkspace,
   commonDb,
@@ -30,15 +32,43 @@ import {
 } from '../db/index.ts';
 import { ApiError, knownError } from '../errors.ts';
 import { executionContextOf } from '../execution-context.ts';
-import { outsideAccount, type OutsideAccount } from './account.ts';
-import { readInput, requireOrigin } from './guards.ts';
-import type { Defer, ImplementedOperation } from './implement.ts';
+import { outsideAccount } from './account.ts';
+import { isCurrentConsent, latestConsentOf } from './consent.ts';
+import { readBinaryBody, readInput, requireOrigin } from './guards.ts';
+import type { CurrentSession, Defer, ImplementedOperation } from './implement.ts';
 import { operatorTools, type OperatorTools } from './operator-tools.ts';
 import { organizationTools } from './organization-tools.ts';
 import { logOperation } from './operation-log.ts';
+import { tokenAllows } from './token-scope.ts';
 
 // ログに残す、リクエストの途中で分かった値
 type Trace = { organizationId: string | null; userId: string | null; accountId: string | null };
+
+// Authorization: Bearer <値> の値。Bearer の語（大文字小文字を区別する）で始まるヘッダーがあれば API トークンの呼び出しで、
+// 値が空でも Bearer の呼び出し（401）。ヘッダーが無いか、ほかの書き方なら undefined（Cookie の呼び出し）
+function bearerOf(c: Context<AppEnv>): string | undefined {
+  const header = c.req.header('Authorization');
+  if (header === undefined) return undefined;
+  if (header === 'Bearer') return '';
+  return header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : undefined;
+}
+
+// API トークンの呼び出しにセッションは無い。セッションを使う操作には cookieOnly を付けて、ここへ来る前に 403 にする。
+// 付け忘れた操作が使ったら、別の行を指さずに 500 で落とす
+function tokenCall(): CurrentSession {
+  const unavailable = (): never => {
+    throw new Error('API トークンの呼び出しにセッションは無い（cookieOnly が要る）');
+  };
+  return {
+    get tokenHash(): string {
+      return unavailable();
+    },
+    get createdAt(): string {
+      return unavailable();
+    },
+    clearCookie: unavailable,
+  };
+}
 
 // 処理に渡す文脈の型は implement() が定義から決めている。ここでは型を消して呼ぶ
 type Handler = (context: unknown) => Promise<unknown>;
@@ -112,8 +142,9 @@ async function handleOperation(
   let status = 200;
   let code = 'ok';
   const cookie: SessionCookie = { applied: false, extend: false, clear: false };
+  const bearer = bearerOf(c);
   try {
-    return await execute(c, operation, trace, cookie, options);
+    return await execute(c, operation, trace, cookie, options, bearer);
   } catch (err) {
     // 失敗の応答にも、期限を延ばす Cookie と、消す Cookie を付ける（1本だけ。applySessionCookie）
     applySessionCookie(c, cookie);
@@ -126,6 +157,7 @@ async function handleOperation(
       requestId: c.get('requestId'),
       operation: operation.definition.name,
       ...trace,
+      credential: bearer === undefined ? 'cookie' : 'token',
       code,
       status,
       durationMs: Date.now() - startedAt,
@@ -172,27 +204,11 @@ function isAllowedInWorkspace(permission: Permission, actor: OrganizationActor, 
   }
 }
 
-// ログインできる条件を失った人（入れる組織も届いた招待も無く、運用者でもない人）は、セッションを消し、Cookie も消して 401。
-// 組織に入れるかはリクエストのたびに確かめているので、消し忘れても入れはしない（docs/data-model.md の「書き込みの単位」）。
-// 判定を走らせるのは、組織の外の操作（定義が skipsLoginAccess を付けたものを除く）と、組織の中の操作で組織に入れなかったとき。
-// 運用者は入れる組織が無くても通す。消すのは判定した時刻までに作られたセッションで、判定の後に作られたものは残す
-async function requireLoginAccess(
-  c: Context<AppEnv>,
-  cookie: SessionCookie,
-  accountId: string,
-  account: OutsideAccount,
-): Promise<void> {
-  if (await account.isOperator()) return;
-  const checkedAt = new Date();
-  // 組織の選択と同じ読み取りの結果（account.organizations()。同じリクエストの中で1回だけ引く）。
-  // アカウントに結ばれる前の行は数えない。数えると、結ばれる前の行だけの人が、どこにも入れないままセッションを持ち続ける。
-  // その人は 401 でセッションが消え、もう一度ログインすると結ばれて入れる
-  const { organizations, invitations, suspended } = await account.organizations();
-  if (organizations.length > 0 || invitations.length > 0) return;
-  await deleteSessionsOf(commonDb(c.env), accountId, checkedAt);
-  cookie.clear = true;
-  // 入れたはずの組織が停止しているだけなら、details の reason で伝える。画面はログインの画面へ移すときの理由（suspended）にする
-  throw new ApiError(401, 'unauthenticated', suspended ? { reason: UNAUTHENTICATED_SUSPENDED } : undefined);
+// API トークンで呼べるかの検査。権限の検査の後、入力を読む前に行う。
+// 運用者の操作と cookieOnly の操作は、どのトークンでも 403。write の操作は write のトークンだけ（read のトークンは 403）
+function checkTokenScope(definition: AnyOperationDefinition, apiToken: ApiToken | undefined): void {
+  if (apiToken === undefined) return;
+  if (!tokenAllows(definition, apiToken.scope)) throw new ApiError(403, 'forbidden');
 }
 
 // 定義の rateLimit を、アカウントと操作ごとに数える。権限の検査の後、入力を読む前に行う
@@ -218,30 +234,56 @@ async function execute(
   trace: Trace,
   cookie: SessionCookie,
   options: OperationsAppOptions,
+  bearer: string | undefined,
 ): Promise<Response> {
   const { definition } = operation;
   const handler = operation.handler as Handler;
 
-  requireOrigin(c);
+  // Bearer があれば API トークンだけで認証する。無効なら Cookie に落とさず 401。
+  // Origin の検査も Cookie の読み取りも延長も消去もしない（ブラウザは Authorization を勝手に付けないので CSRF は成り立たない）
+  let apiToken: ApiToken | undefined;
+  let session: CurrentSession;
+  let accountId: string;
+  if (bearer !== undefined) {
+    apiToken = await readApiToken(c.env, bearer, new Date());
+    if (apiToken === undefined) throw new ApiError(401, 'unauthenticated');
+    accountId = apiToken.accountId;
+    session = tokenCall();
+  } else {
+    requireOrigin(c);
 
-  const cookieName = sessionCookieName(c.env.PUBLIC_ORIGIN);
-  const token = getCookie(c, cookieName);
-  const session = await readSession(c.env, token, new Date(), c.get('requestId'));
-  if (session === undefined) throw new ApiError(401, 'unauthenticated');
-  trace.accountId = session.accountId;
-  // 使うたびに期限を延ばす。DB の expires_at を書き直したときは Cookie の期限も同じだけ延ばす（付けるのは応答を作る直前）
-  cookie.extend = session.refreshed && token !== undefined;
+    const token = getCookie(c, sessionCookieName(c.env.PUBLIC_ORIGIN));
+    const read = await readSession(c.env, token, new Date(), c.get('requestId'));
+    if (read === undefined) throw new ApiError(401, 'unauthenticated');
+    accountId = read.accountId;
+    // 使うたびに期限を延ばす。DB の expires_at を書き直したときは Cookie の期限も同じだけ延ばす（付けるのは応答を作る直前）
+    cookie.extend = read.refreshed && token !== undefined;
+    session = {
+      tokenHash: read.tokenHash,
+      createdAt: read.createdAt,
+      clearCookie: () => {
+        cookie.clear = true;
+      },
+    };
+  }
+  trace.accountId = accountId;
+
+  // 今の版に同意していない人は、組織に入る前（存在しない slug も入れない組織も同じ）、トークンの範囲の検査より前に断る。
+  // 飛ばせるのは skipsConsent を付けた操作だけ（同意の操作、ログアウト、自分の確かめ）
+  if (definition.skipsConsent !== true) {
+    const latest = await latestConsentOf(commonDb(c.env), accountId);
+    if (!isCurrentConsent(latest)) throw new ApiError(403, 'terms_required');
+  }
 
   const deferred = deferrer(c);
   // 運用者の判定と、アカウントに結んだログインの手段と ID の読み取りは account.ts の1か所。
   // ログインの手段と ID は、使われたときに1回だけ引く。設定の誤りは app のミドルウェアが先に 500 にしている
-  const account = outsideAccount(c.env, session.accountId);
+  const account = outsideAccount(c.env, accountId);
   let result: unknown;
   if (isOutsideOperation(definition)) {
-    // 運用者は入れる組織が無くてもログインできる。それ以外は、入れる組織を失っていればセッションを消して 401。
-    // 確かめないのは、定義が skipsLoginAccess を付けた操作（ログアウトなど）だけ。
-    // 運用者の権限の検査（403）より前に確かめる（入れる組織を失った非運用者には、403 でなく 401 を返す）
-    if (definition.skipsLoginAccess !== true) await requireLoginAccess(c, cookie, session.accountId, account);
+    // 組織の外の操作は、アカウントがあれば入れる組織が無くても通す（入れる組織を失った人も、停止した組織にしか入れない人も）
+    // トークンでは運用者の操作と cookieOnly の操作を呼べない。運用者かどうかを引く前に 403 にする
+    checkTokenScope(definition, apiToken);
     // 運用者の操作には、運用者のログインの ID と運用者の道具を渡す。運用者でなければ 403
     let operator: OperatorTools | undefined;
     if (definition.permission === 'operator') {
@@ -253,18 +295,14 @@ async function execute(
         inviteeResolverOf(c, options),
       );
     }
-    await enforceRateLimit(c, definition, session.accountId);
+    await enforceRateLimit(c, definition, accountId);
     const input = await readInput(c, definition.input);
     result = await handler({
       db: commonDb(c.env),
-      accountId: session.accountId,
+      accountId,
       account,
-      session: {
-        tokenHash: session.tokenHash,
-        clearCookie: () => {
-          cookie.clear = true;
-        },
-      },
+      session,
+      tokenScope: apiToken?.scope,
       ...(operator === undefined ? {} : { operator }),
       input,
     });
@@ -272,18 +310,14 @@ async function execute(
     // 運用者かどうかは組織に入れるかを変えない。入れる組織が無い運用者は、組織が無いときと同じ 404 になる
     const slug = c.req.param('slug');
     if (slug === undefined) throw new ApiError(404, 'not_found');
-    const entry = await enterOrganization(c.env, slug, { accountId: session.accountId, loadLogins: account.logins });
+    const entry = await enterOrganization(c.env, slug, { accountId, loadLogins: account.logins });
     // 停止した組織は、停止していなければ入れた人にだけ伝える。入れない人は下の 404（組織があることを漏らさない）
     if (isSuspendedOrganization(entry)) {
       trace.organizationId = entry.organizationId;
-      // 停止した組織にしか入れない人は、ログインできる条件を失っている。403 を返し続けるとセッションが延び続けるので、
-      // ほかに入れる組織が無ければ、セッションを消して 401（理由 suspended）にする
-      await requireLoginAccess(c, cookie, session.accountId, account);
       throw new ApiError(403, 'organization_suspended');
     }
     if (entry === undefined) {
-      // この組織に入れないだけか、どの組織にも入れなくなったか。入れる組織があれば、組織が無いときと同じ 404
-      await requireLoginAccess(c, cookie, session.accountId, account);
+      // 入れないときは、組織が無いときと同じ 404（入れる組織が1つも無い人も同じ）
       throw new ApiError(404, 'not_found');
     }
     const { db, actor, organization } = entry;
@@ -292,9 +326,11 @@ async function execute(
     trace.organizationId = db.organizationId;
     trace.userId = actor.userId;
     checkOrganizationPermission(definition.permission, actor);
-    await enforceRateLimit(c, definition, session.accountId);
+    checkTokenScope(definition, apiToken);
+    await enforceRateLimit(c, definition, accountId);
 
-    const input = await readInput(c, definition.input);
+    const input = await readInput(c, definition.input, definition.body);
+    const binary = definition.body === 'binary' ? { binary: readBinaryBody(c), requestId: c.get('requestId') } : {};
     if (isWorkspaceOperation(definition)) {
       // 別の組織のワークスペースは、存在しないときと同じ 404
       const workspace = await verifyWorkspace(db, actor, (input as { workspace_id: string }).workspace_id);
@@ -305,9 +341,9 @@ async function execute(
         throw new ApiError(409, 'workspace_closed');
       }
       assertVerifiedWorkspace(workspace);
-      result = await handler({ db, actor, organization, tools, input, workspace, defer: deferred.defer });
+      result = await handler({ db, actor, organization, tools, input, workspace, defer: deferred.defer, ...binary });
     } else {
-      result = await handler({ db, actor, organization, tools, input, defer: deferred.defer });
+      result = await handler({ db, actor, organization, tools, input, defer: deferred.defer, ...binary });
     }
   }
 

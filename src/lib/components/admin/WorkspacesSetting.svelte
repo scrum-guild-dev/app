@@ -1,12 +1,13 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
+  import { tick } from 'svelte';
   import { workspaceList, workspaceReopen } from '../../../shared/operations/workspace/index.ts';
   import type { OutputOf } from '../../../shared/operations/define.ts';
-  import type { Vocabulary } from '../../../shared/vocabulary.ts';
   import { callOperation } from '../../api.ts';
   import { formatLocalDate } from '../../format.ts';
   import { isUnauthenticated, loginUrl } from '../../login-redirect.ts';
+  import { memberLimitDetailsOf } from '../../member-limit-details.ts';
   import { showToast } from '../../toast.svelte.ts';
   import { t } from '../../vocabulary.svelte.ts';
   import EmptyState from '../EmptyState.svelte';
@@ -29,12 +30,10 @@
   let {
     slug,
     meId,
-    organizationVocabulary,
     onopencount,
   }: {
     slug: string;
     meId: string;
-    organizationVocabulary: Vocabulary;
     onopencount: (count: number | null) => void;
   } = $props();
 
@@ -46,6 +45,10 @@
   let workspaces = $state<Workspace[]>([]);
   // 再開する操作を送っている行
   let reopeningId = $state<string | null>(null);
+  // 再開が人数の上限で断られた理由。読み返せるよう、トーストでなく表の上のコールアウトに残す。
+  // 次に「再開する」を押したとき、再開か終了が成功したとき、組織が替わったときに消し、一覧を読み直しても残す
+  let reopenRefusal = $state<string | null>(null);
+  let refusalBox = $state<HTMLElement>();
   let createDialog = $state<ReturnType<typeof WorkspaceCreateDialog>>();
   let closeDialog = $state<ReturnType<typeof WorkspaceCloseDialog>>();
   // 終了の確認の対象。ダイアログの結果を受けるとき、どの行だったかを名前で知らせるのに使う
@@ -70,6 +73,7 @@
       workspaces = [];
       onopencount(null);
       reopeningId = null;
+      reopenRefusal = null;
     },
   );
 
@@ -77,6 +81,7 @@
     if (reopeningId !== null) return;
     const token = section.token();
     reopeningId = workspace.id;
+    reopenRefusal = null;
     try {
       const result = await callOperation(workspaceReopen, { workspace_id: workspace.id }, { slug: currentSlug });
       if (!section.isCurrent(token)) return;
@@ -88,6 +93,29 @@
       } else if (result.status === 409 && result.error?.code === 'conflict') {
         // 別の画面で先に操作されていた。再開されたのか、終了し直されたのかは言い切らず、読み直した一覧を見てもらう
         showToast(t('workspaceStateChanged', { name: workspace.name }), 'alert');
+      } else if (result.status === 409 && result.error?.code === 'member_limit_reached') {
+        // 人数の上限で断られた。長い理由と対処は、トーストでなく表の上のコールアウトに残す。
+        // 数が読めない応答（details が無いか不正）は、数を含まない文言にする
+        const seats = memberLimitDetailsOf(result.error.details);
+        const common = {
+          name: workspace.name,
+          organization: t('organization'),
+          workspace: t('workspace'),
+          adminPage: t('pageOrgAdmin'),
+          users: t('userSectionTitle'),
+        };
+        reopenRefusal =
+          seats === undefined
+            ? t('workspaceReopenMemberLimitUnknown', common)
+            : t('workspaceReopenMemberLimit', {
+                ...common,
+                adding: seats.adding,
+                used: seats.used,
+                limit: seats.limit,
+              });
+        // 押した行が表の下にあっても理由が見えるよう、描いた後に画面の中へ動かす。フォーカスは押したボタンに残す
+        await tick();
+        refusalBox?.scrollIntoView({ block: 'nearest' });
       } else if (result.status === 404 || result.status === 403) {
         showToast(t('workspaceUnavailable', { name: workspace.name }), 'alert');
       } else {
@@ -104,8 +132,10 @@
       window.location.assign(loginUrl(page.url));
       return;
     }
-    if (outcome === 'closed') showToast(t('workspaceClosed', { workspace: t('workspace') }), 'check');
-    else if (outcome === 'state_changed') showToast(t('workspaceStateChanged', { name }), 'alert');
+    if (outcome === 'closed') {
+      reopenRefusal = null;
+      showToast(t('workspaceClosed', { workspace: t('workspace') }), 'check');
+    } else if (outcome === 'state_changed') showToast(t('workspaceStateChanged', { name }), 'alert');
     else showToast(t('workspaceUnavailable', { name }), 'alert');
     void section.load();
   }
@@ -132,6 +162,11 @@
     failedTitle={t('workspaceListLoadFailed', { workspace: t('workspace') })}
     refreshFailedText={t('workspaceListRefreshFailed', { workspace: t('workspace') })}
   >
+    {#if reopenRefusal !== null}
+      <div class="callout is-warn" role="alert" bind:this={refusalBox}>
+        <Icon name="alert" /><span class="wrap-anywhere">{reopenRefusal}</span>
+      </div>
+    {/if}
     {#if workspaces.length === 0}
       <EmptyState
         icon="users"
@@ -146,7 +181,7 @@
       </EmptyState>
     {:else}
       <div class="table-wrap">
-        <table class="table" aria-label={t('workspaceListLabel', { workspace: t('workspace') })}>
+        <table class="table is-stacked" aria-label={t('workspaceListLabel', { workspace: t('workspace') })}>
           <thead>
             <tr>
               <th class="is-name">{t('fieldName')}</th>
@@ -167,9 +202,13 @@
                     <span class="chip is-warn">{t('workspaceNoLeaderChip', { leader: t('leader') })}</span>
                   {/if}
                 </td>
-                <td class="is-num">{workspace.member_count}</td>
-                <td class="is-num">{workspace.leader_count}</td>
-                <td class="mono">{workspace.created_on}</td>
+                <td class="is-num" data-label={t('workspaceMemberCountHeader', { member: t('member') })}
+                  >{workspace.member_count}</td
+                >
+                <td class="is-num" data-label={t('workspaceLeaderCountHeader', { leader: t('leader') })}
+                  >{workspace.leader_count}</td
+                >
+                <td class="mono" data-label={t('createdOn')}>{workspace.created_on}</td>
                 <td class="is-actions">
                   <!-- 終了した行は「再開する」、進行中の行は「終了する」。同じ要素のまま文字だけを替え、読み直しでフォーカスを失わない。
                        読み上げの名前に、どのワークスペースかを添える -->
@@ -196,7 +235,8 @@
   <span class="visually-hidden" role="status">{status}</span>
 </Setting>
 
-<WorkspaceCreateDialog bind:this={createDialog} {slug} {meId} {organizationVocabulary} />
+<!-- 作った後、完了の表示を×などで閉じて画面に残っても一覧に出るよう、読み直す -->
+<WorkspaceCreateDialog bind:this={createDialog} {slug} {meId} oncreated={() => void section.load()} />
 <WorkspaceCloseDialog
   bind:this={closeDialog}
   {slug}

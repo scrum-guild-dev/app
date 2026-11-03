@@ -15,8 +15,13 @@ export const reservedSlugs: readonly string[] = [
   'api',
   'auth',
   'login',
+  'signup',
   'logout',
   'invite',
+  'terms',
+  'privacy',
+  // 規約への同意の画面（#645 のストーリー2）の経路。ルートはまだ無いが、後から作ったときに組織の URL と重ならないよう先に予約する
+  'consent',
   'operator',
   'health',
   'static',

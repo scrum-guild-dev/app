@@ -8,9 +8,10 @@ const workspaceRoutes = [
   '/[slug]/w/[id]/members',
   '/[slug]/w/[id]/plan',
   '/[slug]/w/[id]/settings',
+  '/[slug]/w/[id]/sprint',
 ] as const;
 export type WorkspaceNavRoute = (typeof workspaceRoutes)[number];
-export type NavRoute = '/[slug]' | '/[slug]/me' | '/[slug]/admin' | WorkspaceNavRoute;
+export type NavRoute = '/[slug]' | WorkspaceNavRoute;
 
 export function isWorkspaceRoute(route: NavRoute): route is WorkspaceNavRoute {
   return (workspaceRoutes as readonly string[]).includes(route);
@@ -25,12 +26,11 @@ export function isWorkspaceId(id: string | null | undefined): id is string {
 // メニューの項目。kit.js の PAGES と同じ並びと見出し。
 // href が null の項目は、画面がまだ無いのでメニューに出さない（色を薄くして押せなくする形は、
 // 状態が色だけに頼り、コントラストも足りないので採らない）。画面を足したら href に経路の ID を入れる。
-// adminOnly の項目は管理者にだけ出す。leaderOnly の項目は、開いているワークスペースのリーダーと管理者にだけ出す
+// leaderOnly の項目は、開いているワークスペースのリーダーと管理者にだけ出す
 export type NavItem = {
   icon: IconName;
   label: DictionaryKey;
   href: NavRoute | null;
-  adminOnly?: true;
   leaderOnly?: true;
 };
 
@@ -77,7 +77,6 @@ export function visibleNav(
       items: section.items.filter(
         (item): item is VisibleNavItem =>
           item.href !== null &&
-          (!item.adminOnly || isAdmin) &&
           (!item.leaderOnly || isAdmin || isLeader) &&
           (!isWorkspaceRoute(item.href) || (inWorkspaceScreen && isWorkspaceId(workspaceId))),
       ),
@@ -90,8 +89,6 @@ export const navSections: NavSection[] = [
     items: [
       { icon: 'sun', label: 'pageToday', href: '/[slug]' },
       { icon: 'bell', label: 'pageNotifications', href: null },
-      { icon: 'users', label: 'pageMe', href: '/[slug]/me' },
-      { icon: 'shield', label: 'pageOrgAdmin', href: '/[slug]/admin', adminOnly: true },
     ],
   },
   {
@@ -101,7 +98,7 @@ export const navSections: NavSection[] = [
     items: [
       { icon: 'inbox', label: 'inbox', href: null },
       { icon: 'board', label: 'backlog', href: '/[slug]/w/[id]' },
-      { icon: 'columns', label: 'sprint', href: null },
+      { icon: 'columns', label: 'sprint', href: '/[slug]/w/[id]/sprint' },
       { icon: 'calendar', label: 'plan', href: '/[slug]/w/[id]/plan' },
       { icon: 'flag', label: 'epic', href: null },
     ],

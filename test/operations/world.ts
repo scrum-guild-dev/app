@@ -6,6 +6,7 @@ import {
   createInvitation,
   createMembership,
   createOrganization,
+  createPersonalOrganizationRow,
   createSessionWithToken,
   createUser,
   createWorkspace,
@@ -44,9 +45,11 @@ export async function createPerson(
     // 今所属するワークスペースとロール
     membership?: { workspaceId: string; role: WorkspaceRoleName };
     sessionOverrides?: Parameters<typeof createSessionWithToken>[1];
+    // false は、同意の行を持たない人（省略は今の版に同意済み）
+    consented?: boolean;
   } = {},
 ): Promise<Person> {
-  const account = await createAccount();
+  const account = await createAccount({}, { consented: options.consented ?? true });
   const login = await createAccountLogin(
     account.id,
     options.login && {
@@ -79,8 +82,8 @@ export async function createPerson(
   };
 }
 
-// ほかの組織の管理者でもある人にする。ある組織に入れない人の結果を、どの組織にも入れなくなった人の 401 と
-// 区別して見るために使う（セッションは、ログインできる条件を失うと消える）
+// ほかの組織の管理者でもある人にする。ある組織に入れない人の結果を、どの組織にも入れない人の結果と
+// 区別して見るために使う（どの組織にも入れなくなっても、セッションは消えない）
 export async function admitElsewhere(person: Person): Promise<Person> {
   const elsewhere = await createOrganization();
   await createUser(elsewhere, {
@@ -94,7 +97,7 @@ export async function admitElsewhere(person: Person): Promise<Person> {
 
 // ログインできる人（どこかの組織の管理者）。組織の外の操作（permission: login）の呼び出しに使う
 export async function createLoginPerson(
-  options: { sessionOverrides?: Parameters<typeof createSessionWithToken>[1] } = {},
+  options: { sessionOverrides?: Parameters<typeof createSessionWithToken>[1]; consented?: boolean } = {},
 ): Promise<Person> {
   return createPerson({ organization: await createOrganization(), admin: true, ...options });
 }
@@ -177,5 +180,43 @@ export async function createTarget(options: { closed?: boolean; suspended?: bool
     member,
     bystander,
     invitee,
+  };
+}
+
+// 自分用の組織。作った本人が管理者の1人だけ（製品の道ではこの形になる）。
+// 断る検査のために、製品の道では起きない行（管理者でないリーダー、もう1人の users の行）も持つ
+export type PersonalTarget = Target & {
+  // 管理者のほかに users に入れた人。リーダーで、管理者ではない
+  extra: Person;
+};
+
+export async function createPersonalTarget(options: { suspended?: boolean } = {}): Promise<PersonalTarget> {
+  const owner = await createPerson();
+  const organization = await createPersonalOrganizationRow(
+    owner.accountId,
+    options.suspended ? { suspended_at: SUSPENDED_AT } : {},
+  );
+  const user = await createUser(organization, {
+    account_id: owner.accountId,
+    login_provider: owner.login.provider,
+    login_subject: owner.login.subject,
+    is_admin: 1,
+  });
+  const admin: Person = { ...owner, userId: user.id };
+  const workspace = await createWorkspace(organization, user.id);
+  const otherWorkspace = await createWorkspace(organization, user.id);
+  const extra = await createPerson({ organization, membership: { workspaceId: workspace.id, role: 'leader' } });
+  const invitee = await createPerson();
+  return {
+    organization,
+    slug: organization.slug,
+    workspace,
+    otherWorkspace,
+    admin,
+    leader: extra,
+    member: extra,
+    bystander: extra,
+    invitee,
+    extra,
   };
 }

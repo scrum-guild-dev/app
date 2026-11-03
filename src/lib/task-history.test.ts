@@ -1,14 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import type { TaskHistoryEntry } from '../shared/operations/task/index.ts';
-import { word, type Vocabulary } from '../shared/vocabulary.ts';
+import { word } from '../shared/vocabulary.ts';
 import { formatHistoryTime, historyEntryView, historyFieldLabel, type Translate } from './task-history.ts';
 
-const translate =
-  (vocabulary: Vocabulary): Translate =>
-  (key, params) =>
-    word(key, { workspace: vocabulary, organization: 'game' }, params);
-const game = translate('game');
-const scrum = translate('scrum');
+const t: Translate = (key, params) => word(key, params);
 
 const member = { id: 'u1', name: '若葉 湊' };
 const leader = { id: 'u2', name: '朝霧 楓' };
@@ -38,6 +33,30 @@ describe('formatHistoryTime', () => {
   });
 });
 
+describe('historyEntryView の決まった欄', () => {
+  test('欄の値の書き込みは、欄の名前だけで、書いた、直した、空にしたを出す（値の全文は持たない）', () => {
+    const criteria = { id: 'f1', name: '受け入れ基準' };
+    const view = historyEntryView(
+      entry({
+        changes: [
+          { field: 'field', before: null, after: criteria },
+          { field: 'field', before: criteria, after: criteria },
+          { field: 'field', before: criteria, after: null },
+          { field: 'field', before: null, after: { id: 'f2', name: '' } },
+        ],
+      }),
+      'Asia/Tokyo',
+      t,
+    );
+    expect(view.lines).toEqual([
+      { label: null, text: '「受け入れ基準」を書いた' },
+      { label: null, text: '「受け入れ基準」を直した' },
+      { label: null, text: '「受け入れ基準」を空にした' },
+      { label: null, text: '「不明」を書いた' },
+    ]);
+  });
+});
+
 describe('historyEntryView', () => {
   test('変更は、列の名前と前と後を出す。空の値は列ごとの言葉', () => {
     const view = historyEntryView(
@@ -51,7 +70,7 @@ describe('historyEntryView', () => {
         ],
       }),
       'Asia/Tokyo',
-      scrum,
+      t,
     );
     expect(view).toEqual({
       id: 'h1',
@@ -70,7 +89,7 @@ describe('historyEntryView', () => {
     });
   });
 
-  test('言葉づかいを替えると、列の名前と操作の言葉も替わる', () => {
+  test('列の名前と操作の言葉は、辞書のスクラムの言葉で出る', () => {
     const changed = entry({
       changes: [
         { field: 'points', before: 3, after: 5 },
@@ -78,19 +97,13 @@ describe('historyEntryView', () => {
         { field: 'story', before: { id: 's1', name: '見積もりの準備' }, after: null },
       ],
     });
-    expect(historyEntryView(changed, 'UTC', game).lines).toEqual([
-      { label: '難易度', text: '3 → 5' },
-      { label: '担い手', text: '担い手なし → 若葉 湊' },
-      { label: '親の達成目標', text: '見積もりの準備 → なし' },
+    expect(historyEntryView(changed, 'UTC', t).lines).toEqual([
+      { label: 'ポイント', text: '3 → 5' },
+      { label: '担当', text: '担当なし → 若葉 湊' },
+      { label: '親のストーリー', text: '見積もりの準備 → なし' },
     ]);
-    expect(historyEntryView(changed, 'UTC', game).summary).toBe('書き換えた');
-    expect(historyEntryView(changed, 'UTC', scrum).lines.map((line) => line.label)).toEqual([
-      'ポイント',
-      '担当',
-      '親のストーリー',
-    ]);
-    expect(historyEntryView(entry({ action: 'complete' }), 'UTC', game).summary).toBe('完遂にした');
-    expect(historyEntryView(entry({ action: 'complete' }), 'UTC', scrum).summary).toBe('完了にした');
+    expect(historyEntryView(changed, 'UTC', t).summary).toBe('変更した');
+    expect(historyEntryView(entry({ action: 'complete' }), 'UTC', t).summary).toBe('完了にした');
   });
 
   test('作成は、作ったときの空でない値だけを出す', () => {
@@ -105,23 +118,40 @@ describe('historyEntryView', () => {
         ],
       }),
       'UTC',
-      scrum,
+      t,
     );
     expect(view.summary).toBe('作成した');
     expect(view.lines).toEqual([
       { label: 'タイトル', text: '見積もりを送る' },
       { label: '担当', text: '若葉 湊' },
     ]);
-    expect(historyEntryView(entry({ action: 'create' }), 'UTC', game).summary).toBe('依頼を出した');
+    expect(historyEntryView(entry({ action: 'create' }), 'UTC', t).summary).toBe('作成した');
   });
 
   test('完了と削除は、何をしたかだけを出す', () => {
     const changes = [{ field: 'deleted_at', before: null, after: '2026-10-26T01:02:00.000Z' }];
-    expect(historyEntryView(entry({ action: 'delete', changes }), 'UTC', scrum)).toMatchObject({
+    expect(historyEntryView(entry({ action: 'delete', changes }), 'UTC', t)).toMatchObject({
       summary: '削除した',
       lines: [],
     });
-    expect(historyEntryView(entry({ action: 'complete' }), 'UTC', scrum).lines).toEqual([]);
+    expect(historyEntryView(entry({ action: 'complete' }), 'UTC', t).lines).toEqual([]);
+  });
+
+  test('完了を戻したら、戻したことと、スプリントの中なら完了の列から戻した列を出す', () => {
+    const changes = [
+      { field: 'completed_at', before: '2026-10-25T15:05:00.000Z', after: null },
+      { field: 'completed_by', before: member, after: null },
+      { field: 'column', before: { id: 'c9', name: '' }, after: { id: 'c2', name: '遂行中' } },
+    ];
+    expect(historyEntryView(entry({ action: 'reopen', changes }), 'UTC', t)).toMatchObject({
+      summary: '完了を戻した',
+      lines: [{ label: '列', text: '完了 → 遂行中' }],
+    });
+    // スプリントの外の完了を戻したときは、戻したことだけ
+    expect(historyEntryView(entry({ action: 'reopen', changes: changes.slice(0, 2) }), 'UTC', t)).toMatchObject({
+      summary: '完了を戻した',
+      lines: [],
+    });
   });
 
   test('本文は値を出さずに直したことだけを、知らない列は「そのほかの欄」を出す', () => {
@@ -133,24 +163,24 @@ describe('historyEntryView', () => {
         ],
       }),
       'UTC',
-      scrum,
+      t,
     );
     expect(view.lines).toEqual([
       { label: null, text: '本文を直した' },
       { label: null, text: 'そのほかの欄を直した' },
     ]);
-    expect(historyFieldLabel('mystery', game)).toBe('そのほかの欄');
+    expect(historyFieldLabel('mystery', t)).toBe('そのほかの欄');
   });
 
   test('知らない操作は変更として出し、表に無い列（完了の日時など）は「そのほかの欄」。変えた人がいなければ定期処理か運用者', () => {
     const view = historyEntryView(
       entry({
-        action: 'reopen',
+        action: 'archive',
         actor: null,
         changes: [{ field: 'completed_at', before: '2026-10-25T15:05:00.000Z', after: null }],
       }),
       'Asia/Tokyo',
-      scrum,
+      t,
     );
     expect(view.actorName).toBe('定期処理か運用者');
     expect(view.summary).toBe('変更した');
@@ -159,8 +189,8 @@ describe('historyEntryView', () => {
 
   test('__proto__ などの列の名前も、知らない列として扱う', () => {
     for (const field of ['__proto__', 'constructor', 'toString']) {
-      expect(historyFieldLabel(field, scrum)).toBe('そのほかの欄');
-      expect(historyEntryView(entry({ changes: [{ field, before: 1, after: 2 }] }), 'UTC', scrum).lines).toEqual([
+      expect(historyFieldLabel(field, t)).toBe('そのほかの欄');
+      expect(historyEntryView(entry({ changes: [{ field, before: 1, after: 2 }] }), 'UTC', t).lines).toEqual([
         { label: null, text: 'そのほかの欄を直した' },
       ]);
     }
@@ -176,12 +206,21 @@ describe('historyEntryView', () => {
         ],
       }),
       'UTC',
-      game,
+      t,
     );
     expect(view.actorName).toBe('不明');
     expect(view.lines).toEqual([
-      { label: '担い手', text: '不明 → 若葉 湊' },
-      { label: '親の達成目標', text: '不明 → なし' },
+      { label: '担当', text: '不明 → 若葉 湊' },
+      { label: '親のストーリー', text: '不明 → なし' },
     ]);
   });
+});
+
+test('感謝の履歴は相手の名前と「なし」を出す', () => {
+  expect(
+    historyEntryView(entry({ changes: [{ field: 'thanks', before: null, after: member }] }), 'UTC', t).lines,
+  ).toEqual([{ label: '感謝', text: `なし → ${member.name}` }]);
+  expect(
+    historyEntryView(entry({ changes: [{ field: 'thanks', before: member, after: null }] }), 'UTC', t).lines,
+  ).toEqual([{ label: '感謝', text: `${member.name} → なし` }]);
 });

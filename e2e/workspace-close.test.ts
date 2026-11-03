@@ -1,9 +1,10 @@
 // ワークスペースを終了する、再開する。管理者が終了する（確認のダイアログを経る）→ 帯を確かめる → 再開する。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト、一般のユーザーはハルカ。
-// 終了して確かめるワークスペースは、管理の画面から作った専用のもの（seed のワークスペースを終了したままにしない）
+// 終了して確かめるワークスペースは、管理の画面から作った専用のもの（seed のワークスペースを終了したままにしない）。
+// 作ったワークスペースは消せずに残るので、名前に繰り返し（--repeat-each）とやり直しの回を混ぜ、前の回の行に当たらないようにする
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { signIn, watchViolations } from './helpers.ts';
+import { expectFocusReturned, signIn, watchViolations } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
@@ -16,17 +17,23 @@ function bannerOf(page: Page) {
 
 // 管理の画面のワークスペースの節。変更の履歴の節も表を持ち、ワークスペースの名前の行が出るので、節で絞る
 function workspacesOf(page: Page) {
-  return page.getByRole('region', { name: 'パーティ', exact: true });
+  return page.getByRole('region', { name: 'ワークスペース', exact: true });
 }
 
-// 管理の画面から、自分をリーダーにワークスペースを作る。作ると、そのワークスペースの画面へ移る
+// この回の印。作る行の名前に混ぜる
+function runMark(): string {
+  return `${test.info().repeatEachIndex}-${test.info().retry}`;
+}
+
+// 管理の画面から、自分をリーダーにワークスペースを作る。完了の表示で「開く」を押して、そのワークスペースの画面へ移る
 async function createWorkspace(page: Page, name: string): Promise<string> {
   await page.goto('/aoba/admin');
-  await page.getByRole('button', { name: 'パーティを作る' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'パーティを作る' });
+  await page.getByRole('button', { name: 'ワークスペースを作る' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'ワークスペースを作る' });
   await expect(dialog.getByRole('combobox')).toBeEnabled();
   await dialog.getByLabel('名前').fill(name);
   await dialog.getByRole('button', { name: '作る' }).click();
+  await page.getByRole('dialog', { name: 'ワークスペースを作りました' }).getByRole('button', { name: '開く' }).click();
   await expect(page).toHaveURL(/\/aoba\/w\/[0-9a-f-]{36}$/);
   return page.url();
 }
@@ -38,11 +45,11 @@ test.describe('管理者（あおば開発のミナト）', () => {
 
   test('確認のダイアログを経て終了し、帯と読み取り専用を確かめ、再開すると元に戻る', async ({ page }) => {
     const collect = await watchViolations(page);
-    const name = '終了確認パーティ';
+    const name = `終了確認ワークスペース ${runMark()}`;
     const workspaceUrl = await createWorkspace(page, name);
     // 進行中のうちは帯が無く、起票できる
     await expect(bannerOf(page)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '依頼を出す' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '起票' })).toBeVisible();
 
     await page.goto('/aoba/admin');
     const row = workspacesOf(page).locator('tbody tr', { hasText: name });
@@ -54,26 +61,26 @@ test.describe('管理者（あおば開発のミナト）', () => {
     const dialog = page.getByRole('dialog', { name: `「${name}」を終了しますか？` });
     await expect(dialog).toContainText('読み取り専用');
     await expect(dialog).toContainText('いつでも再開できます');
-    // 本文は言葉づかいに依らない（対象のワークスペースの名前だけを埋める）
+    // 対象のワークスペースの名前だけを埋める
     await expect(dialog).not.toContainText('{');
     await expect(dialog.locator('.is-danger')).toHaveCount(0);
     // やめれば何も起きない
     await dialog.getByRole('button', { name: 'やめる' }).click();
     await expect(dialog).toBeHidden();
-    await expect(closeButton).toBeFocused();
+    await expectFocusReturned(page, closeButton);
     await expect(row.locator('.chip')).toHaveCount(0);
 
     await closeButton.click();
     await dialog.getByRole('button', { name: `「${name}」を終了する` }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole('status').filter({ hasText: 'パーティを終了しました' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'ワークスペースを終了しました' })).toBeVisible();
     // 一覧を読み直して、終了の印と「再開する」に替わる。押したボタンは残り、フォーカスを保つ
     await expect(row.locator('.chip')).toHaveText(/^終了 \d{4}-\d{2}-\d{2}$/);
     const reopenButton = row.getByRole('button', { name: `「${name}」を再開する` });
     await expect(reopenButton).toHaveText('再開する');
     await expect(reopenButton).toBeFocused();
     // 見出しの集計は進行中のワークスペースの数
-    await expect(page.locator('.tally')).toContainText('進行中のパーティ');
+    await expect(page.locator('.tally')).toContainText('進行中のワークスペース');
 
     // 終了したワークスペースの画面: どの画面にも帯が出て、起票の操作は出ない。管理者には組織の管理へのリンクが付く
     await page.goto(workspaceUrl);
@@ -89,7 +96,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
     expect(colors[0]).toBe(colors[1]);
     await expect(link).toHaveCSS('text-decoration-line', 'underline');
     await expect(banner.getByRole('button')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '依頼を出す' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '起票' })).toHaveCount(0);
     // 見出しの右上の「終了 <日>」の印は、帯と重なるので出さない
     await expect(page.locator('.page-head .chip')).toHaveCount(0);
     await banner.getByRole('link', { name: '組織の管理で再開する' }).click();
@@ -97,19 +104,19 @@ test.describe('管理者（あおば開発のミナト）', () => {
 
     // 再開する。確認なしで送り、一覧が読み直される
     await row.getByRole('button', { name: `「${name}」を再開する` }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'パーティを再開しました' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'ワークスペースを再開しました' })).toBeVisible();
     await expect(row.locator('.chip')).toHaveCount(0);
     await expect(row.getByRole('button', { name: `「${name}」を終了する` })).toHaveText('終了する');
 
     await page.goto(workspaceUrl);
-    await expect(page.getByRole('heading', { level: 1, name: '掲示板' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
     await expect(bannerOf(page)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '依頼を出す' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '起票' })).toBeVisible();
     expect(await collect()).toEqual([]);
   });
 
   test('送っている間は、「終了する」を押しても無視し、ダイアログも閉じられず、1回しか送らない', async ({ page }) => {
-    const name = '二重送信の確認パーティ';
+    const name = `二重送信の確認ワークスペース ${runMark()}`;
     await createWorkspace(page, name);
     let requests = 0;
     await page.route('**/api/aoba/workspace-close', async (route) => {
@@ -145,7 +152,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
   test('終了できなかったときは、ダイアログの中に理由を出して開いたままにする。別の画面で先に終了されていたら、読み直して知らせる', async ({
     page,
   }) => {
-    const name = '失敗の確認パーティ';
+    const name = `失敗の確認ワークスペース ${runMark()}`;
     await createWorkspace(page, name);
     await page.goto('/aoba/admin');
     const row = workspacesOf(page).locator('tbody tr', { hasText: name });
@@ -156,7 +163,9 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await row.getByRole('button', { name: `「${name}」を終了する` }).click();
     const dialog = page.getByRole('dialog', { name: `「${name}」を終了しますか？` });
     await dialog.getByRole('button', { name: `「${name}」を終了する` }).click();
-    await expect(dialog.getByRole('alert')).toHaveText('パーティを終了できませんでした。もう一度試してください。');
+    await expect(dialog.getByRole('alert')).toHaveText(
+      'ワークスペースを終了できませんでした。もう一度試してください。',
+    );
     await expect(dialog.getByRole('button', { name: `「${name}」を終了する` })).toHaveAttribute(
       'aria-disabled',
       'false',
@@ -202,19 +211,19 @@ test.describe('管理者（あおば開発のミナト）', () => {
     return () => calls;
   }
 
-  test('390px の幅でも、操作の列は右端に固定されて見える', async ({ page }) => {
+  test('390px の幅では、行を縦に積み、操作は横にはみ出さずに見える', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto('/aoba/admin');
     const button = page
       .locator('tbody tr', { hasText: SEED_NAME })
       .getByRole('button', { name: `「${SEED_NAME}」を終了する` });
-    // 表が横にはみ出す幅であること（固定を外すと、操作の列は横スクロールの先に隠れる）
     await expect(button).toBeAttached();
+    // 760px 以下は列をやめて積むので、表は横にはみ出さず、操作の列を固定する必要が無い（#462）
     const overflow = await workspacesOf(page)
       .locator('.table-wrap')
       .evaluate((el) => el.scrollWidth - el.clientWidth);
-    expect(overflow).toBeGreaterThan(0);
-    // 縦には、その行まで動かす。横には、表がはみ出していても動かさずに見える
+    expect(overflow).toBeLessThanOrEqual(0);
+    // 縦には、その行まで動かす。横には動かさずに見える
     await button.scrollIntoViewIfNeeded();
     await expect(button).toBeInViewport({ ratio: 1 });
     // 押す所は 44px 以上
@@ -222,7 +231,9 @@ test.describe('管理者（あおば開発のミナト）', () => {
   });
 
   test('空白の無い長い名前でも、確認の見出しとトーストは折り返してはみ出さない', async ({ page }) => {
-    const name = 'W'.repeat(50);
+    // 名前の上限（50字）いっぱいに、空白を入れずに回の印を末尾に付ける
+    const mark = runMark().replace('-', 'x');
+    const name = `${'W'.repeat(50 - mark.length)}${mark}`;
     await createWorkspace(page, name);
     await page.setViewportSize({ width: 390, height: 800 });
     await page.route('**/api/aoba/workspace-close', (route) =>
@@ -282,6 +293,116 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await expect.poll(listCalls).toBe(2);
   });
 
+  // 人数の上限で断られた理由は、4秒で消えるトーストでなく、表の上の消えないコールアウトに出す
+  function refusalOf(page: Page) {
+    return workspacesOf(page).locator('.callout.is-warn[role="alert"]', {
+      hasText: `「${SEED_NAME}」は再開できません`,
+    });
+  }
+
+  test('再開が 409 の member_limit_reached になったら、増える人数と今の人数、上限、対処を表の上に残して読み直す', async ({
+    page,
+  }) => {
+    const listCalls = await showSeedWorkspaceClosed(page, () => 'real');
+    await page.route('**/api/aoba/workspace-reopen', (route) =>
+      route.fulfill({
+        status: 409,
+        json: { error: { code: 'member_limit_reached', message: 'x', details: { used: 14, limit: 15, adding: 2 } } },
+      }),
+    );
+    await page.goto('/aoba/admin');
+    const row = workspacesOf(page).locator('tbody tr', { hasText: SEED_NAME });
+    await row.getByRole('button', { name: `「${SEED_NAME}」を再開する` }).click();
+
+    const refusal = refusalOf(page);
+    await expect(refusal).toBeVisible();
+    await expect(refusal).toContainText('承諾待ちの招待の 2 人が組織の人数に加わり');
+    await expect(refusal).toContainText('今の 14 人と合わせて上限の 15 人を超えます');
+    // 対処は、上限の見直し（運用者に問い合わせる）と、ほかのユーザーを無効にすることだけ。閉じたワークスペースの招待は取り消せない
+    await expect(refusal).toContainText('上限の見直しは運用者に問い合わせてください');
+    await expect(refusal).toContainText('組織の管理の「ユーザー」で、ほかのユーザーを無効にして人数を減らしてください');
+    await expect(refusal).toContainText('有効に戻しても所属は戻りません');
+    await expect(refusal).not.toContainText('取り消');
+    await expect(refusal).not.toContainText('{');
+    // 表の上にある。汎用の失敗の文言には落とさない
+    const aboveTable = await refusal.evaluate(
+      (el) =>
+        (el.compareDocumentPosition(el.parentElement!.querySelector('table')!) & Node.DOCUMENT_POSITION_FOLLOWING) !==
+        0,
+    );
+    expect(aboveTable).toBe(true);
+    await expect(page.getByText('を再開できませんでした')).toHaveCount(0);
+    // 一覧を読み直した後も、トーストが消える時間を過ぎても残る
+    await expect.poll(listCalls).toBe(2);
+    await page.waitForTimeout(5000);
+    await expect(refusal).toBeVisible();
+
+    // 次に「再開する」を押すと消える（成功すれば、そのままトーストで知らせる）
+    await page.unroute('**/api/aoba/workspace-reopen');
+    await page.route('**/api/aoba/workspace-reopen', (route) =>
+      route.fulfill({ json: { workspace_id: '019a0000-0000-7000-8000-000000000401' } }),
+    );
+    await row.getByRole('button', { name: `「${SEED_NAME}」を再開する` }).click();
+    await expect(refusal).toHaveCount(0);
+  });
+
+  test('details の無い 409 の member_limit_reached は、数なしの理由を同じ場所に残して読み直す', async ({ page }) => {
+    const listCalls = await showSeedWorkspaceClosed(page, () => 'real');
+    await page.route('**/api/aoba/workspace-reopen', (route) =>
+      route.fulfill({ status: 409, json: { error: { code: 'member_limit_reached', message: 'x' } } }),
+    );
+    await page.goto('/aoba/admin');
+    const row = workspacesOf(page).locator('tbody tr', { hasText: SEED_NAME });
+    await row.getByRole('button', { name: `「${SEED_NAME}」を再開する` }).click();
+
+    const refusal = refusalOf(page);
+    await expect(refusal).toBeVisible();
+    await expect(refusal).toContainText('承諾待ちの招待を含めると、組織の人数が上限を超えます');
+    await expect(refusal).toContainText('上限の見直しは運用者に問い合わせてください');
+    await expect(refusal).toContainText('ほかのユーザーを無効にして人数を減らしてください');
+    // 数の穴を残さない。汎用の失敗の文言にも落とさない
+    for (const leaked of ['人が', '{', 'undefined', 'NaN']) await expect(refusal).not.toContainText(leaked);
+    await expect(page.getByText('を再開できませんでした')).toHaveCount(0);
+    await expect.poll(listCalls).toBe(2);
+    await expect(refusal).toBeVisible();
+  });
+
+  test('空白の無い長い名前でも、断った理由は折り返してはみ出さず、画面の中に入る', async ({ page }) => {
+    // 名前の上限（50字）いっぱいに、空白を入れない
+    const longName = 'W'.repeat(50);
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.route('**/api/aoba/workspace-list', async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as { workspaces: { name: string; closed_at: string | null }[] };
+      for (const workspace of body.workspaces) {
+        if (workspace.name === SEED_NAME)
+          Object.assign(workspace, { name: longName, closed_at: '2026-10-22T00:00:00.000Z' });
+      }
+      return route.fulfill({ response, json: body });
+    });
+    await page.route('**/api/aoba/workspace-reopen', (route) =>
+      route.fulfill({
+        status: 409,
+        json: { error: { code: 'member_limit_reached', message: 'x', details: { used: 14, limit: 15, adding: 2 } } },
+      }),
+    );
+    await page.goto('/aoba/admin');
+    const button = workspacesOf(page)
+      .locator('tbody tr', { hasText: longName })
+      .getByRole('button', { name: `「${longName}」を再開する` });
+    await button.scrollIntoViewIfNeeded();
+    await button.click();
+
+    const refusal = workspacesOf(page).locator('.callout.is-warn[role="alert"]', {
+      hasText: `「${longName}」は再開できません`,
+    });
+    await expect(refusal).toBeVisible();
+    expect(await refusal.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+    expect(await refusal.evaluate((el) => el.getBoundingClientRect().right)).toBeLessThanOrEqual(390);
+    // 押した行が下にあっても、理由が画面の中に入る
+    await expect(refusal).toBeInViewport();
+  });
+
   test('操作の後の読み直しに失敗したら、一覧を残したまま知らせ、「もう一度試す」で読み直せる', async ({ page }) => {
     // 2回目（操作の後の読み直し）だけ失敗させる
     await showSeedWorkspaceClosed(page, (call) => (call === 2 ? 'fail' : 'real'));
@@ -292,8 +413,8 @@ test.describe('管理者（あおば開発のミナト）', () => {
     const row = workspacesOf(page).locator('tbody tr', { hasText: SEED_NAME });
     await row.getByRole('button', { name: `「${SEED_NAME}」を再開する` }).click();
 
-    const notice = page.locator('.callout', { hasText: 'パーティの一覧を更新できませんでした' });
-    await expect(notice.getByRole('alert')).toHaveText('パーティの一覧を更新できませんでした');
+    const notice = page.locator('.callout', { hasText: 'ワークスペースの一覧を更新できませんでした' });
+    await expect(notice.getByRole('alert')).toHaveText('ワークスペースの一覧を更新できませんでした');
     // 知らせ（alert）と状態（status）は入れ子にしない
     await expect(notice.locator('[role="alert"] [role="status"]')).toHaveCount(0);
     // 今の一覧は残る
@@ -314,7 +435,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await page.goto('/aoba/admin');
     const row = workspacesOf(page).locator('tbody tr', { hasText: SEED_NAME });
     const reopen = row.getByRole('button', { name: `「${SEED_NAME}」を再開する` });
-    const notice = page.locator('.callout', { hasText: 'パーティの一覧を更新できませんでした' });
+    const notice = page.locator('.callout', { hasText: 'ワークスペースの一覧を更新できませんでした' });
 
     await reopen.click();
     await expect(notice).toBeVisible();
@@ -383,14 +504,14 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await page.goto('/aoba/admin');
     // 見出しと節の見出しは出ている
     await expect(page.getByRole('heading', { level: 1, name: '組織の管理' })).toBeVisible();
-    // 「パーティの外の言葉づかい」の節と分けるため、名前は完全に一致させる
-    await expect(page.getByRole('heading', { level: 2, name: 'パーティ', exact: true })).toBeVisible();
-    await expect(page.getByText('パーティの一覧を読み込めませんでした')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'パーティを作る' })).toBeVisible();
+    // 「ワークスペースを作る」などと分けるため、名前は完全に一致させる
+    await expect(page.getByRole('heading', { level: 2, name: 'ワークスペース', exact: true })).toBeVisible();
+    await expect(page.getByText('ワークスペースの一覧を読み込めませんでした')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ワークスペースを作る' })).toBeVisible();
 
     await page.getByRole('button', { name: 'もう一度試す' }).click();
     await expect(workspacesOf(page).locator('tbody tr', { hasText: '受託開発チーム' })).toBeVisible();
-    await expect(page.getByText('パーティの一覧を読み込めませんでした')).toHaveCount(0);
+    await expect(page.getByText('ワークスペースの一覧を読み込めませんでした')).toHaveCount(0);
   });
 
   test('初回の読み込み中は、空の読み上げの領域を先に描き、後から文字を入れる', async ({ page }) => {
@@ -421,7 +542,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
     });
     await page.goto('/aoba/admin', { waitUntil: 'commit' });
     // ワークスペースの節の領域（ほかの節も同じ領域を持つ）
-    const region = page.getByRole('region', { name: 'パーティ', exact: true }).locator('[data-section-status]');
+    const region = page.getByRole('region', { name: 'ワークスペース', exact: true }).locator('[data-section-status]');
     await expect(region).toHaveText('読み込んでいます');
     const log = await page.evaluate(() => (window as unknown as { __sectionStatusLog: string[] }).__sectionStatusLog);
     expect(log[0]).toBe('added:');
@@ -466,7 +587,7 @@ test.describe('一般のユーザー（あおば開発のハルカ）', () => {
       await route.fulfill({ response, json: body });
     });
     await page.goto('/aoba/w/019a0000-0000-7000-8000-000000000401');
-    await expect(page.getByRole('heading', { level: 1, name: '掲示板' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
     await expect(bannerOf(page)).toHaveText(BANNER);
     await expect(bannerOf(page).getByRole('link')).toHaveCount(0);
   });

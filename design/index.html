@@ -23,6 +23,8 @@
 .cat-block { display: grid; gap: var(--space-4); scroll-margin-top: var(--space-4); }
 .cat-block > p { color: var(--color-muted); max-width: 66ch; font-size: var(--text-sm); }
 .cat-demo { background: var(--color-bg); border: 1px dashed var(--color-line); border-radius: var(--radius-1); padding: var(--space-5); display: grid; gap: var(--space-4); min-width: 0; }
+.cat-art { margin: 0; display: grid; justify-items: center; gap: var(--space-2); color: var(--color-muted); font-size: var(--text-xs); }
+.cat-art figcaption { font-family: var(--font-mono); }
 .cat-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
 .cat-name { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
 .cat-rules { margin: 0; padding-left: 1.2em; font-size: var(--text-sm); display: grid; gap: 4px; max-width: 70ch; }
@@ -36,7 +38,9 @@
 .space-row { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-xs); }
 .space-row i { display: block; height: 10px; background: var(--color-accent); }
 .icon-cell { display: grid; justify-items: center; gap: 6px; padding: var(--space-3); border: 1px solid var(--color-rule); background: var(--color-surface); border-radius: var(--radius-1); font-size: var(--text-xs); color: var(--color-muted); }
-.icon-cell .ico { width: 22px; height: 22px; color: var(--color-fg); }
+.icon-cell .ico { width: 22px; height: 22px; }
+.icon-cell .ico:not(.is-xp) { color: var(--color-fg); }
+.icon-cell b { color: var(--color-fg); }
 .screens { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3); }
 .screens a { display: grid; gap: 2px; padding: var(--space-3) var(--space-4); background: var(--color-surface); border: 1px solid var(--color-line); border-top: 4px solid var(--color-accent); color: var(--color-fg); text-decoration: none; }
 .screens a:hover { border-color: var(--color-muted); }
@@ -45,6 +49,11 @@
 .cat-panel { position: static; width: 100%; max-width: 400px; height: 560px; border: 1px solid var(--color-line); }
 .cat-drawer { position: static; width: 100%; max-width: 620px; box-shadow: var(--shadow-sheet); border: 1px solid var(--color-line); border-left: var(--rule-double); padding: var(--space-5); overflow: visible; }
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-4); align-items: start; }
+/* アカウントのメニューの見本の枠。760px 以下の画面では一覧が帯を基準に広がり、枠の下端から始まって次の見本に重なるので、
+   見本の中ではボタンの下、右端に合わせて開く広い幅の形に戻す。枠の中でメニューを伸ばさない（一覧の top: 100% がボタンの下になる） */
+.account-menu-frame { position: relative; display: flex; justify-content: flex-end; align-items: flex-start; }
+.account-menu-frame .account-menu { position: relative; }
+.account-menu-frame .account-menu-list { top: calc(100% + var(--space-1)); left: auto; right: 0; min-width: 12rem; max-width: min(20rem, 90vw); }
 @media (max-width: 860px) {
   .cat { grid-template-columns: minmax(0, 1fr); padding-left: max(var(--space-4), env(safe-area-inset-left, 0px)); padding-right: max(var(--space-4), env(safe-area-inset-right, 0px)); }
   .cat-toc { position: static; display: flex; flex-wrap: wrap; gap: var(--space-1); }
@@ -63,26 +72,36 @@
 <div class="celebrate" id="celebrate" hidden></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <script src="icons.js"></script>
+<script src="art.js"></script>
 <script src="sample-data.js"></script>
 <script src="kit.js"></script>
 <script>
 "use strict";
 const { D, t, icon, avatar, avatarOf, emblem, pts, dueChip, tier, book, sprintNotice, raidNotice, levelPanel, load, capacityRows,
-  board, treeEpic, treeStory, progress, pageHead, esc } = SQ;
+  board, treeEpic, treeStory, completedTasks, progress, pageHead, esc } = SQ;
+
+// ゲームの物のアイコン。[名前, 語, アイコンの色（icon の tone）, 色の役割]
+const GAME_ICONS = [
+  ["crystal", "経験値", "xp", "経験値の色"],
+  ["chest", "クリア報酬", "", "段階の色（.tier の中）"],
+  ["crest", "レベル", "xp", "経験値の色"],
+  ["heart", "感謝", "", "文字の色"],
+];
 
 const COLORS = [
   ["地と線", [["地", "--color-bg", "画面の地"], ["面", "--color-surface", "台帳、面、入力欄"], ["一段下", "--color-sunken", "メニュー、列、タグ"], ["枠", "--color-line", "枠の線"], ["罫", "--color-rule", "行を分ける線"]]],
   ["文字", [["文字", "--color-fg", "本文"], ["弱", "--color-muted", "補足、ラベル"], ["淡", "--color-faint", "押す前の操作、未入力"]]],
   ["役割", [["操作", "--color-accent", "操作、選択、進み"], ["操作の淡", "--color-accent-soft", "選択の地"], ["完了", "--color-done", "完了の印、クリア"], ["印", "--color-stamp", "依頼主の印、通知の数"], ["経験値", "--color-xp", "経験値とレベル、レイドだけ"], ["経験値の淡", "--color-xp-soft", "今日やるの地"]]],
   ["状態", [["危", "--color-danger", "期限切れ、重量オーバー"], ["注", "--color-warn", "今週が期限、未記入"], ["良", "--color-ok", "取り込み元で完了、余力あり"]]],
-  ["クリア報酬の段階", [["小", "--color-tier-small", ""], ["中", "--color-tier-medium", ""], ["大", "--color-tier-large", ""]]],
+  ["クリア報酬の段階", [["小", "--color-tier-small", "銅。段階の印（.tier）だけ"], ["中", "--color-tier-medium", "銀。段階の印（.tier）だけ"], ["大", "--color-tier-large", "金。段階の印（.tier）だけ"]]],
 ];
 const SCREENS = [
-  ["login.html", "ログイン", "ログイン、ログインできないとき、届いた招待"],
+  ["consent.html", "同意の確認", "利用規約とプライバシーポリシーへの同意、同意済み、更新、読み込み失敗"],
+  ["login.html", "ログイン", "ログイン、ログインできないとき、会員登録、届いた招待"],
   ["organizations.html", "組織の選択", "入れる組織が2つ以上の人のログイン直後"],
-  ["today.html", "自分の今日", "全ワークスペースの自分のタスク、レベル、積載量"],
+  ["today.html", "今日やること", "全ワークスペースの自分のタスク、レベル、積載量"],
   ["notifications.html", "通知", "画面の中の知らせ、既読"],
-  ["me.html", "自分の設定", "1日の基準、休み、経験値の明細、招待"],
+  ["me.html", "マイプロフィール", "1日の基準、休み、API トークン、経験値の明細、招待"],
   ["admin.html", "組織の管理", "ユーザー、ワークスペース、組織の休日"],
   ["operator.html", "運用", "組織の一覧、作成、停止、管理者の指名し直し（運用者）"],
   ["inbox.html", () => t("inbox"), "取り込んだものの仕分け"],
@@ -90,6 +109,8 @@ const SCREENS = [
   ["sprint.html", () => t("sprint"), "列とカード、ゴール、延長と終了"],
   ["plan.html", () => t("plan"), "ベロシティ、先のスプリント、積載量"],
   ["epic.html", () => t("epic"), "依頼書、討伐隊、達成目標"],
+  ["wiki.html", "Wiki", "ワークスペースの Wiki。木、ページ、編集、版の一覧、.md のアップロード"],
+  ["wiki.html?scope=organization", "Wiki（組織）", "組織の Wiki。組織の全員が見て、書ける"],
   ["capacity.html", () => t("capacity"), "メンバー × 月、スプリント"],
   ["records.html", "完了の記録", "区分と計上月、記録の修正"],
   ["archive.html", () => t("archive"), "扱わない取り込んだタスク"],
@@ -123,22 +144,29 @@ function colorBlock() {
 // opts.tab は開いておくタブ（comments、history）、opts.commentEditing は直している途中のコメントの番号。
 // opts.commentsView はコメントの読み込み（loading、failed、reloadFailed）、opts.commentViewer は見る人（一般のメンバーの見え方）、
 // opts.commentBlocked は直している途中に消されたコメントの番号
+// opts.adjacent は前後のタスク（{ prev, next }。端は null）。順を渡さない画面は null。既定は両側にある。ページ全体の見本には前後のボタンを出さない
 function drawerDemo(tag = "a", id = "t1", editing = [], opts = {}) {
   const st = SQ.drawerState;
-  const keep = [st.id, st.editing, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked];
+  const keep = [st.id, st.editing, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked, st.adjacent];
+  st.adjacent = opts.shape === "page" ? null : "adjacent" in opts ? opts.adjacent : { prev: "t5", next: "t2" };
   st.id = id; st.editing = new Set(editing); st.view = opts.view || null; st.errors = opts.errors || {}; st.drafts = opts.drafts || {};
   st.tab = opts.tab || "comments"; st.commentEditing = opts.commentEditing ?? null;
   st.commentsView = opts.commentsView || null; st.commentViewer = opts.commentViewer || null; st.commentBlocked = opts.commentBlocked ?? null;
-  const html = SQ.drawerHtml()
+  // opts.shape は真ん中（center）とページ全体（page）の見本。選んでいる形の印と枠の class を替える
+  const shape = opts.shape || "";
+  const pressed = (h) => shape === "" ? h
+    : h.replace(/aria-pressed="true"/g, 'aria-pressed="false"').replace(new RegExp(`(data-drawer-mode="${shape}" aria-pressed=)"false"`), '$1"true"');
+  const html = pressed(SQ.drawerHtml())
     .replace('id="drawer-title"', `id="demo-${tag}-title"`)
     .replace(/drawer-edit-/g, `demo-${tag}-edit-`)
     .replace(/drawer-pts/g, `demo-${tag}-pts`)
     .replace(/drawer-(tab|panel)-/g, `demo-${tag}-$1-`)
     .replace(/(id|for|aria-describedby)="(new-comment|comment-edit-\d+)/g, `$1="demo-${tag}-$2`)
-    .replace(/data-close-drawer|data-drawer-size/g, "disabled")
+    .replace(/data-close-drawer|data-drawer-mode/g, "disabled")
+    .replace(/ data-drawer-step="-?1"/g, "")
     .replace(/ data-drawer-(?:edit|save|cancel|pts|due-clear|due)(?![\w-])(?:="[^"]*")?| data-comment-(?:edit|save|cancel|delete|send)(?:="[^"]*")?| data-tab="[^"]*"| data-dialog="deleteTask"/g, "");
-  [st.id, st.editing, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked] = keep;
-  return `<div class="drawer cat-drawer">${html}</div>`;
+  [st.id, st.editing, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked, st.adjacent] = keep;
+  return `<div class="drawer cat-drawer${shape ? ` is-${shape}` : ""}">${html}</div>`;
 }
 
 // アシスタントの見本。押しても会話が進まないよう data-assist-* を外す（答えに出たタスクは押すと詳細が開く）。本物は上のボタンで開く
@@ -155,7 +183,7 @@ function assistDemo() {
   const confirm = (state, more) => ({ state, more, note: `${t("assignee")}を変えても、${t("points")}と${t("column")}はそのままです。`, rows });
   const sp = D.sprints.sp14;
   const late = ai({ steps, text: `残り ${sp.days - sp.dayIndex} 日で、気になるのは 2 件です。${t("due")}を過ぎたものと、${t("points")}が大きいのにまだ手を付けていないものを挙げました。`,
-    refs: [["t8", `<span class="chip is-danger">${icon("alert")}${t("due")}切れ 10/17</span>`], ["t3", `<span class="chip is-warn">${icon("clock")}5 pt で出発前</span>`]] });
+    refs: [["t8", `<span class="chip is-danger">${icon("alert")}${t("due")}切れ 10/17</span>`], ["t3", `<span class="chip is-warn">${icon("clock")}5 pt で未着手</span>`]] });
   return `
     <div class="field"><span class="field-label">開く所とパレット</span>
       <div class="cat-row"><button class="pill assist-launch" type="button" data-assist-open>${icon("spark")}<span>${t("assistant")}に頼む</span><kbd class="kbd">${SQ.ASSIST_KEY}</kbd></button><span class="field-hint">押すと本物のパレットが開く。例の頼みごとを押して試せる</span></div>
@@ -194,7 +222,7 @@ const SECTIONS = [
     colorBlock(), ["完了の色は完了の印とクリアだけ、経験値の色は経験値とレベルとレイドだけに使い、他の意味を持たせない。", "状態の色は、必ずアイコンか文字と一緒に使う（色だけで区別しない）。", "操作の色は操作と選択と進みの色。飾りには使わない。"])],
   ["type", "文字", () => block("type", "文字", "書体は役割で4つに分ける。",
     `<div>
-      <div class="type-row"><span class="cat-name">--font-display<br>2xl / --weight-display</span><span class="page-title">自分の今日</span></div>
+      <div class="type-row"><span class="cat-name">--font-display<br>2xl / --weight-display</span><span class="page-title">今日やること</span></div>
       <div class="type-row"><span class="cat-name">--font-display<br>xl / --weight-display</span><span class="section-title">今週が${t("due")}</span></div>
       <div class="type-row"><span class="cat-name">--font-display<br>lg / 700</span><span class="notice-title">勤怠の月次の締めを手作業なしで回す</span></div>
       <div class="type-row"><span class="cat-name">--font-body<br>md / 400</span><span>購入額に応じてポイントを付け、次の購入で使えるようにする。年内の公開が先方との約束。</span></div>
@@ -220,12 +248,14 @@ const SECTIONS = [
     ["マークの色はテーマで変えない。タブの favicon と画面のロゴを同じ印に見せるため。", "マークは aria-hidden にし、名前は横の文字で読ませる（読み上げは「Scrum Guild」の1回）。", "マークだけを置かない。名前は通常の文字の大きさなら1行に収まり、文字を拡大したときは、はみ出さずに折り返す。", "形や色を変えるときは、static/favicon.svg、kit.js の brandMark、BrandMark.svelte をそろえて直し（scripts/design-parity.test.ts が突き合わせる）、static/favicon.ico を scripts/generate-favicon.ts で作り直す。"],
     ".brand .brand-mark .brand-name / .gate-brand / SQ.brandMark")],
   ["icons", "アイコン", () => block("icons", "アイコン", "24px の格子に線だけで描く。icons.js を読み込むとスプライトが入る。",
-    `<div class="cat-grid" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr))">${(window.SQ_ICONS || []).map((n) => `<div class="icon-cell">${icon(n)}<span>${n}</span></div>`).join("")}</div>`,
-    ["アイコンは文字の代わりにしない。意味のある操作には文字か aria-label を付ける。", "本番では、同じ描き方の OSS のアイコンセット（Lucide など）に置き換えてよい。"], `&lt;svg class="ico"&gt;&lt;use href="#i-sun"/&gt;&lt;/svg&gt;`)],
+    `<div class="field"><span class="field-label">ゲームの物</span><div class="cat-grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${GAME_ICONS.map(([n, word, tone, role]) => `<div class="icon-cell">${icon(n, tone)}<b>${word}</b><span>${n}</span><span>${role}</span></div>`).join("")}</div></div>
+     <div class="field"><span class="field-label">すべて</span><div class="cat-grid" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr))">${(window.SQ_ICONS || []).map((n) => `<div class="icon-cell">${icon(n)}<span>${n}</span></div>`).join("")}</div></div>`,
+    ["アイコンは文字の代わりにしない。意味のある操作には文字か aria-label を付ける。", "ゲームの物のアイコンは、経験値、クリア報酬、レベル、感謝の4つの語にだけ使う。エピック、ストーリー、タスクとメニューは業務のアイコンのまま。", "ゲームの物のアイコンの色は、語の色の役割に従う。経験値とレベルは経験値の色（.ico.is-xp）、クリア報酬は段階の色（.tier の中で受ける）、感謝は文字の色。", "レベルの紋章（.emblem）を出す所には crest を重ねない。紋章がレベルの印を兼ねる。", "本番では、同じ描き方の OSS のアイコンセット（Lucide など）に置き換えてよい。"], `&lt;svg class="ico"&gt;&lt;use href="#i-sun"/&gt;&lt;/svg&gt; / .ico.is-xp`)],
   ["heads", "見出しと集計", () => block("heads", "画面の見出しと集計", "画面の先頭には、見出しと「今気にすること」の件数を置く。画面の主な操作は見出しの右。",
     `${pageHead(D.todayLabel, SQ.sprintLabel("sp14"), [["", "check", "完了", "4 / 24 pt"], ["is-danger", "alert", `${t("due")}切れ`, 1], ["is-warn", "pen", `${t("detail")} 未記入`, 1], ["is-ok", "check", "取り込み元で完了", 0]], `<button class="btn" type="button">延長する</button>`)}
-     <div class="section-head"><h2 class="section-title">今日やる</h2><span class="section-count">3 件</span><span class="section-hint">日付が変わると印は外れます</span></div>`,
-    ["件数が0の集計は色を付けない。"], ".page-head .page-eyebrow .page-head-row .page-title .page-actions .tally / .section-head .section-title .section-count .section-hint")],
+     <div class="section-head"><h2 class="section-title">今日やると決めたもの</h2><span class="section-count">3 件</span><span class="section-hint">印を付けた日が過ぎても、完了にするか印を外すまで残ります</span></div>
+     ${SQ.foldedSection("fold-sample", `進行中の${t("sprint")}`, 2, SQ.book(SQ.tasksWhere((x) => x.who === D.me && !x.doneAt).slice(0, 2), { showWs: true }))}`,
+    ["件数が0の集計は色を付けない。", "初めは閉じて件数だけ出す区分は foldedSection（details と summary）で作る。見出しの行を押すと開き、開いたら「開くと一覧を表示」を隠す。狭い幅と指で押す画面では、見出しの行を44px の高さにする。", "持ち越した行の日数は、book の opts.meta に渡した1行（.props-note）で添える。"], ".page-head .page-eyebrow .page-head-row .page-title .page-actions .tally / .section-head .section-title .section-count .section-hint / .section.is-folded SQ.foldedSection(id, title, count, body)")],
   ["buttons", "ボタン", () => block("buttons", "ボタン", "1つの面に主ボタン（is-primary）は1つまで。",
     `<div class="cat-row">
       <button class="btn is-primary" type="button">${icon("check")}${t("complete")}</button>
@@ -238,15 +268,19 @@ const SECTIONS = [
       <button class="link-btn" type="button">戻す</button>
     </div>
     <div class="cat-row">
-      <button class="pill" type="button">${icon("swap")}言葉: ${t("vocab")}</button>
       <button class="pill" type="button" aria-label="通知 3件">${icon("bell")}<span class="pill-count">3</span></button>
       <button class="pill" type="button" aria-label="閉じる（いまは閉じられません）" aria-disabled="true">${icon("x")}</button>
+    </div>
+    <div class="cat-row" role="group" aria-label="開き方の見本">
+      <button class="pill" type="button" aria-pressed="true">横</button>
+      <button class="pill" type="button" aria-pressed="false">真ん中</button>
+      <button class="pill" type="button" aria-pressed="false">ページ全体</button>
     </div>
     <div class="cat-row">
       <button class="btn is-google" type="button">${SQ.googleMark}Google でログイン</button>
       <span class="field-hint">ログインの画面の Google のボタン。テーマに合わせて明暗が替わる</span>
     </div>`,
-    ["文言は押すと起きることをそのまま書く（「完遂にする」「受注する」）。", "押せない理由がある無効のボタンは、title か横の文で理由を示す。", "送っている最中や読み直している最中のように、フォーカスを残したいボタンは disabled でなく aria-disabled=\"true\" にする（.btn と .pill が同じ薄い見た目になる）。押しても何も起きないよう、処理の側で無視する。", "取り消せない操作（削除）は is-danger にし、確認は画面の中のダイアログで行う。", "切り替えのボタンは aria-pressed を持ち、押した状態は is-on で示す。", "is-google はログインの画面の Google のボタンだけに使う。ロゴと色は Google のブランドの決まりで固定し（テーマのトークンを通さない）、主ボタン（is-primary）にしない。明暗は、既定のテーマだけ OS に従い、ほかはテーマに合わせる。"],
+    ["文言は押すと起きることをそのまま書く（「完了にする」「参加する」）。", "押せない理由がある無効のボタンは、title か横の文で理由を示す。", "送っている最中や読み直している最中のように、フォーカスを残したいボタンは disabled でなく aria-disabled=\"true\" にする（.btn と .pill が同じ薄い見た目になる）。押しても何も起きないよう、処理の側で無視する。", "取り消せない操作（削除）は is-danger にし、確認は画面の中のダイアログで行う。", "切り替えのボタンは aria-pressed を持ち、押した状態は is-on で示す。.pill の切り替え（引き出しの開き方）は aria-pressed=\"true\" だけで同じ見た目（accent-soft の地に accent の枠と文字と太字）になる。ホバーしても枠は accent のまま。", "is-google はログインと会員登録の画面の Google のボタンだけに使う。ロゴと色は Google のブランドの決まりで固定し（テーマのトークンを通さない）、主ボタン（is-primary）にしない。明暗は、既定のテーマだけ OS に従い、ほかはテーマに合わせる。"],
     ".btn .is-primary .is-quiet .is-danger .is-sm .is-on .is-google / .link-btn / .pill .pill-count")],
   ["forms", "入力と道具の帯", () => block("forms", "入力と道具の帯", "",
     `<div class="toolbar"><label class="search" for="q0">${icon("search")}<input id="q0" type="search" placeholder="${t("backlogSearch")}"></label>
@@ -276,18 +310,21 @@ const SECTIONS = [
     <div class="cat-row">
       <span class="chip is-todo">${icon("pen")}${t("detail")} 未記入</span>
       <span class="chip is-ok">${icon("check")}取り込み元で完了</span>
-      <span class="chip is-done">${icon("check")}クリア済み</span>
-      <span class="chip is-carry">${icon("redo")}昨日から持ち越し</span>
+      <span class="chip is-done">${icon("check")}完了</span>
+      <span class="chip is-carry">${icon("redo")}持ち越し</span>
       <span class="chip is-danger">${icon("alert")}取り込み元で見つからない</span>
     </div>
     <div class="cat-row">
       <span class="chip is-name">${icon("tag")}保守</span>
       <span class="chip is-name">${icon("git")}point-api</span>
       <span class="chip is-name">${icon("tag")}会員ポイントの交換先を増やす追加案件（月ごとに計上して請求書にまとめる分）</span>
+      <span class="chip is-name">${icon("calendar")}<span><span class="visually-hidden">${t("sprint")}：</span>年末の仕上げ</span></span>
+      <span class="chip is-name">${icon("calendar")}<span><span class="visually-hidden">${t("sprint")}：</span><span class="mono">11/2〜11/15</span></span></span>
     </div>
     <div class="cat-row">
-      <span class="tag">受託開発チーム</span><span class="status-dot">遂行中</span>
+      <span class="tag">受託開発チーム</span><span class="status-dot">作業中</span>
       <span class="source-key">${icon("link")} SHOP-128</span><span class="source-key">${icon("git")} acme/shop#412</span>
+      <span class="source-key is-wrap">${icon("link")} https://example.com/spec/points/very-long-path-without-any-space-that-must-wrap-inside-the-column-even-on-a-narrow-screen/0123456789012345678901234567890123456789</span><a class="btn is-sm" href="#" aria-label="リンクを新しいタブで開く">開く</a>
       ${pts(0)}${pts(5)}${pts(13)}${pts(null)}
       ${tier("small")}${tier("medium")}${tier("large")}
       <span class="kind is-epic">${icon("flag")}</span><span class="kind is-story">${icon("check")}</span>
@@ -295,65 +332,113 @@ const SECTIONS = [
     <div class="callout is-ok">${icon("check")}<span>取り込み元で完了になりました。完了にするかはここで決めます。</span></div>
     <div class="callout is-warn">${icon("alert")}<span>10月は配分の合計が 110% です。本人にだけ見えています。</span></div>
     <div class="callout is-info">${icon("archive")}<span>2026-10-22 に終了しました。読み取り専用です。 <a href="admin.html">組織の管理で再開する</a></span></div>
+    <div class="callout is-info">${icon("lock")}<span id="catalog-token-reauth">API トークンを発行するには、ログインし直してください。発行はログインから10分以内に限られます。</span><div class="callout-actions"><a class="btn is-primary" href="login.html?return_to=%2Faoba%2Fme" aria-describedby="catalog-token-reauth">ログインし直す</a></div></div>
     <div class="callout is-warn">${icon("alert")}<span role="alert">${t("workspace")}の一覧を更新できませんでした</span><div class="callout-actions"><button class="btn is-sm" type="button">もう一度試す</button><span class="field-hint" role="status">まだ読み込めませんでした</span></div></div>`,
-    ["期日の印は、期限切れが赤、今日と今週が橙、それより先は色なし。完了したら色を付けない。", "is-ok は取り込み元の状態や進行中のような「良い状態」、is-done はクリアと完了（完了の印と同じ役の色。中世風では朱）。", "取り込み元の期限には「（取り込み元）」を添える。", "区分とリポジトリの名前は .chip.is-name で出す。名前は利用者が付ける（50 字まで）ので、行の幅を超えたら折り返して全文を出す。区分はタグ、リポジトリは git のアイコンを添えて、状態の印と見分けられるようにする。種類は見えない文字（「区分：」「リポジトリ：」）で読み上げに添える。", "ポイントは枠付きの数字、未見積もりは点線の「未」。", "クリア報酬の段階（小・中・大）は、ポイントと混ざらないよう別の形（tier）にする。", "囲みに操作を付けるときは、ボタンと状態の文を .callout-actions にまとめる。右に寄り、狭い幅では本文の下へ折り返す。狭い幅と指で押す画面では、中の小さいボタン（.btn.is-sm）の押せる範囲を、見た目を変えずに 44px 四方以上へ広げる（.form-actions の中も同じ）。失敗の知らせ（role=\"alert\"）は本文の span に付け、状態の文（role=\"status\"）を alert の中に入れ子にしない。", "終了したワークスペースの帯は .callout.is-info で、ワークスペースの中のどの画面にも先頭に置く。再開するボタンは置かず、管理者には組織の管理へのリンクだけを添える。"],
+    ["期日の印は、期限切れが赤、今日と今週が橙、それより先は色なし。完了したら色を付けない。", "is-ok は取り込み元の状態や進行中のような「良い状態」、is-done はクリアと完了（完了の印と同じ役の色。中世風では朱）。", "取り込み元の期限には「（取り込み元）」を添える。", "区分、リポジトリ、入っているスプリントの名前は .chip.is-name で出す。名前は利用者が付ける（50 字まで）ので、行の幅を超えたら折り返して全文を出す。区分はタグ、リポジトリは git、スプリントは暦のアイコンを添えて、状態の印と見分けられるようにする。名前の無いスプリントは期間（M/D〜M/D）を .mono で出す。種類は見えない文字（「区分：」「リポジトリ：」「スプリント：」）で読み上げに添える。", "長い URL を載せる所（エピックの画面の概要など）は、URL を .source-key.is-wrap で折り返して全文を出し、その横に aria-label 付きの「開く」（.btn.is-sm）を置く。引き出しの中は .drawer .source-key が同じ折り返しを持つ。", "ポイントは枠付きの数字、未見積もりは点線の「未」。", "クリア報酬の段階（小・中・大）は、ポイントと混ざらないよう別の形（tier）にする。", "囲みに操作を付けるときは、ボタンと状態の文を .callout-actions にまとめる。右に寄り、狭い幅では本文の下へ折り返す。狭い幅と指で押す画面では、中の小さいボタン（.btn.is-sm）の押せる範囲を、見た目を変えずに 44px 四方以上へ広げる（.form-actions の中も同じ）。失敗の知らせ（role=\"alert\"）は本文の span に付け、状態の文（role=\"status\"）を alert の中に入れ子にしない。", "終了したワークスペースの帯は .callout.is-info で、ワークスペースの中のどの画面にも先頭に置く。再開するボタンは置かず、管理者には組織の管理へのリンクだけを添える。"],
     ".chip .is-danger .is-warn .is-todo .is-ok .is-done .is-carry .is-name / .tag / .status-dot / .source-key / .pts .is-none / .tier / .kind .is-epic .is-story / .callout .is-ok .is-warn .is-info .callout-actions")],
   ["people", "人とレベル", () => block("people", "人とレベル", "他の人に見せるのはレベルだけ。経験値の数字は本人だけ。",
     `<div class="cat-row">
       ${avatarOf("u1")}${avatarOf("u2", { lg: true })}${avatar(null)}${avatarOf("u5")}
       ${avatar("星野 琴音", 3, { lg: true, image: SQ.SAMPLE_PHOTO })}${avatar("星野 琴音", 3, { lg: true, image: SQ.BROKEN_PHOTO })}
       <span class="avatar-stack">${avatarOf("u2")}${avatarOf("u1")}${avatarOf("u3")}</span>
-      ${emblem(7, true)}${emblem(7)}${emblem(12)}
+      ${emblem(7, true)}${emblem(7)}${emblem(12)}${emblem(100, true)}${emblem(100)}${emblem(1000)}
     </div>`,
-    ["離脱した人は薄くし、title に「離脱済み」を出す。", "ログインの手段の側の画像（運用者が指名する人を確かめるときの GitHub のアバター）は、頭文字の円の中に重ねる（.avatar > img）。画像の組の右側は、画像が読み込めない例で、頭文字に戻る。", "紋章の大は自分の記録の面だけ、小は名前の横に添える。"], ".avatar .is-lg .is-none .is-left / .avatar > img / .avatar-stack / .emblem .is-sm")],
+    ["離脱した人は薄くし、title に「離脱済み」を出す。", "ログインの手段の側の画像（運用者が指名する人を確かめるときの GitHub のアバター）は、頭文字の円の中に重ねる（.avatar > img）。画像の組の右側は、画像が読み込めない例で、頭文字に戻る。", "紋章の大は自分の記録の面だけ、小は名前の横に添える。", "紋章の形はレベルによらず同じ六角。テーマで変わるのは縁と質感だけ（シンプルは縁取り、中世風は蝋の印章、現代風は光る枠）。", "3桁以上のレベルは、数字を小さくして面に収める（.is-long は3桁、.is-longer は4桁以上）。"],".avatar .is-lg .is-none .is-left / .avatar > img / .avatar-stack / .emblem .is-sm")],
   ["ledger", "台帳", () => block("ledger", "台帳（タスクの一覧）", "タスクの一覧はすべてこの形。左に今日やるの印、右に期日、ポイント、担当、完了の操作。右端の丸を押すと判子が押される。題を押すと詳細が開く。",
     book(SAMPLE, { showAssignee: true }) +
-    `<div class="cat-row"><button class="done-btn" type="button" aria-disabled="true" aria-label="送信中">${icon("check")}</button><span class="field-hint">完了の操作を送っている最中（aria-disabled）</span></div>`,
-    ["行の左端の太陽は「今日やる」。押すと金色になる。", "完了は判子で示し、すぐ横に「戻す」を置く。", "完了の操作を送っている最中は、丸を薄くして押しても何も起きないようにする（aria-disabled。フォーカスは残す）。", "狭い幅（760px 以下）と指で押す画面では、完了の操作の押せる範囲を 44px 四方に広げる（丸の見た目は変えず、::after で広げる）。ポイントなどの .segmented の選択肢も 44px の高さにする。", "取り込んだタスクは、キーと取り込み元のアイコンを必ず添える。"],
-    ".book .entry .is-done .entry-main .entry-title .entry-meta .entry-end / .sun[aria-pressed] / .done-btn .done-btn[aria-disabled] / .hanko .is-new")],
+    `<div class="cat-row"><button class="done-btn" type="button" aria-disabled="true" aria-label="送信中">${icon("check")}</button><span class="field-hint">完了の操作を送っている最中（aria-disabled）</span></div>` +
+    `<div class="cat-row"><button class="sun" type="button" aria-pressed="false" aria-disabled="true" aria-label="今日やる: 送信中の見本" title="今日やる">${icon("sun")}</button><button class="sun" type="button" aria-pressed="true" aria-disabled="true" aria-label="今日やる: 送信中の見本（印あり）" title="今日やる">${icon("sun")}</button><span class="field-hint">今日やるの印を送っている最中（aria-disabled）。押された状態（左は印なし、右は印あり）の色は保ち、薄くして押しても何も起きない</span></div>` +
+    `<div class="cat-row"><span class="entry-end"><span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span><button class="link-btn" type="button" aria-label="${t("done")}を戻す: 見本" aria-disabled="false">戻す</button><button class="link-btn" type="button" aria-label="${t("done")}を戻す: 送信中の見本" aria-disabled="true">戻す</button></span><span class="field-hint">完了の行の「戻す」（.entry-end .link-btn。折り返さず、縮めない）。右は送っている最中（aria-disabled）</span></div>`,
+    ["行の左端の太陽は「今日やる」。押すと金色になる。", "完了は判子で示し、すぐ横に「戻す」を置く。", "完了の操作を送っている最中は、丸を薄くして押しても何も起きないようにする（aria-disabled。フォーカスは残す）。", "今日やるの印の太陽は、送っている最中は薄くして押しても何も起きないようにする（aria-disabled。押された状態の色は保つ）。読み上げの名前は題を添える（「今日やる: <題>」）。","狭い幅（760px 以下）と指で押す画面では、完了の操作と今日やるの太陽と完了の行の「戻す」（.entry-end .link-btn）の押せる範囲を 44px 四方以上に広げる（見た目は変えず、::after で広げる）。ポイントなどの .segmented の選択肢も 44px の高さにする。", "取り込んだタスクは、キーと取り込み元のアイコンを必ず添える。"],
+    ".book .entry .is-done .entry-main .entry-title .entry-meta .entry-end / .sun[aria-pressed] .sun[aria-disabled] / .done-btn .done-btn[aria-disabled] / .hanko .is-new / .entry-end .link-btn")],
   ["board", "列とカード", () => block("board", "列とカード", "スプリントの列。列の名前は明朝。完了の列にだけ完成の定義を添える。狭いときは横に送る。",
-    board("sp14"),
-    ["列の名前はリーダーが付けたもので、言葉づかいを切り替えても訳さない。完了の列だけは「完遂」か「完了」と出す。", "カードの操作（列の移動）は、ドラッグの他にキーボードでもできるようにする。",
+    board("sp14") +
+    `<div class="cat-row"><span class="order-actions"><button class="icon-btn" type="button" aria-label="前の${t("column")}へ" title="前の${t("column")}へ" aria-disabled="true">${icon("left")}</button><button class="icon-btn" type="button" aria-label="上へ" title="上へ" aria-disabled="true">${icon("up")}</button><button class="icon-btn" type="button" aria-label="下へ" title="下へ">${icon("down")}</button><button class="icon-btn" type="button" aria-label="次の${t("column")}へ" title="次の${t("column")}へ">${icon("right")}</button></span><span class="field-hint">order-actions に隣の列へ移す left と right を両端に足した形（across）。先頭の列の「前の列へ」は aria-disabled</span></div>`,
+    ["列の名前はリーダーが付けたもので、訳さない。完了の列だけは「完了」と出す。列の数は .board の --board-cols で渡す（既定は 4）。列は 232px を下限にし、足りない幅では .board-wrap の中で横にスクロールする。", "カードの操作（列の移動）は、ドラッグの他にキーボードでもできるようにする。完了でないカードは tabindex=\"0\" で選べ、中のどこにフォーカスがあっても Alt と ← → で隣の列の末尾へ、Alt と ↑ ↓ で列の中を1つ動かす。同じ操作を、カードの下の .card-moves の .order-actions（前の列へ、上へ、下へ、次の列へ）のボタンでもできる。動かした後の位置は読み上げる（「<題>を<列>の N 番目に移しました（M 件中）」）。", "最後の完了でない列の「次の列へ」と Alt と → は、完了の列へ移す代わりに完了にする（カードの完了の操作と同じ）。前の列と上と下の端は aria-disabled で、「これより前の列はありません」「いちばん上です」「いちばん下です」を読み上げる。完了の列のカードは選べず、動かすボタンも持たない。完了の印の横の「戻す」（.link-btn）で完了の前の列の末尾へ戻し、戻したカードへフォーカスを移す。完了したストーリーの下のカードと、終了したスプリントのカードには「戻す」を出さない。完了の列の見出しの下には、完成の定義（.dod）を畳んで置く（空なら出さない）。", "選んでいるカード（中にフォーカスがある間）は .card:focus-within で枠の色を変え、左に太い線を入れる（色だけに頼らない）。", "狭い幅（760px 以下）と指で押す画面では、.card-title と .done-btn と .card-moves のボタンと完了のカードの「戻す」（.card .link-btn）を 44px 四方にする。.card-moves のボタン4つ（176px）は隙間を空けずにカードの内側へ収め、収まらない幅では折り返す。",
       `完成の定義（<code>.dod</code>）は畳んで置き、中身はワークスペースの Markdown を <code>.doc-box</code> で描く（<code>.dod</code> の中では枠と余白を外し、見出しも小さい文字のままにする）。開くまで本文を描かない。空なら出さない。${t("backlog")}の木の上にも同じ部品を1つだけ置き、行ごとには繰り返さない。`],
-    ".board-wrap .board .board-col .is-done .board-col-head .board-col-name / .dod / .card .card-parent .card-title .card-meta .card-foot .card-end")],
+    ".board-wrap .board[--board-cols] .board-col .is-done .board-col-head .board-col-name / .dod / .card .card-parent .card-title .card-meta .card-foot .card-end .card-moves .card:focus-within / .order-actions（left right の across）")],
+  ["boarddrag", "カードのドラッグ", () => block("boarddrag", "カードのドラッグ（スプリントの画面）", "スプリントのカードをつかんで、列の中で並べ替え、別の列へ移し、完了の列へ落として完了にする。落とす位置は、カードとカードの間の線か、列の囲みで示す。",
+    board("sp14", { key: "dg1", cardMarks: (x) => (x.id === "t3" ? { state: "is-dragging" } : x.id === "t4" ? { state: "is-busy" } : x.id === "t1" ? { drop: "after" } : undefined) }) +
+    `<div class="cat-row"><span class="field-hint">1列目の先頭のカードをつかんでいる（元の位置で薄くする）。完了か戻しを送っている間のカードは、薄くしてカーソルを進行中にし、つかめない（.is-busy。aria-busy も付ける）。2列目の先頭のカードの下の線は、そのカードの後ろに入る（下半分に重ねたとき）。上半分に重ねると前の線</span></div>` +
+    board("sp14", { key: "dg2", cardMarks: (x) => (x.id === "t11" ? { state: "is-dragging" } : undefined), columnMarks: (c) => (c.id === "c3" ? { drop: "into" } : undefined) }) +
+    `<div class="cat-row"><span class="field-hint">カードの無い所と${t("column")}の頭に重ねると${t("column")}を囲む。離すと${t("column")}の末尾に入る</span></div>` +
+    board("sp14", { key: "dg3", cardMarks: (x) => (x.id === "t2" ? { state: "is-dragging" } : undefined), columnMarks: (c) => (c.done ? { drop: "into" } : undefined) }) +
+    `<div class="cat-row"><span class="field-hint">${t("done")}の${t("column")}は、どこに重ねても${t("column")}を囲む（位置の線は出さない）。離すと${t("done")}になる</span></div>` +
+    board("sp14", { key: "dg4", cardMarks: (x) => (x.id === "t8" ? { state: "is-dropped" } : undefined) }) +
+    `<div class="cat-row"><button class="btn is-sm" type="button" data-replay-flash>${icon("redo")}もう一度光らせる</button><span class="field-hint">落としたカード（1列目の2枚目）は、背景を戻しながら光る</span></div>`,
+    ["カードはカード全体をつかめる（つかめるカードは draggable=\"true\" で、カーソルは grab）。題のリンクは draggable=\"false\" にして、リンクの既定のドラッグがカードのドラッグを奪わないようにする。完了、戻す、.card-moves のボタンは押すだけで動き出さない。指（タッチ）でも、カードの長押しで動かせる。つかめるのは、書き込めて完了していないカードと、完了の列で「戻す」を出すカード。完了したストーリーの下のカードと、終了したワークスペースのカードはつかめない。", "落とす位置は [data-drop] で示す。before と after はカードとカードの間の線（--color-accent の 2px と左端の小さな丸。カードの幅いっぱい）で、カードの上半分に重ねると前、下半分に重ねると後ろ。into は列（.board-col）の囲みで、.dropzone.is-over と同じ --color-accent の枠と --color-accent-soft の地。カードの無い所と列の頭に重ねると、その列の末尾に入る。", "完了の列は、どこに重ねても列を囲む（位置の線は出さない）。完了でないカードを離すと完了にし、完了の列の中で動かし直しても何も起きない。完了の列のカードを別の列へ落とすと、完了を戻してから落とした列と位置へ移す。元と同じ位置と、落とせない場所には何も示さない。", "つかんだカードは元の位置で薄くする（.is-dragging）。落としたカードは、背景を --color-accent-soft から地の色へ約 0.8 秒（--duration-flash）で戻し、--color-accent の 1px の枠も同じ長さで消して光らせる（.is-dropped）。prefers-reduced-motion のときは光らせず、薄くするのも切り替えだけにする。", "色は既存のトークンだけで、4つのテーマに新しい色は足さない。キーボードとボタンの操作は「列とカード」のまま使える。"],
+    ".card[draggable=true] .card-title[draggable=false] / .card[data-drop=before] .card[data-drop=after] / .board-col[data-drop=into] / .is-dragging .is-dropped（.card.is-dropped）")],
   ["tree", "木", () => block("tree", "木（バックログ）", "エピック、ストーリー、タスクの階層。エピックの行は一段下の地と明朝で区切る。",
     `<div class="tree">${treeEpic("e2")}${treeStory("s4", true)}${treeStory("s1", true, { doneAt: "2026-10-22" })}</div>` +
     `<div class="tree">${treeEpic("e1", { cleared: true, key: "e1-cleared" })}${treeEpic("e2", { canceled: true, empty: true, key: "e2-canceled" })}${treeEpic("e1", { empty: true, key: "e1-empty" })}</div>` +
     `<div class="cat-row"><span class="order-actions"><button class="icon-btn" type="button" aria-label="上へ" title="上へ" aria-disabled="true">${icon("up")}</button><button class="icon-btn" type="button" aria-label="下へ" title="下へ">${icon("down")}</button><button class="icon-btn" type="button" aria-label="親を移す" title="親を移す">${icon("swap")}</button></span><span class="field-hint">行の並べ替えと親の移動。先頭の行の「上へ」は aria-disabled</span></div>`,
-    ["最上段はエピック、親のないストーリー、親のないタスクの順。エピックの行の題はボタン（button.tree-link）で、押すとエピックのダイアログが開く。配下が無いエピックには「ストーリーはまだありません」の1行を出す。", "右端の数は「完了 / 全体」のポイント。エピックの行は、配下のストーリーの合計。", "完了したタスクは折りたたみ、件数だけ出す。", "ストーリーの行の右端に「完了にする」（.btn.is-sm）を置く。配下に未完了のタスクが残るあいだは、押してもフォーカスが残るよう aria-disabled にし、横に「残り N 件のタスク」（.tree-note）と、見えない文字の押せない理由を置き、どちらも aria-describedby で結ぶ。完了したストーリー（1つ目の木の下の行）は、「＋タスク」を出さず、完了の印（.hanko）と「取り消す」（.btn.is-sm.is-quiet）を置く。", "2つ目の木は、クリア済みのエピック（.chip.is-done。完了の印と同じ役の色）、中止したエピック（.chip）、配下の無いエピック。完了か中止したエピックの期日には色を付けず、配下の「取り消す」は必ず断られるので aria-disabled にして、理由（.tree-note）を横に出す。エピックの行には区分の印を出さない（本番と同じ）。", "ストーリーの行の「親を移す」は、親なしと、完了も中止もしていないエピックから選ぶ（タスクの「親を移す」と同じダイアログ）。", "行は普通の要素（div）で、開閉は左端の caret のボタン（button.tree-caret の aria-expanded と aria-controls）だけが受け持つ。details と summary は使わない（行の中のボタンと開閉がぶつかるため）。", "ストーリーの題はボタン（button.tree-link）で、押すとダイアログが開く。行の右端の「＋タスク」（.tree-end）は、親を選んだ状態でタスクのダイアログを開く。caret、題、「＋タスク」は独立したボタンで、狭い幅（760px 以下）と指で押す画面では、見た目は変えず押せる範囲を 44px 四方以上に広げる。", "書き込めるときは、タスクの行（.entry-end）と親のないストーリーの行（.tree-end）の右に .order-actions の「上へ」「下へ」を置き、タスクの行には「親を移す」も添える。行の中で Alt と ↑ ↓ を押しても同じ。端の向きは、押した後もフォーカスが残るよう disabled でなく aria-disabled にする。狭い幅と指で押す画面では、ボタンを 44px 四方にする。"],
-    ".tree .tree-group .tree-row .is-epic .is-story .is-root .tree-caret .tree-title .tree-ratio .tree-note .tree-end .tree-children .tree-folded / .chip.is-done / button.tree-link / button.tree-caret[aria-expanded] / .order-actions .icon-btn[aria-disabled]")],
-  ["drag", "木のドラッグ", () => block("drag", "木のドラッグ（バックログの行）", "行の先頭のつまみ（.grip）をつかんで、タスクとストーリーを並べ替え、別の親へ移す。落とす位置は、行と行の間の線か、親の行の囲みで示す。",
-    `<div class="tree">${treeEpic("e1", { order: true, storyOpts: (s) => (s === "s1" ? { entryMarks: (x, i) => (i === 1 ? { drop: "after" } : undefined) } : {}) })}</div>` +
+    ["最上段はエピック、親のないストーリー、親のないタスクの順。エピックの行の題はエピックの画面へのリンク（a.tree-link）。配下が無いエピックには「ストーリーはまだありません」の1行を出す。", "右端の数は「完了 / 全体」のポイント。エピックの行は、配下のストーリーの合計。", "完了したタスクは折りたたみ、件数だけ出す。", "ストーリーの行の右端に「完了にする」（.btn.is-sm）を置く。配下に未完了のタスクが残るあいだは、押してもフォーカスが残るよう aria-disabled にし、横に「残り N 件のタスク」（.tree-note）と、見えない文字の押せない理由を置き、どちらも aria-describedby で結ぶ。完了したストーリー（1つ目の木の下の行）は、「＋タスク」を出さず、完了の印（.hanko）と「取り消す」（.btn.is-sm.is-quiet）を置く。", "2つ目の木は、完了したエピック（.chip.is-done。完了の印と同じ役の色）、中止したエピック（.chip）、配下の無いエピック。完了か中止したエピックの期日には色を付けず、配下の「取り消す」は必ず断られるので aria-disabled にして、理由（.tree-note）を横に出す。エピックの行には区分の印を出さない（本番と同じ）。", "ストーリーの行の「親を移す」は、親なしと、完了も中止もしていないエピックから選ぶ（タスクの「親を移す」と同じダイアログ）。", "行は普通の要素（div）で、開閉は左端の caret のボタン（button.tree-caret の aria-expanded と aria-controls）だけが受け持つ。details と summary は使わない（行の中のボタンと開閉がぶつかるため）。", "ストーリーの題はボタン（button.tree-link）で、押すとダイアログが開く。行の右端の「＋タスク」（.tree-end）は、親を選んだ状態でタスクのダイアログを開く。caret、題、「＋タスク」は独立したボタンで、狭い幅（760px 以下）と指で押す画面では、見た目は変えず押せる範囲を 44px 四方以上に広げる。", "書き込めるときは、タスクの行（.entry-end）とストーリーとエピックの行（.tree-end）の右に .order-actions の「上へ」「下へ」を置き（エピックは親を持たないので「親を移す」は無い）、タスクの行には「親を移す」も添える。行の中で Alt と ↑ ↓ を押しても同じ。端の向きは、押した後もフォーカスが残るよう disabled でなく aria-disabled にする。狭い幅と指で押す画面では、ボタンを 44px 四方にする。"],
+    ".tree .tree-group .tree-row .is-epic .is-story .is-root .tree-caret .tree-title .tree-ratio .tree-note .tree-end .tree-children .tree-folded / .chip.is-done / a.tree-link / button.tree-link / button.tree-caret[aria-expanded] / .order-actions .icon-btn[aria-disabled]")],
+  ["wiki", "Wiki の木とページの道筋", () => block("wiki", "Wiki の木とページの道筋", "ページの親子を、左の欄の入れ子の箇条書きで見せる。今開いているページは色に加えて太字と左の線で示し、枝は caret のボタンで開閉する。ページの上には、最上段から今のページまでの道筋を置く。画面は wiki.html（ワークスペースの Wiki と、?scope=organization の組織の Wiki）。",
+    `<div class="two"><div class="panel"><div class="panel-title"><b>ページ</b><span class="props-note">5 件</span></div><nav aria-label="見本のページ">${SQ.wikiTree([
+      { id: "d1", title: "リリースの手順", children: [{ id: "d2", title: "本番へ出す前の確認" }, { id: "d3", title: "ロールバックの手順" }] },
+      { id: "d4", title: "障害対応", children: [] }], { current: "d2", key: "cat-wiki" })}</nav></div>
+     <div class="panel"><div class="panel-title"><b>並べ替える（行ごとに「上へ」「下へ」）</b></div><nav aria-label="並べ替えの見本">${SQ.wikiTree([
+      { id: "e1", title: "リリースの手順", children: [{ id: "e2", title: "本番へ出す前の確認" }, { id: "e3", title: "ロールバックの手順" }] },
+      { id: "e4", title: "障害対応" }], { current: "e1", reorder: true, key: "cat-wiki-order" })}</nav></div></div>
+     ${SQ.wikiCrumbs("Wiki", [{ id: "d1", title: "リリースの手順" }], "本番へ出す前の確認")}
+     <div class="field"><span class="field-label">探した結果の行（題、道筋、当たった場所。今開いているページは aria-current）</span><ul class="wiki-tree panel">${SQ.wikiHit({ id: "d2", title: "本番へ出す前の確認" }, "リリースの手順 › 本番へ出す前の確認", "title", true)}${SQ.wikiHit({ id: "d3", title: "ロールバックの手順" }, "リリースの手順 › ロールバックの手順", "body")}</ul></div>`,
+    ["木は nav の中の入れ子の ul。ARIA の tree の役割は使わず（矢印キーの移動を持たない）、行は Tab で移る普通のリンクにする。枝の開閉は .tree-caret（aria-expanded と aria-controls）だけが受け持つ。", "並べ替えは、「並べ替える」を押している間だけ行に出る .order-actions のボタン（ドラッグの代わりにもなる）。先頭の「上へ」と末尾の「下へ」は aria-disabled。親を変えるときは、ページの「親を移す」のダイアログで同じ Wiki の中のページを選ぶ（自分と子孫、11 段目になる親は選べない理由を添える）。", "狭い幅（1080px 以下）では1列にして木をページの上に置き、760px 以下と指で押す画面では caret と行を 44px 以上にする。", "ページの頭の frontmatter は、題に使った title を除いた表（.table。キーは .mono）で出す。読めないときは表を出さず、警告の囲みで知らせて全文を本文として描く。"],
+    ".layout-wiki .wiki-side .wiki-main .wiki-head / .wiki-tree .wiki-node .wiki-link[aria-current] .wiki-slot / .crumbs / .tree-caret / .order-actions")],
+  ["completed", "完了の一覧", () => block("completed", "完了の一覧（バックログの折りたたみ）", "完了にしたタスクの「完了 N 件を折りたたんでいます」の行を、開閉のボタンにした部品。開くと完了した行を新しい順に並べる。",
+    `<div class="tree">${completedTasks("catalog-open", SQ.tasksWhere((x) => x.story === "s3" && x.doneAt), { open: true, title: SQ.D.stories.s3.title, status: "more" })}</div>` +
+    `<div class="cat-row"><span class="field-hint">開いた状態。末尾に「さらに見る」（20 件ずつ読む）。chevron は開くと 90 度回る</span></div>` +
+    `<div class="tree">${completedTasks("catalog-root", SQ.tasksWhere((x) => x.ws === "wa" && !x.story && x.doneAt), { root: true })}</div>` +
+    `<div class="cat-row"><span class="field-hint">閉じた状態（親のないタスク）。既定は閉じ、開いた状態は覚えない</span></div>` +
+    `<div class="tree">${completedTasks("catalog-loading", [], { open: true, root: true, status: "loading" })}</div>` +
+    `<div class="cat-row"><span class="field-hint">読み込み中。開いた時点で出す（role="status" の領域は常に置き、中身だけを替える）</span></div>` +
+    `<div class="tree">${completedTasks("catalog-failed", [], { open: true, root: true, status: "failed" })}</div>` +
+    `<div class="cat-row"><span class="field-hint">読めなかったとき。その場で「もう一度試す」</span></div>` +
+    `<div class="tree">${completedTasks("catalog-empty", [], { open: true, root: true, status: "empty" })}</div>` +
+    `<div class="cat-row"><span class="field-hint">開いて読んだ結果が 0 件（引き出しで戻した後など）</span></div>`,
+    ["閉じているときは button.tree-folded（aria-expanded と、一覧の id を指す aria-controls）。見える文言は「完了 N 件を折りたたんでいます」、開くと「完了 N 件を閉じる」。ストーリーの配下では、読み上げの名前に題を添える（「完了 N 件を折りたたんでいます（<題>）」）。開閉の印は木の caret と同じ chevron。", "開いた一覧は div.completed-list（role=\"group\"。名前は「<題>の完了した<タスク>」）。行は .entry で、題の button.entry-title（引き出しを開く）、完了した日（<time datetime>。日付は .mono）、ポイント（.pts）、担当（アバター）。つまみ（.grip）と完了の丸（.done-btn）は出さず、落とし先にもしない。", "「さらに見る」「もう一度試す」は .completed-status の .btn.is-sm。狭い幅（760px 以下）と指で押す画面では、見た目は変えず押せる範囲を 44px 四方以上に広げる。開閉のボタンは行の高さごと 44px にする。", "押したボタンが消えたら（最後まで読んだ、再試行で読めた）、フォーカスは新しく並んだ先頭の行の題へ移す。"],
+    ".tree-folded button.tree-folded[aria-expanded] / .completed-list[role=group] .completed-status / button.entry-title / time .mono")],
+  ["drag", "木のドラッグ", () => block("drag", "木のドラッグ（バックログの行）", "行の先頭のつまみ（.grip）をつかんで、エピック、ストーリー、タスクを並べ替え、ストーリーとタスクを別の親へ移す。落とす位置は、行と行の間の線か、親の行の囲みで示す。",
+    `<div class="tree">${treeEpic("e1", { order: { first: true }, storyOpts: (s) => (s === "s1" ? { entryMarks: (x, i) => (i === 1 ? { drop: "after" } : undefined) } : {}) })}</div>` +
     `<div class="cat-row"><span class="field-hint">${t("task")}の行の下の線。開いた${t("story")}の中なので、${t("task")}の字下げから始まる</span></div>` +
-    `<div class="tree">${treeEpic("e1", { order: true, storyOpts: (s) => (s === "s2" ? { mark: { drop: "before" } } : {}) })}</div>` +
+    `<div class="tree">${treeEpic("e1", { order: { first: true }, storyOpts: (s) => (s === "s2" ? { mark: { drop: "before" } } : {}) })}</div>` +
     `<div class="cat-row"><span class="field-hint">次の${t("story")}の前の線。${t("story")}の字下げから始まるので、上の線（最後の${t("task")}の下）と見分けられる</span></div>` +
     `<div class="tree">${treeStory("s4", true, { order: { first: true, last: true, parent: true }, mark: { drop: "into" } })}</div>` +
     `<div class="cat-row"><span class="field-hint">親の行の囲み。離すと、その配下の末尾に入る（畳まれていれば開く）</span></div>` +
+    `<div class="tree">${treeEpic("e1", { order: { first: true }, key: "e1-drag", mark: { drop: "after" } })}${treeEpic("e2", { order: { last: true }, key: "e2-drag" })}</div>` +
+    `<div class="cat-row"><span class="field-hint">${t("epic")}を運ぶときの、${t("epic")}の塊の後ろの線。${t("epic")}の段の字下げから始まり、開いた配下の途中には入らない。${t("epic")}は${t("epic")}の行の前後にだけ落とせる</span></div>` +
+    `<div class="tree">${treeEpic("e2", { order: { last: true }, key: "e2-into", mark: { drop: "into" } })}</div>` +
+    `<div class="cat-row"><span class="field-hint">${t("story")}を運ぶときの、${t("epic")}の行の囲み。${t("epic")}を運ぶときは出さず、行の上半分か下半分で前後の線になる</span></div>` +
     `<div class="tree">${treeStory("s3", true, { order: { first: true, last: true, parent: true }, tailMark: { drop: "before" } })}</div>` +
     `<div class="cat-row"><span class="field-hint">「完了 N 件を折りたたんでいます」の行の前後は、その配下の末尾として扱う</span></div>` +
     `<div class="tree">${treeStory("s2", true, { order: { first: true, last: true, parent: true }, entryMarks: (x, i) => (i === 0 ? { state: "is-dragging" } : { state: "is-dropped" }) })}</div>` +
     `<div class="cat-row"><button class="btn is-sm" type="button" data-replay-flash>${icon("redo")}もう一度光らせる</button><span class="field-hint">1行目はつかんだ行（元の位置で薄くする）、2行目は落とした行（背景を戻しながら光る）</span></div>` +
     `<div class="tree">${treeStory("s1", true, { order: { first: true, last: true, parent: true } })}<div class="tree-slot"><div class="dropzone is-over">${icon("swap")}<span class="dropzone-text"><b>親なしの${t("task")}へ移す</b></span></div></div></div>` +
     `<div class="cat-row"><span class="field-hint">親なしの段が空のとき、行をつかんでいる間だけ出す落とし先（.tree-slot の中の .dropzone）。重ねると .is-over で囲み、離すと親なしの末尾に入る。つかんでいないときは出さない</span></div>`,
-    ["つかむ場所は行の先頭のつまみ（.grip。飾りで aria-hidden）だけ。題の文字は選べ、ボタンを押すつもりで動き出さない。キーボードと読み上げの人は、行の「上へ」「下へ」と Alt と ↑ ↓ を使う。", "つまみの列は、書き込めるときだけ行（.entry、.tree-row）に .has-grip を付けて空ける。つかめない行（完了にした直後の行、エピックの行）は .grip.is-off で列だけ空ける。狭い幅（760px 以下）と指で押す画面（pointer: coarse）では、つまみを出さず、列も空けない。", "落とす位置は [data-drop] で示す。before と after は行と行の間の線（--color-accent の 2px と左端の小さな丸）で、その行の字下げ（--row-indent）から始める。into は親の行（タスクを運ぶときのストーリーの行、ストーリーを運ぶときのエピックの行）の囲みで、.dropzone.is-over と同じ --color-accent の枠と --color-accent-soft の地。落とせない場所には何も示さない。", "親なしの段（親なしのタスク、親のないストーリー）が空のときは、その種類の行をつかんでいる間だけ、段の場所に落とし先（.tree-slot の .dropzone）を出す。", "つかんだ行は元の位置で薄くする（.is-dragging）。落とした行は、背景を --color-accent-soft から地の色へ約 0.8 秒（--duration-flash）で戻し、--color-accent の 1px の枠も同じ長さで消して光らせる（.is-dropped。地と accent-soft の差が小さいテーマでも見えるように）。prefers-reduced-motion のときは光らせず、薄くするのも切り替えだけにする。", "並べ替えの案内（.action-note）のうち、つまみのドラッグに触れる文は .drag-note に入れ、つまみを出さない条件（狭い幅と指で押す画面）では隠す。", "色は既存のトークンだけで、4つのテーマに新しい色は足さない。"],
+    ["つかむ場所は行の先頭のつまみ（.grip。飾りで aria-hidden）だけ。題の文字は選べ、ボタンを押すつもりで動き出さない。キーボードと読み上げの人は、行の「上へ」「下へ」と Alt と ↑ ↓ を使う。", "つまみの列は、書き込めるときだけ行（.entry、.tree-row）に .has-grip を付けて空ける。つかめない行（完了にした直後の行）は .grip.is-off で列だけ空ける。狭い幅（760px 以下）と指で押す画面（pointer: coarse）では、つまみを出さず、列も空けない。", "落とす位置は [data-drop] で示す。before と after は行と行の間の線（--color-accent の 2px と左端の小さな丸）で、その行の字下げ（--row-indent）から始める。into は親の行（タスクを運ぶときのストーリーの行、ストーリーを運ぶときのエピックの行）の囲みで、.dropzone.is-over と同じ --color-accent の枠と --color-accent-soft の地。落とせない場所には何も示さない。", "エピックは親を持たず、エピックの段（完了と中止したエピックも含む）の中で並べ替える。運ぶときはエピックの行の前後にだけ線を出し、線は配下を含めた塊（.tree-group）の上端と下端に、エピックの段の字下げから引く。エピックの行の真ん中に重ねても囲みは出さない（囲みはストーリーを運ぶときだけ）。ストーリー、タスク、折りたたみの行、親なしの段の落とし先には何も示さない。", "親なしの段（親なしのタスク、親のないストーリー）が空のときは、その種類の行をつかんでいる間だけ、段の場所に落とし先（.tree-slot の .dropzone）を出す。", "つかんだ行は元の位置で薄くする（.is-dragging）。落とした行は、背景を --color-accent-soft から地の色へ約 0.8 秒（--duration-flash）で戻し、--color-accent の 1px の枠も同じ長さで消して光らせる（.is-dropped。地と accent-soft の差が小さいテーマでも見えるように）。prefers-reduced-motion のときは光らせず、薄くするのも切り替えだけにする。", "並べ替えの案内（.action-note）のうち、つまみのドラッグに触れる文は .drag-note に入れ、つまみを出さない条件（狭い幅と指で押す画面）では隠す。", "色は既存のトークンだけで、4つのテーマに新しい色は足さない。"],
     ".grip .grip.is-off / .entry.has-grip .tree-row.has-grip / [data-drop=before] [data-drop=after] [data-drop=into] / .tree-slot .dropzone.is-over / .is-dragging .is-dropped / .action-note .drag-note")],
   ["notices", "貼り紙", () => block("notices", "貼り紙", "掲示する物（スプリントゴール、レイド）は、上辺に太い線を引いた紙として見せる。レイドは金、クリア済みは朱。",
     `<div class="notice-grid">${sprintNotice("sp14")}${raidNotice("e1")}${raidNotice("e2", { cleared: true })}</div>`,
-    ["依頼主の名前の横に朱の「印」を添える。", "クリアしたレイドには「済」の判子を押す。"], ".notice .is-raid .is-cleared / .notice-label .notice-title .notice-meta .notice-facts .notice-foot / .day-ticks / .progress / .seal")],
+    ["依頼主の名前の横に朱の「印」を添える。", "クリアしたレイドには「済」の判子を押す。", "スプリントゴールの文（.notice-title.is-goal）は、書いた改行を残し（white-space: pre-line）、長い語は折り返す。ゴールを書かずに始めたスプリントは、貼り紙を出さない。"], ".notice .is-raid .is-cleared / .notice-label .notice-title .notice-title.is-goal .notice-meta .notice-facts .notice-foot / .day-ticks / .progress / .seal")],
   ["records", "記録", () => block("records", "記録（レベルと積載量）", "計器の見た目。経験値のゲージは10の目盛り、積載量は5%の目盛りで、許容幅の両端を縦線で示す。",
     `<div class="two">${levelPanel()}<section class="panel"><div class="panel-title"><b>${t("capacity")}</b>判定の5つ</div>${capacityRows()}${load("社内ツール", "配分 40%", 30.4, 30.0, { lead: avatarOf("u1") })}</section></div>` +
     `<div class="cat-row">${SQ.teamXp()}<span class="field-hint">チーム全体の経験値（バックログの画面の見出しの中）</span></div>` +
     `<div class="cat-row">${SQ.xpDelta(30)}${SQ.xpDelta(10)}${SQ.xpDelta(-20)}<span class="field-hint">経験値の明細の値（打ち消しは負の値）</span></div>`,
-    ["判定は重量オーバー（赤）、範囲内（藍）、余力あり（緑）、未見積もりあり（灰）、配分未設定（斜線）。必ず文字を添える。", "未見積もりのタスクが1件でもあれば、余力ありの色は付けない。", "時間は0.1時間に丸めて出す。", "チーム全体の経験値は、ワークスペースの全員の合計の1つの数だけを出し、人ごとの値は出さない。画面の見出しの中、集計の下に置く（.team-xp）。", "経験値の明細の値は、付与を経験値の色で「+」を付け、打ち消しを赤の負の値で出す（.xp-delta .is-minus）。"],
-    ".panel .panel-title / .level .emblem .xp-num .xp-sub / .gauge .gauge-got .gauge-soon .legend / .breakdown / .team-xp / .xp-delta .is-minus / .load .cap .is-over .is-free .is-unknown .is-unset .cap-band .cap-fill .verdict")],
+    ["判定は重量オーバー（赤）、範囲内（藍）、余力あり（緑）、未見積もりあり（灰）、配分未設定（斜線）。必ず文字を添える。", "未見積もりのタスクが1件でもあれば、余力ありの色は付けない。", "時間は0.1時間に丸めて出す。", "レベルの面の末尾に、受け取った感謝の数を .breakdown の1行で出す（題の前に感謝のアイコン heart。role=group で名前を付けた div で包む。levelThanks）。", "チーム全体の経験値は、ワークスペースの全員の合計の1つの数だけを出し、人ごとの値は出さない。画面の見出しの中、集計の下に置く（.team-xp）。", "経験値の明細の値は、付与を経験値の色で「+」を付け、打ち消しを赤の負の値で出す（.xp-delta .is-minus）。", "経験値のゲージは、両端に今のレベルと次のレベルの数字を置く（.gauge-end。次のレベルは .is-next。読み上げから外す）。塗りは置かれたときに1回だけ 0 から伸び、伸びる間だけ先端に短い光の線が出る。動きを減らす設定では、伸びも光も出さずに今の値で出る。読み込みに失敗した後の「もう一度試す」で出した面は、読み直しなので .gauge に .is-still を付けて伸ばさず、今の値で出す。"],
+    ".panel .panel-title / .level .emblem .xp-num .xp-sub / .gauge-row .gauge-end .is-next .gauge .is-still .gauge-got .gauge-soon .legend / .breakdown / .team-xp / .xp-delta .is-minus / .load .cap .is-over .is-free .is-unknown .is-unset .cap-band .cap-fill .verdict")],
   ["plan", "速度とレーン", () => block("plan", "速度とレーン", "計画の画面の部品。ベロシティの棒は、除外した回を斜線で示す。レーンは1本のスプリントで、入れたポイントとベロシティを比べる。",
     `<div class="panel"><div class="velocity"><div class="stat"><span class="stat-label">ベロシティ</span><span class="stat-num">31.7<small>pt</small></span></div>
-      <div><div class="bars"><span class="bars-avg" style="bottom:63px"><span>平均 31.7</span></span><div class="bar-col"><b>32</b><i style="height:64px"></i></div><div class="bar-col is-excluded"><b>41</b><i style="height:82px"></i></div><div class="bar-col"><b>29</b><i style="height:58px"></i></div></div>
-      <div class="bars-labels"><span>第11回</span><span>第12回<br>延長・除外</span><span>第13回</span></div></div></div></div>
+      <div><div class="bars"><span class="bars-avg" style="bottom:63px"></span><div class="bar-col"><b>32</b><i style="height:64px"></i></div><div class="bar-col is-excluded"><b>41</b><i style="height:82px"></i></div><div class="bar-col"><b>29</b><i style="height:58px"></i></div></div>
+      <div class="bars-labels"><span>第11回</span><span>第12回<br>延長・除外</span><span>第13回</span></div><p class="bars-legend"><i aria-hidden="true"></i>平均 31.7</p></div></div></div>
      <div class="lanes" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))"><section class="lane is-active"><div class="lane-head"><h3 class="lane-title">${SQ.sprintLabel("sp14")}</h3><span class="chip is-ok">進行中</span></div>
+      <p class="lane-goal"><span class="lane-goal-label">${t("sprintGoal")}</span>${esc(D.sprints.sp14.goal)}</p>
       <div class="lane-fill"><div class="lane-fill-bar"><span style="width:62%"></span><i style="left:80%"></i></div><div class="lane-fill-text"><span>入れた 25 pt</span><span>ベロシティ 31.7</span></div></div>
-      <div class="lane-row">${pts(5)}<a href="#" data-task="t1">ポイント付与のバッチを作る</a>${avatarOf("u1")}</div><div class="lane-row">${pts(null)}<a href="#" data-task="t13">ポイント失効の通知メールを作る</a>${avatarOf(null)}</div></section></div>`,
-    null, ".velocity .stat .stat-label .stat-num / .bars .bars-avg .bar-col .is-excluded .bars-labels / .lanes .lane .is-active .lane-head .lane-title .lane-sub .lane-fill .lane-fill-bar .is-over .lane-row")],
+      <div class="lane-row">${pts(5)}<a href="#" data-task="t1">ポイント付与のバッチを作る</a><span class="lane-row-end">${avatarOf("u1")}<button class="icon-btn" type="button" aria-label="外す: ポイント付与のバッチを作る" title="外す">${icon("x")}</button></span></div>
+      <div class="lane-row">${pts(null)}<a href="#" data-task="t13">ポイント失効の通知メールを作る</a><span class="lane-row-end">${avatarOf(null)}<button class="icon-btn" type="button" aria-label="外す: ポイント失効の通知メールを作る" title="外す">${icon("x")}</button></span></div>
+      <div class="lane-row is-done">${pts(2)}<a href="#" data-task="t7">タイムアウトの閾値を見直す</a><span class="lane-row-end"><span class="hanko" role="img" aria-label="タイムアウトの閾値を見直す: ${t("done")}">${icon("check")}<b>完</b></span>${avatarOf("u4")}<span class="lane-row-slot" aria-hidden="true"></span></span></div>
+      <button class="btn is-sm" type="button" data-dialog="sprintTaskAdd">${icon("plus")}${t("backlog")}から入れる</button></section></div>`,
+    ["入っているタスクは .lane-row（ポイント、タイトル、右端の .lane-row-end）。右端は担当と「外す」（.icon-btn。狭い幅と指で押す画面では 44px 四方）。完了したタスクは .lane-row.is-done で薄くし、担当の左に完了の印（.hanko。読み上げは「<題>: 完了」）を置き、「外す」の代わりに同じ幅の空き（.lane-row-slot）を置いて担当の位置をそろえる。", "「<バックログ>から入れる」はスプリントに入れるダイアログを開く。ストーリーを見出し（.pick-row.is-head）にして配下を字下げした行（.pick-row.is-child）で並べ、一覧（.pick-list）は高さに上限を付けて中でスクロールする。足元に選んだ件数（.pick-count）と主ボタン。"],
+    ".velocity .stat .stat-label .stat-num / .bars .bars-avg .bars-legend .bar-col .is-excluded .bars-labels / .lanes .lane .is-active .lane-head .lane-title .lane-sub .lane-goal .lane-goal-label .lane-fill .lane-fill-bar .is-over .lane-row .lane-row-end .lane-row-slot / .pick-list .pick-group .pick-row .is-head .is-child .pick-meta .pick-empty .pick-count")],
   ["table", "表", () => block("table", "表", "数が並ぶ一覧は表にする。数の列は右に揃える。",
     `<div class="table-wrap"><table class="table"><thead><tr><th>${t("epic")}</th><th class="is-num">残り（pt）</th><th>進み</th><th>${t("due")}</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
       <tbody>${Object.keys(D.epics).map((id) => { const p = SQ.epicPts(id); return `<tr><td><a href="epic.html">${SQ.esc(D.epics[id].title)}</a></td><td class="is-num">${p.all - p.done}</td><td>${progress(p.done, p.all)}</td><td>${dueChip(D.epics[id].due)}</td><td class="is-actions"><button class="btn is-sm is-quiet" type="button">開く</button></td></tr>`; }).join("")}</tbody></table></div>
@@ -362,12 +447,13 @@ const SECTIONS = [
     <div class="table-wrap"><table class="table is-stacked"><thead><tr><th>日時</th><th>した人</th><th>内容</th></tr></thead>
       <tbody><tr><td class="mono">2026/10/18 14:02</td><td data-label="した人"><span class="person is-wrap">${avatarOf("u1")}ミナト</span></td><td class="is-wrap" data-label="内容">${t("workspace")}「${"W".repeat(50)}」を作りました</td></tr></tbody></table></div>
     <div class="table-wrap"><table class="table is-stacked"><thead><tr><th class="is-name">名前</th><th>作った日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
-      <tbody><tr><td class="is-name">あおば開発<br><span class="mono props-note">aoba</span></td><td class="mono" data-label="作った日">2026/10/01&nbsp;18:30</td><td class="is-actions"><span class="table-actions"><button class="btn is-sm is-quiet is-danger" type="button">停止する</button></span></td></tr>
-        <tr><td class="is-name">かもめ社 <span class="chip is-warn">停止 2026-10-10</span> <span class="chip is-danger">${icon("alert")}${t("admin")}の招待の URL は期限切れ</span><br><span class="mono props-note">kamome</span></td><td class="mono" data-label="作った日">2026/06/01&nbsp;09:00</td><td class="is-actions"><span class="table-actions"><button class="btn is-sm is-quiet" type="button">停止の理由を変える</button><button class="btn is-sm is-quiet" type="button">再開する</button></span></td></tr></tbody></table></div>
+      <tbody><tr><td class="is-name">あおば開発<br><span class="mono props-note">aoba</span></td><td class="mono" data-label="作った日">2026/10/01&nbsp;18:30</td><td class="is-actions"><span class="table-actions is-wrap"><button class="btn is-sm is-quiet" type="button">${t("admin")}を指名</button><button class="btn is-sm is-quiet is-danger" type="button">停止する</button></span></td></tr>
+        <tr><td class="is-name">かもめ社 <span class="chip is-warn">停止 2026-10-10</span> <span class="chip is-danger">${icon("alert")}${t("admin")}の招待の URL は期限切れ</span><br><span class="mono props-note">kamome</span></td><td class="mono" data-label="作った日">2026/06/01&nbsp;09:00</td><td class="is-actions"><span class="table-actions is-wrap"><button class="btn is-sm is-quiet" type="button">${t("admin")}を指名</button><button class="btn is-sm is-quiet" type="button">停止の理由を変える</button><button class="btn is-sm is-quiet" type="button">再開する</button></span></td></tr>
+        <tr><td class="is-name">きり製作所 <span class="chip is-warn">停止 2026-09-10</span> <span class="chip is-danger">2026-10-10 に消す</span><br><span class="mono props-note">kiri</span></td><td class="mono" data-label="作った日">2026/05/20&nbsp;13:10</td><td class="is-actions"><span class="table-actions is-wrap"><span class="props-note">消す予定日を過ぎたので、再開も停止の理由の切り替えも${t("admin")}の指名もできません</span></span></td></tr></tbody></table></div>
     <div class="table-wrap"><table class="table is-stacked"><thead><tr><th class="is-name">名前</th><th>ロール</th><th>参加日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
       <tbody><tr><td class="is-name"><span class="person is-wrap">${avatarOf("u1")}ミナト</span></td><td data-label="ロール"><select class="select" aria-label="ミナトのロール"><option selected>${t("leader")}</option><option>一般</option></select></td><td class="mono" data-label="参加日">2026-10-01</td><td class="is-actions"><button class="btn is-sm is-quiet" type="button">抜ける</button></td></tr>
         <tr><td class="is-name"><span class="person is-wrap">${avatarOf("u2")}ハルカ</span></td><td data-label="ロール"><select class="select" aria-label="ハルカのロール" aria-disabled="true"><option>${t("leader")}</option><option selected>一般</option></select></td><td class="mono" data-label="参加日">2026-10-01</td><td class="is-actions"><button class="btn is-sm is-quiet is-danger" type="button">外す</button></td></tr></tbody></table></div>`,
-    ["表の見出しの下は二重罫。", "名前の列には is-name を付ける（th と td の両方）。名前が1字ずつ折れるほど縮まないよう最小幅を持ち、足りない幅は .table-wrap の横スクロールで受ける。", "利用者が付けた長い名前（空白の無い30字以上、メールアドレスなど）が入る列は、人の名前に .person.is-wrap、等幅の文字に .mono.is-wrap を付けて折り返す（下の表）。付けた列だけが縮み、右の列を押し出さない。.mono.is-wrap の列には is-name を付けない（最小幅が、幅の狭い画面で表をはみ出させるため）。代わりに .mono.is-wrap は 6 文字分の最小幅を持つ。", "利用者が付けた名前を文の中に含む本文のセル（変更の履歴の内容）は、td に is-wrap を付けて、空白の無い長い名前も途中で折る（3つ目の表）。12 文字分の最小幅を持つ。", "行ごとの操作の列には is-actions を付ける（th と td の両方）。狭い幅で表が横にはみ出しても、操作を右端に固定して隠さない。", "狭い幅と指で押す画面では、表の中の小さいボタン（.btn.is-sm）も 44px 四方以上にする。", "操作が2つ並ぶ行がある表は、table に is-stacked を付け、操作を .table-actions で包む（4つ目の表）。操作の列が無くても、狭い幅で列に収まらない文の列を持つ表（変更の履歴。3つ目の表）にも is-stacked を付ける。760px 以下では列をやめ、1行を縦に積む（名前、ほかの列、操作の順）。固定した操作の列が名前の列を覆わず、文の列が数字ずつに縮まない。見出しの行は見えなくし、名前以外の td には data-label に列の名前を入れて、値の前に出す。", "名前の列（is-name）の印（.chip）は、長い文でも列の幅で折り返す。積んだ行でも、印は右端で切れずに折り返す。", "行の中の選択欄（.select。メンバーのロールなど）は、列が縮んでも選んだ値が読めるよう中身の幅を保ち、行の高さに合わせて小さくする。狭い幅と指で押す画面では 44px の高さにする。選択欄と操作のボタンが並ぶ表も is-stacked にする（最後の表。ロールの選択欄と「抜ける」「外す」）。送っている間の選択欄は aria-disabled にし、.btn と同じく薄くして押せない形にする（2行目）。"], ".table-wrap .table .is-num .is-name .is-actions .person.is-wrap .mono.is-wrap td.is-wrap .table.is-stacked .table-actions .table .select")],
+    ["表の見出しの下は二重罫。", "名前の列には is-name を付ける（th と td の両方）。名前が1字ずつ折れるほど縮まないよう最小幅を持ち、足りない幅は .table-wrap の横スクロールで受ける。", "利用者が付けた長い名前（空白の無い30字以上、メールアドレスなど）が入る列は、人の名前に .person.is-wrap、等幅の文字に .mono.is-wrap を付けて折り返す（下の表）。付けた列だけが縮み、右の列を押し出さない。.mono.is-wrap の列には is-name を付けない（最小幅が、幅の狭い画面で表をはみ出させるため）。代わりに .mono.is-wrap は 6 文字分の最小幅を持つ。", "利用者が付けた名前を文の中に含む本文のセル（変更の履歴の内容）は、td に is-wrap を付けて、空白の無い長い名前も途中で折る（3つ目の表）。12 文字分の最小幅を持つ。", "行ごとの操作の列には is-actions を付ける（th と td の両方）。狭い幅で表が横にはみ出しても、操作を右端に固定して隠さない。", "狭い幅と指で押す画面では、表の中の小さいボタン（.btn.is-sm）も 44px 四方以上にする。", "操作が2つ並ぶ行がある表は、table に is-stacked を付け、操作を .table-actions で包む（4つ目の表）。操作の列が無くても、狭い幅で列に収まらない文の列を持つ表（変更の履歴。3つ目の表）にも is-stacked を付ける。760px 以下では列をやめ、1行を縦に積む（名前、ほかの列、操作の順）。固定した操作の列が名前の列を覆わず、文の列が数字ずつに縮まない。見出しの行は見えなくし、名前以外の td には data-label に列の名前を入れて、値の前に出す。", "操作が3つ並ぶ行がある表（運用の組織の一覧。4つ目の表）は、.table-actions に is-wrap を付ける。表の幅が足りないときは操作の列を広げずにボタンを折り返し、足りていれば1行に並ぶ。", "行の状態のせいで操作を出せないときは、ボタンを消すだけにせず、.table-actions の中に .props-note で理由を出す（4つ目の表の3行目。消す予定日を過ぎた組織）。注記はボタンの高さの中央に置き、操作の列の折り返さない指定を継がずに、狭い幅では折り返す。注記だけの行で縦長に潰れないよう、16em の最小の幅を持つ。","名前の列（is-name）の印（.chip）は、長い文でも列の幅で折り返す。積んだ行でも、印は右端で切れずに折り返す。", "行の中の選択欄（.select。メンバーのロールなど）は、列が縮んでも選んだ値が読めるよう中身の幅を保ち、行の高さに合わせて小さくする。狭い幅と指で押す画面では 44px の高さにする。選択欄と操作のボタンが並ぶ表も is-stacked にする（最後の表。ロールの選択欄と「抜ける」「外す」）。送っている間の選択欄は aria-disabled にし、.btn と同じく薄くして押せない形にする（2行目）。"], ".table-wrap .table .is-num .is-name .is-actions .person.is-wrap .mono.is-wrap td.is-wrap .table.is-stacked .table-actions .table-actions.is-wrap .table-actions .props-note .table .select")],
   ["party-list", "一覧の行", () => block("party-list", "一覧の行", "列の見出しが要らない短い一覧（休日、休み、討伐隊）。1行に日付や人と名前を並べ、操作は右端に寄せる。",
     `<ul class="party-list" aria-label="登録した休日">
       <li><span class="mono">2026-11-03</span><span class="party-list-text">文化の日</span><button class="icon-btn is-danger party-list-end" type="button" aria-label="2026-11-03 を消す">${icon("trash")}</button></li>
@@ -379,7 +465,12 @@ const SECTIONS = [
     `<div class="cat-row">
       <button class="btn" type="button" data-dialog="sprintCreate">${t("sprint")}を作る</button>
       <button class="btn" type="button" data-dialog="sprintStart">${t("sprint")}を始める</button>
+      <button class="btn" type="button" data-dialog="sprintStart" data-state="active">${t("sprint")}を始める（進行中が既にある）</button>
+      <button class="btn" type="button" data-dialog="sprintStart" data-state="ended">${t("sprint")}を始める（最終日を過ぎている）</button>
+      <button class="btn" type="button" data-dialog="sprintStart" data-state="toolong">${t("sprint")}を始める（ゴールが長すぎる）</button>
       <button class="btn" type="button" data-dialog="sprintExtend">${t("sprint")}を延ばす</button>
+      <button class="btn" type="button" data-dialog="sprintExtend" data-state="none">${t("sprint")}を延ばす（後ろが動かない）</button>
+      <button class="btn" type="button" data-dialog="sprintEditActive">${t("sprint")}を直す（進行中）</button>
       <button class="btn" type="button" data-dialog="sprintEnd">${t("sprint")}を終える</button>
       <button class="btn" type="button" data-dialog="createTask">${t("create")}</button>
       <button class="btn" type="button" data-dialog="moveTask">親を移す</button>
@@ -413,32 +504,53 @@ const SECTIONS = [
     `<div class="two">
       <div class="field"><span class="field-label">並んだ選択肢（segmented）</span><div class="segmented" role="radiogroup"><label><input type="radio" name="cs" checked><span>完了した月</span></label><label><input type="radio" name="cs"><span>計上月</span></label></div></div>
       <div class="field"><span class="field-label">スイッチ</span><label class="toggle"><input type="checkbox" checked><span>月ごとに計上する</span></label></div>
+      <div class="field"><span class="field-label">押せないスイッチ</span><label class="toggle"><input type="checkbox" disabled aria-describedby="c-toggle-off"><span>${t("admin")}にする</span></label><span class="field-hint" id="c-toggle-off">無効の人は${t("admin")}に指名できません</span></div>
       <div class="field"><span class="field-label">曜日</span><div class="weekdays">${["日", "月", "火", "水", "木", "金", "土"].map((w, i) => `<label><input type="checkbox" ${i > 0 && i < 6 ? "checked" : ""} aria-label="${w}曜日"><span>${w}</span></label>`).join("")}</div></div>
       <div class="choice-list"><label class="choice"><input type="radio" name="cc" checked><div><b>次の${t("sprint")}へ持ち越す</b><span>同じ${t("task")}をそのまま移します。</span></div></label><label class="choice"><input type="radio" name="cc"><div><b>${t("backlog")}へ戻す</b><span>どの${t("sprint")}にも入っていない状態にします。</span></div></label></div>
       <div class="field"><span class="field-label" id="cc-off-label">選べない choice</span><div class="choice-list" role="radiogroup" aria-labelledby="cc-off-label"><label class="choice"><input type="radio" name="cc-off" checked><div><b>配下を親なしで残す</b><span>${t("task")} 3 件は親なしの${t("task")}として末尾へ移ります。</span></div></label><label class="choice"><input type="radio" name="cc-off" disabled aria-describedby="cc-off-hint"><div><b>配下もまとめて削除する</b><span>${t("task")} 3 件を削除します。</span></div></label></div><span class="field-hint" id="cc-off-hint">配下に他の人が作ったものがあるため、まとめて削除できるのは${t("leader")}だけです。</span></div>
+      <div class="field"><span class="field-label" id="cc-tier-label">${t("reward")}の段階</span><div class="choice-list" role="radiogroup" aria-labelledby="cc-tier-label"><label class="choice"><input type="radio" name="cc-tier"><div>${tier("small")}</div></label><label class="choice"><input type="radio" name="cc-tier" checked><div>${tier("medium")}</div></label><label class="choice"><input type="radio" name="cc-tier"><div>${tier("large")}</div></label></div></div>
       <div class="choice-list"><a class="choice" href="#choices"><div><b>あおば開発</b><span class="mono">scrum-guild.dev/aoba/</span><span>${t("workspace")} 2</span></div><span class="chip">${t("admin")}</span></a></div>
       <div class="choice-list"><a class="choice" href="#choices"><div><b>ひばり工房</b><span>承諾待ちの招待があります</span></div></a></div>
       <div class="choice-list"><div class="choice is-static"><div><b>デザイン相談室</b><span>ひばり工房・リンさんから・一般・2026-10-19</span><div class="form-actions"><button class="btn is-primary is-sm" type="button">承諾する</button><button class="btn is-quiet is-sm" type="button">辞退する</button></div></div></div></div>
+      <div class="field"><label class="choice is-static is-consent"><input type="checkbox"><span>${t("consentCheckLabel")}</span></label><div class="form-actions"><button class="btn is-primary" type="button" aria-disabled="true" aria-describedby="cc-consent-hint">${t("consentSubmit")}</button></div><span class="field-hint is-reserved" id="cc-consent-hint">${t("consentSubmitHint")}</span></div>
+      <div class="field"><label class="choice is-static is-consent"><input type="checkbox" checked><span>${t("consentCheckLabel")}</span></label><div class="form-actions"><button class="btn is-primary" type="button" aria-disabled="false">${t("consentSubmit")}</button></div><span class="field-hint is-reserved" aria-hidden="true">${t("consentSubmitHint")}</span></div>
       <div class="field"><span class="field-label">押せない segmented</span><div class="segmented" role="radiogroup" aria-label="押せない例"><label><input type="radio" name="cs-off" checked disabled><span>GitHub</span></label><label><input type="radio" name="cs-off" disabled><span>Google</span></label></div></div>
       ${SQ.loginTarget("cat-login", { hints: { github: "GitHub のユーザー ID に解決して招待します。", google: "招待の URL を作り、本人がそこから Google でログインすると入れます。" } })}
     </div>`,
-    ["2〜7個の短い選択肢は segmented、説明が要る選択肢は choice、その場で効くオンとオフはスイッチ。", "押すとすぐ移る選択肢（組織の選択）は a.choice にする。ラジオを持たず、行の全体がリンクになる。", "選べない choice は input に disabled を付ける（.choice:has(input:disabled) が薄くする）。選べない理由は選択肢の下の .field-hint に出し、input の aria-describedby で結ぶ（エピックとストーリーの削除の確認の「まとめて削除する」）。","組織の選択の届いた招待は、その組織の招待の画面へ移る a.choice にする。", "行の中に操作を置く行（招待の画面の届いた招待。承諾する、辞退する）は .choice.is-static にし、操作は中の .form-actions に並べる。記録の面の .panel は光るので、ここには使わない。","招待と管理者の指名で人を指す欄は loginTarget。先に手段を選び、選んだ手段に合わせて欄の名前、例、説明を差し替える。"], ".segmented / .toggle / .weekdays / .choice-list .choice / .choice:has(input:disabled) / a.choice / .choice.is-static / SQ.loginTarget")],
-  ["org-menu", "組織の切り替え", () => block("org-menu", "組織の切り替え", "左のメニューの上（ブランドの下）に置く。開閉するメニューで、中は各組織へのリンクと、最後に組織の選択の画面へ戻るリンク。入れる組織が2つ以上、または届いた招待があるときだけ出す。",
+    ["2〜7個の短い選択肢は segmented、説明が要る選択肢は choice、その場で効くオンとオフはスイッチ。", "押すとすぐ移る選択肢（組織の選択）は a.choice にする。ラジオを持たず、行の全体がリンクになる。", "選択肢にクリア報酬の段階を並べるときは、choice の中に tier の印を置く（エピックの画面の「クリア報酬を変える」）。額の数字は .choice .tier b が印の中で続けて読ませる。", "選べない choice は input に disabled を付ける（.choice:has(input:disabled) が薄くする）。選べない理由は選択肢の下の .field-hint に出し、input の aria-describedby で結ぶ（エピックとストーリーの削除の確認の「まとめて削除する」）。","組織の選択の届いた招待は、その組織の招待の画面へ移る a.choice にする。", "行の中に操作を置く行（招待の画面の届いた招待。承諾する、辞退する）は .choice.is-static にし、操作は中の .form-actions に並べる。記録の面の .panel は光るので、ここには使わない。","招待と管理者の指名で人を指す欄は loginTarget。先に手段を選び、選んだ手段に合わせて欄の名前、例、説明を差し替える。", "確認して行う操作そのものの文（同意の画面の主文）は label.choice.is-static.is-consent にする。補足の小さく薄い字ではなく、本文と同じ大きさと色で出す。文は label の直接の子の span に置く。押せない理由の説明（.field-hint）は、チェックボックスでなくボタンの aria-describedby で結ぶ。押せるようになったら aria-describedby を外し、説明は .is-reserved に aria-hidden=\"true\" を付けて文を描いたまま隠す（行数に頼らず高さが残り、縦中央の紙が動かない）。", "状態として押せないスイッチ（無効のユーザーの管理者の印）は input に disabled を付け、送っている間の aria-disabled と同じく薄く出す。理由は aria-describedby で結ぶ（組織の管理のユーザーの表では、読み上げだけの文にする）。表のセルのスイッチは、狭い幅と指で押す画面で包む label を 44px 四方にする。"], ".segmented / .toggle / .toggle input:disabled / .table .toggle / .weekdays / .choice-list .choice / .choice:has(input:disabled) / a.choice / .choice.is-static / .choice.is-consent / .field-hint.is-reserved / SQ.loginTarget")],
+  ["org-menu", "組織の切り替え", () => block("org-menu", "組織の切り替え", "左のメニューの上（ブランドの下）に置く。開閉するメニューで、中は各組織へのリンクと、組織の選択の画面へ戻るリンクと、「組織を作る」（自分の組織の作成のダイアログを開く）、最後に「自分用を作る」（自分用を持たない人にだけ。自分用の作成のダイアログを開く）。自分用の組織は名前の代わりに「自分用」と出す。切り替えは入れる組織の数によらず出す。戻るリンクは、入れる組織が2つ以上、または届いた招待があるときだけ出す。",
     `<div class="two"><div class="field"><span class="field-label">閉じているとき（招待なし）</span><div style="max-width:240px">${SQ.orgMenuHtml({ open: false, id: "cat-org-menu-closed", live: false, invited: false })}</div></div>
       <div class="field"><span class="field-label">開いているとき（今の組織に aria-current="page" とチェック）</span><div style="max-width:240px">${SQ.orgMenuHtml({ open: true, id: "cat-org-menu-open", live: false, invited: false })}</div></div>
       <div class="field"><span class="field-label">1組織と届いた招待（印と、一覧へ戻る行の注記）</span><div style="max-width:240px">${SQ.orgMenuHtml({ open: true, id: "cat-org-menu-invited", live: false, orgs: D.organizations.slice(0, 1), invited: true })}</div></div>
+      <div class="field"><span class="field-label">1組織で招待なし（戻る行は出さず、「組織を作る」と「自分用を作る」だけが並ぶ。/ は今の組織へ移るので、組織の選択の画面に届かない人の入口）</span><div style="max-width:240px">${SQ.orgMenuHtml({ open: true, id: "cat-org-menu-single", live: false, orgs: D.organizations.slice(0, 1), invited: false })}</div></div>
+      <div class="field"><span class="field-label">自分用の組織を持つ人（名前の代わりに「自分用」と出し、「自分用を作る」は出さない。停止した組織に自分用があるときも出さない）</span><div style="max-width:240px">${SQ.orgMenuHtml({ open: true, id: "cat-org-menu-personal", live: false, orgs: [{ slug: "mio-solo", name: "自分用", kind: "personal" }, ...D.organizations.slice(0, 1)], invited: false })}</div></div>
+      <div class="field"><span class="field-label">別の組織へ移っている最中（名前の欄に「移っています」。畳んだ列では名前の欄が隠れ、札に出したままにする）</span><div style="max-width:240px">${SQ.orgMenuHtml({ open: false, id: "cat-org-menu-moving", live: false, invited: false, moving: true })}</div></div>
       <div class="field"><span class="field-label">組織が多いとき（一覧の中でスクロールする）</span><div style="max-width:240px">${SQ.orgMenuHtml({ open: true, id: "cat-org-menu-many", live: false, invited: false, orgs: Array.from({ length: 12 }, (_, i) => ({ slug: i === 0 ? D.organization : `k${i}`, name: i === 0 ? D.organizations[0].name : `${D.organizations[1].name} ${i}` })) })}</div></div></div>`,
-    ["選ぶと画面が移るので select にしない。矢印キーで選んだだけで移ってしまい、操作の結果が予告なく変わる（WCAG 3.2.2）。リンクの一覧なら、移るのは押したときだけになる。", "閉じるのは、ボタン、メニューの外を押す、Tab で外へ出る、リンクを押す、Esc。メニューの中にフォーカスがあるときに閉じたら、ボタンにフォーカスを戻す（隠れた要素にフォーカスを残さない）。", "組織が多いときは、画面の高さの 40% までで、一覧の中でスクロールする（メニューの綴じが画面の高さに収まらなくなるため）。", "届いた招待があるときは、ボタンに「届いた招待あり」の印を出し、一覧へ戻る行に「招待が届いています」を添える。招待が見える入口は組織の選択の画面だけなので、1組織でも切り替えを出す。", "760px 以下と、指で押す画面では、リンクの高さを 44px 以上にする。隠さない。メニューが上の帯になる幅では、ブランドの横に並べ、開くと下に広がる。", "組織の名前は長くても折り返し、はみ出さない。ボタンとリストには読み上げの名前を付ける。"],
+    ["選ぶと画面が移るので select にしない。矢印キーで選んだだけで移ってしまい、操作の結果が予告なく変わる（WCAG 3.2.2）。リンクの一覧なら、移るのは押したときだけになる。", "閉じるのは、ボタン、メニューの外を押す、Tab で外へ出る、リンクを押す、Esc。メニューの中にフォーカスがあるときに閉じたら、ボタンにフォーカスを戻す（隠れた要素にフォーカスを残さない）。", "組織が多いときは、画面の高さの 40% までで、一覧の中でスクロールする（メニューの綴じが画面の高さに収まらなくなるため）。", "届いた招待があるときは、ボタンに「届いた招待あり」の印を出し、一覧へ戻る行に「招待が届いています」を添える。招待が見える入口は組織の選択の画面だけなので、1組織でも切り替えを出す。", "「組織を作る」は押すとメニューを閉じてから、自分の組織の作成のダイアログを開く。フォーカスは、ダイアログを閉じたときにメニューのボタンへ戻る。", "「自分用を作る」は、入れる組織にも停止した組織にも自分用が無い人にだけ、「組織を作る」の次に出す。押すとメニューを閉じてから自分用の作成のダイアログを開き、成功したら新しい自分用の組織へ移る。入れる組織が1つで招待が無い人は組織の選択の画面に届かないので、ここが入口になる。", "760px 以下と、指で押す画面では、リンクの高さを 44px 以上にする。隠さない。メニューが上の帯になる幅では、ブランドの横に並べ、開くと下に広がる。", "組織の名前は長くても折り返し、はみ出さない。ボタンとリストには読み上げの名前を付ける。"],
     ".org-menu .org-menu-label .org-menu-button .org-menu-list .org-menu-name .org-menu-note / a[aria-current=\"page\"] / SQ.orgMenuHtml()")],
-  ["account-menu", "アカウントのメニュー", () => block("account-menu", "アカウントのメニュー", "上の帯の右端に置く、自分の名前のボタンと、押すと開くメニュー。中は「ログアウト」の1項目で、後で「自分の設定」も入る。枠の外の画面（組織の選択、運用の画面）には置かず、紙の一番下の静かなボタン（btn is-sm is-quiet）でログアウトする。",
-    `<div class="two"><div class="field"><span class="field-label">閉じているとき</span><div style="display:flex;justify-content:flex-end">${SQ.accountMenuHtml({ open: false, id: "cat-account-menu-closed", live: false, operator: false })}</div></div>
-      <div class="field"><span class="field-label">開いているとき（帯の下に重ねて出す。管理者の印）</span><div style="position:relative;display:flex;justify-content:flex-end;min-height:5rem">${SQ.accountMenuHtml({ open: true, id: "cat-account-menu-open", live: false, operator: false, admin: true })}</div></div>
-      <div class="field"><span class="field-label">ログアウトを待っているとき（項目は aria-disabled、文言は「ログアウトしています」）</span><div style="position:relative;display:flex;justify-content:flex-end;min-height:5rem">${SQ.accountMenuHtml({ open: true, id: "cat-account-menu-busy", live: false, operator: false, busy: true })}</div></div>
-      <div class="field"><span class="field-label">運用者の枠</span><div style="position:relative;display:flex;justify-content:flex-end;min-height:5rem">${SQ.accountMenuHtml({ open: true, id: "cat-account-menu-operator", live: false, operator: true })}</div></div>
+  ["ws-menu", "ワークスペースの切り替え", () => block("ws-menu", "ワークスペースの切り替え", "所属するワークスペースへのリンクを開閉する。選ぶとバックログへ移る。終了したものも含め、所属が1つでも出す。760px 以下の上の帯と畳んだ列では隠す。",
+    `<div class="two"><div class="field"><span class="field-label">閉じている</span><div style="max-width:240px">${SQ.workspaceMenuHtml({ open: false, id: "cat-ws-closed", live: false })}</div></div>
+      <div class="field"><span class="field-label">開いている（今のものにチェック）</span><div style="max-width:240px">${SQ.workspaceMenuHtml({ open: true, id: "cat-ws-open", live: false })}</div></div>
+      <div class="field"><span class="field-label">所属が1つ</span><div style="max-width:240px">${SQ.workspaceMenuHtml({ open: true, id: "cat-ws-single", live: false, workspaces: [{ id: D.workspace, ...D.workspaces[D.workspace] }] })}</div></div>
+      <div class="field"><span class="field-label">所属が多い（一覧の中でスクロール）</span><div style="max-width:240px">${SQ.workspaceMenuHtml({ open: true, id: "cat-ws-many", live: false, workspaces: Array.from({ length: 16 }, (_, i) => ({ id: i === 0 ? D.workspace : `sample-${i}`, name: i === 0 ? D.workspaces[D.workspace].name : `架空の開発チーム ${i}・長いワークスペースの名前も折り返して表示する` })) })}</div></div>
+      <div class="field"><span class="field-label">所属していない管理者（先頭は押せない現在地の行）</span><div style="max-width:240px">${SQ.workspaceMenuHtml({ open: true, id: "cat-ws-admin", live: false, current: { id: "sample-other", name: "架空の管理対象チーム" } })}</div></div></div>`,
+    ["ボタンで開き、Tab でリンクを選び、Enter で移る。矢印キーだけでは移らない。", "Esc、外側を押す、Tab で外へ出る、リンクを押すと閉じる。中にフォーカスがあればボタンへ戻す。", "一覧の高さは 40vh まで。組織の切り替えと同じスタイルで、長い名前は折り返す。"],
+    ".ws-menu .ws-menu-button .ws-menu-list / SQ.workspaceMenuHtml()")],
+  ["nav-collapse", "左のメニューの折りたたみ", () => block("nav-collapse", "左のメニューの折りたたみ", "761px 以上では、ブランド横のボタンで左のメニューを 64px のアイコン列へ畳む。もう一度押すと 240px に戻る。下の見本は、ホバーのできる端末（マウスやトラックパッド）で見る。指だけのタブレットでは畳まないので、広げた列で出る。",
+    `<div class="app" data-nav-collapsed="true" style="min-height:260px"><aside class="binding"><div class="binding-inner"><div class="binding-head"><a class="brand" href="#nav-collapse">${SQ.brandMark}<span class="brand-name">Scrum Guild</span></a><button class="nav-toggle" type="button" aria-expanded="false" aria-controls="cat-nav" aria-label="${t("menuExpand")}">${icon("panel")}<span class="nav-tip" aria-hidden="true">${t("menuExpand")}</span></button></div><div class="org-menu"><button class="org-menu-button" type="button" aria-label="あおば開発。組織を切り替える。届いた招待あり"><span class="org-menu-label">${t("organization")}</span><b>あおば開発</b><span class="org-menu-invite" aria-hidden="true"></span>${icon("swap")}${icon("chevron")}<span class="nav-tip" aria-hidden="true">あおば開発<small>届いた招待あり</small></span></button></div><nav class="nav" id="cat-nav"><div class="nav-group"><span class="nav-group-label">${t("workspace")}</span></div><a class="nav-item" href="#nav-collapse" aria-current="page">${icon("sun")}<span class="nav-item-label">${t("pageToday")}</span></a><a class="nav-item" href="#nav-collapse">${icon("board")}<span class="nav-item-label">${t("backlog")}</span></a></nav></div></aside><div class="sheet"><main class="content"><p>本文の幅が広がる見本</p></main></div></div>`,
+    ["畳んだ列は 64px。ブランドはマークだけにし（名前は読み上げに残す）、開閉のボタンはマークの下に来る。組織は swap のアイコンと、届いた招待があるときだけ印を見せる。", "項目のラベルはマウスを載せるかキーボードでフォーカスしたときだけ列の横に浮かせる（:focus-within にしない。マウスで押した後に出続けるため）。", "開閉のボタンと畳んだ組織のボタンはアイコンだけなので、同じ札（.nav-tip、aria-hidden）で名前を横に見せる。読み上げは aria-label と aria-expanded が受け持つ。", "綴じは本文より上の層に置き、札と一覧がバックログの行などに隠れないようにする。", "今のページは、太字が名前と一緒に見えなくなるので、左の縦棒（縁で描き、強制カラーでも残る）でも示す。", "組織を移っている最中（SQ.orgMenuHtml の moving。見本は「組織の切り替え」）は、一覧を閉じていれば札に「移っています」を出したままにする。", "ホバーで出す札は (hover: hover) の端末だけ。ホバーのできない端末（指だけのタブレット）では畳まず、開閉のボタンも出さない。", "本番の状態は端末の localStorage に覚え、761px 未満では上の帯の形に戻す。"],
+    ".binding-head / .app[data-nav-collapsed=\"true\"] .binding / .nav-toggle / .nav-item-label")],
+  ["account-menu", "アカウントのメニュー", () => block("account-menu", "アカウントのメニュー", "上の帯の右端に置く、自分の名前のボタンと、押すと開くメニュー。中は「マイプロフィール」「組織の管理」（管理者だけ）「ログアウト」の順。招待が届いているとボタンに点、「マイプロフィール」に件数を出す。枠の外の画面（組織の選択、運用の画面）には置かず、紙の一番下の静かなボタン（btn is-sm is-quiet）でログアウトする。",
+    `<div class="two"><div class="field"><span class="field-label">閉じているとき（管理者でなく、招待なし。点は出ない）</span><div style="display:flex;justify-content:flex-end">${SQ.accountMenuHtml({ open: false, id: "cat-account-menu-closed", live: false, operator: false, admin: false, invitationCount: 0 })}</div></div>
+      <div class="field"><span class="field-label">閉じているとき（招待が届いている。点はボタンの右上の角に出す）</span><div style="display:flex;justify-content:flex-end">${SQ.accountMenuHtml({ open: false, id: "cat-account-menu-closed-invited", live: false, operator: false, admin: false, invitationCount: 2 })}</div></div>
+      <div class="field"><span class="field-label">開いているとき（帯の下に重ねて出す。管理者の印と、「組織の管理」、招待の件数）</span><div class="account-menu-frame" style="min-height:13rem">${SQ.accountMenuHtml({ open: true, id: "cat-account-menu-open", live: false, operator: false, admin: true, invitationCount: 2 })}</div></div>
+      <div class="field"><span class="field-label">開いているとき（管理者でなく、招待なし。「組織の管理」は出ない）</span><div class="account-menu-frame" style="min-height:13rem">${SQ.accountMenuHtml({ open: true, id: "cat-account-menu-open-member", live: false, operator: false, admin: false, invitationCount: 0 })}</div></div>
+      <div class="field"><span class="field-label">ログアウトを待っているとき（項目は aria-disabled、文言は「ログアウトしています」）</span><div class="account-menu-frame" style="min-height:13rem">${SQ.accountMenuHtml({ open: true, id: "cat-account-menu-busy", live: false, operator: false, busy: true, admin: false, invitationCount: 0 })}</div></div>
+      <div class="field"><span class="field-label">運用者の枠</span><div class="account-menu-frame" style="min-height:10rem">${SQ.accountMenuHtml({ open: true, id: "cat-account-menu-operator", live: false, operator: true })}</div></div>
       <div class="field"><span class="field-label">紙の下のボタン（枠の外の画面）</span><div class="form-actions"><button class="btn is-sm is-quiet" type="button">${t("logout")}</button></div></div>
       <div class="field"><span class="field-label">紙の下のボタン、ログアウトを待っているとき</span><div class="form-actions"><button class="btn is-sm is-quiet" type="button" aria-disabled="true">${t("logoutMoving")}</button></div></div></div>`,
     ["開閉は組織の切り替えと同じ。閉じるのは、ボタン、メニューの外を押す、Tab で外へ出る、Esc。メニューの中にフォーカスがあるときに閉じたら、ボタンにフォーカスを戻す。", "確認のダイアログは挟まない。失うのは再ログインの手間だけで、メニューを開く1手が誤操作を防ぐ。", "押したらボタンを止めて「ログアウトしています」にする。通信の失敗と 5xx は、トーストを出して今の画面に留まる（Cookie と行が残ったまま「できた」ように見せない）。", "リストの見た目は組織の切り替えと同じ（CSS で .org-menu-list と並べて書く）にして、帯の高さを変えずに下へ重ねる。広い幅ではボタンの右端に合わせて開き、760px 以下では帯を基準に左右の余白の内側へ広げる（帯が左に寄ってボタンが左端に来ても、画面の外へはみ出さない）。760px 以下と、指で押す画面では、ボタンと項目の高さを 44px 以上にする。", "ボタンには `{名前}。アカウントのメニュー` の読み上げの名前を付ける。管理者のときは名前の後ろに（管理者）を含める。待っている間の文言は、常に置く role=status の領域にも入れて読み上げに伝える。", "ログアウトの項目を押してもメニューは閉じない（待ちの表示を見せるため）。"],
-    ".account-menu .account-menu-button .account-menu-list / button[aria-disabled=\"true\"] / SQ.accountMenuHtml()")],
+    ".account-menu .account-menu-button .account-menu-list .account-menu-invite .account-menu-badge / a[aria-current=\"page\"] / button[aria-disabled=\"true\"] / SQ.accountMenuHtml()")],
   ["gate", "枠の外の画面", () => block("gate", "枠の外の画面（ゲート）", "ログイン、組織の選択、見つからない、運用の仮の画面のように、左のメニューを出さない画面。.gate が画面いっぱいに中央寄せし、中の .gate-stack が紙（.gate-sheet）を縦に並べる。本番では Gate.svelte が外側、GateSheet.svelte が紙1枚。",
     `<div class="gate-stack">
       <section class="gate-sheet">
@@ -446,6 +558,8 @@ const SECTIONS = [
         <h1 class="gate-title">${t("organization")}を選ぶ</h1>
         <p>先頭の紙には、ブランドと画面の見出し（h1）を置く。</p>
         <p class="gate-note">補足は gate-note に書く。</p>
+        <p class="gate-divider">または</p>
+        <p>手段の間の区切りは gate-divider に短い語を入れる（パスワードの手段を開いたときのログインの画面の、外の手段のボタンとメールアドレスの欄の間。初版は閉じていて、区切りは出さない）。</p>
       </section>
       <section class="gate-sheet"><h2 class="dialog-title">届いた招待</h2><p class="gate-note">2枚目からの紙は、見出しを h2 にする。</p></section>
     </div>
@@ -457,11 +571,27 @@ const SECTIONS = [
             <tbody><tr><td>あおば開発<br><span class="mono props-note">aoba</span></td><td class="mono">2026/10/01&nbsp;18:30</td></tr></tbody></table></div>
         </section>
       </div>
+    </div>
+    <div class="gate is-reading" style="min-height:0">
+      <div class="gate-stack">
+        <section class="gate-sheet">
+          <div class="gate-brand">${SQ.brandMark}<span class="brand-name">Scrum Guild</span></div>
+          <h2 class="gate-title">利用規約</h2>
+          <p>改定日: 2026-10-31</p>
+          <div class="doc-box">
+            <h2 class="doc-h1">第1条 本サービスについて</h2>
+            <p>本サービスは、チームのタスクを集め、ゲームの仕組みで回すための Web サービスです。</p>
+            <h2 class="doc-h1">第2条 アカウントとログイン</h2>
+            <ul><li>ログインできる手段は、GitHub と Google のアカウントです。</li><li>ログインに使うアカウントは、本人が責任を持って守ってください。</li></ul>
+          </div>
+          <div class="form-actions" role="group" aria-label="関連するページ"><a class="btn is-sm" href="#">プライバシーポリシー</a><button class="btn is-sm is-quiet" type="button">前の画面に戻る</button></div>
+        </section>
+      </div>
     </div>`,
-    ["紙の幅は 440px までで、狭い画面では画面の幅に収める。", "表を載せる画面（運用）は、外側の .gate に is-wide を付けて、紙の幅を 1200px までに広げる（本番では Gate の wide）。", "枠の外の画面では、テーマと言葉づかいを既定（シンプル（自動）、ゲームの言葉）に戻す。どの組織の値も持ち越さない。", "本番の Gate は、外側を main にする。"],
-    ".gate .gate-stack .gate-sheet .gate-brand .gate-title .gate-note / .gate.is-wide")],
+    ["紙の幅は 440px までで、狭い画面では画面の幅に収める。", "表を載せる画面（運用）は、外側の .gate に is-wide を付けて、紙の幅を 1200px までに広げる（本番では Gate の wide）。", "長い文を読む画面（利用規約とプライバシーポリシー）は、外側の .gate に is-reading を付けて、紙の幅を 720px までに広げる（本番では Gate の reading）。紙の直下に Markdown の本文（.doc-box）を置くと、紙が枠なので .doc-box の枠と余白を外し、条の見出し（.doc-h1。画面の見出しの次の段）の前を広く空ける。法文の本体は辞書に入れず、Markdown のファイル（src/lib/legal/）に置く。", "枠の外の画面では、テーマを既定（シンプル（自動））に戻す。どの組織の値も持ち越さない。", "本番の Gate は、外側を main にする。"],
+    ".gate .gate-stack .gate-sheet .gate-brand .gate-title .gate-note .gate-divider / .gate.is-wide / .gate.is-reading / .gate-sheet > .doc-box")],
   ["settings", "設定の節と並べ替え", () => block("settings", "設定の節と並べ替え", "設定の画面は、左に説明、右に入力を置く節を縦に並べる。並べ替えられる一覧は、ドラッグの他に上下のボタンを持つ。",
-    `<div class="settings"><section class="setting"><div class="setting-head"><h3 class="setting-title">${t("column")}</h3><p class="setting-desc">名前は言葉づかいを切り替えても訳しません。</p></div><div class="setting-body">
+    `<div class="settings"><section class="setting"><div class="setting-head"><h3 class="setting-title">${t("column")}</h3><p class="setting-desc">名前は付けたままで、訳しません。</p></div><div class="setting-body">
       <ol class="order-list">${D.columns.filter((c) => !c.done).map((c, i, a) => `<li><span class="grip" aria-hidden="true">${icon("grip")}</span><input class="input" value="${c.name}" aria-label="名前"><span class="order-actions"><button class="icon-btn" type="button" aria-label="上へ" ${i === 0 ? "disabled" : ""}>${icon("up")}</button><button class="icon-btn" type="button" aria-label="下へ" ${i === a.length - 1 ? "disabled" : ""}>${icon("down")}</button><button class="icon-btn is-danger" type="button" aria-label="削除">${icon("trash")}</button></span></li>`).join("")}
         <li><span class="grip is-off" aria-hidden="true"></span><span class="fixed">${icon("check")} ${t("done")}</span><span class="props-note">常に末尾</span></li></ol></div></section>
       <section class="setting"><div class="setting-head"><h3 class="setting-title">${t("category")}</h3><p class="setting-desc">行ごとにすぐ書く形（本番の区分とリポジトリの節）。名前は押すと入力欄になる。</p></div><div class="setting-body">
@@ -473,9 +603,14 @@ const SECTIONS = [
   ["steps", "手順", () => block("steps", "手順", "順番に進めるもの（接続の登録、最初にやること）にだけ番号を付ける。",
     `<ol class="steps"><li class="step is-done"><div class="step-body"><span class="step-title">取り込み元を選ぶ</span><span class="props-note">Backlog</span></div></li><li class="step"><div class="step-body"><span class="step-title">認証情報を入れる</span><label class="field" for="k0"><span class="field-label">API キー</span><input class="input" id="k0" type="password"></label></div></li><li class="step"><div class="step-body"><span class="step-title">取り込む範囲を選ぶ</span></div></li></ol>`,
     null, ".steps .step .is-done .step-body .step-title")],
-  ["first", "最初にやること", () => block("first", "最初にやること", "初めて使う人の自分の今日の先頭に、ロールごとの手順を出す。済んだかは今のデータから決まる。必須の手順がすべて済むと出なくなる。",
+  ["art", "線画", () => block("art", "線画", "空の一覧と「最初にやること」の先頭に置く小さな絵。64px の格子に、アイコンと同じ線の太さ（2px）と丸い端で描く。art.js を読み込むとスプライトが入る。",
+    `<div class="cat-row">${[["notice", "空の掲示板"], ["chest", "空の宝箱"], ["map", "出発の地図"]].map(([n, label]) => `<figure class="cat-art">${SQ.art(n)}<figcaption>${n}（${label}）</figcaption></figure>`).join("")}</div>
+     <div class="two">${SQ.emptyState("board", `まだ${t("task")}がありません`, `${t("task")}を優先する順に並べる場所です。`, "", undefined, "notice")}${SQ.emptyState("calendar", `まだ${t("sprint")}がありません`, `${t("sprint")}を作ると、ここに先の${t("sprint")}が並びます。`, "", undefined, "map")}</div>`,
+    ["色はテーマの文字の薄い色に従い、絵柄はテーマで替えない。文とボタンより目立たせない（アイコンの色より濃くしない）。", "読み上げから外す（aria-hidden）。何が出る場所かと次にやることは、隣の文が伝える。", "種類は掲示板（一覧が空）、宝箱（報酬や明細が空）、地図（最初の一歩）の3つ。場面ごとに選び、増やすときはここに足す。", "「最初にやること」では、パネルの見出しの左に小さい形（SQ.art(map, true)、.art.is-lead）で置く。見本は下の「最初にやること」。"],
+    "SQ.art(name, lead) .art .art.is-lead / SQ.emptyState(…, art)")],
+  ["first", "最初にやること", () => block("first", "最初にやること", "初めて使う人の今日やることの先頭に、ロールごとの手順を出す。済んだかは今のデータから決まる。必須の手順がすべて済むと出なくなる。",
     `<div class="two">${SQ.firstSteps("member", { preview: true })}${SQ.firstSteps("admin", { preview: true })}</div>`,
-    ["ロールは一般、リーダー、ワークスペースがまだない管理者の3つ。", "主ボタンは、まだ済んでいない最初の手順にだけ付ける。", "取り込み元やスプリントのように使わないチームもあるものは「任意」にし、済んでいなくても手順の一覧を消す妨げにしない。"],
+    ["ロールは一般、リーダー、ワークスペースがまだない管理者の3つ。", "主ボタンは、まだ済んでいない最初の必須の手順にだけ付ける。", "取り込み元やスプリントのように使わないチームもあるものは「任意」にし、済んでいなくても手順の一覧を消す妨げにしない。"],
     "SQ.firstSteps(role) / .panel .steps .step .is-done .chip")],
   ["status", "状態と事実の並び", () => block("status", "状態と事実の並び", "接続などの状態は、色と文字の両方で示す。事実は見出しと値の組で並べる。",
     `<div class="cat-row"><span class="state-badge is-ok">有効</span><span class="state-badge is-error">エラー</span><span class="state-badge is-stopped">停止</span><span class="state-badge is-muted">下書き</span></div>
@@ -484,14 +619,20 @@ const SECTIONS = [
   ["feed", "知らせの一覧と空の状態", () => block("feed", "知らせの一覧と空の状態", "",
     `<ul class="feed">${D.notifications.slice(0, 3).map((n) => `<li class="${n.read ? "" : "is-unread"}"><span class="feed-icon">${icon("bell")}</span><span class="feed-main"><span class="feed-text">${SQ.esc(n.text)}</span><span class="feed-at">${n.at}</span></span><button class="btn is-sm is-quiet" type="button">既読にする</button></li>`).join("")}</ul>
      ${SQ.emptyState("inbox", "届いたものはありません", `次の同期で新しく取り込んだ${t("task")}がここに届きます。`)}
-     ${SQ.emptyState("board", `まだ${t("task")}がありません`, `${t("task")}を優先する順に並べる場所です。上の「${t("create")}」から最初の${t("task")}を作ります。`, `<button class="btn is-sm" type="button" data-toast="見本なので画面は移りません">${t("connection")}を登録する</button>`)}`,
-    ["未読は太字と淡い藍の地。", "空の状態は、何が出る場所かと、次に何をすればよいかを書く。自分で起こせることがあれば、その画面へのボタンを1つ添える。", "空の状態のボタンは主ボタンにしない。画面の主な操作は見出しの右に置く。"], ".feed .is-unread .feed-icon .feed-main .feed-text .feed-at / SQ.emptyState() .empty")],
+     ${SQ.emptyState("board", `まだ${t("task")}がありません`, `${t("task")}を優先する順に並べる場所です。上の「${t("create")}」から最初の${t("task")}を作ります。`, `<button class="btn is-sm" type="button" data-toast="見本なので画面は移りません">${t("connection")}を登録する</button>`, undefined, "notice")}
+     ${SQ.emptyState("crystal", "経験値の明細はまだありません", `${t("task")}を${t("complete")}と、起票や${t("done")}の経験値がここに並びます。`, "", "xp", "chest")}`,
+    ["未読は太字と淡い藍の地。", "空の状態は、何が出る場所かと、次に何をすればよいかを書く。自分で起こせることがあれば、その画面へのボタンを1つ添える。", "空の状態のボタンは主ボタンにしない。画面の主な操作は見出しの右に置く。", "空の一覧には、アイコンの代わりに線画（6つ目の引数）を置ける。場面に合うものを選ぶ（下の「線画」）。"], ".feed .is-unread .feed-icon .feed-main .feed-text .feed-at / SQ.emptyState() .empty")],
   ["monthly", "月の積載量", () => block("monthly", "月の積載量", "メンバー × 月の表のセル。",
     `<div class="cat-row" style="align-items:flex-start">${[[103.2, 118, 0], [172, 168, 0], [86, 60, 1], [80, 60, 0], "unset", null].map((c) => `<div class="panel" style="padding:var(--space-3)">${SQ.miniCap(c)}</div>`).join("")}</div>`,
     ["スプリントが1つもない月は、余力ありではなく「計画なし」と出す。"], ".mini-cap .is-none .mini-cap-num / .cap.is-mini")],
-  ["drawer", "引き出し", () => block("drawer", "引き出し（タスクの詳細）", "タスクの詳細は、どの画面からでも右から出る引き出しで開く。上の広げるボタンで、左のメニューを残して右側いっぱいに広げ、同じ所で横に戻せる。広げている間は幕を外し、メニューから別の画面へ移れる。中身は 960px の幅で中央に寄せる。メニューが上の帯になる 760px 以下では全幅に広げ、引き出しがもともと全幅になる 620px 以下ではボタンを出さない。広さはページの中で覚え、次に開くタスクも同じ広さで出す。広げても書きかけの入力は残す。Esc か外側を押すと閉じ（広げている間は外側が無いので、閉じるボタンか Esc）、開いた元の行に戻る。",
+  ["drawer", "引き出し", () => block("drawer", "引き出し（タスクの詳細）", "タスクの詳細は上の帯で横、真ん中、ページ全体、新しいタブを選ぶ。端末に既定を覚え、次に開くときも使う。横と真ん中は幕のあるダイアログ。ページ全体は詳細だけを幅 960px までで中央に置く。620px 以下では真ん中を隠し、既定が真ん中なら横で開く。書きかけがあるときは、形を替える前にも捨てるかを確かめる。横と真ん中の上の帯には、開いた画面に今見えているタスクの行の順で前後へ移るボタンがあり（端では押せない）、移る前にも書きかけを確かめる。Esc と閉じるボタンで閉じ、最後に表示したタスクの行へフォーカスを戻す。ページ全体を直接開いたときの閉じる先はバックログ。",
     `<div class="grid-2">
       <div class="field"><span class="field-label">ふだんの形</span>${drawerDemo("a", "t1")}</div>
+      <div class="field"><span class="field-label">真ん中の形（幕のあるダイアログ。中央に幅 960px まで。620px 以下では真ん中のボタンを出さず、横で開く）</span>${drawerDemo("r", "t1", [], { shape: "center" })}</div>
+      <div class="field"><span class="field-label">ページ全体の形（幕も外側を操作できなくする指定も無い通常の領域。幅 960px までで中央に置く）</span>${drawerDemo("s", "t1", [], { shape: "page" })}</div>
+      <div class="field"><span class="field-label">一覧の先頭のタスク（「前の${t("task")}」は押せない。端で止まる）</span>${drawerDemo("u", "t1", [], { adjacent: { prev: null, next: "t2" } })}</div>
+      <div class="field"><span class="field-label">一覧の末尾のタスク（「次の${t("task")}」は押せない）</span>${drawerDemo("v", "t1", [], { adjacent: { prev: "t5", next: null } })}</div>
+      <div class="field"><span class="field-label">タスクの行を持たない画面（メンバーなど）の上に開いた形（前後のボタンを出さない）</span>${drawerDemo("w", "t1", [], { adjacent: null })}</div>
       <div class="field"><span class="field-label">タイトル、リンク、本文を直している途中</span>${drawerDemo("b", "t1", ["title", "link", "body"])}</div>
       <div class="field"><span class="field-label">自分のコメントを直している途中（見出しの右の操作は隠れ、本文が書く欄に替わる）</span>${drawerDemo("j", "t1", [], { commentEditing: 1 })}</div>
       <div class="field"><span class="field-label">新しいコメントを空のまま送った（欄の下に理由）</span>${drawerDemo("k", "t1", [], { errors: { comment: "コメントを書いてから送ってください" } })}</div>
@@ -511,11 +652,14 @@ const SECTIONS = [
     [`取り込み元の属性（タイトル、状態、期限）は、ここでは変えられないことを添える。取り込んだ${t("task")}のタイトルとリンクも直せない（リンクは手で作った${t("task")}だけが持つ）。`, `完了の操作の横（<code>.done-bar-dod</code>）に完成の定義を出す。題（<code>.done-bar-dod-title</code>）は h3 で、本文（<code>.done-bar-dod-body</code>）は Markdown の <code>.doc-box</code> を枠なしで描き、高さを抑えて中で送る（送る領域は <code>tabindex="0"</code> と <code>role="region"</code> で、名前は題）。空なら出さない。確認のダイアログは挟まない。`, "感謝は押した状態を is-on で示し、完了までは取り消せる。",
       "欄ごとにその場で直す。タイトルとリンクは、値そのもの（<code>.edit-trigger</code>）を押すと入力欄に替わり、Enter か「保存」で確定、Esc か「取り消し」で戻す。本文は「編集」で書く欄に替わり、保存か取り消しで描いた本文に戻る（Enter は改行）。" + `${t("points")}と${t("due")}は選んだら保存する。保存した欄は、その場で一覧の行に反映する。`,
       `完了した${t("task")}の${t("points")}は直せない。欄は読み取り専用にし、薄めずに選んだ値の色を保って、鍵のアイコンと「${t("done")}した${t("task")}の${t("points")}は直せません」を添える（理由の文は欄の <code>aria-describedby</code> に結ぶ。経験値と${t("sprint")}の集計が完了の記録の値を使うため）。ほかの属性は完了の後も直せる。`,
+      "決まった欄の見出し（<code>.field-label</code>）には、リーダーが付けた名前（50 字まで）が入る。空白の無い長い名前（英数字の連続）も途中で折り返し（<code>overflow-wrap: anywhere</code>）、右の「書く」「編集」のボタンを押し出さない。",
       "書きかけ（直している途中で、値が元と違う欄）があるまま閉じる（か別の" + t("task") + "へ移る）ときは、アプリの中のダイアログで捨てるかを確かめる。安全な側（書き続ける）を主ボタンにし、ブラウザの <code>confirm</code> は使わない。削除も確認を挟み、消したら引き出しを閉じる。",
-      "広げた形は <code>aria-modal=\"false\"</code>（左のメニューを押せるため）、横に出した形は <code>aria-modal=\"true\"</code> で外側を操作できなくする。終了したワークスペースでは直す口と削除を出さず、読み取り専用で開く。",
+      "開き方は上の帯の <code>.drawer-mode</code>（<code>role=\"group\"</code> の <code>.pill</code> 4 つ）で選ぶ。今の形は <code>aria-pressed</code> で示し（色に加えて太字）、各ボタンは押した時点で実行する。<code>select</code> は矢印キーを押すだけで確認なしに移ってしまうので使わない。620px 以下では真ん中のボタンを出さない。",
+      "前後のタスクへは、開き方の左の <code>.drawer-steps</code>（<code>role=\"group\"</code> の <code>.pill</code> 2 つ。矢印のアイコンで、名前は <code>aria-label</code> と <code>title</code>）か、キーボードの <code>[</code>（前）と <code>]</code>（次）で移る。順は開いた画面に今見えているタスクの行の順で、畳んだ枝の中、絞り込みで外れた行、エピックとストーリーの行は飛ばす。各ボタンは <code>aria-keyshortcuts</code>（<code>[</code>、<code>]</code>）でキーを伝え、<code>title</code> にだけ「（[）」「（]）」を添える（読み上げの名前は変えない）。端では <code>aria-disabled</code> にして押しても何もせず、<code>title</code> は「先頭です」「最後です」にする。ボタン（クリックと Enter）で移ったときは、移った先で読み込み中から押したのと同じ向きのボタンへフォーカスを置き、移った先のタイトルを <code>role=\"status\"</code> の領域で読み上げる（端で押せなければ見出し。<code>[</code> <code>]</code> のキーで移ったときは見出し）。文字や数字を入れる型の <code>input</code>、<code>textarea</code>、<code>select</code>、<code>contenteditable</code> の中、日本語の変換中、修飾キー付きでは移らない（ポイントの <code>radio</code> など文字を打たない型の中では移る）。行を持たない画面と、ページ全体、新しいタブでは出さない。620px 以下でも出す。",
+      "横と真ん中は <code>aria-modal=\"true\"</code> で外側を操作できなくする。ページ全体は通常の領域として出し、引き出しの外（左のメニューなど）にフォーカスがあるときの Esc では閉じない。終了したワークスペースでは直す口と削除を出さず、読み取り専用で開く。",
       "下の「コメント N」と「変更の履歴」はタブ（<code>role=\"tablist\"</code>、左右の矢印キーで移る）。N は消していないコメントの数。コメントは書いた順に並べ、50 件より前は上の「前のコメントを読む」で足す。本文は Markdown の <code>.doc-box</code> を枠なしで描く。見出し（名前、日時、編集済み）の右（<code>.comment-actions</code>）には、許された操作だけを <code>.btn.is-sm.is-quiet</code> の「編集」「削除」で出す（自分のコメントは両方、" + t("leader") + "は人のコメントの「削除」）。「編集」は本文がその場で書く欄に替わり、「削除」は確かめのダイアログを挟む。消したものは「削除されました」、本人以外が消したら「〇〇が削除しました」と残る。新しいコメントの欄と、直している途中のコメントは書きかけに数え、タブを切り替えても残す。終了した" + t("workspace") + "では、書く欄と操作を出さない。"],
-    ".drawer .is-full .scrim .drawer-top .drawer-tools .drawer-size .drawer-close .drawer-title / .edit-trigger .is-empty .edit-form .edit-actions .field-head / .props .props-note / .doc-box .is-empty / .done-bar .done-bar-done .done-bar-dod .done-bar-dod-title .done-bar-dod-body /.thanks / .tabs .tab / .thread .comment .comment-head .comment-actions .comment-body .is-deleted .composer-foot / .history .history-changes")],
-  ["files", "添付ファイル", () => block("files", "添付ファイル", "タスク、ストーリー、エピック、コメントに付ける。画像と動画は縮小した絵、それ以外は1行。押すとプレビューが開く。「ファイルを選ぶ」で上げる動きを試せる（3回目は大きすぎて失敗する）。",
+    ".drawer .is-center .is-page .scrim .drawer-top .drawer-tools .drawer-steps .drawer-mode .drawer-close .drawer-title / .edit-trigger .is-empty .edit-form .edit-actions .field-head / .props .props-note / .doc-box .is-empty / .done-bar .done-bar-done .done-bar-dod .done-bar-dod-title .done-bar-dod-body /.thanks / .tabs .tab / .thread .comment .comment-head .comment-actions .comment-body .is-deleted .composer-foot / .history .history-changes")],
+  ["files", "添付ファイル", () => block("files", "添付ファイル", "タスク、ストーリー、エピック、コメントに付ける。画像も動画もそれ以外も1行ずつ並べ、容量、上げた人、上げた日時を横に出す。名前を押すとプレビューが開く。「ファイルを選ぶ」は複数を選べて、選んだ数だけ行が増える（ドラッグでも同じ）。",
     `<div class="field"><span class="field-label">一覧と上げる場所</span>${SQ.attachments("t1")}</div>
      <div class="field"><span class="field-label">上げている途中と失敗</span>
        ${SQ.fileRow({ id: "x1", name: "スクリーンショット 2026-10-20 11.41.png", type: "image", size: "1.8 MB", state: "uploading", pct: 60 })}
@@ -524,7 +668,7 @@ const SECTIONS = [
      <div class="field"><span class="field-label">小さなボタン（${t("story")}、起票、コメント）</span>${SQ.dropzone("demo", { button: true, full: false })}</div>
      <div class="field"><span class="field-label">使っている量と上限</span><div class="grid-2">${SQ.meter(3.1, 10)}${SQ.meter(8.3, 10)}${SQ.meter(10, 10)}<div class="panel">${SQ.meter(21.7, 50, { small: true })}</div></div></div>`,
     ["画像（PNG、JPEG、GIF、WebP）と動画（MP4、WebM）は画面で見せる。それ以外はダウンロードだけ。", "失敗は理由と数字を出す（何 MB を超えたか）。上限に達したら、上げる場所を止めて、誰が何をすれば添付できるかを書く。", "量の色は 80% を超えたら警告、上限で危険。色だけでなく、割合と文字を添える。", "消すときは、戻せないことと、差し込んだ所がどうなるかを確認のダイアログで伝える。"],
-    ".files .file-thumbs .file-thumb .file-thumb-label .file-art .is-video / .file-row .file-main .file-name .file-meta .file-actions .is-error .file-bar / .dropzone .is-over .is-disabled / .md-figure .comment-files .composer-foot / .preview .dialog-sheet.is-wide / .meter .meter-small .is-warn .is-full")],
+    ".files .file-thumb .file-thumb-label .file-art .is-video / .file-row .file-main .file-name .file-meta .file-actions .is-error .file-bar / .dropzone .is-over .is-disabled / .md-figure .comment-files .composer-foot / .preview .dialog-sheet.is-wide / .meter .meter-small .is-warn .is-full")],
   ["markdown", "Markdown の本文", () => block("markdown", "Markdown の本文", "タスクの本文、コメント、決まった欄、ストーリーとエピックの本文を描く。生の HTML は文字で出し、リンクは http と https の絶対 URL だけにする。",
     `<div class="field"><span class="field-label">見出し、段落、リスト、チェックリスト、引用、コード、区切り線、表</span>${SQ.markdownSample()}</div>
      <div class="field"><span class="field-label">リンクにしないもの（HTML、相対リンク、mailto:、外部の画像）</span>${SQ.markdownSample("unsafe")}</div>
@@ -546,16 +690,11 @@ function render() {
         <h1 class="page-title">デザインシステム</h1>
         <p class="cat-lead">テーマは5つ（シンプル（自動、ライト、ダーク）、中世風、現代風）。すぐ下で切り替えられる。部品はどのテーマでも同じで、変わるのは tokens.css の変数とテーマの飾りだけ。画面は、ここにある部品だけで組む。足りない部品は先にここへ足す。読み込む順は tokens.css、components.css、icons.js、sample-data.js、kit.js。</p>
       </div>
-      <div class="cat-row">
-        <button class="pill" type="button" data-switch="vocab">${icon("swap")}<span data-vocab-label></span></button>
-      </div>
       <div class="segmented" role="radiogroup" aria-label="テーマ">${SQ.THEMES.map((v) => `<label><input type="radio" name="cat-theme" value="${v}" data-pick-theme><span>${SQ.THEME_LABEL[v]}</span></label>`).join("")}</div>
     </header>
     ${SECTIONS.map(([, , fn]) => fn()).join("")}`;
-  document.querySelectorAll("[data-switch='vocab']").forEach((b) => (b.onclick = SQ.toggleVocab));
-  document.querySelectorAll("[data-vocab-label]").forEach((el) => (el.textContent = `言葉: ${t("vocab")}`));
   document.querySelectorAll("[data-replay-flash]").forEach((b) => (b.onclick = () => {
-    document.querySelectorAll("#drag .is-dropped").forEach((el) => {
+    document.querySelectorAll("#drag .is-dropped, #boarddrag .is-dropped").forEach((el) => {
       el.classList.remove("is-dropped");
       void el.offsetWidth;
       el.classList.add("is-dropped");
@@ -564,7 +703,6 @@ function render() {
   SQ.applyTheme();
 }
 SQ.enableAssistOnCatalog();
-SQ.onChange(render);
 SQ.onRedraw(render);
 new MutationObserver(() => { const el = document.querySelector("#colors .cat-demo"); if (el) el.innerHTML = colorBlock(); })
   .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });

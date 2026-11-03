@@ -8,6 +8,7 @@
   import ConfirmDialog from '../../../../../lib/components/ConfirmDialog.svelte';
   import Emblem from '../../../../../lib/components/Emblem.svelte';
   import EmptyState from '../../../../../lib/components/EmptyState.svelte';
+  import Icon from '../../../../../lib/components/Icon.svelte';
   import LoadFailed from '../../../../../lib/components/LoadFailed.svelte';
   import MemberInvite from '../../../../../lib/components/MemberInvite.svelte';
   import PageHead from '../../../../../lib/components/PageHead.svelte';
@@ -27,6 +28,8 @@
   // 名前の横に、その人のレベルの小さい紋章を添える（経験値の数値は API も返さない）。
   // 承諾待ちの招待と組織の人数は、リーダーと管理者にだけ API が返す（一般のメンバーは null）ので、null のときは
   // 「招待する」と「承諾待ちの招待」の節も「招待中」の数も出さない。終了したワークスペースでは、招待と取り消しの操作を出さない。
+  // 自分用の組織（kind が personal。持ち主 1 人だけ）では、「招待する」の節に招待のフォームを出さず、人を招待できない理由だけを案内する。
+  // 招待を受けないので、「承諾待ちの招待」の節と「招待中」の数も出さない。
   // 期限の過ぎた Google の招待は、一覧に「期限切れ」と出し、「招待中」の数には入れない（docs/data-model.md）。
   // 所属している人の行の操作（終了していないワークスペースでだけ出す）: リーダーと管理者には、ロールの選択欄と、他人の行の「外す」。
   // 自分の行には「抜ける」。一般のメンバーには、ロールを文字で出し、自分の行の「抜ける」だけを出す。
@@ -43,6 +46,8 @@
   const canWrite = $derived(workspace !== null && workspace.closedAt === null);
   // 自分の判定は組織の枠の me で行う（member-list の応答は変えない）
   const me = $derived(data.organization?.me ?? null);
+  // 自分用の組織（kind が personal）は自分だけで使うので、「招待する」の節は招待のフォームの代わりに理由を出す
+  const personal = $derived(data.organization?.organization.kind === 'personal');
   // ロールの付け替えと他人を外すのは、ワークスペースのリーダーと管理者
   const canManage = $derived(
     invitations !== null || workspace?.role === 'leader' || data.organization?.me.is_admin === true,
@@ -180,7 +185,6 @@
     heading?.focus();
   }
 
-  // 言葉は、開いているワークスペースの言葉づかいで引く（t が当てる）
   function roleLabel(role: 'leader' | 'member'): string {
     return role === 'leader' ? t('leader') : t('roleMember');
   }
@@ -250,7 +254,7 @@
   const tallies = $derived([
     { label: t('membersTallyBelonging'), count: members?.length ?? 0, icon: 'users' as const },
     { label: t('leader'), count: leaderCount },
-    ...(invitations === null
+    ...(invitations === null || personal
       ? []
       : [
           {
@@ -401,23 +405,33 @@
   </ConfirmDialog>
 
   {#if invitations !== null && seats !== null && canWrite}
-    <Section
-      id="members-invite"
-      title={t('inviteSectionTitle')}
-      hint={t('inviteSeats', {
-        organization: t('organization'),
-        used: String(seats.used),
-        limit: String(seats.limit),
-      })}
-    >
-      <!-- ワークスペースを替えたら、入力と確かめた結果を捨てる -->
-      {#key workspace.id}
-        <MemberInvite {slug} workspaceId={workspace.id} {seats} onchanged={reload} />
-      {/key}
-    </Section>
+    {#if personal}
+      <!-- 自分用の組織は自分だけで使う。招待のフォームは出さず、理由を案内する（API も 409 の personal_organization で断る） -->
+      <Section id="members-invite" title={t('inviteSectionTitle')}>
+        <div class="callout is-info">
+          <Icon name="shield" /><span>{t('invitePersonalNote', { organization: t('organization') })}</span>
+        </div>
+      </Section>
+    {:else}
+      <Section
+        id="members-invite"
+        title={t('inviteSectionTitle')}
+        hint={t('inviteSeats', {
+          organization: t('organization'),
+          used: String(seats.used),
+          limit: String(seats.limit),
+        })}
+      >
+        <!-- ワークスペースを替えたら、入力と確かめた結果を捨てる -->
+        {#key workspace.id}
+          <MemberInvite {slug} workspaceId={workspace.id} {seats} onchanged={reload} />
+        {/key}
+      </Section>
+    {/if}
   {/if}
 
-  {#if invitations !== null}
+  <!-- 自分用の組織は招待を受けないので、承諾待ちの招待の節と「招待中」の数も出さない -->
+  {#if invitations !== null && !personal}
     <Section
       id="members-invitations"
       title={t('invitationsSectionTitle')}

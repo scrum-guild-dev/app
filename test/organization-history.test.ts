@@ -120,7 +120,7 @@ describe('organization-history', () => {
     const createRes = await post(app, workspaceCreate, {
       slug: target.slug,
       token: target.admin.token,
-      body: { name: '保守チーム', timezone: 'Asia/Tokyo', vocabulary: 'game', leader_user_id: target.admin.userId },
+      body: { name: '保守チーム', timezone: 'Asia/Tokyo', leader_user_id: target.admin.userId },
     });
     expect(createRes.status).toBe(200);
     const workspaceId = ((await createRes.json()) as { workspace_id: string }).workspace_id;
@@ -154,12 +154,12 @@ describe('organization-history', () => {
     }
   });
 
-  test('組織の言葉づかいと既定のテーマの変更の操作が書いた行を、組織の設定の変更として返す', async () => {
+  test('組織の既定のテーマの変更の操作が書いた行を、組織の設定の変更として返す', async () => {
     const target = await createTarget();
     const res = await post(app, organizationSettingsUpdate, {
       slug: target.slug,
       token: target.admin.token,
-      body: { vocabulary: { from: 'game', to: 'scrum' }, theme: { from: 'simple', to: 'medieval' } },
+      body: { theme: { from: 'simple', to: 'medieval' } },
     });
     expect(res.status).toBe(200);
 
@@ -390,6 +390,11 @@ describe('organization-history', () => {
       [userLog({ is_admin: [1, 0] }), { kind: 'admin_revoked', name: '汐見 アオイ' }],
       [userLog({ disabled_at: [null, minutesLater(0)] }), { kind: 'user_disabled', name: '汐見 アオイ' }],
       [userLog({ disabled_at: [minutesLater(0), null] }), { kind: 'user_enabled', name: '汐見 アオイ' }],
+      // 管理者の無効化（user-disable）は、同じ文で解除するので両方の列を持つ
+      [
+        userLog({ disabled_at: [null, minutesLater(0)], is_admin: [1, 0] }),
+        { kind: 'user_disabled', name: '汐見 アオイ' },
+      ],
       // Google の招待で指名した人が、同じ組織に既にいた（cross-organization.ts の統合の記録。した人は本人）
       [
         { ...userLog({ is_admin: [0, 1], disabled_at: [minutesLater(0), null] }), actor_user_id: person.id },
@@ -500,6 +505,48 @@ describe('organization-history', () => {
         { kind: 'user', id: target.admin.userId, name: '星野 澪' },
         { kind: 'workspace_closed', workspace_name: null },
       ],
+    ]);
+  });
+
+  // 管理者の指名し直し（#217）で、まだログインしていない前の指名を消した記録。行は消えているので、名前は記録の前の値から取る
+  test('運用者が前の指名を消した記録（user の delete）は admin_designation_removed で、名前は記録の GitHub のユーザー名。Google の待つ行は null', async () => {
+    const target = await createTarget();
+    const removed = (changes: unknown, minutes: number) =>
+      log(target.organization, {
+        operator: OPERATOR_LOGIN_ID,
+        entity_type: 'user',
+        // 消した行。users にはもう無い
+        entity_id: uuidv7(),
+        action: 'delete',
+        changes_json: JSON.stringify(changes),
+        created_at: minutesLater(minutes),
+      });
+    await removed(
+      {
+        is_admin: [1, null],
+        name: ['sora-dev', null],
+        login_provider: ['github', null],
+        login_subject: ['9000000000088001', null],
+      },
+      4,
+    );
+    await removed({ is_admin: [1, null], name: [WAITING_USER_NAME_IN_LOG, null], login_provider: ['google', null] }, 3);
+    // 記録の名前がメールアドレスに見えるなら使わない
+    await removed({ is_admin: [1, null], name: ['sora.wait@example.com', null], login_provider: ['google', null] }, 2);
+    // 名前の無い記録
+    await removed({ is_admin: [1, null] }, 1);
+
+    const res = await call(target);
+    const text = await res.text();
+    expect(text).not.toContain('9000000000088001');
+    expect(text).not.toContain('@example.com');
+    expect(text).not.toContain(WAITING_USER_NAME_IN_LOG);
+    expect(text).not.toContain(OPERATOR_LOGIN_ID);
+    expect((JSON.parse(text) as History).entries.map((entry) => [entry.actor, entry.event])).toEqual([
+      [{ kind: 'operator' }, { kind: 'admin_designation_removed', name: 'sora-dev' }],
+      [{ kind: 'operator' }, { kind: 'admin_designation_removed', name: null }],
+      [{ kind: 'operator' }, { kind: 'admin_designation_removed', name: null }],
+      [{ kind: 'operator' }, { kind: 'admin_designation_removed', name: null }],
     ]);
   });
 

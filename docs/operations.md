@@ -2,7 +2,7 @@
 
 本番を用意し、出し、戻す手順。決めた理由は `docs/development.md` の「CD」と「Cloudflare のアカウントとドメイン」にある。
 
-自動のデプロイは Workers Builds だけが行う。この文書の手で行う操作（用意、手での rollback、DB の復元）は人が手元で行い、Claude のセッションは実行しない（フックが止める）。
+自動のデプロイは Workers Builds だけが行う。この文書の手で行う操作（用意、手での rollback、DB の復元、解約した組織のデータを消すこと）は人が手元で行い、Claude のセッションは実行しない（フックが止める）。
 
 ## 用意
 
@@ -26,6 +26,23 @@
 1. ダッシュボードの D1 の「Create Database」か、手元の `wrangler d1 create scrum-guild` で、本番の D1 を作る。置き場所は自動（作った人に近い地域）のまま。今の D1 は Asia Pacific にある（2026-10-25）
 2. D1 の ID を `wrangler.jsonc` の `d1_databases` の `database_id` に入れ、PR で `main` に入れる
 3. マイグレーションは手で当てない。次のデプロイが `migrations/` の全部を当てる
+
+### R2
+
+添付ファイルの中身を置く本番のバケットは、人がダッシュボードで用意する。R2 binding を含む版のマージはバケットを作った後で、バケットが無いままマージすると Workers Builds のデプロイが失敗する。
+
+本番のバケット `scrum-guild-attachments` は 2026-11-02 に作った（#743）。作り直すときの手順:
+
+1. Cloudflare のダッシュボードで ucan-lab のアカウントを選び、R2 Object Storage の Overview →「Create bucket」を開く。R2 を有効にしていないアカウントでは、先に有効にする（支払い方法の登録を求められる）
+2. バケット名を `scrum-guild-attachments` にし、地域（Location）は自動（Automatic、地域の指定なし）のまま作る（[地域の選び方](https://developers.cloudflare.com/r2/reference/data-location/)）
+3. 公開アクセスは有効にしない。Settings の Public Development URL（`r2.dev`）は無効のままにし、Custom Domains もつながない。添付ファイルは Worker が権限を確かめて返す（[公開アクセスの設定](https://developers.cloudflare.com/r2/buckets/public-buckets/)）
+4. バケットができたことと名前を確かめてから、`wrangler.jsonc` の `r2_buckets` に binding `ATTACHMENTS` とバケット名 `scrum-guild-attachments` を含む版をマージする。binding はデプロイが設定するので、ダッシュボードで Worker に足す必要はない
+
+人の端末の `pnpm exec wrangler r2 bucket create scrum-guild-attachments` でも作れる。続けて「設定に binding を足すか」を聞かれたら断る（足すと、打ったディレクトリの `wrangler.jsonc` を書き換え、別名の binding が増える）。「手元の dev を本番のバケットにつなぐか」も断る。
+
+ビルド用のトークン（下の「API トークン」）には R2 の権限を足さない。wrangler 4.153.0 は、デプロイのときに binding のバケットがあるかを R2 の API で確かめるが、403 で断られたら確かめを飛ばしてデプロイを続ける（`collectPendingResources` が 403 を受け流す）。最初のデプロイか、wrangler を上げた後のデプロイが R2 の権限で落ちたら、`Workers R2 Storage: Read` だけを足し、Edit は足さない（`package.json` は `^4.153.0` なので、版が上がるとこの挙動が変わりうる）。Read を足したトークンは、REST API で全組織の添付ファイルを読める権限として扱う。Edit を持たせると、書き換えと削除までできる。もっとも、トークンは Workers Scripts: Edit を持ち、`ATTACHMENTS` の binding を持つ Worker を上げられるので、R2 の権限を絞っても、乗っ取られた依存への守りは限られる。
+
+手元の `wrangler dev` と vitest の Workers の実行環境は R2 を模擬する。本番のバケットには触らず、手元用のバケットを Cloudflare に作る必要はない。
 
 ### Workers Builds の接続
 
@@ -63,7 +80,7 @@ Workers Builds が使えるのは、Builds が自分で作ったトークンだ�
 
 - 作られたときは、Workers AI、Queues、Containers、Secrets Store、R2、KV、AI Gateway などの編集と、全アカウントの全ゾーンの Email Routing Rules、Workers Routes、SSL and Certificates の編集まで、30 の権限を持っていた
 - マイグレーション（`d1 time-travel info`、`d1 migrations apply`）は D1: Edit で動く見込みで、最初のマイグレーションのデプロイで確かめる
-- 機能を足して権限が要るようになったら（R2 の添付ファイル、Queues など）、そのときに足す
+- 機能を足して権限が要るようになったら（Queues など）、そのときに足す。R2 の添付ファイルは権限を足さずにデプロイする見込みで、扱いは上の「R2」
 
 権限を変える手順:
 
@@ -97,10 +114,10 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 
 - 空の項目、形に合わない項目、前後の空白、大文字の手段名が1つでもあると、`/api/health` を含むすべての API が 500 の `internal` を返す。運用者でない人に運用者の権限を渡さないよう、一覧を部分的に読まずに止める。ログ（Workers Logs）に項目の位置（`invalidPositions`）だけが出て、値は出ない
 - 未設定は「運用者がいない」として扱う。設定してあって空の文字列にすると、500 になる
-- 最初の運用者は、初めてログインする前に自分の ID をこの一覧に入れる（形と調べ方は上の表）。組織も招待も無い本番では、運用者でない人は GitHub の認可を通っても `/login?error=denied` に戻る（Workers Logs には `step: "callback"`、`outcome: "denied"` が出る）。組織は運用者が作るので、一覧が未設定のままだと誰も入れない
+- 最初の運用者は、初めてログインする前に自分の ID をこの一覧に入れる（形と調べ方は上の表）。組織も招待も無い本番では、運用者でない人は GitHub の認可を通っても `/login?error=denied` に戻る（Workers Logs には `step: "callback"`、`outcome: "denied"` が出る）。アカウントを持たない人は、ログインの画面のボタンからは同じ `denied` に戻る（会員登録の画面 `/signup` からなら、アカウントを作ってログインできる）。すでにアカウントがある会員は、一覧が未設定のままでも自分の組織を作って入れる（運用者の画面と、運用者が作る組織の管理者の指名は使えない）
 - シークレットを入れるか変えたら、すぐに `https://scrum-guild.ucan-lab.workers.dev/api/health` を開き、200 で版が返ることを確かめる。500 なら、直前の変更を直す
 - 運用者を外したら、一覧を変えた版より前の版へ rollback しない。rollback はシークレットも戻し先の版の値に戻すので、外した運用者が戻る（下の「戻るもの、戻らないもの」）
-- 運用者を外すと、入れる組織も無い人は、次に組織の外の操作（`logout` を除く）を呼んだときにセッションが消え、ログインできなくなる
+- 運用者を外しても、その人のアカウントとセッションは消えない。入れる組織が無ければ、ログインでき、組織の選択の画面に「入れる組織がありません」が出るだけで、運用の画面には入れなくなる
 
 ### GitHub OAuth App
 
@@ -148,7 +165,7 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 
 - 戻り先の URL は、アプリが開始のときに渡す `redirect_uri`（`PUBLIC_ORIGIN` に `/api/auth/google/callback` を足した値）と、クライアントに登録した承認済みのリダイレクト URI が完全に合う必要がある。独自ドメインへ移すときは、リダイレクト URI も直す（上の「ドメインへ移す」）
 - 開発用の戻り先は、`pnpm dev` の画面の URL（`http://localhost:5173`。ワークツリーのポートは名前からずれるので、本物のログインはワークツリーの `.dev-port-offset` に 0 を書いて確かめる）。`DEV_PORT_OFFSET` で明示してポートをずらして確かめるときは、そのポートの戻り先（例 `http://localhost:5183/api/auth/google/callback`）も承認済みのリダイレクト URI に足す。`pnpm preview` で確かめるときは `http://localhost:8787/api/auth/google/callback` も足す
-- Google で指名した組織の招待の URL を失った、または期限が切れたときは、指名し直し（#60）が入るまで直す操作が無い。招待の URL は作った直後の画面にだけ出て、DB には SHA-256 のハッシュしか無いので、運用者にも取り出せない
+- Google で指名した組織の招待の URL を失った、または期限が切れたときは、運用の画面の一覧のその組織の「管理者を指名」から指名し直す。新しい招待の URL がダイアログに出て、前の待つ行は消えるので古い URL は使えなくなる。招待の URL は作った直後の画面にだけ出て、DB には SHA-256 のハッシュしか無いので、運用者にも取り出せない
 - 開発用のクライアントで確かめるのは、本物のログインとログアウトだけ。e2e は seed のセッションの Cookie で通し、クライアントの値を渡さない（`docs/development.md` の「開発とテストでのログイン」）
 - アプリは Google のアクセストークンを使わず、取り消しもしない。Google 側の許可を消すと、その人はログインのたびに同意画面が出直す
 - クライアントシークレットは git、ログ、Issue、PR に書かない。漏れたと分かったら、クライアントで新しいシークレットを作って入れ替え、動くことを確かめてから古いシークレットを無効にして消す
@@ -176,6 +193,7 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 - 変更したか確かめる場所は、ダッシュボードの Network の Pseudo IPv4。既定は Off
 - `CF-Connecting-IP` が無いリクエスト（手元の開発）と、解釈できない値は、`login:unknown` の1つの枠にまとめて数える。本番で `login:unknown` の行が増えたら、ヘッダーが付いていない経路が無いかを見る
 - ログインの開始は、全部の IP を合わせた全体の枠（`login:global`、10分に600回）でも数え、当たったことを知らせる通知は無い。「ログインできない」と言われたら、Workers Logs で `outcome: "too_many_global"` を引く。叩かれているときは、攻撃が止まってから窓の10分の後に開始が通るようになり、続いているあいだは止まったまま。止まるのは運用者を含む全員の新しいログインで、ログイン済みのセッション（使うたびに30日延びる）は使える。止まっている間に枠を避けて入る手段は無い。続くようなら、ダッシュボードの D1 で `rate_limits` の `login:` と `login48:` の行の偏りを見て、WAF のレート制限ルール（ドメインを取った後）を検討する。正規の利用が増えて当たっているときは、`src/server/auth/rate-limit.ts` の値を上げる
+- メールアドレスとパスワードのログインは、OAuth と別の枠で、同じ `CF-Connecting-IP` の丸め方で `password:` と `password48:` に数え（10分に30回、/48 は60回）、加えて同じメールアドレスに向けて `password-email:<メールアドレスの SHA-256>` で10分に10回まで数える。アカウントは締め出さないので、当たった人も窓の10分が過ぎれば入れる。ただし、メールアドレスの枠はどの IP からの試みも数えるので、その人のメールアドレスを知る第三者が10分ごとに10回送り続けると、本人は入れないままになる（受け入れ条件どおりの枠の限界。続くようなら、Workers Logs の `too_many` の偏りと送り元の IP を見て、Cloudflare の WAF で止める）。「パスワードでログインできない」と言われたら、Workers Logs で `provider: "password"` の `outcome` を引く（`too_many` なら枠、`invalid_credentials` ならメールアドレスかパスワードの誤り）。ログにメールアドレスは出ないので、どの人の試みかはログから分からない
 
 ## 出し方
 
@@ -195,6 +213,29 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 - `煙のテスト:` の行。何回目、何秒で版が一致したか
 
 続けてマージするときは、前のデプロイが終わってから次をマージする。Workers Builds はビルドを一列に並べず同時に走らせる（2026-10-25 に確かめた）。デプロイの段が重なると、スクリプトは別のビルドを潰さないよう戻さずに止まり、どちらの版が本番に残ったかを人が確かめることになる。ダッシュボードから古いコミットのビルドをやり直すのも、本番のコードを巻き戻すことになるので行わない。
+
+### 規約への同意の門を出す前に
+
+同意の門（`docs/development.md` の「操作の定義」の同意の門）を含む版を出す前に、チームへ次の3点を連絡しておく。
+
+- 画面が同意を求める。今の版の規約に同意していない人には同意の画面（`/consent`）が出て、同意するまで組織の画面にも運用の画面にも入れない
+- CLI（`sg`）と MCP も同じ扱いで、本人が同意するまで、その人の API トークンは 403 の `terms_required` になる
+- 同意は本人がブラウザで行う操作で、トークンからは行えない。同意が済んだ後は、トークンを作り直さずに使い続けられる
+
+出した後の確かめは、運用者が同意の画面を通ること（人が本番の画面で見る）。
+
+規約の版（`src/lib/legal/versions.ts`）を上げた後に、前の版へ戻す版を出すと、上げた版に同意した人は、最新の同意が今の版と違うので、もう一度同意の画面を通る。上げた版を一度も開かず前の版のままの人には影響しない。連絡は、戻す前に、上げた版に同意した人へ行う。
+
+### 規約を改めるとき
+
+利用規約かプライバシーポリシーを改めて版を上げると、全員が次に開いたときに同意の画面（`/consent`）で同意し直す。前の版に同意した人には、同意の画面が改めたこと、改めた文書の名前と改定日を出す。利用規約とプライバシーポリシーのどちらか一方だけを改めても、全員が同意し直す（同意は2つの文書の版の組に対する1回の記録で、片方の版が変われば組が変わるため）。画面の案内に挙がるのは、前の同意と版が違う文書だけ。
+
+1. 文面（`src/lib/legal/terms.md`、`src/lib/legal/privacy.md`）を直す。末尾の「改定日: YYYY-MM-DD」の行も、改めた日に直す
+2. `src/lib/legal/versions.ts` の版（`TERMS_VERSION`、`PRIVACY_VERSION`）を、改めた文書の末尾の「改定日: YYYY-MM-DD」と同じ日に上げる。文面の改定日と版が食い違うと、テスト（`src/lib/legal/documents.test.ts`）が落ちる
+3. 出す前に、チームとお試しの組織の人に、次に開いたときに全員が同意の画面を通ることを伝える。連絡の中身は上の「規約への同意の門を出す前に」の3点と同じ（CLI と MCP も、本人がブラウザで同意するまで 403 の `terms_required` になる）
+4. 出した後に、運用者が同意し直す画面（前の版に同意した運用者が `/consent` で「改められました」の案内を見て、同意して元の画面に戻ること）を、人が本番の画面で確かめる
+
+版を上げずに文面だけを直したときは、同意し直す人も画面の案内も出ない。版を上げないのは、誤字の修正のように同意し直しを求めない直しだけにする。
 
 ### デプロイが失敗で終わったとき
 
@@ -216,19 +257,25 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 
 ### seed のセッションが本番に入ったとき
 
-seed のセッションのトークン（`seed/sessions.ts`）は公開された開発用の値で、本番の `sessions` に行があれば、誰でも管理者と運用者として入れる。デプロイの煙のテストが、全部のトークンを本番の `POST /api/logout` に送って確かめる（`docs/development.md` の「開発とテストでのログイン」）。`logout` は入れる組織があるかを判定しない操作なので、seed の行が残っていれば、入れる組織が無くても 2xx で通る（判定をする `me` では、行があっても 401 になり、見逃す）。受け付けたトークンがあっても、残りのトークンも全部確かめてから失敗にする。ビルドのログの `本番が seed のトークンを受け付けました: admin（200）、operator（200）` には、受け付けられたトークンの名前（`seed/sessions.ts` のキー）だけを全部並べ、値は出さない。`logout` は受け付けたトークンの行を消す副作用を持つが、確かめた後で、行が残っていないことを下の手順の3で確かめる。スクリプトが前の版へ戻しても、戻るのはコードだけで、DB の行は残る。次の手順は人が手元（上の「手元の準備」）で実行する。Claude のセッションと自動のデプロイは `--remote` の `wrangler d1` を実行しない。
+この手順は、seed の API トークン（`seed/api-tokens.ts`）が本番に入ったときにも使う。API トークンの確認は `me` で行う。`me` は入れる組織の有無を確かめないので、行が残っていれば seed の組織が本番に無くても 2xx になり、検知できる。念のため、ビルドのログに `本番が seed のトークンを受け付けました` が出なくても、下の手順 3 の `api_tokens` の件数で確かめる。
+
+seed のセッションのトークン（`seed/sessions.ts`）と API トークン（`seed/api-tokens.ts`）は公開された開発用の値で、本番の `sessions` か `api_tokens` に行があれば、誰でも管理者として入れる（API トークンでは運用者の操作は 403 で、運用者にはなれない）。デプロイの煙のテストが、セッションのトークンを Cookie で本番の `POST /api/logout` に、API トークンを `Authorization: Bearer` で本番の `POST /api/me` に送って確かめる（`docs/development.md` の「開発とテストでのログイン」）。`logout` は Cookie のセッションの行があれば（入れる組織が無くても）2xx で通るので、seed の行が残っていれば見つかる。受け付けたトークンがあっても、残りのトークンも全部確かめてから失敗にする。ビルドのログの `本番が seed のトークンを受け付けました: admin（200）、operator（200）` には、受け付けられたトークンの名前（`seed/sessions.ts` のキー）だけを全部並べ、値は出さない。`logout` は受け付けたトークンの行を消す副作用を持つが、確かめた後で、行が残っていないことを下の手順の3で確かめる。スクリプトが前の版へ戻しても、戻るのはコードだけで、DB の行は残る。次の手順は人が手元（上の「手元の準備」）で実行する。Claude のセッションと自動のデプロイは `--remote` の `wrangler d1` を実行しない。
 
 1. 使われた形跡を、ビルドのログの `seed のトークン（…）を受け付けました` と、Workers Logs の `operation: "logout"` と `operation: "me"` や、`accountId` が下の seed のアカウントの ID のログで見る
-2. seed のセッションの行を消す。アカウントの ID は `seed/sessions.ts` の `accountId`（`019a0000-0000-7000-8000-000000000101` から `…104` の4つ）
+2. seed のセッションと API トークンの行を消す。アカウントの ID は `seed/sessions.ts` の `accountId`（`019a0000-0000-7000-8000-000000000101` から `…104` の4つ）
 
    ```bash
    pnpm exec wrangler d1 execute scrum-guild --remote --command "DELETE FROM sessions WHERE account_id IN ('019a0000-0000-7000-8000-000000000101', '019a0000-0000-7000-8000-000000000102', '019a0000-0000-7000-8000-000000000103', '019a0000-0000-7000-8000-000000000104')"
+   ```
+   ```bash
+   pnpm exec wrangler d1 execute scrum-guild --remote --command "DELETE FROM api_tokens WHERE account_id IN ('019a0000-0000-7000-8000-000000000101', '019a0000-0000-7000-8000-000000000102', '019a0000-0000-7000-8000-000000000103', '019a0000-0000-7000-8000-000000000104')"
    ```
 
 3. 行が消えたことと、seed のほかの行（`seed/data.sql`）が本番に残っていないことを確かめる。
 
    ```bash
    pnpm exec wrangler d1 execute scrum-guild --remote --command "SELECT count(*) AS n FROM sessions WHERE account_id LIKE '019a0000-0000-7000-8000-%'"
+   pnpm exec wrangler d1 execute scrum-guild --remote --command "SELECT count(*) AS n FROM api_tokens WHERE account_id LIKE '019a0000-0000-7000-8000-%'"
    pnpm exec wrangler d1 execute scrum-guild --remote --command "SELECT id, slug FROM organizations WHERE id LIKE '019a0000-0000-7000-8000-%'"
    ```
 
@@ -264,7 +311,7 @@ rollback で戻るのは、版が持つものすべて。コードと設定の�
 次のものは戻らない。
 
 - D1 のデータとスキーマ（下の「DB を戻す」）
-- cron やルート（triggers）の変更。`wrangler deploy` が版と一緒に反映する。triggers を変えた版を戻すときは、手元（上の「手元の準備」）で戻し先の版のコミットを checkout し、その `wrangler.jsonc` で `wrangler triggers deploy` を実行して当て直す。今の `main` で実行すると、戻したい triggers をもう一度当てるだけになる。今の `wrangler.jsonc` の triggers は、毎分（`* * * * *`）の期限切れの行の掃除だけ
+- cron やルート（triggers）の変更。`wrangler deploy` が版と一緒に反映する。triggers を変えた版を戻すときは、手元（上の「手元の準備」）で戻し先の版のコミットを checkout し、その `wrangler.jsonc` で `wrangler triggers deploy` を実行して当て直す。今の `main` で実行すると、戻したい triggers をもう一度当てるだけになる。今の `wrangler.jsonc` の triggers は、毎分（`* * * * *`）の期限切れの行の掃除と、毎時 0 分（`0 * * * *`）のお試しの期限切れの停止の2つ
 
 ### DB を戻す
 
@@ -277,12 +324,26 @@ rollback で戻るのは、版が持つものすべて。コードと設定の�
 
 マイグレーションは「広げてから縮める」に従うので、コードだけを戻せば足りることが多い。DB まで戻すのは、データを壊したときに限る。
 
+### マイグレーションをまとめ直したとき（DB を作り直す）
+
+「DB を作り直してよい期間」（`docs/development.md`）に、人が決めた Issue で既にあるマイグレーションを書き換えたら、本番の D1 を作り直す。D1 は当てたマイグレーションを名前で `d1_migrations` に記録するので、書き換えたファイルはデプロイしても当たり直さず、本番の表は古い定義のまま残る（`db:migrate:fresh` と CI の migration のジョブは空の D1 に流すので、このずれを見つけない）。
+
+- 今の対象: #256 で 0001 の `users` と `invitations` の `login_email` の CHECK を `login_provider IN ('google', 'password')` に広げた。#256 自体は `login_email` を使わないので作り直さなくても動くが、`password` で待つ指名と招待（#257 以降）を本番で使う前に作り直す
+
+1. 作り直す日と、全員がログインし直すこと、取り込み元から入れ直せないもの（完了の記録、経験値、手で作ったタスク）が消えることを、チームに知らせる
+2. 戻せる時点を控える。`wrangler d1 time-travel info scrum-guild` のブックマークを残す（上の「DB を戻す」）
+3. 手元（上の「手元の準備」）で、全部の表と `d1_migrations` を消す。または新しい D1 を作り、`wrangler.jsonc` の `database_id` を PR で替える
+4. 次の Workers Builds のデプロイが、全部のマイグレーションを当てる。ビルドのログで当たったことを確かめる
+5. 運用者が組織と最初の管理者を作り直し、チームのデータを入れ直す
+
+手元の D1 も同じく、当て済みのファイルは当たり直さない。`.wrangler/state/v3/d1` を消してから `pnpm db:seed` する。
+
 ### 期限切れの行の掃除
 
 毎分の cron（`* * * * *`）が、`oauth_states`、`sessions`、`rate_limits` の期限を過ぎた行を消す（`src/server/scheduled/`、条件と上限は `docs/data-model.md` の「期限切れの行の掃除」）。掃除の失敗や遅れを知らせる通知は無い。D1 の書き込みの使用量の通知（上の「Cloudflare のアカウント」）が届いたら、Workers Logs で `job: "cleanup-expired"` のログを見る。
 
 - `level: "warn"`: 回数か時間の予算を使い切っても、消すのが追いついていない。`behind` が追いついていない表。1回の warn では動かない。毎分続いたときに、行が増えている原因（攻撃や設定の誤り）を調べる
-- `level: "error"`: その表の掃除が失敗した。`table` が表の名前、`error` が例外の種類。cron の失敗にも残る。ほかの表は消えている
+- `level: "error"`: その表の掃除が失敗した。`table` が表の名前、`error` が例外の種類、`cause` が例外の message を分けた分類名（`network`、`timeout`、`overloaded`、`busy`、`reset`、`storage`、`constraint`、`syntax`、どれにも当たらないものは `unknown`。message そのものは SQL や値が混ざりうるので出さない）、`rounds` がその表で成功した文の回数、`elapsedMs` がその表の掃除を始めてからの経過時間。`network`、`timeout`、`overloaded`、`busy`、`reset` は D1 側の一時的な失敗で、次の回で消えていれば様子を見る。`constraint`、`syntax` は文の不具合なので直す。`storage` は D1 の容量の上限なので、容量を調べる。`unknown` は分類に無い失敗なので、`requestId` と `traceId` から Workers Logs を調べ、分類を足す。cron の失敗にも残る。ほかの表は消えている
 - `level: "info"`: 1行以上消した回の件数（`deleted` は表ごとの合計、`rounds` は表ごとに文を送った回数）。掃除が動いていることは、このログが出ることで分かる。行が無い回は何も出ない
 - 掃除だけが静かに止まったときは、通知が来ないので気づきにくい
 
@@ -298,6 +359,20 @@ rollback で戻るのは、版が持つものすべて。コードと設定の�
 
 ## 組織
 
+### お試しの期限切れの停止
+
+毎時 0 分の cron（`0 * * * *`）が、お試しの期限（`organizations.trial_ends_on`、UTC の日付）が今日（UTC）より前で、停止していない組織を、一時的な停止にする（`src/server/scheduled/suspend-expired-trials.ts`、書き込みは `docs/data-model.md` の「書き込みの単位」のお試しの期限切れによる停止）。期限の当日までは使え、期限の翌日（UTC）に入って1時間のうちに止まる。運用者が先に止めた組織と、運用者が作った組織（期限が無い）は変わらない。止めた組織の変更の履歴（`change_logs`）には、`operator` も空の行が `suspend` で残り、組織の管理の画面には「システム」の操作として出る。
+
+Workers Logs で `job: "suspend-expired-trials"` のログを見る。
+
+- `level: "info"`: 止めた組織の件数（`suspended`）。止める組織が無い回は何も出ない
+- `level: "warn"`（`limited: true`）: 止めた件数が1回の上限（200件）に届いた。積み残しは次の回に止まる。続けて出るなら、期限切れがたまっている
+- `level: "error"`（`code: "internal"`）: 組織は止まったが、その履歴を書けなかった。`organization_id` が組織の ID、`changes` が書こうとした履歴の `changes_json`、`at` が停止の日時、`error` が例外の名前。組織の停止は残り、ほかの組織の処理は続く。履歴は、このログの値から手で補う（`change_logs` に、`entity_type` が `organization`、`action` が `suspend`、`operator` と `actor_user_id` と `workspace_id` が空の行を足す）
+
+cron は、止める文が失敗すると例外で終わり、次の回（1時間後）で同じ条件の組織を止め直す。1回に止める組織は、期限の古い順に200件まで（`SUSPEND_EXPIRED_TRIALS_LIMIT`）で、残りは次の回に回る（履歴の書き込みが D1 の呼び出し数の上限に当たらないため）。
+
+この版から戻すと、戻し先のコードは `0 * * * *` の式を表に持たず、毎時 0 分に例外で失敗する。triggers は版と一緒に戻らないので、戻すときは「手元の準備」の手順で、戻し先の `wrangler.jsonc` の triggers を当て直す。
+
 ### 停止と再開
 
 運用の画面（`/operator`。運用者だけが開ける）の組織の一覧から行う。
@@ -309,9 +384,10 @@ rollback で戻るのは、版が持つものすべて。コードと設定の�
 3. 「停止する」を押す。一覧の組織の名前の横に「停止 <日>」が出る。解約なら「<日> に消す」も出る
 
 - 停止した組織には、管理者を含め誰も入れない。停止していなければ入れた人の画面は「この組織は停止しています。運用者に問い合わせてください。」で、ほかの人の画面は「見つかりません」。問い合わせの窓口は運用者
-- 停止した組織にしか入れない人は、停止するとセッションが消え、ログインし直すと「所属しているか招待されている組織は停止しています」が出る。再開した後も、もう一度ログインが要る
+- 停止した組織にしか入れない人も、セッションは消えず、ログインできる。組織の選択の画面（`/`）に、その組織が停止していることと、運用者に問い合わせることが出る。再開すれば、ログインし直さずに入れる
 - 「解約」の消す予定日は、停止した日時の UTC の日付の30日後。停止中に解約へ切り替えたときの数え方は、下の「停止の理由を変える」。一覧に出る日付（停止した日も UTC の日付）と、`organizations.purge_on` が同じ値
-- 取り込み（#67）と日をまたぐ処理を作るときに、`suspended_at` の組織を飛ばす。今は止める定期処理が無い
+- 取り込み（#67）と日をまたぐ処理を作るときに、`suspended_at` の組織を飛ばす
+- お試しの期限が過ぎた組織は、上の「お試しの期限切れの停止」で自動で止まる。止まった組織は一時的な停止と同じ状態（消す予定日は無い）で、運用者は同じ手順で再開か解約への切り替えができる。運用者が止めた組織の停止の理由は、この定期処理が変えない
 
 停止の理由を変える（再開しない）。
 
@@ -320,18 +396,130 @@ rollback で戻るのは、版が持つものすべて。コードと設定の�
 
 - 解約に変えると、変えた日の UTC の日付の30日後が消す予定日になる。一時的な停止に変えると、消す予定日の印が消える
 - 今と同じ理由には変えられない
+- 解約で消す予定日を過ぎた組織（予定日が今日（UTC）より前）は、一時的な停止に変えられない。行に「停止の理由を変える」が出ず、「消す予定日を過ぎたので、再開も停止の理由の切り替えも管理者の指名もできません」と出る（自分用の行は指名の操作が無いので、「管理者の指名も」を除いた文言が出る）
 
 再開する。
 
 1. 停止中の組織の行の「再開する」を押す。確認は出ない
 2. 一覧の印が消え、元どおり入れる
 
-- 解約で消す予定日を過ぎていても、データを消すまでは再開できる
+- 再開した時点で、お試しは終わる。同じ文で組織のお試しの期限（`trial_ends_on`）を空にするので、期限を過ぎて自動で止まった組織も、再開の後は定期処理で止まらない（期限を過ぎていない組織を再開したときも同じ）。お試しの期限より前に支払いを受けたときは、期限が過ぎて止まるのを待ち、止まった後に再開する。お試しを、停止させずに終える操作は無い。断られた再開（409）と、停止、停止の理由の変更では期限を変えない
+- 解約で消す予定日を過ぎた組織（予定日が今日（UTC）より前）は再開できない。行に「再開する」が出ず、「消す予定日を過ぎたので、再開も停止の理由の切り替えも管理者の指名もできません」と出る（自分用の行は「管理者の指名も」を除いた文言）。境目は下の「解約した組織のデータを消す」の SQL のガードと同じで、予定日の当日までは再開できる。画面を開いた後に日付が変わって断られたときも、同じ理由が出る（API は 409 の `purge_due`）。予定日を過ぎた後に戻す道は無い。顧客が戻るなら、データを消した後に組織を作り直す
 - 停止、再開、停止の理由の変更は、その組織の変更の履歴（`change_logs`。`entity_type` が `organization`、`action` が `suspend`、`resume`、`update`、`operator` に運用者のログインの ID）に残る
 - 履歴の書き込みに失敗しても、操作は成功する。このとき `organizations` の状態を正とし、Workers Logs の `reason: "組織の状態は書けたが、変更の履歴を書けなかった"` の行（`operation`、`action`、`organizationId`、`changes`（`changes_json` と同じ前後の値）、`at`（操作の日時）、`error`（例外の名前）が付く）を見て、欠けた履歴の行を手で補う
 - 一覧が「状態が変わっていました」と出したときは、別の画面で先に操作が済んでいる。読み直した一覧を見て、必要なら操作し直す
 
-データを消す手順は、解約した組織が出る前に、ここに書く。
+### 人数と添付ファイルの上限を変える
+
+1. 組織の行の添付ファイルの上限の下の「人数と容量の上限を変える」を押す。今の上限に合う段階（小さい組織、標準）か、合わなければ「ほかの値」に今の値を入れた状態でダイアログが開く
+2. 段階を選ぶか、「ほかの値」に人数の上限（人）と添付ファイルの上限（GB の整数）を入れ、「変える」を押す。一覧の上限が変わる
+
+- 自分用の組織（`kind` が `personal`）の行には「人数と容量の上限を変える」が出ない（添付ファイルの上限の値は出る）。自分用の上限は画面から変えられない（運用者の操作は API トークンでは呼べないので、CLI でも変えられない）。サーバーの `organization-quota-update` は自分用の上限も受けるが、自分用の人数の守りは上限の値でなく `kind` で行うので、人数の上限を上げても人は増えない。自分用の添付ファイルの上限を上げる必要が出たら、画面に足すかを別の Issue で決める
+- 停止中の組織も変えられる。人数を今の人数より小さくしても、今いる人は残り、上限を下回るまで、まだ数えられていない人の招待と管理者への指名だけが止まる
+- 添付ファイルの上限を上げると、80% の通知の日時（`attachment_quota_warned_at`）が空に戻る
+- ダイアログを開いた後に別の画面で上限が変わっていたら「状態が変わっていました」と出て変わらない。読み直した一覧を見て、必要なら変え直す
+- 変更は、その組織の変更の履歴（`action` が `update`、変わった列の前後の値）に残る。履歴の書き込みに失敗したときの扱いは停止と同じ（Workers Logs の `operation` は `organization-quota-update`）
+
+### 管理者の指名し直し
+
+組織の行の「管理者を指名」から行う。指名し直しは、その組織の変更の履歴に運用者の操作として残る。
+
+- 解約で消す予定日を過ぎた組織（予定日が今日（UTC）より前）には指名し直せない。行に「管理者を指名」が出ず、「消す予定日を過ぎたので、再開も停止の理由の切り替えも管理者の指名もできません」と出る。ダイアログを開いた後に日付が変わって断られたときも、理由が出る（API は 409 の `purge_due`）。消している途中で組織の中に行を足さないため。ただし、断る判定と組織の中への書き込みは別の DB なので、判定の直後に日付が変わる窓は残る。その窓で書かれた行は、下の「解約した組織のデータを消す」を流し直せば消える
+
+- 自分用の組織（`kind` が `personal`）には指名し直せない。行に「管理者を指名」が出ず、管理者の状態の印も出ない（API は 409 の `personal_organization`）。自分用は持ち主の1人だけで使い、運用者の指名で2人目の管理者が入らないようにするため。最初の管理者を書けず、組織の行も戻せなかった二重の失敗で、管理者のいない自分用が残ったときは、そのアカウントの自分用の枠が塞がり、指名し直しでも直せない。直すときは、その組織を「解約」で停止し（上の「停止と再開」）、消す予定日を過ぎてから下の「解約した組織のデータを消す」で行を消す。行が消えれば、本人は自分用を作り直せる
+- 運用者が自分を管理者に指名するのは、画面が断る自分の GitHub のログインに限らず、手順として行わない。自分の Google のメールアドレスで指名して招待の URL を自分で開くことと、アカウントに結んでいない別の GitHub のアカウントで指名することは、仕組みでは止められない（`docs/requirements.md` の「組織と運用者」）
+- 組織の中を見る必要があるときは、その組織の管理者に頼んで、組織のユーザーとして招待か指名をしてもらう
+
+### 解約した組織のデータを消す
+
+解約で停止し、消す予定日を過ぎた組織の D1 の行を、すべて消す。消すのは、組織の中のすべての表の、その組織の行と、最後に `organizations` の行。手順は人が手元（上の「手元の準備」）で実行する。Claude のセッションと自動のデプロイは `--remote` の `wrangler d1` を実行しない。
+
+消さないもの。
+
+- アカウント（`accounts`、`account_logins`）。ほかの組織でも使うので残る。どの組織にも入れなくなったアカウントをどうするかは #407 で決める
+- セッション（`sessions`）。セッションはアカウントに結ぶので、組織を消しても消さない。入れる組織を失った人のセッションは消さない（アカウントがあればログインできる）。消えるのは、ログアウトと期限切れ
+
+消した行は戻せない。Time Travel（上の「DB を戻す」。直近30日まで）は DB の全体を戻し、その後に書かれたほかの組織のデータも失うので、この組織だけを戻す手段にはならない。一方で、消した後も最大30日は、Time Travel に消す前の状態が残る。この組織のデータが D1 から跡形もなく無くなるのは、消してから30日後。
+
+この手順を本番で初めて使う前に、#406（外部キーの子の列の索引）を済ませる。#406 が無いと、親の行を消す文が子の表を全組織の分まで読み、DB が大きいと1文が時間の上限に当たる。
+
+消す予定日を過ぎた組織は、運用の画面からも API からも再開できず、一時的な停止にも切り替えられない（409 の `purge_due`。上の「停止と再開」）。境目は消す SQL のガード（`purge_on < date('now')`）と同じなので、ガードが真の組織を、消している間に戻されることはない。消している途中の組織を戻す道は無いので、消し始めたら終えるまで進める。
+
+1. 運用の画面（`/operator`）の組織の一覧で、その組織の名前の横に「停止 <日>」と「<日> に消す」が出ていて、消す日が今日（UTC）より前であることを確かめる。「<日> に消す」が無い組織（一時的な停止）と、消す日が今日か先の組織は消さない。名前の列の slug を控える
+2. 組織の ID を確かめる。運用の画面には ID が出ないので、控えた slug で引く。`suspended_at` と `purge_on` が空でなく、`purge_on` が今日（UTC）より前であることも見る
+
+   ```bash
+   pnpm exec wrangler d1 execute scrum-guild --remote --command "SELECT id, slug, name, suspended_at, purge_on FROM organizations WHERE slug = '<slug>'"
+   ```
+
+3. 消す SQL を、リポジトリの外（`/tmp`）へ書き出す。スクリプトは DB に触らず、組織の ID を埋めた `DELETE` を1行に1文で書くだけ（コメントの行は無い）。ID は小文字の UUID の形だけを受ける。以降の段は、同じシェルで `id` を使う
+
+   ```bash
+   id=<組織の ID>
+   node scripts/purge-organization.ts "$id" > "/tmp/purge-$id.sql"
+   ```
+
+   書き出した SQL は、外部キーの子から順に表ごとの `DELETE` を並べ、最後に `organizations` の行を消す。どの文にも「その組織が解約で停止していて、`purge_on` が今日（UTC）より前」の条件が付く。ID を取り違えても、一時的な停止の組織、停止していない組織、消す日が今日か先の組織、無い ID では1行も消えない。
+   D1 の行を消す前に、その組織の添付ファイルのキーも `/tmp` に書き出す。失敗したら先へ進まない。途中から再開するときは、最初に書き出したファイルを上書きせず保持する（行を消した後はキーを引けない）。
+
+   ```bash
+   if [ -e "/tmp/purge-$id.attachments.json" ]; then
+     echo "書き出し済み。上書きしない"
+   else
+     pnpm exec wrangler d1 execute scrum-guild --remote --json --command "SELECT object_key FROM attachments WHERE workspace_id IN (SELECT id FROM workspaces WHERE organization_id = '$id')" > "/tmp/purge-$id.attachments.tmp" &&
+       jq -e '.[0].success == true and (.[0].results | type == "array")' "/tmp/purge-$id.attachments.tmp" &&
+       mv "/tmp/purge-$id.attachments.tmp" "/tmp/purge-$id.attachments.json"
+   fi
+   jq '.[0].results | length' "/tmp/purge-$id.attachments.json"
+   ```
+
+   本来の名前（`.json`）のファイルは、`wrangler` が成功を返し、`jq` で `success` が真で `results` が配列だと確かめた後にだけできる。`wrangler` か `jq` が失敗したら `.json` はできず、最後の `jq` が誤りで止まる。そのときは `/tmp/purge-$id.attachments.tmp` を消してから、この段を流し直す。`.json` が既にあれば書き出さない（流し直しで、行を消した後の空の結果に上書きしないため）。最後の `jq` が返す数（添付が無ければ 0）を控える。
+4. 流す前の数を控える。`--count` は、組織の slug と停止の状態（`suspended_at`、`purge_on`）と、`organizations` と消す表ごとの、その組織の行の数を返す1行の `SELECT` を書き出す。出力の `slug` が手順 1 で控えた slug と同じであることを確かめる（違えば ID を取り違えているので、ここで止まる）。出力を手元に残し、手順 6 で比べる
+
+   ```bash
+   pnpm exec wrangler d1 execute scrum-guild --remote --json --command "$(node scripts/purge-organization.ts --count "$id")" | tee "/tmp/purge-$id.before.json"
+   ```
+
+5. 1文ずつ流す。`--file` は使わない。`--file` は取り込みの API を使い、流している間は D1 全体がクエリに答えなくなる（wrangler が「your D1 database will be unavailable to serve queries」と出す）。`--command` の1文は、ほかのクエリと並んで動く。文が誤りを返したら、そこで止まる
+
+   ```bash
+   while IFS= read -r statement <&3; do
+     echo "$statement"
+     pnpm exec wrangler d1 execute scrum-guild --remote --command "$statement" || { echo "ここで止まった: $statement" >&2; break; }
+   done 3< "/tmp/purge-$id.sql"
+   ```
+
+   止まっても、ループ全体の終了コードは 0 になる。「ここで止まった」が出ていないことを見てから手順 6 へ進む（出ていても、手順 6 の表で見分けられる）。
+
+   ファイルは標準入力でなく3番で読む。標準入力で渡すと、ループの中のコマンドが標準入力を読んだときに残りの行を読んでしまい、その後の文が流れない。
+6. 残りを数え、手順 4 の数と比べる
+
+   ```bash
+   pnpm exec wrangler d1 execute scrum-guild --remote --json --command "$(node scripts/purge-organization.ts --count "$id")"
+   ```
+
+   表の上の行から順に当てはめる。
+
+   | 流した後 | 起きたこと | すること |
+   | --- | --- | --- |
+   | `organizations` が 1 で、`suspended_at` か `purge_on` が空 | 消している間に再開された。一部の行が消えた組織が動いている。画面と API は予定日を過ぎた組織の再開を断るので、D1 を直に書き換えたときだけ起こる | 流し直さない（条件に当たって何も消えない）。どうするか（もう一度解約で停止し、予定日の後に消し直すなど）は、その組織の管理者と話して人が決める |
+   | 全部 0（`suspended_at` と `purge_on` は空） | 消し終えた | 手順 7 へ進む |
+   | `organizations` が 1 で、ほかのどれかが手順 4 の数より減っている | 途中で止まった | 手順 5 を同じ順でもう一度流す |
+   | 全部が手順 4 の数のまま | 条件に当たって、何も消えていない | 手順 2 の値を見直す（一時的な停止、消す日が今日か先、ID の誤り）。手順 5 が最初の文で誤りを返して止まったときもこの形になるので、そのときは誤りを見て流し直す |
+
+7. 書き出した JSON の `results` の `object_key` ごとに、次のコマンドで R2 のファイルを消す。キーが対象の `<組織の ID>/` で始まることを確かめてから `<キー>` に入れ、すべての削除の成功を確かめる。失敗したキーはやり直す
+
+   ```bash
+   pnpm exec wrangler r2 object delete "scrum-guild-attachments/<キー>" --remote
+   ```
+
+   Cloudflare のダッシュボードで R2 のバケット `scrum-guild-attachments` のオブジェクトの一覧を開き、`<組織の ID>/` の前方一致で絞る。残り（D1 に行の無いファイルを含む）があれば消し、一覧を再読み込みして残りが無いことを確かめる。wrangler 4.153 には R2 の一覧のコマンドが無いので、この最後の確認にはダッシュボードを使う。ここまで人が手元で行い、セッションは実行しない。
+8. 消したことを #220 にコメントで残す。書くのは、消した日（UTC）と組織の ID。このリポジトリは公開なので、slug と組織の名前（顧客を表しうる）と、実在の個人名は書かない
+9. 書き出したファイル（`/tmp/purge-$id.sql`、`/tmp/purge-$id.before.json`、`/tmp/purge-$id.attachments.json`、残っていれば `/tmp/purge-$id.attachments.tmp`）を消す
+
+- 途中で止まったら（通信が切れた、D1 が誤りを返した）、手順 5 を同じファイルでもう一度流す。どの文にも条件が付き、`organizations` の行を最後に消すので、条件は最後の文まで当たり続け、残った行から消える。消し終えた後にもう一度流しても誤りにならない
+- 1文は D1 の1クエリとして動き、1クエリの時間の上限（30秒）を超えると、その文は何も消さずに誤りを返す。親の行を消す文は、外部キーの検査で子の表をほかの組織の分まで読むので、時間は消す組織の大きさでなく DB 全体の大きさで決まる。索引（#406 で足す）が揃うまでは、DB が大きいと1文が上限に当たりうる。同じ文で繰り返し止まるなら、流し直しを続けず、#406 を待つ
+- 組織の中の表を足したときは、消す文も足す（`docs/development.md` の「入口を守る規則」の、表を足すときの箇条書き。足し忘れると `test/purge-organization.test.ts` が落ちる）
 
 ## 鍵の入れ替え
 
@@ -339,4 +527,47 @@ rollback で戻るのは、版が持つものすべて。コードと設定の�
 
 ## 本番で壊れたとき
 
-まだ書いていない。気づく手段は `docs/development.md` の「本番で壊れたことに気づく」、戻す手順は上の「戻し方」。
+書いてあるのは下の「画面のエラー」の探し方だけで、ほかはまだ書いていない。気づく手段は `docs/development.md` の「本番で壊れたことに気づく」、戻す手順は上の「戻し方」。
+
+### 画面のエラー
+
+画面で捕まえていない例外と Promise の拒否は、Workers Logs に `level: "error"`、`source: "client"` の1行で残る（送り方と受け方は `docs/development.md` の「本番で壊れたことに気づく」）。届いたことを知らせる通知は無いので、出した後や「画面が動かない」と言われたときに見る。
+
+探し方: Cloudflare のダッシュボードの Workers & Pages で `scrum-guild` の Observability を開き、Events（Workers Logs）で `source` が `client` のものに絞る。版ごとに見るなら `version`（Worker の版）か `clientVersion`（画面の版）、画面ごとなら `route` で絞り、`name` と `message` でまとめる。
+
+項目の意味:
+
+| 項目 | 意味 |
+| --- | --- |
+| `requestId` | 送信を受けた呼び出しの `cf-ray` |
+| `kind` | `error`（捕まえていない例外）か `unhandledrejection`（捕まえていない Promise の拒否） |
+| `name` | 例外の名前（`TypeError` など）。英字40字までに合わなければ `Error` |
+| `message` | メッセージ。サーバーが次の順に `…` に伏せた先頭200字: 1. `スキーム://` から末尾までと、V8 の `Invalid regular expression: /…/` の元の文字列 2. 引用符の種類ごとに最初の引用符から最後の引用符まで（1つだけなら末尾まで） 3. 最初の「`: `」か「` in `」の後ろを末尾まで 4. 英字だけでない語（数字、`@`、`/`、`.`、`-`、`_`、英字でない文字を含む語）と UUID。伏せすぎることが多い（`can't save 'x'` は `can'…'`、`Unexpected token "x" in JSON` は `Unexpected token "…" in …` になる）ので、元の文言は `name` と場所から、手元で再現して確かめる。Error でない拒否は文字列ならそのまま、ほかは `Non-Error rejection (<型>)` |
+| `location` | 起きた場所の1か所（`file`、`line`、`column`）。`file` は `/_app/` の下のファイルで、ほかのオリジンや拡張機能なら `external`。場所が取れなければ `null` |
+| `route` | 画面の `route.id`（`/[slug]/w/[id]/plan` など）。当たらない経路は `null` |
+| `clientVersion` | 画面の版（build のコミットの SHA）。開いたままの古い画面からは、前の版の SHA が来る。形の合わない値（英数字と `.`、`_`、`-` の64字まででない）は `invalid` |
+| `version` | 受けた Worker の版 |
+| `browser` | `family`（`chrome`、`firefox`、`safari`、`edge`、`other`）、`major`（主な版）、`mobile` |
+
+誰のエラーか、IP、URL のクエリはログに残らない。ただし、回数の上限を数える D1 の `rate_limits` には、IP のキー（`client-error:<IP>`、IPv6 は /64 と /48）が、最長の窓（10分）を過ぎて毎分の掃除が消すまで残る（`docs/data-model.md` の `rate_limits`）。送信は10分に、同じ IP（IPv6 は /64）から20回、IPv6 の /48 から40回、全体で300回までで、超えた分と、同じページで同じエラーの2回目からは残らない。数が少ないから影響が小さいとは限らない。Origin の検査はブラウザの外（`curl` など）からは偽れるので、行は誰でも作れる。画面の外から来た行を見分ける手段は無く、手元で再現できるかで確かめる。
+
+残る危険（受け入れた）: `message` の伏せ方は、引用符、区切り（`: `、` in `）、英字でない文字を目印にする。英字だけの値（人の名前や英単語のパスワードなど）が、引用符の外で、区切りに当たらない位置に入る文言は、伏せられずに残りうる。ログを読めるのは運用者（Cloudflare のアカウントのメンバー）だけ。読んだ行を Issue などに貼るときは、`message` に利用者の値が残っていないかを見てから貼る。
+
+元の位置へ戻す: `file` は build で圧縮したファイルなので、`clientVersion` の SHA を手元で同じに build し、ソースマップで元のファイルと行に戻す。
+
+1. その SHA のワークツリーを切る: `git fetch origin && git worktree add worktrees/client-error-<SHA の先頭7字> <SHA>`。切ったワークツリーで `pnpm install`
+2. 本番と同じ版で、ソースマップを出して build する: `APP_VERSION=<SHA> pnpm exec vite build --sourcemap hidden`。`hidden` は JS に参照を足さないので、出る JS は本番と同じ（2026-10-27 に確かめた）。`build<file>` があることを確かめる。無ければ SHA か依存が違う
+3. 行と列を戻す（`column` は1から数え、ソースマップは0から数えるので1を引く）
+
+```sh
+node --input-type=module -e "
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+const require = createRequire(process.cwd() + '/node_modules/.pnpm/node_modules/');
+const { TraceMap, originalPositionFor } = require('@jridgewell/trace-mapping');
+const [file, line, column] = process.argv.slice(1);
+console.log(originalPositionFor(new TraceMap(readFileSync('build' + file + '.map', 'utf8')), { line: Number(line), column: Number(column) - 1 }));
+" <file> <line> <column>
+```
+
+4. 終わったら `git worktree remove worktrees/client-error-<SHA の先頭7字>` で消す

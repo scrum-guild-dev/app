@@ -13,6 +13,7 @@
 <body>
 <div id="app"></div>
 <script src="icons.js"></script>
+<script src="art.js"></script>
 <script src="sample-data.js"></script>
 <script src="kit.js"></script>
 <script>
@@ -50,9 +51,9 @@ SQ.mount("members", () => {
         <div class="form-row">
           ${loginTarget("login")}
           <div class="field"><span class="field-label">ロール</span><div class="segmented" role="radiogroup"><label><input type="radio" name="role" checked><span>一般</span></label><label><input type="radio" name="role"><span>${t("leader")}</span></label></div></div>
-          <button class="btn is-primary" type="button" data-invite-link="login" data-invite-done="招待しました">${icon("mail")}招待する</button>
+          <button class="btn is-primary" type="button" data-invite-link="login" data-invite-done="招待しました" data-invite-kind="workspace">${icon("mail")}招待する</button>
         </div>
-        <span class="field-hint">Scrum Guild は招待をメールで送りません。GitHub の招待は${t("organization")}の URL（<span class="mono">scrum-guild.dev/${esc(D.organization)}/</span>）を、Google の招待は招待したときに出る招待の URL（14日で切れます）を本人に伝えてください。</span>
+        <span class="field-hint">Scrum Guild は招待をメールで送りません。Google の招待は、招待したときに出る招待の URL（14日で切れます）を本人に伝えてください。GitHub の招待は、次の${t("organization")}の URL を伝えてください。 <span class="mono wrap-anywhere">https://scrum-guild.dev/${esc(D.organization)}/</span></span>
         ${D.invitations.map((i) => `<div class="load-foot" style="padding-top:var(--space-3);border-top:1px solid var(--color-rule)"><span><span class="mono">${esc(i.login)}</span>（${i.via === "google" ? "Google" : "GitHub"}）・${i.role === "member" ? "一般" : t("leader")}・${esc(user(i.by).name)}が ${esc(i.at)} に招待${i.expires ? `・${esc(i.expires)} まで` : ""}</span><button class="btn is-sm is-quiet" type="button" data-toast="招待を取り消しました">取り消す</button></div>`).join("")}
       </div>
       <div class="panel">
@@ -63,6 +64,10 @@ SQ.mount("members", () => {
         </div>
         <p class="props-note">人数が上限に達したときの表示の見本です。人数は${t("admin")}と、いずれかの${t("workspace")}に所属しているか招待されている人を数えます。</p>
       </div>
+    </section>
+    <section class="section"><div class="section-head"><h2 class="section-title">招待する（自分用の${t("organization")}）</h2></div>
+      <div class="callout is-info">${icon("shield")}<span>自分用の${t("organization")}は自分だけで使うため、人を招待できません。</span></div>
+      <p class="props-note">自分用の${t("organization")}（<code>kind</code> が <code>personal</code>）の表示の見本です。招待のフォームも人数の右肩も、「承諾待ちの招待」の節と頭の数字の「招待中」も出さず、理由だけを案内します。サーバーも招待を 409 の <code>personal_organization</code> で断ります。</p>
     </section>`;
 });
 </script>

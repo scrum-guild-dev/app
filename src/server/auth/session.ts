@@ -12,6 +12,8 @@ export type Session = {
   accountId: string;
   // sessions.token_hash。ログアウトが今のセッションの行を指すのに使う
   tokenHash: string;
+  // sessions.created_at。再認証の猶予の起点（延長しても変わらない）
+  createdAt: string;
   // last_used_at と expires_at を書き直した。Cookie の期限も延ばす
   refreshed: boolean;
 };
@@ -36,14 +38,18 @@ export async function readSession(
   const db = commonDb(env);
   const row = await db.first(
     db.statement((q) =>
-      q.selectFrom('sessions').select(['account_id', 'last_used_at', 'expires_at']).where('token_hash', '=', tokenHash),
+      q
+        .selectFrom('sessions')
+        .select(['account_id', 'created_at', 'last_used_at', 'expires_at'])
+        .where('token_hash', '=', tokenHash),
     ),
   );
   if (row === undefined || row.expires_at <= now.toISOString()) return undefined;
 
   // 日時が読めない行は、書き直して直す
   const idleMs = now.getTime() - Date.parse(row.last_used_at);
-  if (idleMs < REFRESH_AFTER_MS) return { accountId: row.account_id, tokenHash, refreshed: false };
+  if (idleMs < REFRESH_AFTER_MS)
+    return { accountId: row.account_id, tokenHash, createdAt: row.created_at, refreshed: false };
 
   try {
     const [result] = await db.batch([
@@ -55,7 +61,7 @@ export async function readSession(
           .where('last_used_at', '=', row.last_used_at),
       ),
     ]);
-    return { accountId: row.account_id, tokenHash, refreshed: result.changes === 1 };
+    return { accountId: row.account_id, tokenHash, createdAt: row.created_at, refreshed: result.changes === 1 };
   } catch (err) {
     // 例外の message に SQL や接続の詳細が混ざりうるので、名前だけを残す
     console.error(
@@ -67,14 +73,13 @@ export async function readSession(
         error: err instanceof Error ? err.name : typeof err,
       }),
     );
-    return { accountId: row.account_id, tokenHash, refreshed: false };
+    return { accountId: row.account_id, tokenHash, createdAt: row.created_at, refreshed: false };
   }
 }
 
 // セッションを作り、Cookie に入れるトークンを返す。DB には SHA-256 のハッシュだけを入れ、トークンは残さない。
 // replacedToken は、このリクエストが持っていた古いセッションの Cookie の値。ログインし直したら同じ書き込みで消す。
 // 期限（expires_at）は呼び出しの時刻 now から30日。作成の時刻（created_at と last_used_at）は、挿入の直前の時刻にする。
-// ログインできる条件を失ったと判定した時刻より後に作ったセッションを、その判定が消さないため（deleteSessionsOf）
 export async function createSession(
   env: Env,
   accountId: string,
@@ -107,12 +112,36 @@ export async function createSession(
   return token;
 }
 
-// その人のセッションを消す。ログインできる条件を失ったと判定した時刻（checkedAt）までに作られたものだけ。
-// 判定の後に、その人が入れる条件を満たして作ったセッション（ログインし直した直後など）を消さないため
+// その人のセッションを、checkedAt までに作られたものだけ消す。checkedAt より後に作られたセッションは残す
+// （消す判定の後にログインし直したセッションを消さないため）。呼ぶのは今はテストだけで、本番の道は無い（退会とアカウントの削除で使う見込み）
 export async function deleteSessionsOf(db: CommonDb, accountId: string, checkedAt: Date): Promise<void> {
   await db.batch([
     db.statement((q) =>
       q.deleteFrom('sessions').where('account_id', '=', accountId).where('created_at', '<=', checkedAt.toISOString()),
     ),
   ]);
+}
+
+// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消す文。期限が切れた行も、期限内の行も消す。
+// ほかのアカウントのセッションは account_id で除く。別の文と同じ batch() に入れて送るために、文のまま返す
+export function deleteOtherSessionsStatement(
+  db: CommonDb,
+  accountId: string,
+  currentTokenHash: string,
+): Statement<'common'> {
+  return db.statement((q) =>
+    q.deleteFrom('sessions').where('account_id', '=', accountId).where('token_hash', '!=', currentTokenHash),
+  );
+}
+
+// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消し、消した行数を返す。
+// 今のセッションと、ほかのアカウントのセッションは残す。本番の道（credentials-revoke-all）は、トークンの取り消しと
+// 同じ batch() に入れるため、文（deleteOtherSessionsStatement）を直に使う。この関数を呼ぶのは今はテストだけ
+export async function deleteOtherSessionsOf(
+  db: CommonDb,
+  accountId: string,
+  currentTokenHash: string,
+): Promise<number> {
+  const [result] = await db.batch([deleteOtherSessionsStatement(db, accountId, currentTokenHash)]);
+  return result.changes;
 }

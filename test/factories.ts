@@ -9,6 +9,7 @@ import {
   type Selectable,
   type VerifiedOrganization,
 } from '../src/server/db/index.ts';
+import { PRIVACY_VERSION, TERMS_VERSION } from '../src/lib/legal/versions.ts';
 import { hashSessionToken } from '../src/server/auth/session.ts';
 import { uuidv7 as newUuidv7 } from '../src/server/uuid.ts';
 import { verifiedOrganizationForTest } from '../src/server/db/testing.ts';
@@ -41,10 +42,14 @@ export type OrganizationFixture = Row<CommonTables, 'organizations'> & {
 
 export async function createOrganization(overrides: Partial<Row<CommonTables, 'organizations'>> = {}) {
   const id = overrides.id ?? uuidv7();
-  const row: Row<CommonTables, 'organizations'> = {
+  // 作った人のアカウントとお試しの期限は、渡さなければ列を省いて NULL にする（運用者が作った組織の形）
+  const row: Omit<Row<CommonTables, 'organizations'>, 'created_by_account_id' | 'trial_ends_on'> &
+    Partial<Pick<Row<CommonTables, 'organizations'>, 'created_by_account_id' | 'trial_ends_on'>> = {
     id,
     slug: `org-${id.slice(-8)}`,
     name: '青葉工房',
+    kind: 'team',
+    // 列は残っているので、言葉づかいを選べた頃の 'game' の行を模す（画面も API もこの値を読まない）
     vocabulary: 'game',
     theme: 'simple',
     suspended_at: null,
@@ -60,10 +65,22 @@ export async function createOrganization(overrides: Partial<Row<CommonTables, 'o
   };
   const db = commonDb(env);
   await db.run(db.statement((q) => q.insertInto('organizations').values(row)));
-  return { ...row, verified: verifiedOrganizationForTest(row.id) } satisfies OrganizationFixture;
+  return {
+    created_by_account_id: null,
+    trial_ends_on: null,
+    ...row,
+    verified: verifiedOrganizationForTest(row.id),
+  } satisfies OrganizationFixture;
 }
 
-export async function createAccount(overrides: Partial<Row<CommonTables, 'accounts'>> = {}) {
+// createAccount が足す同意の行の日時
+export const CONSENTED_AT = '2026-10-31T00:00:00.000Z';
+
+// 既定で今の版の同意の行を足す（未同意の人は、同意するまで操作できない）。未同意の人を作るときは { consented: false }
+export async function createAccount(
+  overrides: Partial<Row<CommonTables, 'accounts'>> = {},
+  options: { consented?: boolean } = {},
+) {
   const row: Row<CommonTables, 'accounts'> = {
     id: uuidv7(),
     last_login_at: null,
@@ -73,6 +90,18 @@ export async function createAccount(overrides: Partial<Row<CommonTables, 'accoun
   };
   const db = commonDb(env);
   await db.run(db.statement((q) => q.insertInto('accounts').values(row)));
+  if (options.consented ?? true) {
+    await db.run(
+      db.statement((q) =>
+        q.insertInto('account_consents').values({
+          account_id: row.id,
+          terms_version: TERMS_VERSION,
+          privacy_version: PRIVACY_VERSION,
+          consented_at: CONSENTED_AT,
+        }),
+      ),
+    );
+  }
   return row;
 }
 
@@ -100,7 +129,8 @@ export async function createSession(accountId: string, overrides: Partial<Row<Co
   const row: Row<CommonTables, 'sessions'> = {
     token_hash: hash64(),
     account_id: accountId,
-    created_at: AT,
+    // token-create はログインから10分以内のセッションだけ通す。固定の過去の日時だと、既定のセッションが発行を断られる
+    created_at: new Date().toISOString(),
     last_used_at: AT,
     expires_at: '2026-11-19T00:00:00.000Z',
     ...overrides,
@@ -191,6 +221,7 @@ export async function createWorkspace(
     name: '青葉チーム',
     timezone: 'Asia/Tokyo',
     week_start: 1,
+    // 列は残っているので、言葉づかいを選べた頃の 'game' の行を模す（画面も API もこの値を読まない）
     vocabulary: 'game',
     definition_of_done_md: null,
     closed_at: null,
@@ -447,6 +478,35 @@ export async function createComment(
   return row;
 }
 
+// 添付ファイルの情報。既定は付く先のない行。中身を R2 へ上げる操作は行わない
+export async function createAttachment(
+  organization: OrganizationFixture,
+  workspaceId: string,
+  uploadedBy: string,
+  overrides: Partial<Row<OrganizationTables, 'attachments'>> = {},
+) {
+  const id = uuidv7();
+  const row: Row<OrganizationTables, 'attachments'> = {
+    id,
+    workspace_id: workspaceId,
+    task_id: null,
+    story_id: null,
+    epic_id: null,
+    comment_id: null,
+    object_key: `${organization.id}/${workspaceId}/${id}`,
+    file_name: '手順.txt',
+    content_type: 'text/plain',
+    size_bytes: 1,
+    uploaded_by: uploadedBy,
+    attached_at: null,
+    created_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('attachments').values(row)));
+  return row;
+}
+
 // 先のスプリント（planned）。期間の重なりは操作が断るもので、ここでは確かめない（重ねたいテストは期間を渡す）
 export async function createSprint(
   organization: OrganizationFixture,
@@ -474,6 +534,141 @@ export async function createSprint(
   };
   const db = orgDb(env, organization.verified);
   await db.run(db.statement((q) => q.insertInto('sprints').values(row)));
+  return row;
+}
+
+// ワークスペースの列。既定は完了でない列（名前あり）。完了の列は is_done: 1 と name: null を渡す（ワークスペースに1つ）
+export async function createBoardColumn(
+  organization: OrganizationFixture,
+  workspaceId: string,
+  overrides: Partial<Row<OrganizationTables, 'board_columns'>> = {},
+) {
+  const row: Row<OrganizationTables, 'board_columns'> = {
+    id: uuidv7(),
+    workspace_id: workspaceId,
+    name: '出発前',
+    is_done: 0,
+    position: 'a0',
+    deleted_at: null,
+    created_at: AT,
+    updated_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('board_columns').values(row)));
+  return row;
+}
+
+export async function createDetailField(
+  organization: OrganizationFixture,
+  workspaceId: string,
+  overrides: Partial<Row<OrganizationTables, 'detail_fields'>> = {},
+) {
+  const row: Row<OrganizationTables, 'detail_fields'> = {
+    id: uuidv7(),
+    workspace_id: workspaceId,
+    name: '影響範囲',
+    position: 'a0',
+    deleted_at: null,
+    created_at: AT,
+    updated_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('detail_fields').values(row)));
+  return row;
+}
+
+// タスクの決まった欄の値。主キー（タスクと欄）にぶつかるなら、別の欄を渡す
+export async function createTaskFieldValue(
+  organization: OrganizationFixture,
+  taskId: string,
+  fieldId: string,
+  updatedBy: string,
+  overrides: Partial<Row<OrganizationTables, 'task_field_values'>> = {},
+) {
+  const row: Row<OrganizationTables, 'task_field_values'> = {
+    task_id: taskId,
+    field_id: fieldId,
+    value_md: '- 影響する画面を挙げてある',
+    updated_by: updatedBy,
+    updated_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('task_field_values').values(row)));
+  return row;
+}
+
+// ポイントあたりの時間。主キー（ワークスペースと月）にぶつかるなら月を渡す
+export async function createWorkspacePointRate(
+  organization: OrganizationFixture,
+  workspaceId: string,
+  overrides: Partial<Row<OrganizationTables, 'workspace_point_rates'>> = {},
+) {
+  const row: Row<OrganizationTables, 'workspace_point_rates'> = {
+    workspace_id: workspaceId,
+    effective_month: '2026-10',
+    hours_per_point: 2,
+    created_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('workspace_point_rates').values(row)));
+  return row;
+}
+
+// タスクの完了の記録。完了した人が要る
+export async function createCompletion(
+  organization: OrganizationFixture,
+  workspaceId: string,
+  taskId: string,
+  completedBy: string,
+  overrides: Partial<Row<OrganizationTables, 'completions'>> = {},
+) {
+  const row: Row<OrganizationTables, 'completions'> = {
+    id: uuidv7(),
+    workspace_id: workspaceId,
+    task_id: taskId,
+    completed_at: AT,
+    completed_by: completedBy,
+    points: null,
+    assignee_user_id: null,
+    sprint_id: null,
+    previous_column_id: null,
+    category_id: null,
+    billing_month: null,
+    created_at: AT,
+    updated_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('completions').values(row)));
+  return row;
+}
+
+// タスクがスプリントに入った行。既定は入っている間の行（ended_at と outcome が空）。タスクの sprint_id と column_id は呼ぶ側がそろえる
+export async function createSprintEntry(
+  organization: OrganizationFixture,
+  workspaceId: string,
+  sprintId: string,
+  taskId: string,
+  addedBy: string,
+  overrides: Partial<Row<OrganizationTables, 'sprint_entries'>> = {},
+) {
+  const row: Row<OrganizationTables, 'sprint_entries'> = {
+    id: uuidv7(),
+    workspace_id: workspaceId,
+    sprint_id: sprintId,
+    task_id: taskId,
+    added_at: AT,
+    added_by: addedBy,
+    ended_at: null,
+    outcome: null,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('sprint_entries').values(row)));
   return row;
 }
 
@@ -505,4 +700,64 @@ export async function createXpGrant(
   const db = orgDb(env, organization.verified);
   await db.run(db.statement((q) => q.insertInto('xp_grants').values(row)));
   return row;
+}
+
+// エピックの討伐隊の1人。既定は受注（joined_via が self、入れたのは本人）
+export async function createEpicPartyMember(
+  organization: OrganizationFixture,
+  epicId: string,
+  userId: string,
+  overrides: Partial<Row<OrganizationTables, 'epic_party_members'>> = {},
+) {
+  const row: Row<OrganizationTables, 'epic_party_members'> = {
+    epic_id: epicId,
+    user_id: userId,
+    joined_via: 'self',
+    added_by: userId,
+    joined_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('epic_party_members').values(row)));
+  return row;
+}
+
+// 感謝の1行。送る人と受け取る人は別の人にする
+export async function createThanks(
+  organization: OrganizationFixture,
+  workspaceId: string,
+  taskId: string,
+  senderUserId: string,
+  recipientUserId: string,
+  overrides: Partial<Row<OrganizationTables, 'thanks'>> = {},
+) {
+  const row: Row<OrganizationTables, 'thanks'> = {
+    id: uuidv7(),
+    workspace_id: workspaceId,
+    task_id: taskId,
+    sender_user_id: senderUserId,
+    recipient_user_id: recipientUserId,
+    created_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('thanks').values(row)));
+  return row;
+}
+
+// 自分用（kind = 'personal'）の組織。1人だけの組織なので member_limit は 1、添付は 1GB、作った人は本人（セルフサービス）
+export async function createPersonalOrganizationRow(
+  createdByAccountId: string,
+  overrides: Partial<Row<CommonTables, 'organizations'>> = {},
+) {
+  return createOrganization({
+    kind: 'personal',
+    name: '自分用',
+    member_limit: 1,
+    attachment_quota_bytes: 1073741824,
+    created_by_operator: 'self-service',
+    created_by_account_id: createdByAccountId,
+    trial_ends_on: null,
+    ...overrides,
+  });
 }

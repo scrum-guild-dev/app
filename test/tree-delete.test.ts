@@ -834,7 +834,7 @@ describe('実行計画', () => {
         const all = plans.join('\n');
         if (kind === 'epic') expect(all).toContain('stories_workspace_epic');
         expect(all).toContain('tasks_story');
-        // 配下のタスク（ut、t、ot）を tasks_workspace_tray や全件の走査で引かない（移す先の末尾を読む a だけが使う）
+        // 配下のタスク（ut、t、ot）を tasks_workspace_tray や全件の走査で引かない（移す先の末尾を読む別名なしの tasks だけが使う）
         expect(all).not.toMatch(/\b(ut|t|ot) USING (COVERING )?INDEX tasks_workspace_tray/);
         expect(all).not.toMatch(/^\s*SCAN (tasks|stories|ut|t|s|us|es|os|ot)\s*$/m);
       }
@@ -872,9 +872,9 @@ describe('文の数', () => {
 
   test.each([
     ['epic', 'keep', 4],
-    ['epic', 'delete', 8],
+    ['epic', 'delete', 9],
     ['story', 'keep', 4],
-    ['story', 'delete', 6],
+    ['story', 'delete', 7],
   ] as const)('%s を %s で削除する文は %i 個で、子が 1 件でも 30 件でも同じ', async (kind, mode, expected) => {
     expect(await statementCount(1, kind, mode)).toBe(expected);
     expect(await statementCount(30, kind, mode)).toBe(expected);

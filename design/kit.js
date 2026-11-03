@@ -1,4 +1,4 @@
-// 部品の HTML を作る関数、画面の枠、言葉づかいとテーマの切り替え。
+// 部品の HTML を作る関数、画面の枠、テーマの切り替え。
 // カタログ（index.html）と画面の見本が同じ関数を使い、見た目がずれないようにする。
 // 本番の Svelte では、ここの関数がそれぞれ1つのコンポーネントになる。
 // sample-data.js を先に読み込んでおくこと。
@@ -27,14 +27,14 @@
   })();
   const firstHref = (href, role = first) => (role && FIRST_PAGES[role].includes(href) ? `${href}?first=${role}` : href);
   // ワークスペースを作った直後の既定値は requirements.md の「機能」の冒頭。
-  // 決まった欄の名前は作ったときの言葉づかい（既定のゲームの言葉）で付き、あとから訳さない
+  // 決まった欄の名前は作ったときに付けたまま、訳さない
   function freshData(role) {
     const me = { ...D.users[D.me], level: 1, role: role === "member" ? "member" : "leader" };
     const common = {
       organizations: [{ ...D.organizations[0], level: 1, admin: role === "admin" }], receivedInvites: [],
       tasks: [], inbox: [], archive: [], epics: {}, stories: {}, sprints: {}, comments: {}, history: {}, files: {},
       connections: [], notifications: [], completions: [], audit: [], capacity: [], invitations: [],
-      categories: {}, repositories: {}, detailFields: ["達成条件"], definitionOfDone: [], pointRates: [["2026-10", 4]], workspaceHolidays: [],
+      categories: {}, repositories: {}, detailFields: ["受け入れ基準"], definitionOfDone: [], pointRates: [["2026-10", 4]], workspaceHolidays: [],
       storage: { ...D.storage, used: 0, byWorkspace: [] },
       level: { level: 1, xp: 0, toNext: 100, soon: 0, gotPct: 0, soonPct: 0 },
     };
@@ -51,52 +51,52 @@
       seats: { ...D.seats, used: members.length } };
   }
   if (first) Object.assign(D, freshData(first));
+  try {
+    const selected = new URLSearchParams(location.search).get("workspace");
+    if (selected && Object.hasOwn(D.workspaces, selected)) D.workspace = selected;
+  } catch (e) { /* URL を読めない場合は既定の見本 */ }
 
-  // ---- 言葉の辞書（ゲームの言葉 / スクラムの言葉） ----
+  // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
   const DICT = {
-    workspace: ["パーティ", "ワークスペース"], inbox: ["届いた便り", "受信箱"], backlog: ["掲示板", "バックログ"],
-    sprint: ["遠征", "スプリント"], plan: ["遠征の計画", "計画"], epic: ["レイド", "エピック"], story: ["達成目標", "ストーリー"],
-    task: ["クエスト", "タスク"], archive: ["保管庫", "アーカイブ"], connection: ["便りの経路", "接続"],
-    sprintGoal: ["遠征の目的", "スプリントゴール"], detail: ["手配書", "詳細"], ac: ["達成条件", "受け入れ基準"],
-    due: ["期限", "期日"], points: ["難易度", "ポイント"], assignee: ["担い手", "担当"], category: ["系統", "区分"],
-    capacity: ["積載量", "作業量と基準"], over: ["重量オーバー", "超過"], done: ["完遂", "完了"], column: ["行程", "列"],
-    doneToday: ["今日の完遂", "今日の完了"], complete: ["完遂にする", "完了にする"],
-    requester: ["依頼主", "作成者"], party: ["討伐隊", "参加者"], accept: ["受注する", "参加する"], leave: ["討伐隊を抜ける", "参加をやめる"],
-    historyCreated: ["依頼を出した", "作成した"], historyUpdated: ["書き換えた", "変更した"],
-    reward: ["クリア報酬", "クリア報酬"], clear: ["レイドをクリアする", "エピックを完了にする"], create: ["依頼を出す", "起票"],
-    leader: ["パーティリーダー", "リーダー"], member: ["冒険者", "メンバー"], dod: ["パーティの掟", "完成の定義"],
-    vocab: ["ゲームの言葉", "スクラムの言葉"], organization: ["冒険者ギルド", "組織"], admin: ["ギルドマスター", "管理者"],
-    assistant: ["ギルドの書記", "アシスタント"],
-    accountMenuLabel: ["{name}。アカウントのメニュー", "{name}。アカウントのメニュー"], logout: ["ログアウト", "ログアウト"],
-    logoutMoving: ["ログアウトしています", "ログアウトしています"], loggedOut: ["ログアウトしました。", "ログアウトしました。"],
-    logoutFailed: ["ログアウトできませんでした。時間をおいてもう一度試してください。", "ログアウトできませんでした。時間をおいてもう一度試してください。"],
-    markdownPlainNote: ["整形せずに表示しています", "整形せずに表示しています"], markdownNewTab: ["新しいタブで開きます", "新しいタブで開きます"],
-    markdownCodeRegion: ["コード", "コード"], markdownTableRegion: ["表", "表"],
-    teamXpLabel: ["パーティ全体の経験値", "チーム全体の経験値"],
-    filterLabel: ["{backlog}の絞り込み", "{backlog}の絞り込み"], backlogSearch: ["タイトルで探す", "タイトルで探す"],
-    filterAll: ["{label}: すべて", "{label}: すべて"], filterMe: ["自分", "自分"],
-    unassigned: ["担い手なし", "担当なし"], leftMember: ["（離脱済み）", "（離脱済み）"], categoryNone: ["{category}なし", "{category}なし"],
-    filterNoRepository: ["リポジトリなし", "リポジトリなし"], filterNoEpic: ["{epic}なし", "{epic}なし"],
-    filterClear: ["絞り込みを外す", "絞り込みを外す"],
-    backlogFilterOrderNote: ["上にあるものほど優先します。絞り込みを外すと並べ替えられます。", "上にあるものほど優先します。絞り込みを外すと並べ替えられます。"],
-    backlogNoMatchTitle: ["絞り込みに当たるものはありません", "絞り込みに当たるものはありません"],
-    backlogNoMatchText: ["条件を変えるか、絞り込みを外してください。", "条件を変えるか、絞り込みを外してください。"],
-    filterTotalsNote: ["{points}と件数は、絞る前の全体の値です", "{points}と件数は、絞る前の全体の値です"],
-    filterHiddenCreated: ["作りました。絞り込みに当たらないので表示していません", "作りました。絞り込みに当たらないので表示していません"],
+    workspaceSwitchLabel: "{name}。{workspace}を切り替える", workspaceSwitchListLabel: "所属する{workspace}",
+    workspace: "ワークスペース", inbox: "受信箱", backlog: "バックログ", sprint: "スプリント", plan: "計画", epic: "エピック", story: "ストーリー",
+    menuCollapse: "メニューを畳む", menuExpand: "メニューを広げる", organizationMoving: "移っています",
+    personalOrganizationName: "自分用", createPersonalOrganizationAction: "自分用を作る",
+    task: "タスク", archive: "アーカイブ", connection: "接続", sprintGoal: "スプリントゴール", detail: "詳細", ac: "受け入れ基準", due: "期日",
+    points: "ポイント", assignee: "担当", category: "区分", capacity: "作業量と基準", over: "超過", done: "完了", column: "列",
+    doneToday: "今日の完了", complete: "完了にする", requester: "作成者", party: "参加者", accept: "参加する", leave: "参加をやめる",
+    historyCreated: "作成した", historyUpdated: "変更した", reward: "クリア報酬", clear: "エピックを完了にする", create: "起票", leader: "リーダー",
+    member: "メンバー", dod: "完成の定義", organization: "組織", admin: "管理者", assistant: "アシスタント",
+    epicPageRequest: "概要", epicPagePartyEmpty: "参加者はまだいません。", accountMenuLabel: "{name}。アカウントのメニュー", pageMe: "マイプロフィール", pageOrgAdmin: "組織の管理", navInvitationsBadge: "招待 {count}", navInvitationsLabel: "、届いた招待 {count}件", logout: "ログアウト",
+    logoutMoving: "ログアウトしています", loggedOut: "ログアウトしました。", logoutFailed: "ログアウトできませんでした。時間をおいてもう一度試してください。",
+    markdownPlainNote: "整形せずに表示しています", markdownNewTab: "新しいタブで開きます", markdownCodeRegion: "コード",
+    termsTitle: "利用規約", privacyTitle: "プライバシーポリシー", retry: "もう一度試す", retrying: "読み込んでいます",
+    consentTitle: "同意の確認", consentLead: "{app} を使うには、利用規約とプライバシーポリシーを確認してください。", consentVersion: "版: {version}",
+    consentCheckLabel: "利用規約とプライバシーポリシーを確認し、同意します", consentSubmit: "同意して進む", consentContinue: "進む",
+    consentUpdated: "規約が更新されました。内容を確認し直してください。", consentCurrent: "現在の版に同意しています。",
+    consentRecordedAt: "同意した日時:", consentSubmitHint: "利用規約とプライバシーポリシーを確認し、チェックしてください。",
+    consentLoadFailed: "同意の状態を読み込めませんでした。もう一度試してください。", consentSubmitting: "同意を記録しています", consentRecordFailed: "同意を記録できませんでした。もう一度試してください。",
+    legalRevised: "改定日: {date}", consentRevisedTerms: "利用規約が改められました", consentRevisedPrivacy: "プライバシーポリシーが改められました",
+    consentRevisedBoth: "利用規約とプライバシーポリシーが改められました",
+    markdownTableRegion: "表", teamXpLabel: "チーム全体の経験値", filterLabel: "{backlog}の絞り込み", backlogSearch: "タイトルで探す",
+    filterAll: "{label}: すべて", filterMe: "自分", unassigned: "担当なし", leftMember: "（離脱済み）", categoryNone: "{category}なし",
+    filterNoRepository: "リポジトリなし", filterNoEpic: "{epic}なし", filterClear: "絞り込みを外す",
+    backlogFilterOrderNote: "上にあるものほど優先します。絞り込みを外すと並べ替えられます。", backlogNoMatchTitle: "絞り込みに当たるものはありません",
+    backlogNoMatchText: "条件を変えるか、絞り込みを外してください。", filterTotalsNote: "{points}と件数は、絞る前の全体の値です",
+    filterHiddenCreated: "作りました。絞り込みに当たらないので表示していません",
   };
-  let vocab = 0;
-  const listeners = [];
-  const t = (k) => (DICT[k] ? DICT[k][vocab] : k);
-  function setVocab(v) { vocab = v; listeners.forEach((fn) => fn()); if (assist.open) renderAssist(); }
-  function toggleVocab() { setVocab(vocab ? 0 : 1); }
-  function onChange(fn) { listeners.push(fn); }
+  const t = (k) => DICT[k] ?? k;
 
   // ---- 小さな道具 ----
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   // 完成の定義。本番はワークスペースの Markdown を Markdown の部品（.doc-box）で描く。見本は箇条書きの Markdown を描いた形。
   // 空なら、完了の列（.dod）にも、バックログの木の上（.dod）にも、完了の操作の横（.done-bar-dod）にも出さない
   const dodDoc = () => `<div class="doc-box"><ul>${D.definitionOfDone.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div>`;
-  const icon = (id) => `<svg class="ico" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+  // 線画。装飾なので読み上げから外す（本番の Art.svelte）。種類は art.js の ARTS
+  // lead は「最初にやること」の先頭に置く小さい形（.art.is-lead）
+  const art = (id, lead) => `<svg class="${lead ? "art is-lead" : "art"}" aria-hidden="true"><use href="#a-${id}"/></svg>`;
+  // tone は "xp" で経験値の色（.ico.is-xp）。ゲームの物の経験値（crystal）とレベル（crest）に使う。本番の Icon と同じく "xp" だけを受ける
+  const icon = (id, tone) => `<svg class="${tone === "xp" ? "ico is-xp" : "ico"}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
   const md = (d) => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
   const sumPts = (list) => list.reduce((a, x) => a + (x.pts || 0), 0);
 
@@ -169,9 +169,11 @@
     return avatar(u.name, u.hue, { ...opts, left: u.left });
   }
   function emblem(level, sm) {
+    const digits = String(level).length;
+    const size = digits === 3 ? " is-long" : digits > 3 ? " is-longer" : "";
     return sm
-      ? `<span class="emblem is-sm" role="img" aria-label="レベル ${level}"><span>${level}</span></span>`
-      : `<span class="emblem" role="img" aria-label="レベル ${level}"><span><small>LV</small>${level}</span></span>`;
+      ? `<span class="emblem is-sm${size}" role="img" aria-label="レベル ${level}"><span>${level}</span></span>`
+      : `<span class="emblem${size}" role="img" aria-label="レベル ${level}"><span><small>LV</small>${level}</span></span>`;
   }
   function pts(p) {
     return p == null
@@ -194,7 +196,7 @@
   function tier(size) {
     const map = { small: ["小", 100], medium: ["中", 300], large: ["大", 600] };
     const [label, xp] = map[size];
-    return `<span class="tier is-${size}">${label} · <b>${xp}</b> XP</span>`;
+    return `<span class="tier is-${size}">${icon("chest")}${label} · <b>${xp}</b> XP</span>`;
   }
   function sourceKey(x) {
     return x.src ? `<span class="source-key">${icon(SRC[x.src.kind].icon)} ${esc(x.src.key)}</span>` : "";
@@ -210,6 +212,14 @@
   function categoryTag(id) {
     return id ? nameChip("tag", t("category"), D.categories[id].name) : "";
   }
+  // 入っているスプリント（本番の DefinitionChip の sprint）。名前が無ければ期間。バックログの木の行にだけ出す
+  function sprintTag(x) {
+    if (!x.sprint || !D.sprints[x.sprint]) return "";
+    const s = D.sprints[x.sprint];
+    if (s.name) return nameChip("calendar", t("sprint"), s.name);
+    // 名前の無いスプリントは期間を等幅（.mono）で出す
+    return `<span class="chip is-name">${icon("calendar")}<span><span class="visually-hidden">${t("sprint")}：</span><span class="mono">${md(s.start)}〜${md(s.end)}</span></span></span>`;
+  }
   // 区分の選択欄（本番のエピック、ストーリー、起票のダイアログと、引き出し）。先頭が「区分なし」
   function categorySelect(id, current, readOnly) {
     if (readOnly) return `<span>${current ? esc(D.categories[current].name) : `${t("category")}なし`}</span>`;
@@ -223,7 +233,7 @@
   }
   function taskFlags(x) {
     const carried = x.todayOn && x.todayOn < D.today && !x.doneAt;
-    return `${carried ? `<span class="chip is-carry">${icon("redo")}昨日から持ち越し</span>` : ""}
+    return `${carried ? `<span class="chip is-carry">${icon("redo")}持ち越し</span>` : ""}
       ${x.unfilled ? `<span class="chip is-todo">${icon("pen")}${t("detail")} 未記入</span>` : ""}
       ${x.srcDone && !x.doneAt ? `<span class="chip is-ok">${icon("check")}取り込み元で完了</span>` : ""}`;
   }
@@ -231,20 +241,23 @@
   function doneControl(x) {
     return x.doneAt
       ? `<span class="hanko ${stamped.has(x.id) ? "is-new" : ""}" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span>
-         <button class="link-btn" type="button" data-undo="${x.id}">戻す</button>`
+         <button class="link-btn" type="button" data-undo="${x.id}" aria-label="${t("done")}を戻す: ${esc(x.title)}" aria-disabled="false">戻す</button>`
       : `<button class="done-btn" type="button" data-done="${x.id}" aria-label="${t("complete")}" title="${t("complete")}">${icon("check")}</button>`;
   }
 
   // 並べ替えの「上へ」「下へ」と「親を移す」（本番の TaskEntry、TreeStory と同じ組み方）。
-  // order: { first, last, parent }。端の向きは aria-disabled（フォーカスを失わない）。parent が真なら「親を移す」も出す
+  // order: { first, last, parent, across }。端の向きは aria-disabled（フォーカスを失わない）。parent が真なら「親を移す」も出す。
+  // across: { first, last } を渡すと、スプリントの画面のカードのように、隣の列へ移す「前の列へ」「次の列へ」を両端に足す
   function orderActions(title, order) {
     const btn = (name, label, disabled) =>
-      `<button class="icon-btn" type="button" aria-label="${label}: ${esc(title)}" title="${label}"${disabled === undefined ? "" : ` aria-disabled="${disabled}"`}>${icon(name)}</button>`;
-    return `<span class="order-actions">${btn("up", "上へ", Boolean(order.first))}${btn("down", "下へ", Boolean(order.last))}${order.parent ? btn("swap", "親を移す") : ""}</span>`;
+      `<button class="icon-btn" type="button" data-order="${name}" aria-label="${label}: ${esc(title)}" title="${label}"${disabled === undefined ? "" : ` aria-disabled="${disabled}"`}>${icon(name)}</button>`;
+    const left = order.across ? btn("left", `前の${t("column")}へ`, Boolean(order.across.first)) : "";
+    const right = order.across ? btn("right", `次の${t("column")}へ`, Boolean(order.across.last)) : "";
+    return `<span class="order-actions">${left}${btn("up", "上へ", Boolean(order.first))}${btn("down", "下へ", Boolean(order.last))}${right}${order.parent ? btn("swap", "親を移す") : ""}</span>`;
   }
 
   // 行の先頭のつまみ（飾りで、aria-hidden）。order を渡した行（書き込めるとき）だけに付く。
-  // off が真なら、つかめない行（完了にした直後の行、エピックの行）の列だけを空ける。狭い幅と指の画面では CSS が隠す
+  // off が真なら、つかめない行（完了にした直後の行）の列だけを空ける。狭い幅と指の画面では CSS が隠す
   function gripCell(off) {
     return `<span class="grip${off ? " is-off" : ""}" aria-hidden="true">${off ? "" : icon("grip")}</span>`;
   }
@@ -253,13 +266,14 @@
     return mark && mark.drop ? ` data-drop="${mark.drop}"` : "";
   }
 
-  // 台帳の1行。opts: showWs, showParent（既定 true）, showAssignee, order（並べ替えの操作。orderActions の order）,
+  // 台帳の1行。opts: showWs, showParent（既定 true）, showAssignee, showSprint（入っているスプリントの印。バックログの木）,
+  // order（並べ替えの操作。orderActions の order）,
   // mark（ドラッグの状態。dropAttr）
   function entry(x, opts = {}) {
     const showParent = opts.showParent !== false;
     const parent = x.story ? D.stories[x.story].title : null;
     const lead = opts.lead !== undefined ? opts.lead
-      : `<button class="sun" type="button" data-sun="${x.id}" aria-pressed="${x.todayOn === D.today}" aria-label="今日やる" title="今日やる">${icon("sun")}</button>`;
+      : `<button class="sun" type="button" data-sun="${x.id}" aria-pressed="${x.todayOn === D.today}" aria-label="今日やる: ${esc(x.title)}" title="今日やる" aria-disabled="false">${icon("sun")}</button>`;
     const title = opts.noLink ? `<span class="entry-title">${titleOf(x)}</span>` : `<a class="entry-title" href="#" data-task="${x.id}">${titleOf(x)}</a>`;
     const mark = opts.mark || {};
     return `<div class="entry ${x.doneAt ? "is-done" : ""}${opts.order ? " has-grip" : ""}${mark.state ? ` ${mark.state}` : ""}"${dropAttr(mark)}>
@@ -268,7 +282,7 @@
         ${title}
         <span class="entry-meta">
           ${opts.showWs ? `<span class="tag">${esc(D.workspaces[x.ws].name)}</span>` : ""}
-          ${repoTag(x)}${x.story ? "" : categoryTag(x.cat)}${sourceKey(x)}
+          ${opts.showSprint ? sprintTag(x) : ""}${repoTag(x)}${x.story ? "" : categoryTag(x.cat)}${sourceKey(x)}
           ${showParent && parent ? `<span>${icon("flag")} ${esc(parent)}</span>` : ""}
           ${x.doneAt ? `<span>${t("done")} ${esc(x.doneAt)}</span>` : colName(x) ? `<span class="status-dot">${esc(colName(x))}</span>` : ""}
           ${taskFlags(x)}${opts.meta ? opts.meta(x) : ""}
@@ -284,8 +298,9 @@
   }
   // 空の状態。何が出る場所かと、次に何をすればよいかを書く。actions は押す操作の HTML。
   // title と text も HTML として埋め込むので、利用者のデータは esc してから渡す
-  function emptyState(ic, title, text, actions = "") {
-    return `<div class="empty">${icon(ic)}<b>${title}</b>${text ? `<span>${text}</span>` : ""}${actions ? `<div class="form-actions">${actions}</div>` : ""}</div>`;
+  // tone はアイコンの色（icon の tone。本番の EmptyState の iconTone）。ゲームの物のアイコンを置くときに使う
+  function emptyState(ic, title, text, actions = "", tone, artName) {
+    return `<div class="empty">${artName ? art(artName) : icon(ic, tone)}<b>${title}</b>${text ? `<span>${text}</span>` : ""}${actions ? `<div class="form-actions">${actions}</div>` : ""}</div>`;
   }
 
   // 最初にやること。済んだかは今のデータから決まるので、閉じた印を持たない。
@@ -293,19 +308,19 @@
   // title と note は HTML として埋め込む。利用者のデータは esc してから渡す
   const FIRST_STEPS = {
     member: () => [
-      { title: `${t("workspace")}「${esc(firstWsName())}」に入る`, note: "招待を承諾しました。", done: true },
+      { title: `${t("workspace")}「${esc(firstWsName())}」に入る`, note: `この${t("workspace")}の${t("backlog")}と${t("sprint")}を使えます。`, done: true },
       // 取り込み元だけで回す人は起票者にならないので、接続の登録でも済んだことにする
       { title: `自分の${t("task")}を用意する`, done: D.tasks.some((x) => x.creator === D.me) || D.connections.some((c) => c.owner === D.me),
         note: `「${t("create")}」で作るか、Backlog や GitHub を${t("connection")}として登録して、自分の担当分を${t("inbox")}に取り込みます。${t("points")}を1以上振ったまま完了にすると、起票の経験値が付きます。`,
         action: (p) => `<button class="btn is-sm ${p}" type="button" data-dialog="createTask">${icon("plus")}${t("create")}</button>
           <a class="btn is-sm" href="${firstHref("connections.html")}">${t("connection")}を登録する</a>` },
       { title: `今日やる${t("task")}に印を付ける`, optional: true, done: D.tasks.some((x) => x.who === D.me && x.todayOn),
-        note: `${t("backlog")}や${t("sprint")}の行の左端にある太陽を押すと、この画面の「今日やる」に並びます。印は日付が変わると外れます。`,
+        note: `${t("backlog")}や${t("sprint")}の行の左端にある太陽を押すと、この画面の「今日やると決めたもの」に並びます。印を付けた日が過ぎても、完了にするか印を外すまで持ち越します。`,
         action: (p) => `<a class="btn is-sm ${p}" href="${firstHref("backlog.html")}">${t("backlog")}を開く</a>` },
     ],
     leader: () => [
-      { title: `${t("workspace")}「${esc(firstWsName())}」の${t("leader")}になる`, note: `${t("admin")}が${t("workspace")}を作り、あなたを指名しました。`, done: true },
-      { title: "メンバーを招待する", done: D.invitations.length > 0 || D.members.filter((m) => !m.left).length > 1,
+      { title: `${t("workspace")}「${esc(firstWsName())}」の${t("leader")}になる`, note: `${t("member")}の招待と、${t("backlog")}の準備を進められます。`, done: true },
+      { title: "メンバーを招待する", optional: true, done: D.invitations.length > 0 || D.members.filter((m) => !m.left).length > 1,
         note: `GitHub のユーザー名か Google のメールアドレスで招待し、${t("organization")}の URL（Google なら招待の URL）を本人に伝えます。Scrum Guild は招待をメールで送りません。`,
         action: (p) => `<a class="btn is-sm ${p}" href="${firstHref("members.html")}">メンバーを招待する</a>` },
       { title: `${t("backlog")}に最初の${t("task")}を入れる`, done: D.tasks.some((x) => x.ws === D.workspace),
@@ -329,19 +344,19 @@
     ],
   };
   const FIRST_HINT = {
-    member: () => `1日の時間は8時間、稼働する曜日は月〜金として${t("capacity")}を数えます。違うときは<a href="me.html">自分の設定</a>で変えます。`,
-    leader: () => `${t("column")}、${t("detail")}の決まった欄、言葉づかいは、作ったときの既定のままです。変えるときは<a href="${firstHref("settings.html")}">設定</a>で変えます。`,
+    member: () => `1日の時間は8時間、稼働する曜日は月〜金として${t("capacity")}を数えます。違うときは<a href="me.html">マイプロフィール</a>で変えます。`,
+    leader: () => `${t("column")}、${t("detail")}の決まった欄は、作ったときの既定のままです。変えるときは<a href="${firstHref("settings.html")}">設定</a>で変えます。`,
     admin: () => "",
   };
   function firstWsName() { const ws = Object.values(D.workspaces)[0]; return ws ? ws.name : ""; }
   function firstSteps(role, opts = {}) {
     const steps = FIRST_STEPS[role]().map((s, i) => ({ ...s, done: opts.preview ? i === 0 : s.done }));
     if (steps.every((s) => s.done || s.optional)) return "";
-    // 主ボタンは、まだ済んでいない最初の手順にだけ付ける
-    const next = steps.findIndex((s) => !s.done && s.action);
+    // 主ボタンは、まだ済んでいない最初の必須の手順にだけ付ける
+    const next = steps.findIndex((s) => !s.done && !s.optional && s.action);
     const hint = FIRST_HINT[role]();
     return `<section class="panel" aria-labelledby="first-steps-${role}">
-      <div class="panel-title"><b id="first-steps-${role}">最初にやること</b>${steps.filter((s) => s.done).length} / ${steps.length} 済み</div>
+      <div class="panel-title">${art("map", true)}<b id="first-steps-${role}">最初にやること</b>${steps.filter((s) => s.done).length} / ${steps.length} 済み</div>
       <ol class="steps">${steps.map((s, i) => `<li class="step ${s.done ? "is-done" : ""}"><div class="step-body">
         <span class="step-title">${s.title}${s.optional ? ` <span class="chip">任意</span>` : ""}</span>
         <span class="action-note">${s.note}</span>
@@ -356,6 +371,42 @@
       ${body}
     </section>`;
   }
+  function foldedSection(id, title, count, body) {
+    return `<details class="section is-folded"><summary class="section-head"><h2 class="section-title" id="${id}">${title}</h2><span class="section-count">${count} 件</span><span class="section-hint">開くと一覧を表示</span></summary>${body}</details>`;
+  }
+  // ---- Wiki ----
+  // ページの木（左の欄の nav の中身）。nodes は { id, title, children } の木、current は今開いているページの ID、
+  // open は開いている枝の ID の配列（null ならすべて開く）。reorder が真なら、行ごとに「上へ」「下へ」を出す（兄弟の中の並べ替え。
+  // 先頭の「上へ」と末尾の「下へ」は aria-disabled）。枝の開閉はバックログの木と同じ data-tree-toggle。
+  // key は同じ画面に木を並べるときの id の接頭辞。リンクは data-wiki-page（画面が受ける）、並べ替えは data-wiki-move="<ID>:up|down"
+  function wikiTree(nodes, { current = null, open = null, reorder = false, key = "wiki" } = {}) {
+    const isOpen = (n) => open === null || open.includes(n.id);
+    const row = (n, i, list) => {
+      const kids = n.children || [];
+      const cid = `${key}-c-${n.id}`;
+      const opened = isOpen(n);
+      const caret = kids.length
+        ? `<button class="tree-caret" type="button" data-tree-toggle="${cid}" data-tree-title="${esc(n.title)}" aria-expanded="${opened}" aria-controls="${cid}" aria-label="${esc(n.title)}${opened ? "を閉じる" : "を開く"}">${icon("chevron")}</button>`
+        : `<span class="wiki-slot" aria-hidden="true"></span>`;
+      const move = (dir, label, ic, off) => `<button class="icon-btn" type="button" data-wiki-move="${n.id}:${dir}" aria-label="${esc(n.title)}を${label}" title="${label}" ${off ? 'aria-disabled="true"' : ""}>${icon(ic)}</button>`;
+      const moves = reorder ? `<span class="order-actions">${move("up", "上へ", "up", i === 0)}${move("down", "下へ", "down", i === list.length - 1)}</span>` : "";
+      return `<li><div class="wiki-node">${caret}<a class="wiki-link" href="#${n.id}" data-wiki-page="${n.id}"${n.id === current ? ' aria-current="page"' : ""}>${esc(n.title)}</a>${moves}</div>${kids.length ? `<ul id="${cid}" ${opened ? "" : "hidden"}>${kids.map(row).join("")}</ul>` : ""}</li>`;
+    };
+    return `<ul class="wiki-tree">${nodes.map(row).join("")}</ul>`;
+  }
+  // ページの道筋。rootLabel は最上段（Wiki 全体）へのリンク、ancestors は { id, title } の配列（最上段から親まで）、最後に今のページの題を文字で置く。
+  // 祖先が3つ以上のときは、最上段と親と今のページだけを見せ、途中は「…」のボタン（data-crumbs-more。画面が受けて、隠した行を出す）に畳む
+  function wikiCrumbs(rootLabel, ancestors, currentTitle) {
+    const link = (p, hidden) => `<li${hidden ? " hidden data-crumb-mid" : ""}><a href="#${p.id}" data-wiki-page="${p.id}">${esc(p.title)}</a></li>`;
+    const fold = ancestors.length > 2;
+    const mid = fold ? ancestors.slice(0, -1) : [];
+    const shown = fold ? ancestors.slice(-1) : ancestors;
+    return `<nav class="crumbs" aria-label="ページの道筋"><ol><li><a href="#" data-wiki-page="">${esc(rootLabel)}</a></li>${fold ? `<li><button class="link-btn" type="button" data-crumbs-more aria-label="途中のページ ${mid.length} 件を表示">…</button></li>${mid.map((p) => link(p, true)).join("")}` : ""}${shown.map((p) => link(p, false)).join("")}<li><span aria-current="page">${esc(currentTitle)}</span></li></ol></nav>`;
+  }
+  // 探した結果の1行。where は当たった場所（"title" か "body"）、path は親の題を「›」でつないだ道筋。今開いているページには aria-current
+  function wikiHit(p, path, where, current = false) {
+    return `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"${current ? ' aria-current="page"' : ""}><span>${esc(p.title)}<span class="chip">${where === "title" ? "題に一致" : "本文に一致"}</span></span><span class="props-note">${esc(path)}</span></a></li>`;
+  }
   // meta は集計の下に置く1行（バックログの画面のチーム全体の経験値 teamXp など）
   function pageHead(eyebrow, title, tallies = [], actions = "", meta = "") {
     const tally = tallies.length
@@ -369,23 +420,41 @@
   }
 
   // スプリントのカード（列の中）
-  function card(x) {
+  // order を渡したカード（完了していないカード）は tabindex="0" で選べ、下に移す操作（.order-actions）を持つ。
+  // キーボードでは、選んで Alt と ← → で隣の列、Alt と ↑ ↓ で列の中を動かす（本番の SprintBoard）。完了の列のカードは動かさない
+  // ドラッグ（本番の SprintCard）: つかめるカードは draggable="true" を持ち、カード全体をつかむ（opts.grab を false にするとつかめないカード）。
+  // opts.mark はドラッグの状態: { drop: "before" | "after", state: "is-dragging" | "is-dropped" }（dropAttr と同じ形。into は列に付ける）
+  function card(x, order, opts = {}) {
+    const mark = opts.mark || {};
+    const grab = opts.grab !== false;
+    // 同じ画面に同じ盤を並べる（カタログ）ときの id の重なりを避ける接頭辞
+    const k = opts.key ? `${opts.key}-` : "";
     const parent = x.story ? D.stories[x.story].title : null;
-    return `<article class="card ${x.doneAt ? "is-done" : ""}">
+    // 選べるカードは、題を名前に、ポイントと担当の要約と画面の下の動かし方の案内（#board-key-hint）を説明に読む
+    const who = x.who ? user(x.who).name : null;
+    const summary = `${x.pts == null ? "未見積もり" : `${t("points")} ${x.pts}`}、${who ? `${t("assignee")}は${esc(who)}` : `${t("assignee")}なし`}`;
+    return `<article class="card ${x.doneAt ? "is-done" : ""}${mark.state ? ` ${mark.state}` : ""}"${grab ? ` draggable="true"` : ""}${dropAttr(mark)}${order ? ` tabindex="0" aria-labelledby="card-${k}${x.id}-title" aria-describedby="card-${k}${x.id}-summary board-key-hint"` : ""}>
+      ${order ? `<span class="visually-hidden" id="card-${k}${x.id}-summary">${summary}</span>` : ""}
       ${parent ? `<span class="card-parent">${icon("flag")} ${esc(parent)}</span>` : ""}
-      <a class="card-title" href="#" data-task="${x.id}">${titleOf(x)}</a>
+      <a class="card-title" id="card-${k}${x.id}-title" href="#" data-task="${x.id}" draggable="false">${titleOf(x)}</a>
       <div class="card-meta">${repoTag(x)}${sourceKey(x)}${taskFlags(x)}${taskDue(x)}</div>
       <div class="card-foot">${pts(x.pts)}${avatarOf(x.who)}<span class="card-end">${doneControl(x)}</span></div>
+      ${order ? `<div class="card-moves">${orderActions(x.title, order)}</div>` : ""}
     </article>`;
   }
-  function board(sprintId) {
+  // opts.key: カードの id の接頭辞、opts.cardMarks: (x, i, c) => card のドラッグの状態、opts.columnMarks: (c) => 列の囲み（{ drop: "into" }）、opts.grab: (x) => つかめるか（既定は完了していないカードだけ。完了の列のカードは、本番では戻せるもの（reopenable）だけがつかめる）
+  function board(sprintId, opts = {}) {
     const list = tasksWhere((x) => x.sprint === sprintId);
-    return `<div class="board-wrap"><div class="board">${D.columns.map((c) => {
+    const open = D.columns.filter((c) => !c.done);
+    return `<div class="board-wrap"><div class="board" style="--board-cols:${D.columns.length}">${D.columns.map((c) => {
       const items = list.filter((x) => (c.done ? x.doneAt : !x.doneAt && x.col === c.id));
-      return `<section class="board-col ${c.done ? "is-done" : ""}" aria-label="${c.done ? t("done") : esc(c.name)}">
+      const at = open.indexOf(c);
+      // 最後の完了でない列の「次の列へ」は、完了の列へ移す代わりに完了にする（本番は task-complete を呼ぶ）ので、押せる
+      const orderOf = (i) => ({ first: i === 0, last: i === items.length - 1, across: { first: at === 0, last: false } });
+      return `<section class="board-col ${c.done ? "is-done" : ""}"${dropAttr(opts.columnMarks && opts.columnMarks(c))} aria-label="${c.done ? t("done") : esc(c.name)}">
         <div class="board-col-head">${c.done ? icon("check") : ""}<span class="board-col-name">${c.done ? t("done") : esc(c.name)}</span><span class="board-col-n">${items.length}</span><span class="board-col-pts">${sumPts(items)} pt</span></div>
         ${c.done && D.definitionOfDone.length ? `<details class="dod"><summary>${t("dod")}</summary>${dodDoc()}</details>` : ""}
-        ${items.map(card).join("") || `<p class="board-empty">なし</p>`}
+        ${items.map((x, i) => card(x, c.done ? undefined : orderOf(i), { mark: opts.cardMarks && opts.cardMarks(x, i, c), grab: opts.grab ? opts.grab(x) : !x.doneAt, key: opts.key })).join("") || `<p class="board-empty">なし</p>`}
       </section>`;
     }).join("")}</div></div>`;
   }
@@ -409,6 +478,40 @@
     return `${note}<button class="btn is-sm" type="button" aria-label="${t("complete")}: ${esc(st.title)}"${remaining ? ` aria-disabled="true" aria-describedby="tree-${key}-remaining tree-${key}-reason"` : ` data-toast="${t("story")}を${t("done")}にしました"`}>${icon("check")}${t("complete")}</button>`;
   }
 
+  // 完了の折りたたみ（本番の CompletedTasks）。閉じているときは「完了 N 件を折りたたんでいます」の開閉のボタン（chevron は開くと回る）、
+  // 開くと完了した行を新しい順に並べる。行は題（引き出しを開くボタン）、完了した日（<time> の日付は等幅）、ポイント、担当。
+  // 完了した行は、つまみも完了の丸も持たない。実画面は開くと API から20件ずつ読む。
+  // opts.root は親のないタスク、opts.title はストーリーの配下のときの題（開閉のボタンの読み上げの名前に添える）。
+  // opts.open で開いた状態、opts.status で読み込み中（loading）、失敗（failed）、空（empty）、続きがある（more）の見本を描く。
+  // opts.tail は木のドラッグの落とし先の印（dropAttr）。開閉のボタンが配下の末尾の落とし先を兼ねる
+  function doneDate(v) {
+    const iso = /^\d{4}-\d{2}-\d{2}/.exec(String(v));
+    if (iso) return iso[0];
+    const md = /^(\d+)\/(\d+)/.exec(String(v));
+    return md ? `${D.today.slice(0, 4)}-${md[1].padStart(2, "0")}-${md[2].padStart(2, "0")}` : String(v);
+  }
+  function completedTasks(key, list, opts = {}) {
+    const id = `completed-${key}`;
+    const open = Boolean(opts.open);
+    const prefix = opts.root ? "親のない" : "";
+    const closed = `${prefix}${t("done")} ${list.length} 件を折りたたんでいます`;
+    const opened = `${prefix}${t("done")} ${list.length} 件を閉じる`;
+    const named = (label) => (opts.title ? `${label}（${opts.title}）` : "");
+    const groupName = opts.root ? `親のない${t("done")}した${t("task")}` : `${opts.title}の${t("done")}した${t("task")}`;
+    const rows = list.slice().sort((a, b) => String(b.doneAt).localeCompare(String(a.doneAt)) || b.id.localeCompare(a.id)).map((x) => `<div class="entry">
+        <span aria-hidden="true"></span>
+        <div class="entry-main"><button class="entry-title" type="button" data-task="${esc(x.id)}">${esc(x.title)}</button>
+          <span class="entry-meta"><time datetime="${doneDate(x.doneAt)}">${t("done")}した日 <span class="mono">${doneDate(x.doneAt)}</span></time></span></div>
+        <div class="entry-end">${pts(x.pts)}${avatarOf(x.who)}</div></div>`).join("");
+    const status = {
+      loading: `<p class="completed-status" role="status">読み込んでいます</p>`,
+      failed: `<p class="completed-status" role="status"></p><div class="completed-status"><p role="alert">読み込めませんでした</p><button class="btn is-sm" type="button">もう一度試す</button></div>`,
+      empty: `<p class="completed-status" role="status"></p><p class="completed-status">${t("done")}した${t("task")}はありません</p>`,
+      more: `<p class="completed-status" role="status"></p><div class="completed-status"><button class="btn is-sm" type="button">さらに見る</button></div>`,
+    }[opts.status] || `<p class="completed-status" role="status"></p>`;
+    return `<button class="tree-folded${opts.root ? " is-root" : ""}" type="button" aria-expanded="${open}" aria-controls="${id}"${opts.title ? ` aria-label="${esc(named(open ? opened : closed))}"` : ""} data-completed-toggle="${id}" data-closed="${esc(closed)}" data-opened="${esc(opened)}" data-title="${esc(opts.title || "")}"${dropAttr(opts.tail || {})}>${icon("chevron")}<span>${esc(open ? opened : closed)}</span></button>
+      <div id="${id}" class="completed-list" role="group" aria-label="${esc(groupName)}"${open ? "" : " hidden"}>${rows}${status}</div>`;
+  }
   // バックログの木。opts.order を渡すと、ストーリーの行に「上へ」「下へ」（order.parent が真なら「親を移す」も）を、
   // 配下のタスクの行に並べ替えと「親を移す」を出す。opts.doneAt で、完了したストーリーとして描ける（カタログの見本）。
   // opts.blocked は親のエピックが完了か中止している、opts.key は同じストーリーを2回描くときの id の区別
@@ -436,18 +539,21 @@
           ${opts.order ? orderActions(st.title, opts.order) : ""}
         </span>
       </div>
-      <div class="tree-children" id="tree-${key}">${open.map((x, i) => entry(x, { showParent: false, showAssignee: true,
+      <div class="tree-children" id="tree-${key}">${open.map((x, i) => entry(x, { showParent: false, showAssignee: true, showSprint: true,
         mark: opts.entryMarks ? opts.entryMarks(x, i) : undefined,
         order: opts.order ? { first: i === 0, last: i === open.length - 1, parent: true } : undefined })).join("")}
-        ${done ? `<p class="tree-folded"${dropAttr(tail)}>完了 ${done} 件を折りたたんでいます</p>` : ""}${!list.length ? `<p class="tree-folded"${dropAttr(tail)}>${t("task")}はまだありません</p>` : ""}</div>
+        ${done ? completedTasks(key, list.filter(x => x.doneAt), { title: st.title, tail }) : ""}${!list.length ? `<p class="tree-folded"${dropAttr(tail)}>${t("task")}はまだありません</p>` : ""}</div>
     </div>`;
   }
   // 木の行の開閉。行（div）の中の caret のボタンだけが開閉を受け持ち、題や「＋タスク」のボタンとはぶつからない
   function treeCaret(bodyId, title) {
     return `<button class="tree-caret" type="button" aria-expanded="true" aria-controls="${bodyId}" aria-label="${esc(title)}を閉じる" data-tree-toggle="${bodyId}" data-tree-title="${esc(title)}">${icon("chevron")}</button>`;
   }
-  // エピックの行（本番の TreeEpic）。題はエピックのダイアログを開くボタン。opts.order を渡すと、配下のストーリーの行に
-  // 並べ替えと「親を移す」を出す。エピックの画面へのリンクと並べ替えは、エピックの画面の Issue（#65）で足す。
+  // エピックの行（本番の TreeEpic）。題はエピックのダイアログを開くボタン。opts.order を渡すと、エピックの行の先頭につまみを、
+  // 配下のストーリーの行に並べ替えと「親を移す」を出す。opts.order が { first, last } なら、エピックの行の右端にも「上へ」「下へ」を出す
+  // （エピックは親を持たないので「親を移す」は無い）。opts.mark はドラッグの印で、前後の線（before / after）は配下を含めた塊
+  // （.tree-group。エピックの段の字下げ）に、囲み（into。ストーリーを運ぶとき）は行に付ける。
+  // エピックの画面へのリンクは、エピックの画面の Issue（#65）で足す。
   // 区分の印はエピックに振ったものを出す（配下の行では繰り返さない。本番と同じ）。
   // カタログの見本用に、opts.cleared（クリア済み。配下は完了したストーリー）、opts.canceled（中止）、opts.empty（配下なし）、
   // opts.key（同じエピックを2回描くときの id の区別）を受ける。完了か中止したエピックは、期日に色を付けず、配下の取り消しを押せなくする
@@ -459,15 +565,17 @@
     const p = opts.cleared ? { done: pts.all, all: pts.all } : pts;
     const stories = opts.empty ? [] : Object.keys(D.stories).filter((s) => D.stories[s].epic === eid);
     const finished = Boolean(opts.cleared || opts.canceled);
-    const state = opts.cleared ? `<span class="chip is-done">${icon("check")}${vocab ? t("done") : "クリア済み"}</span>`
+    const state = opts.cleared ? `<span class="chip is-done">${icon("check")}${t("done")}</span>`
       : opts.canceled ? `<span class="chip">中止</span>` : "";
     const mark = opts.mark || {};
-    return `<div class="tree-group">
-      <div class="tree-row is-epic${opts.order ? " has-grip" : ""}"${dropAttr(mark)}>
-        ${opts.order ? gripCell(true) : ""}${treeCaret(`tree-${key}`, e.title)}
+    const into = mark.drop === "into";
+    const epicOrder = opts.order && typeof opts.order === "object" ? opts.order : null;
+    return `<div class="tree-group${mark.state === "is-dragging" ? " is-dragging" : ""}"${into ? "" : dropAttr(mark)}>
+      <div class="tree-row is-epic${opts.order ? " has-grip" : ""}${mark.state === "is-dropped" ? " is-dropped" : ""}"${into ? dropAttr(mark) : ""}>
+        ${opts.order ? gripCell(false) : ""}${treeCaret(`tree-${key}`, e.title)}
         <span class="kind is-epic" title="${t("epic")}">${icon("flag")}</span>
-        <span class="tree-title"><button class="tree-link" type="button" data-dialog="editEpic">${esc(e.title)}</button> ${categoryTag(e.cat)} ${state} ${dueChip(e.due, { done: finished })}</span>
-        <span class="tree-end"><span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span></span>
+        <span class="tree-title"><a class="tree-link" href="epic.html">${esc(e.title)}</a> ${categoryTag(e.cat)} ${state} ${dueChip(e.due, { done: finished })}</span>
+        <span class="tree-end"><span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span>${epicOrder ? orderActions(e.title, { first: epicOrder.first, last: epicOrder.last }) : ""}</span>
       </div>
       <div class="tree-children" id="tree-${key}">${stories.map((s, i) => treeStory(s, false, {
         key: `${key}-${s}`,
@@ -485,7 +593,7 @@
     const ticks = Array.from({ length: s.days }, (_, i) => `<i class="${i < s.dayIndex ? "is-past" : i === s.dayIndex ? "is-today" : ""}"></i>`).join("");
     return `<article class="notice">
       <span class="notice-label">${t("sprintGoal")}</span>
-      <p class="notice-title">${esc(s.goal)}</p>
+      <p class="notice-title is-goal">${esc(s.goal)}</p>
       <div class="notice-meta">${opts.showWs !== false ? `<span>${esc(D.workspaces[s.ws].name)}</span>` : ""}<span>${sprintLabel(id)}</span>${s.name ? `<span class="mono">${md(s.start)}〜${md(s.end)}</span>` : ""}<span>残り ${s.days - s.dayIndex} 日</span></div>
       <div class="day-ticks" role="img" aria-label="${s.days} 日のうち ${s.dayIndex + 1} 日目">${ticks}</div>
     </article>`;
@@ -508,7 +616,7 @@
       </dl>
       <div class="notice-foot">
         ${progress(p.done, p.all)}
-        ${cleared ? `<span class="hanko" role="img" aria-label="クリア済み">${icon("check")}<b>済</b></span>` : `<button class="btn ${joined ? "" : "is-primary"} is-sm" type="button" data-join="${eid}">${joined ? t("leave") : t("accept")}</button>`}
+        ${cleared ? `<span class="hanko" role="img" aria-label="完了">${icon("check")}<b>済</b></span>` : `<button class="btn ${joined ? "" : "is-primary"} is-sm" type="button" data-join="${eid}">${joined ? t("leave") : t("accept")}</button>`}
       </div>
     </article>`;
   }
@@ -518,23 +626,30 @@
   }
 
   // レベルの面
-  function levelPanel(l = D.level) {
+  function levelPanel(l = D.level, thanks = D.thanksReceived) {
     return `<section class="panel" aria-labelledby="level-panel-title">
       <div class="panel-title"><h2 id="level-panel-title">レベル</h2>経験値は本人だけに見えます</div>
       <div class="level">${emblem(l.level)}
-        <div><div class="xp-num">${l.xp.toLocaleString()}<small>XP</small></div>
+        <div><div class="xp-num">${icon("crystal", "xp")}${l.xp.toLocaleString()}<small>XP</small></div>
         <div class="xp-sub">次のレベルまで <b>${l.toNext}</b>・見込み <b>+${l.soon}</b></div></div>
       </div>
-      <div class="gauge" role="img" aria-label="次のレベルまでの ${l.gotPct}% を確定、${l.soonPct}% が見込み"><span class="gauge-got" style="width:${l.gotPct}%"></span><span class="gauge-soon" style="width:${l.soonPct}%"></span></div>
+      <div class="gauge-row"><span class="gauge-end" aria-hidden="true">LV ${l.level}</span>
+        <div class="gauge" role="img" aria-label="次のレベルまでの ${l.gotPct}% を確定、${l.soonPct}% が見込み"><span class="gauge-got" style="width:${l.gotPct}%"></span><span class="gauge-soon" style="width:${l.soonPct}%"></span></div>
+        <span class="gauge-end is-next" aria-hidden="true">LV ${l.level + 1}</span></div>
       <div class="legend"><span><i class="is-got"></i>確定</span><span><i class="is-soon"></i>見込み（${t("task")}の${t("done")}で確定）</span></div>
       ${l.rows ? `<div role="group" aria-label="${t("workspace")}ごとの経験値"><dl class="breakdown">${l.rows.map(([n, v]) => `<div><dt>${esc(n)}</dt><dd>${v.toLocaleString()}</dd></div>`).join("")}
         <div class="is-total"><dt>すべての${t("workspace")}</dt><dd>${l.total.toLocaleString()}</dd></div></dl></div>` : ""}
+      ${levelThanks(thanks)}
     </section>`;
+  }
+  // レベルの面の末尾の、受け取った感謝の数（組織の合計。0 のときも出す）。内訳と同じ部品（.breakdown）の1行。感謝のアイコン（heart）は文字の色
+  function levelThanks(count) {
+    return `<div role="group" aria-label="受け取った感謝"><dl class="breakdown"><div><dt>${icon("heart")}受け取った感謝</dt><dd>${count.toLocaleString()}</dd></div></dl></div>`;
   }
 
   // チーム全体の経験値。ワークスペースの全員の合計の1つの数で、人ごとの値は出さない。バックログの画面の見出しの中に置く
   function teamXp(total = D.teamXp) {
-    return `<p class="team-xp">${t("teamXpLabel")}<b>${total.toLocaleString()}</b><small>XP</small></p>`;
+    return `<p class="team-xp">${icon("crystal", "xp")}${t("teamXpLabel")}<b>${total.toLocaleString()}</b><small>XP</small></p>`;
   }
   // 経験値の明細の値。付与は経験値の色、打ち消し（負の値）は赤
   function xpDelta(v) {
@@ -580,7 +695,8 @@
 
   // ---- 添付ファイル ----
   // 付く先のキー（タスク、ストーリー、エピックの ID、コメントは "comment:<タスク>:<番号>"）ごとに D.files に持つ。
-  // 画像と動画は縮小した絵を並べ、それ以外は1行ずつ。押すとプレビューが開く
+  // 画像も動画もそれ以外も、1行ずつ並べる（容量、上げた人、上げた日時が読める）。名前を押すとプレビューが開く。
+  // 本文に差し込んだ画像だけは、縮小した絵（fileThumb）で出す
   const FILE_ICON = { image: "image", video: "play", file: "file" };
   const FILE_KIND = { image: "画像", video: "動画", file: "ファイル" };
   const filesOf = (key) => D.files[key] || [];
@@ -609,8 +725,9 @@
       return `<div class="file-row is-error" role="alert">${icon("alert")}<div class="file-main"><span class="file-name">${esc(f.name)}</span><span class="file-meta">${esc(f.error)}</span></div>
         <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-cancel-file="${f.id}">閉じる</button></div></div>`;
     }
-    return `<div class="file-row">${icon(FILE_ICON[f.type])}<div class="file-main"><button class="file-name" type="button" data-file="${f.id}">${esc(f.name)}</button>
-      <span class="file-meta">${f.size}・${esc(user(f.who).name)}・${f.at}</span></div>
+    const nb = (s) => String(s).replace(/ /g, " ");
+    return `<div class="file-row">${icon(FILE_ICON[f.type])}<div class="file-main"><button class="file-name" type="button" data-file="${f.id}" aria-label="${esc(f.name)}（${FILE_KIND[f.type]}）を開く">${esc(f.name)}</button>
+      <span class="file-meta"><span class="mono">${nb(f.size)}</span>・${esc(user(f.who).name)}・<span class="mono">${nb(f.at)}</span>${f.length ? `・${f.length}` : ""}</span></div>
       <div class="file-actions"><button class="icon-btn" type="button" data-toast="ダウンロードを始めました" aria-label="${esc(f.name)} をダウンロード" title="ダウンロード">${icon("download")}</button>
         <button class="icon-btn is-danger" type="button" data-delete-file="${f.id}" aria-label="${esc(f.name)} を消す" title="消す">${icon("trash")}</button></div></div>`;
   }
@@ -621,17 +738,14 @@
     }
     if (opts.button) return `<div><button class="btn is-sm is-quiet" type="button" data-pick-file="${key}">${icon("clip")}ファイルを添付</button></div>`;
     return `<div class="dropzone ${opts.over ? "is-over" : ""}" data-drop="${key}">${icon("upload")}
-      <span class="dropzone-text"><b>${opts.over ? "離すと添付します" : "ここにファイルをドラッグして添付"}</b><span>1 ファイル 50 MB まで。画像は本文やコメントに貼り付けても添付できます</span></span>
+      <span class="dropzone-text"><b>${opts.over ? "離すと添付します" : "ここにファイルをドラッグして添付"}</b><span>1 ファイル 50 MB まで。複数をまとめて選べます。画像は本文やコメントに貼り付けても添付できます</span></span>
       <button class="btn is-sm" type="button" data-pick-file="${key}">${icon("clip")}ファイルを選ぶ</button></div>`;
   }
   // 添付ファイルの一覧と上げる場所。opts.noDrop なら一覧だけ。上げると data-files-for の中だけを描き直す
   function attachments(key, opts = {}) {
     const list = filesOf(key);
-    const media = list.filter((f) => f.type !== "file" && !f.state);
-    const rest = list.filter((f) => f.type === "file" || f.state);
     return `<div class="files" data-files-for="${key}" data-files-opts='${JSON.stringify(opts)}'>
-      ${media.length ? `<div class="file-thumbs">${media.map(fileThumb).join("")}</div>` : ""}
-      ${rest.map(fileRow).join("")}
+      ${list.map(fileRow).join("")}
       ${opts.noDrop ? "" : dropzone(key, opts)}</div>`;
   }
   // Markdown に差し込んだ画像。消したファイルは「見つかりません」と出す
@@ -718,19 +832,101 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       <span class="props-note">${opts.note || `縦の線は 80% の位置。超えると${t("admin")}に通知します。`}</span></div>`;
   }
 
-  // ---- タスクの詳細（右から出る引き出し。左のメニューを残して広げられる） ----
-  // full は開き直しても残し、次に開くタスクも同じ広さで出す
+  // ---- タスクの詳細（横、真ん中、ページ全体、新しいタブ） ----
+  // mode は端末の localStorage に覚え、次に開くタスクも同じ形で出す（task.html はページ全体の見本）
   // editing は直している途中の欄（title、link、body）。欄ごとに別々に開け、保存か取り消しで閉じる
   // view は見本の状態の切り替え（読み込み中、読めない、閉じたワークスペースの読み取り専用）。errors は欄の下に出す理由
   // commentEditing は直している途中のコメントの番号、commentDeleting は消すかを確かめているコメントの番号
-  const drawer = { id: null, tab: "comments", thanked: new Set(), opener: null, full: false, editing: new Set(), view: null, errors: {}, drafts: {}, commentEditing: null, commentDeleting: null,
+  const drawer = { id: null, tab: "comments", thanked: new Set(), opener: null, mode: readDrawerMode(), editing: new Set(), view: null, errors: {}, drafts: {}, commentEditing: null, commentDeleting: null,
     // 見本の状態の切り替え（カタログの drawerDemo が使う）。commentsView はコメントの読み込み（loading、failed、reloadFailed）
-    commentsView: null, commentViewer: null, commentBlocked: null };
+    // adjacent は前後のタスク（{ prev, next }。順を渡さない画面は null）。undefined なら画面の行から求める（drawerAdjacent）
+    commentsView: null, commentViewer: null, commentBlocked: null, adjacent: undefined };
   const drawerReadOnly = () => drawer.view === "readonly";
-  function drawerSizeBtn() {
-    const label = drawer.full ? "横に戻す" : "広げる";
-    return `<button class="pill drawer-size" type="button" data-drawer-size aria-label="${label}" title="${label}">${icon(drawer.full ? "shrink" : "expand")}</button>`;
+  function readDrawerMode() {
+    try { const mode = localStorage.getItem("sq-design-task-open-mode"); return ["side", "center", "page", "tab"].includes(mode) ? mode : "side"; }
+    catch { return "side"; }
   }
+  function shownDrawerMode() { return drawer.mode === "center" && matchMedia("(max-width: 620px)").matches ? "side" : drawer.mode; }
+  // 今描いている形。ページ全体の見本（task.html）はページ全体、それ以外は横か真ん中（狭い幅の真ん中は横）
+  function renderedDrawerMode() { return location.pathname.endsWith("/task.html") ? "page" : shownDrawerMode() === "center" ? "center" : "side"; }
+  // 開き方は押した時点で実行するボタンの組。select にすると、矢印キーを押すだけで確認なしに遷移してしまう
+  function drawerModeButtons() {
+    const narrow = matchMedia("(max-width: 620px)").matches, now = renderedDrawerMode();
+    const buttons = [["side", "横"], ["center", "真ん中"], ["page", "ページ全体"], ["tab", "新しいタブ"]].filter(([v]) => v !== "center" || !narrow)
+      .map(([v, label]) => `<button class="pill" type="button" data-drawer-mode="${v}" aria-pressed="${now === v}">${label}</button>`).join("");
+    return `<span class="drawer-mode" role="group" aria-label="開き方">${buttons}</span>`;
+  }
+  // 前後のタスクへ移るボタン（本番は Drawer.svelte と task-order.ts）。順は開いた画面に今見えているタスクの行を、画面の上から下の順に並べたもの。
+  // 畳んだ枝の中（[hidden]）と、引き出しやアシスタントの中の行は数えない。端では null で、ボタンは aria-disabled。
+  // 順に無いとき、ページ全体、画面が順を渡さないときは null を返し、ボタンを出さない。drawer.adjacent は見本の状態の切り替え（カタログの drawerDemo が使う）
+  function drawerAdjacent() {
+    if (drawer.adjacent !== undefined) return drawer.adjacent;
+    if (renderedDrawerMode() === "page") return null;
+    const ids = [...new Set([...document.querySelectorAll("[data-task]")]
+      .filter((el) => !el.closest("#drawer, #assist-panel, #assist-palette, [hidden]")).map((el) => el.dataset.task))];
+    const at = ids.indexOf(drawer.id);
+    return at < 0 ? null : { prev: ids[at - 1] ?? null, next: ids[at + 1] ?? null };
+  }
+  // キーの先が文字を打つ場所か（本番は task-order.ts の isTypingTarget）。文字や数字を入れる型の input、textarea、select、contenteditable。
+  // ポイントの radio のように文字を打たない型の input では、[ ] で移れる
+  const TEXT_INPUT_TYPES = ["", "text", "search", "url", "email", "tel", "password", "number", "date", "datetime-local", "month", "week", "time"];
+  function isTypingTarget(el) {
+    if (!el) return false;
+    if (el.isContentEditable === true) return true;
+    const tag = (el.tagName || "").toUpperCase();
+    return tag === "TEXTAREA" || tag === "SELECT" || (tag === "INPUT" && TEXT_INPUT_TYPES.includes((el.type || "").toLowerCase()));
+  }
+  function drawerStepButtons() {
+    const adjacent = drawerAdjacent();
+    if (!adjacent) return "";
+    // 読み上げの名前は変えず、title にだけキーを添える。キーは aria-keyshortcuts でも伝える。端で押せないときの title は理由（先頭です／最後です）
+    const button = (delta, label, key, glyph, has, edge) => `<button class="pill" type="button" data-drawer-step="${delta}" aria-label="${label}" aria-keyshortcuts="${key}" title="${has ? `${label}（${key}）` : edge}" aria-disabled="${!has}">${icon(glyph)}</button>`;
+    return `<span class="drawer-steps" role="group" aria-label="前後の${t("task")}">${button(-1, `前の${t("task")}`, "[", "up", adjacent.prev, "先頭です")}${button(1, `次の${t("task")}`, "]", "down", adjacent.next, "最後です")}</span>`;
+  }
+  // 前後へ移る。書きかけがあれば、閉じるときと同じ確認を挟む（force は捨てると決めた後）。閉じたときの戻り先は、最後に表示したタスクの行。
+  // ボタン（viaButton）で移ったときは、押したのと同じ向きのボタンへフォーカスを戻す（端で押せないなら見出し）。キー（[ ]）のときは見出し
+  let pendingDrawerStep = null;
+  function stepDrawer(delta, force = false, viaButton = false) {
+    const adjacent = drawerAdjacent();
+    const id = adjacent && (delta < 0 ? adjacent.prev : adjacent.next);
+    if (!id) return;
+    if (!force && drawerHasDraft()) { pendingDrawerMode = null; pendingDrawerStep = { delta, viaButton }; DIALOGS.discardDraft(); return; }
+    pendingDrawerStep = null;
+    drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = id; drawer.editing = new Set(); drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
+    renderDrawer();
+    const again = viaButton && document.querySelector(`#drawer [data-drawer-step="${delta}"]:not([aria-disabled="true"])`);
+    if (again) { again.focus(); return; }
+    const heading = document.querySelector("#drawer h2");
+    if (heading) { heading.tabIndex = -1; heading.focus(); }
+  }
+  let pendingDrawerMode = null;
+  function saveDrawerMode(mode) {
+    try { localStorage.setItem("sq-design-task-open-mode", mode); drawer.mode = mode; } catch { drawer.mode = "side"; }
+  }
+  function changeDrawerMode(mode, force = false) {
+    // 描いている形と同じ形を押したときは、移らずに既定だけを保存する
+    if (mode === renderedDrawerMode()) { saveDrawerMode(mode); renderDrawer(); return; }
+    if (!force && drawerHasDraft()) { pendingDrawerMode = mode; pendingDrawerStep = null; DIALOGS.discardDraft(); return; }
+    const id = drawer.id;
+    pendingDrawerMode = null;
+    if (mode === "tab") {
+      // 開けなかったら（遮断された）、詳細も既定もそのままにする
+      const opened = window.open(`task.html?task=${encodeURIComponent(id)}`, "_blank");
+      if (!opened) { toast(`${icon("alert")}新しいタブを開けませんでした`); return; }
+      opened.opener = null;
+      saveDrawerMode(mode); closeDrawer(true);
+      return;
+    }
+    saveDrawerMode(mode);
+    if (mode === "page") {
+      sessionStorage.setItem("sq-design-task-return", location.href); location.href = `task.html?task=${encodeURIComponent(id)}`;
+      return;
+    }
+    if (location.pathname.endsWith("/task.html")) { location.href = `backlog.html?task=${encodeURIComponent(id)}`; return; }
+    closeDrawer(true); openDrawer(id, drawer.opener);
+  }
+  // 画面の幅が 620px を越えたら、真ん中のボタンを出し入れする
+  matchMedia("(max-width: 620px)").addEventListener("change", () => renderDrawer());
   // 欄ごとに直す。値そのものが押せるボタン（edit-trigger）で、押すと入力欄と「保存」「取り消し」に替わる。
   // Enter で保存、Esc で取り消し（本文は Enter が改行なので、保存は「保存」だけ）。ポイントと期日は選んだら保存する
   function editActions(name) {
@@ -821,7 +1017,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ? `<p class="comment-body">${deletedText}</p>`
         : `<div class="comment-body"><div class="doc-box">${mdBody([c.body])}</div></div>`;
     const files = !c.deleted && filesOf(`comment:${x.id}:${i}`).length
-      ? `<div class="comment-files">${filesOf(`comment:${x.id}:${i}`).map((f) => (f.type === "file" ? fileRow(f) : fileThumb(f))).join("")}</div>` : "";
+      ? `<div class="comment-files">${filesOf(`comment:${x.id}:${i}`).map(fileRow).join("")}</div>` : "";
     return `<div class="comment${c.deleted ? " is-deleted" : ""}">${avatarOf(c.who)}<div>
       <div class="comment-head"><b>${esc(user(c.who).name)}</b><span class="mono">${c.at}</span>${c.edited ? "<span>編集済み</span>" : ""}${actions ? `<span class="comment-actions">${actions}</span>` : ""}</div>
       ${body}${files}</div></div>`;
@@ -850,7 +1046,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         <span class="chip">${icon(x.src ? SRC[x.src.kind].icon : "pen")}${x.src ? SRC[x.src.kind].label : `手で作った${t("task")}`}</span>
         ${x.src ? `<span class="source-key">${esc(x.src.key)}</span><span class="chip">取り込み元: ${esc(x.src.status)}</span>` : ""}
         <span class="drawer-tools">
-          ${drawerSizeBtn()}
+          ${drawerStepButtons()}${drawerModeButtons()}
           <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
         </span>
       </div>
@@ -869,7 +1065,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
           ? `${cat.id ? esc(D.categories[cat.id].name) : `${t("category")}なし`}<span class="props-note">親から引き継ぎ</span>`
           : categorySelect("drawer-cat", cat ? cat.id : null, drawerReadOnly())}</dd></div>
         ${x.src ? "" : `<div><dt>リンク</dt><dd>${drawerLinkHtml(x)}</dd></div>`}
-        <div><dt>今日やる</dt><dd><button class="sun" type="button" data-sun="${x.id}" aria-pressed="${x.todayOn === D.today}" aria-label="今日やる">${icon("sun")}</button>${x.todayOn === D.today ? "今日やる" : ""}</dd></div>
+        <div><dt>今日やる</dt><dd><button class="sun" type="button" data-sun="${x.id}" aria-pressed="${x.todayOn === D.today}" aria-label="今日やる: ${esc(x.title)}" aria-disabled="false">${icon("sun")}</button>${x.todayOn === D.today ? "今日やる" : ""}</dd></div>
       </dl>
       <div class="field">
         <span class="field-label">${icon("pen")} ${t("detail")}・${t("ac")} ${x.unfilled ? `<span class="chip is-todo">未記入</span>` : ""}</span>
@@ -881,7 +1077,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${attachments(x.id)}
       </div>
       <div class="done-bar">
-        ${x.doneAt ? `<span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span><span>${t("done")} ${esc(x.doneAt)}</span></span><button class="link-btn" type="button" data-undo="${x.id}">戻す</button>`
+        ${x.doneAt ? `<span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span><span>${t("done")} ${esc(x.doneAt)}</span><button class="link-btn" type="button" data-undo="${x.id}" aria-label="${t("done")}を戻す: ${esc(x.title)}" aria-disabled="false">戻す</button></span>`
           : `<button class="btn is-primary" type="button" data-done="${x.id}">${icon("check")}${t("complete")}</button>`}
         ${D.definitionOfDone.length ? `<div class="done-bar-dod"><h3 class="done-bar-dod-title" id="drawer-dod">${t("dod")}</h3><div class="done-bar-dod-body" tabindex="0" role="region" aria-labelledby="drawer-dod">${dodDoc()}</div></div>` : ""}
       </div>
@@ -926,13 +1122,20 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // 引き出しの見本の状態。読み込み中と、読めなかったとき（もう一度試す）は、見出しと文だけ
   function drawerStateHtml() {
     const x = task(drawer.id);
-    const top = `<div class="drawer-top"><span class="drawer-tools">${drawerSizeBtn()}<button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></span></div>
+    const top = `<div class="drawer-top"><span class="drawer-tools">${drawerStepButtons()}${drawerModeButtons()}<button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></span></div>
       <h2 class="drawer-title"><span id="drawer-title">${t("task")}</span></h2>`;
     if (drawer.view === "loading") return `${top}<p class="field-hint">読み込んでいます</p>`;
     return `${top}<div class="callout is-danger" role="alert">${icon("alert")}<span>この${t("task")}を読み込めませんでした。もう一度試してください。</span></div>
       <div class="form-actions"><button class="btn" type="button">もう一度試す</button></div>`;
   }
   function openDrawer(id, opener) {
+    if (!location.pathname.endsWith("/task.html") && (drawer.mode === "page" || drawer.mode === "tab")) {
+      const url = `task.html?task=${encodeURIComponent(id)}`;
+      if (drawer.mode === "tab") window.open(url, "_blank", "noopener,noreferrer");
+      else { sessionStorage.setItem("sq-design-task-return", location.href); location.href = url; }
+      return;
+    }
+
     drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = opener || null; drawer.editing = new Set(); drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     renderDrawer();
     document.querySelector("[data-close-drawer]")?.focus();
@@ -958,7 +1161,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 書きかけがあるときは、捨てるかをダイアログで確かめる。force は捨てると決めた後
   function closeDrawer(force = false) {
-    if (!force && drawerHasDraft()) { DIALOGS.discardDraft(); return; }
+    // 形を替える確認で「書き続ける」を選んだ後に、閉じる操作の確認へ前の形の指定を持ち越さない
+    if (!force && drawerHasDraft()) { pendingDrawerMode = null; pendingDrawerStep = null; DIALOGS.discardDraft(); return; }
+    if (location.pathname.endsWith("/task.html")) {
+      const back = sessionStorage.getItem("sq-design-task-return"); sessionStorage.removeItem("sq-design-task-return");
+      location.href = back || "backlog.html"; return;
+    }
     drawer.id = null; drawer.editing = new Set(); drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     renderDrawer();
     const back = drawer.opener && document.querySelector(`[data-task="${drawer.opener}"]`);
@@ -992,16 +1200,18 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     else x.due = el.value || null;
     redrawAll(); toast(`${icon("check")}保存しました`);
   });
-  // 広げている間は左のメニューも押せるので、モーダルとして扱わない
   function applyDrawerSize(el) {
-    el.classList.toggle("is-full", drawer.full);
-    el.setAttribute("aria-modal", String(!drawer.full));
+    const isPage = location.pathname.endsWith("/task.html");
+    el.classList.toggle("is-center", !isPage && shownDrawerMode() === "center");
+    el.classList.toggle("is-page", isPage);
+    el.setAttribute("role", isPage ? "region" : "dialog");
+    if (isPage) el.removeAttribute("aria-modal"); else el.setAttribute("aria-modal", "true");
   }
   function renderDrawer() {
     const el = document.getElementById("drawer"), scrim = document.getElementById("scrim");
     if (!el) return;
     applyDrawerSize(el);
-    if (drawer.id) { captureDrafts(); el.innerHTML = drawerHtml(); el.hidden = false; scrim.hidden = false; }
+    if (drawer.id) { captureDrafts(); el.innerHTML = drawerHtml(); el.hidden = false; scrim.hidden = location.pathname.endsWith("/task.html"); }
     else { el.innerHTML = ""; el.hidden = true; scrim.hidden = true; }
     const ctx = document.querySelector("#assist-panel .assist-context");
     if (ctx) ctx.outerHTML = assistCtx();
@@ -1010,7 +1220,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // ---- ダイアログ ----
   // html は中身。閉じる操作は data-close-dialog。開いた元の要素にフォーカスを戻す
   let dialogOpener = null;
-  function openDialog(title, body, foot) {
+  // 値を二度と出せないダイアログ（API トークンの発行直後）は、Esc と背景では閉じず、「閉じる」と × だけで閉じる（本番の Dialog の outsideDismiss={false}）
+  let dialogOnlyButtons = false;
+  function openDialog(title, body, foot, onlyButtons = false) {
+    dialogOnlyButtons = onlyButtons;
     dialogOpener = document.activeElement;
     const el = document.getElementById("dialog");
     el.innerHTML = `<div class="dialog-sheet" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
@@ -1024,7 +1237,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function closeDialog() {
     const el = document.getElementById("dialog");
     if (!el || el.hidden) return false;
-    el.hidden = true; el.innerHTML = "";
+    el.hidden = true; el.innerHTML = ""; dialogOnlyButtons = false;
     if (dialogOpener && dialogOpener.focus) dialogOpener.focus();
     return true;
   }
@@ -1199,6 +1412,27 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         : `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${e ? `${t("epic")}を保存しました` : `${t("epic")}を作りました`}">${e ? "保存する" : "作る"}</button>`);
   }
   const DIALOGS = {
+    // 先のスプリントに入れる（本番の SprintTaskPicker）。計画の画面の「<バックログ>から入れる」から開く。
+    // ストーリーを見出しにして配下の未完了のタスクを並べ、見出しのチェックで配下をまとめて選び、1件ずつ外せる（一部だけなら indeterminate）。
+    // 親のないタスクは別の見出し。タイトルで絞る検索欄、高さに上限のある一覧、足元に選んだ件数と主ボタン
+    sprintTaskAdd: () => {
+      const open = (x) => !x.doneAt && x.ws === "wa" && x.sprint !== "sp16";
+      const groups = Object.keys(D.stories).map((sid) => ({ sid, title: D.stories[sid].title, list: tasksWhere((x) => open(x) && x.story === sid) }))
+        .filter((g) => g.list.length);
+      const roots = tasksWhere((x) => open(x) && !x.story);
+      const picked = (groups[0]?.list.length ?? 0) + (groups[1] ? 1 : 0);
+      const row = (x, checked) => `<label class="pick-row is-child"><input type="checkbox" ${checked ? "checked" : ""}><span>${esc(x.title)}<span class="pick-meta">${x.pts == null ? "未見積もり" : `${x.pts} pt`}${x.sprint ? `・${esc(sprintLabel(x.sprint))} から移します` : ""}</span></span></label>`;
+      openDialog(`${esc(sprintLabel("sp16"))} に入れる`,
+        `<p class="field-hint" id="d-pick-hint">${t("story")}を選ぶと、配下の未完了の${t("task")}をまとめて入れます。ほかの${t("sprint")}に入っている${t("task")}は、こちらへ移します。</p>
+         <label class="search">${icon("search")}<input type="search" aria-label="${t("task")}と${t("story")}のタイトルで絞る" placeholder="タイトルで絞る"></label>
+         <div class="pick-list" role="group" aria-label="入れる${t("task")}" aria-describedby="d-pick-hint">
+           ${groups.map((g, gi) => `<div class="pick-group"><label class="pick-row is-head"><input type="checkbox" ${gi === 0 ? "checked" : ""} data-indeterminate="${gi === 1}"><span>${esc(g.title)}<span class="pick-meta">未完了の${t("task")} ${g.list.length} 件</span></span></label>
+             ${g.list.map((x, i) => row(x, gi === 0 || (gi === 1 && i === 0))).join("")}</div>`).join("")}
+           ${roots.length ? `<div class="pick-group"><div class="pick-row is-head"><span>親のない${t("task")}</span></div>${roots.map((x) => row(x, false)).join("")}</div>` : ""}
+         </div>`,
+        `<span class="pick-count">${picked} 件を選んでいます</span><button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${picked} 件入れました">${picked} 件入れる</button>`);
+      document.querySelectorAll("#dialog [data-indeterminate='true']").forEach((el) => { el.indeterminate = true; });
+    },
     sprintCreate: () => sprintDialog(null),
     // 始まる前のスプリントを直す（本番の SprintDialog）。計画の画面の先のスプリントの「直す」から開く。欄は作るときと同じ
     sprintEdit: () => sprintDialog("sp16"),
@@ -1210,17 +1444,83 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="${t("sprint")}を削除しました">削除する</button>`);
       document.querySelector(".dialog-sheet").classList.add("is-danger");
     },
-    sprintStart: () => openDialog(`${t("sprint")}を始める`,
-      `<p>${sprintLabel("sp15")}（${md(D.sprints.sp15.start)}〜${md(D.sprints.sp15.end)}）を始めます。入っている${t("task")}は 3 件、11 pt です。</p>
-       <div class="callout is-warn">${icon("alert")}<span>未見積もりが 1 件、${t("detail")}が未記入のものが 2 件あります。始めることはできます。</span></div>
-       <label class="field" for="d-goal"><span class="field-label">${t("sprintGoal")}</span><textarea class="textarea" id="d-goal" placeholder="この${t("sprint")}で何ができるようになるか"></textarea><span class="field-hint">空でも始められます。計画、${t("sprint")}、自分の今日の画面に出ます。</span></label>`,
-      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("sprint")}を始めました">始める</button>`),
-    sprintExtend: () => openDialog(`${t("sprint")}を延ばす`,
-      `<div class="form-row"><label class="field" for="d-days"><span class="field-label">延ばす日数</span><input class="input" id="d-days" type="number" min="1" value="2"></label>
-         <div class="field"><span class="field-label">新しい最終日</span><span class="mono">2026-10-28（水）</span></div></div>
-       <div class="callout is-info">${icon("calendar")}<span>次の ${sprintLabel("sp15")} と重なるので、${sprintLabel("sp15")} と ${sprintLabel("sp16")} を同じく 2 日ずつ後ろへずらします。</span></div>
-       <p class="field-hint">延ばした${t("sprint")}は、計画の画面のベロシティから除きます。</p>`,
-      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="2 日延ばしました">2 日延ばす</button>`),
+    // API トークンを発行した直後（本番は ApiTokensSetting の Dialog）。マイプロフィールの「発行する」から開く。
+    // 生の値はこのダイアログの中にだけ出し、閉じると二度と出せない。値は固定の架空の値
+    tokenIssued: () => {
+      openDialog("API トークンを発行しました",
+        `<p>「手元の CLI」の値です。</p>
+         <div class="field"><label class="field-label" for="d-token">トークンの値</label>
+           <div class="input-row"><input class="input mono" id="d-token" value="sgp_Qm7tX2vLr9aKpE4wZc8hN3bYd6fGs1uJ0oTiRl5eWxA" readonly spellcheck="false" autocomplete="off">
+             <button class="btn" type="button" data-toast="トークンの値をコピーしました">${icon("link")}コピーする</button></div></div>
+         <div class="callout is-warn">${icon("alert")}<span>この値は二度と見られません。閉じる前にコピーして、安全な場所に保管してください。</span></div>
+         <p class="field-hint">2027/01/29 09:00 まで使えます。</p>`,
+        `<button class="btn is-primary" type="button" data-close-dialog>閉じる</button>`, true);
+    },
+    // API トークンの取消の確認（本番は ConfirmDialog）。マイプロフィールの一覧の「取り消す」から開く。取り消せない旨を書く
+    tokenRevoke: () => {
+      openDialog("API トークン「手元の CLI」を取り消しますか",
+        `<p>取り消すと、このトークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。</p>`,
+        `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="「手元の CLI」を取り消しました">取り消す</button>`);
+      document.querySelector(".dialog-sheet").classList.add("is-danger");
+    },
+    // 今のセッション以外のすべてのセッションと、すべての API トークンを無効にする確認（本番は ConfirmDialog）。API トークンの節の末尾の
+    // 「すべての端末とトークンを締め出す」から開く。元に戻せない旨と、いま使っているこのブラウザのログインだけが残る旨を書く
+    tokenRevokeAll: () => {
+      openDialog("すべての端末とトークンを締め出しますか",
+        `<p>いま使っているこのブラウザのログインだけが残り、ほかのすべての端末（同じ端末のほかのブラウザを含む）はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。</p>`,
+        `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="ほかの端末のセッション2件と、API トークン2件を締め出しました">締め出す</button>`);
+      document.querySelector(".dialog-sheet").classList.add("is-danger");
+    },
+    // スプリントを始めるダイアログ（本番は SprintStartDialog）。押したボタンの data-state で状態を替える。
+    // active: 進行中のスプリントが既にある（開いた時点から理由を出し、「始める」を押せなくする）、
+    // ended: 最終日が今日より前（押した後に理由を出して開いたまま）、toolong: ゴールが 200 字を超えた（欄の下に理由）
+    sprintStart: (el) => {
+      const state = (el && el.dataset && el.dataset.state) || "";
+      const sprint = `${t("sprint")}`;
+      const lead = state === "active"
+        ? `<div class="callout is-danger" role="alert">${icon("alert")}<span>進行中の${sprint}があるので、始められません。終えてから始めてください</span></div>`
+        : `<div class="callout is-warn">${icon("alert")}<span>未見積もりが 1 件あります。始めることはできます。</span></div>`;
+      const goalError = state === "toolong"
+        ? `<span class="field-error" id="d-goal-error" role="alert">${icon("alert")}${t("sprintGoal")}は 200 字までです</span>` : "";
+      const submitError = state === "ended"
+        ? `<div class="callout is-danger" role="alert">${icon("alert")}<span>この${sprint}は最終日を過ぎているので、始められません。期間を直すか、削除して作り直してください</span></div>` : "";
+      openDialog(`${sprint}を始める`,
+        `<p>${sprintLabel("sp15")}（${md(D.sprints.sp15.start)}〜${md(D.sprints.sp15.end)}）を始めます。入っている${t("task")}は 3 件、11 pt です。</p>
+         ${lead}
+         <label class="field${state === "toolong" ? " is-invalid" : ""}" for="d-goal"><span class="field-label">${t("sprintGoal")}</span><textarea class="textarea" id="d-goal" placeholder="この${sprint}で何ができるようになるか" aria-describedby="d-goal-hint${goalError ? " d-goal-error" : ""}"${state === "toolong" ? ` aria-invalid="true"` : ""}></textarea>${goalError}<span class="field-hint" id="d-goal-hint">空でも始められます。200 字まで書け、${t("plan")}と${sprint}の画面に出ます。</span></label>
+         ${submitError}`,
+        `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button"${state === "active" ? ` aria-disabled="true"` : ` data-close-dialog data-toast="${sprint}を始めました"`}>始める</button>`);
+    },
+    // 進行中のスプリントを延ばす（本番の SprintExtendDialog）。日数の下に範囲の添え書きを置き、新しい最終日とずれる分の予告は
+    // aria-live の1つの領域に入れる。名前の無いスプリントは期間が名前なので、冒頭の期間を重ねない。後ろが動かないとき（data-state="none"）は、その旨を出す
+    sprintExtend: (el) => {
+      const none = el && el.dataset.state === "none";
+      const id = none ? "spb" : "sp14";
+      const s = D.sprints[id];
+      const period = `<span class="mono">${md(s.start)}〜${md(s.end)}</span>`;
+      const head = s.name ? `${sprintLabel(id)}（${period}）` : `${t("sprint")} ${period}`;
+      const shift = (to, before, after) => `<div class="field"><span class="field-label">${sprintLabel(to)}</span><span><span class="mono">${before} → ${after}</span> <span>（2 日）</span></span></div>`;
+      const preview = none
+        ? `<p class="props-note">後ろの${t("sprint")}は動きません</p>`
+        : `${shift("sp15", "10/27〜11/9", "10/29〜11/11")}${shift("sp16", "11/10〜11/23", "11/12〜11/25")}`;
+      openDialog(`${t("sprint")}を延ばす`,
+        `<p>${head}</p>
+         <div class="field"><label class="field-label" for="d-days">延ばす日数</label><input class="input" id="d-days" type="number" min="1" max="14" value="2" aria-describedby="d-days-hint"><p class="field-hint" id="d-days-hint">1〜14 日</p></div>
+         <div class="form-fields" aria-live="polite">
+           <div class="field"><span class="field-label">新しい最終日</span><span class="mono">2026-10-28</span></div>
+           ${preview}
+         </div>
+         <p class="field-hint">延ばした${t("sprint")}はベロシティの計算から除きます。</p>`,
+        `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("sprint")}を 2 日延長しました">2 日延長する</button>`);
+    },
+    // 進行中のスプリントの名前とゴールを直す（本番の SprintDialog の進行中）。期間は変えられないので、開始日と長さの欄は出さない
+    sprintEditActive: () => {
+      const s = D.sprints.sp14;
+      openDialog(`${t("sprint")}を直す`,
+        `<label class="field" for="d-an"><span class="field-label">名前（任意）</span><input class="input" id="d-an" placeholder="空なら期間を名前にします" value="${esc(s.name)}"></label>
+         <div class="field"><label class="field-label" for="d-ag">${t("sprintGoal")}</label><textarea class="textarea" id="d-ag" aria-describedby="d-ag-hint" rows="3">${esc(s.goal)}</textarea><p class="field-hint" id="d-ag-hint">200 字まで。空にすると消えます</p></div>`,
+        `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("sprint")}を保存しました">保存する</button>`);
+    },
     sprintEnd: () => openDialog(`${t("sprint")}を終える`,
       `<p>${sprintLabel("sp14")} を終えます。終えた${t("sprint")}の期間と中身は、あとから変えられません。</p>
        <fieldset class="field" style="border:0;padding:0;margin:0"><legend class="field-label">終わらなかった${t("task")} 7 件の行き先</legend>
@@ -1321,18 +1621,36 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     createWorkspace: () => openDialog(`${t("workspace")}を作る`,
       `<label class="field" for="d-wn"><span class="field-label">名前</span><input class="input" id="d-wn" placeholder="例: 保守チーム"></label>
        <label class="field" for="d-wl"><span class="field-label">最初の${t("leader")}</span><select class="select" id="d-wl">${Object.values(D.users).filter((u) => !u.left).map((u) => `<option>${esc(u.name)}</option>`).join("")}</select><span class="field-hint">自分でもかまいません。あとから${t("leader")}を足せます。</span></label>
-       <div class="field"><span class="field-label" id="d-wv">言葉づかい</span>
-         <div class="choice-list" role="radiogroup" aria-labelledby="d-wv">
-           <label class="choice"><input type="radio" name="d-wv" ${vocab ? "" : "checked"}><div><b>ゲームの言葉</b><span>パーティ、クエスト、レイド</span></div></label>
-           <label class="choice"><input type="radio" name="d-wv" ${vocab ? "checked" : ""}><div><b>スクラムの言葉</b><span>ワークスペース、タスク、エピック</span></div></label></div>
-         <span class="field-hint">${t("column")}と決まった欄の名前は、選んだ言葉づかいで決まります。あとから言葉づかいを替えても、名前は変わりません。</span></div>
-       <p class="field-hint">${t("column")}は「${vocab ? "未着手、作業中、レビュー" : "出発前、遂行中、査定中"}、${t("done")}」、決まった欄は「${vocab ? "受け入れ基準" : "達成条件"}」、換算は 1 ${t("points")} = 4 時間、週の始まりは月曜、タイムゾーンは Asia/Tokyo（このブラウザの設定）で作ります。あとから設定で変えられます。</p>`,
-      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("workspace")}を作りました">作る</button>`),
+       <p class="field-hint">${t("column")}は「未着手、作業中、レビュー、${t("done")}」、決まった欄は「受け入れ基準」、換算は 1 ${t("points")} = 4 時間、週の始まりは月曜、タイムゾーンは Asia/Tokyo（このブラウザの設定）で作ります。あとから設定で変えられます。</p>`,
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-workspace-created="d-wn">作る</button>`),
+    // 作った後（本番の WorkspaceCreateDialog の完了の表示）。同じダイアログの中身を差し替える。
+    // 「続けて作る」は空のフォームに戻って名前の欄へ、「開く」は作った${t("workspace")}のバックログへ移る。×、Esc、背景で閉じたら今の画面に残る
+    workspaceCreated: (name) => openDialog(`${t("workspace")}を作りました`,
+      `<div class="callout is-ok">${icon("check")}<span class="wrap-anywhere">${esc(name)}</span></div>`,
+      `<button class="btn is-quiet" type="button" data-workspace-again>続けて作る</button><a class="btn is-primary" href="backlog.html">開く</a>`),
     closeWorkspace: () => {
       const target = D.admin.workspaces.find((w) => !w.closed);
       return openDialog(`「${esc(target ? target.name : "")}」を終了しますか？`,
         `<p>終了すると読み取り専用になり、中の書き込みはすべてできなくなります。この画面からいつでも再開できます。</p>`,
         `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("workspace")}を終了しました">終了する</button>`);
+    },
+    // ユーザーを無効にする前の確認（本番の UsersSetting の ConfirmDialog）。押した行の data-name と data-admin で文を作る。
+    // 管理者なら指名も解除することを添える。本文は本番の辞書（userDisableText、userDisableAdminNote、userDisableEnableNote）と同じ文
+    disableUser: (el) => {
+      const name = esc(el?.dataset.name ?? user("u3").name);
+      openDialog(`${name}を無効にしますか？`,
+        `<p>${name}はこの${t("organization")}に入れなくなります。すべての${t("workspace")}から外れ、担当していた未完了の${t("task")}は担当なしに戻り、承諾待ちの招待は取り消します。完了の記録と経験値は残ります。</p>
+         ${el?.dataset.admin === "true" ? `<p>${t("admin")}の指名も解除します。</p>` : ""}
+         <p>有効に戻しても所属と${t("admin")}の指名は戻りません。もう一度使ってもらうには、${t("workspace")}に招待し直してください。</p>`,
+        `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="${name}を無効にしました">無効にする</button>`);
+      document.querySelector(".dialog-sheet").classList.add("is-danger");
+    },
+    // 自分の管理者を解除する前の確認（本番の UsersSetting）。ほかに管理者がいるときだけ開く（自分だけなら、開かずにトーストで断る）
+    revokeSelfAdmin: () => {
+      openDialog(`自分の${t("admin")}を解除しますか？`,
+        `<p>解除すると、この画面を開けなくなります。${t("admin")}に戻るには、ほかの${t("admin")}に指名し直してもらいます。</p>`,
+        `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="${esc(user(D.me).name)}の${t("admin")}を解除しました">解除する</button>`);
+      document.querySelector(".dialog-sheet").classList.add("is-danger");
     },
     createOrganization: () => openDialog(`${t("organization")}を作る`,
       `<label class="field" for="d-ks"><span class="field-label">URL の名前（slug）</span><input class="input mono" id="d-ks" placeholder="例: sakura-dev"><span class="field-hint">英小文字、数字、ハイフンで 2〜40 字。あとから変えられません。</span></label>
@@ -1344,6 +1662,19 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
        </div>
        <div class="callout is-info">${icon("link")}<span>URL は <span class="mono">scrum-guild.dev/&lt;slug&gt;/</span> になります。作ったあとに出る組織の URL（Google の指名は招待の URL）を、${t("admin")}になる人に伝えてください。</span></div>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" id="d-kb" type="button" data-org-create="d-ka" disabled>作る</button>`),
+    // 会員が自分の組織を作る（本番の CreateMyOrganizationDialog。組織の選択の「組織を作る」から開く）。
+    // slug の規則、「あとから変えられません」、できあがる URL を欄の下に常に出す。成功したら /<slug> へ移る（見本は移らない）
+    createMyOrganization: () => openDialog(`自分の${t("organization")}を作る`,
+      `<p>あなたが${t("admin")}になり、30日間のお試しで始めます。お試し中の${t("organization")}は、1つのアカウントにつき1つまでです。</p>
+       <div class="field"><label class="field-label" for="d-ms">URL の名前（slug）</label><input class="input mono" id="d-ms" placeholder="例: sakura-dev" autocomplete="off" spellcheck="false" aria-describedby="d-ms-hint d-ms-url"><span class="field-hint" id="d-ms-hint">英小文字、数字、ハイフンで 2〜40 字。あとから変えられません。</span><span class="field-hint" id="d-ms-url">${t("organization")}の URL は scrum-guild.dev/&lt;slug&gt;/ になります。</span></div>
+       <div class="field"><label class="field-label" for="d-mn">${t("organization")}の名前</label><input class="input" id="d-mn" placeholder="例: さくら開発" autocomplete="organization" aria-describedby="d-mn-hint"><span class="field-hint" id="d-mn-hint">80 字までです。</span></div>`,
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="見本のため、${t("organization")}は作りません">${t("organization")}を作る</button>`),
+    // 会員が自分だけで使う組織（自分用）を作る（本番の CreatePersonalOrganizationDialog。組織の選択の「自分用を作る」から開く）。
+    // 入れるのは slug だけで、名前は固定の「自分用」。slug の規則、「あとから変えられません」、できあがる URL を欄の下に常に出す。成功したら /<slug> へ移る（見本は移らない）
+    createPersonalOrganization: () => openDialog(`自分用の${t("organization")}を作る`,
+      `<p>自分だけで使う${t("organization")}を作ります。あなたが${t("admin")}になります。期限はなく無料で使えますが、人を招待したり、${t("admin")}を増やしたりはできません。1つのアカウントにつき1つまでです。</p>
+       <div class="field"><label class="field-label" for="d-ps">URL の名前（slug）</label><input class="input mono" id="d-ps" placeholder="例: sakura-dev" autocomplete="off" spellcheck="false" aria-describedby="d-ps-hint d-ps-url"><span class="field-hint" id="d-ps-hint">英小文字、数字、ハイフンで 2〜40 字。あとから変えられません。</span><span class="field-hint" id="d-ps-url">${t("organization")}の URL は scrum-guild.dev/&lt;slug&gt;/ になります。</span></div>`,
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="見本のため、${t("organization")}は作りません">自分用を作る</button>`),
     // 作った後。組織の URL とコピー、管理者になる人に伝えること
     organizationCreated: () => openDialog(`${t("organization")}を作りました`,
       `<p>Scrum Guild はメールを送りません。${t("admin")}になる人に、次の URL とログインの手段を伝えてください。</p>
@@ -1352,12 +1683,26 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
            <button class="btn" type="button" data-toast="URL をコピーしました">${icon("link")}コピー</button></div></div>
        <div class="callout is-info">${icon("check")}<span>GitHub の kotone-dev でログインするよう伝えてください。</span></div>`,
       `<button class="btn is-primary" type="button" data-close-dialog>閉じる</button>`),
+    // 管理者の指名し直し。指し方は組織の作成と同じで、GitHub は確かめるまで指名できない。
+    // 最初の文は一覧の管理者の状態で変わる（本番の ReassignAdminDialog）。見本は「管理者がいない」の1つを例にする
     reassignAdmin: () => openDialog(`${t("admin")}を指名し直す`,
-      `<p>くもラボには今${t("admin")}がいません。新しい${t("admin")}を、GitHub のユーザー名か Google のメールアドレスで指名します。</p>
-       ${loginTarget("d-ra", { hints: adminHints() })}
-       <p class="field-hint">この${t("organization")}のユーザーでなくてもかまいません。指名しても、運用者はこの${t("organization")}の中を見られるようにはなりません。まだログインしていない前の指名は消えます。</p>
+      `<p class="wrap-anywhere">「くもラボ」には今${t("admin")}がいません。新しい${t("admin")}を、GitHub のユーザー名か Google のメールアドレスで指名します。</p>
+       ${loginTarget("d-ra", { title: `${t("admin")}のログインの手段`, hints: reassignHints(), action: `<button class="btn" id="d-rz" type="button" data-verify-admin="d-ra" data-verify-panel="d-rv" data-verify-submit="d-rb">確かめる</button>` })}
+       <div id="d-rv" hidden>
+         <div class="callout is-info">${icon("shield")}<span>この人を${t("admin")}にします。アバター、ユーザー名、表示名が、伝えたい人のものか確かめてください。ユーザー名は 1 字違いでも別の人に当たります。</span></div>
+         <div class="choice is-static">${avatar("星野 琴音", 3, { lg: true, image: SAMPLE_PHOTO })}<div><b class="mono">kotone-dev</b><span>星野 琴音</span><span>GitHub のユーザー ID 5550001</span></div></div>
+       </div>
+       <p class="field-hint">この${t("organization")}のユーザーでなくてもかまいません。指名しても、運用者はこの${t("organization")}の中を見られるようにはなりません。まだログインしていない前の指名は取り消されます。</p>
        <p class="field-hint">指名は${t("organization")}の変更の履歴に、運用者の操作として残ります。</p>`,
-      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-invite-link="d-ra" data-invite-done="${t("admin")}を指名しました">指名する</button>`),
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" id="d-rb" type="button" data-reassign-admin="d-ra" disabled>指名する</button>`),
+    // 指名し直した後（GitHub）。組織の URL とコピー、管理者になる人に伝えること
+    adminReassigned: () => openDialog(`${t("admin")}を指名しました`,
+      `<p>Scrum Guild はメールを送りません。${t("admin")}になる人に、次の URL とログインの手段を伝えてください。</p>
+       <div class="field"><label class="field-label" for="d-ru">${t("organization")}の URL</label>
+         <div class="input-row"><input class="input mono" id="d-ru" value="https://scrum-guild.dev/kumo-lab/" readonly>
+           <button class="btn" type="button" data-toast="URL をコピーしました">${icon("link")}コピー</button></div></div>
+       <div class="callout is-info">${icon("check")}<span>GitHub の kotone-dev でログインするよう伝えてください。</span></div>`,
+      `<button class="btn is-primary" type="button" data-close-dialog>閉じる</button>`),
     // 添付ファイルのプレビュー。画像と動画は画面で見られ、それ以外はダウンロードして開く
     previewFile: (id) => {
       const hit = findFile(id);
@@ -1378,23 +1723,32 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-confirm-delete-file="${id}">${icon("trash")}消す</button>`);
       document.querySelector(".dialog-sheet").classList.add("is-danger");
     },
+    // 人数と添付ファイルの上限の変更（本番の OrganizationQuotaDialog）。今の上限に合う段階を選んだ状態で開く。
+    // 「ほかの値」の欄は、「ほかの値」を選んでいる間だけ出す（data-quota-choice の change）。
+    // 添付ファイルの今の合計と、合計に関わる注意（合計が下がるまで添付できない、80% の通知）は #68 まで出さない
     changeQuota: () => openDialog("人数と添付ファイルの上限を変える",
-      `<p>あおば開発の上限を変えます。今は人数 5 人（上限 15 人）、添付ファイルの合計 25.1 GB（上限 30 GB）です。</p>
-       <div class="choice-list">
-         <label class="choice"><input type="radio" name="d-q" checked><div><b>小さい${t("organization")}</b><span>15 人・30 GB</span></div></label>
-         <label class="choice"><input type="radio" name="d-q"><div><b>標準</b><span>50 人・100 GB</span></div></label>
-         <label class="choice"><input type="radio" name="d-q"><div><b>ほかの値</b><span>51 人以上の${t("organization")}のために値を入れます
-           <span class="form-row"><input class="input" type="number" min="1" aria-label="人数の上限" placeholder="人数" style="max-width:8em"><input class="input" type="number" min="1" aria-label="添付ファイルの上限（GB）" placeholder="GB" style="max-width:8em"></span></span></div></label>
+      `<p class="wrap-anywhere">「あおば開発」の上限を変えます。今は人数 5&nbsp;人（上限 15&nbsp;人）、添付ファイルの上限 30&nbsp;GB です。</p>
+       <div class="field"><span class="field-label" id="d-ql">新しい上限</span>
+         <div class="choice-list" role="radiogroup" aria-labelledby="d-ql">
+           <label class="choice"><input type="radio" name="d-q" value="small" data-quota-choice checked><div><b>小さい${t("organization")}</b><span>15&nbsp;人・30&nbsp;GB</span></div></label>
+           <label class="choice"><input type="radio" name="d-q" value="standard" data-quota-choice><div><b>標準</b><span>50&nbsp;人・100&nbsp;GB</span></div></label>
+           <label class="choice"><input type="radio" name="d-q" value="other" data-quota-choice><div><b>ほかの値</b><span>51&nbsp;人以上の${t("organization")}のために値を入れます。</span></div></label>
+         </div></div>
+       <div class="form-row is-start" id="d-qo" hidden>
+         <div class="field"><label class="field-label" for="d-qm">人数の上限（人）</label><input class="input" id="d-qm" type="number" min="1" step="1" value="15"></div>
+         <div class="field"><label class="field-label" for="d-qg">添付ファイルの上限（GB）</label><input class="input" id="d-qg" type="number" min="1" step="1" value="30"></div>
        </div>
-       <p class="field-hint">人数を今より小さくしても、今いる人はそのまま残り、上限を下回るまで招待だけを止めます。添付ファイルを今の合計より小さくすると、合計が下がるまで新しく添付できなくなります。上限を上げて 80% を下回ると、次に超えたときにまた${t("admin")}に通知します。</p>`,
-      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="上限を変えました">変える</button>`),
+       <p class="field-hint" id="d-qu">今の上限です。別の値を選ぶと変えられます。</p>
+       <p class="field-hint">人数を今より小さくしても、今いる人はそのまま残り、上限を下回るまで新しい人の招待と管理者への指名だけを止めます。</p>
+       <p class="field-hint">上限の変更は${t("organization")}の変更の履歴に、運用者の操作として残ります。</p>`,
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" id="d-qs" aria-disabled="true" aria-describedby="d-qu">変える</button>`),
     suspendOrganization: () => {
       openDialog(`${t("organization")}を停止する`,
       `<p>ひばり工房を停止します。停止すると誰も入れなくなり、取り込みと日をまたぐ処理も止まります。データは残り、再開すれば元どおりに使えます。</p>
        <fieldset class="field" style="border:0;padding:0;margin:0"><legend class="field-label">停止の理由</legend>
          <div class="choice-list">
            <label class="choice"><input type="radio" name="d-why" checked><div><b>一時的に止める</b><span>支払いの遅れなど。消す予定は立てません。</span></div></label>
-           <label class="choice"><input type="radio" name="d-why"><div><b>解約</b><span>停止から 30 日後に、運用の手順でデータをすべて消します。それまでは再開できます。</span></div></label>
+           <label class="choice"><input type="radio" name="d-why"><div><b>解約</b><span>停止から 30 日後に、運用の手順でデータをすべて消します。消す予定日の当日までは再開できます。過ぎると、再開も停止の理由の切り替えもできません。</span></div></label>
          </div></fieldset>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="${t("organization")}を停止しました">停止する</button>`);
       document.querySelector(".dialog-sheet").classList.add("is-danger");
@@ -1405,7 +1759,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
        <fieldset class="field" style="border:0;padding:0;margin:0"><legend class="field-label">停止の理由</legend>
          <div class="choice-list">
            <label class="choice"><input type="radio" name="d-why" checked><div><b>一時的に止める</b><span>消す予定を取り消します。</span></div></label>
-           <label class="choice"><input type="radio" name="d-why"><div><b>解約</b><span>切り替えた日から 30 日後に、運用の手順でデータをすべて消します。それまでは再開できます。</span></div></label>
+           <label class="choice"><input type="radio" name="d-why"><div><b>解約</b><span>切り替えた日から 30 日後に、運用の手順でデータをすべて消します。消す予定日の当日までは再開できます。過ぎると、再開も停止の理由の切り替えもできません。</span></div></label>
          </div></fieldset>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="停止の理由を変えました">変える</button>`),
   };
@@ -1428,6 +1782,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function assistContext() {
     if (drawer.id) return `${t("task")}「${esc(task(drawer.id).title)}」`;
     if (!page) return esc(Object.values(D.workspaces)[0]?.name || "");
+    if (["me", "admin"].includes(page.current)) return t(page.current === "me" ? "pageMe" : "pageOrgAdmin");
     if (page.current === "sprint" && D.sprints.sp14) return esc(sprintLabel("sp14"));
     const p = PAGES.find((x) => Array.isArray(x) && x[0] === page.current);
     const inWs = PAGES.indexOf(p) > PAGES.indexOf("workspace");
@@ -1449,7 +1804,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       `<button class="assist-example" type="button" data-assist-ask="${esc(q)}">${icon("spark")}<span>${esc(q)}</span></button>`).join("")}
       <span class="field-hint">${t("task")}を読む頼みごとはすぐ答えます。変える頼みごとは、実行する前に何をどう変えるかを見せます。できるのは、あなたが画面でできる操作だけです。</span></div>`;
   }
-  // 答えの文は、描くときに言葉を通す関数で持つ（言葉を切り替えると会話の中も切り替わる）。カタログの見本は文字列でもよい
+  // 答えの文は、描くときに言葉を通す関数で持つ（辞書の言葉は描く時点で決まるため）。カタログの見本は文字列でもよい
   const val = (x) => (typeof x === "function" ? x() : x);
   // 1つのやり取り。i は assist.msgs の位置（カタログの見本では null）
   function assistMsg(m, i = null) {
@@ -1663,16 +2018,16 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // [id, アイコン, 名前, ファイル, 件数]。文字列だけの行は見出し
   const PAGES = [
     "organization",
-    ["today", "sun", () => "自分の今日", "today.html"],
+    ["today", "sun", () => "今日やること", "today.html"],
     ["notifications", "bell", () => "通知", "notifications.html", 3],
-    ["me", "users", () => "自分の設定", "me.html"],
-    ["admin", "shield", () => "組織の管理", "admin.html"],
+    ["orgwiki", "file", () => `${t("organization")}の Wiki`, "wiki.html?scope=organization"],
     "workspace",
     ["inbox", "inbox", () => t("inbox"), "inbox.html", 4],
     ["backlog", "board", () => t("backlog"), "backlog.html"],
     ["sprint", "columns", () => t("sprint"), "sprint.html"],
     ["plan", "calendar", () => t("plan"), "plan.html"],
     ["epic", "flag", () => t("epic"), "epic.html"],
+    ["wiki", "file", () => "Wiki", "wiki.html"],
     "記録",
     ["capacity", "trend", () => t("capacity"), "capacity.html"],
     ["records", "check", () => "完了の記録", "records.html"],
@@ -1693,25 +2048,35 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     return pages.slice(0, cut < 0 ? pages.length : cut).map((p) => {
       // 組織の切り替えは、メニューの外（ブランドの下）の orgMenuHtml
       if (p === "organization") return "";
-      if (p === "workspace") return `<div class="nav-group">${t("workspace")}</div>
-        <label class="ws-select" for="ws"><span>${t("workspace")}</span><select id="ws">${Object.values(D.workspaces).map((w) => `<option>${esc(w.name)}</option>`).join("")}</select></label>`;
-      if (typeof p === "string") return `<div class="nav-group">${p}</div>`;
+      if (p === "workspace") return `<div class="nav-group"><span class="nav-group-label">${t("workspace")}</span></div>
+        ${["today", "notifications", "orgwiki", "me", "admin", "operator"].includes(current) ? "" : `<div id="ws-menu-slot">${workspaceMenuHtml()}</div>`}`;
+      if (typeof p === "string") return `<div class="nav-group"><span class="nav-group-label">${p}</span></div>`;
       const [id, ic, label, href, badge] = p;
-      return `<a class="nav-item" href="${firstHref(href)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
+      return `<a class="nav-item" href="${firstHref(href)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
     }).join("");
   }
-  // 組織の切り替え。開閉するメニューで、中は各組織へのリンクと、最後に組織の選択の画面へ戻るリンク。
-  // 入れる組織が2つ以上、または届いた招待があるときだけ出す（1組織でも招待があれば、一覧へ戻る道が要る）。
+  // 組織の切り替え。開閉するメニューで、中は各組織へのリンクと、組織の選択の画面へ戻るリンクと、最後に「組織を作る」（ダイアログを開く）。
+  // 戻るリンクは、入れる組織が2つ以上、または届いた招待があるときだけ出す（1組織でも招待があれば、一覧へ戻る道が要る）。
+  // 「組織を作る」は常に出す（入れる組織が1つで招待が無い人は、/ を開くと今の組織へ移り、組織の選択の画面に届かない）。
+  // 続けて「自分用を作る」を、自分用を持たない人にだけ出す（同じ理由で、ここが入口になる）。
   // select にしないのは、矢印キーで選んだだけで画面が移らないようにするため。
   // 閉じるのは、ボタン、外を押す、Tab で外へ出る、リンクを押す、Esc。メニューの中にフォーカスがあるときに閉じたら、ボタンへ戻す
   let orgMenuOpen = false;
+  let navCollapsed = (() => { try { return localStorage.getItem("sg-nav-collapsed") === "true"; } catch (e) { return false; } })();
   // カタログの見本は、開いた状態と閉じた状態、組織の数、招待の有無を替えて並べるので、引数で渡す。live が偽なら押しても動かない
-  function orgMenuHtml({ open = orgMenuOpen, id = "org-menu-list", live = true, orgs = D.organizations, invited = (D.receivedInvites || []).length > 0 } = {}) {
-    if (orgs.length < 2 && !invited) return "";
+  // moving は別の組織へ移っている最中（本番の OrganizationSwitcher の moving）。名前の欄と札に「移っています」を出す
+  // 自分用の組織（kind が personal）は、名前の代わりに辞書の「自分用」で出す。
+  // 「自分用を作る」は、入れる組織（orgs）にも停止した組織（suspended）にも自分用が無い人にだけ出す（canCreatePersonal）。
+  // 入れる組織が1つで招待が無い人は組織の選択の画面に届かないので、ここも「自分用を作る」の入口になる
+  const orgName = (k) => (k.kind === "personal" ? t("personalOrganizationName") : k.name);
+  function orgMenuHtml({ open = orgMenuOpen, id = "org-menu-list", live = true, orgs = D.organizations, suspended = [], invited = (D.receivedInvites || []).length > 0, moving = false, canCreatePersonal = ![...orgs, ...suspended].some((k) => k.kind === "personal") } = {}) {
+    // 入れる組織が1つで招待が無い人は、/ を開くと今の組織へ移るので、一覧へ戻る行を出さない（「組織を作る」の入口は残す）
+    const hasList = orgs.length > 1 || invited;
     const current = orgs.find((k) => k.slug === D.organization) || orgs[0];
-    const label = `${current.name}。${t("organization")}を切り替える${invited ? "。届いた招待あり" : ""}`;
-    return `<div class="org-menu"><button class="org-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-org-menu" : ""}><span class="org-menu-label">${t("organization")}</span><b>${esc(current.name)}</b>${invited ? '<span class="chip">届いた招待あり</span>' : ""}${icon("chevron")}</button>
-      <ul class="org-menu-list" id="${id}" aria-label="入れる${t("organization")}" ${open ? "" : "hidden"}>${orgs.map((k) => `<li><a href="today.html"${k.slug === current.slug ? ' aria-current="page"' : ""}><span class="org-menu-name">${esc(k.name)}</span>${k.slug === current.slug ? icon("check") : ""}</a></li>`).join("")}<li><a href="organizations.html"><span class="org-menu-name">${t("organization")}の一覧へ</span>${invited ? '<span class="org-menu-note">招待が届いています</span>' : ""}</a></li></ul></div>`;
+    const label = `${orgName(current)}。${t("organization")}を切り替える${invited ? "。届いた招待あり" : ""}`;
+    const shown = moving ? t("organizationMoving") : esc(orgName(current));
+    return `<div class="org-menu"><button class="org-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${moving ? 'data-moving="true"' : ""} ${live ? "data-org-menu" : ""}><span class="org-menu-label">${t("organization")}</span><b>${shown}</b>${invited ? '<span class="chip">届いた招待あり</span>' : ""}${invited ? '<span class="org-menu-invite" aria-hidden="true"></span>' : ""}${icon("swap")}${icon("chevron")}<span class="nav-tip" aria-hidden="true">${shown}${invited && !moving ? "<small>届いた招待あり</small>" : ""}</span></button><span class="visually-hidden" role="status">${moving ? t("organizationMoving") : ""}</span>
+      <ul class="org-menu-list" id="${id}" aria-label="入れる${t("organization")}" ${open ? "" : "hidden"}>${orgs.map((k) => `<li><a href="today.html"${k.slug === current.slug ? ' aria-current="page"' : ""}><span class="org-menu-name">${esc(orgName(k))}</span>${k.slug === current.slug ? icon("check") : ""}</a></li>`).join("")}${hasList ? `<li class="is-aside"><a href="organizations.html"><span class="org-menu-name">${t("organization")}の一覧へ</span>${invited ? '<span class="org-menu-note">招待が届いています</span>' : ""}</a></li>` : ""}<li class="is-aside"><button type="button" ${live ? 'data-dialog="createMyOrganization"' : ""}><span class="org-menu-name">${t("organization")}を作る</span></button></li>${canCreatePersonal ? `<li class="is-aside"><button type="button" ${live ? 'data-dialog="createPersonalOrganization"' : ""}><span class="org-menu-name">${t("createPersonalOrganizationAction")}</span></button></li>` : ""}</ul></div>`;
   }
   function setOrgMenu(open, focus) {
     orgMenuOpen = open;
@@ -1727,22 +2092,46 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const next = ev.relatedTarget;
     if (orgMenuOpen && next && !next.closest(".org-menu")) setOrgMenu(false);
   });
-  // アカウントのメニュー。上の帯の自分の名前を押すと開き、中は「ログアウト」の1項目（後で「自分の設定」も入る）。
+  // ワークスペースの切り替え。組織と同じ開閉と通常のリンクを使い、移動先はバックログ。
+  let workspaceMenuOpen = false;
+  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] } } = {}) {
+    const name = workspaces.find((w) => w.id === current.id)?.name || current.name;
+    const label = t("workspaceSwitchLabel").replace("{name}", name).replace("{workspace}", t("workspace"));
+    const listLabel = t("workspaceSwitchListLabel").replace("{workspace}", t("workspace"));
+    return `<div class="ws-menu"><button class="ws-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-ws-menu" : ""}><span class="ws-menu-label">${t("workspace")}</span><b>${esc(name)}</b>${icon("chevron")}</button>
+      <ul class="ws-menu-list" id="${id}" aria-label="${esc(listLabel)}" ${open ? "" : "hidden"}>${workspaces.some((w) => w.id === current.id) ? "" : `<li class="ws-menu-current"><span aria-current="page">${esc(current.name)}</span>${icon("check")}</li>`}${workspaces.map((w) => `<li><a href="${firstHref("backlog.html")}${first ? "&" : "?"}workspace=${encodeURIComponent(w.id)}" ${live ? `data-ws-target="${esc(w.id)}"` : ""}${w.id === current.id ? ' aria-current="page"' : ""}><span class="org-menu-name">${esc(w.name)}</span>${w.id === current.id ? icon("check") : ""}</a></li>`).join("")}</ul></div>`;
+  }
+  function setWorkspaceMenu(open, focus) {
+    workspaceMenuOpen = open;
+    const slot = document.getElementById("ws-menu-slot");
+    if (slot) slot.innerHTML = workspaceMenuHtml();
+    if (focus) document.querySelector("[data-ws-menu]")?.focus();
+  }
+  function closeWorkspaceMenu() {
+    setWorkspaceMenu(false, !!document.activeElement?.closest?.(".ws-menu"));
+  }
+  document.addEventListener("focusout", (ev) => {
+    const next = ev.relatedTarget;
+    if (workspaceMenuOpen && next && !next.closest(".ws-menu")) setWorkspaceMenu(false);
+  });
+  // アカウントのメニュー。上の帯の自分の名前を押すと開き、中は「マイプロフィール」、管理者だけ「組織の管理」、最後に「ログアウト」。
   // 開閉は組織の切り替えと同じ: ボタン、外を押す、Tab で外へ出る、Esc。メニューの中にフォーカスがあるときに閉じたら、ボタンへ戻す。
   // 見本ではログアウトせず、トーストだけを出す。運用者の枠も同じメニュー（本番の /operator は紙の下のボタン）
   let accountMenuOpen = false;
   // busy は、ログアウトを押して結果を待っている間（項目を aria-disabled にして文言を替え、読み上げの領域に伝える）。
   // admin は管理者の印を出し、読み上げの名前にも含める
-  function accountMenuHtml({ open = accountMenuOpen, id = "account-menu-list", live = true, operator = page && page.operator, busy = false, admin = false } = {}) {
+  function accountMenuHtml({ open = accountMenuOpen, id = "account-menu-list", live = true, operator = page && page.operator, busy = false, admin = !!D.organizations.find((org) => org.slug === D.organization)?.admin, invitationCount = (D.receivedInvites || []).length } = {}) {
     const name = operator ? D.operator.name : user(D.me).name;
     const badge = operator ? "運用者" : admin ? t("admin") : "";
     const who = operator
       ? `${avatar(D.operator.name, 0)}${esc(name)}<span class="chip">運用者</span>`
       : `${avatarOf(D.me)}${esc(name)}${admin ? `<span class="chip">${t("admin")}</span>` : ""}${emblem(user(D.me).level, true)}`;
     const label = t("accountMenuLabel").replace("{name}", badge ? `${name}（${badge}）` : name);
-    return `<div class="account-menu"><button class="account-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-account-menu" : ""}><span class="me">${who}</span>${icon("chevron")}</button>
+    const count = operator ? 0 : invitationCount;
+    const items = operator ? "" : `<li><a href="${firstHref("me.html")}" ${page && page.current === "me" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageMe")}</span>${count > 0 ? `<span class="account-menu-badge" aria-hidden="true">${t("navInvitationsBadge").replace("{count}", count)}</span><span class="visually-hidden">${t("navInvitationsLabel").replace("{count}", count)}</span>` : ""}</a></li>${admin ? `<li><a href="${firstHref("admin.html")}" ${page && page.current === "admin" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageOrgAdmin")}</span></a></li>` : ""}`;
+    return `<div class="account-menu"><button class="account-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-account-menu" : ""}><span class="me">${who}</span>${count > 0 ? '<span class="account-menu-invite" aria-hidden="true"></span>' : ""}${icon("chevron")}</button>
       <span class="visually-hidden" role="status">${busy ? t("logoutMoving") : ""}</span>
-      <ul class="account-menu-list" id="${id}" aria-label="${esc(label)}" ${open ? "" : "hidden"}><li><button type="button" ${busy ? 'aria-disabled="true"' : ""} ${live ? 'data-toast="見本のため、ログアウトしません"' : ""}><span class="org-menu-name">${busy ? t("logoutMoving") : t("logout")}</span></button></li></ul></div>`;
+      <ul class="account-menu-list" id="${id}" aria-label="${esc(label)}" ${open ? "" : "hidden"}>${items}<li><button type="button" ${busy ? 'aria-disabled="true"' : ""} ${live ? 'data-toast="見本のため、ログアウトしません"' : ""}><span class="org-menu-name">${busy ? t("logoutMoving") : t("logout")}</span></button></li></ul></div>`;
   }
   function setAccountMenu(open, focus) {
     accountMenuOpen = open;
@@ -1759,11 +2148,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   const FIRST_LABEL = { member: "最初の日・一般", leader: "最初の日・リーダー", admin: "最初の日・管理者" };
   const firstLabel = (role) => FIRST_LABEL[role] || "使い込んだ状態";
-  // 使い込んだ状態 → 最初の日（一般 → リーダー → 管理者）の順に回す。今の画面に見本がなければ自分の今日へ
+  // 使い込んだ状態 → 最初の日（一般 → リーダー → 管理者）の順に回す。今の画面に見本がなければ今日やることへ
   function cycleFirst() {
     const order = [null, ...FIRST_ROLES];
     const next = order[(order.indexOf(first) + 1) % order.length];
-    const here = (PAGES.find((p) => Array.isArray(p) && p[0] === page.current) || [])[3] || "today.html";
+    const here = ["me", "admin"].includes(page.current) ? `${page.current}.html` : (PAGES.find((p) => Array.isArray(p) && p[0] === page.current) || [])[3] || "today.html";
     const target = !next || FIRST_PAGES[next].includes(here) ? here : "today.html";
     location.href = firstHref(target, next);
   }
@@ -1772,13 +2161,26 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!page) return;
     document.getElementById("org-menu-slot").innerHTML = page.operator ? "" : orgMenuHtml();
     document.getElementById("account-menu-slot").innerHTML = accountMenuHtml();
-    document.getElementById("nav").innerHTML = navHtml(page.current, page.operator ? OPERATOR_PAGES : PAGES);
-    document.querySelectorAll("[data-vocab-label]").forEach((el) => (el.textContent = `言葉: ${t("vocab")}`));
+    document.getElementById("app-nav").innerHTML = navHtml(page.current, page.operator ? OPERATOR_PAGES : PAGES);
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
     document.getElementById("content").innerHTML = page.render();
+    applyNavCollapsed();
     applyTheme();
     renderDrawer();
     stamped.clear();
+  }
+  // 左のメニューの開閉を枠とボタンの属性にだけ当てる（本文は描き直さない。開いた引き出しや入力を消さないため）。
+  // CSS は [data-nav-collapsed="true"] で当てるので、値を "true" にする（toggleAttribute の空の値では当たらない）
+  function applyNavCollapsed() {
+    const app = document.querySelector(".app");
+    if (app) { if (navCollapsed) app.setAttribute("data-nav-collapsed", "true"); else app.removeAttribute("data-nav-collapsed"); }
+    const toggle = document.querySelector("[data-nav-toggle]");
+    if (!toggle) return;
+    const label = t(navCollapsed ? "menuExpand" : "menuCollapse");
+    toggle.setAttribute("aria-expanded", String(!navCollapsed));
+    toggle.setAttribute("aria-label", label);
+    const tip = toggle.querySelector(".nav-tip");
+    if (tip) tip.textContent = label;
   }
   // 画面の見本を組み立てる。render は中身の HTML を返す関数。
   // opts.operator なら運用者の画面の枠にする（組織のメニュー、通知、レベルを出さない）
@@ -1792,15 +2194,17 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     document.getElementById("app").innerHTML = `
     <div class="app">
       <aside class="binding" aria-label="メニュー"><div class="binding-inner">
-        <a class="brand" href="index.html" title="デザインシステムのカタログへ">${brandMark}<span class="brand-name">Scrum Guild</span></a>
+        <div class="binding-head">
+          <a class="brand" href="index.html" title="デザインシステムのカタログへ">${brandMark}<span class="brand-name">Scrum Guild</span></a>
+          <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="${!navCollapsed}" aria-controls="app-nav" aria-label="${t(navCollapsed ? "menuExpand" : "menuCollapse")}">${icon("panel")}<span class="nav-tip" aria-hidden="true">${t(navCollapsed ? "menuExpand" : "menuCollapse")}</span></button>
+        </div>
         <div id="org-menu-slot"></div>
-        <nav class="nav" id="nav"></nav>
+        <nav class="nav" id="app-nav"></nav>
         <p class="binding-foot">デザインの見本。データはすべて架空の例です</p>
       </div></aside>
       <div class="sheet">
         <div class="topbar">
           ${page.operator ? "" : `<button class="pill assist-launch" type="button" data-assist-open aria-keyshortcuts="Control+K Meta+K">${icon("spark")}<span data-assist-label></span><kbd class="kbd">${ASSIST_KEY}</kbd></button>`}
-          <button class="pill" type="button" data-switch="vocab">${icon("swap")}<span data-vocab-label></span></button>
           <button class="pill" type="button" data-switch="theme">${icon("moon")}<span data-theme-label></span></button>
           ${page.operator ? "" : `<button class="pill" type="button" data-switch="first">${icon("redo")}<span>見本: ${firstLabel(first)}</span></button>`}
           ${who}
@@ -1813,12 +2217,23 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     <div class="dialog" id="dialog" hidden></div>
     <div class="celebrate" id="celebrate" hidden></div>
     <div class="toasts" id="toasts" aria-live="polite"></div>`;
-    document.querySelector("[data-switch='vocab']").addEventListener("click", toggleVocab);
     document.querySelector("[data-switch='theme']").addEventListener("click", cycleTheme);
+    document.querySelector("[data-nav-toggle]").addEventListener("click", () => {
+      navCollapsed = !navCollapsed;
+      try { localStorage.setItem("sg-nav-collapsed", String(navCollapsed)); } catch (e) { /* 覚えられないだけで、今の画面では開閉する */ }
+      applyNavCollapsed();
+    });
     document.querySelector("[data-switch='first']")?.addEventListener("click", cycleFirst);
-    onChange(redraw);
     applyTheme();
     redraw();
+    const taskId = new URLSearchParams(location.search).get("task");
+    if (taskId) {
+      if (location.pathname.endsWith("/task.html")) {
+        drawer.mode = "page";
+        document.getElementById("content").append(document.getElementById("drawer"));
+      }
+      openDrawer(taskId, null);
+    }
   }
 
   // 招待と管理者の指名で人を指す欄。手段を選ぶと、欄の名前、例、説明だけを差し替える（描き直さない）。
@@ -1843,18 +2258,30 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     github: `GitHub のユーザー ID に解決します。その人が GitHub でログインすると、この${t("organization")}の${t("admin")}として入れます。`,
     google: `その人が招待の URL を開き、このメールアドレスの Google アカウントでログインすると、${t("admin")}として入れます。招待の URL は14日で切れます。`,
   });
+  // 運用者が管理者を指名し直すときの、手段ごとの説明（GitHub は確かめてから指名する）
+  const reassignHints = () => ({
+    github: "GitHub のユーザー ID に解決します。「確かめる」を押して、指名する人を見て確かめてから指名します。",
+    google: adminHints().google,
+  });
   // 招待と指名を決めたあと。Google なら、このときだけ出る招待の URL をダイアログで見せる。
+  // reissue を付けると、URL を失ったときと期限が切れたときの直し方（指名し直し）を添える（運用者の指名）。
   // 見本の URL は固定の架空の値
-  function inviteLink(id, done) {
+  // workspace を付けると、ワークスペースへの招待（メンバーの画面）の文にする（本番の MemberInvite.svelte と辞書の inviteUrl* と同じ文）
+  function inviteLink(id, done, reissue = false, workspace = false) {
     const via = document.querySelector(`[data-login-via="${id}"]:checked`)?.value;
     if (via !== "google") { closeDialog(); toast(`${icon("check")}${esc(done)}`); return; }
+    const lead = workspace
+      ? `招待しました。Scrum Guild はメールを送りません。この招待の URL を本人に伝えてください。本人がこの URL を開き、招待したメールアドレスの Google アカウントでログインすると、招待を承諾して${t("workspace")}に入れます。`
+      : `${esc(done)}。この URL を本人に伝えてください。本人がこの URL を開き、招待したメールアドレスの Google アカウントでログインすると入れます。`;
     openDialog("招待の URL",
-      `<p>${esc(done)}。この URL を本人に伝えてください。本人がこの URL を開き、招待したメールアドレスの Google アカウントでログインすると入れます。</p>
+      `<p>${lead}</p>
        <div class="field"><label class="field-label" for="d-iu">招待の URL</label>
          <div class="input-row"><input class="input mono" id="d-iu" value="https://scrum-guild.dev/invite#Qm7tX2vLr9aKpE4wZc8hN3bYd6fGs1uJ0oTiRl5eWxA" readonly>
            <button class="btn" type="button" data-toast="招待の URL をコピーしました">${icon("link")}コピー</button></div></div>
        <div class="callout is-info">${icon("check")}<span>次のメールアドレスの Google アカウントでログインするよう伝えてください。<b class="mono wrap-anywhere">mio.hoshino@example.com</b></span></div>
-       <div class="callout is-warn">${icon("alert")}<span>この URL はこの画面を閉じると二度と出せません。期限は14日（2026/11/09 09:00 まで）です。期限までに本人へ伝えてください。</span></div>`,
+       <div class="callout is-warn">${icon("alert")}<span>この URL はこの画面を閉じると二度と出せません。期限は14日（2026/11/09 09:00 まで）です。期限までに本人へ伝えてください。</span></div>
+       ${reissue ? `<p class="field-hint">URL を失ったときや期限が切れたときは、一覧の「${t("admin")}を指名」から指名し直すと、新しい招待の URL が出ます。</p>` : ""}
+       ${workspace ? `<p class="field-hint">URL を失ったときや期限が切れたときは、同じメールアドレスで招待し直すと、新しい招待の URL が出ます（期限が切れた後は、${t("organization")}の人数が上限なら招待し直せません）。招待し直すと（ほかの${t("leader")}が招待し直したときも）、前の招待の URL は使えなくなります。</p>` : ""}`,
       `<button class="btn is-primary" type="button" data-close-dialog>閉じる</button>`);
   }
   document.addEventListener("change", (ev) => {
@@ -1867,13 +2294,37 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     input.placeholder = via.example;
     field.querySelectorAll("[data-login-hint]").forEach((h) => (h.hidden = h.dataset.loginHint !== el.value));
     // 組織の作成のダイアログ: GitHub は確かめるまで作れない。Google はメールアドレスで指し、確かめる手順が無く、すぐ作れる
-    if (el.dataset.loginVia === "d-ka" && document.getElementById("d-kb")) {
+    // 管理者の指名し直しのダイアログも同じ（確かめるボタン d-rz、確かめた人 d-rv、指名する d-rb）
+    const ids = { "d-ka": ["d-kz", "d-kv", "d-kb"], "d-ra": ["d-rz", "d-rv", "d-rb"] }[el.dataset.loginVia];
+    if (ids && document.getElementById(ids[2])) {
       const google = el.value === "google";
-      document.getElementById("d-kz").hidden = google;
-      document.getElementById("d-kv").hidden = true;
-      document.getElementById("d-kb").disabled = !google;
+      document.getElementById(ids[0]).hidden = google;
+      document.getElementById(ids[1]).hidden = true;
+      document.getElementById(ids[2]).disabled = !google;
     }
   });
+
+  // 上限の変更のダイアログ: 「ほかの値」を選んでいる間だけ、人数と容量の欄（d-qo）を出す（本番の OrganizationQuotaDialog と同じ）。
+  // 見本の今の上限（15 人・30 GB）と同じ値を選んでいる間は「変える」を aria-disabled にし、理由（d-qu）を添える。押せるときだけ閉じてトーストを出す
+  const syncQuotaDialog = () => {
+    const chosen = document.querySelector("[data-quota-choice]:checked");
+    const submit = document.getElementById("d-qs");
+    if (!chosen || !submit) return;
+    document.getElementById("d-qo").hidden = chosen.value !== "other";
+    const same = chosen.value === "small" ||
+      (chosen.value === "other" && document.getElementById("d-qm").value === "15" && document.getElementById("d-qg").value === "30");
+    submit.setAttribute("aria-disabled", String(same));
+    document.getElementById("d-qu").hidden = !same;
+    if (same) {
+      submit.removeAttribute("data-close-dialog");
+      submit.removeAttribute("data-toast");
+    } else {
+      submit.setAttribute("data-close-dialog", "");
+      submit.setAttribute("data-toast", "「あおば開発」の上限を変えました");
+    }
+  };
+  document.addEventListener("change", (ev) => { if (ev.target.closest("[data-quota-choice]")) syncQuotaDialog(); });
+  document.addEventListener("input", (ev) => { if (ev.target.closest("#d-qm, #d-qg")) syncQuotaDialog(); });
 
   // ---- 操作（見本の中だけで動き、保存はしない） ----
   document.addEventListener("change", (ev) => {
@@ -1888,10 +2339,20 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const hit = (attr) => ev.target.closest(`[${attr}]`);
     let el;
     // 組織の切り替えを開閉する。外を押したら閉じる（押したものの動きは続ける）
-    if (hit("data-org-menu")) { setOrgMenu(!orgMenuOpen, true); return; }
-    if (orgMenuOpen && ev.target.closest(".org-menu-list a")) closeOrgMenu();
+    if (hit("data-org-menu")) {
+      if (workspaceMenuOpen) setWorkspaceMenu(false);
+      setOrgMenu(!orgMenuOpen, true);
+      return;
+    }
+    if (orgMenuOpen && ev.target.closest(".org-menu-list a, .org-menu-list button")) closeOrgMenu();
     else if (orgMenuOpen && !ev.target.closest(".org-menu")) closeOrgMenu();
+    if (hit("data-ws-menu")) { setWorkspaceMenu(!workspaceMenuOpen, true); return; }
+    if ((el = hit("data-ws-target"))) {
+      D.workspace = el.dataset.wsTarget;
+      closeWorkspaceMenu();
+    } else if (workspaceMenuOpen && !ev.target.closest(".ws-menu")) closeWorkspaceMenu();
     // アカウントのメニューも同じ。ただしログアウトの項目を押しても閉じない（本番は待ちの表示を見せるため）
+    if (hit("data-account-link")) { closeAccountMenu(); return; }
     if (hit("data-account-menu")) { setAccountMenu(!accountMenuOpen, true); return; }
     if (accountMenuOpen && !ev.target.closest(".account-menu")) closeAccountMenu();
     if ((el = hit("data-sun"))) {
@@ -1959,31 +2420,60 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if ((el = hit("data-drawer-cancel"))) { cancelDrawerEdit(el.dataset.drawerCancel); return; }
     if ((el = hit("data-drawer-save"))) { saveDrawerEdit(el.dataset.drawerSave); return; }
     if (hit("data-drawer-due-clear")) { task(drawer.id).due = null; redrawAll(); toast(`${icon("check")}保存しました`); return; }
-    if (hit("data-discard-draft")) { closeDialog(); closeDrawer(true); return; }
+    if ((el = hit("data-drawer-mode"))) { changeDrawerMode(el.dataset.drawerMode); return; }
+    if ((el = hit("data-drawer-step"))) { stepDrawer(Number(el.dataset.drawerStep), false, true); return; }
+    if (hit("data-discard-draft")) {
+      const next = pendingDrawerMode, step = pendingDrawerStep;
+      closeDialog();
+      if (next) changeDrawerMode(next, true); else if (step) stepDrawer(step.delta, true, step.viaButton); else closeDrawer(true);
+      return;
+    }
     if (hit("data-delete-task")) {
       const x = task(drawer.id);
       closeDialog(); closeDrawer(true);
       D.tasks = D.tasks.filter((y) => y !== x);
       redrawAll(); toast(`${icon("check")}${t("task")}を削除しました`); return;
     }
-    if ((el = hit("data-drawer-size"))) {
-      // 中身は描き直さない。書きかけのコメントとスクロールの位置を残すため
-      drawer.full = !drawer.full;
-      applyDrawerSize(document.getElementById("drawer"));
-      el.outerHTML = drawerSizeBtn();
-      document.querySelector("#drawer [data-drawer-size]")?.focus({ preventScroll: true }); return;
-    }
-    if ((el = hit("data-invite-link"))) { inviteLink(el.dataset.inviteLink, el.dataset.inviteDone); return; }
+    if ((el = hit("data-invite-link"))) { inviteLink(el.dataset.inviteLink, el.dataset.inviteDone, false, el.dataset.inviteKind === "workspace"); return; }
     // 組織の作成: GitHub は解決した人を見せ、確かめてから作れる。作った後は組織の URL を出す
+    // 管理者の指名し直しも同じ（確かめた人の表示と指名するボタンを、data-verify-panel と data-verify-submit で渡す）
     if ((el = hit("data-verify-admin"))) {
-      document.getElementById("d-kv").hidden = false;
-      document.getElementById("d-kb").disabled = false;
+      document.getElementById(el.dataset.verifyPanel ?? "d-kv").hidden = false;
+      document.getElementById(el.dataset.verifySubmit ?? "d-kb").disabled = false;
+      return;
+    }
+    if ((el = hit("data-reassign-admin"))) {
+      if (document.querySelector(`[data-login-via="${el.dataset.reassignAdmin}"]:checked`)?.value === "google") inviteLink(el.dataset.reassignAdmin, `${t("admin")}を指名しました`, true);
+      else DIALOGS.adminReassigned();
       return;
     }
     // Google の指名は、組織の URL の代わりに招待の URL を出す
     if ((el = hit("data-org-create"))) {
       if (document.querySelector(`[data-login-via="${el.dataset.orgCreate}"]:checked`)?.value === "google") inviteLink(el.dataset.orgCreate, `${t("organization")}を作りました`);
       else DIALOGS.organizationCreated();
+      return;
+    }
+    // ワークスペースを作る: 「作る」で完了の表示に替わる。「続けて作る」は、開いた要素を保ったまま空のフォームに戻す
+    if ((el = hit("data-workspace-created"))) {
+      const opener = dialogOpener;
+      DIALOGS.workspaceCreated(document.getElementById(el.dataset.workspaceCreated).value.trim() || "保守チーム");
+      dialogOpener = opener;
+      return;
+    }
+    if (hit("data-workspace-again")) {
+      const opener = dialogOpener;
+      DIALOGS.createWorkspace();
+      dialogOpener = opener;
+      return;
+    }
+    if ((el = hit("data-completed-toggle"))) {
+      const body = document.getElementById(el.dataset.completedToggle);
+      const opened = el.getAttribute("aria-expanded") === "true";
+      el.setAttribute("aria-expanded", String(!opened));
+      const label = opened ? el.dataset.closed : el.dataset.opened;
+      el.querySelector("span").textContent = label;
+      if (el.dataset.title) el.setAttribute("aria-label", `${label}（${el.dataset.title}）`);
+      if (body) body.hidden = opened;
       return;
     }
     if ((el = hit("data-tree-toggle"))) {
@@ -1996,7 +2486,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
     if ((el = hit("data-dialog"))) {
       if (el.dataset.dialog === "createTask") delete D.files.new;
-      DIALOGS[el.dataset.dialog]();
+      // 切り替え（自分の管理者の解除）から開くときは、確認を待つ間、切り替えを今の値のまま保つ（本番の UsersSetting と同じ）
+      if (el.matches("input[type=checkbox]")) ev.preventDefault();
+      DIALOGS[el.dataset.dialog](el);
       return;
     }
     if ((el = hit("data-file"))) { DIALOGS.previewFile(el.dataset.file); return; }
@@ -2006,7 +2498,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       if (found) D.files[found.key] = D.files[found.key].filter((x) => x !== found.f);
       closeDialog(); redrawAll(); toast(`${icon("check")}添付ファイルを消しました`); return;
     }
-    if ((el = hit("data-pick-file"))) { fakeUpload(el.dataset.pickFile); return; }
+    if ((el = hit("data-pick-file"))) { pickFiles(el.dataset.pickFile); return; }
     if ((el = hit("data-cancel-file"))) {
       const found = findFile(el.dataset.cancelFile);
       if (found) { D.files[found.key] = D.files[found.key].filter((x) => x !== found.f); redrawFiles(found.key); }
@@ -2016,7 +2508,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const e = D.epics[el.dataset.celebrate];
       celebrate(e.title, `${t("party")}の ${e.party.length} 人に ${{ small: 100, medium: 300, large: 600 }[e.tier]} XP`); return;
     }
-    if ((el = hit("data-close-dialog")) || ev.target.id === "dialog") {
+    if ((el = hit("data-close-dialog")) || (ev.target.id === "dialog" && !dialogOnlyButtons)) {
       const msg = el && el.dataset.toast; closeDialog(); if (msg) toast(`${icon("check")}${esc(msg)}`); return;
     }
     if ((el = hit("data-toast"))) {
@@ -2079,15 +2571,26 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (ev.key === "Enter" && !ev.isComposing && ev.target.matches && ev.target.matches("input[data-drawer-input]")) {
       ev.preventDefault(); saveDrawerEdit(ev.target.dataset.drawerInput); return;
     }
+    // [ が前、] が次。文字を打つ場所の中、日本語の変換中、修飾キー付き、押しっぱなしの繰り返しでは移らない（ページ全体では drawerAdjacent が null）
+    if ((ev.key === "[" || ev.key === "]") && drawer.id && !overlay && !ev.isComposing && ev.keyCode !== 229 && !ev.repeat
+      && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !ev.shiftKey && !isTypingTarget(ev.target)) {
+      if (drawerAdjacent()) { ev.preventDefault(); stepDrawer(ev.key === "[" ? -1 : 1); }
+      return;
+    }
     if (ev.key !== "Escape" || ev.isComposing || ev.keyCode === 229) return;
     if (orgMenuOpen) { ev.stopPropagation(); closeOrgMenu(); return; }
+    if (workspaceMenuOpen) { ev.stopPropagation(); closeWorkspaceMenu(); return; }
     if (accountMenuOpen) { ev.stopPropagation(); closeAccountMenu(); return; }
-    if (closeCelebrate() || closeDialog()) return;
+    if (closeCelebrate()) return;
+    if (dialogOnlyButtons && !document.getElementById("dialog")?.hidden) return;
+    if (closeDialog()) return;
     if (assist.open === "palette") { closeAssist(); return; }
     if (drawer.id) {
       // タイトルとリンクの入力欄では、Esc は欄の取り消し。本文は Esc でも閉じる（書きかけは確かめる）
       const name = ev.target.dataset && ev.target.dataset.drawerInput;
       if (name && name !== "body") { cancelDrawerEdit(name); return; }
+      // ページ全体は、引き出しの外（左のメニューなど）にフォーカスがあるときの Esc で閉じない
+      if (renderedDrawerMode() === "page" && ev.target !== document.body && !ev.target.closest("#drawer")) return;
       closeDrawer(); return;
     }
     if (assist.open === "panel" && ev.target.closest && ev.target.closest("#assist-panel")) closeAssist();
@@ -2100,35 +2603,67 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       el.outerHTML = attachments(key, opts);
     });
   }
-  function fakeUpload(key) {
-    uploads += 1;
-    const f = uploads % 3 === 0
-      ? { id: `n${uploads}`, name: "画面の録画 2026-10-20 11.52.mov", type: "video", size: "82.1 MB", state: "error", error: "50 MB を超えているため添付できません（82.1 MB）" }
-      : { id: `n${uploads}`, name: `スクリーンショット 2026-10-20 11.4${uploads}.png`, type: "image", size: "1.8 MB", who: D.me, at: "10/20 11:4" + uploads, state: "uploading", pct: 0 };
-    (D.files[key] = D.files[key] || []).push(f);
-    redrawFiles(key);
-    if (f.state !== "uploading") return;
-    const timer = setInterval(() => {
-      if (!findFile(f.id)) { clearInterval(timer); return; }
-      f.pct = Math.min(100, f.pct + 25);
-      if (f.pct === 100) { clearInterval(timer); delete f.state; toast(`${icon("check")}添付しました`); }
+  // 選んだ（またはドラッグした）ファイルを1つずつ加える。files が無ければ見本の作り物を1つ加える（3つ目ごとに大きすぎる録画）
+  const fmtSize = (n) => (n >= 1048576 ? `${(Math.ceil(n / 104857.6) / 10).toFixed(1)} MB` : `${Math.min(1023, Math.max(1, Math.ceil(n / 1024)))} KB`);
+  const fileKind = (mime) => (/^image\/(png|jpeg|gif|webp)$/.test(mime) ? "image" : /^video\/(mp4|webm)$/.test(mime) ? "video" : "file");
+  const nowLabel = () => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+  function fakeUpload(key, files) {
+    if (!files || !files.length) return; // ファイルでないものを落としたときは何もしない
+    const picked = Array.from(files);
+    let pending = picked.length, done = 0;
+    const finish = () => { if (--pending === 0 && done) toast(`${icon("check")}${done} 件を添付しました`); };
+    picked.forEach((file) => {
+      uploads += 1;
+      const base = { name: file.name, type: fileKind(file.type), size: fmtSize(file.size) };
+      const reject = file.size === 0 ? "空のファイルは添付できません" : file.size > 52428800 ? `50 MB を超えているため添付できません（${base.size}）` : null;
+      const f = reject
+        ? { id: `n${uploads}`, ...base, state: "error", error: reject }
+        : { id: `n${uploads}`, ...base, who: D.me, at: nowLabel(), state: "uploading", pct: 0 };
+      (D.files[key] = D.files[key] || []).push(f);
       redrawFiles(key);
-    }, 350);
+      if (f.state !== "uploading") { finish(); return; }
+      const timer = setInterval(() => {
+        if (!findFile(f.id)) { clearInterval(timer); finish(); return; }
+        f.pct = Math.min(100, f.pct + 25);
+        if (f.pct === 100) { clearInterval(timer); delete f.state; done += 1; finish(); }
+        redrawFiles(key);
+      }, 350);
+    });
   }
+  // 「ファイルを選ぶ」は、複数を選べる選択欄を開く
+  const picker = document.createElement("input");
+  picker.type = "file"; picker.multiple = true; picker.hidden = true; picker.tabIndex = -1;
+  let pickerKey = null;
+  picker.addEventListener("change", () => { if (pickerKey && picker.files.length) fakeUpload(pickerKey, picker.files); picker.value = ""; });
+  document.body.appendChild(picker);
+  function pickFiles(key) { pickerKey = key; picker.click(); }
+  // ファイルのドラッグだけを扱う（行やカードの並べ替えのドラッグには触れない）。受けるのは .dropzone[data-drop] だけ。
+  // 並べ替えの行も data-drop（落とす位置の印）を持つので、[data-drop] だけでは拾わない。
+  // 落とし先の外では dropEffect を none にして落とせないことを示し、それでも落とされたら drop を打ち消す。
+  // ページが受けないと、ブラウザが落としたファイルを開いてページが離れるため
+  const isFileDrag = (ev) => Boolean(ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes("Files"));
+  const fileZone = (ev) => (ev.target.closest ? ev.target.closest(".dropzone[data-drop]") : null);
+  let overZone = null;
   document.addEventListener("dragover", (ev) => {
-    const zone = ev.target.closest && ev.target.closest("[data-drop]");
-    document.querySelectorAll(".dropzone.is-over").forEach((z) => z !== zone && z.classList.remove("is-over"));
-    if (!zone) return;
-    ev.preventDefault(); zone.classList.add("is-over");
+    if (!isFileDrag(ev)) return;
+    ev.preventDefault();
+    const zone = fileZone(ev);
+    if (overZone && overZone !== zone) overZone.classList.remove("is-over");
+    overZone = zone;
+    if (!zone) { ev.dataTransfer.dropEffect = "none"; return; }
+    ev.dataTransfer.dropEffect = "copy"; zone.classList.add("is-over");
   });
   document.addEventListener("dragleave", (ev) => {
-    const zone = ev.target.closest && ev.target.closest("[data-drop]");
-    if (zone && !zone.contains(ev.relatedTarget)) zone.classList.remove("is-over");
+    if (!isFileDrag(ev)) return;
+    const zone = fileZone(ev);
+    if (zone && !zone.contains(ev.relatedTarget)) { zone.classList.remove("is-over"); if (overZone === zone) overZone = null; }
   });
   document.addEventListener("drop", (ev) => {
-    const zone = ev.target.closest && ev.target.closest("[data-drop]");
-    if (!zone) return;
-    ev.preventDefault(); fakeUpload(zone.dataset.drop);
+    if (!isFileDrag(ev)) return;
+    ev.preventDefault();
+    const zone = fileZone(ev);
+    if (overZone) { overZone.classList.remove("is-over"); overZone = null; }
+    if (zone) fakeUpload(zone.dataset.drop, ev.dataTransfer.files);
   });
 
   const extraRedraws = [];
@@ -2144,7 +2679,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     simple_light: "業務の道具として落ち着いた見た目。いつも明るい地",
     simple_dark: "業務の道具として落ち着いた見た目。いつも暗い地",
     medieval: "冒険者ギルドの帳簿。紙と墨、完了に朱の判子",
-    modern: "ハンターに届くシステムのウィンドウ。暗い地に光る枠",
+    modern: "近未来の端末のウィンドウ。暗い地に光る枠",
   };
   let theme = null;
   try { theme = localStorage.getItem("sq-design-theme"); } catch (e) { /* なくても動く */ }
@@ -2167,13 +2702,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
 
   window.SQ = {
-    first, firstHref, firstSteps, emptyState,
-    D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, setVocab, toggleVocab, onChange, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
+    first, firstHref, firstSteps, emptyState, art,
+    D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer,
-    user, task, tasksWhere, repoTag, categoryTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
-    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, pageHead,
-    card, board, treeStory, treeEpic, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
-    openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, accountMenuHtml,
+    user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
+    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
+    card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
+    openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, mdBody, markdownSample, meter,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
     enableAssistOnCatalog: () => { assistOnCatalog = true; },

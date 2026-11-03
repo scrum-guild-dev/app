@@ -7,8 +7,11 @@
     taskDelete,
     taskDetail,
     taskHistory,
+    taskReopen,
+    taskReopenConflictReasonOf,
     taskUpdate,
     type TaskDetail,
+    type TaskFieldValue,
     type TaskHistoryEntry,
   } from '../../shared/operations/task/index.ts';
   import { memberList } from '../../shared/operations/workspace/index.ts';
@@ -25,7 +28,16 @@
   import { TASK_POINT_VALUES, TASK_TITLE_MAX_LENGTH, taskTitleProblem } from '../../shared/task.ts';
   import { callOperation } from '../api.ts';
   import { withCurrent } from '../definition-options.ts';
+  import {
+    clearStepFocus,
+    consumeStepFocus,
+    markStepFocus,
+    pickTaskOpenMode,
+    type StepSource,
+    type TaskOpenMode,
+  } from '../drawer.svelte.ts';
   import { formatDateTime } from '../format-datetime.ts';
+  import { completedMessage, sprintLabel, sprintPeriod } from '../sprint-label.ts';
   import { historyEntryView } from '../task-history.ts';
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
@@ -38,10 +50,15 @@
   import Markdown from './Markdown.svelte';
   import RepositoryPicker from './RepositoryPicker.svelte';
   import TaskComments from './TaskComments.svelte';
+  import TaskFieldValues from './TaskFieldValues.svelte';
+  import TaskThanks from './TaskThanks.svelte';
 
   // タスクの詳細の引き出しの中身（kit.js の drawerHtml）。`?task=<ID>` が付いている間、画面の枠（/[slug]/w/[id] のレイアウト）が置く。
   // 開いたら task-detail で1件を読む（本文は長いので、木には載せない）。読んでいる間は読み込み中を出し、読めなければ
   // （404 以外）もう一度試すを出す（フォーカスもそこへ置く）。404 は、トーストで知らせて閉じ、画面が木を読み直す（onremoved）。
+  // ワークスペースの決まった欄は、属性の下、本文の前に欄ごとに並べる（TaskFieldValues。値は Markdown で、書かれていなければ
+  // 完了していないタスクだけ「未記入」の印を添える。task-detail の fields を読み、保存は task-field-set で、読んだ値のままなら書き、
+  // 同時に直されていれば断って読み直す）。
   // 欄ごとに、その場で直す。ポイントと期日は選んだら保存し、タイトル、リンク、本文は InlineEdit で確定する（本文は Markdown の部品で描く）。
   // 送る欄は、今の値と違うものだけ。保存したら、その欄だけを応答で入れ替え、画面が木を読み直す（onchanged）。
   // ポイントの保存は1本ずつ送る。送っている間に選び直したら、最後の選択だけを溜め、送り終えた後に送る（矢印キーで動かしても要求が飛び交わず、
@@ -57,6 +74,7 @@
   // 書きかけ（タイトル、リンク、本文の直している途中で、保存と同じ整え方の後も値が保存した値と違うもの。保存の要求を送っている間も数える。
   // と、まだ送っていない期日の入力）があるまま閉じる（×、幕、Esc）か、別のタスクや別の画面へ移る（beforeNavigate）ときは、
   // 捨てるかをアプリの中のダイアログで確かめる。捨てると決めたら、閉じる／移る。送っている最中の要求は止められず、そのまま通る。
+  // 帯の前後のボタンと `[` `]` で前後のタスクへ移るとき（開いた画面が順を渡したときだけ。adjacent）も、同じ確認を挟む。
   // 閉じた後に返った保存の応答も、通ったら木を読み直してトーストで知らせ、失敗はトーストで知らせる（saveFields）。
   // 引き出しが読み直すのは木（onchanged）かワークスペースの枠（onstale）だけで、組織の枠は読み直さない。
   // 削除は確認のダイアログを挟む。消したら閉じ、トーストで知らせ、画面が木を読み直す（onremoved）。
@@ -67,11 +85,17 @@
   // 読み込めたときと、引き出しで保存した後に読み直す。列の名前と値の文は src/lib/task-history.ts が辞書の言葉で作る。
   // 本文の下に完了の帯（.done-bar）を置く。完了していなくて書けるときは「完了にする」（task-complete。確かめのダイアログは挟まない）、
   // 完了していれば完了の印と完了した日時を出し、横にワークスペースの完成の定義（空なら出さない）を Markdown で出す。
-  // 完了にしたら、応答の日時を入れ、履歴を読み直し、画面が木を読み直す（onchanged）。押したボタンは消えるので、印へフォーカスを移す。
-  // 完了を戻す操作は #240 で足す
+  // 完了にしたら、応答の日時を入れ、詳細と履歴を読み直し、画面が木を読み直す（onchanged）。押したボタンは消えるので、印へフォーカスを移す。
+  // 完了していて戻せる（task-detail の reopenable）ときは、日時の横に「戻す」（.link-btn。task-reopen。確かめのダイアログは挟まない）。
+  // 戻したら、詳細と履歴を読み直し、画面が木を読み直す。押したボタンは消えるので、「完了にする」へフォーカスを移す
   let {
+    mode = 'side',
+    onmode,
+    adjacent,
+    onstep,
     slug,
     workspaceId,
+    currentUserId,
     taskId,
     canWrite,
     definitionOfDone,
@@ -80,8 +104,16 @@
     onstale,
     onremoved,
   }: {
+    mode?: TaskOpenMode;
+    // 確認を通った後に呼ぶ。既定の保存は呼び出し側が行う。移れなかったとき（新しいタブを開けなかった）は false を返す
+    onmode: (mode: TaskOpenMode) => boolean;
+    // 開いた画面に今見えているタスクの行の、前と次の ID（端では null）。渡さなければ前後のボタンとキーを使わない（ページ全体など）
+    adjacent?: { prev: string | null; next: string | null };
+    // 確認を通った後に、その ID のタスクへ移る。移り終えるまで待てる値を返す（取り消されたら、この引き出しのまま続けられる）
+    onstep?: (taskId: string) => Promise<void>;
     slug: string;
     workspaceId: string;
+    currentUserId: string | null;
     taskId: string;
     canWrite: boolean;
     // ワークスペースの完成の定義（Markdown）。空なら null で、完了の操作の横に何も出さない
@@ -131,20 +163,25 @@
   let task = $state<TaskDetail | null>(null);
   // 期日の印を決める、ワークスペースの今日と週の始まり（task-detail の値。ブラウザの時計に頼らない）
   let clock = $state<{ today: string; weekStart: number } | null>(null);
+  // 削除していない決まった欄と値（task-detail の fields。書かれていなければ value_md が null）
+  let fields = $state<TaskFieldValue[]>([]);
+  // バックログのタスクか。受信箱とアーカイブのタスクには、欄ごとの「未記入」の印を出さない（木の行と件数と同じ範囲）
+  let inBacklog = $state(false);
   let heading = $state<HTMLElement>();
   let retryButton = $state<HTMLButtonElement>();
   let discardDialog = $state<ReturnType<typeof ConfirmDialog>>();
   let deleteDialog = $state<ReturnType<typeof ConfirmDialog>>();
 
   // 直している途中の欄ごとの書きかけ（保存の要求を送っている間も数える）
-  const dirty = $state({ title: false, link: false, body: false });
-  // 書きかけ。タイトル、リンク、本文の書きかけと、まだ送っていない期日の入力（待っている間と、打ちかけ）と担当の選択（待っている間）と、
+  const dirty = $state({ title: false, link: false, body: false, fields: false });
+  // 書きかけ。タイトル、リンク、本文、決まった欄の書きかけと、まだ送っていない期日の入力（待っている間と、打ちかけ）と担当の選択（待っている間）と、
   // コメントの書きかけ（新しいコメントの欄の文字と、直している途中のコメント。TaskComments の hasDraft）
   function hasDraft(): boolean {
     return (
       dirty.title ||
       dirty.link ||
       dirty.body ||
+      dirty.fields ||
       dueUnsent() ||
       assigneeChoice !== null ||
       categoryChoice !== null ||
@@ -319,7 +356,7 @@
   let historyAdded = $state('');
   // 履歴の読み込みの進み具合を読み上げに伝える（見える「読み込んでいます」は aria-hidden にする）
   const historyStatus = $derived(historyState === 'loading' || historyMore === 'loading' ? t('loading') : historyAdded);
-  // 言葉づかいを切り替えたら、列の名前と操作の言葉も描き直す（t を $derived の中で呼ぶ）
+  // 履歴の行の文は、列の名前と操作の言葉を辞書の t で組む（t を $derived の中で呼ぶ）
   const historyViews = $derived(historyEntries.map((entry) => historyEntryView(entry, historyTimezone, t)));
 
   // 先頭の 50 件を読み直す。読み直している間は、前に読めた行を残す（保存のたびに消えてちらつかない）。
@@ -386,13 +423,25 @@
     historyPanel?.focus();
   }
 
+  // 前後のボタンで移ってきたときの、押した向き。置き直した引き出しは、読み込み中から同じ向きのボタンにフォーカスを持ち（Drawer の initialFocus）、
+  // 最初の読み込みの終わりにも同じ向きのボタンへ置き、移った先のタイトルを読み上げる
+  const arrivedByStep = consumeStepFocus();
+  let stepFocus = arrivedByStep;
+  // 移った先のタイトルの読み上げ。ボタンで移ったときだけ入れる（キーで移ったときは、見出しへのフォーカスで読まれる）。
+  // 状態の読み上げ（status）とは別の領域にして、あとから状態が替わっても読み直されないようにする
+  let movedStatus = $state('');
+
   async function load(): Promise<void> {
+    const wantedStepFocus = stepFocus;
+    stepFocus = null;
     const mine = ++loadVersion;
     loadState = 'loading';
     const result = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: taskId }, { slug });
     if (!alive || mine !== loadVersion) return;
     if (result.ok) {
       task = result.data.task;
+      fields = result.data.fields;
+      inBacklog = result.data.in_backlog;
       clock = { today: result.data.today, weekStart: result.data.week_start };
       loadState = 'ready';
       void loadHistory();
@@ -403,8 +452,19 @@
       // 開いたときの読み上げに、見出しが読まれるようにする。閉じるボタンか何も無い所にフォーカスがあるときだけ移す
       await tick();
       if (!alive) return;
+      // ボタンで移ってきたなら、移った先のタイトルを読み上げに出し、押したのと同じ向きのボタンへフォーカスを置く（続けて押せる）。
+      // 押せない（端）なら見出しへ。読み込みの間に利用者が別の所へ移したフォーカスは奪わない
       const active = document.activeElement;
-      if (active === document.body || active?.classList.contains('drawer-close')) heading?.focus();
+      const idle = active === document.body || active?.classList.contains('drawer-close');
+      if (wantedStepFocus !== null) {
+        movedStatus = t('drawerMoved', { task: t('task'), title: result.data.task.title });
+        const button = document.querySelector<HTMLElement>(`.drawer [data-drawer-step="${wantedStepFocus}"]`);
+        if (button !== null && button.getAttribute('aria-disabled') !== 'true') {
+          if (idle || active === button) button.focus();
+          return;
+        }
+      }
+      if (idle) heading?.focus();
       return;
     }
     if (result.status === 401) {
@@ -438,6 +498,36 @@
     if (hasDraft() && !(await confirmDiscard())) return;
     leaving = true;
     onclose();
+  }
+
+  // 帯で形を押したとき。描いている形（shown）と同じなら既定だけ保存して終える。違えば、書きかけの確認の後に呼び出し側が移る
+  async function requestMode(next: TaskOpenMode, shown: TaskOpenMode): Promise<void> {
+    if (asking || leaving) return;
+    if (pickTaskOpenMode(next, shown) === 'stay') return;
+    if (hasDraft() && !(await confirmDiscard())) return;
+    leaving = true;
+    // 新しいタブを開けなかったときは移らず、今の詳細を残す
+    if (!onmode(next)) leaving = false;
+  }
+
+  // 前後のタスクへ移る操作（帯のボタンと `[` `]`）。書きかけがあれば、閉じるときと同じ確認を挟む。
+  // 移ると引き出しは置き直される（呼び出し側の {#key}）ので、移れなかったとき（移動が取り消された）だけ、この引き出しを続けられる状態に戻す
+  // 移る先は確認の後に決め直す（確認の間に、順が替わったり、引き出しが閉じたりしうる）。消えていれば移らない。
+  // ボタンで移ったときだけ、移った先の引き出しが、押したのと同じ向きのボタンへフォーカスを戻す（stepFocus。キーで移ったときは見出し）
+  const stepTarget = (delta: -1 | 1) => (delta < 0 ? adjacent?.prev : adjacent?.next);
+
+  async function requestStep(delta: -1 | 1, source: StepSource): Promise<void> {
+    if (!onstep || !stepTarget(delta) || asking || leaving) return;
+    if (hasDraft() && !(await confirmDiscard())) return;
+    const target = stepTarget(delta);
+    if (!alive || leaving || !target) return;
+    leaving = true;
+    if (source === 'button') markStepFocus(delta);
+    await onstep(target);
+    if (!alive) return;
+    // 移れなかった（移動が取り消された）。この引き出しを続けられる状態に戻す
+    clearStepFocus();
+    leaving = false;
   }
 
   async function confirmDiscard(): Promise<boolean> {
@@ -561,11 +651,51 @@
     if (!result.ok) return null;
     if (alive) {
       task = result.data.task;
+      fields = result.data.fields;
+      inBacklog = result.data.in_backlog;
       clock = { today: result.data.today, weekStart: result.data.week_start };
+      if (canWrite && task.completed_at === null && candidates === null) void loadCandidates();
       // 別の人の変更を読み直したので、その変更が載った履歴も読み直す
       void loadHistory();
     }
     return result.data.task;
+  }
+
+  // ---- 決まった欄（TaskFieldValues が task-field-set で保存する） ----
+  // 書けた。応答の欄だけを入れ替え（別の欄の保存と前後しても、古い値で戻さない）、履歴と木を読み直す
+  function fieldSaved(saved: TaskFieldValue): void {
+    if (!alive) {
+      onchanged();
+      return;
+    }
+    fields = fields.map((field) => (field.id === saved.id ? saved : field));
+    void loadHistory();
+    onchanged();
+  }
+
+  // 欄かタスクが見つからなかった。読み直して、タスクが消えていれば閉じる。欄だけが削除されていたら、欄の一覧から外れ、入力欄ごと
+  // 書きかけが消えるので、トーストで知らせる（理由の文が入力欄と一緒に消えるため）。読み直せなかったときは削除されたと言い切らず、
+  // false を返す（呼んだ側がふつうの失敗の文を出す）。欄が一覧から外れたことを確かめられたら true
+  async function fieldMissing(fieldId: string): Promise<boolean> {
+    const latest = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: taskId }, { slug });
+    if (!latest.ok && latest.status === 404) {
+      taskGone = true;
+      if (alive) gone();
+      else {
+        showToast(t('taskGone', { task: t('task') }), 'alert');
+        onchanged();
+      }
+      return false;
+    }
+    if (!latest.ok) return false;
+    if (alive) {
+      task = latest.data.task;
+      fields = latest.data.fields;
+      inBacklog = latest.data.in_backlog;
+    }
+    const removed = !latest.data.fields.some((field) => field.id === fieldId);
+    if (removed) showToast(t('fieldValueGone'), 'alert');
+    return removed;
   }
 
   // ---- 担当（選んで少し待ってから、か欄を離れたときに保存する。1本ずつ送る） ----
@@ -664,7 +794,13 @@
     if (result.ok) {
       if (alive && task !== null) {
         const saved = result.data.task;
-        task = { ...task, assignee: saved.assignee, completed_at: saved.completed_at, can_delete: saved.can_delete };
+        task = {
+          ...task,
+          assignee: saved.assignee,
+          completed_at: saved.completed_at,
+          can_delete: saved.can_delete,
+          can_send_thanks: saved.can_send_thanks,
+        };
         void loadHistory();
       }
       showToast(t('taskSaved'), 'check');
@@ -1021,14 +1157,15 @@
   let doneMark = $state<HTMLElement>();
 
   async function complete(): Promise<void> {
-    if (task === null || completing || task.completed_at !== null) return;
+    // 戻している間は完了にしない
+    if (task === null || completing || reopening || task.completed_at !== null) return;
     completing = true;
     try {
       const result = await callOperation(taskComplete, { workspace_id: workspaceId, task_id: taskId }, { slug });
       if (!alive) {
         // 送っている間に閉じられた。通ったら木を読み直して知らせ、失敗は知らせる
         if (result.ok) {
-          showToast(t('taskCompleted', { task: t('task'), done: t('done') }), 'check');
+          showToast(completedMessage(result.data.left_sprint, t), 'check');
           onchanged();
         } else if (result.status !== 409 || result.error?.code !== 'conflict') {
           showToast(t('taskCompleteFailed', { done: t('done') }), 'alert');
@@ -1037,8 +1174,9 @@
       }
       if (result.ok) {
         if (task !== null) task = { ...task, completed_at: result.data.completed_at };
-        showToast(t('taskCompleted', { task: t('task'), done: t('done') }), 'check');
-        void loadHistory();
+        showToast(completedMessage(result.data.left_sprint, t), 'check');
+        // 戻せるか（reopenable）と、始まっていないスプリントから外れたことを出すため、詳細ごと読み直す（履歴も読み直す）
+        await refresh();
         onchanged();
       } else if (result.status === 401) {
         onstale();
@@ -1065,6 +1203,71 @@
     // 押したボタンは完了の印に替わって消えるので、フォーカスを印へ移す
     await tick();
     if (alive) doneMark?.focus();
+  }
+
+  // ---- 完了を戻す（確かめのダイアログは挟まない。1本だけ送る） ----
+  let reopening = $state(false);
+  let completeButton = $state<HTMLElement>();
+
+  function reopenFailureMessage(details: unknown): string {
+    const words = { task: t('task'), done: t('done'), sprint: t('sprint'), story: t('story') };
+    switch (taskReopenConflictReasonOf(details)) {
+      case 'not_completed':
+        return t('taskReopenNotDone', words);
+      case 'sprint_closed':
+        return t('taskReopenSprintClosed', words);
+      case 'parent_completed':
+        return t('taskReopenParentDone', words);
+      default:
+        return t('taskReopenChanged');
+    }
+  }
+
+  async function reopen(): Promise<void> {
+    if (task === null || reopening || completing || task.completed_at === null) return;
+    reopening = true;
+    try {
+      const result = await callOperation(taskReopen, { workspace_id: workspaceId, task_id: taskId }, { slug });
+      if (!alive) {
+        // 送っている間に閉じられた。通ったら木を読み直して知らせ、失敗は知らせる
+        if (result.ok) {
+          showToast(t('taskReopened', { task: t('task'), done: t('done') }), 'check');
+          onchanged();
+        } else if (result.status !== 401) {
+          showToast(t('taskReopenFailed', { done: t('done') }), 'alert');
+        }
+        return;
+      }
+      if (result.ok) {
+        if (task !== null) task = { ...task, completed_at: null, reopenable: false };
+        showToast(t('taskReopened', { task: t('task'), done: t('done') }), 'check');
+        await refresh();
+        onchanged();
+      } else if (result.status === 401) {
+        onstale();
+        return;
+      } else if (result.status === 404) {
+        gone();
+        return;
+      } else if (result.status === 409 && result.error?.code === 'workspace_closed') {
+        showToast(t('workspaceClosedReadOnly', { workspace: t('workspace') }), 'alert');
+        onstale();
+        return;
+      } else if (result.status === 409) {
+        // 別の画面で先に戻されたか、戻せない状態になっていた。読み直して、今の状態で示す
+        showToast(reopenFailureMessage(result.error?.details), 'alert');
+        await refresh();
+        onchanged();
+      } else {
+        showToast(t('taskReopenFailed', { done: t('done') }), 'alert');
+        return;
+      }
+    } finally {
+      if (alive) reopening = false;
+    }
+    // 押した「戻す」は消えるので、「完了にする」か（戻せないまま完了していれば）印へフォーカスを移す
+    await tick();
+    if (alive) (task?.completed_at == null ? completeButton : doneMark)?.focus();
   }
 
   // ---- 削除 ----
@@ -1128,7 +1331,9 @@
         ? t('taskDeleting')
         : completing
           ? t('taskCompleting', { done: t('done') })
-          : '',
+          : reopening
+            ? t('taskReopening', { done: t('done') })
+            : '',
   );
 </script>
 
@@ -1155,7 +1360,16 @@
   {/if}
 {/snippet}
 
-<Drawer labelledBy={titleLabelId} busy={loadState === 'loading'} onrequestclose={() => void requestClose()}>
+<Drawer
+  {mode}
+  onmode={(next, shown) => void requestMode(next, shown)}
+  adjacent={adjacent === undefined ? undefined : { hasPrev: adjacent.prev !== null, hasNext: adjacent.next !== null }}
+  onstep={(delta, source) => void requestStep(delta, source)}
+  initialFocus={arrivedByStep}
+  labelledBy={titleLabelId}
+  busy={loadState === 'loading'}
+  onrequestclose={() => void requestClose()}
+>
   {#snippet top()}
     {#if task !== null}
       <span class="chip"
@@ -1357,6 +1571,21 @@
         </dd>
       </div>
       <div>
+        <!-- 入っているスプリント（kit.js の drawer）。入っていなければ「<バックログ>」。出し入れは計画の画面で行う -->
+        <dt>{t('sprint')}</dt>
+        <dd>
+          {#if task.sprint === null}
+            <span>{t('sprintNone', { backlog: t('backlog') })}</span>
+          {:else if task.sprint.name === null}
+            <!-- 名前の無いスプリントは、期間を等幅で出す -->
+            <span>{t('sprint')} <span class="mono">{sprintPeriod(task.sprint, t)}</span></span>
+          {:else}
+            <span>{sprintLabel(task.sprint, t)}</span>
+          {/if}
+          <span class="props-note">{t('sprintPlanNote', { plan: t('plan') })}</span>
+        </dd>
+      </div>
+      <div>
         <dt id={repositoryLabelId}>{t('repository')}</dt>
         <dd>
           <!-- 1回押して選ぶボタンの並び。選んだら保存する。読み取り専用では、選んだ値の色を保ったまま押せない形にする -->
@@ -1493,6 +1722,21 @@
       {/if}
     </dl>
 
+    <!-- 決まった欄（ワークスペースで定義した欄ごと）。本文の前に置く -->
+    <TaskFieldValues
+      {slug}
+      {workspaceId}
+      {taskId}
+      {fields}
+      marksUnfilled={inBacklog && task.completed_at === null}
+      {canWrite}
+      onsaved={fieldSaved}
+      onrefresh={async () => (await refresh()) !== null}
+      onmissing={fieldMissing}
+      {onstale}
+      ondirty={(value) => (dirty.fields = value)}
+    />
+
     <div class="field">
       {#if canWrite}
         <InlineEdit
@@ -1519,7 +1763,7 @@
       {/if}
     </div>
 
-    <!-- 完了の帯（kit.js の drawerHtml の .done-bar）。完了を戻す操作は #240 で足す -->
+    <!-- 完了の帯（kit.js の drawerHtml の .done-bar）。完了していて戻せるときは、日時の横に「戻す」 -->
     {#if task.completed_at !== null || canWrite || definitionOfDone !== null}
       <div class="done-bar">
         {#if task.completed_at !== null}
@@ -1532,9 +1776,24 @@
             <time datetime={task.completed_at}
               >{t('taskCompletedAt', { done: t('done'), at: formatDateTime(task.completed_at) })}</time
             >
+            {#if canWrite && task.reopenable}
+              <button
+                class="link-btn"
+                type="button"
+                aria-label={t('taskReopenLabel', { done: t('done'), title: task.title })}
+                aria-disabled={reopening}
+                onclick={() => void reopen()}>{t('taskReopen')}</button
+              >
+            {/if}
           </span>
         {:else if canWrite}
-          <button class="btn is-primary" type="button" aria-disabled={completing} onclick={() => void complete()}>
+          <button
+            class="btn is-primary"
+            type="button"
+            aria-disabled={completing}
+            bind:this={completeButton}
+            onclick={() => void complete()}
+          >
             <Icon name="check" />{t('complete')}
           </button>
         {/if}
@@ -1551,6 +1810,20 @@
         {/if}
       </div>
     {/if}
+
+    <TaskThanks
+      {slug}
+      {workspaceId}
+      {task}
+      {currentUserId}
+      {canWrite}
+      {candidates}
+      {candidatesLoading}
+      {candidatesFailed}
+      onretry={() => void loadCandidates()}
+      onrefresh={refresh}
+      {onstale}
+    />
 
     <!-- コメントと変更の履歴のタブ（kit.js の drawerHtml の .tabs）。中身は外さずに隠す（書きかけのコメントを、タブを切り替えても保つ）。
          左右の矢印キーと Home、End でタブを移り、移った先を選ぶ -->
@@ -1695,6 +1968,8 @@
 
   <!-- 状態の読み上げの領域。常に置き、中の文字だけを替える -->
   <span class="visually-hidden" role="status">{status}</span>
+  <!-- 前後のボタンで移ったときだけ、移った先のタイトルを読み上げる（フォーカスは押したボタンに残るため） -->
+  <span class="visually-hidden" role="status">{movedStatus}</span>
 </Drawer>
 
 <ConfirmDialog

@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import './zod-config.ts';
 import { isCalendarDate } from './due.ts';
+import { hasHiddenCharacter } from './hidden-characters.ts';
 import { BLANK_CHARACTERS, shortTextProblem } from './text-rules.ts';
 
 // 長さは 1〜28 日（DB の CHECK と同じ）。前のスプリントが無いときの初期値は 14 日
@@ -42,12 +43,50 @@ export const sprintNameSchema = z
   })
   .nullable();
 
+// ゴール（始めるときに書く、任意の文）。前後の空白を除いて 0〜200 字（コードポイントで数える）。改行は入れられる（LF にそろえる）。
+// 断る文字は名前と同じ（hidden-characters.ts）が、改行（LF）と字下げのタブは通す
+export const SPRINT_GOAL_MAX_LENGTH = 200;
+
+export type SprintGoalProblem = 'too_long' | 'invalid_character';
+
+// 前後の空白を除き、改行を LF にそろえる。空白（と見えない空白）だけのゴールは空と同じで、null にそろえる
+export function normalizeSprintGoal(raw: string): string | null {
+  const value = raw.replace(/\r\n?/g, '\n').trim();
+  return value.replace(BLANK_CHARACTERS, '') === '' ? null : value;
+}
+
+// value は normalizeSprintGoal を通した後の値。空（null）はゴールなしで、誤りではない
+export function sprintGoalProblem(value: string | null): SprintGoalProblem | null {
+  if (value === null) return null;
+  if (hasHiddenCharacter(value.replace(/[\n\t]/g, ' '))) return 'invalid_character';
+  if ([...value].length > SPRINT_GOAL_MAX_LENGTH) return 'too_long';
+  return null;
+}
+
+export const sprintGoalSchema = z
+  .string()
+  .transform((raw, ctx) => {
+    const value = normalizeSprintGoal(raw);
+    const problem = sprintGoalProblem(value);
+    if (problem !== null) {
+      ctx.addIssue({ code: 'custom', message: `スプリントのゴールが使えない（${problem}）` });
+      return z.NEVER;
+    }
+    return value;
+  })
+  .nullable();
+
 export const sprintLengthSchema = z.number().int().min(SPRINT_MIN_LENGTH).max(SPRINT_MAX_LENGTH);
 
 // 開始日は YYYY-MM-DD の暦の日付。最終日も暦に収まること（9999-12-31 を越えない）は、長さと合わせて sprintEndOn で見る
 export const sprintStartOnSchema = z
   .string()
   .refine(isCalendarDate, { message: '開始日が使えない（YYYY-MM-DD の暦の日付）' });
+
+// 延長の入力で、画面が読んだ今の最終日。YYYY-MM-DD の暦の日付
+export const sprintEndOnSchema = z
+  .string()
+  .refine(isCalendarDate, { message: '最終日が使えない（YYYY-MM-DD の暦の日付）' });
 
 const DAY_MS = 86_400_000;
 
@@ -109,4 +148,47 @@ export function sprintDefaults(
   }
   const ahead = (weekStart - weekdayOf(today) + 7) % 7 || 7;
   return { start_on: addDays(today, ahead) ?? today, length: SPRINT_DEFAULT_LENGTH };
+}
+
+export type SprintProgress = { day: number; length: number; remaining: number };
+
+// 進行中のスプリントの「N 日のうち M 日目」と残りの日数。today はワークスペースのタイムゾーンでの今日。
+// 残りは今日を含めて数える（見本の「残り」と同じで、最終日は残り 1 日）。
+// 開始日の前に始めたときは 1 日目で残りは長さのまま、最終日を過ぎたときは最終日の日に丸めて残りは 0
+export function sprintProgress(sprint: { start_on: string; end_on: string }, today: string): SprintProgress {
+  const length = sprintLengthOf(sprint.start_on, sprint.end_on);
+  const start = dayNumberOf(sprint.start_on)!;
+  const now = dayNumberOf(today);
+  const elapsed = now === null ? 1 : Math.max(now - start + 1, 1);
+  return { day: Math.min(elapsed, length), length, remaining: Math.max(length - elapsed + 1, 0) };
+}
+
+export type ExtensionSprint = {
+  id: string;
+  name: string | null;
+  start_on: string;
+  end_on: string;
+  status: string;
+  deleted_at?: string | null;
+};
+
+// 空きの日で吸収できない分だけ押し出す。入力を変えず、開始日の順で返す。暦を外れたら null。
+export function sprintExtension(current: { end_on: string }, days: number, sprints: readonly ExtensionSprint[]) {
+  const end_on = addDays(current.end_on, days);
+  if (end_on === null) return null;
+  const shifted: { id: string; name: string | null; start_on: string; end_on: string; days: number }[] = [];
+  let previousEnd = end_on;
+  const following = sprints
+    .filter((s) => s.status === 'planned' && s.deleted_at == null && s.start_on > current.end_on)
+    .toSorted((a, b) => a.start_on.localeCompare(b.start_on) || a.id.localeCompare(b.id));
+  for (const sprint of following) {
+    if (sprint.start_on > previousEnd) break;
+    const shift = sprintLengthOf(sprint.start_on, previousEnd);
+    const start = addDays(sprint.start_on, shift);
+    const end = addDays(sprint.end_on, shift);
+    if (start === null || end === null) return null;
+    shifted.push({ id: sprint.id, name: sprint.name, start_on: start, end_on: end, days: shift });
+    previousEnd = end;
+  }
+  return { end_on, shifted };
 }

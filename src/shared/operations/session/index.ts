@@ -3,12 +3,18 @@
 import { z } from 'zod';
 import { defineOperation } from '../define.ts';
 import type { AnyOperationDefinition } from '../define.ts';
+import { tokenCreate, tokenList, tokenRevoke } from './token.ts';
+import { credentialsRevokeAll } from './credentials.ts';
+import { operationList } from './operation-list.ts';
+import { consentRecord, consentStatus } from './consent.ts';
 
 export const me = defineOperation({
   name: 'me',
   description: 'ログインしている自分のアカウントと、ログインの手段の表示用の名前とアバターを返す',
   mode: 'read',
   permission: 'login',
+  // 同意の画面が、同意していない人の表示にも使う
+  skipsConsent: true,
   input: z.object({}),
   output: z.object({
     account_id: z.string(),
@@ -24,10 +30,28 @@ export const logout = defineOperation({
   description: '今のセッションを消し、セッションの Cookie も消す',
   mode: 'write',
   permission: 'login',
-  // 入れる組織を失った人にも使わせる。ここで確かめると、セッションの行を消す仕事が、確かめの失敗の 401 に先を越される
-  skipsLoginAccess: true,
+  // 消すのは sessions の行と Cookie だけで、API トークンの行は指せない。トークンからは断る
+  cookieOnly: true,
+  // 同意しない人が抜けられるように
+  skipsConsent: true,
   input: z.object({}),
   output: z.object({}),
 });
 
-export const sessionOperations: readonly AnyOperationDefinition[] = [me, logout];
+export { tokenCreate, tokenList, tokenRevoke } from './token.ts';
+
+export { credentialsRevokeAll } from './credentials.ts';
+
+export { operationList } from './operation-list.ts';
+
+export const sessionOperations: readonly AnyOperationDefinition[] = [
+  me,
+  logout,
+  consentStatus,
+  consentRecord,
+  tokenCreate,
+  tokenList,
+  tokenRevoke,
+  credentialsRevokeAll,
+  operationList,
+];

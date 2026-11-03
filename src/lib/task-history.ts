@@ -1,6 +1,6 @@
 // タスクの詳細の引き出しの「変更の履歴」の、1件ごとの見せ方（task-history の結果を、辞書の言葉の文にする）。
-// 列の名前は、下の表で辞書の言葉にする（言葉づかいを切り替えると、列の名前も替わる）。
-// 辞書は引数（translate）で受け取り、画面の状態に頼らない（テストで言葉づかいを替えて確かめる）
+// 列の名前は、下の表で辞書の言葉にする。
+// 辞書は引数（translate）で受け取り、画面の状態に頼らない（テストが画面なしで呼べる）
 import type { TaskHistoryEntry, TaskHistoryValue } from '../shared/operations/task/index.ts';
 import type { DictionaryKey, TemplateParams } from '../shared/vocabulary.ts';
 
@@ -26,6 +26,7 @@ export type HistoryEntryView = {
 // 完了と削除の行は操作だけを出すので、その列（completed_at、completed_by、deleted_at）は表に入れない。
 // 列の名前は保存した JSON のキーなので、__proto__ などで Object の持ち物を引かないよう Map で持つ
 const FIELD_LABELS: ReadonlyMap<string, (t: Translate) => string> = new Map([
+  ['thanks', (t: Translate) => t('thanks')],
   ['title', (t: Translate) => t('fieldTitle')],
   ['points', (t: Translate) => t('points')],
   ['due_on', (t: Translate) => t('due')],
@@ -35,7 +36,9 @@ const FIELD_LABELS: ReadonlyMap<string, (t: Translate) => string> = new Map([
   ['story', (t: Translate) => t('historyFieldParent', { story: t('story') })],
   ['category', (t: Translate) => t('category')],
   ['repository', (t: Translate) => t('repository')],
-  ['today_on', (t: Translate) => t('sectionToday')],
+  ['sprint', (t: Translate) => t('sprint')],
+  ['column', (t: Translate) => t('column')],
+  ['today_on', (t: Translate) => t('historyFieldToday')],
 ]);
 
 // 値を出さない列（本文は長いので、API も値を返さない）
@@ -86,6 +89,7 @@ function nameText(name: string, t: Translate): string {
 
 function valueText(field: string, value: TaskHistoryValue, t: Translate): string {
   if (value === null) {
+    if (field === 'thanks') return t('thanksNone');
     if (field === 'points') return t('pointsUnsetTitle');
     if (field === 'assignee') return t('unassigned');
     return t('historyNone');
@@ -99,7 +103,24 @@ function hasValue(value: TaskHistoryValue): boolean {
   return value !== null && value !== '';
 }
 
+// 決まった欄の値の書き込み（キーは field）。値の全文は履歴に無く、欄の { id, name } か null（書かれていない）だけを持つ。
+// 書いた（なし → あり）、直した（あり → あり）、空にした（あり → なし）を、欄の名前つきで出す
+function detailFieldLine(change: TaskHistoryEntry['changes'][number], t: Translate): HistoryLine {
+  const named = [change.after, change.before].find(
+    (value): value is { id: string; name: string } => typeof value === 'object' && value !== null,
+  );
+  const name = nameText(named?.name ?? '', t);
+  const key =
+    change.after === null
+      ? 'historyDetailCleared'
+      : change.before === null
+        ? 'historyDetailWritten'
+        : 'historyDetailEdited';
+  return { label: null, text: t(key, { name }) };
+}
+
 function lineOf(change: TaskHistoryEntry['changes'][number], created: boolean, t: Translate): HistoryLine {
+  if (change.field === 'field') return detailFieldLine(change, t);
   const label = historyFieldLabel(change.field, t);
   // 本文と知らない列は、値を出さず、直したことだけを出す
   if (VALUELESS_FIELDS.has(change.field) || !FIELD_LABELS.has(change.field)) {
@@ -122,6 +143,22 @@ export function historyEntryView(entry: TaskHistoryEntry, timeZone: string, t: T
   // 完了と削除は、何をしたかだけを出す（日時と人は行の頭にある）
   if (entry.action === 'complete') return { ...base, summary: t('historyCompleted', { done: t('done') }), lines: [] };
   if (entry.action === 'delete') return { ...base, summary: t('historyDeleted'), lines: [] };
+  // 完了を戻した（task-reopen）。スプリントの中なら、戻した列だけを出す。前の列は完了の列で、名前を持たない（画面は辞書の「完了」を出す）
+  if (entry.action === 'reopen') {
+    const lines = entry.changes
+      .filter((change) => change.field === 'column')
+      .map((change) => {
+        const before =
+          change.before !== null && typeof change.before === 'object' && change.before.name === ''
+            ? t('done')
+            : valueText(change.field, change.before, t);
+        return {
+          label: historyFieldLabel(change.field, t),
+          text: t('historyChange', { before, after: valueText(change.field, change.after, t) }),
+        };
+      });
+    return { ...base, summary: t('historyReopened', { done: t('done') }), lines };
+  }
   if (entry.action === 'create') {
     // 作成は、空でない初めの値だけを出す（本文と知らない列は、直したことだけ）
     const changes = entry.changes.filter(

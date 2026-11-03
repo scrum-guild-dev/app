@@ -1,3 +1,4 @@
+import { readThanks } from './thanks.ts';
 import { now, todayIn } from '../../shared/clock.ts';
 import { taskAssign, taskDelete, taskDetail, taskUpdate, type TaskDetail } from '../../shared/operations/task/index.ts';
 import { previousStatementChanged, type OrganizationDb, type VerifiedWorkspace } from '../db/index.ts';
@@ -11,7 +12,11 @@ import {
   refOf,
   repositoryRow,
 } from './definition-refs.ts';
+import { taskAssigneePartyStatements } from './epic-party.ts';
 import { implement } from './implement.ts';
+import { sprintRefColumns, sprintRefOf } from './sprint-refs.ts';
+import { readTaskFields } from './task-field.ts';
+import { reopenBlockOf } from './task-reopen.ts';
 import {
   activeMemberName,
   actorUserIdOf,
@@ -69,7 +74,20 @@ async function readTask(db: OrganizationDb, workspaceId: string, taskId: string)
         .leftJoin('repositories', (join) =>
           join.onRef('repositories.id', '=', 'tasks.repository_id').on('repositories.workspace_id', '=', workspaceId),
         )
+        // 入っているスプリント。同じワークスペースの削除していないものだけを結ぶ
+        .leftJoin('sprints', (join) =>
+          join
+            .onRef('sprints.id', '=', 'tasks.sprint_id')
+            .on('sprints.workspace_id', '=', workspaceId)
+            .on('sprints.deleted_at', 'is', null),
+        )
         .select([
+          ...sprintRefColumns,
+          // 完了を戻せるか（reopenable）。削除したスプリントは結ばないので、sprint_id があって状態が無ければ削除したスプリント
+          'tasks.tray',
+          'tasks.sprint_id',
+          'sprints.status as sprint_status',
+          'stories.completed_at as story_completed_at',
           'tasks.id',
           'tasks.title',
           'tasks.body_md',
@@ -145,12 +163,25 @@ function repositoryOf(row: TaskRow): TaskDetail['repository'] {
   return { id: row.repository_id, name: row.repository_name ?? '' };
 }
 
-function detailOf(
+async function detailOf(
+  db: OrganizationDb,
   row: TaskRow,
   actor: { userId: string | null; isAdmin: boolean },
   workspace: VerifiedWorkspace,
-): TaskDetail {
+): Promise<TaskDetail> {
   return {
+    thanks: await readThanks(
+      db,
+      workspace.workspaceId,
+      row.id,
+      actor.userId,
+      !workspace.closed && row.completed_at === null,
+    ),
+    can_send_thanks:
+      !workspace.closed &&
+      row.completed_at === null &&
+      actor.userId !== null &&
+      (row.assignee_user_id ?? row.created_by) === actor.userId,
     id: row.id,
     title: row.title,
     body_md: row.body_md,
@@ -160,10 +191,21 @@ function detailOf(
     assignee: assigneeOf(row),
     is_imported: row.is_imported === 1,
     completed_at: row.completed_at,
+    reopenable:
+      row.completed_at !== null &&
+      !workspace.closed &&
+      reopenBlockOf({
+        tray: row.tray,
+        completedAt: row.completed_at,
+        sprintId: row.sprint_id,
+        sprintActive: row.sprint_status === 'active',
+        parentCompleted: row.story_completed_at !== null,
+      }) === null,
     can_delete: canDelete(row, actor, workspace),
     story_id: row.story_id,
     category: categoryOf(row),
     repository: repositoryOf(row),
+    sprint: sprintRefOf(row),
   };
 }
 
@@ -181,7 +223,16 @@ export const taskDetailOperation = implement(taskDetail, async ({ db, actor, wor
     ),
   );
   if (settings === undefined) throw new ApiError(404, 'not_found');
-  return { task: detailOf(task, actor, workspace), today: todayIn(settings.timezone), week_start: settings.week_start };
+  // 削除していない決まった欄と値。未記入は、完了していないタスクで、値の無い欄があるとき（backlog-tree の unfilled と同じ判定）
+  const fields = await readTaskFields(db, workspace.workspaceId, task.id);
+  return {
+    task: await detailOf(db, task, actor, workspace),
+    fields,
+    unfilled: task.tray === 'backlog' && task.completed_at === null && fields.some((field) => field.value_md === null),
+    in_backlog: task.tray === 'backlog',
+    today: todayIn(settings.timezone),
+    week_start: settings.week_start,
+  };
 });
 
 // 書く欄。ポイントと期日、リンク、本文、区分、リポジトリは空にできる
@@ -270,7 +321,7 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
     if (draft.isEmpty) {
       // 書くものが無くても、閉じたワークスペースは断る
       await throwIfClosed(db, workspaceId);
-      return { task: detailOf(current, actor, workspace) };
+      return { task: await detailOf(db, current, actor, workspace) };
     }
     assertEditable(current, draft.values);
     // 振る区分とリポジトリは、同じワークスペースの削除していないものだけ（無ければ 404）。書く文にも同じ条件を入れる
@@ -339,7 +390,7 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
     if ((results[0]?.changes ?? 0) > 0) {
       const updated = await readTask(db, workspaceId, taskId);
       if (updated === undefined) throw new ApiError(404, 'not_found');
-      return { task: detailOf(updated, actor, workspace) };
+      return { task: await detailOf(db, updated, actor, workspace) };
     }
     // 閉じていれば 409 の workspace_closed。無ければ 404。どちらでもなければ、別の要求が先に同じ欄を変えたので、読み直してやり直す
     // （完了にされていたか親の下へ移されていたら、次の周の assertEditable が 409 に、区分かリポジトリが削除されていたら、次の周の読み取りが 404 にする）
@@ -351,6 +402,7 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
 
 // 担当を替える（null で外す）。読んだ担当から替わるときだけ、「読んだ担当のまま、読んだ今日やるの印のまま、完了していない、
 // 新しい担当が今所属している、ワークスペースが開いている」という条件つきで書き、同じ文で今日やるの印を消す。
+// 担当を付けたら、同じ batch() で、タスクの親のストーリーの親のエピックの討伐隊に担当を足す（taskAssigneePartyStatements）。
 // 通らなかったら読み直して、やり直す（task-update と同じ。3 回まで）
 export const taskAssignOperation = implement(taskAssign, async ({ db, actor, workspace, input }) => {
   const actorUserId = actorUserIdOf(actor);
@@ -368,7 +420,7 @@ export const taskAssignOperation = implement(taskAssign, async ({ db, actor, wor
     if (current.assignee_user_id === nextId) {
       // 替わらなければ何も書かない（今日やるの印も消さない）。書くものが無くても、閉じたワークスペースは断る
       await throwIfClosed(db, workspaceId);
-      return { task: detailOf(current, actor, workspace) };
+      return { task: await detailOf(db, current, actor, workspace) };
     }
     // 完了したタスクの担当は替えない（完了の経験値と完了の記録が、完了した時点の担当を使うため）。
     // 閉じたワークスペースは、完了したタスクでも workspace_closed で答える
@@ -437,12 +489,24 @@ export const taskAssignOperation = implement(taskAssign, async ({ db, actor, wor
               .where(previousStatementChanged),
           ),
       ),
+      // 担当を付けたら、タスクの親のストーリーの親の進行中のエピックの討伐隊に、担当を task_assignee で足す（既にいれば何もしない）。
+      // 直前のタスクの履歴が入った（= 上の更新が通った）ときだけ。外すとき（null）は何もしない
+      ...(next === null
+        ? []
+        : taskAssigneePartyStatements(db, {
+            workspaceId,
+            taskId,
+            assignee: next,
+            actorUserId,
+            at,
+            taskUpdatedAt: updatedAt,
+          })),
     ]);
 
     if ((results[0]?.changes ?? 0) > 0) {
       const updated = await readTask(db, workspaceId, taskId);
       if (updated === undefined) throw new ApiError(404, 'not_found');
-      return { task: detailOf(updated, actor, workspace) };
+      return { task: await detailOf(db, updated, actor, workspace) };
     }
     // 閉じていれば 409 の workspace_closed。タスクが無いか、新しい担当が所属を外れていれば 404。
     // どちらでもなければ、別の要求が先に担当か今日やるの印を変えたか、完了にしたので、読み直してやり直す
@@ -477,10 +541,17 @@ export const taskDeleteOperation = implement(taskDelete, async ({ db, actor, wor
   const at = now();
   const deletedAt = at.toISOString();
   const results = await db.batch([
+    // スプリントに入っていれば、スプリント、列、列の中の位置も空にする（tasks.sprint_id と入っている行を一致させる。行は 3 で閉じる）
     db.statement((q) =>
       q
         .updateTable('tasks')
-        .set({ deleted_at: deletedAt, updated_at: deletedAt })
+        .set({
+          deleted_at: deletedAt,
+          updated_at: deletedAt,
+          sprint_id: null,
+          column_id: null,
+          column_position: null,
+        })
         .where((eb) =>
           eb.and([
             eb('id', '=', taskId),
@@ -509,6 +580,25 @@ export const taskDeleteOperation = implement(taskDelete, async ({ db, actor, wor
               eb.val(deletedAt).as('created_at'),
             ])
             .where(previousStatementChanged),
+        ),
+    ),
+    // 3. スプリントに入っていれば、入っていた行を removed で閉じる。1 でこの要求が削除した（deleted_at が自分の時刻）ことが条件
+    db.statement((q) =>
+      q
+        .updateTable('sprint_entries')
+        .set({ ended_at: deletedAt, outcome: 'removed' })
+        .where('workspace_id', '=', workspaceId)
+        .where('task_id', '=', taskId)
+        .where('ended_at', 'is', null)
+        .where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('tasks as gone')
+              .select('gone.id')
+              .where('gone.id', '=', taskId)
+              .where('gone.workspace_id', '=', workspaceId)
+              .where('gone.deleted_at', '=', deletedAt),
+          ),
         ),
     ),
   ]);

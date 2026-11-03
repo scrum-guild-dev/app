@@ -1,6 +1,10 @@
+import { thanksSendOperation, thanksRevokeOperation } from './thanks.ts';
 // 本番に登録する操作の一覧。定義は src/shared/operations/ に、処理はここに置く（docs/development.md の「操作の定義」）。
 // 仮の操作はテストの中で定義し、ここに入れない
 import type { ImplementedOperation } from './implement.ts';
+import { attachmentUploadOperation } from './attachment.ts';
+import { operationListOperationFor } from './operation-list.ts';
+import { backlogCompletedTasksOperation } from './backlog-completed-tasks.ts';
 import { experienceGrantsOperation, experienceSummaryOperation, experienceTeamTotalOperation } from './experience.ts';
 import { invitationCreateOperation, invitationRevokeOperation, inviteeResolveOperation } from './invitation.ts';
 import {
@@ -8,14 +12,21 @@ import {
   invitationDeclineOperation,
   invitationListOperation,
 } from './invitation-response.ts';
+import { meThemeUpdateOperation } from './me-theme.ts';
 import { membershipLeaveOperation, membershipRoleUpdateOperation } from './membership.ts';
 import { createOrganizationOperation, listOrganizationsOperation, resolveGithubUserOperation } from './operator.ts';
+import { organizationAdminReassignOperation } from './operator-admin.ts';
+import { organizationQuotaUpdateOperation } from './operator-quota.ts';
 import {
   organizationResumeOperation,
   organizationSuspendOperation,
   organizationSuspensionUpdateOperation,
 } from './operator-suspension.ts';
+import { createMyOrganizationOperation } from './create-my-organization.ts';
+import { createPersonalOrganizationOperation } from './create-personal-organization.ts';
 import { myOrganizationsOperation, organizationInfoOperation } from './organization.ts';
+import { todayOperation } from './today.ts';
+import { firstStepsOperation } from './first-steps.ts';
 import { organizationHistoryOperation } from './organization-history.ts';
 import {
   organizationHolidayAddOperation,
@@ -24,19 +35,50 @@ import {
 } from './organization-holiday.ts';
 import { organizationSettingsUpdateOperation } from './organization-settings.ts';
 import { logoutOperation, meOperation } from './session.ts';
-import { sprintCreateOperation, sprintDeleteOperation, sprintListOperation, sprintUpdateOperation } from './sprint.ts';
-import { epicCreateOperation, epicGetOperation, epicUpdateOperation } from './epic.ts';
+import { consentRecordOperation, consentStatusOperation } from './consent.ts';
+import { credentialsRevokeAllOperation } from './credentials.ts';
+import { tokenCreateOperation, tokenListOperation, tokenRevokeOperation } from './token.ts';
+import { userAdminUpdateOperation, userDisableOperation, userEnableOperation, userListOperation } from './user.ts';
+import { planSummaryOperation } from './plan-summary.ts';
+import { sprintBoardOperation, taskColumnMoveOperation } from './sprint-board.ts';
+import { sprintExtendOperation } from './sprint-extend.ts';
+import { sprintCloseOperation } from './sprint-close.ts';
+import {
+  sprintCreateOperation,
+  sprintDeleteOperation,
+  sprintListOperation,
+  sprintStartOperation,
+  sprintTaskAddOperation,
+  sprintTaskRemoveOperation,
+  sprintUpdateOperation,
+} from './sprint.ts';
+import { epicCreateOperation, epicGetOperation, epicMoveOperation, epicUpdateOperation } from './epic.ts';
+import { epicDetailOperation } from './epic-detail.ts';
+import { epicPartyAssignOperation, epicPartyJoinOperation, epicPartyLeaveOperation } from './epic-party.ts';
+import { epicRequesterUpdateOperation, epicRewardUpdateOperation } from './epic-reward.ts';
 import {
   categoryCreateOperation,
   categoryDeleteOperation,
   categoryMoveOperation,
   categoryRepositoryListOperation,
   categoryUpdateOperation,
+  detailFieldCreateOperation,
+  detailFieldDeleteOperation,
+  detailFieldListOperation,
+  detailFieldMoveOperation,
+  detailFieldUpdateOperation,
   repositoryCreateOperation,
   repositoryDeleteOperation,
   repositoryMoveOperation,
   repositoryUpdateOperation,
 } from './definition.ts';
+import {
+  columnCreateOperation,
+  columnDeleteOperation,
+  columnListOperation,
+  columnMoveOperation,
+  columnUpdateOperation,
+} from './column.ts';
 import {
   storyCompleteOperation,
   storyCreateOperation,
@@ -46,6 +88,8 @@ import {
   storyUpdateOperation,
 } from './story.ts';
 import { taskAssignOperation, taskDeleteOperation, taskDetailOperation, taskUpdateOperation } from './task-edit.ts';
+import { taskFieldSetOperation } from './task-field.ts';
+import { taskTodayMarkOperation } from './task-today-mark.ts';
 import { taskHistoryOperation } from './task-history.ts';
 import {
   commentCreateOperation,
@@ -55,6 +99,7 @@ import {
 } from './comment.ts';
 import { epicDeleteOperation, storyDeleteOperation } from './tree-delete.ts';
 import { backlogTreeOperation, taskCompleteOperation, taskCreateOperation, taskMoveOperation } from './task.ts';
+import { taskReopenOperation } from './task-reopen.ts';
 import {
   memberListOperation,
   workspaceCloseOperation,
@@ -66,25 +111,50 @@ import {
   workspaceReopenOperation,
 } from './workspace.ts';
 
-export const implementedOperations: readonly ImplementedOperation[] = [
+// 呼べる操作の一覧（operation-list）が載せる、ほかの操作
+const listedOperations: readonly ImplementedOperation[] = [
   listOrganizationsOperation,
   resolveGithubUserOperation,
   createOrganizationOperation,
   organizationSuspendOperation,
   organizationSuspensionUpdateOperation,
   organizationResumeOperation,
+  organizationAdminReassignOperation,
+  organizationQuotaUpdateOperation,
   myOrganizationsOperation,
+  createMyOrganizationOperation,
+  createPersonalOrganizationOperation,
   organizationInfoOperation,
+  meThemeUpdateOperation,
+  todayOperation,
+  firstStepsOperation,
   organizationHolidayListOperation,
   organizationHolidayAddOperation,
   organizationHolidayDeleteOperation,
   organizationSettingsUpdateOperation,
   organizationHistoryOperation,
+  userListOperation,
+  userAdminUpdateOperation,
+  userDisableOperation,
+  userEnableOperation,
   meOperation,
   logoutOperation,
+  consentStatusOperation,
+  consentRecordOperation,
+  tokenCreateOperation,
+  tokenListOperation,
+  tokenRevokeOperation,
+  credentialsRevokeAllOperation,
   epicCreateOperation,
   epicGetOperation,
+  epicDetailOperation,
   epicUpdateOperation,
+  epicMoveOperation,
+  epicPartyJoinOperation,
+  epicPartyLeaveOperation,
+  epicPartyAssignOperation,
+  epicRewardUpdateOperation,
+  epicRequesterUpdateOperation,
   experienceSummaryOperation,
   experienceGrantsOperation,
   experienceTeamTotalOperation,
@@ -100,15 +170,28 @@ export const implementedOperations: readonly ImplementedOperation[] = [
   sprintCreateOperation,
   sprintUpdateOperation,
   sprintDeleteOperation,
+  sprintTaskAddOperation,
+  sprintTaskRemoveOperation,
+  sprintStartOperation,
+  sprintCloseOperation,
+  sprintExtendOperation,
+  sprintBoardOperation,
+  planSummaryOperation,
+  taskColumnMoveOperation,
   taskCreateOperation,
   backlogTreeOperation,
+  backlogCompletedTasksOperation,
   taskCompleteOperation,
+  taskReopenOperation,
   taskDetailOperation,
   taskUpdateOperation,
   taskAssignOperation,
+  taskTodayMarkOperation,
   taskDeleteOperation,
   taskMoveOperation,
   taskHistoryOperation,
+  thanksSendOperation,
+  thanksRevokeOperation,
   commentListOperation,
   commentCreateOperation,
   commentUpdateOperation,
@@ -135,7 +218,24 @@ export const implementedOperations: readonly ImplementedOperation[] = [
   repositoryUpdateOperation,
   repositoryMoveOperation,
   repositoryDeleteOperation,
+  detailFieldListOperation,
+  detailFieldCreateOperation,
+  detailFieldUpdateOperation,
+  detailFieldMoveOperation,
+  detailFieldDeleteOperation,
+  taskFieldSetOperation,
+  columnListOperation,
+  columnCreateOperation,
+  columnUpdateOperation,
+  columnMoveOperation,
+  columnDeleteOperation,
   invitationListOperation,
   invitationAcceptOperation,
   invitationDeclineOperation,
+  attachmentUploadOperation,
+];
+
+export const implementedOperations: readonly ImplementedOperation[] = [
+  ...listedOperations,
+  operationListOperationFor(listedOperations.map((operation) => operation.definition)),
 ];

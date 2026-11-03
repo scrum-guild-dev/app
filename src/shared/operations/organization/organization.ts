@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { organizationKinds } from '../../organization-kind.ts';
 import { themes } from '../../theme.ts';
 import { defineOperation } from '../define.ts';
 
@@ -10,14 +11,15 @@ const theme = z.enum(themes);
 export const organizationInfo = defineOperation({
   name: 'organization',
   description:
-    '組織の名前、言葉づかい、既定のテーマと、この組織での自分、所属するワークスペースを返す。呼ぶと last_seen_at を書く（1時間に1回まで）',
+    '組織の名前、既定のテーマと、この組織での自分、所属するワークスペース、管理者ならお試しの期限と残りの日数を返す。呼ぶと last_seen_at を書く（1時間に1回まで）',
   mode: 'read',
   permission: 'organization',
   input: z.object({}),
   output: z.object({
     organization: z.object({
       name: z.string(),
-      vocabulary: z.enum(['game', 'scrum']),
+      // team はチーム用、personal は自分用（1人だけ。招待と管理者の指名はできない）
+      kind: z.enum(organizationKinds),
       theme,
       // 組織にワークスペースが1つでもあるか（所属していないものと、閉じたものを含む）。最初のワークスペースを作る案内の判定に使う
       has_workspaces: z.boolean(),
@@ -30,6 +32,7 @@ export const organizationInfo = defineOperation({
       theme: theme.nullable(),
       level: z.number().int(),
     }),
+    trial: z.object({ ends_on: z.string(), days_left: z.number().int() }).nullable(),
     workspaces: z.array(z.object({ id: z.string(), name: z.string(), role: z.enum(['leader', 'member']) })),
   }),
 });

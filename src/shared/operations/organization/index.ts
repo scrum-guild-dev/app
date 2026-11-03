@@ -1,12 +1,38 @@
 // 組織の選択と組織の枠、組織の管理の画面が使う操作の定義
 import type { AnyOperationDefinition } from '../define.ts';
+import {
+  createMyOrganization,
+  createMyOrganizationConflictReasonOf,
+  createMyOrganizationConflictReasons,
+  type CreateMyOrganizationConflictReason,
+} from './create-my-organization.ts';
+import {
+  createPersonalOrganization,
+  createPersonalOrganizationConflictReasonOf,
+  createPersonalOrganizationConflictReasons,
+  type CreatePersonalOrganizationConflictReason,
+} from './create-personal-organization.ts';
+import { firstSteps } from './first-steps.ts';
+import { meThemeUpdate } from './me-theme-update.ts';
 import { myOrganizations } from './my-organizations.ts';
 import { organizationInfo } from './organization.ts';
 import { organizationHistory } from './organization-history.ts';
 import { organizationHolidayAdd, organizationHolidayDelete, organizationHolidayList } from './organization-holiday.ts';
 import { organizationSettingsUpdate } from './organization-settings.ts';
+import { userAdminUpdate, userDisable, userEnable, userList } from './user.ts';
+import { today } from './today.ts';
 
 export {
+  createMyOrganization,
+  createMyOrganizationConflictReasonOf,
+  createMyOrganizationConflictReasons,
+  type CreateMyOrganizationConflictReason,
+  createPersonalOrganization,
+  createPersonalOrganizationConflictReasonOf,
+  createPersonalOrganizationConflictReasons,
+  type CreatePersonalOrganizationConflictReason,
+  firstSteps,
+  meThemeUpdate,
   myOrganizations,
   organizationHistory,
   organizationHolidayAdd,
@@ -14,14 +40,28 @@ export {
   organizationHolidayList,
   organizationInfo,
   organizationSettingsUpdate,
+  userAdminUpdate,
+  userDisable,
+  userEnable,
+  userList,
+  today,
 };
 
 export const organizationOperations: readonly AnyOperationDefinition[] = [
   myOrganizations,
+  createMyOrganization,
+  createPersonalOrganization,
   organizationInfo,
+  meThemeUpdate,
   organizationHolidayList,
   organizationHolidayAdd,
   organizationHolidayDelete,
   organizationSettingsUpdate,
   organizationHistory,
+  userList,
+  userAdminUpdate,
+  userDisable,
+  userEnable,
+  today,
+  firstSteps,
 ];

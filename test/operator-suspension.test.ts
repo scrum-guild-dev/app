@@ -1,13 +1,14 @@
 // 運用者の組織の停止と再開（organization-suspend、organization-resume）の結合テスト。
 // 組織の分離と権限の一覧のテスト（test/operation-registry.test.ts）は、この2つの操作も回す。
-// ここでは、停止と再開に固有の振る舞い（purge_on の値、競合の 409、履歴の行、履歴を書けなくても成功すること、
-// 停止中に入れる人と入れない人）を確かめる
+// ここでは、停止と再開に固有の振る舞い（purge_on の値、競合の 409、消す予定日を過ぎた組織の 409 の purge_due、履歴の行、
+// 履歴を書けなくても成功すること、停止中に入れる人と入れない人）を確かめる
 import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createApp } from '../src/server/app.ts';
 import { commonDb, orgDb } from '../src/server/db/index.ts';
 import { envWithD1Hooks, verifiedOrganizationForTest } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
+import { setFixedNow } from '../src/shared/clock.ts';
 import {
   listOrganizations,
   organizationResume,
@@ -21,6 +22,7 @@ import { errorCodeOf, post } from './operations/harness.ts';
 import {
   admitElsewhere,
   createPerson,
+  createPersonalTarget,
   createTarget,
   getOperator,
   OPERATOR_LOGIN_ID,
@@ -32,6 +34,7 @@ const app = createApp(implementedOperations);
 
 afterEach(() => {
   vi.restoreAllMocks();
+  setFixedNow(undefined);
 });
 
 const operatorToken = async () => (await withNewSession(await getOperator())).token;
@@ -68,6 +71,13 @@ async function changeKindBy(token: string, slug: string, kind: 'temporary' | 'ca
 }
 
 const SUSPENDED_AT = '2026-10-20T00:00:00.000Z';
+// 消す予定日を過ぎていない解約の予定日。本物の時計で走るテストが、日が経っても予定日を過ぎないよう遠い先にする
+const LATER_PURGE_ON = '2999-12-31';
+
+// 開発用の時計（DEV_NOW）が使える、ループバックの公開 URL の環境。消す予定日の境目を、時計を止めて確かめる
+function devEnv(devNow: string): Env {
+  return Object.assign({}, testEnv, { PUBLIC_ORIGIN: 'http://localhost:8787', DEV_NOW: devNow });
+}
 
 describe('消す予定日', () => {
   test('停止した日時の UTC の日付の30日後。日本の日付と UTC の日付がずれる時刻でも UTC の日付で数える', () => {
@@ -112,14 +122,14 @@ describe('組織の停止', () => {
   test('既に停止している組織は 409 の conflict で、書き換えない', async () => {
     const organization = await createOrganization({
       suspended_at: '2026-10-20T00:00:00.000Z',
-      purge_on: '2026-11-19',
+      purge_on: LATER_PURGE_ON,
     });
     const res = await suspendBy(await operatorToken(), organization.slug, 'temporary');
     expect(res.status).toBe(409);
     expect(await errorCodeOf(res)).toBe('conflict');
     expect(await organizationRow(organization.id)).toMatchObject({
       suspended_at: '2026-10-20T00:00:00.000Z',
-      purge_on: '2026-11-19',
+      purge_on: LATER_PURGE_ON,
     });
     expect(await changeLogsOf(organization.id)).toEqual([]);
   });
@@ -180,10 +190,10 @@ describe('組織の停止', () => {
 });
 
 describe('組織の再開', () => {
-  test('停止した日時と消す予定日を空に戻す。消す予定日を過ぎていても再開できる', async () => {
+  test('停止した日時と消す予定日を空に戻す', async () => {
     const organization = await createOrganization({
       suspended_at: '2026-01-01T00:00:00.000Z',
-      purge_on: '2026-01-31',
+      purge_on: LATER_PURGE_ON,
     });
     const res = await resumeBy(await operatorToken(), organization.slug);
     expect(res.status).toBe(200);
@@ -254,7 +264,7 @@ describe('停止の理由の切り替え', () => {
   });
 
   test('解約から一時的な停止へ。消す予定日を空にし、停止した日時は変えない', async () => {
-    const organization = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: '2026-11-19' });
+    const organization = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: LATER_PURGE_ON });
     const res = await changeKindBy(await operatorToken(), organization.slug, 'temporary');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ slug: organization.slug, purge_on: null });
@@ -276,7 +286,7 @@ describe('停止の理由の切り替え', () => {
   test('今と同じ理由への切り替えは 409 の conflict で、書き換えない', async () => {
     const token = await operatorToken();
     const temporary = await createOrganization({ suspended_at: SUSPENDED_AT });
-    const cancellation = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: '2026-11-19' });
+    const cancellation = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: LATER_PURGE_ON });
     for (const [organization, kind] of [
       [temporary, 'temporary'],
       [cancellation, 'cancellation'],
@@ -286,7 +296,7 @@ describe('停止の理由の切り替え', () => {
       expect(await errorCodeOf(res)).toBe('conflict');
       expect(await changeLogsOf(organization.id)).toEqual([]);
     }
-    expect((await organizationRow(cancellation.id))?.purge_on).toBe('2026-11-19');
+    expect((await organizationRow(cancellation.id))?.purge_on).toBe(LATER_PURGE_ON);
     expect((await organizationRow(temporary.id))?.purge_on).toBeNull();
   });
 
@@ -327,7 +337,7 @@ describe('停止の理由の切り替え', () => {
         const db = commonDb(env);
         await db.batch([
           db.statement((q) =>
-            q.updateTable('organizations').set({ purge_on: '2026-11-19' }).where('id', '=', organization.id),
+            q.updateTable('organizations').set({ purge_on: LATER_PURGE_ON }).where('id', '=', organization.id),
           ),
         ]);
       },
@@ -335,7 +345,7 @@ describe('停止の理由の切り替え', () => {
     const res = await changeKindBy(await operatorToken(), organization.slug, 'cancellation', racing);
     expect(armed).toBe(false);
     expect(res.status).toBe(409);
-    expect((await organizationRow(organization.id))?.purge_on).toBe('2026-11-19');
+    expect((await organizationRow(organization.id))?.purge_on).toBe(LATER_PURGE_ON);
     expect(await changeLogsOf(organization.id)).toEqual([]);
   });
 
@@ -373,6 +383,124 @@ describe('停止の理由の切り替え', () => {
     expect(logged).toContain(organization.id);
     expect(logged).toContain('"action":"update"');
     expect(logged).not.toContain('secret SQL detail');
+  });
+});
+
+describe('消す予定日を過ぎた解約の組織', () => {
+  // 日本時間では 11/20 の 08:00 で、UTC の日付は 11/19。境目は UTC の日付で数える（消す SQL のガード purge_on < date('now') と同じ）。
+  // UPDATE は D1 の date('now')（実際の時計）とも比べるので、どの日付も実際の今日より十分先に置く
+  const NOW = '2999-11-20T08:00:00+09:00';
+  const TODAY = '2999-11-19';
+  const YESTERDAY = '2999-11-18';
+  const TOMORROW = '2999-11-20';
+
+  test('予定日が今日の UTC の日付より前なら、再開は 409 の purge_due で、書き換えず履歴も残さない', async () => {
+    const organization = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: YESTERDAY });
+    const res = await resumeBy(await operatorToken(), organization.slug, devEnv(NOW));
+    expect(res.status).toBe(409);
+    expect(await errorCodeOf(res)).toBe('purge_due');
+    expect(await organizationRow(organization.id)).toMatchObject({ suspended_at: SUSPENDED_AT, purge_on: YESTERDAY });
+    expect(await changeLogsOf(organization.id)).toEqual([]);
+  });
+
+  test('予定日を過ぎたら、一時的な停止へ切り替えられない（purge_due）。解約から解約へは今どおり conflict', async () => {
+    const organization = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: YESTERDAY });
+    const token = await operatorToken();
+    const toTemporary = await changeKindBy(token, organization.slug, 'temporary', devEnv(NOW));
+    expect(toTemporary.status).toBe(409);
+    expect(await errorCodeOf(toTemporary)).toBe('purge_due');
+    const toCancellation = await changeKindBy(token, organization.slug, 'cancellation', devEnv(NOW));
+    expect(toCancellation.status).toBe(409);
+    expect(await errorCodeOf(toCancellation)).toBe('conflict');
+    expect(await organizationRow(organization.id)).toMatchObject({ suspended_at: SUSPENDED_AT, purge_on: YESTERDAY });
+    expect(await changeLogsOf(organization.id)).toEqual([]);
+  });
+
+  test('予定日の当日（日本の日付では翌日でも）と、未来の予定日は、再開も一時的な停止への切り替えもできる', async () => {
+    const token = await operatorToken();
+    for (const purgeOn of [TODAY, TOMORROW]) {
+      const resumed = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: purgeOn });
+      const resume = await resumeBy(token, resumed.slug, devEnv(NOW));
+      expect(resume.status, purgeOn).toBe(200);
+      expect(await organizationRow(resumed.id)).toMatchObject({ suspended_at: null, purge_on: null });
+
+      const changed = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: purgeOn });
+      const change = await changeKindBy(token, changed.slug, 'temporary', devEnv(NOW));
+      expect(change.status, purgeOn).toBe(200);
+      expect(await organizationRow(changed.id)).toMatchObject({ suspended_at: SUSPENDED_AT, purge_on: null });
+    }
+  });
+
+  test('一時的な停止は、今どおり再開でき、解約へ切り替えられる', async () => {
+    const token = await operatorToken();
+    const resumed = await createOrganization({ suspended_at: SUSPENDED_AT });
+    expect((await resumeBy(token, resumed.slug, devEnv(NOW))).status).toBe(200);
+    const changed = await createOrganization({ suspended_at: SUSPENDED_AT });
+    const change = await changeKindBy(token, changed.slug, 'cancellation', devEnv(NOW));
+    expect(change.status).toBe(200);
+    expect(await change.json()).toEqual({ slug: changed.slug, purge_on: '2999-12-19' });
+  });
+
+  test('読んだ後に予定日を過ぎても、UPDATE の条件で外れて 409 の purge_due', async () => {
+    const organization = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: TODAY });
+    let armed = true;
+    const racing = envWithD1Hooks(devEnv(NOW), {
+      // 停止の状態を読んだ直後に、予定日を前の日にずらす（読んだ後に日付が変わったのと同じく、予定日が今日より前になる）。
+      // 停止した日時は変えないので、再開の UPDATE を外すのは予定日の条件だけ
+      afterQuery: async (sql) => {
+        if (!armed || !sql.includes('from "organizations"') || !sql.includes('"purge_on"')) return;
+        armed = false;
+        const db = commonDb(env);
+        await db.batch([
+          db.statement((q) =>
+            q.updateTable('organizations').set({ purge_on: YESTERDAY }).where('id', '=', organization.id),
+          ),
+        ]);
+      },
+    });
+    const res = await resumeBy(await operatorToken(), organization.slug, racing);
+    expect(armed).toBe(false);
+    expect(res.status).toBe(409);
+    expect(await errorCodeOf(res)).toBe('purge_due');
+    expect(await organizationRow(organization.id)).toMatchObject({ suspended_at: SUSPENDED_AT, purge_on: YESTERDAY });
+    expect(await changeLogsOf(organization.id)).toEqual([]);
+  });
+
+  test("Worker の時計では過ぎていなくても、D1 の date('now') で過ぎていれば、UPDATE の条件で外れて 409 の purge_due", async () => {
+    // Worker の時計（DEV_NOW）を実際の今日より前に止め、予定日をその日より後で実際の今日より前にする。
+    // 事前の判定（Worker の日付）は通るが、消す SQL のガード（D1 の date('now')）では過ぎている。UTC の 0 時をまたいだときの隙間と同じ形
+    const pastNow = '2020-01-01T00:00:00Z';
+    const purgeOn = '2020-06-01';
+    const token = await operatorToken();
+    const resumed = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: purgeOn });
+    const resume = await resumeBy(token, resumed.slug, devEnv(pastNow));
+    expect(resume.status).toBe(409);
+    expect(await errorCodeOf(resume)).toBe('purge_due');
+    expect(await organizationRow(resumed.id)).toMatchObject({ suspended_at: SUSPENDED_AT, purge_on: purgeOn });
+    expect(await changeLogsOf(resumed.id)).toEqual([]);
+
+    const changed = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: purgeOn });
+    const change = await changeKindBy(token, changed.slug, 'temporary', devEnv(pastNow));
+    expect(change.status).toBe(409);
+    expect(await errorCodeOf(change)).toBe('purge_due');
+    expect(await organizationRow(changed.id)).toMatchObject({ suspended_at: SUSPENDED_AT, purge_on: purgeOn });
+    expect(await changeLogsOf(changed.id)).toEqual([]);
+  });
+
+  test('一覧の purge_due は、予定日を過ぎた解約の組織だけが真', async () => {
+    const token = await operatorToken();
+    const due = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: YESTERDAY });
+    const today = await createOrganization({ suspended_at: SUSPENDED_AT, purge_on: TODAY });
+    const temporary = await createOrganization({ suspended_at: SUSPENDED_AT });
+    const running = await createOrganization();
+    const listed = (await (await post(app, listOrganizations, { token, env: devEnv(NOW) })).json()) as {
+      organizations: { slug: string; purge_due: boolean }[];
+    };
+    const dueOf = (slug: string) => listed.organizations.find((entry) => entry.slug === slug)?.purge_due;
+    expect(dueOf(due.slug)).toBe(true);
+    expect(dueOf(today.slug)).toBe(false);
+    expect(dueOf(temporary.slug)).toBe(false);
+    expect(dueOf(running.slug)).toBe(false);
   });
 });
 
@@ -452,7 +580,7 @@ describe('変更の履歴', () => {
 describe('停止中の組織に入る人', () => {
   test('入れたはずの人は 403 の organization_suspended、入れない人は 404。再開すれば入れる', async () => {
     const target = await createTarget();
-    // 停止した組織にしか入れない人は、403 の前にセッションを消されて 401 になるので、ほかの組織にも入れる人にする
+    // 停止した組織にしか入れない人も 403 を受ける（セッションは消えない）。ここでは、ほかの組織にも入れる人にする
     const stayer = await admitElsewhere(target.admin);
     await admitElsewhere(target.member);
     await admitElsewhere(target.invitee);
@@ -495,12 +623,91 @@ describe('停止中の組織に入る人', () => {
     expect(await slugsOf()).toContain(target.slug);
   });
 
-  test('停止した組織にしか入れない人は、次の組織の外の操作で 401 になり、理由は suspended', async () => {
+  // #639: 停止した組織にしか入れない人もセッションを失わず、組織の選択に停止した組織が出る
+  test('停止した組織にしか入れない人も、組織の外の操作は 200 で、suspended にその組織が出る。再開すれば戻る', async () => {
     const target = await createTarget();
-    await suspendBy(await operatorToken(), target.slug, 'temporary');
+    const token = await operatorToken();
+    await suspendBy(token, target.slug, 'temporary');
 
-    const res = await post(app, myOrganizations, { token: target.admin.token });
-    expect(res.status).toBe(401);
-    expect(await res.json()).toMatchObject({ error: { code: 'unauthenticated', details: { reason: 'suspended' } } });
+    for (const person of [target.admin, target.member, target.invitee]) {
+      const res = await post(app, myOrganizations, { token: person.token });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        organizations: unknown[];
+        invitations: unknown[];
+        suspended?: { slug: string; name: string }[];
+      };
+      expect(body.organizations).toEqual([]);
+      expect(body.invitations).toEqual([]);
+      expect(body.suspended).toEqual([{ slug: target.slug, name: target.organization.name, kind: 'team' }]);
+      // 組織の中は 403 のままで、セッションは残る（次の呼び出しも 403）
+      for (let i = 0; i < 2; i++) {
+        const inside = await post(app, organizationInfo, { slug: target.slug, token: person.token });
+        expect(inside.status).toBe(403);
+        expect(await errorCodeOf(inside)).toBe('organization_suspended');
+      }
+    }
+
+    // 入れない人（別の組織の人、組織も招待も無い人）には、停止した組織を出さない
+    const outsider = await createPerson();
+    const listed = await post(app, myOrganizations, { token: outsider.token });
+    expect(listed.status).toBe(200);
+    expect(JSON.stringify(await listed.json())).not.toContain(target.slug);
+    expect((await post(app, organizationInfo, { slug: target.slug, token: outsider.token })).status).toBe(404);
+
+    expect((await resumeBy(token, target.slug)).status).toBe(200);
+    const back = (await (await post(app, myOrganizations, { token: target.admin.token })).json()) as {
+      organizations: { slug: string }[];
+      suspended?: unknown[];
+    };
+    expect(back.organizations.map((organization) => organization.slug)).toEqual([target.slug]);
+    expect(back.suspended).toEqual([]);
+  });
+
+  // #735: 自分用（kind が personal）も、停止と再開は種類によらない。停止すると本人は入れず、再開すると入れる
+  test('自分用の組織も、停止すると本人は 403 の organization_suspended で入れず、再開すると入れる', async () => {
+    const target = await createPersonalTarget();
+    const token = await operatorToken();
+    const enter = () => post(app, organizationInfo, { slug: target.slug, token: target.admin.token });
+    const listedItem = async () => {
+      const listed = await post(app, listOrganizations, { token });
+      return (
+        (await listed.json()) as { organizations: { slug: string; kind: string; suspended_at: string | null }[] }
+      ).organizations.find((entry) => entry.slug === target.slug);
+    };
+
+    expect((await enter()).status).toBe(200);
+    expect((await listedItem())?.kind).toBe('personal');
+
+    expect((await suspendBy(token, target.slug, 'temporary')).status).toBe(200);
+    for (let i = 0; i < 2; i++) {
+      const res = await enter();
+      expect(res.status).toBe(403);
+      expect(await errorCodeOf(res)).toBe('organization_suspended');
+    }
+    // 運用者の一覧には、停止した自分用が種類つきで出る
+    const suspended = await listedItem();
+    expect(suspended?.kind).toBe('personal');
+    expect(suspended?.suspended_at).not.toBeNull();
+    // 組織の選択は、停止した自分用を suspended に出す（セッションは残る）
+    const mine = await post(app, myOrganizations, { token: target.admin.token });
+    expect(mine.status).toBe(200);
+    const mineBody = (await mine.json()) as { organizations: unknown[]; suspended?: { slug: string; kind: string }[] };
+    expect(mineBody.organizations).toEqual([]);
+    expect(mineBody.suspended).toEqual([expect.objectContaining({ slug: target.slug, kind: 'personal' })]);
+
+    expect((await resumeBy(token, target.slug)).status).toBe(200);
+    expect((await enter()).status).toBe(200);
+    expect((await listedItem())?.suspended_at).toBeNull();
+  });
+
+  test('解約の停止でも、停止した組織にしか入れない人はセッションを失わない', async () => {
+    const target = await createTarget();
+    await suspendBy(await operatorToken(), target.slug, 'cancellation');
+    const res = await post(app, myOrganizations, { token: target.member.token });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { suspended?: { slug: string }[] }).suspended?.map((o) => o.slug)).toEqual([
+      target.slug,
+    ]);
   });
 });

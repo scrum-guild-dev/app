@@ -10,8 +10,13 @@ import { implement } from './implement.ts';
 const LAST_SEEN_INTERVAL_MS = 60 * 60 * 1000;
 
 export const myOrganizationsOperation = implement(myOrganizations, async ({ account }) => {
-  const { organizations, invitations } = await account.organizations();
-  return { organizations: [...organizations], invitations: [...invitations], operator: await account.isOperator() };
+  const { organizations, invitations, suspended } = await account.organizations();
+  return {
+    organizations: [...organizations],
+    invitations: [...invitations],
+    suspended: [...suspended],
+    operator: await account.isOperator(),
+  };
 });
 
 export const organizationInfoOperation = implement(organizationInfo, async ({ db, actor, organization, defer }) => {
@@ -66,10 +71,10 @@ export const organizationInfoOperation = implement(organizationInfo, async ({ db
   );
 
   return {
-    // vocabulary と theme の形は出力のスキーマ（z.enum）が検証する
+    // theme の形は出力のスキーマ（z.enum）が検証する
     organization: {
       name: organization.name,
-      vocabulary: organization.vocabulary,
+      kind: organization.kind,
       theme: organization.theme,
       has_workspaces: anyWorkspaceResult.rows.length > 0,
     },
@@ -81,6 +86,14 @@ export const organizationInfoOperation = implement(organizationInfo, async ({ db
       theme: user.theme as Theme | null,
       level: levelOf(amountOf(experienceResult.rows[0]?.total)),
     },
+    trial:
+      actor.isAdmin && organization.trial_ends_on !== null
+        ? {
+            ends_on: organization.trial_ends_on,
+            days_left:
+              (Date.parse(organization.trial_ends_on) - Date.parse(at.toISOString().slice(0, 10))) / 86_400_000,
+          }
+        : null,
     workspaces: workspaceResult.rows.map((row) => ({
       id: row.id,
       name: row.name,

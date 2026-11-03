@@ -1,6 +1,6 @@
 ---
 name: done-check
-description: 自分の差分を点検する。Issue の完了条件との突き合わせ、規約違反の確認、レビューエージェントによる指摘出しを行い、直してからコミットする。PR 作成後は、rebase・push・CI・レビューコメントの解決を確認してから点検する。「セルフレビュー」「PR 前に見て」「実装終わったので確認して」と言われたときに使う。PR を作る段階は pr-create、PR に付いた指摘への対応は pr-feedback を使う。
+description: 自分の差分を点検する。Issue の完了条件との突き合わせ、規約違反の確認、レビューエージェントによる指摘出しを行い、直してからコミットする。PR 作成後は、merge・push・CI・レビューコメントの解決を確認してから点検する。「セルフレビュー」「PR 前に見て」「実装終わったので確認して」と言われたときに使う。PR を作る段階は pr-create、PR に付いた指摘への対応は pr-feedback を使う。
 ---
 
 # done-check
@@ -43,8 +43,8 @@ PR があれば、ベースは `origin/<base>` とし、次の前提をすべて
 | --- | --- | --- |
 | 最新のベースを取り込み済み | `git fetch origin && git merge-base --is-ancestor origin/<base> HEAD` | 終了コード 0 |
 | 最新のコミットを push 済み | `git rev-parse HEAD` と `head_sha` を比べる。`git status --short` も見る | 一致し、未コミットの変更が無い |
-| CI が成功 | 下の check-runs | `review` と `evidence` を除き、全て `status` が `completed` で、`conclusion` が `success`、`skipped`、`neutral` のどれか |
-| レビューコメントを解決済み | 下の GraphQL | `isResolved: false` のスレッドが 0 件 |
+| CI が成功 | 下の check-runs | `review` を除き、全て `status` が `completed` で、`conclusion` が `success`、`skipped`、`neutral` のどれか |
+| レビューコメントを解決済み | 下の GraphQL | PR の作成者が書き、`pr-create` の目印が付いたコメントで始まるスレッドを除き、`isResolved: false` のスレッドが 0 件 |
 
 ```bash
 gh api "repos/{owner}/{repo}/commits/<head_sha>/check-runs" --jq '.check_runs[] | {name, status, conclusion, url: .html_url}'
@@ -53,19 +53,21 @@ gh api "repos/{owner}/{repo}/commits/<head_sha>/check-runs" --jq '.check_runs[] 
 `review` は AI レビュー（`.github/workflows/ai-review.yml`）のチェックで、助言なので `ci-ok` に含めず、落ちてもマージの判定を止めない（`docs/development.md` の「CI」）。
 `review` の `status` と `conclusion` が何でも、この前提は満たすものとして扱う（理由: 回した先の pr-feedback も `review` の失敗は直さないので、数に入れると done-check が先へ進めない）。
 実行中の `review` が後から付ける指摘は、pr-feedback の手順 1 が完了を待って拾う。
-`evidence` は e2e の画像を PR にコメントで並べるジョブ（`.github/workflows/ci.yml`）で、同じく助言なので `ci-ok` に含めない。`review` と同じく、何で終わっても満たすものとして扱う。UI が変わる PR で落ちていたら、画像が付かないことを出力に書く。
+PR 作成後の段では、`e2e`、`e2e-dev`、`e2e-repeat` の結果も確かめる。e2e はセッションが手元で走らせないので、これが e2e の確かめになる。この 3 つは `ci-ok` に含まれ、上の表の「CI が成功」で見る。落ちていたら手元で再現せず、回した先の pr-feedback の手順 5 が、ログと trace で直す（`docs/development.md` の「CI の e2e が落ちたとき」）。
 
 ```bash
-gh api graphql -f query='{ repository(owner:"<owner>", name:"<repo>") { pullRequest(number:<number>) { reviewThreads(first:100) { nodes { isResolved path comments(first:1) { nodes { body author { login } } } } } } } }'
+gh api graphql -f query='{ repository(owner:"<owner>", name:"<repo>") { pullRequest(number:<number>) { author { login } reviewThreads(first:100) { nodes { isResolved path comments(first:1) { nodes { body author { login } } } } } } } }'
 ```
 
-スレッドの解決状態は GraphQL でしか取れない。403（クラウド）が返ったら、`gh api "repos/{owner}/{repo}/pulls/<number>/comments" --paginate` でレビューコメントを読み、自分の返信が付いていないスレッドの先頭を数える。この前提は「解決状態は確かめられなかった」と出力に書いて先へ進む。
+先頭コメントの本文に目印の `<!-- pr-create:guide -->` があり、かつその `author.login` が PR の `author.login` と同じスレッドは数えない（理由: `pr-create` がレビュワーへの案内として付けるインラインコメントも未解決のスレッドになり、数えると PR を作った後の done-check が止まる。作者だけで除くと、作者は人の本人のアカウントなので人が自分で付けた指摘まで数えなくなり、目印だけで除くと、公開リポジトリで誰でも目印を仕込んだ指摘を数えさせなくできる）。
+
+スレッドの解決状態は GraphQL でしか取れない。403（クラウド）が返ったら、`gh api "repos/{owner}/{repo}/pulls/<number>/comments" --paginate` でレビューコメントを読み、同じ条件で除いて、自分の返信が付いていないスレッドの先頭を数える。この前提は「解決状態は確かめられなかった」と出力に書いて先へ進む。
 
 満たさない前提が 1 つでもあれば、レビューに進まず止まり、満たさない前提と次の経路を出力する。
 
-- ベースの取り込みが未了: `sync-base` で rebase して `--force-with-lease` で push する
+- ベースの取り込みが未了: `sync-base` で merge して通常の push をする
 - push が未了: `git push` を提案する
-- CI が失敗: pr-feedback で直す。`review` と `evidence` を除いて `status` が `completed` でないものがあれば、間を空けて check-runs を取り直し、結果が出てから再確認する
+- CI が失敗: pr-feedback で直す。`review` を除いて `status` が `completed` でないものがあれば、間を空けて check-runs を取り直し、結果が出てから再確認する
 - 未解決のスレッドがある: pr-feedback で対応する
 
 全て満たせば手順 1 へ進む。
@@ -83,6 +85,15 @@ git diff <base>...HEAD
 
 Issue の完了条件を 1 つずつ、差分のどこで満たされているかを確認する。
 満たせていないものがあれば、実装に戻る。
+
+続けて、差分が Issue の `やらないこと` に触れていないかを突き合わせる。`git diff <base>...HEAD --stat` の変えたパスと、手順 1 で読んだ差分の振る舞いを、`やらないこと` の行と1行ずつ見る。前の点検が足した `- 点検（` で始まる行は、突き合わせる行に数えない（理由: 完了条件を満たした実装でも、触らないと決めたものまで変えていると、人が差分を読まないかぎり誰も気づかない）。
+
+- Issue に `やらないこと` の節が無い（節を足す前に起票した）なら、突き合わせを飛ばし、判断の差分に「節が無い」と出す。節が `（なし）` なら、判断の差分に「触れていない」と出す
+- 触れていなければ、判断の差分に「触れていない」と出す
+- 触れていたら、対話の実行では `AskUserQuestion` で人に聞く。推す案を先頭にする（例: 戻す、触れたまま進める）。「戻す」が選ばれたら実装に戻り、直してから突き合わせ直す。答えは言い換えずに出力に残す（Issue への写しは `pr-create` の Step 5-C が行う。done-check は Issue を書かない）
+- 人に聞けない実行（`AskUserQuestion` を出せないか、答える人がいない。`claude -p` などの非対話の実行、CI の中）では、聞かずに `触れた: <パス> — <理由>` として出力に残す。`pr-create` が PR に `needs-human` を足す
+
+あわせて、実装中に置いた判断のうち、Issue（`人が決めたこと`、`セッションが置いた前提`、やること）と `docs/` に書かれていないものを、根拠と一緒に一覧にする。`pr-create` が `セッションが置いた前提` に足せるよう、`- <日付> 実装中 <判断したスキル名>: <判断> — <根拠>` の形で書く。無ければ「無し」と出す。
 
 ### 3. 規約を読む
 
@@ -102,36 +113,22 @@ Issue の「確認方法」を自分で実行し、完了条件を満たすか�
 | 変更の及ぶ先 | 確かめ方 |
 | --- | --- |
 | API | `wrangler dev` を立て、Cookie を付けてリクエストを送り、レスポンスと D1 の中身を見る。組織をまたぐ操作は、別の組織の ID で呼んで 404 になることも見る |
-| 画面 | 手元は `terminal-browser` で Cookie を置いて開き、操作して表示と状態を見る。ブラウザの無いクラウドのセッションは、変えた画面の e2e のファイルを走らせてスクリーンショットを見る（絞り方は `increment-build` の受け入れ条件と同じ）。画像は `test-results/<テスト>/` にあり、手元では通ったテストが `test-finished-<n>.png`、落ちたテストが `test-failed-<n>.png` になる（CI と同じ `evidence-<n>.png` で見たいときは `E2E_EVIDENCE=1 pnpm e2e <ファイル>`）。変えた画面と状態を開く e2e のテストが無ければ足す。PR のエビデンスの画像は、e2e が開く画面にだけ CI の `evidence` が R2 に上げ、`pr-feedback` が本文に埋め込むため（`pr-create` の `evidence.md`）。この手順では PR の本文に触らない |
+| 画面 | 手元は `terminal-browser` で Cookie を置いて開き、操作して表示と状態を見る。ブラウザの無いクラウドのセッションは、PR の後の CI の e2e の結果で確かめる（落ちたテストの画像は成果物の `test-results/` の `test-failed-<n>.png`）。e2e はセッションが手元で走らせない（`docs/development.md` の「開発の流れ」）。変えた画面と状態を開く e2e のテストが無ければ足す。PR の本文には画像を載せない（`pr-create` の Step 3）。この手順では PR の本文に触らない |
 | 挙動の変わらない変更（リファクタ、型、ドキュメント、設定） | 手順 4 で足りる。省いた旨を出力に書く |
 
 動かせなかった項目は、確かめられなかった項目として出力に書く（理由: 確認済みと書くと、マージの判定で人が動作確認を省く）。
 
 ### 6. レビューエージェントに渡す
 
-エージェントの定義はこのリポジトリの `.claude/agents/` にある。
-
-| 対象 | エージェント |
-| --- | --- |
-| すべて | `code-reviewer` |
-| 認証、認可、API エンドポイントの追加や変更、外部入力を SQL、シェル、ファイル、HTML、外部 URL に渡す処理、秘密情報を含む | `security-reviewer` |
-| マイグレーション、クエリ、スキーマの変更を含む | `database-reviewer` |
-| 画面（`.svelte`、CSS、`design/`、言葉の辞書）の変更を含む | `ui-reviewer` |
-
-該当するエージェントは、1つのメッセージで同時に呼ぶ。
+呼ぶエージェントは `.claude/skills/ai-review/reviewers.md` の表で決める。差分を「呼ぶとき」に当て、当たったエージェントのうち手元（done-check）の列が「呼ぶ」のものをすべて、1つのメッセージで同時に呼ぶ。
 
 エージェントには範囲として「ベースは `<base>`。コミット済みの `git diff <base>...HEAD`（3点。分岐した点からの差分）と、未コミットの `git diff HEAD` を合わせて見る」と渡す。
 範囲を渡さないと、エージェントは未コミットの差分しか見ない。
+呼ぶ直前に `git rev-parse HEAD` の完全な SHA を控え、出力の「点検した head」に書く（理由: 出力を書くときに取ると、手順 7 の直しのコミットを含む head を点検済みにしうる）。2巡目を呼ぶときは、その直前に控え直し、出力には2巡目に渡した SHA を書く（1巡目の直しは2巡目が見ているので含めてよい。2巡目の後の直しは含めない）。
 2点の `git diff <base>` と `git diff <base>..HEAD` は使わない（理由: どちらもベースの先端と比べるので、作業中にベースが進むと、ベース側の新しいコミットが逆向きの差分として混ざり、触っていない処理を消したという指摘が出る）。
 
-手元のセッションでは、エージェントの結果を待つ間に Skill ツールで `codex-review` も起動する（理由: `code-reviewer` も CI の AI レビューも Claude 系で、同じ系統のモデルは同じ偏りを持つため、GPT 系の目を必ず1つ入れる）。
-codex-review に渡す差分も、エージェントと同じ範囲（3点の差分と未コミットの差分）にする。
-codex-review の指摘も、エージェントの指摘とまとめて手順 7 の基準で直す。
-クラウドのセッションには `codex` CLI が無いので省き、出力に「クラウドのため codex-review を省略」と書く。手元でも `codex` が動かないときは、止まらずにその旨を書いて続ける。
-
-差分が依存のバージョン指定とロックファイル（`package.json` と `package-lock.json` など）だけなら、エージェントと codex-review を省いてよい。
-省いたときは、出力に「依存ファイルだけの差分のためレビューを省略」と書く。
-それ以外の差分では、`code-reviewer` を必ず呼ぶ。
+レビューのエージェント（`code-reviewer`、`security-reviewer`、`database-reviewer`、`ui-reviewer`、`falsification-qa`）は、ブランチごとに2巡まで起動できる（フック `.claude/hooks/review-budget.mjs`。最初の起動から120秒以内の起動は同じ巡）。`finding-verifier` は数えない（理由: 指摘を反証にかけるだけで、新しい指摘を出す巡ではないため）。
+起動が拒否されたら、エージェントの名前を変えて呼び直す、Skill や別の経路で同じ点検をするなどで回避しない。`AskUserQuestion` でユーザーに延長を聞き、承認されたら `node .claude/hooks/review-budget.mjs extend <巡数> --reason <理由>` を実行してから呼び直す。承認されなければ、レビューを省いた旨を出力に書いて続ける。
 
 ### 7. 直す
 
@@ -150,26 +147,32 @@ CRITICAL と HIGH は、別の Issue にするかをユーザーに提案する�
 
 `git add <paths> && git commit -m "..."` のように 1 コマンドにまとめる。
 件名には、変更した対象と内容を書く（例: `fix: fill_results.py で結果の未指定と不正値を検出する`）。「レビュー指摘に対応する」のように、指摘への対応であることしか分からない件名にしない（理由: squash merge ではコミットメッセージが本文に残り、マージ後は直せない）。
-PR があるときは、手順 7 の直しをすべてコミットしてからまとめて `git push` し、手順 0 の check-runs で CI が通ることを確かめる（`review` と `evidence` は手順 0 と同じく除く。修正は通常の push で積む。force push はベースを取り込む `sync-base` の中だけ）。コミットごとに push しない。CI の失敗を直した後の push は、その直しをまとめてから行う（理由: push のたびに CI のジョブがすべて走り直し、前の実行の取り消しが終わるまで次の実行も始まらない。`docs/development.md` の「開発の流れ」）。
+PR があるときは、手順 7 の直しをすべてコミットしてからまとめて `git push` し、手順 0 の check-runs で CI が通ることを確かめる（`review` は手順 0 と同じく除く。修正は通常の push で積む。force push は使わない）。コミットごとに push しない。CI の失敗を直した後の push は、その直しをまとめてから行う（理由: push のたびに CI のジョブがすべて走り直し、前の実行の取り消しが終わるまで次の実行も始まらない。`docs/development.md` の「開発の流れ」）。
+
+手順 7 の直しで差分が変わったら、コミットの後に手順 2 の `やらないこと` との突き合わせと判断の一覧を取り直し、出力の判断の差分をその結果にする（理由: `pr-create` は判断の差分から head の SHA 付きの点検の行を書くので、直しの前の結果のままだと、点検していない head を点検済みと書く）。
 
 ### 9. pr-create に引き継ぐ
 
 PR 作成前なら、Skill ツールで `pr-create` を起動する。
 pr-create の手順から呼ばれた done-check なら、起動せずに pr-create の続きに戻る（互いに呼び合って止まらなくなるため）。
-PR 作成後はここで終える。
+PR 作成後はここで終える。判断の差分は出力に出すだけにする。Issue の本文に足すのは、直しを push する `pr-feedback` の手順 3 が行う（理由: done-check は Issue を書かない）。
 
 ## 出力
 
 - 完了条件ごとの充足状況と、手順 5 で確かめた方法（確かめられなかった項目はその旨）
 - 直した指摘と、直さなかった指摘とその理由
+- 点検した head: 手順 6 でレビューのエージェントに渡したときの `git rev-parse HEAD` の完全な SHA（2巡目を回したら、2巡目に渡したときのもの）。手順 7 の直しのコミットは含めない（理由: 直しはどのエージェントも見ていないので、CI の AI レビューに見せる）。`pr-create` が PR 本文の done-check の印に書く（`pr-create` の Step 3 の「done-check の印」）。手順 6 のレビューを省いたとき（上限で延長が承認されなかったときを含む）は、`点検した head: 無し — <理由>` と書く（理由: レビューしていない head を点検済みにすると、CI の AI レビューがその差分を見ない）
+- 判断の差分: `やらないこと` の点検の結果（`触れていない`、`節が無い`、`触れた: <パス> — <理由>`。対話の実行で人に聞いたなら、その問いと答え）と、実装中に置いた判断で Issue と `docs/` に無いものの一覧（根拠付き。無ければ「無し」）
 
 ## 完了条件
 
 - PR 作成後なら、手順 0 の前提が全て満たされている（スレッドの解決状態を確かめられなかったときは、その旨が出力に書かれている）
 - 完了条件が全て満たされている、または満たさない理由が書かれている
+- `やらないこと` との突き合わせの結果（触れていない、節が無い、触れた）と、実装中に置いた判断の一覧が、判断の差分として出力に書かれている。触れていたものは、対話の実行では人の答えが、人に聞けない実行では `触れた: <パス> — <理由>` が書かれている
+- 点検した head（完全な SHA か、`無し` とその理由）が出力に書かれている
 - lint とテストが通っている
 - 挙動の変わる変更なら、手順 5 で実際に動かして完了条件を確かめている
-- レビューエージェントと codex-review（手元のセッションのみ）の CRITICAL と HIGH が、直されているか、直さない理由が出力に書かれている。直さないものには `finding-verifier` の判定が付いている
+- レビューエージェントの CRITICAL と HIGH が、直されているか、直さない理由が出力に書かれている。上限で起動を拒否され、延長も承認されなかったときは、レビューを省いた旨が書かれている。直さないものには `finding-verifier` の判定が付いている
 
 ## 止まる条件
 

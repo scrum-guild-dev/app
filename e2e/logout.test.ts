@@ -1,6 +1,7 @@
 // ログアウト。組織の中は上の帯のアカウントのメニュー、組織の外（/operator）は紙の下のボタンから押す。
 // e2e は seed のセッションを全ファイルで共有して並列に走るので、本物のログアウトは専用の行（adminLogout、operatorLogout。
-// seed/sessions.ts）だけで行い、共有の admin、member、operator は消さない。失敗と待ちの見せ方は、logout の応答を差し替えて確かめる
+// seed/sessions.ts）だけで行い、共有の admin、member、operator は消さない。専用の行は、繰り返し（--repeat-each）で前の回が消しているので、
+// テストの初めに手元の D1 へ入れ直す（e2e/local-d1.ts）。失敗と待ちの見せ方は、logout の応答を差し替えて確かめる
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { SEED_SESSIONS } from '../seed/sessions.ts';
@@ -8,6 +9,7 @@ import { listOrganizations } from '../src/shared/operations/operator/list-organi
 import { logout } from '../src/shared/operations/session/index.ts';
 import { sessionCookieName } from '../src/shared/session-cookie.ts';
 import { signIn } from './helpers.ts';
+import { restoreSeedSession } from './local-d1.ts';
 import { failOperation, mockOperation, routeOperation } from './operations.ts';
 
 const accountButton = (page: Page) => page.getByRole('button', { name: /アカウントのメニュー$/ });
@@ -29,11 +31,12 @@ test.describe('組織の中（アカウントのメニュー）', () => {
       });
       return res.status();
     };
+    await restoreSeedSession('adminLogout');
     expect(await meWith('adminLogout')).toBe(200);
 
     await signIn(context, baseURL, 'adminLogout');
     await page.goto('/aoba');
-    await expect(page.getByRole('heading', { level: 1, name: '自分の今日' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
     // 別の画面へ移ってからログアウトする（「戻る」の先に組織の画面がある）
     await page.goto('/aoba/admin');
     await expect(accountButton(page)).toBeVisible();
@@ -78,7 +81,9 @@ test.describe('組織の中（アカウントのメニュー）', () => {
     test('名前のボタンで開閉し、Esc、外を押す、Tab で外へ出ると閉じる。中にフォーカスがあるときはボタンへ戻る', async ({
       page,
     }) => {
-      await page.goto('/aoba');
+      // Tab の出た先がメニューの外の要素になるよう、本文にフォーカスできる要素のある画面で開く
+      // （今日やること（/aoba）の本文にはフォーカスできる要素が無く、Tab でページの外へ出て relatedTarget が null になる）
+      await page.goto('/aoba/me');
       const button = accountButton(page);
       await expect(button).toContainText('ミナト');
       await expect(button).toHaveAttribute('aria-expanded', 'false');
@@ -96,6 +101,10 @@ test.describe('組織の中（アカウントのメニュー）', () => {
       // メニューの中にフォーカスがあるときの Esc は、ボタンへ戻す
       await page.keyboard.press('Enter');
       await page.keyboard.press('Tab');
+      await expect(page.locator('.account-menu-list a').first()).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(page.locator('.account-menu-list a').last()).toBeFocused();
+      await page.keyboard.press('Tab');
       await expect(logoutItem(page)).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(button).toHaveAttribute('aria-expanded', 'false');
@@ -110,10 +119,14 @@ test.describe('組織の中（アカウントのメニュー）', () => {
       // Tab でメニューの外へ出ると閉じる
       await button.click();
       await page.keyboard.press('Tab');
+      await expect(page.locator('.account-menu-list a').first()).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(page.locator('.account-menu-list a').last()).toBeFocused();
+      await page.keyboard.press('Tab');
       await expect(logoutItem(page)).toBeFocused();
       await page.keyboard.press('Tab');
       await expect(button).toHaveAttribute('aria-expanded', 'false');
-      await expect(page).toHaveURL(/\/aoba$/);
+      await expect(page).toHaveURL(/\/aoba\/me$/);
     });
 
     test('bfcache から戻った画面（pageshow の persisted）は読み直す', async ({ page }) => {
@@ -165,7 +178,7 @@ test.describe('組織の中（アカウントのメニュー）', () => {
         await call.fail(503, 'unavailable');
       });
       await page.goto('/aoba');
-      await expect(accountButton(page)).toHaveAttribute('aria-label', 'ミナト（ギルドマスター）。アカウントのメニュー');
+      await expect(accountButton(page)).toHaveAttribute('aria-label', 'ミナト（管理者）。アカウントのメニュー');
       const status = page.locator('.account-menu [role="status"]');
       await expect(status).toHaveText('');
       await accountButton(page).click();
@@ -234,6 +247,7 @@ test.describe('組織の外（紙の下のボタン）', () => {
     if (baseURL === undefined) throw new Error('baseURL が無い');
     // e2e の Worker には運用者の一覧が無いので、組織の一覧は差し替える（運用者の画面は operator.test.ts と同じ）
     await mockOperation(page, listOrganizations, { organizations: [] });
+    await restoreSeedSession('operatorLogout');
     await signIn(context, baseURL, 'operatorLogout');
     await page.goto('/operator');
     await expect(page.getByRole('heading', { level: 1, name: '運用' })).toBeVisible();
@@ -257,7 +271,7 @@ test.describe('組織の外（紙の下のボタン）', () => {
     // 組織が2つの人にだけ組織の選択の画面が出る
     await signIn(context, baseURL, 'admin');
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1, name: '冒険者ギルドを選ぶ' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '組織を選ぶ' })).toBeVisible();
     await expect(page.locator('.gate-sheet').first().getByRole('button', { name: 'ログアウト' })).toBeVisible();
   });
 });

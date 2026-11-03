@@ -1,8 +1,10 @@
 // 登録の関数が操作の前に行う検査のうち、DB を引かないもの
 import type { Context } from 'hono';
 import type { z } from 'zod';
+import { ATTACHMENT_MAX_BYTES } from '../../shared/operations/attachment/index.ts';
 import { ApiError } from '../errors.ts';
 import type { AppEnv } from '../app-env.ts';
+import type { BinaryBody } from './implement.ts';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -14,10 +16,11 @@ export function requireOrigin(c: Context<AppEnv>): void {
   if (c.req.header('Origin') !== allowed) throw new ApiError(403, 'forbidden');
 }
 
-// 本文を上限まで読む。Content-Length が無い（chunked の）本文も、読んだ分を数えて上限で止める
-async function readBodyText(c: Context<AppEnv>): Promise<string> {
+// 本文を上限（バイト）まで読む。Content-Length が無い（chunked の）本文も、読んだ分を数えて上限で止める。
+// 超えたら 413 の invalid_input。操作の定義のほか、画面のエラーの送信（src/server/client-errors.ts）が小さい上限で使う
+export async function readBodyText(c: Context<AppEnv>, maxBytes: number = MAX_BODY_BYTES): Promise<string> {
   const declared = c.req.header('Content-Length');
-  if (declared !== undefined && Number(declared) > MAX_BODY_BYTES) throw new ApiError(413, 'invalid_input');
+  if (declared !== undefined && Number(declared) > maxBytes) throw new ApiError(413, 'invalid_input');
   const body = c.req.raw.body;
   if (body === null) return '';
   const reader = body.getReader();
@@ -27,7 +30,7 @@ async function readBodyText(c: Context<AppEnv>): Promise<string> {
     const { done, value } = await reader.read();
     if (done) break;
     received += value.byteLength;
-    if (received > MAX_BODY_BYTES) {
+    if (received > maxBytes) {
       await reader.cancel();
       throw new ApiError(413, 'invalid_input');
     }
@@ -42,16 +45,24 @@ async function readBodyText(c: Context<AppEnv>): Promise<string> {
   return new TextDecoder().decode(bytes);
 }
 
-// 入力は JSON の本文だけ。URL のクエリは読まない。Origin とセッションの検査の後に呼ぶ（未ログインの呼び出しに本文を読ませない）
+// 入力は JSON の本文、binary の操作だけ X-Operation-Input。URL のクエリは読まない。
+// Origin とセッションの検査の後に呼ぶ（未ログインの呼び出しに本文を読ませない）
 export async function readInput<Schema extends z.ZodType>(
   c: Context<AppEnv>,
   schema: Schema,
+  bodyType?: 'binary',
 ): Promise<z.output<Schema>> {
-  const contentType = c.req.header('Content-Type')?.split(';')[0]?.trim().toLowerCase();
-  if (contentType !== 'application/json') throw new ApiError(400, 'invalid_input');
   let body: unknown;
   try {
-    body = JSON.parse(await readBodyText(c));
+    if (bodyType === 'binary') {
+      const header = c.req.header('X-Operation-Input');
+      if (header === undefined) throw new ApiError(400, 'invalid_input');
+      body = JSON.parse(decodeURIComponent(header));
+    } else {
+      const contentType = c.req.header('Content-Type')?.split(';')[0]?.trim().toLowerCase();
+      if (contentType !== 'application/json') throw new ApiError(400, 'invalid_input');
+      body = JSON.parse(await readBodyText(c));
+    }
   } catch (err) {
     if (err instanceof ApiError) throw err;
     throw new ApiError(400, 'invalid_input');
@@ -68,4 +79,16 @@ export async function readInput<Schema extends z.ZodType>(
       message: issue.message,
     })),
   );
+}
+
+// ヘッダーの入力を検証した後、ワークスペースを確かめる前に呼ぶ。本文はここでは読まない。
+export function readBinaryBody(c: Context<AppEnv>): BinaryBody {
+  const declared = c.req.header('Content-Length');
+  if (declared === undefined || !/^[0-9]+$/.test(declared)) throw new ApiError(400, 'invalid_input');
+  const contentLength = Number(declared);
+  if (contentLength === 0) throw new ApiError(400, 'invalid_input');
+  if (contentLength > ATTACHMENT_MAX_BYTES) throw new ApiError(413, 'invalid_input');
+  const body = c.req.raw.body;
+  if (body === null) throw new ApiError(400, 'invalid_input');
+  return { body, contentLength, bucket: c.env.ATTACHMENTS };
 }

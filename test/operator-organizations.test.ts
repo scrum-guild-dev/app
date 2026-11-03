@@ -195,7 +195,7 @@ describe('組織の作成', () => {
     expect(organization).toMatchObject({
       slug,
       name: 'さくら開発',
-      vocabulary: 'game',
+      vocabulary: 'scrum',
       theme: 'simple',
       suspended_at: null,
       member_limit: 15,
@@ -266,6 +266,7 @@ describe('組織の作成', () => {
     const browser = new FakeBrowser(createLoginApp(github), github);
     const login = await browser.login(user);
     expect(login.response.status).toBe(302);
+    await browser.consent();
 
     const res = await post(app, organizationInfo, { slug, token: browser.sessionToken });
     expect(res.status).toBe(200);
@@ -576,8 +577,10 @@ describe('組織の一覧', () => {
     expect(item).toEqual({
       slug: organization.slug,
       name: '一覧の工房',
+      kind: 'team',
       suspended_at: '2026-10-20T00:00:00.000Z',
       purge_on: null,
+      purge_due: false,
       created_at: organization.created_at,
       admin_status: 'pending',
       // 指名した管理者は、ログインする前から人数に数える
@@ -586,6 +589,9 @@ describe('組織の一覧', () => {
       task_count: 0,
       attachment_quota_bytes: 32212254720,
       last_used_at: null,
+      self_created: false,
+      trial_ends_on: null,
+      trial_expired: false,
     });
   });
 
@@ -833,13 +839,18 @@ describe('組織ごとの集計', () => {
       'admin_status',
       'attachment_quota_bytes',
       'created_at',
+      'kind',
       'last_used_at',
       'name',
+      'purge_due',
       'purge_on',
       'seats',
+      'self_created',
       'slug',
       'suspended_at',
       'task_count',
+      'trial_ends_on',
+      'trial_expired',
       'workspace_count',
     ]);
   });

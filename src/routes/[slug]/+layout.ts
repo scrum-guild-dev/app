@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { callOperation } from '../../lib/api.ts';
-import { isUnauthenticated, loginUrl } from '../../lib/login-redirect.ts';
+import { consentUrl, isTermsRequired, isUnauthenticated, loginUrl } from '../../lib/login-redirect.ts';
 import { myOrganizations, organizationInfo } from '../../shared/operations/organization/index.ts';
 import { invitationList } from '../../shared/operations/workspace/index.ts';
 import type { LayoutLoad } from './$types';
@@ -10,16 +10,22 @@ import type { LayoutLoad } from './$types';
 // 組織に入れない（404 の not_found）が、組織の選択の届いた招待にこの slug があるとき（承諾待ちの招待だけの人）だけ、
 // 届いた招待の一覧（invitation-list）を読んで invitationInbox に入れる。枠はこれがあれば招待の画面を出す。
 // 読めなかったとき（通信、5xx）は failure をその応答にして、読み込みの失敗を出す。
-// url は 401 のときだけ読む（読むと、移るたびにこの load が走り直る）
+// 組織に入れる人で、組織の選択の届いた招待にこの slug があるとき（別のワークスペースから招待が届いた）だけ、同じく invitation-list を読み、
+// 件数を invitationCount に入れる（メニューの「マイプロフィール」の印に出す）。招待が無い人は追加の呼び出しをしない。読めなかったときは 0（印を出さない）。
+// url は 401 と terms_required のときだけ読む（読むと、移るたびにこの load が走り直る）
 export const load: LayoutLoad = async ({ params, fetch, url }) => {
   const [organization, accountOrganizations] = await Promise.all([
     callOperation(organizationInfo, {}, { slug: params.slug, fetcher: fetch }),
     callOperation(myOrganizations, {}, { fetcher: fetch }),
   ]);
-  // 停止した組織にしか入れない人は、組織の選択の読み取りがセッションを消して 401（理由 suspended）を返すので、ログインの画面へ移す。
-  // ほかに入れる組織がある人は、組織の操作が 403 の organization_suspended を返し、組織の枠が停止の画面を出す
+  // 同意していない（403 の terms_required）ときは、どちらの呼び出しでも同意の画面へ移す。401 の確かめより先に見る
+  if (isTermsRequired(organization) || isTermsRequired(accountOrganizations)) {
+    redirect(307, consentUrl(url));
+  }
+  // ログインしていない（401）ときだけ、ログインの画面へ移す。入れる組織を失った人や、停止した組織にしか入れない人は
+  // セッションが残るので 401 にならない（組織の操作が 404 か 403 の organization_suspended を返し、組織の枠が画面を出す）
   if (isUnauthenticated(organization) || isUnauthenticated(accountOrganizations)) {
-    redirect(307, loginUrl(url, organization, accountOrganizations));
+    redirect(307, loginUrl(url));
   }
 
   let failure = organization.ok ? null : { status: organization.status, code: organization.error?.code ?? null };
@@ -32,9 +38,20 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
     accountOrganizations.data.invitations.some((invitation) => invitation.slug === params.slug);
   if (invited) {
     const inbox = await callOperation(invitationList, {}, { slug: params.slug, fetcher: fetch });
-    if (isUnauthenticated(inbox)) redirect(307, loginUrl(url, inbox));
+    if (isTermsRequired(inbox)) redirect(307, consentUrl(url));
+    if (isUnauthenticated(inbox)) redirect(307, loginUrl(url));
     if (inbox.ok) invitationInbox = inbox.data;
     else if (inbox.status !== 404) failure = { status: inbox.status, code: inbox.error?.code ?? null };
+  }
+
+  let invitationCount = 0;
+  if (
+    organization.ok &&
+    accountOrganizations.ok &&
+    accountOrganizations.data.invitations.some((invitation) => invitation.slug === params.slug)
+  ) {
+    const list = await callOperation(invitationList, {}, { slug: params.slug, fetcher: fetch });
+    if (list.ok) invitationCount = list.data.invitations.length;
   }
 
   return {
@@ -42,6 +59,7 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
     organization: organization.ok ? organization.data : null,
     failure,
     invitationInbox,
+    invitationCount,
     // 組織の切り替えの一覧。取れなかったときは切り替えを出さない
     organizations: accountOrganizations.ok ? accountOrganizations.data : null,
   };

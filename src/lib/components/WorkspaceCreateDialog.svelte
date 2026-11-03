@@ -3,31 +3,35 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { workspaceCreate, workspaceLeaderCandidates } from '../../shared/operations/workspace/index.ts';
-  import type { Vocabulary } from '../../shared/vocabulary.ts';
   import {
     DEFAULT_HOURS_PER_POINT,
     WORKSPACE_NAME_MAX_LENGTH,
     defaultColumnNames,
-    defaultDetailFieldNames,
+    defaultDetailFieldName,
     workspaceNameProblem,
     type WorkspaceNameProblem,
   } from '../../shared/workspace.ts';
   import { callOperation } from '../api.ts';
+  import { focusPageHeading } from '../focus-heading.ts';
   import { browserTimezone } from '../format.ts';
-  import { showToast } from '../toast.svelte.ts';
-  import { t, tIn } from '../vocabulary.svelte.ts';
+  import { workspaceLimitDetailsOf } from '../workspace-limit-details.ts';
+  import { t } from '../vocabulary.svelte.ts';
   import Dialog from './Dialog.svelte';
   import Icon from './Icon.svelte';
 
-  // admin.html / kit.js の createWorkspace。管理の画面と自分の今日の2か所が、同じ部品を使う。
-  // 開いたときに最初のリーダーの候補を取る（既定は自分）。言葉づかいの既定は組織の言葉づかい。
-  // 題、リーダーのラベル、説明文は、選んだ言葉づかいの言葉で出す。説明文には、列と決まった欄の名前、換算比率、
+  // admin.html / kit.js の createWorkspace。管理の画面と今日やることの2か所が、同じ部品を使う。
+  // 開いたときに最初のリーダーの候補を取る（既定は自分）。説明文には、列と決まった欄の名前、換算比率、
   // 週の始まり、このブラウザのタイムゾーンを出す。
   // 送っている間は、「作る」を押しても無視し（aria-disabled）、ダイアログも閉じられない。二重送信はそれだけで防ぐ。
-  // 作れたら組織の枠のデータを読み直し、そのワークスペースの画面へ移って、見出しにフォーカスを置く。
-  // 送り始めた後に部品が外れた（画面を離れた、組織が替わった）ときは、古い応答で移らず、状態も更新しない（generation）
-  let { slug, meId, organizationVocabulary }: { slug: string; meId: string; organizationVocabulary: Vocabulary } =
-    $props();
+  // 作れたら、同じダイアログの中身を完了の表示（見出し「ワークスペースを作りました」、作った名前、「続けて作る」「開く」）に
+  // 差し替える（開き直さないので、フォーカスの閉じ込めと戻し先は途切れない）。組織の枠のデータの読み直しは、完了の表示を
+  // 閉じた後に行う（表示の間に読み直して失敗すると枠ごと外れ、選べなくなるため。「開く」は移る動作が読み直す）。
+  // 作れた時点で oncreated で画面に知らせる（管理の画面は一覧だけ読み直す）。
+  // 「続けて作る」は開いたときと同じ空のフォームに戻して名前の欄へ、「開く」は閉じてそのワークスペースの画面へ移り見出しにフォーカスを置く。
+  // 完了の表示を×、Esc、背景で閉じたら、今の画面に残る。
+  // 自分用の組織の個数の上限（409 の workspace_limit_reached）で断られたら、上限と今の個数を、ダイアログの中の警告（callout is-warn）に出す。
+  // 送り始めた後に部品が外れた（画面を離れた、組織が替わった）ときは、古い応答で完了の表示にせず、状態も更新しない（generation）
+  let { slug, meId, oncreated }: { slug: string; meId: string; oncreated?: (workspaceId: string) => void } = $props();
 
   type Candidate = { id: string; name: string };
 
@@ -38,9 +42,6 @@
   const leaderId = `${ids}-leader`;
   const leaderHintId = `${ids}-leader-hint`;
   const leaderStateId = `${ids}-leader-state`;
-  const vocabularyLabelId = `${ids}-vocabulary`;
-  const vocabularyHintId = `${ids}-vocabulary-hint`;
-  const defaultsId = `${ids}-defaults`;
 
   let open = $state(false);
   let dialog = $state<ReturnType<typeof Dialog>>();
@@ -50,21 +51,26 @@
 
   let name = $state('');
   let leaderUserId = $state('');
-  let vocabulary = $state<Vocabulary>('game');
   let candidates = $state<Candidate[]>([]);
   let candidatesState = $state<'loading' | 'failed' | 'ready'>('loading');
   // 読み込みに失敗したことがある間は、読み直している最中も「もう一度試す」を残す（フォーカスを失わせない）
   let candidatesFailedBefore = $state(false);
   let nameError = $state<string | null>(null);
   let submitError = $state<string | null>(null);
+  // 個数の上限で断られた理由。送り直す、開き直す、「続けて作る」で消す
+  let limitMessage = $state<string | null>(null);
   let submitting = $state(false);
+  // 作れたワークスペース。あれば完了の表示。組織は送り始めたときのもの
+  let created = $state<{ id: string; name: string; slug: string } | null>(null);
+  let openButton = $state<HTMLButtonElement>();
+  // 作れたが、組織の枠の読み直しがまだ。ダイアログが閉じたら読み直す。「開く」の移動中は二重に押させない
+  let needsRefresh = $state(false);
+  let opening = false;
 
   const timezone = browserTimezone();
   // 開き直し、部品の取り外し、組織の入れ替わりで進める。古い読み込みと古い応答が、今の状態を上書きしない
   let generation = 0;
 
-  // 選んだ言葉づかいの言葉。ワークスペースの言葉だけを替える
-  const words = $derived({ workspace: vocabulary });
   const canSubmit = $derived(!submitting && candidatesState === 'ready' && leaderUserId !== '');
 
   // 組織の枠のデータを読み直すと slug の props は新しい getter になるが、値が同じなら $derived は変わらない
@@ -76,19 +82,71 @@
       generation++;
       submitting = false;
       open = false;
+      // 完了の表示のまま部品が外れた（戻る、再描画）。同じ枠の中の移動では枠のデータが読み直されないので、ここで読み直す
+      if (needsRefresh) {
+        needsRefresh = false;
+        void invalidateAll().catch(() => undefined);
+      }
     };
   });
 
-  export function show(trigger?: HTMLElement | null): void {
+  // 作った後にダイアログが閉じたら（×、Esc、背景）、組織の枠のデータ（has_workspaces、所属するワークスペース）を読み直す。
+  // 「開く」は移る動作が読み直すので、ここでは読み直さない（openCreated が needsRefresh を下ろす）
+  $effect(() => {
+    if (open || !needsRefresh) return;
+    needsRefresh = false;
+    void invalidateAll()
+      .catch(() => undefined)
+      .then(() => {
+        // 読み直しで、閉じたときにフォーカスを戻した元のボタン（空の状態の「作る」）が消えると、フォーカスが body に落ちる。見出しへ移す
+        const active = document.activeElement;
+        if (active === null || active === document.body) focusPageHeading();
+      });
+  });
+
+  // 空の作成のフォームに戻す。開いたときと「続けて作る」が同じ状態から始める
+  function resetForm(): void {
     generation++;
     name = '';
-    vocabulary = organizationVocabulary;
     nameError = null;
     submitError = null;
+    limitMessage = null;
     submitting = false;
+    created = null;
     candidatesFailedBefore = false;
-    dialog?.show(trigger);
     void loadCandidates();
+  }
+
+  export function show(trigger?: HTMLElement | null): void {
+    resetForm();
+    dialog?.show(trigger);
+  }
+
+  // 完了の表示から作成のフォームへ戻る。名前は空、リーダーは候補を取り直して自分、フォーカスは名前の欄
+  async function createAnother(): Promise<void> {
+    resetForm();
+    await tick();
+    nameInput?.focus();
+  }
+
+  // 閉じて、作ったワークスペースの画面へ移り、見出しにフォーカスを置く
+  async function openCreated(): Promise<void> {
+    if (created === null || opening) return;
+    const target = created;
+    opening = true;
+    needsRefresh = false;
+    open = false;
+    try {
+      await goto(resolve('/[slug]/w/[id]', { slug: target.slug, id: target.id }), { refreshAll: true });
+      // 移った先の見出しへフォーカスを置く（移った画面の題は、SvelteKit のルートの読み上げが伝える）
+      await tick();
+      document.querySelector<HTMLElement>('main h1')?.focus();
+    } catch {
+      // 移れなかった。組織の枠の読み直しを戻し、閉じた後に読み直す（次の「開く」も押せるよう opening は下で戻す）
+      needsRefresh = true;
+    } finally {
+      opening = false;
+    }
   }
 
   async function loadCandidates(): Promise<void> {
@@ -130,27 +188,15 @@
     return problem === null ? null : nameMessages[problem];
   }
 
-  const leaderWord = $derived(tIn('leader', words));
-  const defaultsNote = $derived(
-    tIn('workspaceDefaultsNote', words, {
-      column: tIn('column', words),
-      columns: [...defaultColumnNames[vocabulary], tIn('done', words)].join('、'),
-      field: defaultDetailFieldNames[vocabulary],
-      points: tIn('points', words),
-      hours: DEFAULT_HOURS_PER_POINT,
-      timezone,
-    }),
-  );
-
-  // 言葉づかいの選択肢の例。その言葉づかいの言葉で出す
-  function vocabularyExample(value: Vocabulary): string {
-    const scope = { workspace: value };
-    return tIn('vocabularyNote', scope, {
-      workspace: tIn('workspace', scope),
-      task: tIn('task', scope),
-      epic: tIn('epic', scope),
-    });
-  }
+  const leaderWord = t('leader');
+  const defaultsNote = t('workspaceDefaultsNote', {
+    column: t('column'),
+    columns: [...defaultColumnNames, t('done')].join('、'),
+    field: defaultDetailFieldName,
+    points: t('points'),
+    hours: DEFAULT_HOURS_PER_POINT,
+    timezone,
+  });
 
   // 400 の details（項目ごとの path）から、断られた項目を取り出す
   function rejectedFields(details: unknown): string[] {
@@ -174,6 +220,7 @@
     const sentTimezone = timezone;
     submitting = true;
     submitError = null;
+    limitMessage = null;
     // 欄が disabled になるので、Enter で送ったときもフォーカスを失わないよう、「作る」へ移す
     submitButton?.focus();
     // 名前が断られたときに名前の欄へ戻す。送っている間は欄が disabled でフォーカスを受けないので、戻すのは disabled を外した後
@@ -181,7 +228,7 @@
     try {
       const result = await callOperation(
         workspaceCreate,
-        { name: name.trim(), timezone: sentTimezone, vocabulary, leader_user_id: leaderUserId },
+        { name: name.trim(), timezone: sentTimezone, leader_user_id: leaderUserId },
         { slug: targetSlug },
       );
       if (mine !== generation) return;
@@ -192,9 +239,17 @@
           return;
         }
         if (result.status === 404) {
-          submitError = tIn('workspaceLeaderRejected', words, { leader: leaderWord });
+          submitError = t('workspaceLeaderRejected', { leader: leaderWord });
           // 候補を取り直して、選び直せるようにする
           void loadCandidates();
+        } else if (result.status === 409 && result.error?.code === 'workspace_limit_reached') {
+          // 数が読めない応答（details が無いか不正）は、数を含まない文言にする
+          const limit = workspaceLimitDetailsOf(result.error.details);
+          const common = { workspace: t('workspace') };
+          limitMessage =
+            limit === undefined
+              ? t('workspaceLimitReachedUnknown', common)
+              : t('workspaceLimitReached', { ...common, limit: limit.limit, used: limit.used });
         } else if (result.status === 400 && rejectedFields(result.error?.details).includes('timezone')) {
           // ブラウザの値は直せない。理由を伝える
           submitError = t('workspaceTimezoneRejected', { timezone: sentTimezone });
@@ -207,16 +262,13 @@
         return;
       }
       if (mine !== generation) return;
-      open = false;
-      // 移る先を確定して移る。組織の枠のデータ（has_workspaces、所属するワークスペース）の読み直しは、移る動作に任せる
-      // （先に読み直すと、読み直しが失敗したときに、作ったのに移らなくなる）
-      await goto(resolve('/[slug]/w/[id]', { slug: targetSlug, id: result.data.workspace_id }), {
-        refreshAll: true,
-      });
-      // 移った先の見出しへフォーカスを置く（移った画面の題は、SvelteKit のルートの読み上げが伝える）
+      created = { id: result.data.workspace_id, name: name.trim(), slug: targetSlug };
+      oncreated?.(result.data.workspace_id);
+      // 組織の枠のデータの読み直しは、完了の表示を閉じた後に行う（今読み直して失敗すると、枠ごと外れて選べなくなる）
+      needsRefresh = true;
+      // 押した「作る」は消えるので、完了の表示の主ボタンへフォーカスを移す
       await tick();
-      document.querySelector<HTMLElement>('main h1')?.focus();
-      showToast(t('workspaceCreated', { workspace: tIn('workspace', words) }), 'check');
+      openButton?.focus();
     } finally {
       if (mine === generation) {
         submitting = false;
@@ -229,118 +281,118 @@
   }
 
   // 状態を読み上げに伝える。領域は常に置き、中の文字だけを替える
-  const status = $derived(submitting ? t('workspaceSubmitting') : candidatesState === 'loading' ? t('loading') : '');
+  const status = $derived(
+    created !== null
+      ? t('workspaceCreated', { workspace: t('workspace') })
+      : submitting
+        ? t('workspaceSubmitting')
+        : candidatesState === 'loading'
+          ? t('loading')
+          : '',
+  );
 </script>
 
 <Dialog
   bind:this={dialog}
   bind:open
   dismissible={!submitting}
-  title={tIn('workspaceCreateAction', words, { workspace: tIn('workspace', words) })}
+  title={created !== null
+    ? t('workspaceCreated', { workspace: t('workspace') })
+    : t('workspaceCreateAction', { workspace: t('workspace') })}
 >
-  <form id={formId} class="form" onsubmit={submit} novalidate>
-    <!-- 送っている間は、欄も変えられない。「作る」はフォーカスを残すため、欄のまとまりの外で aria-disabled にしている -->
-    <fieldset class="form-fields" disabled={submitting}>
-      <div class="field" class:is-invalid={nameError !== null}>
-        <label class="field-label" for={nameId}>{t('fieldName')}</label>
-        <input
-          class="input"
-          id={nameId}
-          bind:this={nameInput}
-          bind:value={name}
-          oninput={() => (nameError = null)}
-          placeholder={t('workspaceNamePlaceholder')}
-          autocomplete="off"
-          aria-invalid={nameError !== null}
-          aria-describedby={nameError !== null ? nameErrorId : undefined}
-        />
-        {#if nameError !== null}
-          <span class="field-error" id={nameErrorId} role="alert"><Icon name="alert" />{nameError}</span>
-        {/if}
-      </div>
-
-      <div class="field">
-        <label class="field-label" for={leaderId}>{tIn('workspaceLeaderLabel', words, { leader: leaderWord })}</label>
-        <select
-          class="select"
-          id={leaderId}
-          bind:this={leaderSelect}
-          bind:value={leaderUserId}
-          disabled={candidatesState !== 'ready' || candidates.length === 0}
-          aria-busy={candidatesState === 'loading'}
-          aria-describedby="{leaderHintId} {leaderStateId}"
-        >
-          {#if candidatesState === 'loading'}
-            <option value="">{t('loading')}</option>
-          {:else if candidatesState === 'failed' || candidates.length === 0}
-            <!-- 理由の文は、下のエラー側だけに出す -->
-            <option value="">&mdash;</option>
-          {:else}
-            {#each candidates as user (user.id)}
-              <option value={user.id}>{user.name}</option>
-            {/each}
+  {#if created !== null}
+    <div class="callout is-ok"><Icon name="check" /><span class="wrap-anywhere">{created.name}</span></div>
+  {:else}
+    <form id={formId} class="form" onsubmit={submit} novalidate>
+      <!-- 送っている間は、欄も変えられない。「作る」はフォーカスを残すため、欄のまとまりの外で aria-disabled にしている -->
+      <fieldset class="form-fields" disabled={submitting}>
+        <div class="field" class:is-invalid={nameError !== null}>
+          <label class="field-label" for={nameId}>{t('fieldName')}</label>
+          <input
+            class="input"
+            id={nameId}
+            bind:this={nameInput}
+            bind:value={name}
+            oninput={() => (nameError = null)}
+            placeholder={t('workspaceNamePlaceholder')}
+            autocomplete="off"
+            aria-invalid={nameError !== null}
+            aria-describedby={nameError !== null ? nameErrorId : undefined}
+          />
+          {#if nameError !== null}
+            <span class="field-error" id={nameErrorId} role="alert"><Icon name="alert" />{nameError}</span>
           {/if}
-        </select>
-        <span class="field-hint" id={leaderHintId}>{tIn('workspaceLeaderHint', words, { leader: leaderWord })}</span>
-        <!-- 候補を取れない、または0件のときは、「作る」を押せない理由をここに出す -->
-        <span id={leaderStateId}>
-          {#if candidatesState === 'failed'}
-            <span class="field-error" role="alert"><Icon name="alert" />{t('workspaceLeaderLoadFailed')}</span>
-          {:else if candidatesState === 'ready' && candidates.length === 0}
-            <span class="field-error"
-              ><Icon name="alert" />{tIn('workspaceNoCandidates', words, { leader: leaderWord })}</span
-            >
-          {/if}
-        </span>
-        {#if candidatesFailedBefore}
-          <div class="form-actions">
-            <button
-              class="btn is-sm"
-              type="button"
-              aria-disabled={candidatesState === 'loading'}
-              onclick={retryCandidates}
-            >
-              {candidatesState === 'loading' ? t('retrying') : t('retry')}
-            </button>
-          </div>
-        {/if}
-      </div>
-
-      <div class="field">
-        <span class="field-label" id={vocabularyLabelId}>{t('workspaceVocabularyLabel')}</span>
-        <div
-          class="choice-list"
-          role="radiogroup"
-          aria-labelledby={vocabularyLabelId}
-          aria-describedby="{vocabularyHintId} {defaultsId}"
-        >
-          <label class="choice">
-            <input type="radio" name="{ids}-vocabulary" value="game" bind:group={vocabulary} />
-            <div><b>{t('vocabularyGameLabel')}</b><span>{vocabularyExample('game')}</span></div>
-          </label>
-          <label class="choice">
-            <input type="radio" name="{ids}-vocabulary" value="scrum" bind:group={vocabulary} />
-            <div><b>{t('vocabularyScrumLabel')}</b><span>{vocabularyExample('scrum')}</span></div>
-          </label>
         </div>
-        <span class="field-hint" id={vocabularyHintId}
-          >{tIn('workspaceVocabularyHint', words, { column: tIn('column', words) })}</span
-        >
-      </div>
 
-      <p class="field-hint" id={defaultsId}>{defaultsNote}</p>
-    </fieldset>
+        <div class="field">
+          <label class="field-label" for={leaderId}>{t('workspaceLeaderLabel', { leader: leaderWord })}</label>
+          <select
+            class="select"
+            id={leaderId}
+            bind:this={leaderSelect}
+            bind:value={leaderUserId}
+            disabled={candidatesState !== 'ready' || candidates.length === 0}
+            aria-busy={candidatesState === 'loading'}
+            aria-describedby="{leaderHintId} {leaderStateId}"
+          >
+            {#if candidatesState === 'loading'}
+              <option value="">{t('loading')}</option>
+            {:else if candidatesState === 'failed' || candidates.length === 0}
+              <!-- 理由の文は、下のエラー側だけに出す -->
+              <option value="">&mdash;</option>
+            {:else}
+              {#each candidates as user (user.id)}
+                <option value={user.id}>{user.name}</option>
+              {/each}
+            {/if}
+          </select>
+          <span class="field-hint" id={leaderHintId}>{t('workspaceLeaderHint', { leader: leaderWord })}</span>
+          <!-- 候補を取れない、または0件のときは、「作る」を押せない理由をここに出す -->
+          <span id={leaderStateId}>
+            {#if candidatesState === 'failed'}
+              <span class="field-error" role="alert"><Icon name="alert" />{t('workspaceLeaderLoadFailed')}</span>
+            {:else if candidatesState === 'ready' && candidates.length === 0}
+              <span class="field-error"><Icon name="alert" />{t('workspaceNoCandidates', { leader: leaderWord })}</span>
+            {/if}
+          </span>
+          {#if candidatesFailedBefore}
+            <div class="form-actions">
+              <button
+                class="btn is-sm"
+                type="button"
+                aria-disabled={candidatesState === 'loading'}
+                onclick={retryCandidates}
+              >
+                {candidatesState === 'loading' ? t('retrying') : t('retry')}
+              </button>
+            </div>
+          {/if}
+        </div>
 
-    {#if submitError !== null}
-      <div class="callout is-danger" role="alert"><Icon name="alert" /><span>{submitError}</span></div>
-    {/if}
-  </form>
+        <p class="field-hint">{defaultsNote}</p>
+      </fieldset>
+
+      {#if limitMessage !== null}
+        <div class="callout is-warn" role="alert"><Icon name="alert" /><span>{limitMessage}</span></div>
+      {/if}
+      {#if submitError !== null}
+        <div class="callout is-danger" role="alert"><Icon name="alert" /><span>{submitError}</span></div>
+      {/if}
+    </form>
+  {/if}
   <!-- 状態の読み上げの領域。form の外に常に置き、中の文字だけを替える -->
   <span class="visually-hidden" role="status">{status}</span>
   {#snippet footer(close)}
-    <button class="btn is-quiet" type="button" aria-disabled={submitting} onclick={close}>{t('cancel')}</button>
-    <button class="btn is-primary" type="submit" form={formId} aria-disabled={!canSubmit} bind:this={submitButton}>
-      {submitting ? t('workspaceSubmitting') : t('workspaceSubmit')}
-    </button>
+    {#if created !== null}
+      <button class="btn is-quiet" type="button" onclick={createAnother}>{t('workspaceCreateAnother')}</button>
+      <button class="btn is-primary" type="button" bind:this={openButton} onclick={openCreated}>
+        {t('workspaceOpen')}
+      </button>
+    {:else}
+      <button class="btn is-quiet" type="button" aria-disabled={submitting} onclick={close}>{t('cancel')}</button>
+      <button class="btn is-primary" type="submit" form={formId} aria-disabled={!canSubmit} bind:this={submitButton}>
+        {submitting ? t('workspaceSubmitting') : t('workspaceSubmit')}
+      </button>
+    {/if}
   {/snippet}
 </Dialog>

@@ -12,10 +12,10 @@ import { actorUserIdOf } from './write-guards.ts';
 
 // 経験値の読み方（docs/data-model.md の「経験値の読み方」）。合計は xp_grants の SUM(amount) で、組織の中の表だけを読む。
 // xp_grants は organization_id を持たないので、結合した workspaces.organization_id を入口の組織で絞る。
-// ほかの人の数値と明細は返さない。人ごとの合計を読むのは、レベルを出す member-list と organization だけで、数値は応答に入れない
+// ほかの人の数値と明細は返さない。人ごとの合計を読むのは、レベルを出す member-list、organization、epic-detail（討伐隊）だけで、数値は応答に入れない
 
 // 1人の、組織の中の経験値の合計（抜けたワークスペースと閉じたワークスペースの分も含む）。行が無ければ 0。
-// 索引 xp_grants_user_workspace（user_id, workspace_id）に乗る
+// 索引 xp_grants_user_workspace_amount（user_id, workspace_id, amount）だけで読む
 export function userExperienceTotalStatement(db: OrganizationDb, userId: string) {
   const organizationId = db.organizationId;
   return db.statement((q) =>
@@ -51,6 +51,28 @@ export function memberExperienceTotalsStatement(db: OrganizationDb, workspaceId:
   );
 }
 
+// エピックの討伐隊の人ごとの、組織の中の経験値の合計。討伐隊は抜けた人も含みうるので、今の所属でなく討伐隊の行で絞る。
+// 明細の無い人は行を返さない（合計 0 として扱う）。エピックはワークスペースで絞って引く（別のワークスペースの討伐隊を読まない）
+export function epicPartyExperienceTotalsStatement(db: OrganizationDb, workspaceId: string, epicId: string) {
+  const organizationId = db.organizationId;
+  return db.statement((q) =>
+    q
+      .selectFrom('xp_grants as g')
+      .innerJoin('workspaces as w', 'w.id', 'g.workspace_id')
+      .select((eb) => ['g.user_id', eb.fn.sum<number>('g.amount').as('total')])
+      .where('w.organization_id', '=', organizationId)
+      .where('g.user_id', 'in', (eb) =>
+        eb
+          .selectFrom('epic_party_members as p')
+          .innerJoin('epics as e', 'e.id', 'p.epic_id')
+          .select('p.user_id')
+          .where('p.epic_id', '=', epicId)
+          .where('e.workspace_id', '=', workspaceId),
+      )
+      .groupBy('g.user_id'),
+  );
+}
+
 // SUM と COUNT の結果を数にする（D1 は整数で返す。null と数でない値は 0 として扱う）。合計を読むどの処理もこれを使う
 export function amountOf(value: unknown): number {
   const number = Number(value ?? 0);
@@ -68,7 +90,7 @@ export const experienceSummaryOperation = implement(experienceSummary, async ({ 
   const userId = actorUserIdOf(actor);
   const organizationId = db.organizationId;
 
-  const [grantResult, membershipResult, prospectiveResult] = await db.batch([
+  const [grantResult, membershipResult, prospectiveResult, thanksResult] = await db.batch([
     // ワークスペースごとの確定の合計（明細のあるワークスペース）
     db.statement((q) =>
       q
@@ -90,7 +112,7 @@ export const experienceSummaryOperation = implement(experienceSummary, async ({ 
         .where('w.organization_id', '=', organizationId),
     ),
     // 見込み。今所属している閉じていないワークスペースで、自分が手で作った、未完了の、削除していない、ポイントが1以上のタスクの件数。
-    // 実行計画は、索引 tasks_created_by（created_by）から本人のタスクを引き、memberships_current で今の所属を確かめる。
+    // 実行計画は、部分索引 tasks_created_by_open（created_by, completed_at）から本人の未完了のタスクだけを引き、memberships_current で今の所属を確かめる。
     // 手で作ったタスクはいつもバックログにある（tasks の CHECK）ので、tray = 'backlog' は結果を変えない念押しの条件
     db.statement((q) =>
       q
@@ -110,14 +132,34 @@ export const experienceSummaryOperation = implement(experienceSummary, async ({ 
         .where('t.points', '>=', MIN_POINTS_FOR_EXPERIENCE)
         .groupBy('m.workspace_id'),
     ),
+    // 受け取った感謝の数。送られた相手が本人の行だけを、ワークスペースごとに数える（抜けたワークスペースも含む）。
+    // 索引 thanks_recipient_user で本人の行を引き、結合した workspaces.organization_id を入口の組織で絞る
+    db.statement((q) =>
+      q
+        .selectFrom('thanks as th')
+        .innerJoin('workspaces as w', 'w.id', 'th.workspace_id')
+        .select((eb) => ['w.id', 'w.name', eb.fn.countAll<number>().as('count')])
+        .where('th.recipient_user_id', '=', userId)
+        .where('w.organization_id', '=', organizationId)
+        .groupBy(['w.id', 'w.name']),
+    ),
   ] as const);
 
-  const workspaces = new Map<string, { id: string; name: string; total: number; prospective: number }>();
+  const workspaces = new Map<
+    string,
+    { id: string; name: string; total: number; prospective: number; thanks_received: number }
+  >();
+  const empty = (id: string, name: string) => ({ id, name, total: 0, prospective: 0, thanks_received: 0 });
   for (const row of grantResult.rows) {
-    workspaces.set(row.id, { id: row.id, name: row.name, total: amountOf(row.total), prospective: 0 });
+    workspaces.set(row.id, { ...empty(row.id, row.name), total: amountOf(row.total) });
   }
   for (const row of membershipResult.rows) {
-    if (!workspaces.has(row.id)) workspaces.set(row.id, { id: row.id, name: row.name, total: 0, prospective: 0 });
+    if (!workspaces.has(row.id)) workspaces.set(row.id, empty(row.id, row.name));
+  }
+  for (const row of thanksResult.rows) {
+    const workspace = workspaces.get(row.id) ?? empty(row.id, row.name);
+    workspace.thanks_received = amountOf(row.count);
+    workspaces.set(row.id, workspace);
   }
   for (const row of prospectiveResult.rows) {
     const workspace = workspaces.get(row.workspace_id);
@@ -127,6 +169,7 @@ export const experienceSummaryOperation = implement(experienceSummary, async ({ 
   const rows = [...workspaces.values()].sort(byNameThenId);
   const total = rows.reduce((sum, row) => sum + row.total, 0);
   const prospective = rows.reduce((sum, row) => sum + row.prospective, 0);
+  const thanksReceived = rows.reduce((sum, row) => sum + row.thanks_received, 0);
   const level = levelOf(total);
   return {
     total,
@@ -134,6 +177,7 @@ export const experienceSummaryOperation = implement(experienceSummary, async ({ 
     level_start: levelStartOf(level),
     next_level_at: levelStartOf(level + 1),
     prospective,
+    thanks_received: thanksReceived,
     workspaces: rows,
   };
 });
@@ -182,13 +226,10 @@ export const experienceGrantsOperation = implement(experienceGrants, async ({ db
         ])
         .where('g.user_id', '=', userId)
         .where('w.organization_id', '=', organizationId)
+        // 行値の比較にすると、SQLite が索引 xp_grants_user_confirmed の範囲にできる（OR に展開した書き方は範囲にならず、
+        // カーソルより新しい側の項目を先頭から読み捨てる）
         .$if(before !== undefined, (qb) =>
-          qb.where((eb) =>
-            eb.or([
-              eb('g.confirmed_at', '<', before!.confirmed_at),
-              eb.and([eb('g.confirmed_at', '=', before!.confirmed_at), eb('g.id', '<', before!.id)]),
-            ]),
-          ),
+          qb.where((eb) => eb(eb.refTuple('g.confirmed_at', 'g.id'), '<', eb.tuple(before!.confirmed_at, before!.id))),
         )
         .orderBy('g.confirmed_at', 'desc')
         .orderBy('g.id', 'desc')

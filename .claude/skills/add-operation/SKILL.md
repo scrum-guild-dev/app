@@ -22,7 +22,7 @@ description: API の操作を1つ足す型紙。権限の選択、定義（src/s
 
 | 権限 | 使うとき |
 | --- | --- |
-| `login` | ログインしていて、入れる組織がある人（か運用者）。組織の外（`/api/<名前>`）。入れる組織を失った人は、セッションを消して 401 にする。入れる組織を失った人にも使わせる操作（ログアウトなど）だけ、定義に `skipsLoginAccess: true` を付ける（組織の中の操作には付けられない） |
+| `login` | ログインしている人。組織の外（`/api/<名前>`）。入れる組織が無い人も通す（アカウントがあればログインできる。docs/requirements.md の「メンバーと権限」） |
 | `operator` | 運用者だけ。組織の外。定義は `src/shared/operations/operator/` に置く（人が差分を読む領域） |
 | `invitee` | 招待の一覧、承諾、辞退。承諾待ちの招待だけの人も通す。`actor.userId` は null がありうる。組織の中のデータを読む操作には使わない |
 | `organization` | `users` の行がある人（無効でない管理者か、ワークスペースに今所属している人）。承諾待ちの招待だけの人には 404 |
@@ -55,7 +55,7 @@ export const renameWorkspace = defineOperation({
 - 入力と出力の項目名は DB の列と同じスネークケース
 - 出力は画面が使う項目だけを書く。出力のスキーマに無い項目は応答から落ちるので、行をそのまま返しても余計な列は出ないが、返す形は定義で決める
 - 画面ごとの値の整形は定義に持たせない
-- 重い操作（手動の同期など）には `rateLimit: { max: 5, windowSeconds: 300 }` を付ける。登録の関数がアカウントと操作ごとに数え、超えた呼び出しは 429 の `rate_limited` で断る（処理は動かない）。軽い操作に付けない（アプリ側のレート制限は、ログイン、手動の同期、GitHub に問い合わせる招待する人の解決にだけ設ける）
+- 重い操作（手動の同期など）には `rateLimit: { max: 5, windowSeconds: 300 }` を付ける。登録の関数がアカウントと操作ごとに数え、超えた呼び出しは 429 の `rate_limited` で断る（処理は動かない）。軽い操作に付けない（アプリ側のレート制限を設ける操作の並びは `docs/requirements.md` の「運用」が正）
 
 ### 3. 処理を書く
 
@@ -78,14 +78,14 @@ export const renameWorkspaceOperation = implement(renameWorkspace, async ({ db, 
 });
 ```
 
-- 渡るもの: 組織の外は `db`（共通の入口）と `accountId` と `account`（`organizations()` は入れる組織と届いた招待、`isOperator()` は運用者か、`logins()` はアカウントに結んだログインの手段と ID。どれも1回のリクエストで1回だけ引く）と `session`（今のセッション。ログアウトのように、セッションを終える操作だけが使う）。組織の中は `db`（組織の中の入口）と `actor` と `organization`（入るときに引いた組織の slug、名前、言葉づかい、既定のテーマ）と `defer`（応答を待たせずに続ける仕事。`read` の操作が副作用として書くものに使う）。ワークスペースの下はさらに `workspace`（確かめたワークスペース）。どれも `input` は検証済み
+- 渡るもの: 組織の外は `db`（共通の入口）と `accountId` と `account`（`organizations()` は入れる組織と届いた招待、`isOperator()` は運用者か、`logins()` はアカウントに結んだログインの手段と ID。どれも1回のリクエストで1回だけ引く）と `session`（今のセッション。ログアウトのように、セッションを終える操作だけが使う）。組織の中は `db`（組織の中の入口）と `actor` と `organization`（入るときに引いた組織の slug、名前、既定のテーマ）と `defer`（応答を待たせずに続ける仕事。`read` の操作が副作用として書くものに使う）。ワークスペースの下はさらに `workspace`（確かめたワークスペース）。どれも `input` は検証済み
 - 組織の直下の表は `db.organizationId` で、ワークスペースの下の表は `workspace.workspaceId` で絞る。ID を入力から受ける組織の中の操作（`workspace_id` を持たないもの）は、結合した `workspaces.organization_id` を `db.organizationId` で絞り、行が無ければ `throw new ApiError(404, 'not_found')` を返す。別の組織の行と存在しない行を区別しない
 - 書き込みは文を並べて `db.batch([...])` で1回に送る。先に読んだ値で判定する書き込みは、書く文の `WHERE` に同じ条件を入れる（`docs/development.md` の「入口を守る規則」）
 - 競合は `throw new ApiError(409, 'conflict')`。ログに本文を出さない。`console.log` に入力や行を渡さない
 
 ### 4. 組織の分離のテスト用の関数を足す
 
-組織の中の操作（`invitee`、`organization`、`member`、`leader`、`admin`）は、`test/operations/pointers.ts` に操作の名前をキーにして足す。足し忘れると `test/operation-registry.test.ts` が落ちる。
+組織の中の操作（`invitee`、`organization`、`member`、`leader`、`admin`）は、`test/operations/pointers.ts` に操作の名前をキーにして足す。足し忘れると `test/operation-registry.test.ts`（と、一覧を回す `test/operation-registry-production-<番号>.test.ts`）が落ちる。
 
 ```ts
 'rename-workspace': async (target) => ({ workspace_id: target.workspace.id, name: '青葉チーム' }),

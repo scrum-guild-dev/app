@@ -1,5 +1,5 @@
 // 組織の変更の履歴の節（HistorySetting.svelte）が出す、した人と内容の文。種類（organization-history の event.kind）ごとに辞書の1項目。
-// 部品から外し、DOM なしで両方の言葉づかいを確かめられるようにする。translate は t（か、言葉づかいを決めた word）
+// 部品から外し、DOM なしで確かめられるようにする。translate は t（か、テストが言葉を決めた word）
 import type { OutputOf } from '../shared/operations/define.ts';
 import type { organizationHistory } from '../shared/operations/organization/organization-history.ts';
 import type { DictionaryKey, TemplateParams } from '../shared/vocabulary.ts';
@@ -71,6 +71,11 @@ export function historyEventText(event: HistoryEntry['event'], translate: Transl
       return event.workspace_name === null
         ? translate('orgHistoryWorkspaceReopenedNoName', words)
         : translate('orgHistoryWorkspaceReopened', { ...words, name: event.workspace_name });
+    // 運用者が指名し直したときに消した、まだログインしていない前の指名。Google で待っていた行は名前が無い
+    case 'admin_designation_removed':
+      return event.name === null
+        ? translate('orgHistoryAdminDesignationRemovedNoName', words)
+        : translate('orgHistoryAdminDesignationRemoved', { ...words, name: event.name });
     case 'other':
       return translate('orgHistoryOther', words);
   }

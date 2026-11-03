@@ -6,8 +6,18 @@ export const errorCodes = [
   'unauthenticated',
   // ログインしていて、権限が無い。Origin が公開する URL と違うときも
   'forbidden',
+  // パスワードでのログインの、違うパスワード、無いメールアドレス、そろえ方に合わない入力。401。どれも同じ本文にする
+  'invalid_credentials',
   'not_found',
+  // 今の版の規約に同意していない。403。同意の操作とログアウトなど、定義に skipsConsent を付けた操作以外をすべて断る。画面は同意の画面へ移す
+  'terms_required',
   'conflict',
+  // クリアか中止した（終わった）エピックの討伐隊・報酬・依頼主を変える操作（epic-party-join、epic-party-leave、epic-party-assign、
+  // epic-reward-update、epic-requester-update）の 409。書き込みの競合に 3 回続けて負けたときは conflict のまま。画面は「終わっているので変えられません」を出す
+  'epic_finished',
+  // ワークスペースの作成（workspace-create）が、自分用の組織のワークスペースの個数の上限（閉じたものも数える）で断られた。409。
+  // details は { used, limit }。画面は作成のダイアログの中に上限と今の個数を出す
+  'workspace_limit_reached',
   // 閉じたワークスペースへの書き込み。読み取り専用なので書けない。409
   'workspace_closed',
   // 招待の作成（invitation-create）の 409。招待する人がもうそのワークスペースに所属している、同じワークスペースに承諾待ちの招待がある、
@@ -20,6 +30,13 @@ export const errorCodes = [
   // 組織が停止している。403。停止していなければ入れた人にだけ返す（入れない人は組織が無いときと同じ not_found）。
   // 画面の組織の枠は「この組織は停止しています」を出す
   'organization_suspended',
+  // 解約で停止した組織の、データを消す予定日（purge_on）を過ぎた。409。運用者の再開（organization-resume）と、
+  // 一時的な停止への切り替え（organization-suspension-update の kind: temporary）と、管理者の指名し直し
+  // （organization-admin-reassign）を断る。消している途中で戻さない、組織の中に行を足さないため。
+  // 境目は消す SQL のガードと同じで、予定日の当日まではできる。画面は「消す予定日を過ぎたので、どれもできない」を出す
+  'purge_due',
+  // API トークンの発行（token-create）で、ログインから API_TOKEN_REAUTH_MINUTES 分を超えている。403。401 ではない（画面がログインの画面へ移さない）
+  'reauth_required',
   // 操作の回数の上限（定義の rateLimit）を超えた。429
   'rate_limited',
   'internal',
@@ -37,21 +54,6 @@ export type ErrorBody = {
     details?: unknown;
   };
 };
-
-// 入れる組織を失ってセッションが消えた 401 の details.reason。入れたはずの組織が停止しているだけのときに付く。
-// 画面はログインの画面へ移すときの理由（/login?error=suspended）にする
-export const UNAUTHENTICATED_SUSPENDED = 'suspended';
-
-export function isSuspendedUnauthenticated(error: ErrorBody['error'] | null | undefined): boolean {
-  const details = error?.details;
-  return (
-    error?.code === 'unauthenticated' &&
-    typeof details === 'object' &&
-    details !== null &&
-    'reason' in details &&
-    details.reason === UNAUTHENTICATED_SUSPENDED
-  );
-}
 
 export function isErrorBody(value: unknown): value is ErrorBody {
   if (typeof value !== 'object' || value === null || !('error' in value)) return false;

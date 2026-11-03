@@ -28,6 +28,8 @@ export type Defer = (task: () => Promise<unknown>) => void;
 export type CurrentSession = {
   // sessions.token_hash
   readonly tokenHash: string;
+  // sessions.created_at
+  readonly createdAt: string;
   // 応答でセッションの Cookie を消す。行を消した後に呼ぶ
   clearCookie(): void;
 };
@@ -37,6 +39,8 @@ export type OutsideContext<Input> = {
   accountId: string;
   account: OutsideAccount;
   session: CurrentSession;
+  // 呼び出しの API トークンの範囲。Cookie の呼び出しは undefined
+  tokenScope: 'read' | 'write' | undefined;
   input: Input;
 };
 // 運用者の操作（permission: 'operator'）。登録の関数が運用者を確かめた後に、運用者の道具を渡す
@@ -53,13 +57,25 @@ export type OrganizationContext<Input> = {
 };
 export type WorkspaceContext<Input> = OrganizationContext<Input> & { workspace: VerifiedWorkspace };
 
-export type ContextOf<D extends AnyOperationDefinition> = D extends OutsideOperationDefinition
+// binary の操作だけに渡す。binding はリクエストの env から取り、本文は未読のまま渡す。
+export type BinaryBody = {
+  body: ReadableStream<Uint8Array>;
+  contentLength: number;
+  bucket: R2Bucket;
+};
+
+type BaseContextOf<D extends AnyOperationDefinition> = D extends OutsideOperationDefinition
   ? D['permission'] extends 'operator'
     ? OperatorContext<z.output<D['input']>>
     : OutsideContext<z.output<D['input']>>
   : D extends WorkspaceOperationDefinition
     ? WorkspaceContext<z.output<D['input']>>
     : OrganizationContext<z.output<D['input']>>;
+
+export type ContextOf<D extends AnyOperationDefinition> = BaseContextOf<D> &
+  (D extends { readonly body: 'binary' }
+    ? { binary: BinaryBody; requestId: string } // requestId は失敗のログ用（deferrer のログと同じ値）
+    : unknown);
 
 // 処理の戻り値は出力のスキーマで検証し、スキーマに無い項目は落とす（行をそのまま返しても余計な列が出ない）
 export type HandlerOf<D extends AnyOperationDefinition> = (context: ContextOf<D>) => Promise<z.input<D['output']>>;

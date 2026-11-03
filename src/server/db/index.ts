@@ -1,19 +1,23 @@
 // D1 への入口。D1 には、ここの commonDb と orgDb からだけ問い合わせる（docs/development.md の「入口を守る規則」）。
 // src/server/db/ の外からは、このモジュール以外を import しない（ESLint が落とす）。
-// 生の SQL（kysely の sql）は db/ の中だけで使うので出さない（固定の条件 previousStatementChanged と、一覧を1つの値で渡す jsonList と、
-// 行ごとの ID を SQL の中で作る uuidv7Sql と、部分索引に合わせた組織の変更の履歴の条件 organizationHistoryRowFilter と、
-// 複数の行を1つの文で並びの末尾に振る tailPosition と、タイトルの検索の条件 titleContainsAll と、列に索引を使わせない unindexed だけを出す）。
+// 生の SQL（kysely の sql）は db/ の中だけで使うので出さない（固定の条件 previousStatementChanged と、一覧を1つの値で渡す jsonList と、キーごとの値を1つの値で渡して列で引く jsonLookup と、
+// 鍵と値の組を1つの値で渡して式で引く jsonPairLookup と、変更の履歴に残すスプリントの値 sprintLogRefSql と sprintLeftLogSql と、行ごとの ID を SQL の中で作る uuidv7Sql と、部分索引に合わせた組織の変更の履歴の条件 organizationHistoryRowFilter と進行中のスプリントの条件 activeSprintRowFilter と、
+// メールアドレスで待つ承諾待ちの招待の条件 pendingEmailInvitationRowFilter と、複数の行を1つの文で並びの末尾に振る tailPosition と、タイトルの検索の条件 titleContainsAll と、列に索引を使わせない unindexed だけを出す）。
 // 照合用の値はテストの口（testing.ts）から出す
 export type { ExpressionBuilder, Insertable, QueryCreator, Selectable } from 'kysely';
 export type { Statement } from './entry.ts';
 export { commonDb, orgDb, type CommonDb, type OrganizationDb } from './entries.ts';
 export { DatabaseUnavailableError, pingDatabase } from './ping.ts';
-export { jsonList } from './json-list.ts';
+export { jsonList, jsonPairLookup, jsonPairRows, sprintLeftLogSql, sprintLogRefSql } from './json-list.ts';
+export { jsonLookup } from './json-lookup.ts';
 export { previousStatementChanged } from './previous-statement.ts';
 export { organizationHistoryRowFilter } from './organization-history-filter.ts';
+export { activeSprintRowFilter } from './active-sprint-filter.ts';
+export { pendingEmailInvitationRowFilter } from './pending-email-invitation-filter.ts';
 export { uuidv7Sql } from './uuid-sql.ts';
 export { tailPosition } from './tail-position.ts';
 export { titleContainsAll } from './title-search.ts';
+export { purgeDueInDatabase, purgeNotDue } from './purge-due.ts';
 export { unindexed } from './unindexed.ts';
 export type { CommonTables, OrganizationTables } from './tables.ts';
 export type { VerifiedOrganization } from './verify-organization.ts';
@@ -28,11 +32,31 @@ export {
   type OrganizationActor,
   type OrganizationSummary,
 } from './enter-organization.ts';
-export { insertOrganization, type CreatedOrganization, type NewOrganization } from './create-organization.ts';
+export {
+  deleteSelfCreatedOrganization,
+  insertOrganization,
+  insertPersonalOrganization,
+  insertSelfCreatedOrganization,
+  SELF_SERVICE_CREATOR,
+  type CreatedOrganization,
+  type NewOrganization,
+  type NewSelfCreatedOrganization,
+} from './create-organization.ts';
+export { VOCABULARY_COLUMN_VALUE } from './vocabulary-column.ts';
 // 組織の人数に数える人。組織の中の処理には、確かめた組織の入口だけを受ける seatHoldersOf を出す（組織の ID の束は受けない）
-export { personKey, seatHoldersOf } from './seats.ts';
+export { hasSeatInvitationOfLogin, personKey, seatHoldersOf, seatHoldersOfWorkspaceInvitations } from './seats.ts';
 // 運用者の道具（operations/operator-tools.ts）だけが import できる（eslint.config.db-entry.js）
 export { appendOperatorChangeLog, type OperatorChangeLog } from './operator-change-log.ts';
+// お試しの期限切れの組織を止める1文（定期処理が呼ぶ）
+export { SUSPEND_EXPIRED_TRIALS_LIMIT, suspendExpiredTrials } from './suspend-expired-trials.ts';
+// 定期処理（src/server/scheduled/）だけが import できる（eslint.config.db-entry.js）
+export { appendScheduledChangeLog, type ScheduledChangeLog } from './scheduled-change-log.ts';
+// 運用者の道具（operations/operator-tools.ts）だけが import できる（eslint.config.db-entry.js）
+export {
+  reassignOrganizationAdmin,
+  type AdminReassignment,
+  type AdminReassignmentResult,
+} from './operator-reassign-admin.ts';
 export {
   readOrganizationRow,
   userAvatarsOf,
@@ -57,3 +81,4 @@ export {
   listAccountOrganizations,
   type AccountOrganizations,
 } from './cross-organization.ts';
+export { sprintExtensionUnchanged, sprintExtensionNoOverlap, type SprintExtensionWrite } from './sprint-extension.ts';

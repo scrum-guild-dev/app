@@ -8,13 +8,23 @@
   import LoadFailed from '../../../../lib/components/LoadFailed.svelte';
   import NotFoundPage from '../../../../lib/components/NotFoundPage.svelte';
   import TaskDrawer from '../../../../lib/components/TaskDrawer.svelte';
+  import {
+    adjacentTaskIds,
+    drawerState,
+    taskOrder,
+    clearOverlayHandoff,
+    markOverlayHandoff,
+    openTaskTab,
+    setTaskOpenMode,
+    taskPageHref,
+    type TaskOpenMode,
+  } from '../../../../lib/drawer.svelte.ts';
   import { focusPageHeading } from '../../../../lib/focus-heading.ts';
   import { formatLocalDate } from '../../../../lib/format.ts';
-  import { setWorkspaceVocabulary, t } from '../../../../lib/vocabulary.svelte.ts';
+  import { t } from '../../../../lib/vocabulary.svelte.ts';
   import type { LayoutData } from './$types';
 
-  // ワークスペースの枠。workspace の操作の結果で、ワークスペースの中の言葉づかいを当てる（離れるときに戻す）。
-  // 最初の描画から当たるよう、描く前に走る $effect.pre で入れる。
+  // ワークスペースの枠。
   // 左のメニューのワークスペースの節と、上の帯の「所属せず管理者として開いています」の印は、組織の枠が page.data から出す。
   // 存在しない ID と別の組織の ID（404）は、同じ「見つからない」。所属していない一般のユーザー（403）も、
   // 読み直しても直らないので「入れない」の案内にする（組織の枠の 403 とは違い、ここでは「もう一度試す」を出さない）。
@@ -25,6 +35,9 @@
   // 画面にまだ無い）画面の見出しへ移す。保存した欄は、木だけを読み直して行に反映する（`app:backlog-tree`）。引き出しが読み直すのは、
   // 木かこの枠（`app:workspace`）だけで、組織の枠は読み直さない（組織の枠の失敗で、引き出しと書きかけが消えないため）。
   // 終了したワークスペースでは、引き出しを読み取り専用で開く
+  // ページ全体（tasks/[taskId]）は、ルートが TaskDrawer を置くので、ここでは引き出しを重ねない
+  // 引き出しの帯に、前後のタスクへ移るボタンを出す。順は開いた画面が置く（バックログ、計画、スプリント。画面の見えている行の順で、端で止まる）。
+  // 移るときは `?task=` を置き換え（履歴は積まない）、引き出しは置き直される。閉じたときのフォーカスは、最後に表示したタスクの行へ戻る（下の shownTaskId）
   let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
   const workspace = $derived(data.workspace);
@@ -32,14 +45,43 @@
   const status = $derived(data.workspaceFailure?.status);
   const code = $derived(data.workspaceFailure?.code);
   const unavailable = $derived((status === 404 && code === 'not_found') || (status === 403 && code === 'forbidden'));
-  const taskId = $derived(page.url.searchParams.get('task'));
-  const canWrite = $derived(workspace !== null && workspace.closedAt === null);
+  const taskId = $derived(page.params.taskId ? null : page.url.searchParams.get('task'));
+  let modeRevision = $state(0);
+  const overlayMode = $derived(drawerState.mode === 'center' ? 'center' : 'side');
 
-  $effect.pre(() => {
-    if (!workspace) return;
-    setWorkspaceVocabulary(workspace.vocabulary);
-    return () => setWorkspaceVocabulary(null);
-  });
+  // 帯で形を替える（書きかけの確認は TaskDrawer が済ませている）。移れなかったとき（新しいタブを開けなかった）は false を返し、
+  // 引き出しも既定もそのままにする
+  function changeMode(mode: TaskOpenMode): boolean {
+    if (!taskId) return true;
+    if (mode === 'tab') {
+      if (!openTaskTab(taskPageHref(data.slug, workspace!.id, taskId))) return false;
+      setTaskOpenMode(mode);
+      void withoutTask();
+      return true;
+    }
+    setTaskOpenMode(mode);
+    if (mode === 'page') {
+      // 一覧の上の引き出しからページ全体へ移っても履歴は足さない。足すと、ページ全体を閉じたとき引き出しが開いた状態の一覧に戻る
+      markOverlayHandoff();
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- 同じワークスペース内の詳細の URL
+      void goto(taskPageHref(data.slug, workspace!.id, taskId), { replace: true }).finally(() => {
+        // 移れていれば（URL がページ全体）、ページ側の afterNavigate が印を読む。移れなかったときだけ外す
+        if (!location.pathname.includes('/tasks/')) clearOverlayHandoff();
+      });
+    } else modeRevision += 1;
+    return true;
+  }
+  const canWrite = $derived(workspace !== null && workspace.closedAt === null);
+  // 前後のタスク。開いた画面が置いた、今見えている行の順（task-order.ts）の中の隣。順に無い（画面が順を置かない、完了して外れた）ときは渡さない
+  const adjacent = $derived(taskId === null ? null : adjacentTaskIds(taskOrder.ids, taskId));
+
+  // 前後のタスクへ移る（書きかけの確認は TaskDrawer が済ませている）。`?task=` だけを置き換え、ほかのクエリは残す。履歴は積まない
+  function stepTo(id: string): Promise<void> {
+    const query = new SvelteURLSearchParams(page.url.search);
+    query.set('task', id);
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路（page.url.pathname）に、残すクエリと task だけを足している
+    return goto(`${page.url.pathname}?${query}`, { replace: true, reset: false });
+  }
 
   // 今の URL から `task` だけを外した画面。開いた画面（バックログ、メンバーなど）のまま、ほかのクエリも残す
   const withoutTask = () => {
@@ -53,7 +95,8 @@
     });
   };
 
-  // 閉じたら、開いた行のリンクへフォーカスを戻す。行が無ければ（消えた、画面にまだ無い）画面の見出しへ移す。
+  // 閉じたら、開いた行の題（data-task-id を持つリンクか、バックログの完了した行の題のボタン）へフォーカスを戻す。
+  // 行が無ければ（消えた、画面にまだ無い）画面の見出しへ移す。
   // 閉じるボタンと Esc だけでなく、戻る／進むで `?task=` が外れて閉じたときも同じ。タスクが消えて閉じたときは、
   // 木を読み直した後に見出しへ移す（removed）ので、ここでは移さない
   let shownTaskId: string | null = null;
@@ -62,12 +105,14 @@
     const previous = shownTaskId;
     shownTaskId = taskId;
     if (previous === null || taskId !== null) return;
+    // 引き出しからページ全体へ移ったときも taskId は null になる。ページ全体の TaskDrawer が置いたフォーカスを奪わない
+    if (page.params.taskId) return;
     if (focusAfterReload) {
       focusAfterReload = false;
       return;
     }
     void tick().then(() => {
-      const row = document.querySelector<HTMLElement>(`a[data-task-id="${CSS.escape(previous)}"]`);
+      const row = document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(previous)}"]`);
       if (row) row.focus();
       else focusPageHeading();
     });
@@ -100,11 +145,16 @@
   {/if}
   {@render children()}
   {#if taskId !== null}
-    {#key taskId}
+    {#key `${taskId}:${modeRevision}`}
       <TaskDrawer
+        mode={overlayMode}
+        onmode={changeMode}
+        adjacent={adjacent ?? undefined}
+        onstep={stepTo}
         slug={page.params.slug ?? ''}
         workspaceId={workspace.id}
         {taskId}
+        currentUserId={data.organization?.me.id ?? null}
         {canWrite}
         definitionOfDone={workspace.definitionOfDone}
         onclose={() => void withoutTask()}

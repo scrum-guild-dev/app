@@ -1,7 +1,7 @@
 // node --test .claude/hooks/*.test.mjs
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
@@ -24,6 +24,8 @@ const scripts = {
   pretest: 'echo pre',
   commit: 'git commit -m x',
   'r2:get': 'wrangler r2 object get b/k --local',
+  // package.json の e2e と同じ中身（#521）
+  e2e: 'playwright test',
 };
 const ctx = (branch) => ({ cwd: '/repo', branchOf: () => branch, scriptOf: (dir, name) => (dir ? scripts[name] : undefined) });
 const verdict = (command, branch = '21-claude-settings') => judgeBash(command, ctx(branch));
@@ -666,6 +668,15 @@ describe('bash-rules: 止める', () => {
     'git push --force-with-lease --repo=origin main',
     'git push --force-with-lease origin $BRANCH main',
     'cd ~ && git push --force-with-lease origin HEAD main',
+    // force push は作業ブランチ宛てでも止める（ベースは merge で取り込み、通常の push をする）
+    'cd ~ && git push --force-with-lease',
+    'git push --force-with-lease',
+    'git push --force-with-lease origin 21-claude-settings',
+    'git push --force-with-lease=x:abc origin x',
+    'git push --force-with-lease=41-x:abc --force-if-includes origin 41-x',
+    'git push -u --force-with-lease origin x',
+    'git push --force-w origin x',
+    'git push --force-with-lease=x:abc origin :feature',
     'git push origin +x',
     'git push --all',
     'git push --mirror',
@@ -970,7 +981,9 @@ describe('bash-rules: 止める', () => {
     assert.equal(judgeBash('cd /elsewhere && git -C /repo push', { cwd: '/x', branchOf })?.[0], 'deny');
     assert.equal(judgeBash('git -C/repo push --force-with-lease origin HEAD', { cwd: '/w', branchOf })?.[0], 'deny');
     assert.equal(judgeBash('cd /repo && git push --force-with-lease', { cwd: '/w', branchOf })?.[0], 'deny');
-    assert.equal(judgeBash('git -C worktrees/x push --force-with-lease', { cwd: '/repo', branchOf }), null);
+    // force push は行き先のブランチを問わず止める
+    assert.equal(judgeBash('git -C worktrees/x push --force-with-lease', { cwd: '/repo', branchOf })?.[0], 'deny');
+    assert.equal(judgeBash('git -C worktrees/x push', { cwd: '/repo', branchOf }), null);
     for (const command of [
       'git -C "$(git rev-parse --show-toplevel)" commit -m x',
       'git -C "$(pwd)" merge x',
@@ -1003,7 +1016,11 @@ describe('bash-rules: 止める', () => {
     assert.match(verdict('"$(which wrangler)" deploy')[1], /道具の名前を変数/);
     assert.match(verdict('wrangler kv key put k v --local --local.foo=bar')[1], /どのフラグと読むかを判定できない/);
     assert.match(verdict('wrangler secret put X --a.b')[1], /シークレットとログイン/);
-    assert.match(verdict('git push -f')[1], /--force-with-lease/);
+    // force push は全面で止め、ベースは merge で取り込んで通常の push をするよう促す
+    assert.match(verdict('git push -f')[1], /merge/);
+    assert.doesNotMatch(verdict('git push -f')[1], /--force-with-lease で push/);
+    assert.match(verdict('git push --force-with-lease')[1], /merge/);
+    assert.doesNotMatch(verdict('git push --force-with-lease')[1], /--force-with-lease で push/);
     assert.equal(decision('git push --force-with-lease', 'main'), 'deny');
     assert.match(verdict('gh api -X PUT repos/o/r/pulls/1/merge')[1], /gh pr merge/);
     assert.match(verdict('gh pr merge 1 --squash')[1], /--match-head-commit/);
@@ -1039,13 +1056,6 @@ describe('bash-rules: 確認を挟む', () => {
     '{wrangler,x} deploy',
     'gh stack push',
     'gh stack sync',
-    'cd ~ && git push --force-with-lease',
-    'gh pr merge 21 --squash --match-head-commit abc123',
-    'gh pr merge 21 --squash --match-head-commit=abc123',
-    'gh -R ucan-lab/scrum-guild pr merge 21 --match-head-commit abc123',
-    'gh pr merge --repo o/r 21 --squash --match-head-commit abc123',
-    'gh pr merge $N --squash --match-head-commit $HEAD',
-    'bash -c "gh pr merge 21 --squash --match-head-commit abc123"',
     'git push origin $BRANCH',
     'git push origin $(echo main)',
     `echo '{"disableAllHooks": true}' > .claude/settings.local.json`,
@@ -1537,11 +1547,174 @@ describe('bash-rules: 確認を挟む', () => {
     assert.match(verdict('cf-wrangler dev')[1], /util\.parseArgs/);
   });
 
-  test('マージの確認の理由に、使うコマンドと needs-human の扱いを書く', () => {
-    const [d, reason] = verdict('gh pr merge 1 --squash --match-head-commit abc123');
-    assert.equal(d, 'ask');
-    assert.match(reason, /gh pr merge <番号> --squash --match-head-commit/);
-    assert.match(reason, /needs-human の PR .*人がマージする/);
+  // gh pr merge は、作業ブランチの中の固定の形だけを判定せず許可ルールに任せる。CI などで動く環境の変数は外して確かめる
+  const SHA = '0123456789abcdef0123456789abcdef01234567';
+  const UNATTENDED_ENV = ['CI', 'GITHUB_ACTIONS', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_REMOTE'];
+  // 非対話を見分ける環境変数をいったん外し、env だけを置いて判定する
+  const withEnv = (env, fn) => {
+    const saved = UNATTENDED_ENV.map((k) => [k, process.env[k]]);
+    for (const k of UNATTENDED_ENV) delete process.env[k];
+    Object.assign(process.env, env);
+    try {
+      return fn();
+    } finally {
+      for (const k of UNATTENDED_ENV) delete process.env[k];
+      for (const [k, v] of saved) if (v !== undefined) process.env[k] = v;
+    }
+  };
+  const mergeVerdict = (command, branch = '372-session-merge', env = {}) => withEnv(env, () => verdict(command, branch));
+
+  for (const command of [
+    `gh pr merge --squash --match-head-commit ${SHA}`,
+    `gh pr merge --match-head-commit ${SHA} --squash`,
+    `gh pr merge --squash --match-head-commit=${SHA}`,
+    `gh pr merge --squash --match-head-commit ${SHA.toUpperCase()}`,
+    // 標準エラーを標準出力へ流すだけの 2>&1 と、末尾のコメントは固定の形のまま
+    `gh pr merge --squash --match-head-commit ${SHA} 2>&1`,
+    `gh pr merge --squash --match-head-commit ${SHA} # 確かめた head`,
+  ]) {
+    test(`確認を挟まず、許可ルールに任せる: ${command}`, () => {
+      assert.equal(mergeVerdict(command), null);
+    });
+  }
+
+  for (const command of [
+    // 番号と URL、別のリポジトリ
+    `gh pr merge 21 --squash --match-head-commit ${SHA}`,
+    `gh pr merge https://github.com/o/r/pull/3 --squash --match-head-commit ${SHA}`,
+    `gh -R ucan-lab/scrum-guild pr merge --squash --match-head-commit ${SHA}`,
+    `gh pr merge --repo o/r --squash --match-head-commit ${SHA}`,
+    `gh pr merge --repo=o/r --squash --match-head-commit ${SHA}`,
+    `GH_REPO=o/r gh pr merge --squash --match-head-commit ${SHA}`,
+    `GH_HOST=example.com gh pr merge --squash --match-head-commit ${SHA}`,
+    `export GH_REPO=o/r; gh pr merge --squash --match-head-commit ${SHA}`,
+    // head の固定が空、短い、展開、繰り返し
+    'gh pr merge --squash --match-head-commit ""',
+    "gh pr merge --squash --match-head-commit ''",
+    'gh pr merge --squash --match-head-commit',
+    'gh pr merge --squash --match-head-commit abc123',
+    'gh pr merge --squash --match-head-commit "$H"',
+    'gh pr merge --squash --match-head-commit $UNSET',
+    'gh pr merge --squash --match-head-commit "${H:-}"',
+    'gh pr merge --squash --match-head-commit "$(git rev-parse HEAD)"',
+    `gh pr merge --squash --match-head-commit ${SHA} --match-head-commit ""`,
+    `gh pr merge --squash --match-head-commit ${SHA} --match-head-commit=${SHA}`,
+    // 方式
+    `gh pr merge --merge --match-head-commit ${SHA}`,
+    `gh pr merge --rebase --match-head-commit ${SHA}`,
+    `gh pr merge --match-head-commit ${SHA}`,
+    `gh pr merge --squash --merge --match-head-commit ${SHA}`,
+    // 本文に秘密を出す、ブランチを消す、ほかのフラグ
+    `gh pr merge --squash --match-head-commit ${SHA} --body-file .dev.vars`,
+    `gh pr merge --squash --match-head-commit ${SHA} -F ~/.config/gh/hosts.yml`,
+    `gh pr merge --squash --match-head-commit ${SHA} --body x`,
+    `gh pr merge --squash --match-head-commit ${SHA} --subject x`,
+    `gh pr merge --squash --match-head-commit ${SHA} --delete-branch`,
+    `gh pr merge --squash --subject --match-head-commit=${SHA}`,
+    `gh pr merge --squash --match-head-commit ${SHA} -- --admin`,
+    // 展開で渡す語
+    `gh pr merge --squash --match-head-commit ${SHA} $(echo --admin)`,
+    `gh pr merge --squash --match-head-commit ${SHA} "$(echo --admin)"`,
+    `gh pr merge --squash --match-head-commit ${SHA} \${A:---admin}`,
+    `gh pr merge --squash --match-head-commit ${SHA} --{admin,x}`,
+    `gh pr merge --squash --match-head-commit ${SHA} $@`,
+    `gh pr merge --squash --match-head-commit ${SHA} $(rm -rf ~/x)`,
+    // head の桁数、--squash の重複、=の形の短い head
+    `gh pr merge --squash --match-head-commit ${SHA}0`,
+    `gh pr merge --squash --match-head-commit ${SHA.slice(1)}`,
+    `gh pr merge --squash --match-head-commit ${SHA.slice(0, 7)}`,
+    `gh pr merge --squash --squash --match-head-commit ${SHA}`,
+    'gh pr merge --squash --match-head-commit=abc123',
+    // gh の宛先とブランチを替える変数（行内、export、展開で決まる名前、git の設定）
+    `export GH_HOST=h; gh pr merge --squash --match-head-commit ${SHA}`,
+    `export $K=o/r; gh pr merge --squash --match-head-commit ${SHA}`,
+    `GIT_DIR=/other/.git gh pr merge --squash --match-head-commit ${SHA}`,
+    `export GIT_DIR=/other/.git; gh pr merge --squash --match-head-commit ${SHA}`,
+    `env GIT_DIR=/other/.git gh pr merge --squash --match-head-commit ${SHA}`,
+    `GIT_WORK_TREE=/other gh pr merge --squash --match-head-commit ${SHA}`,
+    `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.url GIT_CONFIG_VALUE_0=https://github.com/o/r gh pr merge --squash --match-head-commit ${SHA}`,
+    `GIT_CONFIG_PARAMETERS="'remote.origin.url=x'" gh pr merge --squash --match-head-commit ${SHA}`,
+    // 同じ行で現在のブランチや宛先を替える、前置きや別の実行ファイル、区切り
+    `gh pr checkout 5 && gh pr merge --squash --match-head-commit ${SHA}`,
+    `gh pr checkout 5; gh pr merge --squash --match-head-commit ${SHA}`,
+    `git checkout 999-x && gh pr merge --squash --match-head-commit ${SHA}`,
+    `git remote set-url origin https://github.com/o/r && gh pr merge --squash --match-head-commit ${SHA}`,
+    `gh repo set-default o/r && gh pr merge --squash --match-head-commit ${SHA}`,
+    `cd /other-repo && gh pr merge --squash --match-head-commit ${SHA}`,
+    `cd worktrees/999-other && gh pr merge --squash --match-head-commit ${SHA}`,
+    `env gh pr merge --squash --match-head-commit ${SHA}`,
+    `command gh pr merge --squash --match-head-commit ${SHA}`,
+    `sudo gh pr merge --squash --match-head-commit ${SHA}`,
+    `timeout 10 gh pr merge --squash --match-head-commit ${SHA}`,
+    `./gh pr merge --squash --match-head-commit ${SHA}`,
+    `/opt/homebrew/bin/gh pr merge --squash --match-head-commit ${SHA}`,
+    `PATH=/tmp/x:$PATH gh pr merge --squash --match-head-commit ${SHA}`,
+    `gh pr merge --squash --match-head-commit ${SHA}; ls`,
+    `gh pr merge --squash --match-head-commit ${SHA} | cat`,
+    `gh pr merge --squash --match-head-commit ${SHA} && git push origin x`,
+    `gh pr merge --squash --match-head-commit ${SHA}\nls`,
+    // リダイレクトは宛先を先に空にするので、固定の形に数えない
+    `gh pr merge --squash --match-head-commit ${SHA} > ~/.gitconfig`,
+    `gh pr merge --squash --match-head-commit ${SHA} > /tmp/x`,
+    `gh pr merge --squash --match-head-commit ${SHA} >> /tmp/x`,
+    `gh pr merge --squash --match-head-commit ${SHA} 2> /tmp/x`,
+    // 入れ子は、外側の区切りの数を引き継ぐので固定の形に数えない
+    `bash -c 'gh pr merge --squash --match-head-commit ${SHA}'`,
+    `pnpm exec gh pr merge --squash --match-head-commit ${SHA}`,
+    `find . -maxdepth 0 -exec gh pr merge --squash --match-head-commit ${SHA} \\;`,
+    `xargs gh pr merge --squash --match-head-commit ${SHA}`,
+    `eval "gh pr merge --squash --match-head-commit ${SHA}"`,
+    // -R は pr の前でも後ろでも止める
+    `gh pr -R o/r merge --squash --match-head-commit ${SHA}`,
+    `gh -R o/r pr merge --squash --match-head-commit ${SHA}`,
+    // --auto と --admin
+    `gh pr merge --squash --admin --match-head-commit ${SHA}`,
+    `gh pr merge --squash --auto --match-head-commit ${SHA}`,
+  ]) {
+    test(`固定の形でないマージは止める: ${command}`, () => {
+      assert.equal(mergeVerdict(command)?.[0], 'deny');
+    });
+  }
+
+  test('作業ブランチの外（main、番号の無い名前）ではマージを止める', () => {
+    for (const branch of ['main', 'claude/x', 'no-number', 'x-21-y', '1x', '-x', '0-x', '00-x', '1-', '372']) {
+      assert.equal(mergeVerdict(`gh pr merge --squash --match-head-commit ${SHA}`, branch)?.[0], 'deny', branch);
+    }
+  });
+
+  test('場所を判定できないとき（cd の先が展開）はマージを止める', () => {
+    assert.equal(mergeVerdict(`cd $X && gh pr merge --squash --match-head-commit ${SHA}`)?.[0], 'deny');
+  });
+
+  test('非対話の実行（CI、claude -p）とクラウドのセッションでは確認に回す', () => {
+    for (const env of [{ CI: 'true' }, { CI: '1' }, { GITHUB_ACTIONS: 'true' }, { CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' }, { CLAUDE_CODE_REMOTE: 'true' }]) {
+      assert.equal(mergeVerdict(`gh pr merge --squash --match-head-commit ${SHA}`, '372-session-merge', env)?.[0], 'ask', JSON.stringify(env));
+    }
+  });
+
+  test('対話の実行では確認に回さない（CI=false と CI=0、cli、xsdk を含む）', () => {
+    for (const env of [{}, { CLAUDE_CODE_ENTRYPOINT: 'cli' }, { CI: 'false' }, { CI: '0' }, { GITHUB_ACTIONS: 'false' }, { CLAUDE_CODE_ENTRYPOINT: 'xsdk-cli' }, { CLAUDE_CODE_REMOTE: 'false' }]) {
+      assert.equal(mergeVerdict(`gh pr merge --squash --match-head-commit ${SHA}`, '372-session-merge', env), null, JSON.stringify(env));
+    }
+  });
+
+  test('固定の形でない理由は、形の説明を返す', () => {
+    for (const command of [`gh pr merge 21 --squash --match-head-commit ${SHA}`, `env gh pr merge --squash --match-head-commit ${SHA}`, `gh pr merge --squash --match-head-commit ${SHA}; ls`]) {
+      assert.match(mergeVerdict(command)[1], /単独の1行/, command);
+    }
+    assert.match(mergeVerdict(`gh pr merge --squash --match-head-commit ${SHA}`, 'main')[1], /<番号>-… の作業ブランチ/);
+  });
+
+  test('API 経由のマージを止める理由は、番号つきの gh pr merge をすすめない', () => {
+    for (const command of ['gh api -X PUT repos/o/r/pulls/1/merge', 'gh api graphql -f query="mutation { mergePullRequest }"']) {
+      assert.doesNotMatch(verdict(command)[1], /<番号>/, command);
+    }
+  });
+
+  test('.claude/settings.json の許可は gh pr merge だけに絞り、ほかの gh を許さない', () => {
+    const settings = JSON.parse(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'settings.json'), 'utf8'));
+    const ghRules = settings.permissions.allow.filter((rule) => /^Bash\(gh\b/.test(rule));
+    assert.deepEqual(ghRules, ['Bash(gh pr merge --squash --match-head-commit *)']);
   });
 
   test('止めるものと確認を挟むものが並んだら止める', () => {
@@ -1927,13 +2100,6 @@ describe('bash-rules: 通す', () => {
     `pnpm test "it's; wrangler deploy"`,
     'pnpm run build',
     'git push origin 21-claude-settings',
-    'git push --force-with-lease',
-    'git push --force-with-lease origin 21-claude-settings',
-    'git push --force-with-lease=x:abc origin x',
-    'git push --force-with-lease=41-x:abc --force-if-includes origin 41-x',
-    'git push -u --force-with-lease origin x',
-    'git push --force-w origin x',
-    'git push --force-with-lease=x:abc origin :feature',
     'git push -u origin 21-claude-settings',
     'git push --follow-tags origin x',
     'git push origin main:21-claude-settings',
@@ -4068,8 +4234,9 @@ describe('入口', () => {
 
   describe('ワークツリーの中のフックの書き換え', () => {
     // CLAUDE_CODE_REMOTE はクラウドのセッションで true になり、guard-files.mjs が本体の detached を通すので、要るテストだけが明示して渡す
+    // GH_REPO、GH_HOST、CI、GITHUB_ACTIONS は、gh pr merge の判定が宛先と非対話を見分けるのに使うので、手元の値を引き継がない
     const cleanEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && key !== 'CLAUDE_CODE_REMOTE'),
+      Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && !['CLAUDE_CODE_REMOTE', 'GH_REPO', 'GH_HOST', 'CI', 'GITHUB_ACTIONS'].includes(key)),
     );
     const main = path.join(tmp, 'repo');
     const worktree = path.join(main, 'worktrees/1-x');
@@ -4189,6 +4356,20 @@ describe('入口', () => {
       assert.equal(bash('cd src && git commit -m y', worktree, `${main}:.`), 'ask');
       // 空の CDPATH は無いものとする
       assert.equal(bash('cd src && git commit -m y', worktree, ''), 'allow');
+    });
+
+    test('Bash の判定は、フックのプロセスの環境の GH_REPO、GH_HOST、GIT_DIR などを見て gh pr merge を止める', () => {
+      const reasonOf = (env) => {
+        const command = `gh pr merge --squash --match-head-commit ${'a'.repeat(40)}`;
+        const input = JSON.stringify({ tool_name: 'Bash', cwd: worktree, tool_input: { command } });
+        const result = spawnSync(process.execPath, [path.join(hooks, 'guard-bash.mjs')], { input, encoding: 'utf8', env: { ...cleanEnv, ...env } });
+        assert.equal(result.status, 0, result.stderr);
+        return result.stdout ? JSON.parse(result.stdout).hookSpecificOutput.permissionDecisionReason : '';
+      };
+      for (const env of [{ GH_REPO: 'o/r' }, { GH_HOST: 'ghe.example.com' }, { GIT_DIR: '/other/.git' }, { GIT_WORK_TREE: '/other' }, { GIT_CONFIG_COUNT: '1' }, { GIT_CONFIG_PARAMETERS: "'x=y'" }]) {
+        assert.match(reasonOf(env), /単独の1行/, JSON.stringify(env));
+      }
+      assert.doesNotMatch(reasonOf({}), /単独の1行/);
     });
 
     test('main の作業コピーの書き換えを止め、ワークツリーと別のリポジトリは通す', () => {
@@ -4824,8 +5005,9 @@ describe('bash-rules: #356 = の形の - で始まる値と - を重ねた名前
     // 前の区切りの npm_config_call は、pnpx の経由先の npx と、exec の前の npm のフラグの後ろにも効く
     ['export npm_config_call=x; pnpx npx foo', 'ask'],
     [`export npm_config_call=x; npm --call 'echo hi' exec`, 'ask'],
-    // 今の通る形（完了条件の「今の通る形の判定は変わらない」）
-    ['npx playwright test', 'allow'],
+    // 今の通る形（完了条件の「今の通る形の判定は変わらない」）。e2e を走らせる npx playwright test は #521 で止める
+    ['npx playwright test', 'deny'],
+    ['npx playwright show-trace t.zip', 'allow'],
     ['npx tsc --noEmit', 'allow'],
     ['npx eslint .', 'allow'],
     ['npx -y create-x', 'allow'],
@@ -5000,5 +5182,834 @@ describe('bash-rules: #356 nopt の値の取り方と npm init と create の --
     [`npm init foo -c "rm -rf .claude/hooks"`, 'ask'],
   ]) {
     test(`[npm init と create の --call] ${command} は ${expected}（npm init の初期化子も --call を動かす）`, () => check(command, expected));
+  }
+});
+
+describe('bash-rules: #521 e2e は手元で走らせず CI で確かめる', () => {
+  // Claude のセッションの Bash では e2e（Playwright のテストの実行）を deny にする。確認を挟むとクラウドのセッションが承認の待ちで止まるので ask にしない。
+  // 人の端末にはフックが効かないので、E2E_LOCAL=1 のような前置きの抜け道も、1ファイルだけの例外も作らない。
+  // 止めるのは e2e を走らせる書き方だけで、show-trace、install、--version などの Playwright の道具と、pnpm test などは今の判定のまま。
+  // pnpm e2e は scripts の e2e（package.json と同じ playwright test）の中身として判定する
+
+  // [区分, コマンド, 期待]
+  const cases = [
+    // 完了条件: 止める
+    ['完了条件', 'pnpm e2e', 'deny'],
+    ['完了条件', 'pnpm run e2e', 'deny'],
+    ['完了条件', 'pnpm e2e e2e/members.test.ts', 'deny'],
+    ['完了条件', 'pnpm exec playwright test', 'deny'],
+    ['完了条件', 'npx playwright test', 'deny'],
+    // 完了条件: 止めない（今の判定のまま）
+    ['完了条件', 'pnpm exec playwright show-trace test-results/x/trace.zip', 'allow'],
+    ['完了条件', 'pnpm exec playwright install chromium', 'allow'],
+    ['完了条件', 'pnpm dev:open', 'allow'],
+    ['完了条件', 'pnpm test', 'allow'],
+    ['完了条件', 'pnpm build', 'allow'],
+
+    // 前提: 抜け道を作らない（前置きの環境変数、1ファイルだけ、CLAUDE.md の書き方）
+    ['抜け道', 'E2E_LOCAL=1 pnpm e2e', 'deny'],
+    ['抜け道', 'CI=1 pnpm e2e', 'deny'],
+    ['抜け道', 'E2E_REUSE_SERVER=1 pnpm e2e', 'deny'],
+    ['抜け道', 'E2E_DEV_BUILD=1 pnpm e2e e2e/members.test.ts', 'deny'],
+    ['抜け道', 'env X=1 pnpm e2e', 'deny'],
+    ['抜け道', 'pnpm e2e --workers=1 --repeat-each=5 --retries=0 e2e/members.test.ts', 'deny'],
+    ['抜け道', 'pnpm exec playwright test e2e/members.test.ts --workers=1', 'deny'],
+
+    // すり抜け: スクリプトの呼び方と作業場所
+    ['すり抜け', 'cd sub && pnpm e2e', 'deny'],
+    ['すり抜け', 'pnpm -C . e2e', 'deny'],
+    ['すり抜け', 'npm run e2e', 'deny'],
+    ['すり抜け', 'yarn e2e', 'deny'],
+    ['すり抜け', 'corepack pnpm e2e', 'deny'],
+    // すり抜け: playwright を直に呼ぶ形
+    ['すり抜け', 'bunx playwright test', 'deny'],
+    ['すり抜け', 'bun x playwright test', 'deny'],
+    ['すり抜け', 'pnpm dlx playwright test', 'deny'],
+    ['すり抜け', 'pnpx playwright test', 'deny'],
+    ['すり抜け', 'npm exec -- playwright test', 'deny'],
+    ['すり抜け', './node_modules/.bin/playwright test', 'deny'],
+    ['すり抜け', 'node_modules/.bin/playwright test --repeat-each=5', 'deny'],
+    ['すり抜け', 'playwright test', 'deny'],
+    ['すり抜け', 'node node_modules/@playwright/test/cli.js test', 'deny'],
+    ['すり抜け', 'node node_modules/playwright/cli.js test', 'deny'],
+    // すり抜け: シェル、前置き、区切り、置換、ヒアドキュメント
+    ['すり抜け', `bash -c 'pnpm e2e'`, 'deny'],
+    ['すり抜け', 'sh -c "npx playwright test"', 'deny'],
+    ['すり抜け', 'eval "pnpm e2e"', 'deny'],
+    ['すり抜け', 'bash <<< "pnpm e2e"', 'deny'],
+    ['すり抜け', "bash <<'EOF'\npnpm e2e\nEOF", 'deny'],
+    ['すり抜け', 'sh <<EOF\nnpx playwright test\nEOF', 'deny'],
+    ['すり抜け', 'echo e2e/members.test.ts | xargs pnpm e2e', 'deny'],
+    ['すり抜け', 'xargs npx playwright test', 'deny'],
+    ['すり抜け', 'timeout 600 pnpm e2e', 'deny'],
+    ['すり抜け', 'nohup pnpm e2e &', 'deny'],
+    ['すり抜け', 'pnpm e2e; echo done', 'deny'],
+    ['すり抜け', 'echo x && pnpm e2e', 'deny'],
+    ['すり抜け', 'echo $(pnpm e2e)', 'deny'],
+    ['すり抜け', 'out="$(npx playwright test 2>&1)"; echo "$out"', 'deny'],
+
+    // 止めない: Playwright の e2e 以外の道具、文字としての e2e、ほかのスクリプト
+    ['止めない', 'npx playwright show-trace t.zip', 'allow'],
+    ['止めない', 'playwright show-trace t.zip', 'allow'],
+    ['止めない', 'playwright install chromium', 'allow'],
+    ['止めない', 'playwright --version', 'allow'],
+    ['止めない', 'pnpm exec playwright --version', 'allow'],
+    ['止めない', 'grep -rn "pnpm e2e" docs', 'allow'],
+    ['止めない', `rg 'playwright test' .`, 'allow'],
+    ['止めない', 'echo pnpm e2e', 'allow'],
+    ['止めない', 'git commit -m "pnpm e2e を止める"', 'allow'],
+    ['止めない', 'cat package.json', 'allow'],
+    // pnpm lint はこの表の postlint（wrangler deploy）で止まるので、表に無い check で見る
+    ['止めない', 'pnpm check', 'allow'],
+    ['止めない', 'node --test .claude/hooks/*.test.mjs', 'allow'],
+
+    // パッケージ名で呼ぶ形（@playwright/test の bin は playwright）。@版 付きも
+    ['パッケージ名', 'npx @playwright/test test', 'deny'],
+    ['パッケージ名', 'npx @playwright/test@latest test', 'deny'],
+    ['パッケージ名', 'npx -y @playwright/test@1.64.1 test', 'deny'],
+    ['パッケージ名', 'pnpm dlx @playwright/test test', 'deny'],
+    ['パッケージ名', 'bunx @playwright/test test', 'deny'],
+    ['パッケージ名', 'npx @playwright/test show-trace t.zip', 'allow'],
+    // cli.js の別の書き方
+    ['cli.js', 'node node_modules/playwright-core/cli.js test', 'deny'],
+    ['cli.js', 'node node_modules/@playwright/test/cli.cjs test', 'deny'],
+    // サブコマンドを展開で渡す形は、test になりうるので止める（wrangler の引用符の外の展開と同じ）
+    ['展開', 'playwright $X', 'deny'],
+    ['展開', 'playwright "$X"', 'deny'],
+    ['展開', 'playwright $(echo test)', 'deny'],
+    ['展開', 'npx playwright $T', 'deny'],
+    // 最初の位置引数だけを見る。後ろの語の test では止めない
+    ['止めない', 'pnpm exec playwright show-trace test', 'allow'],
+    // 引数を実行しない道具の後ろの playwright の語、依存の情報を見るだけの道具の後ろは実行でない
+    ['止めない', 'grep -r playwright test .', 'allow'],
+    ['止めない', 'npm view playwright test', 'allow'],
+    ['止めない', 'pnpm why playwright test', 'allow'],
+  ];
+  for (const [kind, command, expected] of cases) {
+    test(`[${kind}] ${command} は ${expected}`, () => assert.equal(decision(command), expected, command));
+  }
+
+  test('止めた理由に CI で確かめることが出る', () => {
+    for (const command of ['pnpm e2e', 'pnpm run e2e', 'pnpm e2e e2e/members.test.ts', 'pnpm exec playwright test', 'npx playwright test']) {
+      const result = verdict(command);
+      assert.equal(result?.[0], 'deny', command);
+      assert.match(result[1], /CI/, command);
+    }
+  });
+});
+
+describe('bash-rules: force push は作業ブランチ宛てでも止める', () => {
+  // ベースは merge で取り込み、通常の push をする。--force-with-lease を含む force push は、行き先のブランチを問わず deny にする。
+  // force になるかは refspec に依らずフラグで決まるので、行き先を判定できない形（変数の先、cd ~）でも ask ではなく deny にする。
+  // gh api で ref を force=true で動かすのも force push と同じに見る。gh stack の ask は今のまま
+
+  // [区分, コマンド, 期待]
+  const cases = [
+    // 完了条件: --force-with-lease を含む force push を作業ブランチへ打つと止める
+    ['完了条件', 'git push --force-with-lease', 'deny'],
+    ['完了条件', 'git push --force-with-lease origin 21-claude-settings', 'deny'],
+    ['完了条件', 'git push --force-with-lease origin HEAD', 'deny'],
+    ['完了条件', 'git push --force-with-lease --force-if-includes origin x', 'deny'],
+    // 完了条件: 通常の push は今どおり通す
+    ['完了条件', 'git push', 'allow'],
+    ['完了条件', 'git push origin x', 'allow'],
+    ['完了条件', 'git push -u origin x', 'allow'],
+    ['完了条件', 'git push origin HEAD', 'allow'],
+
+    // 断る場合: 前に塞いだ force push の手口は今も止める
+    ['断る', 'git push --force origin x', 'deny'],
+    ['断る', 'git push -f origin x', 'deny'],
+    ['断る', 'git push -uf origin x', 'deny'],
+    ['断る', 'git push --mirror', 'deny'],
+    ['断る', 'git push --all', 'deny'],
+    ['断る', 'git push origin +x', 'deny'],
+    ['断る', 'git push origin +HEAD:x', 'deny'],
+    ['断る', 'git push origin main', 'deny'],
+    ['断る', 'git push --force-with-lease origin main', 'deny'],
+    ['断る', 'gh api -X PATCH repos/o/r/git/refs/heads/main -F force=true', 'deny'],
+    // 断る場合: 行き先を判定できない形も、force なので確かめるまでもなく止める
+    ['断る', 'cd ~ && git push --force-with-lease', 'deny'],
+    ['断る', 'git push --force-with-lease origin $B', 'deny'],
+    ['断る', 'git push --force-with-lease origin "$B"', 'deny'],
+    ['断る', 'git push --force-with-lease origin $(git branch --show-current)', 'deny'],
+    ['断る', 'git push --force-with-lease {origin,x} x', 'deny'],
+
+    // すり抜け: 省略形と = 付きの値
+    ['すり抜け', 'git push --force-wi origin x', 'deny'],
+    ['すり抜け', 'git push --force-with origin x', 'deny'],
+    ['すり抜け', 'git push --force-w origin x', 'deny'],
+    ['すり抜け', 'git push --force-with-lease=x origin x', 'deny'],
+    ['すり抜け', 'git push --force-with-lease=x:abc origin x', 'deny'],
+    ['すり抜け', 'git push --force-with-lease=refs/heads/x:abc origin x', 'deny'],
+    ['すり抜け', 'git push --force-with-lease= origin x', 'deny'],
+    ['すり抜け', 'git push --force-with-lease=x:abc origin :feature', 'deny'],
+    // すり抜け: --force-if-includes の単独と組み合わせ
+    ['すり抜け', 'git push --force-if-includes origin x', 'deny'],
+    ['すり抜け', 'git push --force-if origin x', 'deny'],
+    ['すり抜け', 'git push --force-if-includes --force-with-lease origin x', 'deny'],
+    ['すり抜け', 'git push --force-with-lease=x:abc --force-if-includes origin x', 'deny'],
+    // すり抜け: 位置の前後
+    ['すり抜け', 'git push -u --force-with-lease origin x', 'deny'],
+    ['すり抜け', 'git push --force-with-lease -u origin x', 'deny'],
+    ['すり抜け', 'git push origin x --force-with-lease', 'deny'],
+    ['すり抜け', 'git push origin --force-with-lease x', 'deny'],
+    ['すり抜け', 'git push --force-with-lease -- origin x', 'deny'],
+    ['すり抜け', 'git push -q --follow-tags --force-with-lease origin x', 'deny'],
+    // すり抜け: 作業場所の切り替え
+    ['すり抜け', 'git -C /w push --force-with-lease', 'deny'],
+    ['すり抜け', 'git -C worktrees/x push --force-with-lease origin x', 'deny'],
+    ['すり抜け', 'cd /w && git push --force-with-lease', 'deny'],
+    ['すり抜け', 'cd worktrees/x && git push --force-with-lease origin x', 'deny'],
+    ['すり抜け', 'pushd /w && git push --force-with-lease', 'deny'],
+    ['すり抜け', 'pushd worktrees/x; git push --force-with-lease origin x; popd', 'deny'],
+    // すり抜け: 引用符
+    ['すり抜け', 'git push "--force-with-lease" origin x', 'deny'],
+    ['すり抜け', "git push '--force-with-lease' origin x", 'deny'],
+    ['すり抜け', 'git push --force-with-lease="x:abc" origin x', 'deny'],
+    ['すり抜け', 'git push --"force-with-lease" origin x', 'deny'],
+    ['すり抜け', 'git "push" --force-with-lease origin x', 'deny'],
+    // すり抜け: シェルの中
+    ['すり抜け', "bash -c 'git push --force-with-lease origin x'", 'deny'],
+    ['すり抜け', 'sh -c "git push --force-with-lease"', 'deny'],
+    ['すり抜け', "zsh -c 'git push --force-with-lease origin x'", 'deny'],
+    ['すり抜け', 'eval "git push --force-with-lease origin x"', 'deny'],
+    // すり抜け: 区切りで続けた形
+    ['すり抜け', 'git fetch origin; git push --force-with-lease origin x', 'deny'],
+    ['すり抜け', 'git rebase origin/main && git push --force-with-lease', 'deny'],
+    ['すり抜け', 'git status || git push --force-with-lease', 'deny'],
+    ['すり抜け', 'git push --force-with-lease origin x | tee log', 'deny'],
+    ['すり抜け', 'git push --force-with-lease origin x &', 'deny'],
+    // すり抜け: リダイレクト付き
+    ['すり抜け', 'git push --force-with-lease origin x > log', 'deny'],
+    ['すり抜け', 'git push --force-with-lease origin x 2>&1', 'deny'],
+    ['すり抜け', 'git push --force-with-lease origin x >/dev/null 2>&1', 'deny'],
+    // すり抜け: ヒアストリング、ヒアドキュメントで sh に渡す形
+    ['すり抜け', 'bash <<< "git push --force-with-lease origin x"', 'deny'],
+    ['すり抜け', "sh <<'EOF'\ngit push --force-with-lease origin x\nEOF", 'deny'],
+    ['すり抜け', 'bash <<EOF\ngit push --force-with-lease\nEOF', 'deny'],
+    // すり抜け: 前置き
+    ['すり抜け', 'env X=1 git push --force-with-lease origin x', 'deny'],
+    ['すり抜け', 'X=1 git push --force-with-lease origin x', 'deny'],
+    ['すり抜け', 'command git push --force-with-lease origin x', 'deny'],
+    ['すり抜け', 'timeout 60 git push --force-with-lease origin x', 'deny'],
+    ['すり抜け', 'echo x | xargs git push --force-with-lease origin', 'deny'],
+    ['すり抜け', 'git -c push.default=current push --force-with-lease', 'deny'],
+    ['すり抜け', 'echo $(git push --force-with-lease origin x)', 'deny'],
+    // すり抜け: gh api で作業ブランチの ref を force=true で動かす
+    ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/heads/x -F force=true', 'deny'],
+    ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/heads/x -f force=true', 'deny'],
+    ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/heads/x -f sha=abc -F force=true', 'deny'],
+    ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/heads/x --field force=true', 'deny'],
+    ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/heads/x --raw-field force=true', 'deny'],
+    ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/heads/x --field=force=true', 'deny'],
+    ['すり抜け', 'gh api -XPATCH repos/o/r/git/refs/heads/x -F force=true', 'deny'],
+    ['すり抜け', 'gh api --method PATCH repos/o/r/git/refs/heads/x -F force=true', 'deny'],
+    ['すり抜け', 'gh api --method=PATCH repos/o/r/git/refs/heads/x -F force=true', 'deny'],
+    ['すり抜け', 'gh api -F force=true -X PATCH repos/o/r/git/refs/heads/x', 'deny'],
+    ['すり抜け', 'gh api -X PATCH "repos/{owner}/{repo}/git/refs/heads/x" -F force=true', 'deny'],
+    ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/heads/41-x -F "force=true"', 'deny'],
+    ['すり抜け', "bash -c 'gh api -X PATCH repos/o/r/git/refs/heads/x -F force=true'", 'deny'],
+
+    // 通す: 通常の push、打ち消しだけの --no-force-with-lease、merge での取り込み、force でない ref の読み書き
+    ['通す', 'git push --follow-tags origin x', 'allow'],
+    ['通す', 'git push --no-force-with-lease origin x', 'allow'],
+    ['通す', 'git -C worktrees/x push origin x', 'allow'],
+    ['通す', 'git push origin x 2>&1', 'allow'],
+    ['通す', 'git fetch origin && git merge origin/main && git push', 'allow'],
+    ['通す', 'git merge origin/main', 'allow'],
+    ['通す', 'git merge --no-edit origin/main', 'allow'],
+    ['通す', 'git merge --ff-only origin/x', 'allow'],
+    ['通す', 'gh api -X PATCH repos/o/r/git/refs/heads/x -F force=false', 'allow'],
+    ['通す', 'gh api repos/o/r/git/refs/heads/x', 'allow'],
+    ['通す', 'gh api repos/o/r/git/refs/heads/x --jq .object.sha', 'allow'],
+    ['通す', 'grep -rn "git push --force-with-lease" docs', 'allow'],
+    ['通す', 'echo git push --force-with-lease', 'allow'],
+    ['通す', 'git commit -m "--force-with-lease をやめる"', 'allow'],
+    // gh stack の push と sync は今のまま確認を挟む
+    ['gh stack', 'gh stack push', 'ask'],
+    ['gh stack', 'gh stack sync', 'ask'],
+  ];
+  for (const [kind, command, expected] of cases) {
+    test(`[${kind}] ${command} は ${expected}`, () => assert.equal(decision(command), expected, command));
+  }
+
+  test('止めた理由が merge での取り込みを促す', () => {
+    for (const command of [
+      'git push --force-with-lease',
+      'git push --force-with-lease origin x',
+      'git push --force-if-includes origin x',
+      'git push -f',
+      'git push --force origin x',
+    ]) {
+      const result = verdict(command);
+      assert.equal(result?.[0], 'deny', command);
+      assert.match(result[1], /merge/, command);
+      assert.doesNotMatch(result[1], /--force-with-lease で push/, command);
+    }
+  });
+
+  test('gh api の force=true は作業ブランチの ref でも止める', () => {
+    const result = verdict('gh api -X PATCH repos/o/r/git/refs/heads/x -F force=true');
+    assert.equal(result?.[0], 'deny');
+  });
+});
+
+
+describe('bash-rules: force の拒否は行き先の確認より先に効く', () => {
+  for (const command of [
+    'git push --force-with-lease origin x(N)',
+    'git push --force-if-includes origin x(N)',
+    'git push --force-w origin "$FLAGS"',
+    'git push --force-i origin x',
+    'git push --force-with-lease --no-verify origin x',
+    'git push --force-with-lease origin --"$FLAGS"',
+    'git push origin +x y(N)',
+    'echo x | xargs git push --force-if-includes origin',
+    'gh api -X PATCH repos/o/r/git/refs/heads/feature/x --raw-field=force=true',
+    'gh api -X PATCH repos/o/r/git/refs/heads/x -F=force=true',
+    'gh api -X PATCH repos/o/r/git/refs/heads/x -f=force=true',
+    'gh api -X PATCH repos/o/r/git/refs/heads/x -Fforce=true',
+    'gh api -X PATCH repos/o/r/git/refs/heads/x -fforce=true',
+  ]) {
+    test(command, () => assert.equal(decision(command), 'deny'));
+  }
+  for (const command of [
+    'gh api -X GET repos/o/r/git/refs/heads/x -F force=true',
+    'gh api -X PATCH repos/o/r/git/refs/heads/x --raw-field=force=false',
+    'gh api -X PATCH repos/o/r/git/refs/heads/x -F sha=abc -f note=force=true',
+  ]) {
+    test(command, () => assert.equal(decision(command), 'allow'));
+  }
+});
+
+describe('bash-rules: force push の判定を git と gh の実際の引数の読み方で崩す', () => {
+  // git 2.56.0 の git push --dry-run で forced update になると確かめた形
+  for (const command of [
+    // -4（--ipv4）と -6（--ipv6）は数字の短いフラグで、-f とまとめられる
+    'git push -4f origin x',
+    'git push -f4 origin x',
+    'git push -u6f origin x',
+    // --m は push の長いオプションで --mirror だけに当たる一意な省略形
+    'git push --m',
+    // 値を取る git の大域のオプション
+    'git --config-env foo.bar=HOME push --force-with-lease origin x',
+    'git --attr-source HEAD push --force-with-lease origin x',
+  ]) {
+    test(`[すり抜け] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+
+  // GitHub の側で作業ブランチを rebase し、head を書き換える（既定の merge の更新は通常の更新）
+  for (const command of ['gh pr update-branch --rebase', 'gh pr update-branch 12 --rebase']) {
+    test(`[すり抜け] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+  test('[通す] gh pr update-branch は merge で更新するので通す', () => assert.equal(decision('gh pr update-branch'), 'allow'));
+
+  // ref の更新の API に force: true を送る形
+  for (const command of [
+    'gh api -X PATCH "repos/o/r/git/refs/$REF" -F force=true',
+    "gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<'EOF'\n{\"sha\":\"a\",\"force\":true}\nEOF",
+    "echo '{\"sha\":\"a\",\"force\":true}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -",
+    "curl -X PATCH -H 'Authorization: token t' https://api.github.com/repos/o/r/git/refs/heads/x -d '{\"sha\":\"a\",\"force\":true}'",
+    "curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x --json '{\"sha\":\"a\",\"force\":true}'",
+  ]) {
+    test(`[すり抜け] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+  // 本文をファイルから読むと force を読めない。黙って通さない
+  test('[すり抜け] gh api の ref の PATCH を --input のファイルで送ると通さない', () =>
+    assert.notEqual(decision('gh api -X PATCH repos/o/r/git/refs/heads/x --input body.json'), 'allow'));
+
+  // -o と --push-option は次の語を値に取る。値の -f や --force は push option の文字列で、force にならない
+  // （receive.advertisePushOptions を有効にしたリモートへの --dry-run で non-fast-forward として弾かれると確かめた）
+  for (const command of ['git push -o -f origin x', 'git push --push-option --force origin x', 'git push -oforce origin x']) {
+    test(`[誤って止める] ${command} は deny にしない`, () => assert.notEqual(decision(command), 'deny', command));
+  }
+});
+
+describe('bash-rules: force push の判定で値の位置と本文の見え方を分ける', () => {
+  for (const command of [
+    // push option の値の後ろの force は、値に隠れず効く
+    'git push -o x -f origin x',
+    'git push --pu x --force origin x',
+    "echo '{\"force\":true}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -",
+    'gh api -X PATCH repos/o/r/git/refs/tags/v1 -F force=true',
+    'curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x --data=\'{"force":true}\'',
+    'gh pr update-branch --rebase=true',
+  ]) {
+    test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+  for (const command of [
+    'gh pr update-branch --rebase=false',
+    'gh pr update-branch 12 --repo o/r',
+    "echo '{\"sha\":\"a\"}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -",
+    "gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<'EOF'\n{\"sha\":\"a\",\"force\":false}\nEOF",
+  ]) {
+    test(`[通す] ${command} は allow`, () => assert.equal(decision(command), 'allow', command));
+  }
+  for (const command of [
+    'curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x -d @body.json',
+    'curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x --data-binary @- < body.json',
+    'cat body.json | gh api -X PATCH repos/o/r/git/refs/heads/x --input -',
+  ]) {
+    test(`[確認] ${command} は本文を読めないので allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+});
+
+describe('bash-rules: force の ref 更新を別の入口と道具の引数の読み方で崩す', () => {
+  // git 2.56.0 の git push --dry-run で forced update になると確かめた形（-- の後ろも refspec として読む）
+  for (const command of ['git push -- origin +HEAD:x', 'git push origin -- +HEAD:x']) {
+    test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+
+  // gh pr update-branch --rebase は GraphQL の updatePullRequestBranch に updateMethod: REBASE を送る（gh 2.103.3 の
+  // バイナリに api.UpdatePullRequestBranch と githubv4.PullRequestBranchUpdateMethod がある）。gh api graphql で直に送れる
+  test('[すり抜け] gh api graphql の updatePullRequestBranch に updateMethod: REBASE を送ると deny', () => {
+    const command = `gh api graphql -f query='mutation { updatePullRequestBranch(input: {pullRequestId: "PR_x", updateMethod: REBASE}) { clientMutationId } }'`;
+    assert.equal(decision(command), 'deny', command);
+  });
+  test('[通す] updateMethod を付けない updatePullRequestBranch は merge の更新なので通す', () => {
+    const command = `gh api graphql -f query='mutation { updatePullRequestBranch(input: {pullRequestId: "PR_x"}) { clientMutationId } }'`;
+    assert.equal(decision(command), 'allow', command);
+  });
+
+  // gh repo sync <リポジトリ> --force は GitHub の側で宛先のブランチを hard reset する（gh repo sync --help）
+  test('[すり抜け] gh repo sync o/r --branch x --force は deny', () =>
+    assert.equal(decision('gh repo sync o/r --branch x --force'), 'deny'));
+  test('[通す] gh repo sync o/r --branch x は fast-forward なので通す', () => assert.equal(decision('gh repo sync o/r --branch x'), 'allow'));
+  test('[通す] gh api で新しいブランチの ref を作るのは force でないので通す', () =>
+    assert.equal(decision('gh api -X POST repos/o/r/git/refs -f ref=refs/heads/x -f sha=abc'), 'allow'));
+
+  for (const command of [
+    // -X と --method を重ねると後ろの値が効く（gh は GH_DEBUG=api で PATCH を送ると確かめ、curl は手元のサーバーで PATCH が届いた）
+    'gh api -X GET -X PATCH repos/o/r/git/refs/heads/x -F force=true',
+    'gh api --method GET --method PATCH repos/o/r/git/refs/heads/x -F force=true',
+    `curl -X GET -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x -d '{"force":true}'`,
+    // curl は短いフラグをまとめ、最後のフラグが値を取る（-sXPATCH、-sd。手元のサーバーで PATCH と本文が届いた）
+    `curl -sXPATCH https://api.github.com/repos/o/r/git/refs/heads/x -sd '{"force":true}'`,
+    // URL のホストは大文字と小文字を区別しない（RFC 3986 の 3.2.2）
+    `curl -X PATCH https://API.github.com/repos/o/r/git/refs/heads/x -d '{"force":true}'`,
+  ]) {
+    test(`[すり抜け] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+
+  for (const command of [
+    // 本文が見えない道。-sd @ファイルは手元のサーバーで本文の force: true が届いた
+    'curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x -sd @body.json',
+    // force の値が展開で決まる
+    'gh api -X PATCH repos/o/r/git/refs/heads/x -F force=$F',
+    'gh api -X PATCH repos/o/r/git/refs/heads/x -F "$FIELD"',
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<< "{\\"force\\":$F}"`,
+    `curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x -d "{\\"force\\":$F}"`,
+    // 前の区切りに { があっても、標準入力の本文はその語ではない（jq と printf が組む本文、別のコマンドの {、リダイレクトのファイル）
+    "jq '{sha: .sha, force: true}' x.json | gh api -X PATCH repos/o/r/git/refs/heads/x --input -",
+    `printf '{"%s":true}' force | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+    "git log -1 --format='{%H}'; gh api -X PATCH repos/o/r/git/refs/heads/x --input - < body.json",
+    "echo '{}' > /dev/null; cat body.json | gh api -X PATCH repos/o/r/git/refs/heads/x --input -",
+  ]) {
+    test(`[確認] ${command} は force かを読めないので allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+
+  // 誤って止める: ref を動かさないコマンドの語や、標準入力に流れない前の区切りの語を、本文として読む
+  test('[誤って止める] Issue のコメントの本文に ref の API と {"force":true} を書くのは止めない', () => {
+    const command = `gh api -X POST repos/o/r/issues/1/comments -f body='PATCH /repos/o/r/git/refs/heads/x に {"force":true} を送ると force push と同じ'`;
+    assert.equal(decision(command), 'allow', command);
+  });
+  test('[誤って止める] 前の区切りでファイルに書いた {"force":true} は、次の gh api の標準入力の本文ではない', () => {
+    const command = `echo '{"force":true}' > note.json; echo '{"sha":"a"}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`;
+    assert.notEqual(decision(command), 'deny', command);
+  });
+});
+
+describe('bash-rules: ref の更新の force を字面で読めるかで分ける', () => {
+  for (const command of [
+    `gh api -X PATCH repos/o/r/git/refs/heads/x -f sha=abc -F force=false`,
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<'EOF'\n{"sha":"$SHA"}\nEOF`,
+    `curl -sX PATCH https://api.github.com/repos/o/r/git/refs/heads/x -d "{\\"sha\\":\\"$SHA\\"}"`,
+    `curl -sX PATCH https://api.github.com/repos/o/r/git/refs/heads/x -H 'Authorization: token t' -d '{"force":false}'`,
+    `gh api -X GET repos/o/r/git/refs/heads/x -X GET`,
+    `gh pr update-branch --rebase=false`,
+    `gh api graphql -f query='mutation { updatePullRequestBranch(input: {pullRequestId: "PR_x", updateMethod: MERGE}) { clientMutationId } }'`,
+    `gh repo sync o/r --force=false`,
+  ]) {
+    test(`[通す] ${command} は allow`, () => assert.equal(decision(command), 'allow', command));
+  }
+  for (const command of [
+    `gh repo sync o/r --force`,
+    `gh api graphql -f query='mutation { updatePullRequestBranch(input: {pullRequestId: "PR_x", updateMethod: REBASE}) { clientMutationId } }'`,
+    `gh api graphql -f query='mutation($m: PullRequestBranchUpdateMethod) { updatePullRequestBranch(input: {pullRequestId: "PR_x", updateMethod: $m}) { clientMutationId } }' -f m=REBASE`,
+    `curl -sX PATCH https://api.github.com/repos/o/r/git/refs/heads/x -sd '{"force":true}'`,
+    `printf '{"force":true}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+  ]) {
+    test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+  for (const command of [
+    `printf '{"sha":"a"}\\n' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+  ]) {
+    test(`[通す] ${command} は字面が本文なので allow`, () => assert.equal(decision(command), 'allow', command));
+  }
+  for (const command of [
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input body.json`,
+    `echo '{"force":true}' | sed s/a/b/ | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+  ]) {
+    test(`[確認] ${command} は allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+  for (const command of [
+    // 短いフラグのまとめと -f だけのフィールドでも、メソッドの既定は POST（マージの API は PUT だけを受けるが、ここでは止める）
+    'gh api -iXPUT repos/o/r/pulls/1/merge',
+    'gh api -fbase=main repos/o/r/pulls/1/merge',
+    // --next の後ろの要求にだけ付いた PUT
+    'curl https://example.com --next -X PUT https://api.github.com/repos/o/r/pulls/1/merge',
+    // スキームの無い URL
+    'curl -X PUT api.github.com/repos/o/r/pulls/1/merge',
+    `gh api graphql --input - <<'EOF'\n{"query":"mutation{mergePullRequest(input:{pullRequestId:\\"x\\"}){clientMutationId}}"}\nEOF`,
+  ]) {
+    test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+  // 標準入力のリダイレクトの後ろがヒアドキュメントなら、それが本文
+  test('[通す] gh api --input - < body.json <<<{"sha":"a"} は後ろのヒアストリングが本文なので allow', () =>
+    assert.equal(decision(`gh api -X PATCH repos/o/r/git/refs/heads/x --input - < body.json <<<'{"sha":"a"}'`), 'allow'));
+});
+
+describe('bash-rules: メソッドを最後の値で読む作り直しと、本文の字面の読み方を崩す', () => {
+  // 前は止めていた main の ref、マージ、contents の書き込み。別のフラグの値に置いた -XGET を、メソッドとして最後の値に読んで通す。
+  // gh 2.103.3 は --preview と --jq の次の語を値に取り、GH_DEBUG=api で PATCH を送ると確かめた（閉じた localhost 宛て）。
+  // curl は --user-agent の次の語を値に取り、手元のサーバーに PATCH が届いた
+  for (const command of [
+    'gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc --preview -XGET',
+    'gh api -X PUT repos/o/r/pulls/1/merge --jq -XGET',
+    'gh api -X PUT repos/o/r/contents/a.txt -f message=m -f content=YQ== --preview -XGET',
+    `curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/main -d '{"sha":"a"}' --user-agent -XGET`,
+    'curl -X PUT https://api.github.com/repos/o/r/pulls/1/merge --user-agent -XGET',
+    `curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x -d '{"sha":"a","force":true}' --user-agent -XGET`,
+    // curl の --next（-:）の後ろのオプションは次の URL にだけ効く。前の URL には PUT が届いた（手元のサーバーで確かめた）
+    'curl -X PUT https://api.github.com/repos/o/r/pulls/1/merge --next -X GET https://api.github.com/zen',
+    `curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/main -d '{"sha":"a"}' -: -X GET https://api.github.com/zen`,
+  ]) {
+    test(`[後退] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+  // 短い値のフラグ（-A）の値は、メソッドとして読まない
+  test('[止める] curl の -A の値の -XGET はメソッドにしない', () => {
+    const command = `curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x -d '{"force":true}' -A -XGET`;
+    assert.equal(decision(command), 'deny', command);
+  });
+
+  // pflag は真偽の短いフラグ（-i）と値を取る短いフラグをまとめて読む。gh 2.103.3 で -iXPATCH -iFlocked=true が
+  // PATCH と {"locked": true} になると確かめた
+  for (const command of [
+    'gh api -iXPATCH repos/o/r/git/refs/heads/x -iFforce=true',
+    'gh api -X PATCH repos/o/r/git/refs/heads/x -iFforce=true',
+    'gh api -iX PATCH repos/o/r/git/refs/heads/x -iF force=true',
+  ]) {
+    test(`[すり抜け] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+
+  // printf はいつも、zsh の echo は既定で \n を改行にする。JSON では改行は空白なので force: true になる（手元のサーバーで確かめた）
+  for (const command of [
+    `printf '{"sha":"a","force":\\ntrue}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+    `echo '{"sha":"a","force":\\ntrue}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+    `printf '{"sha":"a","force":\\ntrue}' | curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x -d @-`,
+    // printf の -- は書式の前の区切りで、本文は次の語（bash、zsh、/usr/bin/printf で確かめた）
+    `printf -- '{"sha":"a","force":true}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+  ]) {
+    test(`[すり抜け] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+
+  // 標準入力のリダイレクトは後ろのものが効く。ヒアストリングやヒアドキュメントの後ろの < ファイル が本文になる（bash と curl で確かめた）
+  for (const command of [
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<<'{"sha":"a"}' < body.json`,
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<'EOF' < body.json\n{"sha":"a"}\nEOF`,
+    `curl -X PATCH https://api.github.com/repos/o/r/git/refs/heads/x --data-binary @- <<<'{"sha":"a"}' < body.json`,
+    // 番号付きで標準入力をファイルから読む
+    'gh api -X PATCH repos/o/r/git/refs/heads/x --input - 0< body.json',
+  ]) {
+    test(`[確認] ${command} は本文を読めないので allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+
+  // GraphQL の本文を標準入力で渡すと、mutation の名前と REBASE を字面で見ない。REST の ref の更新は同じ道の本文を読んでいる
+  for (const command of [
+    `gh api graphql --input - <<'EOF'\n{"query":"mutation{updatePullRequestBranch(input:{pullRequestId:\\"x\\",updateMethod:REBASE}){clientMutationId}}"}\nEOF`,
+    `gh api graphql --input - <<'EOF'\n{"query":"mutation{updateRefs(input:{repositoryId:\\"x\\",refUpdates:[{name:\\"refs/heads/x\\",afterOid:\\"a\\",force:true}]}){clientMutationId}}"}\nEOF`,
+  ]) {
+    test(`[すり抜け] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+
+  // エンドポイントを URL の語だけで見るようになり、Host ヘッダーの語を URL とみなす。IP 宛ての URL の merge を見ない
+  test('[後退] curl -k で IP 宛てに Host: api.github.com を付けた merge は deny', () => {
+    const command = `curl -k -X PUT -H 'Host: api.github.com' https://140.82.112.6/repos/o/r/pulls/1/merge`;
+    assert.equal(decision(command), 'deny', command);
+  });
+});
+
+describe('bash-rules: done-check の指摘（URL を決めるオプション、本文の展開、標準入力の出どころ、GraphQL の判定の範囲）', () => {
+  const ref = 'https://api.github.com/repos/o/r/git/refs/heads/x';
+  const merge = 'https://api.github.com/repos/o/r/pulls/1/merge';
+
+  // curl の URL と path は、位置の語と --url のほか、--expand-url と --request-target でも決まる。
+  // 決められないときは、語のぜんたいを path として判定する
+  for (const command of [
+    `curl -X PUT --expand-url ${merge}`,
+    `curl -X PUT --variable u=${merge} --expand-url '{{u}}'`,
+    `curl -X PUT --request-target /repos/o/r/pulls/1/merge https://api.github.com`,
+    `curl -X PUT --expand-request-target /repos/o/r/pulls/1/merge https://api.github.com`,
+    `curl -X PUT --variable p=/repos/o/r/pulls/1/merge --expand-request-target '{{p}}' https://api.github.com`,
+    `curl -X PATCH --expand-url ${ref} -d '{"force":true}'`,
+  ]) {
+    test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+
+  // 本文の途中の展開は、force を持ち込みうる。字面の本文（クォートしたヒアドキュメント、単一引用符）は除く
+  for (const command of [
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<< "{\\"sha\\":\\"a\\",$F}"`,
+    `curl -X PATCH ${ref} -d "{\\"sha\\":\\"a\\",$F}"`,
+    `echo "{\\"sha\\":\\"a\\",$F}" | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<EOF\n{"sha":"a",$(cat f)}\nEOF`,
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<EOF\n{"sha":"$(cat f)"}\nEOF`,
+  ]) {
+    test(`[確認] ${command} は force を持ち込みうるので allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+  for (const command of [
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<'EOF'\n{"sha":"a",$(cat f)}\nEOF`,
+    `curl -X PATCH ${ref} -d '{"sha":"$SHA"}'`,
+    `echo '{"sha":"$SHA"}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+  ]) {
+    test(`[通す] ${command} は字面の本文なので allow`, () => assert.equal(decision(command), 'allow', command));
+  }
+
+  // curl は --json の値をつなぐ
+  test('[止める] curl の --json を重ねてつないだ {"force":true} は deny', () => {
+    const command = `curl -X PATCH ${ref} --json '{"sha":"a","for' --json 'ce":true}'`;
+    assert.equal(decision(command), 'deny', command);
+  });
+
+  // --expand-data 系は本文で、メソッドの既定は POST。値に {{ があれば読めない
+  for (const command of [
+    `curl --expand-data '{"force":true}' ${merge}`,
+    `curl -X PATCH ${ref} --expand-data-raw '{"sha":"a","force":true}'`,
+    `curl -X PATCH ${ref} --expand-json '{"force":true}'`,
+    `curl --expand-data-binary x ${merge}`,
+  ]) {
+    test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+  for (const command of [
+    `curl -X PATCH ${ref} --variable f=true --expand-data '{"force":{{f}}}'`,
+    `curl -X PATCH ${ref} --expand-json '{{body}}'`,
+  ]) {
+    test(`[確認] ${command} は本文を読めないので allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+
+  // GraphQL の query か本文を読めないとき
+  for (const command of [
+    'gh api graphql --input body.json',
+    'gh api graphql -F query=@query.graphql',
+    'gh api graphql --input -',
+    'cat q.json | gh api graphql --input -',
+    'curl -X POST https://api.github.com/graphql -d @q.json',
+  ]) {
+    test(`[確認] ${command} は query を読めないので allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+  test('[通す] gh api graphql の query が引数にあれば allow', () =>
+    assert.equal(decision(`gh api graphql -f query='{ viewer { login } }'`), 'allow'));
+
+  // パイプでつながない echo は、gh と curl の標準入力に流れない
+  for (const command of [
+    `echo '{"force":false}' && gh api -X PATCH repos/o/r/git/refs/heads/x --input - < b.json`,
+    `echo '{"force":false}'; gh api -X PATCH repos/o/r/git/refs/heads/x --input - < b.json`,
+    `echo '{"force":true}'\ngh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+    `echo '{"force":false}' || gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+    `printf '{"force":false}'; curl -X PATCH ${ref} -d @- < b.json`,
+    `while read l; do echo '{"force":false}'; gh api -X PATCH repos/o/r/git/refs/heads/x --input -; done < b.json`,
+  ]) {
+    test(`[確認] ${command} は標準入力の出どころを読めないので ask`, () => assert.equal(decision(command), 'ask', command));
+  }
+  test('[止める] パイプで渡す echo の force:true は読んで deny', () =>
+    assert.equal(decision(`echo x; echo '{"force":true}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`), 'deny'));
+  test('[通す] パイプで渡す echo の force:false は allow', () =>
+    assert.equal(decision(`echo x; echo '{"sha":"a","force":false}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`), 'allow'));
+
+  // グループとサブシェルの中の echo は、gh の標準入力に流れるとは限らない
+  for (const command of [
+    `cat b.json | { echo '{"force":false}'; gh api -X PATCH repos/o/r/git/refs/heads/x --input -; }`,
+    `cat b.json | ( echo '{"force":false}'; gh api -X PATCH repos/o/r/git/refs/heads/x --input - )`,
+    `{ echo '{"force":false}'; gh api -X PATCH repos/o/r/git/refs/heads/x --input -; } < b.json`,
+    `cat b.json | { echo '{"force":false}'; curl -X PATCH ${ref} -d @-; }`,
+  ]) {
+    test(`[確認] ${command} は標準入力の出どころを読めないので allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+
+  // エンドポイントを変数で渡す書き込みは、force が真か読めないとき確認を挟む
+  for (const command of [
+    'gh api -X PATCH "$EP" -F force=true',
+    'gh api -X PATCH "$EP" -F force=$F',
+    'gh api -X PATCH "$EP" --input body.json',
+  ]) {
+    test(`[確認] ${command} は allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+  test('[通す] エンドポイントを変数で渡しても force が無ければ allow', () => assert.equal(decision('gh api -X PATCH "$EP" -f sha=abc'), 'allow'));
+
+  // wget は --method が無ければ GET
+  for (const command of [
+    'wget -qO- https://api.github.com/repos/o/r/contents/README.md',
+    'wget -qO- https://api.github.com/repos/o/r/pulls/5/merge',
+  ]) {
+    test(`[通す] ${command} は GET なので allow`, () => assert.equal(decision(command), 'allow', command));
+  }
+
+  // mutation の名前は、エンドポイントを問わず引数と本文のぜんたいで見る（graphql に絞ると、URL の glob などで前は止めていたマージが通る）。
+  // コメントの本文に書いた語も止まる
+  for (const command of [
+    `gh api -X POST repos/o/r/issues/1/comments -f body='updateRefs で ref を動かし、mergePullRequest でマージする'`,
+    `gh api -X POST repos/o/r/issues/1/comments --input - <<'EOF'\n{"body":"enablePullRequestAutoMerge と updatePullRequestBranch の REBASE"}\nEOF`,
+    `gh api -X POST repos/o/r/issues/1/comments -f body='mergePullRequest'`,
+  ]) {
+    test(`[止める] ${command} はコメントの本文でも mutation の名前に当たるので deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+  for (const command of [
+    `gh api graphql -f query='mutation{updateRefs(input:{repositoryId:"x",refUpdates:[]}){clientMutationId}}'`,
+    `gh api graphql -F query='mutation{mergePullRequest(input:{pullRequestId:"x"}){clientMutationId}}'`,
+    `gh api graphql -f query='mutation{enablePullRequestAutoMerge(input:{pullRequestId:"x"}){clientMutationId}}'`,
+  ]) {
+    test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+
+  // 本文の "force":"true"（文字列）も force
+  test('[止める] 本文の "force":"true" も deny', () => {
+    const command = `curl -X PATCH ${ref} -d '{"sha":"a","force":"true"}'`;
+    assert.equal(decision(command), 'deny', command);
+  });
+});
+
+describe('bash-rules: done-check 2 巡目の指摘（mutation の名前の判定の範囲、展開で渡す query、グループの検出、資源の種類）', () => {
+  const merge = `{"query":"mutation{mergePullRequest(input:{pullRequestId:\\"x\\"}){clientMutationId}}"}`;
+  const ref = 'https://api.github.com/repos/o/r/git/refs/heads/x';
+
+  // mutation の名前は、宛先の字面を問わず、引数と本文のぜんたいで見る
+  for (const url of [
+    'https://api.github.com/graph{ql}',
+    'https://api.github.com/graph[q-q]l',
+    'https://api.github.com/graphql#x',
+    'https://api.github.com/graphql/.',
+    'https://api.github.com/GRAPHQL',
+    'https://api.github.com/graphql?x=1',
+  ]) {
+    test(`[止める] curl ${url} に mergePullRequest を送ると deny`, () => {
+      const command = `curl -X POST '${url}' -d '${merge}'`;
+      assert.equal(decision(command), 'deny', command);
+    });
+  }
+  for (const command of [
+    `curl https://api.github.com/graphql --url-query 'a=1' -d '${merge}'`,
+    `curl https://api.github.com/graphql -F 'query=mutation{mergePullRequest(input:{pullRequestId:"x"}){clientMutationId}}'`,
+    `curl -X POST https://api.github.com/graphql -d '${merge}'`,
+  ]) {
+    test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+
+  // query を展開で渡す形は、mutation の名前を読めない
+  for (const command of [
+    'gh api graphql -f query="$Q"',
+    'gh api graphql -f query="$(cat q.graphql)"',
+    `echo "{\\"query\\":\\"$q\\"}" | gh api graphql --input -`,
+    'curl -X POST https://api.github.com/graphql -d "$BODY"',
+    `gh api graphql --input - <<< "{\\"query\\":\\"$Q\\"}"`,
+    `gh api graphql -f query='mutation{merge'"$X"'}'`,
+    `curl https://api.github.com/graphql -F query="$Q"`,
+  ]) {
+    test(`[確認] ${command} は query を読めないので allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+  test('[通す] query が字面で、ほかのフィールドに展開があっても allow', () =>
+    assert.equal(decision(`gh api graphql -f query='query($o:String!){viewer{login}}' -F o="$OWNER"`), 'allow'));
+
+  // グループの検出。引用符の数え方がずれる形は、グループありとみなす
+  for (const command of [
+    `echo x # it's\ncat b.json | { echo '{"force":false}'; gh api -X PATCH repos/o/r/git/refs/heads/x --input -; }`,
+    `echo $'it\\'s'; cat b.json | { echo '{"force":false}'; gh api -X PATCH repos/o/r/git/refs/heads/x --input -; }`,
+    // ヒアドキュメントの本文のアポストロフィで引用符の数がずれ、走査の終わりで閉じていない
+    `cat <<EOF >/dev/null\nit's\nEOF\necho '{"sha":"a"}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`,
+  ]) {
+    test(`[確認] ${command} は allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+  // $( … ) のコマンド置換はグループではない
+  test('[通す] コマンド置換のあとの echo は標準入力の本文として読む', () => {
+    const command = `n=$(gh api repos/o/r/pulls --jq .[0].number); echo '{"sha":"a"}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`;
+    assert.equal(decision(command), 'allow', command);
+  });
+  test('[止める] コマンド置換のあとの echo の {"force":true} は deny', () => {
+    const command = `n=$(gh api repos/o/r/pulls --jq .[0].number); echo '{"force":true}' | gh api -X PATCH repos/o/r/git/refs/heads/x --input -`;
+    assert.equal(decision(command), 'deny', command);
+  });
+
+  // 展開より前の字面で資源の種類が決まる宛先は、force の確認を挟まない
+  for (const command of [
+    `echo '{"body":"x"}' | gh api repos/o/r/issues/$n/comments --input -`,
+    'gh api repos/o/r/pulls/$n/comments --input reply.json',
+    'gh api repos/o/r/pulls/$n/comments --input - < reply.json',
+    'cat reply.json | gh api repos/o/r/pulls/$n/comments --input -',
+    'gh api -X POST repos/o/r/pulls/$n/comments/$id/replies -f body=x',
+    'curl -s -X POST "https://api.github.com/repos/o/r/issues/$n/comments" -d @body.json',
+    `curl -s -X POST "https://api.github.com/repos/o/r/issues/$n/comments" -d '{"body":"/contents/ を直した"}'`,
+    // curl の -G は GET
+    'curl -sG "https://api.github.com/repos/o/r/pulls/$n/files" -d "per_page=$PER"',
+  ]) {
+    test(`[通す] ${command} は allow`, () => assert.equal(decision(command), 'allow', command));
+  }
+  // 資源の種類が展開で決まる宛先は、確認を挟む
+  for (const command of [
+    'gh api -X PATCH repos/o/r/git/refs/$x --input body.json',
+    'gh api -X PATCH repos/$R/issues/1 --input body.json',
+    'curl -X PATCH "https://api.github.com/repos/o/r/git/refs/$x" -d @body.json',
+  ]) {
+    test(`[確認] ${command} は allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+
+  // ヒアドキュメントの字面かは、その区切りの印のクォートで見る
+  test('[通す] クォートした印の本文の 1 << 2 と $F は字面なので allow', () => {
+    const command = `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<'E'\n{"sha":"a","n":"1 << 2",$F}\nE`;
+    assert.equal(decision(command), 'allow', command);
+  });
+  test('[通す] 別の行の $(cat <<EOF …) があっても、gh のクォートした印の本文は字面', () => {
+    const command = `x=$(cat <<EOF\nabc\nEOF\n)\ngh api -X PATCH repos/o/r/git/refs/heads/x --input - <<'E'\n{"sha":"a",$F}\nE`;
+    assert.equal(decision(command), 'allow', command);
+  });
+  for (const command of [
+    // <<- の後ろの印が - で始まる形はクォートの無い印
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<--X\n{"sha":"a",$F}\n-X`,
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<EOF\n{"sha":"a",$F}\nEOF`,
+  ]) {
+    test(`[確認] ${command} は展開のある本文なので allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+
+  // curl の URL の glob は、curl が展開してから送る
+  for (const command of [
+    `curl -X PUT 'https://api.github.com/repos/o/r/pulls/1/merg[e-e]'`,
+    `curl -X PATCH 'https://api.github.com/repos/o/r/git/refs/heads/mai[n-n]' -d '{"sha":"a"}'`,
+    `curl -X PUT 'https://api.github.com/repos/o/r/conten[t-t]s/a.txt' -d '{"message":"m"}'`,
+  ]) {
+    test(`[確認] ${command} は glob の URL なので allow にしない`, () => assert.equal(decision(command), 'ask', command));
+  }
+  test('[通す] -g を付ければ glob を展開しないので allow', () =>
+    assert.equal(decision(`curl -g -X POST 'https://api.github.com/repos/o/r/issues/1/comments?a[]=1' -d '{"body":"x"}'`), 'allow'));
+  test('[通す] glob の URL でも GET なら allow', () => assert.equal(decision(`curl 'https://api.github.com/repos/o/r/pulls/{1,2}'`), 'allow'));
+
+  // force の値が true と false 以外
+  for (const command of [
+    'gh api -X PATCH repos/o/r/git/refs/heads/x -f sha=abc -F force=1',
+    'gh api -X PATCH repos/o/r/git/refs/heads/x -f sha=abc -f force=yes',
+    `gh api -X PATCH repos/o/r/git/refs/heads/x --input - <<'EOF'\n{"sha":"abc","force":1}\nEOF`,
+  ]) {
+    test(`[確認] ${command} は force かを読めないので ask`, () => assert.equal(decision(command), 'ask', command));
+  }
+  test('[通す] force=false は allow', () => assert.equal(decision('gh api -X PATCH repos/o/r/git/refs/heads/x -f sha=abc -F force=false'), 'allow'));
+
+  // main の判定の終端
+  test('[通す] heads/main-fix は main ではない', () =>
+    assert.equal(decision('gh api -X PATCH repos/o/r/git/refs/heads/main-fix -f sha=abc'), 'allow'));
+  test('[通す] heads/main/x は main ではない', () =>
+    assert.equal(decision('gh api -X PATCH repos/o/r/git/refs/heads/main/x -f sha=abc'), 'allow'));
+  for (const command of [
+    'gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc',
+    'gh api -X PATCH repos/o/r/git/refs/heads/main?x=1 -f sha=abc',
+    'gh api -X PATCH repos/o/r/git/refs/heads/main/ -f sha=abc',
+    'gh api -X PATCH repos/o/r/git/refs/heads/main/?x=1 -f sha=abc',
+  ]) {
+    test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
   }
 });

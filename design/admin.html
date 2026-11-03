@@ -13,19 +13,23 @@
 <body>
 <div id="app"></div>
 <script src="icons.js"></script>
+<script src="art.js"></script>
 <script src="sample-data.js"></script>
 <script src="kit.js"></script>
 <script>
 "use strict";
-// 組織の管理（管理者）: ユーザー、ワークスペース、添付ファイルの合計、組織の休日、言葉づかい、既定のテーマ、配分と積載量の合計、取り込み元の応答、AI の機能、変更の履歴
+// 組織の管理（管理者）: ユーザー、ワークスペース、添付ファイルの合計、組織の休日、既定のテーマ、配分と積載量の合計、取り込み元の応答、AI の機能、変更の履歴
 const { D, t, icon, esc, pageHead, avatarOf, user, meter } = SQ;
 const A = D.admin;
-// 変更の履歴の内容の文。本番の辞書（src/shared/vocabulary.ts の orgHistory*）と同じ文を、言葉づかいに合わせて作る
+// 変更の履歴の内容の文。本番の辞書（src/shared/vocabulary.ts の orgHistory*）と同じ文を作る
 const AUDIT = {
   organizationCreated: (name) => `${t("organization")}「${name}」を作りました`,
   adminDesignated: (name) => `${name}を${t("admin")}に指名しました`,
   userDisabled: (name) => `${name}を無効にしました`,
 };
+// お試しの節の状態。?trial=lastday（期限の当日）か ?trial=expired（期限を過ぎて、定期処理が止めるまでの間）で切り替える。
+// 本番は TrialSetting.svelte が days_left の 0 と負で同じ出し分けをする
+const TRIAL_STATE = new URLSearchParams(location.search).get("trial");
 function setting(title, desc, body) {
   return `<section class="setting"><div class="setting-head"><h2 class="setting-title">${title}</h2><p class="setting-desc">${desc}</p></div><div class="setting-body">${body}</div></section>`;
 }
@@ -33,25 +37,53 @@ function setting(title, desc, body) {
 SQ.mount("admin", () => `
   ${pageHead("管理者だけが見られます", "組織の管理", [
     ["", "users", "ユーザー", A.users.filter((u) => !u.disabled).length],
-    ["", "shield", "管理者", A.users.filter((u) => u.admin).length],
+    ["", "shield", t("admin"), A.users.filter((u) => u.admin && !u.disabled).length],
     ["", "", t("workspace"), A.workspaces.filter((w) => !w.closed).length],
   ], `<button class="btn is-primary" type="button" data-dialog="createWorkspace">${icon("plus")}${t("workspace")}を作る</button>`)}
   <div class="settings">
-    ${setting("ユーザー", `管理者は他のユーザーを管理者にでき、解除もできます。最後の管理者は解除できません。退会はユーザーを無効にして行い、その人の${t("connection")}の認証情報を消します。名前、完了の記録、経験値は残ります。`, `
-      <div class="table-wrap"><table class="table"><thead><tr><th>名前</th><th>管理者</th><th class="is-num">所属</th><th>最後のログイン</th><th></th></tr></thead>
-        <tbody>${A.users.map((r) => `<tr>
-          <td><span class="person">${avatarOf(r.who)}${esc(user(r.who).name)}</span>${r.disabled ? ` <span class="chip">無効</span>` : ""}</td>
-          <td><label class="toggle"><input type="checkbox" ${r.admin ? "checked" : ""} ${r.disabled ? "disabled" : ""} aria-label="${esc(user(r.who).name)}を管理者にする"></label></td>
-          <td class="is-num">${r.wss}</td><td class="mono">${r.lastLogin}</td>
-          <td>${r.disabled ? `<button class="btn is-sm is-quiet" type="button">有効に戻す</button>` : r.who === D.me ? "" : `<button class="btn is-sm is-quiet is-danger" type="button">無効にする</button>`}</td></tr>`).join("")}</tbody></table></div>`)}
+    ${setting("お試し", "継続して使うには、運用者に問い合わせてください。", `
+      <p class="mono">お試しの期限（UTC）: 2026-11-19</p>
+      ${TRIAL_STATE === "expired"
+        ? `<p><span class="chip is-danger">${icon("alert")}お試しの期限を過ぎています</span></p>`
+        : TRIAL_STATE === "lastday"
+          ? `<p class="props-note">今日までです</p>`
+          : `<p class="props-note">残り 30 日</p>`}`)}
+    ${setting("ユーザー", `${t("admin")}は他のユーザーを${t("admin")}に指名でき、解除もできます。最後の${t("admin")}は解除できません。無効にした人は${t("organization")}に入れず、すべての${t("workspace")}から外れます。名前、完了の記録、経験値は残ります。`, `
+      <div class="table-wrap"><table class="table is-stacked" aria-label="${t("organization")}のユーザーの一覧"><thead><tr><th class="is-name">名前</th><th>${t("admin")}</th><th class="is-num">所属</th><th>最後に入った日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
+        <tbody>${A.users.map((r) => {
+          const name = esc(user(r.who).name);
+          const self = r.who === D.me;
+          // 自分の解除は確認を経る（ほかに無効でない管理者がいるとき）。無効の人の切り替えは押せず、理由を読み上げの説明で結ぶ
+          const toggleAttrs = r.disabled
+            ? `disabled aria-describedby="u-off-${r.who}"`
+            : self && r.admin ? `data-dialog="revokeSelfAdmin"` : "";
+          return `<tr>
+          <td class="is-name"><span class="person is-wrap">${avatarOf(r.who)}${name}</span>${r.disabled ? ` <span class="chip">無効</span>` : ""}</td>
+          <td data-label="${t("admin")}"><label class="toggle"><input type="checkbox" ${r.admin ? "checked" : ""} ${toggleAttrs} aria-label="${name}を${t("admin")}にする"></label>${r.disabled ? `<span class="visually-hidden" id="u-off-${r.who}">無効の人は${t("admin")}に指名できません</span>` : ""}</td>
+          <td class="is-num" data-label="所属">${r.wss}</td>
+          <td class="mono" data-label="最後に入った日">${r.lastLogin ?? `<span aria-hidden="true">—</span><span class="visually-hidden">まだ入っていません</span>`}</td>
+          <td class="is-actions">${r.disabled
+            ? `<button class="btn is-sm is-quiet" type="button" aria-label="${name}を有効に戻す" data-toast="${name}を有効に戻しました。入るには${t("workspace")}への招待が要ります">有効に戻す</button>`
+            : self ? "" : `<button class="btn is-sm is-quiet is-danger" type="button" aria-label="${name}を無効にする" data-dialog="disableUser" data-name="${name}" data-admin="${r.admin}">無効にする</button>`}</td></tr>`;
+        }).join("")}</tbody></table></div>`)}
+    ${setting("ユーザー（自分用の" + t("organization") + "）", `自分用の${t("organization")}は自分だけで使うため、${t("admin")}は本人1人のままです。`, `
+      <div class="callout is-info">${icon("shield")}<span>自分用の${t("organization")}は自分だけで使うため、${t("admin")}を増やしたり外したりできません。あなたが${t("admin")}のままです。</span></div>
+      <div class="table-wrap"><table class="table is-stacked" aria-label="${t("organization")}のユーザーの一覧"><thead><tr><th class="is-name">名前</th><th>${t("admin")}</th><th class="is-num">所属</th><th>最後に入った日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
+        <tbody><tr>
+          <td class="is-name"><span class="person is-wrap">${avatarOf(D.me)}${esc(user(D.me).name)}</span></td>
+          <td data-label="${t("admin")}"><label class="toggle"><input type="checkbox" checked disabled aria-describedby="u-personal" aria-label="${esc(user(D.me).name)}を${t("admin")}にする"></label><span class="visually-hidden" id="u-personal">自分用の${t("organization")}では、${t("admin")}の指名と解除はできません</span></td>
+          <td class="is-num" data-label="所属">1</td>
+          <td class="mono" data-label="最後に入った日">10/20</td>
+          <td class="is-actions"></td></tr></tbody></table></div>
+      <p class="props-note">自分用の${t("organization")}（<code>kind</code> が <code>personal</code>）の表示の見本です。${t("admin")}の切り替えは全員の行で押せなくし、理由を表の上に出して、読み上げの説明にも結びます。サーバーも指名と解除を 409 の <code>personal_organization</code> で断ります。</p>`)}
     ${setting(t("workspace"), `終了した${t("workspace")}は読み取り専用になり、${t("connection")}はすべて止まります。再開できます。${t("member")}の数は${t("leader")}を含みます。`, !A.workspaces.length
       ? SQ.emptyState("users", `まだ${t("workspace")}がありません`,
           `チームや用途ごとに作ります。${t("member")}の招待は、作った${t("workspace")}の${t("leader")}が行います。`,
           `<button class="btn is-sm" type="button" data-dialog="createWorkspace">${icon("plus")}${t("workspace")}を作る</button>`)
       : `
-      <div class="table-wrap"><table class="table"><thead><tr><th class="is-name">名前</th><th class="is-num">${t("member")}数</th><th class="is-num">${t("leader")}数</th><th>作った日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
+      <div class="table-wrap"><table class="table is-stacked" aria-label="${t("workspace")}の一覧"><thead><tr><th class="is-name">名前</th><th class="is-num">${t("member")}数</th><th class="is-num">${t("leader")}数</th><th>作った日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
         <tbody>${A.workspaces.map((w) => `<tr><td class="is-name">${esc(w.name)}${w.closed ? ` <span class="chip">終了 ${w.closed}</span>` : ""}${!w.closed && !w.leaders ? ` <span class="chip is-warn">${t("leader")}がいない</span>` : ""}</td>
-          <td class="is-num">${w.members}</td><td class="is-num">${w.leaders}</td><td class="mono">${w.created}</td>
+          <td class="is-num" data-label="${t("member")}数">${w.members}</td><td class="is-num" data-label="${t("leader")}数">${w.leaders}</td><td class="mono" data-label="作った日">${w.created}</td>
           <td class="is-actions">${w.closed ? `<button class="btn is-sm is-quiet" type="button" data-toast="${t("workspace")}を再開しました">再開する</button>` : `<button class="btn is-sm is-quiet" type="button" data-dialog="closeWorkspace">終了する</button>`}</td></tr>`).join("")}</tbody></table></div>`)}
     ${setting("添付ファイル", `${t("task")}、${t("story")}、${t("epic")}、コメントに添付したファイルの合計。上限は運用者が決めます。上限に達すると、どの${t("workspace")}でも新しく添付できなくなります。`, `
       ${meter(D.storage.used, D.storage.quota)}
@@ -64,15 +96,10 @@ SQ.mount("admin", () => `
       ${!A.holidays.length
         ? SQ.emptyState("calendar", "まだ休日がありません", `登録した日は、${t("capacity")}の計算で全員が稼働しない日になります。`)
         : `<ul class="party-list" aria-label="登録した休日">${A.holidays.map(([d, n]) => `<li><span class="mono">${d}</span>${n ? `<span class="party-list-text">${esc(n)}</span>` : ""}<button class="icon-btn is-danger party-list-end" type="button" aria-label="${d} を消す" data-toast="${d}${n ? `（${esc(n)}）` : " "}を消しました">${icon("trash")}</button></li>`).join("")}</ul>`}`)}
-    ${setting(`${t("workspace")}の外の言葉づかい`, `「冒険者ギルド」「ギルドマスター」などの言葉。${t("workspace")}の中の言葉づかいは、それぞれの${t("leader")}が決めます。`, `
-      <div class="choice-list" role="radiogroup" aria-label="${t("workspace")}の外の言葉づかい">
-        <label class="choice"><input type="radio" name="kv" checked><div><b>ゲームの言葉</b><span>冒険者ギルド、ギルドマスター</span></div></label>
-        <label class="choice"><input type="radio" name="kv"><div><b>スクラムの言葉</b><span>組織、管理者</span></div></label></div>
-      <div class="form-actions"><button class="btn" type="button" aria-disabled="true">保存する <span class="visually-hidden">${t("workspace")}の外の言葉づかい</span></button></div>`)}
     ${setting("既定のテーマ", `画面の見た目の既定。自分で選んでいないユーザーに効きます。会社で使うならシンプルが無難です。`, `
       <div class="choice-list" role="radiogroup" aria-label="既定のテーマ">
         ${SQ.THEMES.map((v, i) => `<label class="choice"><input type="radio" name="kt" ${i === 0 ? "checked" : ""}><div><b>${SQ.THEME_LABEL[v]}</b><span>${SQ.THEME_NOTE[v]}</span></div></label>`).join("")}</div>
-      <div class="form-actions"><button class="btn" type="button" aria-disabled="true">保存する <span class="visually-hidden">既定のテーマ</span></button></div>`)}
+      <div class="form-actions"><button class="btn" type="button" aria-disabled="true">保存する</button></div>`)}
     ${setting("配分の合計", `ユーザーごとの、すべての${t("workspace")}の配分の合計。100% を超えた月は本人にも知らせています。`, !A.allocTotals.length
       ? `<p class="props-note">${t("workspace")}ができて、${t("leader")}が配分を決めると出ます。</p>`
       : `

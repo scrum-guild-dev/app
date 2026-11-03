@@ -1,6 +1,7 @@
 // 組織の人数に数える人（docs/data-model.md の organizations の「人数」）。数え方はここだけに置き、
 // 招待の上限の検査と member-list の seats（1つの組織）と、運用者の組織の一覧（組織の ID の束）が同じ関数を通る。
 // 組織の中の表だけを読み、どの文も organization_id IN (...) で組織に絞る
+import type { ExpressionBuilder } from 'kysely';
 import { chunksOf } from './chunks.ts';
 import type { DbEntry } from './entry.ts';
 import type { OrganizationDb } from './entries.ts';
@@ -46,6 +47,33 @@ export function seatUsersStatement(db: OrganizationEntry, organizationIds: reado
   );
 }
 
+type InvitationJoin = OrganizationTables & {
+  i: OrganizationTables['invitations'];
+  w: OrganizationTables['workspaces'];
+};
+
+// 招待の人が、同じ組織で無効にされていないこと（同じログインの手段と ID で disabled_at の入った users の行が無いこと）。
+// 人数に数える承諾待ちの招待を読む2つの文（組織全体と、1つのワークスペース）が同じ式を使い、除き方をそろえる
+function inviteeNotDisabled(eb: ExpressionBuilder<InvitationJoin, 'i' | 'w'>) {
+  return eb.not(
+    eb.exists(
+      eb
+        .selectFrom('users as d')
+        .select('d.id')
+        .whereRef('d.organization_id', '=', 'w.organization_id')
+        .where('d.disabled_at', 'is not', null)
+        .whereRef('d.login_provider', '=', 'i.login_provider')
+        .whereRef('d.login_subject', '=', 'i.login_subject'),
+    ),
+  );
+}
+
+// 期限の過ぎた Google の招待か。member-list の expired と同じく、文字列でなく時刻で比べる（at 以前で切れる）。
+// 人数に数える招待を絞る2つの関数（組織全体と、1つのワークスペース）が同じ判定を通り、数え方が片方だけずれないようにする
+function isExpiredClaim(claimExpiresAt: string | null, time: number): boolean {
+  return claimExpiresAt !== null && Date.parse(claimExpiresAt) <= time;
+}
+
 // 人数に数える承諾待ちの招待。閉じたワークスペースへの招待と、同じ組織で無効にされた人（同じログインの手段と ID）への招待を除く。
 // 期限の過ぎた Google の招待は、読んだ後に時刻で除く
 export function seatInvitationsStatement(db: OrganizationEntry, organizationIds: readonly string[]) {
@@ -57,19 +85,7 @@ export function seatInvitationsStatement(db: OrganizationEntry, organizationIds:
       .where('w.organization_id', 'in', organizationIds)
       .where('w.closed_at', 'is', null)
       .where('i.status', '=', 'pending')
-      .where((eb) =>
-        eb.not(
-          eb.exists(
-            eb
-              .selectFrom('users as d')
-              .select('d.id')
-              .whereRef('d.organization_id', '=', 'w.organization_id')
-              .where('d.disabled_at', 'is not', null)
-              .whereRef('d.login_provider', '=', 'i.login_provider')
-              .whereRef('d.login_subject', '=', 'i.login_subject'),
-          ),
-        ),
-      ),
+      .where(inviteeNotDisabled),
   );
 }
 
@@ -98,13 +114,71 @@ export async function seatHoldersIn(
       ] as const);
       for (const row of userResult.rows) people.get(row.organization_id)?.add(personKey(row));
       for (const row of invitationResult.rows) {
-        // 期限の判定は member-list の expired と同じく時刻で比べる
-        if (row.claim_expires_at !== null && Date.parse(row.claim_expires_at) <= time) continue;
+        if (isExpiredClaim(row.claim_expires_at, time)) continue;
         people.get(row.organization_id)?.add(personKey(row));
       }
     }
   }
   return people;
+}
+
+// あるワークスペースの承諾待ちの招待のうち、人数に数えられる人（personKey の集合）。期限の過ぎた Google の招待と、
+// 同じ組織で無効にされた人への招待は含めない。ワークスペースが閉じていても数える（開き直しで新しく数えられる人を求めるため）。
+// ワークスペースも組織で絞るので、ほかの組織のワークスペースの ID を渡しても何も数えない
+export async function seatHoldersOfWorkspaceInvitations(
+  db: OrganizationDb,
+  workspaceId: string,
+  at: Date,
+): Promise<Set<string>> {
+  const rows = await db.rows(
+    db.statement((q) =>
+      q
+        .selectFrom('invitations as i')
+        .innerJoin('workspaces as w', 'w.id', 'i.workspace_id')
+        .select(['i.login_provider', 'i.login_subject', 'i.login_email', 'i.claim_expires_at'])
+        .where('w.organization_id', '=', db.organizationId)
+        .where('i.workspace_id', '=', workspaceId)
+        .where('i.status', '=', 'pending')
+        .where(inviteeNotDisabled),
+    ),
+  );
+  const time = at.getTime();
+  const people = new Set<string>();
+  for (const row of rows) {
+    if (isExpiredClaim(row.claim_expires_at, time)) continue;
+    people.add(personKey(row));
+  }
+  return people;
+}
+
+// 無効にされた人を有効に戻すと、人数に数えられる承諾待ちの招待（開いたワークスペース、同じ組織）が、そのログイン
+// （手段と ID）にあるか。無効の間は人数に数えない招待なので、inviteeNotDisabled では除かず、有効に戻した後の数え方で見る。
+// 数えるのは seatInvitationsStatement と同じ条件（承諾待ち、開いたワークスペース）に、無効にした日時（disabledAt）以後に作った
+// 招待という条件を足したもの。無効にする前に作った招待は、有効に戻す同じ batch で取り消されて人数に加わらないので数えない
+// （取り消す側の revokeInvitationStatements の createdBefore と境界をそろえた補集合）。
+// 期限（claim_expires_at）は見ない。login_subject の入った行は claim の列が空（migrations/0001 の CHECK）で、期限の過ぎた Google の招待は
+// login_subject が空のメールアドレスで待つ行にしか無く、この検索（login_subject の一致）に当たらない。
+// 同じ人への招待が複数でも、あるかどうかだけを返す。組織の ID は入口の organizationId から取り、ほかの組織の招待は見ない
+export async function hasSeatInvitationOfLogin(
+  db: OrganizationDb,
+  login: { provider: string; subject: string },
+  disabledAt: string,
+): Promise<boolean> {
+  const row = await db.first(
+    db.statement((q) =>
+      q
+        .selectFrom('invitations as i')
+        .innerJoin('workspaces as w', 'w.id', 'i.workspace_id')
+        .select('i.id')
+        .where('w.organization_id', '=', db.organizationId)
+        .where('w.closed_at', 'is', null)
+        .where('i.status', '=', 'pending')
+        .where('i.login_provider', '=', login.provider)
+        .where('i.login_subject', '=', login.subject)
+        .where('i.created_at', '>=', disabledAt),
+    ),
+  );
+  return row !== undefined;
 }
 
 // 確かめた組織の人数に数える人。組織の ID は入口の organizationId から取り、ほかの組織を数えられない
