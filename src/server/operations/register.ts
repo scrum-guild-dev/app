@@ -34,7 +34,7 @@ import { ApiError, knownError } from '../errors.ts';
 import { executionContextOf } from '../execution-context.ts';
 import { outsideAccount } from './account.ts';
 import { isCurrentConsent, latestConsentOf } from './consent.ts';
-import { readBinaryBody, readInput, requireOrigin } from './guards.ts';
+import { readBinaryBody, readDownloadInput, readInput, requireDownloadOrigin, requireOrigin } from './guards.ts';
 import type { CurrentSession, Defer, ImplementedOperation } from './implement.ts';
 import { operatorTools, type OperatorTools } from './operator-tools.ts';
 import { organizationTools } from './organization-tools.ts';
@@ -110,7 +110,11 @@ export function operationsApp(
     if (names.has(name)) throw new Error(`操作の名前が重なっている（${name}）`);
     names.add(name);
     const path = isOutsideOperation(operation.definition) ? `/${name}` : `/:slug/${name}`;
-    app.post(path, (c) => handleOperation(c, operation, options));
+    if (operation.definition.response === 'binary') {
+      app.get(`${path}/:id`, (c) => handleOperation(c, operation, options));
+    } else {
+      app.post(path, (c) => handleOperation(c, operation, options));
+    }
   }
   return app;
 }
@@ -143,8 +147,13 @@ async function handleOperation(
   let code = 'ok';
   const cookie: SessionCookie = { applied: false, extend: false, clear: false };
   const bearer = bearerOf(c);
+  if (operation.definition.response === 'binary') c.set('binaryResponse', true);
   try {
-    return await execute(c, operation, trace, cookie, options, bearer);
+    const response = await execute(c, operation, trace, cookie, options, bearer);
+    status = response.status;
+    // バイナリの応答が返す失敗は、不正な Range の 416（JSON の invalid_input）だけ。
+    if (status === 416) code = 'invalid_input';
+    return response;
   } catch (err) {
     // 失敗の応答にも、期限を延ばす Cookie と、消す Cookie を付ける（1本だけ。applySessionCookie）
     applySessionCookie(c, cookie);
@@ -250,7 +259,8 @@ async function execute(
     accountId = apiToken.accountId;
     session = tokenCall();
   } else {
-    requireOrigin(c);
+    if (definition.response === 'binary') requireDownloadOrigin(c);
+    else requireOrigin(c);
 
     const token = getCookie(c, sessionCookieName(c.env.PUBLIC_ORIGIN));
     const read = await readSession(c.env, token, new Date(), c.get('requestId'));
@@ -329,8 +339,22 @@ async function execute(
     checkTokenScope(definition, apiToken);
     await enforceRateLimit(c, definition, accountId);
 
-    const input = await readInput(c, definition.input, definition.body);
+    const input =
+      definition.response === 'binary'
+        ? readDownloadInput(c, definition.input)
+        : await readInput(c, definition.input, definition.body);
     const binary = definition.body === 'binary' ? { binary: readBinaryBody(c), requestId: c.get('requestId') } : {};
+    const download =
+      definition.response === 'binary'
+        ? {
+            download: {
+              bucket: c.env.ATTACHMENTS,
+              range: c.req.header('Range'),
+              ifRange: c.req.header('If-Range'),
+              head: c.req.method === 'HEAD',
+            },
+          }
+        : {};
     if (isWorkspaceOperation(definition)) {
       // 別の組織のワークスペースは、存在しないときと同じ 404
       const workspace = await verifyWorkspace(db, actor, (input as { workspace_id: string }).workspace_id);
@@ -346,7 +370,7 @@ async function execute(
       assertVerifiedWorkspace(workspace);
       result = await handler({ db, actor, organization, tools, input, workspace, defer: deferred.defer, ...binary });
     } else {
-      result = await handler({ db, actor, organization, tools, input, defer: deferred.defer, ...binary });
+      result = await handler({ db, actor, organization, tools, input, defer: deferred.defer, ...binary, ...download });
     }
   }
 
@@ -354,6 +378,10 @@ async function execute(
   await deferred.settle();
   // Cookie は応答を作る前に付ける（作った後に c.header で足しても、返す応答には載らない）
   applySessionCookie(c, cookie);
+  if (definition.response === 'binary') {
+    if (!(output instanceof Response)) throw new Error('バイナリの応答が Response ではない');
+    return c.newResponse(output.body, output);
+  }
   // 検証した値（スキーマの変換を通した出力）をそのまま送る。画面は同じスキーマで検証し直さない
   return c.json(output);
 }

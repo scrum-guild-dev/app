@@ -30,15 +30,18 @@ function vocabularyPaths(value: unknown, path = '$'): string[] {
   ]);
 }
 
-describe('読み取りの応答に vocabulary が出ない（列が game の組織とワークスペース）', () => {
-  const readOperations = operations.filter((definition) => definition.mode === 'read');
+describe('JSON の読み取りの応答に vocabulary が出ない（列が game の組織とワークスペース）', () => {
+  // ファイルの本文は利用者のバイトで、API の JSON の項目名の検査には含めない。
+  const readOperations = operations.filter(
+    (definition) => definition.mode === 'read' && definition.response !== 'binary',
+  );
 
   test('読み取りの操作がある', () => {
     expect(readOperations.length).toBeGreaterThan(10);
   });
 
   describe.each<Credential>(['cookie', 'bearer'])('%s で呼ぶ', (credential) => {
-    test('すべての読み取りの操作の応答に、vocabulary を含む名前の項目が無い', async () => {
+    test('JSON を返すすべての読み取りの操作の応答に、vocabulary を含む名前の項目が無い', async () => {
       const target = await createTarget();
       // ファクトリーの既定は 'game'。読み取りがその列を漏らさないことを見る
       expect(target.organization.vocabulary).toBe('game');
