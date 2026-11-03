@@ -76,6 +76,9 @@
     return found;
   });
   const depth = $derived(ancestors.length + 1);
+  $effect(() => {
+    if (historyPage !== null && historyPage !== current?.id) historyPage = null;
+  });
 
   async function mayDiscard(): Promise<boolean> {
     if (saving || historyBusy) return false;
@@ -86,10 +89,7 @@
     );
   }
   beforeNavigate((navigation) => {
-    if (!dirty && !saving && !historyBusy) {
-      historyPage = null;
-      return;
-    }
+    if (!dirty && !saving && !historyBusy) return;
     if (navigation.type === 'leave') {
       navigation.cancel();
       return;

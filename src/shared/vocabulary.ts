@@ -90,6 +90,7 @@ export const dictionary = defineDictionary({
   wikiRestoreText: '第{version}版の題と本文で保存します。第{next}版として足されます。',
   wikiRestoreConflict: '他の人が先に保存したため、戻せませんでした。ページへ戻り、今の版を確かめてください。',
   wikiRestored: '第{version}版として保存しました',
+  wikiViewingPast: '第{version}版を見ています。',
   wikiViewingRevision: '第{version}版を見ています。今の版は第{current}版です。',
   wikiHistoryRetry: '版の一覧を読み直す',
   wikiRestoreFailed: '戻せませんでした。もう一度試してください。',

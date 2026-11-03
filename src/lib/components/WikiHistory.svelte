@@ -13,6 +13,7 @@
   } from '../../shared/operations/wiki/index.ts';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import WikiContent from './WikiContent.svelte';
+  import Icon from './Icon.svelte';
 
   let {
     wiki,
@@ -39,14 +40,16 @@
   let selected = $state<WikiPage | null>(null);
   let loading = $state(false);
   let failure = $state('');
-  let conflicted = $state(false);
+  let blocked = $state(false);
+  let restoreFailure = $state(false);
+  let backButton = $state<HTMLButtonElement>();
   let saving = $state(false);
   let confirming = $state(false);
   let request = 0;
   let active = true;
   let dialog = $state<ReturnType<typeof ConfirmDialog>>();
   const listedVersion = $derived(revisions[0]?.version ?? current.version);
-  const stale = $derived(conflicted || listedVersion !== current.version);
+  const stale = $derived(blocked || listedVersion !== current.version);
   const metadata = $derived(revisions.find((revision) => revision.version === selected?.version));
   const busy = $derived(saving || confirming);
   $effect(() => {
@@ -65,11 +68,12 @@
   });
 
   async function load() {
-    if (busy || conflicted) return;
+    if (busy || blocked) return;
     const generation = ++request;
     selected = null;
     loading = true;
     failure = '';
+    restoreFailure = false;
     const result = await wiki.readRevisions(current.id);
     if (!active || generation !== request) return;
     loading = false;
@@ -80,11 +84,12 @@
     } else failure = t('wikiHistoryFailed');
   }
   async function open(version: number) {
-    if (busy || conflicted) return;
+    if (busy || blocked) return;
     const generation = ++request;
     selected = null;
     loading = true;
     failure = '';
+    restoreFailure = false;
     const result = await wiki.readPage(current.id, version);
     if (!active || generation !== request) return;
     loading = false;
@@ -104,6 +109,7 @@
     if (!confirmed || !active) return;
     saving = true;
     failure = '';
+    restoreFailure = false;
     try {
       const result = await update({
         page_id: current.id,
@@ -114,7 +120,9 @@
       if (!active) return;
       if (result.ok) await onrestored(result.data.page);
       else {
-        conflicted = result.error?.code === 'conflict';
+        restoreFailure = true;
+        blocked =
+          result.status === 404 || result.error?.code === 'conflict' || result.error?.code === 'workspace_closed';
         failure = t(
           result.error?.code === 'conflict'
             ? 'wikiRestoreConflict'
@@ -128,6 +136,10 @@
                     ? 'wikiRestoreQuota'
                     : 'wikiRestoreFailed',
         );
+        if (blocked) {
+          await tick();
+          backButton?.focus();
+        }
       }
     } finally {
       saving = false;
@@ -143,6 +155,7 @@
     <button
       class="btn"
       type="button"
+      bind:this={backButton}
       aria-disabled={busy}
       onclick={() => {
         if (!busy) onclose();
@@ -153,13 +166,16 @@
 <p class="field-hint">{t('wikiHistoryHint')}</p>
 <p role="status">{loading ? t('wikiHistoryLoading') : saving ? t('wikiSaving') : ''}</p>
 {#if failure}<p class="callout is-warn" role="alert">{failure}</p>
-  {#if !conflicted}<button class="btn" type="button" aria-disabled={busy} onclick={load}>{t('wikiHistoryRetry')}</button
+  {#if !restoreFailure && !blocked}<button class="btn" type="button" aria-disabled={busy} onclick={load}
+      >{t('wikiHistoryRetry')}</button
     >{/if}
 {/if}
-{#if stale && !failure}<p class="callout is-warn">{t('wikiHistoryChanged')}</p>{/if}
+{#if stale && !failure}<p class="callout is-warn" role="alert">
+    <Icon name="alert" /><span>{t('wikiHistoryChanged')}</span>
+  </p>{/if}
 {#if selected}
   <div class="callout is-info">
-    <p>{t('wikiViewingRevision', { version: selected.version, current: listedVersion })}</p>
+    <p>{t(stale ? 'wikiViewingPast' : 'wikiViewingRevision', { version: selected.version, current: listedVersion })}</p>
     {#if metadata}<p class="wrap-anywhere">
         {metadata.saved_by_name} · <time datetime={metadata.saved_at}>{formatDateTime(metadata.saved_at)}</time>
       </p>{/if}
@@ -170,7 +186,7 @@
           aria-disabled={busy}
           onclick={(event) => restore(event.currentTarget)}>{t('wikiRestore')}</button
         >{/if}
-      {#if !conflicted}<button class="btn" type="button" aria-disabled={busy} onclick={load}
+      {#if !blocked}<button class="btn" type="button" aria-disabled={busy} onclick={load}
           >{t('wikiBackToHistory')}</button
         >{/if}
     </div>

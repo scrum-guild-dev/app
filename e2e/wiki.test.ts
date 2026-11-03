@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures.ts';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { organizationInfo } from '../src/shared/operations/organization/index.ts';
-import { orgWikiPage, orgWikiTree } from '../src/shared/operations/wiki/index.ts';
+import { orgWikiPage, orgWikiTree, orgWikiUpdate, workspaceWikiUpdate } from '../src/shared/operations/wiki/index.ts';
 import { failOperation, rewriteOperation } from './operations.ts';
 
 test('自分用の組織の Wiki は組織の表示名で案内する', async ({ page }) => {
@@ -425,6 +425,8 @@ for (const scope of ['organization', 'workspace'] as const) {
     await page.getByRole('button', { name: 'この版に戻す', exact: true }).click();
     await dialog.getByRole('button', { name: '戻す', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('他の人が先に保存したため、戻せませんでした');
+    await expect(page.getByText(/今の版は第[0-9]+版です/)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'ページへ戻る', exact: true })).toBeFocused();
     await expect(page.getByRole('button', { name: '版の一覧を読み直す', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'この版に戻す', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'ページへ戻る', exact: true }).click();
@@ -457,5 +459,45 @@ for (const scope of ['organization', 'workspace'] as const) {
       'Failed to load resource: the server responded with a status of 409 (Conflict)',
     ]);
     await other.close();
+  });
+}
+
+for (const scenario of [
+  { scope: 'organization', code: 'not_found', status: 404, text: 'ページが見つからないため戻せませんでした' },
+  { scope: 'workspace', code: 'not_found', status: 404, text: 'ページが見つからないため戻せませんでした' },
+  { scope: 'workspace', code: 'workspace_closed', status: 409, text: '終了したワークスペースの Wiki は読むだけです。' },
+] as const) {
+  test(`${scenario.scope}: 復元が${scenario.code}で断られたらページへ戻る操作だけを残す`, async ({ page }) => {
+    if (scenario.scope === 'workspace') {
+      await createWorkspace(page, 'Wikiの復元を断る');
+      await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+    } else await page.goto('/aoba/wiki');
+    await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
+    await page.getByLabel('題', { exact: true }).fill('復元を断る手順');
+    await page.getByLabel('本文', { exact: true }).fill('前の本文');
+    await page.getByRole('button', { name: '保存する', exact: true }).click();
+    await expect(page.getByRole('button', { name: '編集する', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '編集する', exact: true }).click();
+    await page.getByLabel('本文', { exact: true }).fill('今の本文');
+    await page.getByRole('button', { name: '保存する', exact: true }).click();
+    await expect(page.getByRole('button', { name: '編集する', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '版の一覧', exact: true }).click();
+    await page.getByRole('button', { name: 'この版を見る（第1版）', exact: true }).click();
+    await failOperation(
+      page,
+      scenario.scope === 'workspace' ? workspaceWikiUpdate : orgWikiUpdate,
+      { slug: 'aoba' },
+      scenario.status,
+      scenario.code,
+    );
+    await page.getByRole('button', { name: 'この版に戻す', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '戻す', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText(scenario.text);
+    await expect(page.getByRole('button', { name: 'ページへ戻る', exact: true })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'この版に戻す', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '版の一覧を読み直す', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '版の一覧へ', exact: true })).toHaveCount(0);
+    await expect(page.getByText(/今の版は第[0-9]+版です/)).toHaveCount(0);
+    await expect(page.locator('.doc-box')).toContainText('前の本文');
   });
 }
