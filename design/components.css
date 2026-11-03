@@ -1762,6 +1762,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .wiki-tree ul ul ul { margin-left: 0; padding-left: 0; border-left: 0; }
 .wiki-head .section-title { overflow-wrap: anywhere; min-width: 0; }
 .wiki-node { --row-indent: 0px; position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; }
+.wiki-node:has(> .grip:not([hidden])) { min-height: 44px; }
 .wiki-node > .tree-caret { width: 24px; height: 28px; }
 .wiki-node > .grip { width: 24px; height: 28px; }
 .wiki-slot { width: 24px; }
