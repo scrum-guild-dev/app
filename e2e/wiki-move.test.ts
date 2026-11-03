@@ -144,7 +144,7 @@ test('移動が失敗したらトーストと木の上に理由を残す', async
   await dialog.getByRole('combobox').selectOption({ label: '親のページ' });
   await dialog.getByRole('button', { name: '移す', exact: true }).click();
   await expect(
-    page.locator('.toast').filter({ hasText: '子のページを含めて10段を超えるため、移せません。' }),
+    page.locator('.toast:visible').filter({ hasText: '子のページを含めて10段を超えるため、移せません。' }),
   ).toBeVisible();
   const feedback = page.locator('.wiki-side > .field-hint');
   await expect(feedback).toHaveText('子のページを含めて10段を超えるため、移せません。');
