@@ -22,6 +22,7 @@
     workspaceSwitcher,
     assistant,
     account,
+    notice,
     children,
   }: {
     current: string;
@@ -33,6 +34,7 @@
     workspaceSwitcher?: Snippet;
     assistant?: Snippet;
     account?: Snippet;
+    notice?: Snippet;
     children: Snippet;
   } = $props();
 </script>
@@ -68,6 +70,7 @@
         {#if account}{@render account()}{/if}
       </div>
     {/if}
+    {@render notice?.()}
     <main class="content" id="content">{@render children()}</main>
   </div>
 </div>

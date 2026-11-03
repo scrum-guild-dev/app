@@ -317,6 +317,8 @@ describe('cookieOnly の logout', () => {
       'logout',
       'token-create',
       'token-list',
+      'token-notice',
+      'token-notice-seen',
       'token-revoke',
     ]);
   });
