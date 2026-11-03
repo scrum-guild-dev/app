@@ -10,6 +10,7 @@
   import { memberLimitDetailsOf } from '../../member-limit-details.ts';
   import { showToast } from '../../toast.svelte.ts';
   import { t } from '../../vocabulary.svelte.ts';
+  import { workspaceLimitDetailsOf } from '../../workspace-limit-details.ts';
   import EmptyState from '../EmptyState.svelte';
   import Icon from '../Icon.svelte';
   import Setting from '../Setting.svelte';
@@ -45,7 +46,7 @@
   let workspaces = $state<Workspace[]>([]);
   // 再開する操作を送っている行
   let reopeningId = $state<string | null>(null);
-  // 再開が人数の上限で断られた理由。読み返せるよう、トーストでなく表の上のコールアウトに残す。
+  // 再開が人数か個数の上限で断られた理由。読み返せるよう、トーストでなく表の上のコールアウトに残す。
   // 次に「再開する」を押したとき、再開か終了が成功したとき、組織が替わったときに消し、一覧を読み直しても残す
   let reopenRefusal = $state<string | null>(null);
   let refusalBox = $state<HTMLElement>();
@@ -93,6 +94,16 @@
       } else if (result.status === 409 && result.error?.code === 'conflict') {
         // 別の画面で先に操作されていた。再開されたのか、終了し直されたのかは言い切らず、読み直した一覧を見てもらう
         showToast(t('workspaceStateChanged', { name: workspace.name }), 'alert');
+      } else if (result.status === 409 && result.error?.code === 'workspace_limit_reached') {
+        const limit = workspaceLimitDetailsOf(result.error.details);
+        const common = { workspace: t('workspace') };
+        const reason =
+          limit === undefined
+            ? t('workspaceLimitReachedUnknown', common)
+            : t('workspaceLimitReached', { ...common, ...limit });
+        reopenRefusal = t('workspaceReopenWorkspaceLimit', { name: workspace.name, reason });
+        await tick();
+        refusalBox?.scrollIntoView({ block: 'nearest' });
       } else if (result.status === 409 && result.error?.code === 'member_limit_reached') {
         // 人数の上限で断られた。長い理由と対処は、トーストでなく表の上のコールアウトに残す。
         // 数が読めない応答（details が無いか不正）は、数を含まない文言にする

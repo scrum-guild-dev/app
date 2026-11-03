@@ -107,7 +107,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await expect(row.locator('td').nth(2)).toHaveText('1');
   });
 
-  // 自分用の組織の個数の上限（#734）。サーバーの判定（4個目の拒否、閉じたものも数える、同時の作成）は test/workspace-limit.test.ts が確かめる。
+  // 自分用の組織の利用中の個数の上限（#771）。サーバーの判定（上限の拒否、終了による枠の再利用、並行操作）は test/workspace-limit.test.ts が確かめる。
   // ここは応答を書き換えて、画面の出し方だけを確かめる（自分用の組織を作ると、作った組織を後で消せないため）
   test('個数の上限で断られると、ダイアログの中に上限と今の個数が出て、閉じずに入力も残り、作った表示にはならない', async ({
     page,
@@ -124,7 +124,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
 
     const alert = dialog.getByRole('alert').filter({ hasText: '自分用' });
     await expect(alert).toHaveText(
-      '自分用のワークスペースは、終了したものも含めて3個までです（今3個）。これ以上は作れないので、今あるワークスペースを使うか、終了したワークスペースがあれば再開してください。',
+      '自分用のワークスペースは、利用中のものを3個まで使えます（今3個）。新しく作るか、終了したものを再開するには、今あるワークスペースを終了して枠を空けてください。',
     );
     await expect(alert).toHaveClass(/is-warn/);
     await expect(dialog).toBeVisible();
@@ -145,7 +145,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await dialog.getByLabel('名前').fill('四つ目の置き場');
     await dialog.getByRole('button', { name: '作る' }).click();
     await expect(dialog.getByRole('alert')).toHaveText(
-      '自分用のワークスペースの個数が、終了したものも含めて上限に達しています。これ以上は作れないので、今あるワークスペースを使うか、終了したワークスペースがあれば再開してください。',
+      '自分用のワークスペースは、利用中の個数が上限に達しています。新しく作るか、終了したものを再開するには、今あるワークスペースを終了して枠を空けてください。',
     );
   });
 

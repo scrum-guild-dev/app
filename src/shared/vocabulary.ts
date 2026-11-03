@@ -297,14 +297,16 @@ export const dictionary = defineDictionary({
   workspaceOpen: '開く',
   workspaceCreateFailed: '作れませんでした。もう一度試してください。',
   workspaceLeaderRejected: '選んだ人は、いま最初の{leader}に指せません。選び直してください。',
-  // 自分用の組織の{workspace}の個数の上限（409 の workspace_limit_reached）。作成のダイアログの中に出す。
-  // {limit} は上限、{used} は今の個数（終了したものも数える）。終了した{workspace}で枠は空かない。
+  // 自分用の組織の{workspace}の個数の上限（409 の workspace_limit_reached）。作成のダイアログと再開の断りに出す。
+  // {limit} は上限、{used} は利用中の個数。終了すると枠が空く。
   // 数が読めない応答（details が無いか不正）は数を含まない文言にする。
   // 自分用の組織は、組織を選ぶ画面と運用者の一覧のほかでは「組織」と見せないので、{organization} を入れない（#732）
   workspaceLimitReached:
-    '自分用の{workspace}は、終了したものも含めて{limit}個までです（今{used}個）。これ以上は作れないので、今ある{workspace}を使うか、終了した{workspace}があれば再開してください。',
+    '自分用の{workspace}は、利用中のものを{limit}個まで使えます（今{used}個）。新しく作るか、終了したものを再開するには、今ある{workspace}を終了して枠を空けてください。',
   workspaceLimitReachedUnknown:
-    '自分用の{workspace}の個数が、終了したものも含めて上限に達しています。これ以上は作れないので、今ある{workspace}を使うか、終了した{workspace}があれば再開してください。',
+    '自分用の{workspace}は、利用中の個数が上限に達しています。新しく作るか、終了したものを再開するには、今ある{workspace}を終了して枠を空けてください。',
+
+  workspaceReopenWorkspaceLimit: '「{name}」は再開できません。{reason}',
 
   // ワークスペースの枠と画面。見つからない画面は、組織の枠の中に出す
   notMemberAdminChip: '所属せず{admin}として開いています',
@@ -1296,7 +1298,7 @@ export const dictionary = defineDictionary({
   workspaceReopenLabel: '「{name}」を再開する',
   workspaceCloseTitle: '「{name}」を終了しますか？',
   workspaceCloseText:
-    '終了すると読み取り専用になり、中の書き込みはすべてできなくなります。この画面からいつでも再開できます。',
+    '終了すると読み取り専用になり、中の書き込みはすべてできなくなります。再開はこの画面から行えます。自分用の再開には空き枠が必要です。',
   workspaceClosing: '終了しています',
   workspaceReopening: '再開しています',
   workspaceClosed: '{workspace}を終了しました',

@@ -7,10 +7,12 @@ import { defineOperation } from '../define.ts';
 // 閉じている間、そのワークスペースの承諾待ちの招待の人は組織の人数に数えない。開き直すと新しく数えられるので、
 // 新しく数えられる人（adding）が1人以上で、今の人数（used）に足すと上限（limit）を超えるときは、書かずに
 // 409 の member_limit_reached で断る。details は { used, limit, adding }。adding が 0 の開き直しは、上限を超えている組織でも通す
+// 自分用は利用中が個数の上限に達していれば 409 の workspace_limit_reached（details は { used, limit }）。
+// 再開と履歴の書き込み条件にも上限を入れ、同時の作成・再開でも個数を超えず、失敗時は何も書かない。
 export const workspaceReopen = defineOperation({
   name: 'workspace-reopen',
   description:
-    '閉じたワークスペースを開き直す。閉じた日時を空にし、変更の履歴にも残す。開いているワークスペースには 409 の conflict。開き直すと新しく人数に数えられる人がいて、足すと組織の人数の上限を超えるときは、何も書かずに 409 の member_limit_reached（details は { used, limit, adding }）',
+    '閉じたワークスペースを開き直す。閉じた日時を空にし、変更の履歴にも残す。開いているワークスペースには 409 の conflict。開き直すと新しく人数に数えられる人がいて、足すと組織の人数の上限を超えるときは、何も書かずに 409 の member_limit_reached（details は { used, limit, adding }）。自分用は利用中が個数の上限に達していれば、何も書かずに 409 の workspace_limit_reached（details は { used, limit }）',
   mode: 'write',
   permission: 'admin',
   workspace: true,
