@@ -58,10 +58,8 @@
                 ? 'wikiClosed'
                 : 'wikiMoveFailed',
       );
-      if (result.ok) {
-        for (const id of wikiAncestorIds(pages, parentId)) expanded.add(id);
-        showToast(feedback);
-      }
+      if (result.ok) for (const id of wikiAncestorIds(pages, parentId)) expanded.add(id);
+      showToast(feedback, result.ok ? 'check' : 'alert');
       await invalidate('app:wiki');
       await tick();
       if (
@@ -242,11 +240,11 @@
       ordering = !ordering;
     }}>{t('wikiReorder')}</button
   >{/if}
+<p class="field-hint" class:callout={failed} class:is-warn={failed}>{feedback}</p>
 <nav aria-label={t(wiki.treeLabel)}>
   <ul class="wiki-tree panel">{@render branch(null, 1)}</ul>
 </nav>
 
-<p role={failed ? 'alert' : 'status'} class="field-hint">{feedback}</p>
 {#if dropId}<p class="field-hint" role="status">
     {t(dropPart === 'child' ? 'wikiDropChild' : dropPart === 'before' ? 'wikiDropBefore' : 'wikiDropAfter', {
       title: pages.find((item) => item.id === dropId)?.title ?? '',

@@ -1,6 +1,8 @@
 import { expect, test } from './fixtures.ts';
 import type { Page } from '@playwright/test';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { failOperation } from './operations.ts';
+import { workspaceWikiMove } from '../src/shared/operations/wiki/index.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
@@ -117,4 +119,24 @@ test('遅い移動応答が編集中のフォーカスを奪わない', async ({
   await expect(page.locator('.wiki-tree > li > .wiki-node > a').first()).toHaveText('編集中のページ');
   await expect(page.getByLabel('本文', { exact: true })).toBeFocused();
   await expect(page.getByLabel('本文', { exact: true })).toHaveValue('書きかけを保つ');
+});
+
+test('移動が失敗したらトーストと木の上に理由を残す', async ({ page }) => {
+  await createWorkspace(page, 'Wikiの移動の失敗');
+  await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+  await add(page, '親のページ');
+  const url = await add(page, '動かせないページ');
+  await page.getByRole('button', { name: '並べ替える', exact: true }).click();
+  await failOperation(page, workspaceWikiMove, { slug: 'aoba' }, 409, 'conflict', { details: { reason: 'too_deep' } });
+  await page.getByRole('button', { name: '親を移す: 動かせないページ', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('combobox').selectOption({ label: '親のページ' });
+  await dialog.getByRole('button', { name: '移す', exact: true }).click();
+  await expect(
+    page.locator('.toast').filter({ hasText: '子のページを含めて10段を超えるため、移せません。' }),
+  ).toBeVisible();
+  const feedback = page.locator('.wiki-side > .field-hint');
+  await expect(feedback).toHaveText('子のページを含めて10段を超えるため、移せません。');
+  expect(await feedback.evaluate((element) => !!element.nextElementSibling?.matches('nav'))).toBe(true);
+  expect(page.url()).toBe(url);
 });
