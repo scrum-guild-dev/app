@@ -248,8 +248,7 @@ function sideHtml() {
       <p class="field-hint" role="status" id="wiki-q-status">${esc(statusText())}</p>
     <div class="panel">
       <div class="panel-title"><b>ページ</b><span class="props-note">${store.pages.length} 件</span>
-        <button class="btn is-sm is-quiet toolbar-end" type="button" id="wiki-reorder" data-wiki="reorder" aria-pressed="${S.reorder}" ${searching ? 'aria-disabled="true" aria-describedby="wiki-reorder-hint"' : ""}>${icon("swap")}並べ替える</button></div>
-      <span class="field-hint" id="wiki-reorder-hint" ${searching ? "" : "hidden"}>探している間は並べ替えられません。探すのをやめると、並べ替えられます。</span>
+        <button class="btn is-sm is-quiet toolbar-end" type="button" id="wiki-reorder" data-wiki="reorder" aria-pressed="${S.reorder}" ${searching ? "hidden" : ""}>${icon("swap")}並べ替える</button></div>
       <div id="wiki-list">${listHtml()}</div>
     </div></aside>`;
 }
@@ -696,8 +695,7 @@ function refreshSearch() {
   document.getElementById("wiki-q-status").textContent = statusText();
   const searching = S.query.trim() !== "";
   const btn = document.getElementById("wiki-reorder");
-  if (searching) { btn.setAttribute("aria-disabled", "true"); btn.setAttribute("aria-describedby", "wiki-reorder-hint"); } else { btn.removeAttribute("aria-disabled"); btn.removeAttribute("aria-describedby"); }
-  document.getElementById("wiki-reorder-hint").hidden = !searching;
+  btn.hidden = searching;
 }
 document.addEventListener("submit", (ev) => {
   if (ev.target.id !== "wiki-search-form") return;

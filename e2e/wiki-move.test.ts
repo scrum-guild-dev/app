@@ -34,6 +34,17 @@ for (const scope of ['org', 'workspace'] as const) {
     const search = page.getByRole('searchbox', { name: 'Wiki の題と本文を探す' });
     await search.fill(suffix);
     await expect(up).toBeHidden();
+    await expect(page.getByRole('navigation', { name: 'Wiki の検索結果' }).getByRole('link')).toHaveCount(2);
+    // 木の祖先が hidden でも、ページ側から開くネイティブmodalは最上位に描かれる。
+    const pageMove = page.locator('#wiki-parent-action');
+    await pageMove.click();
+    const searchDialog = page.getByRole('dialog');
+    await expect(searchDialog).toBeVisible();
+    await expect(searchDialog.getByRole('combobox')).toBeFocused();
+    await searchDialog.getByRole('button', { name: 'やめる', exact: true }).click();
+    await expect(searchDialog).toBeHidden();
+    await expect(pageMove).toBeFocused();
+    await expect(search).toHaveValue(suffix);
     await search.clear();
     await expect(up).toBeVisible();
     let release!: () => void;
