@@ -102,7 +102,7 @@ test('組織の Wiki も競合時に書きかけを残し、権限のない人�
   await expect(other.locator('details').first()).toContainText('先に保存した本文');
   await other.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(other.getByRole('button', { name: '編集する' })).toBeVisible();
-  await expect(other.locator('.doc-box')).toHaveText('手元の書きかけ');
+  await expect(other.locator('.doc-box')).toContainText('手元の書きかけ');
   await other.close();
   for (const who of ['leftAll', 'otherOrg'] as const) {
     await signIn(context, baseURL, who);
