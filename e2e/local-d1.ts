@@ -133,6 +133,22 @@ export async function resetPasswordLoginRateLimits(): Promise<void> {
   await executeLocalD1([`DELETE FROM rate_limits WHERE key LIKE 'password%';`]);
 }
 
+// Wikiの画面テストが共有seedで繰り返す作成・編集・検索の枠を場面ごとに戻す。
+// 作成は10分30回なので、wikiとwiki-moveを合わせて繰り返すと枠を使い切る。
+// 上限そのものはAPIの検査で確かめ、画面では毎回本物の操作を呼ぶ。
+export async function resetWikiRateLimits(): Promise<void> {
+  const names = [
+    'org-wiki-create',
+    'org-wiki-update',
+    'org-wiki-search',
+    'workspace-wiki-create',
+    'workspace-wiki-update',
+    'workspace-wiki-search',
+  ];
+  const keys = names.map((name) => `'operation:${name}:${SEED_SESSIONS.admin.accountId}'`).join(', ');
+  await executeLocalD1([`DELETE FROM rate_limits WHERE key IN (${keys});`]);
+}
+
 // seed のセッションの行を、無ければ入れ直す（あればそのまま）。ログアウトの e2e が消す専用の行を、消す前に戻すのに使う
 export async function restoreSeedSession(who: keyof typeof SEED_SESSIONS): Promise<void> {
   // 列と期限は seed（scripts/seed.ts の sessionInserts）と同じ文を使い、あれば残すよう INSERT OR IGNORE にだけ替える
