@@ -24,8 +24,8 @@ for (const scope of ['org', 'workspace'] as const) {
       await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
     } else await page.goto('/aoba/wiki');
     const suffix = crypto.randomUUID().slice(0, 8);
-    const first = `先-${suffix}`,
-      second = `後-${suffix}`;
+    const first = `${'A'.repeat(80)}-${suffix}`,
+      second = `${'B'.repeat(80)}-${suffix}`;
     await add(page, first);
     const url = await add(page, second);
     await page.getByRole('button', { name: '並べ替える', exact: true }).click();
@@ -60,6 +60,7 @@ for (const scope of ['org', 'workspace'] as const) {
     await dialog.getByRole('combobox').selectOption({ label: '最上段' });
     await dialog.getByRole('button', { name: '移す', exact: true }).click();
     await expect(page.locator('.crumbs')).not.toContainText(first);
+    await expect(page.locator('.wiki-side > .field-hint')).toHaveText(`「${second}」を移しました。`);
     expect(page.url()).toBe(url);
     await expect(tree.locator('[data-wiki-handle]').first()).toHaveAttribute('aria-hidden', 'true');
     for (const width of [1280, 1024, 390, 320]) {
