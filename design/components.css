@@ -80,6 +80,9 @@ h1, h2, h3 { text-wrap: balance; }
 .nav-item .ico { color: var(--color-muted); }
 .nav-item[aria-current="page"] .ico { color: var(--color-accent); }
 .nav-item-label { min-width: 0; }
+/* 名前を含む項目。狭い幅の帯でも nowrap を引き継がず、名前を全文読めるよう折り返す。 */
+.nav-item.is-wrapping { flex-shrink: 0; }
+.nav-item.is-wrapping .nav-item-label { white-space: normal; overflow-wrap: anywhere; }
 .nav-badge { margin-left: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
 /* 組織とワークスペースの切り替え。共通のボタンとリンクの一覧。
    選ぶと画面が移るので select にしない（矢印キーで選んだだけで移ってしまう）。
@@ -718,6 +721,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .org-menu { flex: 1 1 12rem; }
   .nav { display: flex; overflow-x: auto; width: 100%; gap: var(--space-1); }
   .nav-item { white-space: nowrap; }
+  .nav-item.is-wrapping .nav-item-label { max-width: 12rem; }
   .topbar, .content {
     padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
     padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));

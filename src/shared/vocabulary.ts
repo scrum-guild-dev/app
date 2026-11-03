@@ -12,6 +12,9 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 
 export const dictionary = defineDictionary({
   wiki: 'Wiki',
+  orgWiki: '{organization}の Wiki',
+  orgWikiAccess: 'この組織の全員が、読んで書けます。',
+  orgWikiTreeLabel: '組織の Wiki のページ',
   wikiPage: 'ページ',
   wikiRevision: '版',
   wikiChildPage: '子のページ',

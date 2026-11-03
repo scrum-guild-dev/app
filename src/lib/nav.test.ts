@@ -14,7 +14,7 @@ test.each([false, true])(
         }).flatMap((section) => section.items.map((item) => item.label));
         expect(labels).not.toContain('pageMe');
         expect(labels).not.toContain('pageOrgAdmin');
-        if (!inWorkspaceScreen) expect(labels).toEqual(['pageToday']);
+        if (!inWorkspaceScreen) expect(labels).toEqual(['pageToday', 'orgWiki']);
       }
     }
   },
