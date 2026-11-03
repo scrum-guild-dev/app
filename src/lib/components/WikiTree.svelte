@@ -34,6 +34,12 @@
   let dropPart = $state<'before' | 'child' | 'after'>('child');
   let moveDialog = $state<ReturnType<typeof WikiMoveDialog>>();
   const treeId = $props.id();
+  let dialogFocusId: string | undefined;
+  export function showMove(trigger: HTMLElement, item: WikiNode) {
+    if (busy || !canWrite) return;
+    dialogFocusId = trigger.id || undefined;
+    moveDialog?.show(trigger, item);
+  }
   async function move(item: WikiNode, parentId: string | null, afterId?: string | null, focusId?: string) {
     if (busy || !canWrite) return;
     busy = true;
@@ -57,6 +63,7 @@
               : !result.ok && result.error?.code === 'workspace_closed'
                 ? 'wikiClosed'
                 : 'wikiMoveFailed',
+        { title: item.title },
       );
       if (result.ok) for (const id of wikiAncestorIds(pages, parentId)) expanded.add(id);
       showToast(feedback, result.ok ? 'check' : 'alert');
@@ -218,7 +225,7 @@
             id={`${treeId}-${item.id}-parent`}
             aria-label={t('moveParentLabel', { title: item.title })}
             onclick={(event) => {
-              if (!busy) moveDialog?.show(event.currentTarget, item);
+              showMove(event.currentTarget, item);
             }}>{t('moveParent')}</button
           >
         </div>
@@ -253,5 +260,5 @@
 <WikiMoveDialog
   bind:this={moveDialog}
   {pages}
-  onmove={(item, parentId) => void move(item, parentId, undefined, `${treeId}-${item.id}-parent`)}
+  onmove={(item, parentId) => void move(item, parentId, undefined, dialogFocusId)}
 />

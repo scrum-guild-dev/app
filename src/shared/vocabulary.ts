@@ -52,7 +52,7 @@ export const dictionary = defineDictionary({
   wikiGone: 'ページが見つからないため保存できません。入力は残してあります。',
   wikiSaveFailed: '保存できませんでした。入力は残してあります。もう一度試してください。',
   wikiReorder: '並べ替える',
-  wikiMoved: 'ページを移しました。',
+  wikiMoved: '「{title}」を移しました。',
   wikiMoveCycle: '自分自身や子孫のページの下へは移せません。',
   wikiMoveDepth: '子のページを含めて10段を超えるため、移せません。',
   wikiMoveFailed: 'ページを移せませんでした。木を読み直して、もう一度試してください。',
@@ -61,7 +61,7 @@ export const dictionary = defineDictionary({
   wikiMoveUnavailable: '（10段を超えるため選べません）',
   wikiMoveUnavailableCount: '深さのため選べない親は{count}件です。',
   wikiMoveHint:
-    '子のページも一緒に、同じ Wiki の移す先の末尾へ移します。自分や子孫の下、子を含めて10段を超える場所には移せません。',
+    '子のページも一緒に、同じ Wiki の移す先の末尾へ移します。自分や子孫の下、子を含めて10段を超える場所には移せません。組織とワークスペースの Wiki の間では移せません。',
   wikiDrag: 'ドラッグして移す: {title}',
   wikiDragHint: '上端・下端で並べ替え、中央で子へ移します。ボタンでも移せます。',
   wikiDropChild: '「{title}」の子へ移します',
