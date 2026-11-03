@@ -183,14 +183,13 @@
           href={wiki.pageHref(item.id)}
           aria-current={currentId === item.id ? 'page' : undefined}>{item.title}</a
         >
-        <button
+        <span
           hidden={!canWrite || !ordering}
-          class="icon-btn"
-          type="button"
+          class="grip"
+          class:is-off={busy}
           data-wiki-handle
-          aria-label={t('wikiDrag', { title: item.title })}
-          disabled={busy}
-          title={t('wikiDragHint')}><Icon name="grip" /></button
+          aria-hidden="true"
+          title={t('wikiDragHint')}><Icon name="grip" /></span
         >
       </div>
       {#if canWrite && ordering}
@@ -236,6 +235,7 @@
     type="button"
     disabled={busy}
     aria-pressed={ordering}
+    class:is-on={ordering}
     onclick={() => {
       ordering = !ordering;
     }}>{t('wikiReorder')}</button

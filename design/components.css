@@ -1762,6 +1762,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .wiki-head .section-title { overflow-wrap: anywhere; min-width: 0; }
 .wiki-node { --row-indent: 0px; position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; }
 .wiki-node > .tree-caret { width: 24px; height: 28px; }
+.wiki-node > .grip { width: 24px; height: 28px; }
 .wiki-slot { width: 24px; }
 .wiki-link { display: block; padding: 5px var(--space-2); border-radius: var(--radius-1); color: var(--color-fg); text-decoration: none; font-size: var(--text-sm); line-height: var(--leading-tight); overflow-wrap: anywhere; }
 .wiki-link:hover { background: color-mix(in srgb, var(--color-accent-soft) 45%, transparent); text-decoration: underline; text-underline-offset: 3px; }
@@ -1787,7 +1788,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   .wiki-slot { width: 44px; }
   .wiki-link { display: flex; flex-wrap: wrap; align-items: center; min-height: 44px; }
   .wiki-link .props-note { flex-basis: 100%; }
-  .wiki-node > .icon-btn, .wiki-node .order-actions .icon-btn { width: 44px; height: 44px; }
+  .wiki-node .order-actions .icon-btn { width: 44px; height: 44px; }
   .crumbs a, .crumbs .link-btn { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
   .wiki-side .search { min-height: 44px; }
 }

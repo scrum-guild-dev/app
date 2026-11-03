@@ -61,9 +61,11 @@ for (const scope of ['org', 'workspace'] as const) {
     await dialog.getByRole('button', { name: '移す', exact: true }).click();
     await expect(page.locator('.crumbs')).not.toContainText(first);
     expect(page.url()).toBe(url);
+    await expect(page.getByRole('button', { name: 'ドラッグして移す: 動かす手順', exact: true })).toHaveCount(0);
     for (const width of [1280, 1024, 390, 320]) {
       await page.setViewportSize({ width, height: 800 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      if (width <= 390) await expect(page.locator('[data-wiki-handle]:visible')).toHaveCount(0);
     }
     expect(await violations()).toEqual([]);
   });
@@ -75,7 +77,10 @@ test('Wiki のつまみをドラッグして兄弟の間と子へ移す', async 
   await add(page, '親の手順');
   const url = await add(page, '動かす手順');
   await page.getByRole('button', { name: '並べ替える', exact: true }).click();
-  const handle = page.getByRole('button', { name: 'ドラッグして移す: 動かす手順', exact: true });
+  const handle = page
+    .locator('.wiki-node')
+    .filter({ has: page.getByRole('link', { name: '動かす手順', exact: true }) })
+    .locator('[data-wiki-handle]');
   const target = page.locator('.wiki-node').filter({ has: page.getByRole('link', { name: '親の手順', exact: true }) });
   await handle.dragTo(target, { targetPosition: { x: 80, y: 2 } });
   await expect(page.locator('.wiki-side > .field-hint')).toHaveText('ページを移しました。');
