@@ -2,7 +2,8 @@ import { render } from 'svelte/server';
 import { describe, expect, test } from 'vitest';
 import WikiContent from './WikiContent.svelte';
 
-const html = (source: string) => render(WikiContent, { props: { source } }).body;
+// Svelte の描画用コメントを外し、利用者に出る要素と文字を比較する。
+const html = (source: string) => render(WikiContent, { props: { source } }).body.replace(/<!--[\s\S]*?-->/g, '');
 
 describe('Wiki の frontmatter と本文', () => {
   test('題を除いたキーと値を、本文より前の表に出す', () => {
@@ -23,6 +24,14 @@ describe('Wiki の frontmatter と本文', () => {
     expect(out).toContain('[\n  "a",\n  "b"\n]');
     expect(out).toContain('{\n  "done": true\n}');
     expect(out).not.toMatch(/<(?:img|script|a)[\s>]/);
+  });
+  test('空の文字列は注記を出し、null と区別する', () => {
+    const out = html('---\nblank: ""\nempty: null\n---\n本文');
+    expect(out).toContain('<span class="props-note">（空）</span>');
+    expect(out).toContain('<td>null</td>');
+  });
+  test('題に使えない title は表で読める', () => {
+    expect(html('---\ntitle: 123\n---\n本文')).toContain('<th scope="row">title</th><td>123</td>');
   });
   test('読めない YAML は警告と元の全文を出す', () => {
     const out = html('---\nowner: [\n---\n残す本文');

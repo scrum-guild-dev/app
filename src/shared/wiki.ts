@@ -52,7 +52,7 @@ export function parseWikiFrontmatter(source: string): WikiFrontmatter {
         ? titleOf((value as Record<string, unknown>).title)
         : null;
     const properties = Object.entries(value ?? {})
-      .filter(([key]) => key !== 'title')
+      .filter(([key]) => key !== 'title' || title === null)
       .map(([key, value]) => ({
         key,
         value:

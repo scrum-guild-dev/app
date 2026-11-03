@@ -11,7 +11,7 @@ test('frontmatter を表で読み、読めない YAML と値の無いページ�
   await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
   await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
   const source =
-    '---\ntitle: 手順の情報\nowner: 青葉\nreviewed: 2026-11-03\npeople: [青葉, 若葉]\nreview: {done: true}\nmarkup: "<img src=x> **文字**"\n' +
+    '---\ntitle: 手順の情報\nowner: 青葉\nreviewed: 2026-11-03\npeople: [青葉, 若葉]\nreview: {done: true}\nblank: ""\nmarkup: "<img src=x> **文字**"\n' +
     '長いキー'.repeat(30) +
     ': ' +
     '長い値'.repeat(100) +
@@ -24,11 +24,12 @@ test('frontmatter を表で読み、読めない YAML と値の無いページ�
   await expect(page).toHaveURL(/\/wiki\/[0-9a-f-]{36}$/);
   await page.reload();
   await expect(properties).toBeVisible();
-  await expect(properties.getByRole('row')).toHaveCount(7);
+  await expect(properties.getByRole('row')).toHaveCount(8);
   await expect(properties.getByRole('cell', { name: '2026-11-03', exact: true })).toBeVisible();
   await expect(properties.getByRole('cell', { name: '[ "青葉", "若葉" ]', exact: true })).toBeVisible();
   await expect(properties.getByRole('cell', { name: '{ "done": true }', exact: true })).toBeVisible();
   await expect(properties.getByRole('cell', { name: '<img src=x> **文字**', exact: true })).toBeVisible();
+  await expect(properties.getByRole('cell', { name: '（空）', exact: true })).toBeVisible();
   await expect(properties.locator('img, strong, a')).toHaveCount(0);
   await expect(properties.getByRole('rowheader', { name: 'title', exact: true })).toHaveCount(0);
   await expect(page.locator('.doc-box')).not.toContainText('owner:');
@@ -38,6 +39,13 @@ test('frontmatter を表で読み、読めない YAML と値の無いページ�
     await expect(properties).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
+
+  await page.getByRole('button', { name: '編集する', exact: true }).click();
+  await page.getByLabel('本文', { exact: true }).fill('---\ntitle: 123\n---\n無効な題の本文');
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await expect(page.getByRole('button', { name: '編集する', exact: true })).toBeVisible();
+  await expect(properties.getByRole('rowheader', { name: 'title', exact: true })).toBeVisible();
+  await expect(properties.getByRole('cell', { name: '123', exact: true })).toBeVisible();
 
   for (const body of [
     '---\nowner: [\n---\n## 読めない YAML の本文',

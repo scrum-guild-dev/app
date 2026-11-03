@@ -53,6 +53,7 @@ export const dictionary = defineDictionary({
   wikiProperties: 'ページの frontmatter（題を除く）',
   wikiPropertyKey: 'キー',
   wikiPropertyValue: '値',
+  wikiPropertyEmpty: '（空）',
   wikiDiscardTitle: '書きかけを捨てますか',
   wikiDiscard: '捨てて移る',
   wikiKeepWriting: '続けて書く',

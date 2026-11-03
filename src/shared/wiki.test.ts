@@ -43,12 +43,19 @@ describe('Wiki の題と安全な frontmatter', () => {
       { key: 'notes', value: '一行目\n二行目\n' },
     ]);
   });
-  test.each(['本文', '---\ntitle: 題\n---\n本文', '---\ntitle: 123\n---\n本文'])(
-    '表に出す値が無ければ空の一覧を返す',
-    (source) => {
-      expect(parseWikiFrontmatter(source).properties).toEqual([]);
-    },
-  );
+  test.each(['本文', '---\ntitle: 題\n---\n本文'])('表に出す値が無ければ空の一覧を返す', (source) => {
+    expect(parseWikiFrontmatter(source).properties).toEqual([]);
+  });
+  test.each([
+    ['123', '123'],
+    ['true', 'true'],
+    ['null', 'null'],
+    ['""', ''],
+    ['" "', ' '],
+    ['"' + '長'.repeat(101) + '"', '長'.repeat(101)],
+  ])('題に使えない title %s も表に残す', (yaml, value) => {
+    expect(parseWikiFrontmatter(`---\ntitle: ${yaml}\n---\n本文`).properties).toEqual([{ key: 'title', value }]);
+  });
   test('BOM と CRLF の frontmatter を読み、本文から除く', () => {
     expect(parseWikiFrontmatter('\uFEFF---\r\nowner: 青葉\r\n---\r\n本文')).toEqual({
       title: null,

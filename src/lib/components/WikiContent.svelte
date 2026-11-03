@@ -16,7 +16,12 @@
       <thead><tr><th scope="col">{t('wikiPropertyKey')}</th><th scope="col">{t('wikiPropertyValue')}</th></tr></thead>
       <tbody>
         {#each frontmatter.properties as property (property.key)}
-          <tr><th scope="row">{property.key}</th><td>{property.value}</td></tr>
+          <tr
+            ><th scope="row">{property.key}</th><td
+              >{#if property.value === ''}<span class="props-note">{t('wikiPropertyEmpty')}</span
+                >{:else}{property.value}{/if}</td
+            ></tr
+          >
         {/each}
       </tbody>
     </table>
