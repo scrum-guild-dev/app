@@ -92,7 +92,54 @@ function newGithubUser() {
   return user;
 }
 
+async function wikiFor(target: Target) {
+  const id = crypto.randomUUID();
+  const db = orgDb(env, target.organization.verified);
+  const stamp = '2026-11-03T00:00:00.000Z';
+  await db.batch([
+    db.statement((q) =>
+      q.insertInto('wiki_pages').values({
+        id,
+        organization_id: null,
+        workspace_id: target.workspace.id,
+        parent_id: null,
+        title: '手順',
+        body_md: '本文',
+        version: 1,
+        position: 'a0',
+        created_by: target.member.userId!,
+        updated_by: target.member.userId!,
+        created_at: stamp,
+        updated_at: stamp,
+        deleted_at: null,
+        deleted_by: null,
+      }),
+    ),
+    db.statement((q) =>
+      q.insertInto('wiki_page_revisions').values({
+        page_id: id,
+        version: 1,
+        title: '手順',
+        body_md: '本文',
+        saved_by: target.member.userId!,
+        saved_at: stamp,
+      }),
+    ),
+  ]);
+  return id;
+}
+
 export const pointers: Pointers = {
+  'workspace-wiki-tree': async (target) => ({ workspace_id: target.workspace.id }),
+  'workspace-wiki-create': async (target) => ({ workspace_id: target.workspace.id, title: '手順', body_md: '本文' }),
+  'workspace-wiki-page': async (target) => ({ workspace_id: target.workspace.id, page_id: await wikiFor(target) }),
+  'workspace-wiki-update': async (target) => ({
+    workspace_id: target.workspace.id,
+    page_id: await wikiFor(target),
+    read_version: 1,
+    title: '新しい手順',
+    body_md: '直した本文',
+  }),
   // 入力は空。組織は URL の slug で決まる
   organization: { noReference: {} },
   today: { noReference: {} },

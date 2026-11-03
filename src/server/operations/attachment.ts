@@ -3,17 +3,20 @@ import { now } from '../../shared/clock.ts';
 import { attachmentUpload } from '../../shared/operations/attachment/index.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
-import { actorUserIdOf } from './write-guards.ts';
+import { actorUserIdOf, throwIfClosed } from './write-guards.ts';
+import { insertUploadedAttachment } from '../db/index.ts';
+import { ApiError } from '../errors.ts';
 import { sniffContentType } from '../attachments/sniff.ts';
 
 export const attachmentUploadOperation = implement(
   attachmentUpload,
-  async ({ db, workspace, actor, input, binary, requestId }) => {
+  async ({ db, workspace, actor, tools, input, binary, requestId }) => {
     // R2 に書く前に閉じる（書いた後の NOT NULL 違反で、消すだけの書き込みをしない）
     const uploadedBy = actorUserIdOf(actor);
+    const { attachmentQuotaBytes } = await tools.readOrganization();
     const id = uuidv7(now());
     const objectKey = `${db.organizationId}/${workspace.workspaceId}/${id}`;
-    let createdAt = '';
+    let createdAt: string;
     const { head, stream } = await peekHead(binary.body);
     const contentType = sniffContentType(head);
     const fixed = new FixedLengthStream(binary.contentLength);
@@ -31,25 +34,24 @@ export const attachmentUploadOperation = implement(
       if (pumped.status === 'rejected') throw pumped.reason;
       // 上げ終えた時刻にする。付く先のない行の掃除（#746）は created_at の古さで消すので、上げ始めの時刻にしない
       createdAt = now().toISOString();
-      await db.batch([
-        db.statement((q) =>
-          q.insertInto('attachments').values({
-            id,
-            workspace_id: workspace.workspaceId,
-            task_id: null,
-            story_id: null,
-            epic_id: null,
-            comment_id: null,
-            object_key: objectKey,
-            file_name: input.file_name,
-            content_type: contentType,
-            size_bytes: binary.contentLength,
-            uploaded_by: uploadedBy,
-            attached_at: null,
-            created_at: createdAt,
-          }),
-        ),
-      ]);
+      const inserted = await insertUploadedAttachment(
+        db,
+        {
+          id,
+          workspaceId: workspace.workspaceId,
+          objectKey,
+          fileName: input.file_name,
+          contentType,
+          sizeBytes: binary.contentLength,
+          userId: uploadedBy,
+          at: createdAt,
+        },
+        attachmentQuotaBytes,
+      );
+      if (!inserted) {
+        await throwIfClosed(db, workspace.workspaceId);
+        throw new ApiError(409, 'attachment_quota_exceeded');
+      }
     } catch (error) {
       abort.abort();
       await Promise.allSettled([pumping, putting]);
@@ -67,6 +69,7 @@ export const attachmentUploadOperation = implement(
           }),
         );
       }
+      if (error instanceof ApiError) throw error;
       // どこで落ちたか（R2、長さの食い違い、D1 の制約）を追えるよう、例外の名前だけを残す（メッセージはキーを含みうる）
       console.error(
         JSON.stringify({
