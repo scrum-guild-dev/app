@@ -1,6 +1,6 @@
 // バイナリの Response をラップしても、セッション延長の Cookie が1本だけ残る。
 import { env } from 'cloudflare:workers';
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { commonDb } from '../src/server/db/index.ts';
 import { sessionCookieName } from '../src/shared/session-cookie.ts';
 import { download, expectDownloadHeaders, storedFile } from './attachment-download-helpers.ts';
@@ -8,6 +8,8 @@ import { createSessionWithToken } from './factories.ts';
 import { createTarget, testEnv } from './operations/world.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+afterEach(() => vi.useRealTimers());
 
 describe.each(['https://guild.example', 'http://127.0.0.1:5173'])('配信時の Cookie（%s）', (origin) => {
   test.each([200, 206])('%s の応答でも延長の Cookie とファイルのヘッダーを保つ', async (status) => {
@@ -62,9 +64,15 @@ describe.each(['https://guild.example', 'http://127.0.0.1:5173'])('配信時の 
   });
 
   test('1時間たっていないセッションの Cookie は出し直さない', async () => {
+    // ファクトリーの固定の有効期限を過ぎても、このテストが期限切れで落ちないようにする。
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-12-01T00:00:00.000Z'));
     const target = await createTarget();
     const used = new Date().toISOString();
-    const session = await createSessionWithToken(target.member.accountId, { last_used_at: used });
+    const session = await createSessionWithToken(target.member.accountId, {
+      last_used_at: used,
+      expires_at: new Date(Date.now() + 30 * DAY_MS).toISOString(),
+    });
     const { row } = await storedFile(target);
     const bindings = Object.assign({}, testEnv, { PUBLIC_ORIGIN: origin });
     const response = await download(target, row.id, {
