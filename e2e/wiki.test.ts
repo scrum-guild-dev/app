@@ -1,8 +1,17 @@
 import { expect, test } from './fixtures.ts';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { organizationInfo } from '../src/shared/operations/organization/index.ts';
-import { orgWikiPage, orgWikiTree, orgWikiUpdate, workspaceWikiUpdate } from '../src/shared/operations/wiki/index.ts';
-import { failOperation, rewriteOperation } from './operations.ts';
+import {
+  orgWikiPage,
+  orgWikiTree,
+  orgWikiUpdate,
+  orgWikiRevisions,
+  workspaceWikiPage,
+  workspaceWikiTree,
+  workspaceWikiUpdate,
+  workspaceWikiRevisions,
+} from '../src/shared/operations/wiki/index.ts';
+import { failOperation, mockOperation, rewriteOperation } from './operations.ts';
 
 test('自分用の組織の Wiki は組織の表示名で案内する', async ({ page }) => {
   await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
@@ -468,20 +477,52 @@ for (const scenario of [
   { scope: 'workspace', code: 'workspace_closed', status: 409, text: '終了したワークスペースの Wiki は読むだけです。' },
 ] as const) {
   test(`${scenario.scope}: 復元が${scenario.code}で断られたらページへ戻る操作だけを残す`, async ({ page }) => {
+    let root = '/aoba/wiki';
     if (scenario.scope === 'workspace') {
       await createWorkspace(page, 'Wikiの復元を断る');
-      await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
-    } else await page.goto('/aoba/wiki');
-    await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
-    await page.getByLabel('題', { exact: true }).fill('復元を断る手順');
-    await page.getByLabel('本文', { exact: true }).fill('前の本文');
-    await page.getByRole('button', { name: '保存する', exact: true }).click();
-    await expect(page.getByRole('button', { name: '編集する', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '編集する', exact: true }).click();
-    await page.getByLabel('本文', { exact: true }).fill('今の本文');
-    await page.getByRole('button', { name: '保存する', exact: true }).click();
-    await expect(page.getByRole('button', { name: '編集する', exact: true })).toBeVisible();
+      root = `${new URL(page.url()).pathname}/wiki`;
+    }
+    // このケースは拒否後の画面だけを確かめる。保存を繰り返して他ケースと共有する回数の枠を使い切らない。
+    const wikiPage = {
+      id: crypto.randomUUID(),
+      parent_id: null,
+      position: 'a0',
+      title: '復元を断る手順',
+      body_md: '今の本文',
+      version: 2,
+      created_at: '2026-11-03T00:00:00.000Z',
+      updated_at: '2026-11-03T01:00:00.000Z',
+    };
+    const pageOperation = scenario.scope === 'workspace' ? workspaceWikiPage : orgWikiPage;
+    await mockOperation(
+      page,
+      scenario.scope === 'workspace' ? workspaceWikiTree : orgWikiTree,
+      { slug: 'aoba' },
+      { pages: [wikiPage] },
+    );
+    await mockOperation(page, pageOperation, { slug: 'aoba' }, { page: wikiPage });
+    await mockOperation(
+      page,
+      scenario.scope === 'workspace' ? workspaceWikiRevisions : orgWikiRevisions,
+      { slug: 'aoba' },
+      {
+        revisions: [2, 1].map((version) => ({
+          version,
+          title: wikiPage.title,
+          saved_by: '019a0000-0000-7000-8000-000000000308',
+          saved_by_name: 'ミナト',
+          saved_at: wikiPage.updated_at,
+        })),
+      },
+    );
+    await page.goto(`${root}/${wikiPage.id}`);
     await page.getByRole('button', { name: '版の一覧', exact: true }).click();
+    await mockOperation(
+      page,
+      pageOperation,
+      { slug: 'aoba' },
+      { page: { ...wikiPage, body_md: '前の本文', version: 1 } },
+    );
     await page.getByRole('button', { name: 'この版を見る（第1版）', exact: true }).click();
     await failOperation(
       page,
