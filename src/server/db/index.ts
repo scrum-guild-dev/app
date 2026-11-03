@@ -11,6 +11,7 @@ export { DatabaseUnavailableError, pingDatabase } from './ping.ts';
 export { jsonList, jsonPairLookup, jsonPairRows, sprintLeftLogSql, sprintLogRefSql } from './json-list.ts';
 export { jsonLookup } from './json-lookup.ts';
 export { previousStatementChanged } from './previous-statement.ts';
+export { apiTokenSeenAt } from './api-token-seen-at.ts';
 export { organizationHistoryRowFilter } from './organization-history-filter.ts';
 export { activeSprintRowFilter } from './active-sprint-filter.ts';
 export { pendingEmailInvitationRowFilter } from './pending-email-invitation-filter.ts';

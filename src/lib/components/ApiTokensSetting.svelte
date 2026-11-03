@@ -73,7 +73,7 @@
 
   const ids = $props.id();
   // 節の見出し（h2）の id。Section が見出しと節を結ぶ。読み直せた後にここへフォーカスを移す
-  const sectionId = `${ids}-section`;
+  const sectionId = 'api-tokens';
   const nameId = `${ids}-name`;
   const reauthHintId = `${ids}-reauth-hint`;
   const nameHintId = `${ids}-name-hint`;

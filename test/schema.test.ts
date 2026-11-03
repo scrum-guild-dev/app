@@ -1346,3 +1346,34 @@ describe('organizations.kind', () => {
     expect(results[0]!.sql).toMatch(/WHERE\s+kind\s*=\s*'personal'/i);
   });
 });
+
+// 新しい列を省く旧版の INSERT は引き続き通し、書く場合だけ日時の形を守らせる。
+describe('セッションの API トークンの確認日時', () => {
+  async function insertSeen(value: unknown) {
+    const accountId = id();
+    await run(`INSERT INTO accounts (id, created_at, updated_at) VALUES (?, ?, ?)`, accountId, AT, AT);
+    return run(
+      `INSERT INTO sessions (token_hash, account_id, created_at, last_used_at, expires_at, api_token_seen_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', ''),
+      accountId,
+      AT,
+      AT,
+      AT,
+      value,
+    );
+  }
+
+  test.each([null, AT])('NULL と UTC のミリ秒日時 %s を持てる', async (value) => {
+    await expect(insertSeen(value)).resolves.toBeDefined();
+  });
+
+  test.each([
+    'not-a-date',
+    '2026-10-20',
+    '2026-10-20T00:00:00Z',
+    '2026-10-20T00:00:00.000+09:00',
+    '2026-13-20T00:00:00.000Z',
+  ])('正規の UTC 日時でない %s は拒む', async (value) => {
+    await expect(insertSeen(value)).rejects.toThrow(/CHECK/);
+  });
+});

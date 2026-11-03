@@ -3,6 +3,7 @@ import { callOperation } from '../../lib/api.ts';
 import { consentUrl, isTermsRequired, isUnauthenticated, loginUrl } from '../../lib/login-redirect.ts';
 import { myOrganizations, organizationInfo } from '../../shared/operations/organization/index.ts';
 import { invitationList } from '../../shared/operations/workspace/index.ts';
+import { tokenNotice } from '../../shared/operations/session/token-notice.ts';
 import type { LayoutLoad } from './$types';
 
 // 組織の枠が使う値。組織に入れない（無い slug も同じ）ときは organization が null で、
@@ -14,9 +15,10 @@ import type { LayoutLoad } from './$types';
 // 件数を invitationCount に入れる（メニューの「マイプロフィール」の印に出す）。招待が無い人は追加の呼び出しをしない。読めなかったときは 0（印を出さない）。
 // url は 401 と terms_required のときだけ読む（読むと、移るたびにこの load が走り直る）
 export const load: LayoutLoad = async ({ params, fetch, url }) => {
-  const [organization, accountOrganizations] = await Promise.all([
+  const [organization, accountOrganizations, notice] = await Promise.all([
     callOperation(organizationInfo, {}, { slug: params.slug, fetcher: fetch }),
     callOperation(myOrganizations, {}, { fetcher: fetch }),
+    callOperation(tokenNotice, {}, { fetcher: fetch }),
   ]);
   // 同意していない（403 の terms_required）ときは、どちらの呼び出しでも同意の画面へ移す。401 の確かめより先に見る
   if (isTermsRequired(organization) || isTermsRequired(accountOrganizations)) {
@@ -55,6 +57,7 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
   }
 
   return {
+    tokenNotice: notice.ok ? notice.data : null,
     slug: params.slug,
     organization: organization.ok ? organization.data : null,
     failure,

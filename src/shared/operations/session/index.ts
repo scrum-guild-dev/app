@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { defineOperation } from '../define.ts';
 import type { AnyOperationDefinition } from '../define.ts';
 import { tokenCreate, tokenList, tokenRevoke } from './token.ts';
+import { tokenNotice, tokenNoticeSeen } from './token-notice.ts';
 import { credentialsRevokeAll } from './credentials.ts';
 import { operationList } from './operation-list.ts';
 import { consentRecord, consentStatus } from './consent.ts';
@@ -39,6 +40,7 @@ export const logout = defineOperation({
 });
 
 export { tokenCreate, tokenList, tokenRevoke } from './token.ts';
+export { tokenNotice, tokenNoticeSeen } from './token-notice.ts';
 
 export { credentialsRevokeAll } from './credentials.ts';
 
@@ -52,6 +54,8 @@ export const sessionOperations: readonly AnyOperationDefinition[] = [
   tokenCreate,
   tokenList,
   tokenRevoke,
+  tokenNotice,
+  tokenNoticeSeen,
   credentialsRevokeAll,
   operationList,
 ];
