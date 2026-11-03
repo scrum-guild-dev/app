@@ -91,8 +91,8 @@ function expectedNames(definitions: readonly AnyOperationDefinition[], credentia
   return (
     definitions
       .filter((definition) => definition.permission !== 'operator' && definition.cookieOnly !== true)
-      // 本文がファイルのバイトの操作は、CLI と MCP が JSON で呼べないので載せない（Issue #744）
-      .filter((definition) => definition.body !== 'binary')
+      // ファイルの入出力は CLI と MCP の JSON では扱わない（#744、#745）
+      .filter((definition) => definition.body !== 'binary' && definition.response !== 'binary')
       .filter((definition) => scope === 'write' || definition.mode === 'read')
       .map((definition) => definition.name)
       .sort()

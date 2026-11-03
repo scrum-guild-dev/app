@@ -1,12 +1,53 @@
 // 添付ファイルの操作の処理（定義は src/shared/operations/attachment/index.ts）
 import { now } from '../../shared/clock.ts';
-import { attachmentUpload } from '../../shared/operations/attachment/index.ts';
+import { attachmentDownload, attachmentUpload } from '../../shared/operations/attachment/index.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
 import { actorUserIdOf, throwIfClosed } from './write-guards.ts';
 import { insertUploadedAttachment } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { sniffContentType } from '../attachments/sniff.ts';
+import { downloadAttachment } from '../attachments/download.ts';
+
+export const attachmentDownloadOperation = implement(attachmentDownload, async ({ db, actor, input, download }) => {
+  if (actor.userId === null) throw new ApiError(404, 'not_found');
+  const userId = actor.userId;
+  const row = await db.first(
+    db.statement((q) =>
+      q
+        .selectFrom('attachments as a')
+        .innerJoin('workspaces as w', 'w.id', 'a.workspace_id')
+        .select(['a.id', 'a.workspace_id', 'a.object_key', 'a.file_name', 'a.content_type'])
+        .where('w.organization_id', '=', db.organizationId)
+        .where('a.id', '=', input.id)
+        .where('a.uploaded_by', '=', userId)
+        .where('a.attached_at', 'is', null)
+        .where('a.task_id', 'is', null)
+        .where('a.story_id', 'is', null)
+        .where('a.epic_id', 'is', null)
+        .where('a.comment_id', 'is', null)
+        .where((eb) =>
+          actor.isAdmin
+            ? eb.val(true)
+            : eb.exists(
+                eb
+                  .selectFrom('memberships as m')
+                  .select('m.id')
+                  .whereRef('m.workspace_id', '=', 'a.workspace_id')
+                  .where('m.user_id', '=', userId)
+                  .where('m.left_at', 'is', null),
+              ),
+        ),
+    ),
+  );
+  // 付く先のある行の権限は、付ける操作と一緒に扱う。この版では本人の未添付だけを返す。
+  if (row === undefined || row.object_key !== `${db.organizationId}/${row.workspace_id}/${row.id}`) {
+    throw new ApiError(404, 'not_found');
+  }
+  const response = await downloadAttachment(download.bucket, row, download);
+  if (response === null) throw new ApiError(404, 'not_found');
+  return response;
+});
 
 export const attachmentUploadOperation = implement(
   attachmentUpload,

@@ -1050,6 +1050,7 @@
 - 組織の合計は、組織のワークスペースの `size_bytes` と、組織および各ワークスペースの Wiki の最新本文・過去版（題を含むUTF-8のバイト数、削除後30日の保持分を含む）を上げるたびに合算する。集計は保存しない。添付と Wiki の書く文が、同じ時点の使用量と増分で上限を確かめ、同時の要求でも超えない。上げたことで80%を超え、`organizations.attachment_quota_warned_at` が空なら、管理者全員に通知し、その日時を入れる。
 - 添付ファイルの一覧は、付く先ごとに画像と動画を含むすべての行を返す。一覧の行に出す容量は `size_bytes`、上げた人は `uploaded_by`、上げた日時は `created_at`（書いている途中で上げたものが後で付く先に付いても、上げた日時は変わらない。`attached_at` は出さない）。本文に差し込んだ画像も、一覧の行として残る。
 - 画面と Markdown からは `/api/<slug>/attachments/<id>` で参照する。本文への画像の差し込みは Markdown の `![説明](…)` だけで、`<img>` タグは使えない（`(…)` に入れる参照の書き方は、差し込みの実装で、この URL とそろえて決める）。返すときは権限を確かめ、`X-Content-Type-Options: nosniff` と `Cache-Control: private` を付ける。画像として出す4種類（PNG、JPEG、GIF、WebP）と動画として再生する2種類（MP4、WebM）以外は `Content-Disposition: attachment` で返す。動画は Range リクエストに応える。
+  - GET（操作 `attachments`、`response: 'binary'`）は、組織の `workspaces` と結合して `organization_id` で絞り、同じ文で現在の所属（管理者を除く）、`uploaded_by` と本人の一致、付く先4列と `attached_at` が空であることを確かめる。R2 のキーも組織・ワークスペース・添付の ID と照合する。本人以外と未所属のワークスペース、付く先のある行は、この版ではすべて存在しないときと同じ 404。付く先のある行の閲覧は、付ける操作側の実装で足す。R2 の本文をストリームのまま返し、メタデータの Content-Type は使わない。CSP の sandbox と `default-src 'none'`、`frame-ancestors 'none'` を付け、Cache-Control は権限の取消後に再検査できる `private, no-store` にする。ダウンロード名、Range、HEAD とエラー時のヘッダーは `docs/development.md` の「添付ファイルの配信」。
 - 索引: `(task_id)`、`(story_id)`、`(epic_id)`、`(comment_id)` をそれぞれ NOT NULL の部分索引で、`(workspace_id)`（外部キーの検査）、`(workspace_id, created_at) WHERE attached_at IS NULL`（付く先のない行を消す定期処理。組織のワークスペースで絞るので `workspace_id` を先頭にする）、`(uploaded_by)`（外部キーの検査）。
 
 ### sprints

@@ -45,4 +45,14 @@ export const attachmentUpload = defineOperation({
   }),
 });
 
-export const attachmentOperations: readonly AnyOperationDefinition[] = [attachmentUpload];
+export const attachmentDownload = defineOperation({
+  name: 'attachments',
+  description: '未添付のファイルを、上げた本人の権限を確かめて返す',
+  permission: 'organization',
+  mode: 'read',
+  response: 'binary',
+  input: z.object({ id: idSchema }),
+  output: z.instanceof(Response),
+});
+
+export const attachmentOperations: readonly AnyOperationDefinition[] = [attachmentUpload, attachmentDownload];

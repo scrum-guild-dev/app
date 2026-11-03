@@ -75,6 +75,9 @@ type BaseContextOf<D extends AnyOperationDefinition> = D extends OutsideOperatio
 export type ContextOf<D extends AnyOperationDefinition> = BaseContextOf<D> &
   (D extends { readonly body: 'binary' }
     ? { binary: BinaryBody; requestId: string } // requestId は失敗のログ用（deferrer のログと同じ値）
+    : unknown) &
+  (D extends { readonly response: 'binary' }
+    ? { download: { bucket: R2Bucket; range: string | undefined; ifRange: string | undefined; head: boolean } }
     : unknown);
 
 // 処理の戻り値は出力のスキーマで検証し、スキーマに無い項目は落とす（行をそのまま返しても余計な列が出ない）

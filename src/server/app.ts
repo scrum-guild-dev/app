@@ -3,7 +3,13 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { routePath } from 'hono/route';
 import type { Health } from '../shared/health.ts';
 import { PASSWORD_LOGIN_ENABLED } from '../shared/password-login-enabled.ts';
-import { apiCacheControl, apiCsp, fixedHeaders } from '../shared/security-headers.ts';
+import {
+  apiCacheControl,
+  apiCsp,
+  attachmentCacheControl,
+  attachmentCsp,
+  fixedHeaders,
+} from '../shared/security-headers.ts';
 import { isAllowedPublicOrigin } from '../shared/session-cookie.ts';
 import type { AppEnv } from './app-env.ts';
 import { loginRoutes } from './auth/login-routes.ts';
@@ -44,8 +50,9 @@ export function createApp(
     for (const [name, value] of Object.entries(fixedHeaders)) {
       c.res.headers.set(name, value);
     }
-    c.res.headers.set('Content-Security-Policy', apiCsp);
-    c.res.headers.set('Cache-Control', apiCacheControl);
+    const binary = c.get('binaryResponse') === true;
+    c.res.headers.set('Content-Security-Policy', binary ? attachmentCsp : apiCsp);
+    c.res.headers.set('Cache-Control', binary ? attachmentCacheControl : apiCacheControl);
   });
 
   // 運用者の一覧に形の合わない項目があれば、すべてのリクエストを 500 にする。運用者でない人に運用者の権限を渡さないため、
