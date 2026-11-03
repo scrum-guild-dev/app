@@ -245,7 +245,7 @@
         } else if (result.status === 409 && result.error?.code === 'workspace_limit_reached') {
           // 数が読めない応答（details が無いか不正）は、数を含まない文言にする
           const limit = workspaceLimitDetailsOf(result.error.details);
-          const common = { workspace: t('workspace') };
+          const common = { workspace: t('workspace'), adminPage: t('pageOrgAdmin') };
           limitMessage =
             limit === undefined
               ? t('workspaceLimitReachedUnknown', common)

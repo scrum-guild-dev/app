@@ -2,15 +2,16 @@
 // 上限なら何も書かずに 409 の workspace_limit_reached（details は { used, limit }）。チーム用は制限しない。
 // 権限と組織の分離の一覧は test/operation-registry.test.ts が回す
 import { env } from 'cloudflare:workers';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { WORKSPACE_LIMITS } from '../src/shared/organization-kind.ts';
 import { workspaceClose, workspaceCreate, workspaceReopen } from '../src/shared/operations/workspace/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb } from '../src/server/db/index.ts';
+import { envWithD1Hooks } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { createTask, createWorkspace, type OrganizationFixture } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
-import { createPersonalTarget, createTarget, type Target } from './operations/world.ts';
+import { createPersonalTarget, createTarget, testEnv, type Target } from './operations/world.ts';
 
 const app = createApp(implementedOperations);
 
@@ -68,11 +69,12 @@ async function countRows(organization: OrganizationFixture) {
 
 let counter = 0;
 
-function create(target: Target) {
+function create(target: Target, requestEnv?: Env) {
   return post(app, workspaceCreate, {
     slug: target.slug,
     token: target.admin.token,
     body: { name: `新規 ${counter++}`, timezone: 'Asia/Tokyo', leader_user_id: target.admin.userId! },
+    env: requestEnv,
   });
 }
 
@@ -89,15 +91,16 @@ function close(target: Target, workspaceId: string) {
   });
 }
 
-function reopen(target: Target, workspaceId: string) {
+function reopen(target: Target, workspaceId: string, requestEnv?: Env) {
   return post(app, workspaceReopen, {
+    env: requestEnv,
     slug: target.slug,
     token: target.admin.token,
     body: { workspace_id: workspaceId },
   });
 }
 
-describe('workspace-create の個数の上限', () => {
+describe('workspace-create / workspace-reopen の利用中の個数の上限', () => {
   test('上限の定数は、自分用が3、チーム用が無制限', () => {
     expect(WORKSPACE_LIMITS).toEqual({ personal: 3, team: null });
   });
@@ -264,8 +267,6 @@ describe('workspace-create の個数の上限', () => {
   });
 });
 
-afterEach(() => vi.restoreAllMocks());
-
 async function activeCount(target: Target) {
   const db = orgDb(env, target.organization.verified);
   const rows = await db.rows(
@@ -324,24 +325,23 @@ describe('作成と再開の並行操作', () => {
     '%s の事前検査の後に別の %s が枠を埋めても、書き込み条件で拒否して何も残さない',
     async (first, second) => {
       const { target, a, b } = await closedTarget();
-      const entry = orgDb(env, target.organization.verified);
-      const prototype = Object.getPrototypeOf(Object.getPrototypeOf(entry)) as {
-        first: (this: unknown, ...args: unknown[]) => Promise<unknown>;
-      };
-      const original = prototype.first;
       let fired = false;
       let afterOther: Awaited<ReturnType<typeof countRows>> | undefined;
-      vi.spyOn(prototype, 'first').mockImplementation(async function (this: unknown, ...args: unknown[]) {
-        const row = await original.apply(this, args);
-        if (!fired && typeof row === 'object' && row !== null && 'n' in row && Number(row.n) === 2) {
-          fired = true;
-          const res = second === '作成' ? await create(target) : await reopen(target, b.id);
-          expect(res.status).toBe(200);
-          afterOther = await countRows(target.organization);
-        }
-        return row;
+      const requestEnv = envWithD1Hooks(testEnv, {
+        afterQuery: async (sql) => {
+          if (
+            !fired &&
+            sql.startsWith('select count(*) as "n" from "workspaces"') &&
+            sql.includes('"closed_at" is null')
+          ) {
+            fired = true;
+            const res = second === '作成' ? await create(target) : await reopen(target, b.id);
+            expect(res.status).toBe(200);
+            afterOther = await countRows(target.organization);
+          }
+        },
       });
-      const res = first === '作成' ? await create(target) : await reopen(target, a.id);
+      const res = first === '作成' ? await create(target, requestEnv) : await reopen(target, a.id, requestEnv);
       expect(fired).toBe(true);
       expect(res.status).toBe(409);
       expect(await res.json()).toMatchObject({

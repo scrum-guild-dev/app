@@ -199,7 +199,8 @@ export function createdOn(timezone: string, createdAt: string, operation: string
   }
 }
 
-// 件数に上限を付けない。ワークスペースは組織あたり数十の想定（docs/data-model.md の workspaces の節）
+// 終了済みを含めて全件返す。自分用の利用中は3個だが、累積の総数は制限しない。
+// 総件数が千を超えるか一覧が遅くなったときに、絞り込み・ページ分けを見直す（docs/data-model.md の workspaces の節）
 export const workspaceListOperation = implement(workspaceList, async ({ db }) => {
   const organizationId = db.organizationId;
   const [workspaceResult, countResult] = await db.batch([

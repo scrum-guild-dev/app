@@ -302,9 +302,9 @@ export const dictionary = defineDictionary({
   // 数が読めない応答（details が無いか不正）は数を含まない文言にする。
   // 自分用の組織は、組織を選ぶ画面と運用者の一覧のほかでは「組織」と見せないので、{organization} を入れない（#732）
   workspaceLimitReached:
-    '自分用の{workspace}は、利用中のものを{limit}個まで使えます（今{used}個）。新しく作るか、終了したものを再開するには、今ある{workspace}を終了して枠を空けてください。',
+    '自分用の{workspace}は、利用中のものを{limit}個まで使えます（今{used}個）。「{adminPage}」で今ある{workspace}を終了して枠を空けてください。',
   workspaceLimitReachedUnknown:
-    '自分用の{workspace}は、利用中の個数が上限に達しています。新しく作るか、終了したものを再開するには、今ある{workspace}を終了して枠を空けてください。',
+    '自分用の{workspace}は、利用中の個数が上限に達しています。「{adminPage}」で今ある{workspace}を終了して枠を空けてください。',
 
   workspaceReopenWorkspaceLimit: '「{name}」は再開できません。{reason}',
 
@@ -1298,7 +1298,7 @@ export const dictionary = defineDictionary({
   workspaceReopenLabel: '「{name}」を再開する',
   workspaceCloseTitle: '「{name}」を終了しますか？',
   workspaceCloseText:
-    '終了すると読み取り専用になり、中の書き込みはすべてできなくなります。再開はこの画面から行えます。自分用の再開には空き枠が必要です。',
+    '終了すると読み取り専用になり、中の書き込みはすべてできなくなります。再開はこの画面から行えます。',
   workspaceClosing: '終了しています',
   workspaceReopening: '再開しています',
   workspaceClosed: '{workspace}を終了しました',

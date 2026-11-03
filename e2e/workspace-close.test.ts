@@ -61,7 +61,8 @@ test.describe('管理者（あおば開発のミナト）', () => {
     const dialog = page.getByRole('dialog', { name: `「${name}」を終了しますか？` });
     await expect(dialog).toContainText('読み取り専用');
     await expect(dialog).toContainText('再開はこの画面から行えます');
-    await expect(dialog).toContainText('自分用の再開には空き枠が必要です');
+    await expect(dialog).not.toContainText('自分用');
+    await expect(dialog).not.toContainText('いつでも');
     // 対象のワークスペースの名前だけを埋める
     await expect(dialog).not.toContainText('{');
     await expect(dialog.locator('.is-danger')).toHaveCount(0);
@@ -326,11 +327,21 @@ test.describe('管理者（あおば開発のミナト）', () => {
       expect(await refusal.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
       // 空きができた後の再試行を成功として返す。次の再開で理由が消える。
       await page.unroute('**/api/aoba/workspace-reopen');
-      await page.route('**/api/aoba/workspace-reopen', (route) =>
-        route.fulfill({ status: 200, json: { workspace_id: 'reopened' } }),
-      );
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await page.route('**/api/aoba/workspace-reopen', async (route) => {
+        await pending;
+        await route.fulfill({ status: 200, json: { workspace_id: 'reopened' } });
+      });
       await button.click();
-      await expect(refusal).toHaveCount(0);
+      try {
+        await expect(refusal).toHaveCount(0);
+        await expect(button).toHaveAttribute('aria-disabled', 'true');
+      } finally {
+        release();
+      }
       await expect(page.getByRole('status').filter({ hasText: 'ワークスペースを再開しました' })).toBeVisible();
     });
   }

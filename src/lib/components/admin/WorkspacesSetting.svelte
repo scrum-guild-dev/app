@@ -96,7 +96,7 @@
         showToast(t('workspaceStateChanged', { name: workspace.name }), 'alert');
       } else if (result.status === 409 && result.error?.code === 'workspace_limit_reached') {
         const limit = workspaceLimitDetailsOf(result.error.details);
-        const common = { workspace: t('workspace') };
+        const common = { workspace: t('workspace'), adminPage: t('pageOrgAdmin') };
         const reason =
           limit === undefined
             ? t('workspaceLimitReachedUnknown', common)

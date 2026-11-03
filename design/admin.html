@@ -81,6 +81,7 @@ SQ.mount("admin", () => `
           `チームや用途ごとに作ります。${t("member")}の招待は、作った${t("workspace")}の${t("leader")}が行います。`,
           `<button class="btn is-sm" type="button" data-dialog="createWorkspace">${icon("plus")}${t("workspace")}を作る</button>`)
       : `
+      ${new URLSearchParams(location.search).has("workspace-limit") ? `<div class="callout is-warn" role="alert">${icon("alert")}<span class="wrap-anywhere">「${esc(A.workspaces.find(w => w.closed)?.name || "終了した案件")}」は再開できません。自分用の${t("workspace")}は、利用中のものを3個まで使えます（今3個）。「組織の管理」で今ある${t("workspace")}を終了して枠を空けてください。</span></div>` : ""}
       <div class="table-wrap"><table class="table is-stacked" aria-label="${t("workspace")}の一覧"><thead><tr><th class="is-name">名前</th><th class="is-num">${t("member")}数</th><th class="is-num">${t("leader")}数</th><th>作った日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
         <tbody>${A.workspaces.map((w) => `<tr><td class="is-name">${esc(w.name)}${w.closed ? ` <span class="chip">終了 ${w.closed}</span>` : ""}${!w.closed && !w.leaders ? ` <span class="chip is-warn">${t("leader")}がいない</span>` : ""}</td>
           <td class="is-num" data-label="${t("member")}数">${w.members}</td><td class="is-num" data-label="${t("leader")}数">${w.leaders}</td><td class="mono" data-label="作った日">${w.created}</td>
