@@ -12,8 +12,7 @@
     type WikiPage,
   } from '../../shared/operations/wiki/index.ts';
   import ConfirmDialog from './ConfirmDialog.svelte';
-  import Markdown from './Markdown.svelte';
-  import { parseWikiFrontmatter } from '../../shared/wiki.ts';
+  import WikiContent from './WikiContent.svelte';
 
   let {
     wiki,
@@ -45,7 +44,6 @@
   let request = 0;
   let active = true;
   let dialog = $state<ReturnType<typeof ConfirmDialog>>();
-  const rendered = $derived(parseWikiFrontmatter(selected?.body_md ?? ''));
   const listedVersion = $derived(revisions[0]?.version ?? current.version);
   const metadata = $derived(revisions.find((revision) => revision.version === selected?.version));
   const busy = $derived(saving || confirming);
@@ -165,8 +163,7 @@
       <button class="btn" type="button" aria-disabled={busy} onclick={load}>{t('wikiHistory')}</button>
     </div>
   </div>
-  {#if rendered.invalid}<p class="callout is-warn">{t('wikiFrontmatterInvalid')}</p>{/if}
-  <Markdown source={rendered.body} {internalLinkPrefix} />
+  <WikiContent source={selected.body_md} {internalLinkPrefix} />
 {:else if !loading && !failure}
   <div class="table-wrap">
     <table class="table is-stacked">

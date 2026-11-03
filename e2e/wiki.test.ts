@@ -323,7 +323,7 @@ for (const scope of ['organization', 'workspace'] as const) {
     const title = 'A'.repeat(100);
     await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
     await page.getByLabel('題', { exact: true }).fill(title);
-    await page.getByLabel('本文', { exact: true }).fill('# 以前の本文');
+    await page.getByLabel('本文', { exact: true }).fill('---\ncategory: 過去の分類\n---\n# 以前の本文');
     await page.getByRole('button', { name: '保存する', exact: true }).click();
     await expect(page).toHaveURL(/\/wiki\/[0-9a-f-]{36}$/);
     await page.getByRole('button', { name: '編集する', exact: true }).click();
@@ -343,6 +343,7 @@ for (const scope of ['organization', 'workspace'] as const) {
     await page.getByRole('button', { name: '第1版を見る', exact: true }).click();
     await expect(page.getByRole('heading', { level: 2, name: title })).toBeFocused();
     await expect(page.locator('.doc-box')).toContainText('以前の本文');
+    await expect(page.getByRole('cell', { name: '過去の分類', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'この版に戻す', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('第3版として足されます');
@@ -379,6 +380,7 @@ for (const scope of ['organization', 'workspace'] as const) {
     }
     await expect(page.getByRole('status').filter({ hasText: '第3版として保存しました' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '過去の分類', exact: true })).toBeVisible();
     await page.unroute(operation);
     await page.getByRole('button', { name: '版の一覧', exact: true }).click();
     await expect(rows).toHaveCount(3);
