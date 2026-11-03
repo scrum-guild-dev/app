@@ -176,7 +176,12 @@ test('30日境界の1ミリ秒前は保持し、ちょうど30日で消した本
 });
 
 test('空のfrontmatterは読めるYAMLとして扱い、その下のMarkdownだけを描く', () => {
-  expect(parseWikiFrontmatter('---\n---\n# 手順')).toEqual({ title: null, body: '# 手順', invalid: false });
+  expect(parseWikiFrontmatter('---\n---\n# 手順')).toEqual({
+    title: null,
+    body: '# 手順',
+    invalid: false,
+    properties: [],
+  });
 });
 
 test('削除後に元の親が10段目へ動いても、復元するページは11段目にならず最上段へ戻す', async () => {
