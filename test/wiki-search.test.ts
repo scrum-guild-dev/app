@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
 import { createApp } from '../src/server/app.ts';
-import { orgDb } from '../src/server/db/index.ts';
+import { orgDb, searchWikiPages } from '../src/server/db/index.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { orgWikiSearch, workspaceWikiSearch } from '../src/shared/operations/wiki/index.ts';
-import { runStatementsForTest } from '../src/server/db/testing.ts';
+import { envWithD1Hooks, runStatementsForTest } from '../src/server/db/testing.ts';
 import { AT, uuidv7 } from './factories.ts';
 import { post } from './operations/harness.ts';
 import { createTarget, type Target } from './operations/world.ts';
@@ -102,8 +102,10 @@ describe.each([false, true])('Wiki の検索（組織: %s）', (org) => {
   test('32MiBを超える本文は検索せず断り、削除したページは量に含めない', async () => {
     const target = await createTarget();
     await seedMany(target, org, 111, "replace(hex(zeroblob(50000)), '0', '文')");
+    // 111 × (本文300,000B + 題3B) + 3 × 題3B + 本文254,090B = 32MiBちょうど。
+    for (const size of [100000, 100000, 54090]) await add(target, '端', 'x'.repeat(size), { org });
     expect((await search(target, '不在', org)).status).toBe(200);
-    const extra = await add(target, '追加', '文'.repeat(100000), { org });
+    const extra = await add(target, 'x', '', { org });
     const response = await search(target, '不在', org);
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ error: { code: 'wiki_search_limit' } });
@@ -182,4 +184,24 @@ test('閉じたワークスペースのWikiも検索できる', async () => {
     ),
   );
   expect(await (await search(target, '本文')).json()).toEqual({ pages: [{ id, title: '手順', matched_in: 'body' }] });
+});
+
+test('予算超過では検索本文を走査せず、予算の行読みも5,001行で打ち切る', async () => {
+  const target = await createTarget();
+  await seedMany(target, false, 10001, "'本文'");
+  let rowsRead = 0;
+  const measured = envWithD1Hooks(env, {
+    afterQuery: async (_sql, meta) => {
+      rowsRead += meta.rows_read;
+    },
+  });
+  const result = await searchWikiPages(
+    orgDb(measured, target.organization.verified),
+    { workspaceId: target.workspace.id },
+    '当たらない 語 五 つ 全部',
+  );
+  expect(result).toEqual({ limited: true, pages: [] });
+  // 予算の読み取りは5,001行まで。CASEか予算のLIMITが無ければこの件数を超える。
+  expect(rowsRead).toBeGreaterThan(0);
+  expect(rowsRead).toBeLessThanOrEqual(5010);
 });

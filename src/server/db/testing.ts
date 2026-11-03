@@ -41,12 +41,12 @@ export { compiledQueryOf as compiledQueryForTest };
 
 // D1 の呼び出しに割り込む口。テストが、並行した処理の実行の順を固定したり、書き込みを失敗させたりするのに使う。
 // env の取り出しの Proxy で DB を包むので、入口（commonDb、orgDb）はそのまま包まれた D1 に問い合わせる。
-//   afterQuery: 問い合わせ（rows、first、run）が答えを返した直後に呼ぶ。その間、問い合わせの結果は呼び出し元に返らない
+//   afterQuery: 問い合わせ（rows、first、run）が答えを返した直後にSQLと読み書きした行数を渡す。その間、結果は呼び出し元に返らない
 //   beforeBatch: batch() を送る前に、文の SQL の並びを渡して呼ぶ。投げると、batch() は何も書かずに失敗する
 //   afterBatch: batch() が書き終えた直後に、文の SQL の並びを渡して呼ぶ。投げると、書き込みはコミットされたまま、呼び出し元には失敗が返る
 //     （応答だけが失敗した場合）。別の処理を割り込ませて、書いた直後の状態を変えるのにも使う
 export type D1Hooks = {
-  afterQuery?: (sql: string) => Promise<void>;
+  afterQuery?: (sql: string, meta: Pick<D1Meta, 'rows_read' | 'rows_written'>) => Promise<void>;
   beforeBatch?: (sqls: readonly string[]) => void;
   afterBatch?: (sqls: readonly string[]) => Promise<void> | void;
 };
@@ -62,7 +62,7 @@ export function envWithD1Hooks(base: Env, hooks: D1Hooks): Env {
         if (name === 'all') {
           return async (...args: []) => {
             const result = await target.all(...args);
-            await hooks.afterQuery?.(text);
+            await hooks.afterQuery?.(text, result.meta);
             return result;
           };
         }

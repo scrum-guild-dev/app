@@ -637,7 +637,14 @@ document.addEventListener("submit", (ev) => {
   }, 350);
 });
 let searchTimer;
+let searchComposing = false;
+let searchPending = false;
+function setSearchPending(value) {
+  searchPending = value;
+  document.querySelector('#wiki-search-form button')?.setAttribute('aria-disabled', String(value));
+}
 function refreshSearch() {
+  setSearchPending(false);
   document.getElementById("wiki-list").innerHTML = listHtml();
   document.getElementById("wiki-q-status").textContent = statusText();
   const searching = S.query.trim() !== "";
@@ -647,15 +654,28 @@ function refreshSearch() {
 }
 document.addEventListener("submit", (ev) => {
   if (ev.target.id !== "wiki-search-form") return;
-  ev.preventDefault(); clearTimeout(searchTimer); refreshSearch();
+  ev.preventDefault();
+  if (searchPending || searchComposing) return;
+  clearTimeout(searchTimer); setSearchPending(true); searchTimer = setTimeout(refreshSearch, 800);
 });
+document.addEventListener("compositionstart", (ev) => {
+  if (ev.target.id !== "wiki-q") return;
+  searchComposing = true; setSearchPending(false); clearTimeout(searchTimer);
+});
+function endSearchComposition(ev) {
+  if (ev.target.id !== "wiki-q") return;
+  searchComposing = false; clearTimeout(searchTimer);
+  setSearchPending(true); searchTimer = setTimeout(refreshSearch, 800);
+}
+document.addEventListener("compositionend", endSearchComposition);
+document.addEventListener("focusout", (ev) => { if (searchComposing) endSearchComposition(ev); });
 document.addEventListener("input", (ev) => {
   const id = ev.target.id;
   if (id === "wiki-q") {
     S.query = ev.target.value;
     clearTimeout(searchTimer);
     if (!S.query.trim()) refreshSearch();
-    else searchTimer = setTimeout(refreshSearch, 800);
+    else if (!searchComposing) { setSearchPending(true); searchTimer = setTimeout(refreshSearch, 800); }
     return;
   }
   if (id === "wk-title" || id === "wk-body") {

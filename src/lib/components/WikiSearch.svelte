@@ -33,10 +33,11 @@
       .sort()
       .join('|'),
   );
-  const parsed = $derived(wikiQuerySchema.safeParse(query));
+  const searchText = $derived(query.trim());
+  const parsed = $derived(wikiQuerySchema.safeParse(searchText));
 
   $effect(() => {
-    const text = query.trim();
+    const text = searchText;
     const scopeSlug = slug;
     const scopeWorkspace = workspaceId;
     const input = parsed;
@@ -66,7 +67,8 @@
       loading = false;
       searched = true;
       if (result.ok) results = result.data.pages;
-      else
+      else {
+        results = [];
         failure = t(
           result.error?.code === 'rate_limited'
             ? 'wikiSearchRateLimited'
@@ -74,6 +76,7 @@
               ? 'wikiSearchLimit'
               : 'wikiSearchFailed',
         );
+      }
     }, 800);
     return () => {
       active = false;
@@ -113,6 +116,9 @@
         composing = true;
       }}
       oncompositionend={() => {
+        composing = false;
+      }}
+      onblur={() => {
         composing = false;
       }}
       aria-invalid={query.trim() && !parsed.success ? true : undefined}

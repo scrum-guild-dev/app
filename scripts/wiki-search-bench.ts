@@ -8,6 +8,8 @@ import { SEED_SESSIONS } from '../seed/sessions.ts';
 import { sessionCookieName } from '../src/shared/session-cookie.ts';
 
 const origin = 'http://localhost:9702';
+const ascii = process.argv.includes('--ascii');
+const suffix = ascii ? ' alpha beta gamma delta epsilon' : ' 共通語 手順 本文 末尾 検索対象';
 const orgId = '019a0000-0000-7000-8000-000000000201';
 const userId = '019a0000-0000-7000-8000-000000000301';
 const workspaceId = '019b7570-0000-7000-8000-000000000001';
@@ -74,17 +76,19 @@ try {
   // 走査する本文は各 Wiki で最大300 MBまで。応答5秒で打ち切り、これ以上のデータへ増やさない。
   // 目安はAPI中央値500ms以下・最大2秒以下。超えれば実運用の分布を測り直す。
   const lastMeasurement = new Map<boolean, number>();
-  for (const [count, length] of [
-    [5000, 2000],
-    [1000, 100000],
-  ] as const) {
+  for (const [count, length] of ascii
+    ? [[5000, 6680]]
+    : [
+        [5000, 2000],
+        [1000, 100000],
+      ]) {
     for (const org of [false, true]) {
       execute(`DELETE FROM wiki_pages WHERE ${org ? `organization_id = '${orgId}'` : `workspace_id = '${workspaceId}'`};
         INSERT INTO wiki_pages(id, organization_id, workspace_id, parent_id, position, title, body_md, version, created_by, updated_by, created_at, updated_at)
         WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i < ${count})
         SELECT printf('019b757${org ? 1 : 0}-0000-7000-8000-%012d', i), ${org ? `'${orgId}', NULL` : `NULL, '${workspaceId}'`}, NULL, 'a0',
           CASE WHEN i % 100 = 0 THEN '検索対象 手順' ELSE '普通の題' END,
-          substr(replace(hex(zeroblob(${length})), '0', '文'), 1, ${length - 18}) || ' 共通語 手順 本文 末尾 検索対象',
+          substr(replace(hex(zeroblob(${length})), '0', '${ascii ? 'x' : '文'}'), 1, ${length - suffix.length}) || '${suffix}',
           1, '${userId}', '${userId}', '2026-11-03T00:00:00.000Z', '2026-11-03T00:00:00.000Z' FROM n;`);
       const cooldown = Math.max(0, (lastMeasurement.get(org) ?? 0) + 61000 - Date.now());
       if (cooldown) {
@@ -92,7 +96,9 @@ try {
         await new Promise((resolve) => setTimeout(resolve, cooldown));
       }
       lastMeasurement.set(org, Date.now());
-      for (const query of ['検索対象', '不存在', '共通語 手順 本文 末尾 検索対象']) {
+      for (const query of ascii
+        ? ['epsilon', 'absent', 'alpha beta gamma delta epsilon']
+        : ['検索対象', '不存在', '共通語 手順 本文 末尾 検索対象']) {
         await call(query, org);
         const times: number[] = [];
         let hits = 0;
@@ -107,6 +113,7 @@ try {
         console.log(
           JSON.stringify({
             org,
+            ascii,
             pages: count,
             bodyChars: length,
             query,

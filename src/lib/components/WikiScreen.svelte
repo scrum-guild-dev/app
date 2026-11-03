@@ -213,16 +213,16 @@
 {:else}
   <div class="layout-wiki">
     <aside class="wiki-side">
-      {#key slug + (workspaceId ?? '')}<WikiSearch
-          {slug}
-          workspaceId={workspaceId || null}
-          {pages}
-          currentId={current?.id ?? null}
-        >
-          {#if pages.length}<WikiTree {pages} {wiki} currentId={current?.id ?? null} />{:else}<p class="section-hint">
-              {t('wikiTreeEmpty')}
-            </p>{/if}
-        </WikiSearch>{/key}
+      {#if data.wikiPages !== null}{#key slug + (workspaceId ?? '')}<WikiSearch
+            {slug}
+            workspaceId={workspaceId || null}
+            {pages}
+            currentId={current?.id ?? null}
+          >
+            {#if pages.length}<WikiTree {pages} {wiki} currentId={current?.id ?? null} />{:else}<p class="section-hint">
+                {t('wikiTreeEmpty')}
+              </p>{/if}
+          </WikiSearch>{/key}{/if}
     </aside>
     <section class="wiki-main" aria-label={t('wikiPage')}>
       <nav class="crumbs" aria-label={t('wikiCrumbs')}>

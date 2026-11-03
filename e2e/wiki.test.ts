@@ -2,9 +2,8 @@ import { expect, test } from './fixtures.ts';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { executeLocalD1 } from './local-d1.ts';
 import { SEED_SESSIONS } from '../seed/sessions.ts';
-import { workspaceWikiSearch } from '../src/shared/operations/wiki/index.ts';
 import { organizationInfo } from '../src/shared/operations/organization/index.ts';
-import { orgWikiPage, orgWikiTree } from '../src/shared/operations/wiki/index.ts';
+import { orgWikiPage, orgWikiTree, workspaceWikiSearch } from '../src/shared/operations/wiki/index.ts';
 import { failOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 test('自分用の組織の Wiki は組織の表示名で案内する', async ({ page }) => {
@@ -339,8 +338,23 @@ test('Wiki の題・本文を全語で探し、結果から開け、0件・上�
     await query.fill(text);
     await expect(results.getByRole('link', { name: new RegExp('^' + title) })).toBeVisible();
   }
+  const stopRefreshFailure = await routeOperation(
+    page,
+    workspaceWikiSearch,
+    { slug: new URL(page.url()).pathname.split('/')[1]! },
+    (call) => call.fail(429, 'rate_limited'),
+  );
+  await page.getByRole('button', { name: '探す', exact: true }).click();
+  await expect(
+    page.getByText('検索の回数の上限に達しました。1分ほど待ってから、もう一度探してください。', { exact: true }),
+  ).toBeVisible();
+  await expect(results).toHaveCount(0);
+  await stopRefreshFailure();
+  await page.getByRole('button', { name: '探す', exact: true }).click();
+  await expect(results.getByRole('link', { name: new RegExp('^' + title) })).toBeVisible();
   await results.getByRole('link', { name: new RegExp('^' + title) }).click();
   await expect(page).toHaveURL(pageUrl);
+  await expect(query).toHaveValue('');
   await expect(page.getByRole('heading', { level: 2, name: title, exact: true })).toBeVisible();
   for (const width of [320, 390, 1024, 1280]) {
     await page.setViewportSize({ width, height: 800 });
@@ -432,7 +446,10 @@ test('遅い検索の応答が、新しい語の0件表示を上書きしない'
       response.url().endsWith('/workspace-wiki-search') && response.request().postDataJSON().query === '古い語',
   );
   release?.();
-  await completed;
+  await (await completed).finished();
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
   await expect(page.getByRole('navigation', { name: 'Wiki の検索結果', exact: true })).toHaveCount(0);
   await expect(query).toHaveValue('新しい語');
 });
@@ -487,4 +504,43 @@ test('組織Wikiでも題と本文で探して開け、ワークスペースのW
   await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
   await page.getByRole('searchbox', { name: 'Wiki の題と本文を探す', exact: true }).fill(word);
   await expect(page.getByText('当たるページはありません。語を変えて探してください。', { exact: true })).toBeVisible();
+});
+
+test('検索の800ms待ち・変換中・空白だけの変更を区別する', async ({ page }) => {
+  await createWorkspace(page, 'Wiki検索の入力状態');
+  await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+  const calls: string[] = [];
+  await routeOperation(
+    page,
+    workspaceWikiSearch,
+    { slug: new URL(page.url()).pathname.split('/')[1]! },
+    async (call) => {
+      calls.push(call.input.query);
+      await call.fulfill({ pages: [] });
+    },
+  );
+  const clockStart = Date.now();
+  await page.clock.install({ time: new Date(clockStart) });
+  await page.clock.pauseAt(new Date(clockStart + 60000));
+  const query = page.getByRole('searchbox', { name: 'Wiki の題と本文を探す', exact: true });
+  await query.fill('最初');
+  await page.clock.fastForward(799);
+  expect(calls).toEqual([]);
+  await page.clock.fastForward(1);
+  await expect.poll(() => calls).toEqual(['最初']);
+  await query.dispatchEvent('compositionstart');
+  await query.fill('変換した語');
+  await page.clock.fastForward(5000);
+  expect(calls).toEqual(['最初']);
+  await query.dispatchEvent('compositionend');
+  await page.clock.fastForward(800);
+  await expect.poll(() => calls).toEqual(['最初', '変換した語']);
+  await query.fill('  変換した語　');
+  await page.clock.fastForward(1600);
+  expect(calls).toEqual(['最初', '変換した語']);
+  await query.dispatchEvent('compositionstart');
+  await query.fill('離れた語');
+  await query.blur();
+  await page.clock.fastForward(800);
+  await expect.poll(() => calls).toEqual(['最初', '変換した語', '離れた語']);
 });
