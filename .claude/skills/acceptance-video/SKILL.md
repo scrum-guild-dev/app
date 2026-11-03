@@ -54,7 +54,7 @@ gh api repos/{owner}/{repo}/issues/<番号> --jq '{state, author: .user.login, t
 
 指で押す横長の画面なら `"screen": { "width": 844, "height": 390, "touch": true }` とする。`touch: true` は Playwright の `hasTouch` と `isMobile` を有効にし、`(pointer: coarse)` が真になる。画面サイズは CSS px で幅・高さとも 320〜3840 の整数。各項目は省略でき、幅 1280、高さ 640、`touch: false` が既定値。`screen` 全体を省いた既存の手順書もそのまま使える。未知のキーや範囲外の値は `--check` が断る。
 
-出力の録画は常に 1280×640。画面の縦横比を保ち、全体が収まるように縮小する（小さい画面は拡大しない）。残りは Playwright が右と下に余白を付ける。`compose.py` は従来どおり上に 80px の字幕帯を足し、1280×720 の mp4 を出す。
+出力の録画は常に 1280×640。画面の縦横比を保ち、全体が収まるように縮小する（小さい画面は拡大しない）。残りは Playwright が右と下に余白を付ける。極端に縦長・横長の画面は文字が小さくなるため、読めるかを録画後に確かめる。`compose.py` は従来どおり上に 80px の字幕帯を足し、1280×720 の mp4 を出す。
 
 場面は `caption`（字幕）、`mark`（枠で示す要素）、`actions`（操作）、`read`（字幕を出してから操作までの待ち）、`hold`（操作のあとの待ち）を持つ。
 
