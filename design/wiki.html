@@ -529,9 +529,9 @@ document.addEventListener('dragstart', (event) => {
 });
 document.addEventListener('dragover', (event) => {
   const row = event.target.closest('[data-wiki-row]');
-  if (!draggingWikiId || !row) return;
+  if (!draggingWikiId || !row) { wikiDrop = null; clearWikiDrop(); return; }
   const target = byId(row.dataset.wikiRow);
-  if (target.id === draggingWikiId || descendants(draggingWikiId).includes(target.id)) return;
+  if (target.id === draggingWikiId || descendants(draggingWikiId).includes(target.id)) { wikiDrop = null; clearWikiDrop(); return; }
   event.preventDefault();
   clearWikiDrop();
   const rect = row.getBoundingClientRect();
@@ -541,7 +541,7 @@ document.addEventListener('dragover', (event) => {
   wikiDrop = { target, part };
 });
 document.addEventListener('drop', (event) => {
-  if (!draggingWikiId || !wikiDrop) return;
+  if (!draggingWikiId || !wikiDrop || event.target.closest('[data-wiki-row]')?.dataset.wikiRow !== wikiDrop.target.id) return;
   event.preventDefault();
   const moving = byId(draggingWikiId), { target, part } = wikiDrop;
   const parent = part === 'child' ? target.id : target.parent;
