@@ -1,6 +1,10 @@
 import { expect, test } from './fixtures.ts';
 import type { Page } from '@playwright/test';
-import { createWorkspace, watchViolations } from './helpers.ts';
+import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+
+test.beforeEach(async ({ context, baseURL }) => {
+  await signIn(context, baseURL, 'admin');
+});
 
 async function add(page: Page, title: string) {
   await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
@@ -27,10 +31,14 @@ for (const scope of ['org', 'workspace'] as const) {
     await up.focus();
     await up.press('Enter');
     await expect(page.locator('.wiki-side > .field-hint')).toHaveText('ページを移しました。');
-    await expect(up).toBeFocused();
     const tree = page.locator('.wiki-tree');
-    const titles = await tree.locator(':scope > li > .wiki-node > a').allTextContents();
-    expect(titles.indexOf(second)).toBeLessThan(titles.indexOf(first));
+    await expect
+      .poll(async () => {
+        const titles = await tree.locator(':scope > li > .wiki-node > a').allTextContents();
+        return titles.indexOf(second) >= 0 && titles.indexOf(second) < titles.indexOf(first);
+      })
+      .toBe(true);
+    await expect(up).toBeFocused();
     await page.getByRole('button', { name: `親を移す: ${second}`, exact: true }).focus();
     await page.getByRole('button', { name: `親を移す: ${second}`, exact: true }).press('Enter');
     const dialog = page.getByRole('dialog');
