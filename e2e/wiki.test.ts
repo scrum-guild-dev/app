@@ -13,8 +13,13 @@ test('長い組織名がメニューに収まり、画面内の移動で権限�
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/aoba/wiki');
   const menu = page.locator('.nav-item-label', { hasText: `${name}の Wiki` });
-  await expect(menu).toBeVisible();
-  expect(await menu.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(menu).toBeVisible();
+    expect(await menu.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    expect(await menu.evaluate((element) => element.getBoundingClientRect().width < window.innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
   await page.getByLabel('題', { exact: true }).fill('権限の変化を確認するページ');
   await page.getByLabel('本文', { exact: true }).fill('本文');
