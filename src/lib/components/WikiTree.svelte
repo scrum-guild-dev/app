@@ -73,11 +73,7 @@
       showToast(feedback, result.ok ? 'check' : 'alert');
       await invalidate('app:wiki');
       await tick();
-      if (
-        canWrite &&
-        (document.activeElement === focused ||
-          (focused instanceof HTMLElement && !focused.isConnected && document.activeElement === document.body))
-      )
+      if (live && canWrite && (document.activeElement === focused || document.activeElement === document.body))
         document.getElementById(focusId ?? `${treeId}-${item.id}`)?.focus();
     } finally {
       busy = false;

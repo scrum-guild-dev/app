@@ -30,8 +30,34 @@ for (const scope of ['org', 'workspace'] as const) {
     const url = await add(page, second);
     await page.getByRole('button', { name: '並べ替える', exact: true }).click();
     const up = page.getByRole('button', { name: `上へ: ${second}`, exact: true });
+    let release!: () => void;
+    let received!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pending = new Promise<void>((resolve) => {
+      received = resolve;
+    });
+    await page.route(
+      `**/${scope === 'org' ? 'org' : 'workspace'}-wiki-move`,
+      async (route) => {
+        const response = await route.fetch();
+        received();
+        await gate;
+        await route.fulfill({ response });
+      },
+      { times: 1 },
+    );
     await up.focus();
     await up.press('Enter');
+    await pending;
+    try {
+      // DOMの移動で、接続されたボタンからbodyへフォーカスが落ちる場合も復帰する。
+      await up.evaluate((button) => button.blur());
+      await expect(page.locator('body')).toBeFocused();
+    } finally {
+      release();
+    }
     await expect(page.locator('.wiki-side > .field-hint')).toContainText('移しました。');
     const tree = page.locator('.wiki-tree');
     await expect
