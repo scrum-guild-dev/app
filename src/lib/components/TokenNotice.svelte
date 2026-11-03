@@ -37,7 +37,7 @@
   afterNavigate(({ type, from, to }) => {
     if (
       shouldRefreshTokenNotice(
-        { type, fromSlug: from?.params?.slug, fromPath: from?.url.pathname, toPath: to?.url.pathname },
+        { type, fromSlug: from?.params?.slug, fromPath: from?.url?.pathname, toPath: to?.url?.pathname },
         slug,
       )
     ) {

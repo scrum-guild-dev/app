@@ -6,7 +6,8 @@ import TokenNotice from './TokenNotice.svelte';
 vi.mock('$app/paths', () => ({
   resolve: (route: string, params: { slug: string }) => route.replace('[slug]', params.slug),
 }));
-vi.mock('$app/navigation', () => ({ afterNavigate: vi.fn() }));
+const { afterNavigate } = vi.hoisted(() => ({ afterNavigate: vi.fn() }));
+vi.mock('$app/navigation', () => ({ afterNavigate }));
 
 const latest = { name: '手元の CLI', scope: 'write' as const, created_at: '2026-11-04T01:30:00.000Z', revoked: false };
 const body = (notice: { count: number; latest: typeof latest | null } | null) =>
@@ -40,4 +41,14 @@ test('読み取りに失敗したら再試行を出し、確認の操作は出�
   expect(html).toContain('role="alert"');
   expect(html).toContain('もう一度試す');
   expect(html).not.toContain('確かめた');
+});
+
+test('初回の経路で from.url が未初期化でもナビゲーションを止めない', () => {
+  afterNavigate.mockClear();
+  body({ count: 0, latest: null });
+  const callback = afterNavigate.mock.calls.at(-1)?.[0];
+  expect(callback).toBeTypeOf('function');
+  expect(() =>
+    callback({ type: 'enter', from: { params: {}, url: null }, to: { url: new URL('http://localhost/aoba') } }),
+  ).not.toThrow();
 });
