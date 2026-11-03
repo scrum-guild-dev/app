@@ -640,6 +640,9 @@ export const dictionary = defineDictionary({
   operatorCreate: '{organization}を作る',
   operatorColumnOrganization: '{organization}・slug',
   operatorSelfCreated: '自分で作った組織',
+  // 名前の列の種類の印（自分用の組織は kind が personal、それ以外はチーム用）。自分用の行は人数 / 上限と管理者の状態を出さない
+  operatorKindTeam: 'チーム用',
+  operatorKindPersonal: '自分用',
   // 組織ごとの集計の列。{workspace} {task} は辞書の同じ名前の項目で埋める
   operatorColumnSeats: '人数 / 上限',
   operatorColumnWorkspaces: '{workspace}の数',
@@ -649,6 +652,8 @@ export const dictionary = defineDictionary({
   // {used} は人数、{limit} は人数の上限。空白は不可分の空白（U+00A0）で、積んだ行でも数の間で割れない
   operatorSeats: '{used} / {limit}',
   operatorSeatsFull: '上限に達した',
+  // 自分用の行の人数 / 上限の列。値は無い（空）ことを示すダッシュ
+  operatorSeatsNone: '—',
   // {size} は GB か MB の数（1 GB 未満は MB。src/lib/format.ts の quotaSize）。空白は不可分の空白
   operatorQuotaSize: '{size} GB',
   operatorQuotaSizeMb: '{size} MB',

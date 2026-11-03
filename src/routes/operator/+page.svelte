@@ -38,6 +38,9 @@
   // （サーバーは管理者の指名し直し、再開、一時的な停止への切り替えを 409 の purge_due で断る）。画面を開いた後に日付が変わって purge_due で断られたときは、
   // 理由をトーストで出して一覧を読み直し、押したボタンが消えるので、その行の理由へフォーカスを移す。
   // 添付ファイルの上限の列の「人数と容量の上限を変える」（link-btn）は、上限の変更のダイアログを開く。変えた後は一覧を読み直す
+  // 名前の列の先頭に、組織の種類の印（chip。チーム用か自分用）を出す。自分用（kind が personal）の行は、人数 / 上限の列を空（ダッシュ）にし、
+  // 「上限に達した」の印と管理者の状態の印を出さず、「管理者を指名」と「人数と容量の上限を変える」を置かない（添付ファイルの上限の値は出す）。
+  // 停止、再開、停止の理由の切り替えは自分用の行にも置く
   let { data }: PageProps = $props();
   const ids = $props.id();
 
@@ -213,6 +216,9 @@
                 <tr>
                   <td class="is-name">
                     {organization.name}
+                    <span class="chip"
+                      >{organization.kind === 'personal' ? t('operatorKindPersonal') : t('operatorKindTeam')}</span
+                    >
                     {#if organization.self_created}<span class="chip">{t('operatorSelfCreated')}</span>{/if}
                     {#if organization.trial_ends_on !== null}
                       <span class="chip">{t('orgTrialEndsOn', { date: organization.trial_ends_on })}</span>
@@ -228,12 +234,15 @@
                     {#if organization.suspended_at && organization.purge_on}
                       <span class="chip is-danger">{t('operatorPurgeOn', { date: organization.purge_on })}</span>
                     {/if}
-                    {#if organization.admin_status === 'none'}
-                      <span class="chip is-danger"><Icon name="alert" />{t('operatorAdminNone', words)}</span>
-                    {:else if organization.admin_status === 'pending'}
-                      <span class="chip is-warn"><Icon name="clock" />{t('operatorAdminPending', words)}</span>
-                    {:else if organization.admin_status === 'expired'}
-                      <span class="chip is-danger"><Icon name="alert" />{t('operatorAdminExpired', words)}</span>
+                    <!-- 自分用は持ち主1人だけなので、管理者の状態の印は出さない -->
+                    {#if organization.kind !== 'personal'}
+                      {#if organization.admin_status === 'none'}
+                        <span class="chip is-danger"><Icon name="alert" />{t('operatorAdminNone', words)}</span>
+                      {:else if organization.admin_status === 'pending'}
+                        <span class="chip is-warn"><Icon name="clock" />{t('operatorAdminPending', words)}</span>
+                      {:else if organization.admin_status === 'expired'}
+                        <span class="chip is-danger"><Icon name="alert" />{t('operatorAdminExpired', words)}</span>
+                      {/if}
                     {/if}
                     <!-- slug と日時はキーと日付なので等幅の書体（.mono）で出す -->
                     <br /><span class="props-note"
@@ -242,9 +251,14 @@
                     >
                   </td>
                   <td class="is-num" data-label={t('operatorColumnSeats')}>
-                    {t('operatorSeats', { used: organization.seats.used, limit: organization.seats.limit })}
-                    {#if organization.seats.used >= organization.seats.limit}
-                      <br /><span class="chip is-warn"><Icon name="alert" />{t('operatorSeatsFull')}</span>
+                    {#if organization.kind === 'personal'}
+                      <!-- 自分用は人数が本人1人で上限を持たないので、空（ダッシュ）にし、「上限に達した」も付けない -->
+                      <span class="props-note">{t('operatorSeatsNone')}</span>
+                    {:else}
+                      {t('operatorSeats', { used: organization.seats.used, limit: organization.seats.limit })}
+                      {#if organization.seats.used >= organization.seats.limit}
+                        <br /><span class="chip is-warn"><Icon name="alert" />{t('operatorSeatsFull')}</span>
+                      {/if}
                     {/if}
                   </td>
                   <td class="is-num" data-label={t('operatorColumnWorkspaces', words)}
@@ -255,15 +269,18 @@
                   >
                   <td class="is-num" data-label={t('operatorColumnQuota')}>
                     {quotaText(organization.attachment_quota_bytes)}
-                    <!-- 人数と添付ファイルの上限をまとめて変える。読み上げの名前に、どの組織かを添える -->
-                    <br /><button
-                      class="link-btn"
-                      type="button"
-                      aria-disabled={resumingSlug !== null}
-                      aria-label={t('operatorQuotaLabel', { name: organization.name })}
-                      onclick={(event) => changeQuota(organization, event.currentTarget)}
-                      >{t('operatorQuotaAction')}</button
-                    >
+                    <!-- 人数と添付ファイルの上限をまとめて変える。読み上げの名前に、どの組織かを添える。
+                         自分用は上限を変える対象にしないので、値だけ出して変更のボタンを置かない -->
+                    {#if organization.kind !== 'personal'}
+                      <br /><button
+                        class="link-btn"
+                        type="button"
+                        aria-disabled={resumingSlug !== null}
+                        aria-label={t('operatorQuotaLabel', { name: organization.name })}
+                        onclick={(event) => changeQuota(organization, event.currentTarget)}
+                        >{t('operatorQuotaAction')}</button
+                      >
+                    {/if}
                   </td>
                   {#if organization.last_used_at === null}
                     <td class="props-note" data-label={t('operatorColumnLastUsed')}>{t('operatorNeverUsed')}</td>
@@ -284,7 +301,7 @@
                         <span class="props-note" id={purgeDueId(organization.slug)} tabindex="-1"
                           >{t('operatorPurgeDue', words)}</span
                         >
-                      {:else}
+                      {:else if organization.kind !== 'personal'}
                         <button
                           class="btn is-sm is-quiet"
                           type="button"

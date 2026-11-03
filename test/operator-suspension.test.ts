@@ -22,6 +22,7 @@ import { errorCodeOf, post } from './operations/harness.ts';
 import {
   admitElsewhere,
   createPerson,
+  createPersonalTarget,
   createTarget,
   getOperator,
   OPERATOR_LOGIN_ID,
@@ -661,6 +662,43 @@ describe('停止中の組織に入る人', () => {
     };
     expect(back.organizations.map((organization) => organization.slug)).toEqual([target.slug]);
     expect(back.suspended).toEqual([]);
+  });
+
+  // #735: 自分用（kind が personal）も、停止と再開は種類によらない。停止すると本人は入れず、再開すると入れる
+  test('自分用の組織も、停止すると本人は 403 の organization_suspended で入れず、再開すると入れる', async () => {
+    const target = await createPersonalTarget();
+    const token = await operatorToken();
+    const enter = () => post(app, organizationInfo, { slug: target.slug, token: target.admin.token });
+    const listedItem = async () => {
+      const listed = await post(app, listOrganizations, { token });
+      return (
+        (await listed.json()) as { organizations: { slug: string; kind: string; suspended_at: string | null }[] }
+      ).organizations.find((entry) => entry.slug === target.slug);
+    };
+
+    expect((await enter()).status).toBe(200);
+    expect((await listedItem())?.kind).toBe('personal');
+
+    expect((await suspendBy(token, target.slug, 'temporary')).status).toBe(200);
+    for (let i = 0; i < 2; i++) {
+      const res = await enter();
+      expect(res.status).toBe(403);
+      expect(await errorCodeOf(res)).toBe('organization_suspended');
+    }
+    // 運用者の一覧には、停止した自分用が種類つきで出る
+    const suspended = await listedItem();
+    expect(suspended?.kind).toBe('personal');
+    expect(suspended?.suspended_at).not.toBeNull();
+    // 組織の選択は、停止した自分用を suspended に出す（セッションは残る）
+    const mine = await post(app, myOrganizations, { token: target.admin.token });
+    expect(mine.status).toBe(200);
+    const mineBody = (await mine.json()) as { organizations: unknown[]; suspended?: { slug: string; kind: string }[] };
+    expect(mineBody.organizations).toEqual([]);
+    expect(mineBody.suspended).toEqual([expect.objectContaining({ slug: target.slug, kind: 'personal' })]);
+
+    expect((await resumeBy(token, target.slug)).status).toBe(200);
+    expect((await enter()).status).toBe(200);
+    expect((await listedItem())?.suspended_at).toBeNull();
   });
 
   test('解約の停止でも、停止した組織にしか入れない人はセッションを失わない', async () => {

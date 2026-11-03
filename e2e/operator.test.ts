@@ -137,7 +137,8 @@ test.describe('運用者', () => {
     const rows = page.locator('.table tbody tr');
     await expect(rows).toHaveCount(5);
     await expect(rows.filter({ hasText: 'あおば開発' })).toContainText('aoba');
-    await expect(rows.filter({ hasText: 'あおば開発' }).locator('.chip')).toHaveCount(0);
+    // 状態の印は無く、種類の印（チーム用）だけ
+    await expect(rows.filter({ hasText: 'あおば開発' }).locator('.chip')).toHaveText(['チーム用']);
     await expect(rows.filter({ hasText: 'ひばり工房' }).locator('.chip.is-danger')).toHaveText('管理者がいない');
     await expect(rows.filter({ hasText: 'つばめ商会' }).locator('.chip.is-warn')).toHaveText(
       '管理者は指名済み、ログイン待ち',
@@ -220,7 +221,7 @@ test.describe('運用者', () => {
     await expect(aobaQuota.locator('button.link-btn')).toHaveAccessibleName('「あおば開発」の人数と容量の上限を変える');
     // 2026-10-20T00:12Z は、東京のブラウザでは 09:12
     await expect(aoba.locator('td[data-label="最後に使われた日時"]')).toHaveText('2026/10/20 09:12');
-    await expect(aoba.locator('.chip')).toHaveCount(0);
+    await expect(aoba.locator('.chip')).toHaveText(['チーム用']);
     // 人数が上限以上なら「上限に達した」の印
     const hibari = rows.filter({ hasText: 'ひばり工房' });
     await expect(hibari.locator('td[data-label="人数 / 上限"]')).toContainText('15 / 15');
@@ -330,6 +331,179 @@ test.describe('運用者', () => {
           expect(box.x + box.width).toBeLessThanOrEqual(wrapBox.x + wrapBox.width);
         }
       }
+    });
+  }
+
+  // 自分用（kind が personal）は持ち主1人だけ。種類の印を両方の行に付け、自分用の行には人数の上限と管理者の状態を出さない（#735）
+  test('自分用の行には種類の印が付き、人数 / 上限は空で、上限に達した印と管理者の状態の印、指名と上限変更のボタンが無い', async ({
+    page,
+  }) => {
+    await mockList(page, [
+      organization({}),
+      // 人数 1 / 上限 1 は、チーム用なら「上限に達した」の印が付く値。管理者がいない状態も、チーム用なら印が付く
+      organization({
+        slug: 'solo',
+        name: '自分用',
+        kind: 'personal',
+        seats: { used: 1, limit: 1 },
+        workspace_count: 2,
+        task_count: 7,
+        attachment_quota_bytes: 1024 ** 3,
+        admin_status: 'none',
+        self_created: true,
+      }),
+      organization({
+        slug: 'solo-stopped',
+        name: '自分用',
+        kind: 'personal',
+        seats: { used: 1, limit: 1 },
+        attachment_quota_bytes: 1024 ** 3,
+        admin_status: 'expired',
+        suspended_at: '2026-10-10T20:00:00.000Z',
+      }),
+      organization({
+        slug: 'full-team',
+        name: '満員のチーム',
+        seats: { used: 15, limit: 15 },
+        admin_status: 'none',
+      }),
+    ]);
+    const collect = await watchViolations(page);
+    await page.goto('/operator');
+    const rows = page.locator('.table tbody tr');
+    await expect(rows).toHaveCount(4);
+
+    const team = rows.filter({ hasText: 'あおば開発' });
+    await expect(team.locator('td.is-name .chip')).toHaveText(['チーム用']);
+
+    // slug が solo の行（solo-stopped は含めない）
+    const solo = rows.filter({ has: page.locator('.mono', { hasText: /^solo$/ }) });
+    await expect(solo).toHaveCount(1);
+    // 種類の印の後に、自分で作った組織の印。上限に達した印と管理者の状態の印は出ない
+    await expect(solo.locator('td.is-name .chip')).toHaveText(['自分用', '自分で作った組織']);
+    await expect(solo.locator('td.is-name .chip.is-danger, td.is-name .chip.is-warn')).toHaveCount(0);
+    await expect(solo).not.toContainText('上限に達した');
+    await expect(solo).not.toContainText('管理者がいない');
+    // 人数 / 上限の列は空（ダッシュ）。数の上限は出さない
+    const seats = solo.locator('td[data-label="人数 / 上限"]');
+    await expect(seats).toHaveText('—');
+    await expect(seats.locator('.chip')).toHaveCount(0);
+    // 添付ファイルの上限の値は出し、変更のボタンは置かない
+    const quota = solo.locator('td[data-label="添付ファイルの上限"]');
+    await expect(quota).toHaveText(/^\s*1\sGB\s*$/);
+    await expect(quota.getByRole('button')).toHaveCount(0);
+    await expect(solo.getByRole('button', { name: /人数と容量の上限を変える/ })).toHaveCount(0);
+    // 指名のボタンは無く、停止はできる
+    await expect(solo.locator('td.is-actions').getByRole('button')).toHaveText(['停止する']);
+    await expect(solo.getByRole('button', { name: /管理者を指名/ })).toHaveCount(0);
+
+    // 停止中の自分用は、管理者の状態の印を出さず、停止の理由の切り替えと再開ができる
+    const stopped = rows.filter({ has: page.locator('.mono', { hasText: /^solo-stopped$/ }) });
+    await expect(stopped.locator('td.is-name .chip')).toHaveText(['自分用', '停止 2026-10-10']);
+    await expect(stopped.locator('td[data-label="人数 / 上限"]')).toHaveText('—');
+    await expect(stopped.locator('td.is-actions').getByRole('button')).toHaveText(['停止の理由を変える', '再開する']);
+    await expect(stopped.getByRole('button', { name: /人数と容量の上限を変える/ })).toHaveCount(0);
+
+    // チーム用の行は今まで通り。人数が上限に達した印も、管理者の状態の印も、指名と上限変更のボタンも出る
+    const full = rows.filter({ hasText: 'full-team' });
+    await expect(full.locator('td.is-name .chip')).toHaveText(['チーム用', '管理者がいない']);
+    await expect(full.locator('td[data-label="人数 / 上限"] .chip.is-warn')).toHaveText('上限に達した');
+    await expect(full.locator('td.is-actions').getByRole('button')).toHaveText(['管理者を指名', '停止する']);
+    await expect(full.getByRole('button', { name: /人数と容量の上限を変える/ })).toHaveCount(1);
+    expect(await collect()).toEqual([]);
+  });
+
+  test('自分用の行も、停止のダイアログで停止でき、再開は確認なしで送れる', async ({ page }) => {
+    const listed = [
+      organization({
+        slug: 'solo',
+        name: '自分用',
+        kind: 'personal',
+        seats: { used: 1, limit: 1 },
+        attachment_quota_bytes: 1024 ** 3,
+      }),
+    ];
+    await mockList(page, listed);
+    const sent: unknown[] = [];
+    await routeOperation(page, organizationSuspend, async (call) => {
+      sent.push(call.input);
+      listed[0] = organization({
+        slug: 'solo',
+        name: '自分用',
+        kind: 'personal',
+        seats: { used: 1, limit: 1 },
+        attachment_quota_bytes: 1024 ** 3,
+        suspended_at: '2026-10-26T00:00:00.000Z',
+      });
+      await call.fulfill({ slug: 'solo', suspended_at: '2026-10-26T00:00:00.000Z', purge_on: null });
+    });
+    await routeOperation(page, organizationResume, async (call) => {
+      sent.push(call.input);
+      listed[0] = organization({
+        slug: 'solo',
+        name: '自分用',
+        kind: 'personal',
+        seats: { used: 1, limit: 1 },
+        attachment_quota_bytes: 1024 ** 3,
+      });
+      await call.fulfill({ slug: 'solo' });
+    });
+    await page.goto('/operator');
+    const row = page.locator('.table tbody tr', { hasText: 'solo' });
+    await expect(row.locator('td[data-label="人数 / 上限"]')).toHaveText('—');
+    await row.getByRole('button', { name: '「自分用」を停止する' }).click();
+    const dialog = page.getByRole('dialog', { name: '組織を停止する' });
+    await expect(dialog).toContainText('「自分用」を停止します');
+    await dialog.getByRole('button', { name: '「自分用」を停止する' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(row.locator('.chip.is-warn')).toHaveText('停止 2026-10-26');
+    await expect(row.locator('td[data-label="人数 / 上限"]')).toHaveText('—');
+    await row.getByRole('button', { name: '「自分用」を再開する' }).click();
+    await expect(row.locator('.chip.is-warn')).toHaveCount(0);
+    await expect(row.locator('td.is-actions').getByRole('button')).toHaveText(['停止する']);
+    expect(sent).toEqual([{ slug: 'solo', kind: 'temporary' }, { slug: 'solo' }]);
+  });
+
+  for (const width of [320, 390]) {
+    test(`${width}px の幅でも、自分用の行の種類の印とダッシュと停止のボタンが収まり、横にはみ出さない`, async ({
+      page,
+    }) => {
+      await mockList(page, [
+        organization({}),
+        organization({
+          slug: 'solo',
+          name: '自分用',
+          kind: 'personal',
+          seats: { used: 1, limit: 1 },
+          attachment_quota_bytes: 1024 ** 3,
+          admin_status: 'expired',
+          self_created: true,
+          last_used_at: null,
+        }),
+      ]);
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/operator');
+      const wrap = page.locator('.table-wrap');
+      await expect(page.locator('.table tbody tr')).toHaveCount(2);
+      expect(await wrap.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      const wrapBox = (await wrap.boundingBox())!;
+      const row = page.locator('.table tbody tr', { hasText: 'solo' });
+      const kind = row.locator('td.is-name .chip').first();
+      await expect(kind).toHaveText('自分用');
+      const kindBox = (await kind.boundingBox())!;
+      expect(kindBox.x).toBeGreaterThanOrEqual(wrapBox.x);
+      expect(kindBox.x + kindBox.width).toBeLessThanOrEqual(wrapBox.x + wrapBox.width);
+      // 積んだ行でも、見出しの代わりの data-label の後にダッシュだけが出る
+      const seats = row.locator('td[data-label="人数 / 上限"]');
+      expect(await seats.evaluate((el) => getComputedStyle(el, '::before').content)).toContain('人数 / 上限');
+      await expect(seats).toHaveText('—');
+      const button = row.getByRole('button', { name: '「自分用」を停止する' });
+      await expect(button).toBeVisible();
+      const box = (await button.boundingBox())!;
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.x).toBeGreaterThanOrEqual(wrapBox.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(wrapBox.x + wrapBox.width);
     });
   }
 
@@ -947,7 +1121,7 @@ test.describe('運用者', () => {
       '再開する',
     ]);
     // もう一方の組織は変わらない
-    await expect(page.locator('.table tbody tr', { hasText: 'あおば開発' }).locator('.chip')).toHaveCount(0);
+    await expect(page.locator('.table tbody tr', { hasText: 'あおば開発' }).locator('.chip')).toHaveText(['チーム用']);
     expect(await collect()).toEqual([]);
   });
 
@@ -969,13 +1143,13 @@ test.describe('運用者', () => {
     });
     await page.goto('/operator');
     const row = page.locator('.table tbody tr', { hasText: 'ひばり工房' });
-    await expect(row.locator('.chip')).toHaveCount(2);
+    await expect(row.locator('.chip')).toHaveCount(3);
     await row.getByRole('button', { name: '「ひばり工房」を再開する' }).click();
 
     await expect(page.getByRole('dialog')).toHaveCount(0);
     expect(sent).toEqual({ slug: 'hibari' });
     await expect(page.getByRole('status').filter({ hasText: '「ひばり工房」を再開しました' })).toBeVisible();
-    await expect(row.locator('.chip')).toHaveCount(0);
+    await expect(row.locator('.chip')).toHaveText(['チーム用']);
     await expect(row.locator('td.is-actions').getByRole('button')).toHaveText(['管理者を指名', '停止する']);
   });
 
