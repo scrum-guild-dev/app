@@ -2,22 +2,29 @@ import { resolve } from '$app/paths';
 import { callOperation } from './api.ts';
 import {
   orgWikiCreate,
+  orgWikiUpload,
   orgWikiMove,
   orgWikiPage,
   orgWikiRevisions,
   orgWikiUpdate,
   workspaceWikiCreate,
+  workspaceWikiUpload,
   workspaceWikiMove,
   workspaceWikiPage,
   workspaceWikiRevisions,
   workspaceWikiUpdate,
 } from '../shared/operations/wiki/index.ts';
+import type { WikiUploadFile } from '../shared/wiki-transfer.ts';
 
 type Content = { title: string; body_md: string };
 
 // 組織とワークスペースの違いはここで閉じ、画面と木は同じ Wiki の操作・リンクを使う。
 export function wikiClient(slug: string, workspaceId: string | null) {
   return {
+    upload: (files: WikiUploadFile[], parentId: string | null) =>
+      workspaceId === null
+        ? callOperation(orgWikiUpload, { files, parent_id: parentId }, { slug })
+        : callOperation(workspaceWikiUpload, { files, parent_id: parentId, workspace_id: workspaceId }, { slug }),
     rootHref:
       workspaceId === null
         ? resolve('/[slug]/wiki', { slug })

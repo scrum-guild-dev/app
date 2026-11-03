@@ -18,8 +18,15 @@ function validText(value: string): boolean {
 }
 
 export function wikiBodyProblem(body: string): 'too_long' | 'invalid_character' | null {
+  if (body.length > WIKI_BODY_MAX_LENGTH * 2) return 'too_long';
   if (!validText(body)) return 'invalid_character';
-  return [...body].length > WIKI_BODY_MAX_LENGTH ? 'too_long' : null;
+  let length = 0;
+  for (let offset = 0; offset < body.length; offset++) {
+    if (body.codePointAt(offset)! > 0xffff) offset++;
+    length++;
+    if (length > WIKI_BODY_MAX_LENGTH) return 'too_long';
+  }
+  return null;
 }
 
 function titleOf(value: unknown): string | null {

@@ -142,6 +142,15 @@ export const pointers: Pointers = {
   }),
   'org-wiki-tree': { noReference: {} },
   'org-wiki-create': async (target) => ({ parent_id: await wikiFor(target, true), title: '手順', body_md: '本文' }),
+  'org-wiki-upload': async (target) => ({
+    parent_id: await wikiFor(target, true),
+    files: [{ file_name: '手順.md', body_md: '本文' }],
+  }),
+  'workspace-wiki-upload': async (target) => ({
+    workspace_id: target.workspace.id,
+    parent_id: await wikiFor(target),
+    files: [{ file_name: '手順.md', body_md: '本文' }],
+  }),
   'org-wiki-page': async (target) => ({ page_id: await wikiFor(target, true) }),
   'org-wiki-update': async (target) => ({
     page_id: await wikiFor(target, true),

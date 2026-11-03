@@ -94,6 +94,7 @@ export {
   readWikiTree,
   searchWikiPages,
   insertWikiPage,
+  insertWikiPages,
   updateWikiPage,
   wikiParentFits,
   wikiMoveProblem,

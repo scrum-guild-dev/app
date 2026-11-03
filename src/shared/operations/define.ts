@@ -45,6 +45,9 @@ type Common<Input, Output> = {
   readonly input: Input;
   readonly output: Output;
   readonly rateLimit?: RateLimit;
+  // 入力と権限を検証した後、件数の重みで数える。通常のrateLimitとは排他的。
+  readonly weightedRateLimit?: RateLimit & { readonly weight: (input: unknown) => number };
+  readonly maxBodyBytes?: number;
   // API トークンでは呼べない（403）。Cookie のセッションの行や Cookie を直に扱う操作（ログアウト）に付ける。組織の外の操作だけ
   readonly cookieOnly?: true;
   // 同意していない人にも通す（同意の検査を飛ばす）。permission: 'login' の操作だけ
@@ -113,7 +116,18 @@ export function assertOperationDefinition(definition: AnyOperationDefinition): v
   ) {
     throw new Error(`操作 ${name} の body は、組織の中の write の操作に 'binary' だけ付けられる`);
   }
-  const rateLimit = definition.rateLimit;
+  if (definition.rateLimit && definition.weightedRateLimit)
+    throw new Error(`操作 ${name} は回数の上限を二重に持てない`);
+  if (definition.weightedRateLimit && typeof definition.weightedRateLimit.weight !== 'function')
+    throw new Error(`操作 ${name} の重みは関数`);
+  if (
+    definition.maxBodyBytes !== undefined &&
+    (!Number.isSafeInteger(definition.maxBodyBytes) ||
+      definition.maxBodyBytes < 1 ||
+      definition.maxBodyBytes > 16 * 1024 * 1024)
+  )
+    throw new Error(`操作 ${name} の本文の上限は1〜16MiB`);
+  const rateLimit = definition.rateLimit ?? definition.weightedRateLimit;
   if (rateLimit !== undefined && !(Number.isInteger(rateLimit.max) && rateLimit.max > 0)) {
     throw new Error(`操作 ${name} の rateLimit.max は 1 以上の整数`);
   }

@@ -19,6 +19,11 @@
   import WikiTree from './WikiTree.svelte';
   import WikiSearch from './WikiSearch.svelte';
   import WikiHistory from './WikiHistory.svelte';
+  import WikiUploadDialog from './WikiUploadDialog.svelte';
+  import { wikiDownloadName, wikiDownloadSource } from '../../shared/wiki-transfer.ts';
+  import { showToast } from '../toast.svelte.ts';
+  let uploadDialog = $state<ReturnType<typeof WikiUploadDialog>>();
+  let uploadBusy = $state(false);
   let historyBusy = $state(false);
   let historyPage = $state<string | null>(null);
 
@@ -83,7 +88,7 @@
   });
 
   async function mayDiscard(): Promise<boolean> {
-    if (saving || historyBusy) return false;
+    if (saving || historyBusy || uploadBusy) return false;
     return (
       !dirty ||
       ((await discardDialog?.ask(document.activeElement instanceof HTMLElement ? document.activeElement : null)) ??
@@ -91,6 +96,10 @@
     );
   }
   beforeNavigate((navigation) => {
+    if (uploadBusy) {
+      navigation.cancel();
+      return;
+    }
     if (!dirty && !saving && !historyBusy) return;
     if (navigation.type === 'leave') {
       navigation.cancel();
@@ -200,6 +209,34 @@
       saving = false;
     }
   }
+  async function uploaded(count: number) {
+    notice = t('wikiUploadDone', { count });
+    try {
+      await invalidate('app:wiki');
+    } catch {
+      notice += ` ${t('wikiReadFailed')}`;
+    }
+    showToast(notice);
+  }
+  function download() {
+    if (!current) return;
+    const source = wikiDownloadSource(current.title, current.body_md);
+    const url = URL.createObjectURL(new Blob([source], { type: 'text/markdown;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = wikiDownloadName(current.title);
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const frontmatter = parseWikiFrontmatter(current.body_md);
+    const messages = [];
+    if (frontmatter.invalid) messages.push(t('wikiDownloadRaw'));
+    else if (!frontmatter.title) messages.push(t('wikiDownloadAddedTitle'));
+    if (wikiBodyProblem(source) === 'too_long') messages.push(t('wikiDownloadTooLong'));
+    if (!frontmatter.invalid && parseWikiFrontmatter(source).invalid) messages.push(t('wikiDownloadMetadataLimit'));
+    if (messages.length) showToast(messages.join(' '));
+  }
 </script>
 
 <svelte:head
@@ -212,10 +249,17 @@
 >
 
 <PageHead title={t('wiki')} eyebrow={name}>
-  {#snippet actions()}{#if canWrite}<button
+  {#snippet actions()}{#if canWrite}{#if mode === 'read'}<button
+          class="btn"
+          type="button"
+          aria-disabled={historyBusy || uploadBusy}
+          onclick={(event) => {
+            if (!historyBusy && !uploadBusy) uploadDialog?.show(event.currentTarget, current?.id ?? null);
+          }}>{t('wikiUpload')}</button
+        >{/if}<button
         class="btn is-primary"
         type="button"
-        aria-disabled={historyBusy}
+        aria-disabled={historyBusy || uploadBusy}
         onclick={() => begin(true)}>{t('wikiAdd')}</button
       >{/if}{/snippet}
   {#snippet meta()}{#if data.wikiPages !== null && !data.wikiNotFound}<p class="section-hint">
@@ -241,7 +285,7 @@
                   {pages}
                   {wiki}
                   {searching}
-                  canWrite={canWrite && mode === 'read' && !saving && !historyBusy}
+                  canWrite={canWrite && mode === 'read' && !saving && !historyBusy && !uploadBusy}
                   currentId={current?.id ?? null}
                 />{:else}<p class="section-hint" hidden={searching}>
                   {t('wikiTreeEmpty')}
@@ -356,6 +400,7 @@
         <div class="wiki-head">
           <h2 id="wiki-page-title" tabindex="-1" class="section-title wrap-anywhere">{current.title}</h2>
           <div class="form-actions">
+            <button class="btn" type="button" onclick={download}>{t('wikiDownload')}</button>
             <button
               class="btn"
               type="button"
@@ -397,3 +442,6 @@
   cancelLabel={t('wikiKeepWriting')}
   danger><p>{t('wikiDiscardText')}</p></ConfirmDialog
 >
+{#key wiki.rootHref}
+  <WikiUploadDialog bind:this={uploadDialog} {wiki} {pages} bind:busy={uploadBusy} onuploaded={uploaded} />
+{/key}

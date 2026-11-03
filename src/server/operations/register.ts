@@ -228,6 +228,26 @@ async function enforceRateLimit(
   if (!allowed) throw new ApiError(429, 'rate_limited');
 }
 
+async function enforceWeightedRateLimit(
+  c: Context<AppEnv>,
+  definition: AnyOperationDefinition,
+  accountId: string,
+  input: unknown,
+) {
+  const limit = definition.weightedRateLimit;
+  if (!limit) return;
+  if (
+    !(await consumeRateLimit(
+      c.env,
+      `operation:${definition.name}:${accountId}`,
+      { max: limit.max, windowMs: limit.windowSeconds * 1000 },
+      new Date(),
+      limit.weight(input),
+    ))
+  )
+    throw new ApiError(429, 'rate_limited');
+}
+
 async function execute(
   c: Context<AppEnv>,
   operation: ImplementedOperation,
@@ -296,7 +316,8 @@ async function execute(
       );
     }
     await enforceRateLimit(c, definition, accountId);
-    const input = await readInput(c, definition.input);
+    const input = await readInput(c, definition.input, undefined, definition.maxBodyBytes);
+    await enforceWeightedRateLimit(c, definition, accountId, input);
     result = await handler({
       db: commonDb(c.env),
       accountId,
@@ -329,7 +350,7 @@ async function execute(
     checkTokenScope(definition, apiToken);
     await enforceRateLimit(c, definition, accountId);
 
-    const input = await readInput(c, definition.input, definition.body);
+    const input = await readInput(c, definition.input, definition.body, definition.maxBodyBytes);
     const binary = definition.body === 'binary' ? { binary: readBinaryBody(c), requestId: c.get('requestId') } : {};
     if (isWorkspaceOperation(definition)) {
       // 別の組織のワークスペースは、存在しないときと同じ 404
@@ -344,8 +365,10 @@ async function execute(
         throw new ApiError(409, 'workspace_closed');
       }
       assertVerifiedWorkspace(workspace);
+      await enforceWeightedRateLimit(c, definition, accountId, input);
       result = await handler({ db, actor, organization, tools, input, workspace, defer: deferred.defer, ...binary });
     } else {
+      await enforceWeightedRateLimit(c, definition, accountId, input);
       result = await handler({ db, actor, organization, tools, input, defer: deferred.defer, ...binary });
     }
   }
