@@ -340,6 +340,8 @@ for (const scope of ['organization', 'workspace'] as const) {
     const otherPath = new URL(page.url()).pathname;
     const originalPath = new URL(originalUrl).pathname;
     await page.locator(`.wiki-side a[href="${originalPath}"]`).click();
+    await expect(page).toHaveURL(originalUrl);
+    await expect(page.getByRole('heading', { level: 2, name: '新しい題' })).toBeVisible();
     await page.getByRole('button', { name: '版の一覧', exact: true }).click();
     await expect(page.getByRole('heading', { level: 2, name: '版の一覧' })).toBeVisible();
     await page.locator(`.wiki-side a[href="${otherPath}"]`).click();
