@@ -1,7 +1,6 @@
 import { expect, test } from './fixtures.ts';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
-import { executeLocalD1 } from './local-d1.ts';
-import { SEED_SESSIONS } from '../seed/sessions.ts';
+import { resetWikiRateLimits } from './local-d1.ts';
 import { operationPath } from '../src/shared/operations/define.ts';
 import { organizationInfo } from '../src/shared/operations/organization/index.ts';
 import {
@@ -148,10 +147,7 @@ test('組織の Wiki も競合時に書きかけを残し、権限のない人�
 });
 
 test.beforeEach(async ({ context, baseURL }) => {
-  // 検索の上限はAPIテストで確かめる。画面の繰り返しで共有seedの検索枠を使い切らない。
-  await executeLocalD1([
-    `DELETE FROM rate_limits WHERE key IN ('operation:workspace-wiki-search:${SEED_SESSIONS.admin.accountId}', 'operation:org-wiki-search:${SEED_SESSIONS.admin.accountId}');`,
-  ]);
+  await resetWikiRateLimits();
   await signIn(context, baseURL, 'admin');
 });
 
