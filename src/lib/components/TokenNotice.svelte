@@ -129,7 +129,7 @@
 
 {#if current === null}
   <section class="token-notice" aria-label={t('tokenNoticeLabel')}>
-    <div class="token-notice-body"><p>{t('tokenNoticeLoadFailed')}</p></div>
+    <div class="token-notice-body"><p role="alert">{t('tokenNoticeLoadFailed')}</p></div>
     <div class="token-notice-actions">
       <button class="btn" type="button" aria-disabled={retrying} onclick={retry}
         >{t(retrying ? 'retrying' : 'retry')}</button

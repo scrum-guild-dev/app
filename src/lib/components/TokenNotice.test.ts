@@ -37,6 +37,7 @@ test('名前はHTMLとして解釈しない', () => {
 test('読み取りに失敗したら再試行を出し、確認の操作は出さない', () => {
   const html = body(null);
   expect(html).toContain('API トークンの発行の知らせを読み込めませんでした');
+  expect(html).toContain('role="alert"');
   expect(html).toContain('もう一度試す');
   expect(html).not.toContain('確かめた');
 });
