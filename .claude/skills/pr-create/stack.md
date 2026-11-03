@@ -5,8 +5,8 @@
 依存し合う層に分けた PR 群は、公式の `gh-stack` スキルでブランチを作り、PR も[SKILL.md](SKILL.md) の手順で出す。
 ブランチ名、マージ、push の扱いはグローバルの `CLAUDE.md` に従う。
 
-- PR は `gh stack submit --auto` で下書きとして一括作成する。そのあと下から順に1層ずつ、SKILL.md の Step 1〜4 と Step 5-B（更新モード）で整える。差分の基点はその PR の `base.ref`（1つ下の層）
-- SKILL.md の Step 4 の承認は作成モードと同じ扱いにする（done-check が通っていれば取らない）。`gh stack submit` が作った直後の PR を整えるのは作成の続きのため
+- PR は下から順に1層ずつ、その層のブランチのワークツリーで SKILL.md の Step 0 で既存 PR の有無を確認し、Step 1〜4 でタイトルと本文を用意してから Step 5-A（作成モード）で作る。各層の base は1つ下の層のブランチ、最下層の base は `main`。差分と done-check もその base を基点に読む（通常の Step 2 の既定ブランチより、この指定を優先する）
+- 各層のブランチを push し、最初から `draft: false` で作る。本文の無い PR やドラフトを先に一括作成して後から整える手順は使わない。既存 PR がある層だけ Step 5-B（更新モード）を使い、人が意図してドラフトにした PR の状態は変えない。Step 4 の承認も各層のモードに従う
 - 本文の `## 概要` の冒頭に、スタック全体での位置（何層目か、下の層に何を依存しているか）を1行書く
-- 下書きの PR は、その層の Step 5-B で本文を書いた後に、すぐドラフトを外す（`pr-feedback` の「ドラフトで作った PR のドラフトを外す」の GraphQL）。CI の結果は待たない（理由: SKILL.md と同じく、AI レビューを CI と並べて始める）。Step 5-B で書く本文の末尾には目印の `<!-- pr-create:draft-first -->` を1行足す（外す前に中断しても、`pr-feedback` が人の意図したドラフトと見分けて外せるように）。AI レビューが走るのは base が `main` の層だけ
-- 作成の続きなので、Step 5-B の「done-check の印は無ければ足さない」に当たらない。base が `main` の層の本文には、目印の後に SKILL.md の Step 3 の「done-check の印」を書く（点検した head と比べる push 済みの head は、その層のブランチの head）。ほかの層には AI レビューが走らないので書かない
+- AI レビューが走るのは base が `main` の層だけ。通常の PR と同じく `opened` で CI と並べて始め、CI の結果は待たない。初回レビューのために `ai-review` のラベルを付けない
+- base が `main` の層の本文には、SKILL.md の Step 3 の「done-check の印」を末尾に書く（点検した head と比べる push 済みの head は、その層のブランチの head）。ほかの層には AI レビューが走らないので書かない。既存 PR の更新では Step 5-B に従い、印があれば残し、無ければ足さない

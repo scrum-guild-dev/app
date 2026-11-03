@@ -53,7 +53,7 @@ gh api "repos/{owner}/{repo}/commits/<head_sha>/check-runs" --jq '.check_runs[] 
 
 #### ドラフトで作った PR のドラフトを外す
 
-`pr-create` は PR をドラフトにせず作るので、ふだんはここを飛ばす。目印の `<!-- pr-create:draft-first -->` が本文にあるドラフト（スタック PR の `gh stack submit` の下書きで、`pr-create` が外す前に中断したもの、前のやり方で作ったもの）だけ、AI レビューを待つ前に外す。`ci-ok` の結果は待たない（理由: AI レビューを CI と並べて始める。2026-10-31 に決めた）。目印の無いドラフトは人が意図してドラフトにしているので外さない（理由: 会話の記憶で決めると、別のセッションで再開したときに外れず、AI レビューが一度も走らない）。文書だけの PR と base が `main` でない PR も外す（AI レビューは走らないが、人がマージを判断できる状態にする）。
+`pr-create` はスタックの各層も含め PR を最初からドラフトにせず作るので、ふだんはここを飛ばす。この節は旧方式の PR を再開するときだけ使う。目印の `<!-- pr-create:draft-first -->` が本文にあるドラフト（旧方式で作り、`pr-create` が外す前に中断したもの）だけ、AI レビューを待つ前に外す。`ci-ok` の結果は待たない（理由: AI レビューを CI と並べて始める。2026-10-31 に決めた）。目印の無いドラフトは人が意図してドラフトにしているので外さない（理由: 会話の記憶で決めると、別のセッションで再開したときに外れず、AI レビューが一度も走らない）。文書だけの PR と base が `main` でない PR も外す（AI レビューは走らないが、人がマージを判断できる状態にする）。
 
 ```graphql
 mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { isDraft } } }
