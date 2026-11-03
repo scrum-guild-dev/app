@@ -319,7 +319,10 @@ for (const scope of ['organization', 'workspace'] as const) {
       await page.setViewportSize({ width, height: 800 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     }
-    expect(await violations()).toEqual([]);
+    // 意図して起こした復元競合の409だけを許容し、他のconsole/CSPエラーは引き続き検査する。
+    expect(await violations()).toEqual([
+      'Failed to load resource: the server responded with a status of 409 (Conflict)',
+    ]);
     await other.close();
   });
 }
