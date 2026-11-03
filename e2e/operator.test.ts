@@ -413,6 +413,68 @@ test.describe('運用者', () => {
     expect(await collect()).toEqual([]);
   });
 
+  test('自分用で管理者の指名がログイン待ちの行にも、管理者の状態の印は出ない', async ({ page }) => {
+    await mockList(page, [
+      organization({
+        slug: 'solo-pending',
+        name: '自分用',
+        kind: 'personal',
+        seats: { used: 0, limit: 1 },
+        attachment_quota_bytes: 1024 ** 3,
+        admin_status: 'pending',
+      }),
+    ]);
+    const collect = await watchViolations(page);
+    await page.goto('/operator');
+    const row = page.locator('.table tbody tr');
+    await expect(row.locator('td.is-name .chip')).toHaveText(['自分用']);
+    await expect(row).not.toContainText('ログイン待ち');
+    await expect(row.locator('.chip.is-warn, .chip.is-danger')).toHaveCount(0);
+    expect(await collect()).toEqual([]);
+  });
+
+  test('自分用でも、消す予定日を過ぎた行は操作を出さず、指名に触れない理由だけを出す', async ({ page }) => {
+    await mockList(page, [
+      organization({
+        slug: 'solo-due',
+        name: '自分用',
+        kind: 'personal',
+        seats: { used: 1, limit: 1 },
+        attachment_quota_bytes: 1024 ** 3,
+        suspended_at: '2026-09-10T00:00:00.000Z',
+        purge_on: '2026-10-10',
+        purge_due: true,
+      }),
+    ]);
+    const collect = await watchViolations(page);
+    await page.goto('/operator');
+    const row = page.locator('.table tbody tr');
+    const actions = row.locator('td.is-actions');
+    await expect(actions.getByRole('button')).toHaveCount(0);
+    await expect(row.getByRole('button', { name: /人数と容量の上限を変える/ })).toHaveCount(0);
+    // 自分用には指名の操作が無いので、注記に指名を挙げない
+    await expect(actions.locator('.props-note')).toHaveText(
+      '消す予定日を過ぎたので、再開も停止の理由の切り替えもできません',
+    );
+    expect(await collect()).toEqual([]);
+  });
+
+  test('自分用の行の人数 / 上限の列は、見た目のダッシュのほかに、読み上げ用の文言を持つ', async ({ page }) => {
+    await mockList(page, [
+      organization({
+        slug: 'solo',
+        name: '自分用',
+        kind: 'personal',
+        seats: { used: 1, limit: 1 },
+        attachment_quota_bytes: 1024 ** 3,
+      }),
+    ]);
+    await page.goto('/operator');
+    const seats = page.locator('.table tbody tr td[data-label="人数 / 上限"]');
+    await expect(seats.locator('[aria-hidden="true"]')).toHaveText('—');
+    await expect(seats.locator('.visually-hidden')).toHaveText('人数の上限は無い');
+  });
+
   test('自分用の行も、停止のダイアログで停止でき、再開は確認なしで送れる', async ({ page }) => {
     const listed = [
       organization({

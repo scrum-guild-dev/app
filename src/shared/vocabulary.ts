@@ -654,6 +654,8 @@ export const dictionary = defineDictionary({
   operatorSeatsFull: '上限に達した',
   // 自分用の行の人数 / 上限の列。値は無い（空）ことを示すダッシュ
   operatorSeatsNone: '—',
+  // ダッシュは読み上げで意味が伝わらないので、見た目のダッシュは読み上げから外し、同じ場所に見えない文言を添える
+  operatorSeatsNoneLabel: '人数の上限は無い',
   // {size} は GB か MB の数（1 GB 未満は MB。src/lib/format.ts の quotaSize）。空白は不可分の空白
   operatorQuotaSize: '{size} GB',
   operatorQuotaSizeMb: '{size} MB',
@@ -708,6 +710,8 @@ export const dictionary = defineDictionary({
   // 一時的な停止への切り替えはサーバーが断る。一覧の行では「停止の理由を変える」と「再開する」の代わりに出す
   // {admin} は辞書の同じ名前の項目。管理者の指名し直しも、消している途中で組織の中に行を足さないよう断る
   operatorPurgeDue: '消す予定日を過ぎたので、再開も停止の理由の切り替えも{admin}の指名もできません',
+  // 自分用の組織には{admin}の指名の操作が無いので、挙げない
+  operatorPurgeDuePersonal: '消す予定日を過ぎたので、再開も停止の理由の切り替えもできません',
   operatorReassignPurgeDue: '「{name}」は消す予定日を過ぎたので、{admin}を指名できません',
   // 一覧を開いた後に日付が変わり、操作が purge_due で断られたときのトースト。{name} は組織の名前
   operatorResumePurgeDue: '「{name}」は消す予定日を過ぎたので再開できません',

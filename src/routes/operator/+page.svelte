@@ -38,7 +38,7 @@
   // （サーバーは管理者の指名し直し、再開、一時的な停止への切り替えを 409 の purge_due で断る）。画面を開いた後に日付が変わって purge_due で断られたときは、
   // 理由をトーストで出して一覧を読み直し、押したボタンが消えるので、その行の理由へフォーカスを移す。
   // 添付ファイルの上限の列の「人数と容量の上限を変える」（link-btn）は、上限の変更のダイアログを開く。変えた後は一覧を読み直す
-  // 名前の列の先頭に、組織の種類の印（chip。チーム用か自分用）を出す。自分用（kind が personal）の行は、人数 / 上限の列を空（ダッシュ）にし、
+  // 名前の直後、ほかの印の前に、組織の種類の印（chip。チーム用か自分用）を出す。自分用（kind が personal）の行は、人数 / 上限の列を空（ダッシュ）にし、
   // 「上限に達した」の印と管理者の状態の印を出さず、「管理者を指名」と「人数と容量の上限を変える」を置かない（添付ファイルの上限の値は出す）。
   // 停止、再開、停止の理由の切り替えは自分用の行にも置く
   let { data }: PageProps = $props();
@@ -253,7 +253,8 @@
                   <td class="is-num" data-label={t('operatorColumnSeats')}>
                     {#if organization.kind === 'personal'}
                       <!-- 自分用は人数が本人1人で上限を持たないので、空（ダッシュ）にし、「上限に達した」も付けない -->
-                      <span class="props-note">{t('operatorSeatsNone')}</span>
+                      <span class="props-note" aria-hidden="true">{t('operatorSeatsNone')}</span>
+                      <span class="visually-hidden">{t('operatorSeatsNoneLabel')}</span>
                     {:else}
                       {t('operatorSeats', { used: organization.seats.used, limit: organization.seats.limit })}
                       {#if organization.seats.used >= organization.seats.limit}
@@ -299,7 +300,9 @@
                         <!-- 消す予定日を過ぎた組織は、管理者の指名、停止の理由の切り替え、再開を出さず、できない理由を出す
                              （サーバーはどれも 409 の purge_due で断る）。断られた後のフォーカスの移し先にするので、tabindex="-1" -->
                         <span class="props-note" id={purgeDueId(organization.slug)} tabindex="-1"
-                          >{t('operatorPurgeDue', words)}</span
+                          >{organization.kind === 'personal'
+                            ? t('operatorPurgeDuePersonal')
+                            : t('operatorPurgeDue', words)}</span
                         >
                       {:else if organization.kind !== 'personal'}
                         <button
