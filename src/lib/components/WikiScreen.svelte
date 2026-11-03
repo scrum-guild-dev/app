@@ -34,6 +34,13 @@
   } = $props();
   const slug = $derived(page.params.slug ?? '');
   const workspaceId = $derived(page.params.id ?? null);
+  const name = $derived(
+    workspaceId === null
+      ? data.organization
+        ? organizationLabel(data.organization.organization)
+        : undefined
+      : data.workspace?.name,
+  );
   const current = $derived(data.wikiPage);
   const pages = $derived(data.wikiPages ?? []);
   const canWrite = $derived(
@@ -213,16 +220,16 @@
   }
 </script>
 
-<svelte:head><title>{t('pageTitle', { page: current?.title ?? t('wiki'), app: t('appName') })}</title></svelte:head>
-
-<PageHead
-  title={t('wiki')}
-  eyebrow={workspaceId === null
-    ? data.organization
-      ? organizationLabel(data.organization.organization)
-      : undefined
-    : data.workspace?.name}
+<svelte:head
+  ><title
+    >{t('pageTitle', {
+      page: name ? `${current?.title ?? t('wiki')}・${name}` : (current?.title ?? t('wiki')),
+      app: t('appName'),
+    })}</title
+  ></svelte:head
 >
+
+<PageHead title={t('wiki')} eyebrow={name}>
   {#snippet actions()}{#if canWrite}<button class="btn is-primary" type="button" onclick={() => begin(true)}
         >{t('wikiAdd')}</button
       >{/if}{/snippet}
