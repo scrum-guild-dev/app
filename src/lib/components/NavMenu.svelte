@@ -5,6 +5,7 @@
   import { NAV_MENU_ID } from '../nav-collapse.svelte.ts';
   import { isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
   import { t } from '../vocabulary.svelte.ts';
+  import { organizationLabel } from '../organization-label.ts';
   import { workspaceViewOf } from '../workspace.ts';
   import Icon from './Icon.svelte';
 
@@ -57,11 +58,18 @@
         <a
           class="nav-item"
           {href}
-          aria-current={current === href || (item.label === 'wiki' && current.startsWith(href + '/'))
+          aria-current={current === href ||
+          ((item.label === 'wiki' || item.label === 'orgWiki') && current.startsWith(href + '/'))
             ? 'page'
             : undefined}
         >
-          <Icon name={item.icon} /><span class="nav-item-label">{t(item.label)}</span>
+          <Icon name={item.icon} /><span class="nav-item-label" class:wrap-anywhere={item.label === 'orgWiki'}
+            >{item.label === 'orgWiki'
+              ? t('orgWiki', {
+                  organization: page.data.organization ? organizationLabel(page.data.organization.organization) : '',
+                })
+              : t(item.label)}</span
+          >
         </a>
       {/if}
     {/each}

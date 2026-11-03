@@ -14,7 +14,7 @@
   }: {
     pages: OutputOf<typeof workspaceWikiTree>['pages'];
     slug: string;
-    workspaceId: string;
+    workspaceId: string | null;
     currentId: string | null;
   } = $props();
   const expanded = new SvelteSet<string>();
@@ -61,7 +61,9 @@
         {:else}<span class="wiki-slot"></span>{/if}
         <a
           class="wiki-link"
-          href={resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: item.id })}
+          href={workspaceId === null
+            ? resolve('/[slug]/wiki/[pageId]', { slug, pageId: item.id })
+            : resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: item.id })}
           aria-current={currentId === item.id ? 'page' : undefined}>{item.title}</a
         >
       </div>
@@ -72,6 +74,6 @@
   {/each}
 {/snippet}
 
-<nav aria-label={t('wikiTreeLabel')}>
+<nav aria-label={t(workspaceId === null ? 'orgWikiTreeLabel' : 'wikiTreeLabel')}>
   <ul class="wiki-tree panel">{@render branch(null, 1)}</ul>
 </nav>

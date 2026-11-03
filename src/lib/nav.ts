@@ -12,7 +12,7 @@ const workspaceRoutes = [
   '/[slug]/w/[id]/wiki',
 ] as const;
 export type WorkspaceNavRoute = (typeof workspaceRoutes)[number];
-export type NavRoute = '/[slug]' | WorkspaceNavRoute;
+export type NavRoute = '/[slug]' | '/[slug]/wiki' | WorkspaceNavRoute;
 
 export function isWorkspaceRoute(route: NavRoute): route is WorkspaceNavRoute {
   return (workspaceRoutes as readonly string[]).includes(route);
@@ -90,6 +90,7 @@ export const navSections: NavSection[] = [
     items: [
       { icon: 'sun', label: 'pageToday', href: '/[slug]' },
       { icon: 'bell', label: 'pageNotifications', href: null },
+      { icon: 'file', label: 'orgWiki', href: '/[slug]/wiki' },
     ],
   },
   {
