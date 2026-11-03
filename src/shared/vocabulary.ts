@@ -16,6 +16,7 @@ export const dictionary = defineDictionary({
   wikiSearchRun: '探す',
   wikiSearching: '探しています',
   wikiSearchInvalid: '検索の語は100字・5語までで入れてください。',
+  wikiSearchLimit: 'この Wiki は検索できる量の上限を超えています。検索欄を空にして、木からページを開いてください。',
   wikiSearchRateLimited: '検索の回数の上限に達しました。1分ほど待ってから、もう一度探してください。',
   wikiSearchFailed: '検索できませんでした。「探す」を押してもう一度試してください。',
   wikiSearchEmpty: '当たるページはありません。語を変えて探してください。',

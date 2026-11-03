@@ -214,6 +214,7 @@ test('Wiki の題・本文を全語で探し、結果から開け、0件・上�
     await expect(query).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
+  expect(await violations()).toEqual([]);
   await query.fill('存在しない語');
   await expect(page.getByText('当たるページはありません。語を変えて探してください。', { exact: true })).toBeVisible();
   await expect(results).toHaveCount(0);
@@ -222,7 +223,6 @@ test('Wiki の題・本文を全語で探し、結果から開け、0件・上�
   await query.fill('　 ');
   await expect(results).toHaveCount(0);
   await expect(query).not.toHaveAttribute('aria-invalid', 'true');
-  expect(await violations()).toEqual([]);
   const stopFailure = await routeOperation(
     page,
     workspaceWikiSearch,
@@ -242,6 +242,26 @@ test('Wiki の題・本文を全語で探し、結果から開け、0件・上�
   await page.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(page.getByText('当たるページはありません。語を変えて探してください。', { exact: true })).toBeVisible();
   await expect(results).toHaveCount(0);
+  for (const [status, code, message] of [
+    [429, 'rate_limited', '検索の回数の上限に達しました。1分ほど待ってから、もう一度探してください。'],
+    [
+      409,
+      'wiki_search_limit',
+      'この Wiki は検索できる量の上限を超えています。検索欄を空にして、木からページを開いてください。',
+    ],
+  ] as const) {
+    const stop = await routeOperation(
+      page,
+      workspaceWikiSearch,
+      { slug: new URL(page.url()).pathname.split('/')[1]! },
+      (call) => call.fail(status, code),
+    );
+    await query.fill(String(status));
+    await expect(page.getByText(message, { exact: true })).toBeVisible();
+    await stop();
+  }
+  await query.fill('');
+  await expect(page.getByRole('navigation', { name: 'ワークスペースの Wiki のページ', exact: true })).toBeVisible();
 });
 
 test('遅い検索の応答が、新しい語の0件表示を上書きしない', async ({ page }) => {

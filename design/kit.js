@@ -452,9 +452,9 @@
     const shown = fold ? ancestors.slice(-1) : ancestors;
     return `<nav class="crumbs" aria-label="ページの道筋"><ol><li><a href="#" data-wiki-page="">${esc(rootLabel)}</a></li>${fold ? `<li><button class="link-btn" type="button" data-crumbs-more aria-label="途中のページ ${mid.length} 件を表示">…</button></li>${mid.map((p) => link(p, true)).join("")}` : ""}${shown.map((p) => link(p, false)).join("")}<li><span aria-current="page">${esc(currentTitle)}</span></li></ol></nav>`;
   }
-  // 探した結果の1行。where は当たった場所（"title" か "body"）、path は親の題を「›」でつないだ道筋。今開いているページには aria-current
+  // 探した結果の1行。where は当たった場所（"title" か "body"）、path は Wiki と親の題を「/」でつないだ道筋。今開いているページには aria-current
   function wikiHit(p, path, where, current = false) {
-    return `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"${current ? ' aria-current="page"' : ""}><span>${esc(p.title)}<span class="chip">${where === "title" ? "題に一致" : "本文に一致"}</span></span><span class="props-note">${esc(path)}</span></a></li>`;
+    return `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"${current ? ' aria-current="page"' : ""}>${esc(p.title)}<span class="props-note">${esc(path)}</span><span class="props-note">${where === "title" ? "題に一致" : "本文に一致"}</span></a></li>`;
   }
   // meta は集計の下に置く1行（バックログの画面のチーム全体の経験値 teamXp など）
   function pageHead(eyebrow, title, tallies = [], actions = "", meta = "") {

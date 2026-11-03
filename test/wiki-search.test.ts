@@ -4,6 +4,7 @@ import { createApp } from '../src/server/app.ts';
 import { orgDb } from '../src/server/db/index.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { orgWikiSearch, workspaceWikiSearch } from '../src/shared/operations/wiki/index.ts';
+import { runStatementsForTest } from '../src/server/db/testing.ts';
 import { AT, uuidv7 } from './factories.ts';
 import { post } from './operations/harness.ts';
 import { createTarget, type Target } from './operations/world.ts';
@@ -88,6 +89,46 @@ describe.each([false, true])('Wiki の検索（組織: %s）', (org) => {
     expect(await response.json()).toMatchObject({ error: { code: 'invalid_input' } });
   });
 
+  test('5,000ページまでは検索し、5,001ページは本文を検索せず断る', async () => {
+    const target = await createTarget();
+    await seedMany(target, org, 5000, "''");
+    expect((await search(target, '不在', org)).status).toBe(200);
+    await add(target, '追加', '', { org });
+    const response = await search(target, '不在', org);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: 'wiki_search_limit' } });
+  });
+
+  test('32MiBを超える本文は検索せず断り、削除したページは量に含めない', async () => {
+    const target = await createTarget();
+    await seedMany(target, org, 111, "replace(hex(zeroblob(50000)), '0', '文')");
+    expect((await search(target, '不在', org)).status).toBe(200);
+    const extra = await add(target, '追加', '文'.repeat(100000), { org });
+    const response = await search(target, '不在', org);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: 'wiki_search_limit' } });
+    const db = orgDb(env, target.organization.verified);
+    await db.run(
+      db.statement((q) =>
+        q
+          .updateTable('wiki_pages')
+          .set({ deleted_at: AT, deleted_by: target.admin.userId! })
+          .where('id', '=', extra)
+          .where(org ? 'organization_id' : 'workspace_id', '=', org ? target.organization.id : target.workspace.id),
+      ),
+    );
+    expect((await search(target, '不在', org)).status).toBe(200);
+  });
+
+  test('他のWikiの5,001ページは検索予算に混ぜない', async () => {
+    const target = await createTarget();
+    await seedMany(target, !org, 5001, "''");
+    const id = await add(target, '自分の題', '', { org });
+    expect(await (await search(target, '自分', org)).json()).toEqual({
+      pages: [{ id, title: '自分の題', matched_in: 'title' }],
+    });
+  });
+
   test('検索の31回目を429で断る', async () => {
     const target = await createTarget();
     for (let i = 0; i < 30; i++) expect((await search(target, '語', org)).status).toBe(200);
@@ -113,4 +154,32 @@ describe.each([false, true])('Wiki の検索（組織: %s）', (org) => {
         .map((id) => ({ id, title: '対象'.repeat(50), matched_in: 'body' })),
     });
   });
+});
+
+async function seedMany(target: Target, org: boolean, count: number, bodySql: string) {
+  const prefix = uuidv7().slice(0, 24);
+  await runStatementsForTest(env, [
+    `
+    INSERT INTO wiki_pages(id, organization_id, workspace_id, parent_id, position, title, body_md, version, created_by, updated_by, created_at, updated_at)
+    WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i < ${count})
+    SELECT '${prefix}' || printf('%012d', i), ${org ? `'${target.organization.id}', NULL` : `NULL, '${target.workspace.id}'`}, NULL, 'a0', '題', ${bodySql}, 1,
+      '${target.admin.userId}', '${target.admin.userId}', '${AT}', '${AT}' FROM n;
+  `,
+  ]);
+}
+
+test('閉じたワークスペースのWikiも検索できる', async () => {
+  const target = await createTarget();
+  const id = await add(target, '手順', '本文');
+  const db = orgDb(env, target.organization.verified);
+  await db.run(
+    db.statement((q) =>
+      q
+        .updateTable('workspaces')
+        .set({ closed_at: AT })
+        .where('id', '=', target.workspace.id)
+        .where('organization_id', '=', target.organization.id),
+    ),
+  );
+  expect(await (await search(target, '本文')).json()).toEqual({ pages: [{ id, title: '手順', matched_in: 'body' }] });
 });

@@ -8,6 +8,7 @@ function raw<Row>(db: Pick<OrganizationDb, 'statement'>, query: RawBuilder<Row>)
   return db.statement(() => ({ compile: () => query.compile(compiler) }));
 }
 
+import { WIKI_SEARCH_MAX_BYTES, WIKI_SEARCH_MAX_PAGES } from '../../shared/wiki.ts';
 import { searchWordsOf } from '../../shared/backlog-filter.ts';
 import type { WikiSearchResult, WikiPage } from '../../shared/operations/wiki/index.ts';
 
@@ -76,34 +77,44 @@ export async function readWikiTree(db: OrganizationDb, scope: WikiScope) {
   );
 }
 
-// LIMIT -1 はサブクエリの平坦化を防ぎ、lower(body_md) をページごとに1回だけ計算する。
-// 語は検証済み（1〜5語）。結果に本文を載せず、Wiki の索引で範囲を絞ってから走査する。
+// octet_length(列) はSQLiteのレコードの長さを使い、本文を読み込まずバイト数を数える。
+// 予算の検査と検索を同じ文に置き、検査後にページが増える競合でも予算を超えない。
 export async function searchWikiPages(
   db: OrganizationDb,
   scope: WikiScope,
   query: string,
-): Promise<WikiSearchResult[]> {
+): Promise<{ limited: boolean; pages: WikiSearchResult[] }> {
   const words = searchWordsOf(query);
+  if (!words.length) return { limited: false, pages: [] };
   const titleHits = words.map((word) => sql<boolean>`instr(p.title_search, lower(${word})) > 0`);
   const hits = words.map(
     (word, index) => sql<boolean>`(${titleHits[index]} OR instr(p.body_search, lower(${word})) > 0)`,
   );
-  return db.rows(
+  const row = await db.first(
     raw(
       db,
-      sql<WikiSearchResult>`
-    WITH pages AS (
+      sql<{ limited: number; pages_json: string }>`
+    WITH budget AS (
+      SELECT count(*) > ${WIKI_SEARCH_MAX_PAGES} OR coalesce(sum(bytes), 0) > ${WIKI_SEARCH_MAX_BYTES} AS limited
+      FROM (
+        SELECT octet_length(title) + octet_length(body_md) AS bytes FROM wiki_pages p
+        WHERE ${scopeOf('p', scope)} AND p.deleted_at IS NULL LIMIT ${WIKI_SEARCH_MAX_PAGES + 1}
+      )
+    ), pages AS (
       SELECT id, title, lower(title) AS title_search, lower(body_md) AS body_search, updated_at
       FROM wiki_pages p WHERE ${scopeOf('p', scope)} AND p.deleted_at IS NULL LIMIT -1
     )
-    SELECT p.id, p.title, CASE WHEN (${sql.join(titleHits, sql` OR `)}) THEN 'title' ELSE 'body' END AS matched_in
-    FROM pages p
-    WHERE ${sql.join(hits, sql` AND `)}
-    ORDER BY (${sql.join(titleHits, sql` AND `)}) DESC, p.updated_at DESC, p.id
-    LIMIT 50
+    SELECT limited, CASE WHEN limited THEN '[]' ELSE (
+      SELECT json_group_array(json_object('id', id, 'title', title, 'matched_in', matched_in)) FROM (
+        SELECT p.id, p.title, CASE WHEN (${sql.join(titleHits, sql` OR `)}) THEN 'title' ELSE 'body' END AS matched_in
+        FROM pages p WHERE ${sql.join(hits, sql` AND `)}
+        ORDER BY (${sql.join(titleHits, sql` AND `)}) DESC, p.updated_at DESC, p.id LIMIT 50
+      )
+    ) END AS pages_json FROM budget
   `,
     ),
   );
+  return { limited: row?.limited === 1, pages: JSON.parse(row?.pages_json ?? '[]') as WikiSearchResult[] };
 }
 
 // 祖先は10段で打ち切る。終点が根でなければ循環、欠けた親、または深すぎる木なので通さない。

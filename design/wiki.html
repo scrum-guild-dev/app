@@ -209,11 +209,20 @@ function parentOptions(selected, { exclude = [], height = 1 } = {}) {
 const parentHint = (id, over) => `<span class="field-hint" id="${id}">深さは ${MAX_DEPTH} 段までです。${over ? `${MAX_DEPTH} 段を超える親（${over} 件）は、選べないようにしています。` : ""}</span>`;
 
 // ---- 左の欄: 検索と木 ----
+function searchProblem() {
+  const q = S.query.trim();
+  if ([...q].length > 100 || q.split(/\s+/u).filter(Boolean).length > 5) return "検索の語は100字・5語までで入れてください。";
+  const bytes = store.pages.reduce((sum, p) => sum + new TextEncoder().encode(p.title + p.md).length, 0);
+  if (store.pages.length > 5000 || bytes > 32 * 1024 * 1024) return "この Wiki は検索できる量の上限を超えています。検索欄を空にして、木からページを開いてください。";
+  return "";
+}
 function searchHits() {
-  const words = S.query.trim().split(/[\s　]+/).filter(Boolean).slice(0, 5);
+  const words = S.query.trim().split(/\s+/u).filter(Boolean);
+  if (!words.length || searchProblem()) return [];
   const has = (text, w) => text.toLowerCase().includes(w.toLowerCase());
-  // 語ごとに、題か本文のどちらかに当たればよい。題に当たったページは「題に一致」
-  return store.pages.map((p) => words.every((w) => has(p.title, w) || has(p.md, w)) ? { p, where: words.some((w) => has(p.title, w)) ? "title" : "body" } : null).filter(Boolean);
+  return store.pages.filter((p) => words.every((w) => has(p.title, w) || has(p.md, w)))
+    .map((p) => ({ p, titleHit: words.every((w) => has(p.title, w)), where: words.some((w) => has(p.title, w)) ? "title" : "body" }))
+    .sort((a, b) => Number(b.titleHit) - Number(a.titleHit) || b.p.at.localeCompare(a.p.at) || a.p.id.localeCompare(b.p.id)).slice(0, 50);
 }
 function listHtml() {
   if (!S.query.trim()) {
@@ -221,20 +230,22 @@ function listHtml() {
       ? `<nav aria-label="${scopeName}のページ">${wikiTree(tree(), { current: S.mode === "new" ? null : S.page, open: [...S.open], reorder: S.reorder, key: "wk" })}</nav>`
       : `<p class="props-note">まだありません。</p>`;
   }
-  return `<ul class="wiki-tree">${searchHits().map(({ p, where }) => wikiHit(p, [...ancestors(p.id), p].map((x) => x.title).join(" › "), where, p.id === S.page && S.mode !== "new")).join("")}</ul>`;
+  return `<ul class="wiki-tree">${searchHits().map(({ p, where }) => wikiHit(p, ["Wiki", ...ancestors(p.id).map((x) => x.title)].join(" / "), where, p.id === S.page && S.mode !== "new")).join("")}</ul>`;
 }
 function statusText() {
   const q = S.query.trim();
   if (!q) return "";
+  if (searchProblem()) return searchProblem();
   const n = searchHits().length;
   return n ? `${n} 件のページが見つかりました` : `「${q}」に当たるページはありません。語を減らすか、別の語で探してください。`;
 }
 function sideHtml() {
   const searching = S.query.trim() !== "";
   return `<aside class="wiki-side" aria-label="${scopeName}の検索とページの木">
-    <div class="field"><label class="search">${icon("search")}<input type="search" id="wiki-q" aria-label="題と本文でページを探す" placeholder="題と本文で探す" value="${esc(S.query)}" aria-describedby="wiki-q-hint"></label>
-      <span class="field-hint" id="wiki-q-hint">この Wiki の中だけを探します。</span>
-      <p class="props-note" role="status" id="wiki-q-status">${esc(statusText())}</p></div>
+    <form class="form" id="wiki-search-form" role="search" aria-label="Wiki の題と本文を探す"><div class="field"><label for="wiki-q">Wiki の題と本文を探す</label><input class="input" type="search" id="wiki-q" value="${esc(S.query)}" aria-describedby="wiki-q-hint wiki-q-status">
+      <p class="field-hint" id="wiki-q-hint">この Wiki の中だけを探します。空白で区切って5語・100字まで。</p></div>
+      <div class="form-actions"><button class="btn" type="submit">探す</button></div></form>
+      <p class="field-hint" role="status" id="wiki-q-status">${esc(statusText())}</p>
     <div class="panel">
       <div class="panel-title"><b>ページ</b><span class="props-note">${store.pages.length} 件</span>
         <button class="btn is-sm is-quiet toolbar-end" type="button" id="wiki-reorder" data-wiki="reorder" aria-pressed="${S.reorder}" ${searching ? 'aria-disabled="true" aria-describedby="wiki-reorder-hint"' : ""}>${icon("swap")}並べ替える</button></div>
@@ -625,16 +636,26 @@ document.addEventListener("submit", (ev) => {
     }
   }, 350);
 });
+let searchTimer;
+function refreshSearch() {
+  document.getElementById("wiki-list").innerHTML = listHtml();
+  document.getElementById("wiki-q-status").textContent = statusText();
+  const searching = S.query.trim() !== "";
+  const btn = document.getElementById("wiki-reorder");
+  if (searching) { btn.setAttribute("aria-disabled", "true"); btn.setAttribute("aria-describedby", "wiki-reorder-hint"); } else { btn.removeAttribute("aria-disabled"); btn.removeAttribute("aria-describedby"); }
+  document.getElementById("wiki-reorder-hint").hidden = !searching;
+}
+document.addEventListener("submit", (ev) => {
+  if (ev.target.id !== "wiki-search-form") return;
+  ev.preventDefault(); clearTimeout(searchTimer); refreshSearch();
+});
 document.addEventListener("input", (ev) => {
   const id = ev.target.id;
   if (id === "wiki-q") {
     S.query = ev.target.value;
-    document.getElementById("wiki-list").innerHTML = listHtml();
-    document.getElementById("wiki-q-status").textContent = statusText();
-    const searching = S.query.trim() !== "";
-    const btn = document.getElementById("wiki-reorder");
-    if (searching) { btn.setAttribute("aria-disabled", "true"); btn.setAttribute("aria-describedby", "wiki-reorder-hint"); } else { btn.removeAttribute("aria-disabled"); btn.removeAttribute("aria-describedby"); }
-    document.getElementById("wiki-reorder-hint").hidden = !searching;
+    clearTimeout(searchTimer);
+    if (!S.query.trim()) refreshSearch();
+    else searchTimer = setTimeout(refreshSearch, 800);
     return;
   }
   if (id === "wk-title" || id === "wk-body") {

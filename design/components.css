@@ -1764,7 +1764,6 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .wiki-link[aria-current="page"] { background: var(--color-accent-soft); font-weight: 700; box-shadow: inset 3px 0 0 var(--color-accent); }
 /* 探した結果の行。題の下に、そのページの道筋と、当たった場所（題か本文）を添える */
 .wiki-link .props-note { display: block; font-weight: 400; }
-.wiki-link .chip { margin-left: var(--space-1); vertical-align: 0.1em; }
 .wiki-node .order-actions { padding-right: var(--space-1); }
 /* ページの道筋（最上段から今のページまで）。区切りは見た目だけの文字で、読み上げには出さない（対応しない環境では区切りも読まれるだけ） */
 .crumbs ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); font-size: var(--text-sm); color: var(--color-muted); }

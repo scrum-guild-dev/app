@@ -25,6 +25,14 @@
   let searched = $state(false);
   let failure = $state('');
   let retry = $state(0);
+  let composing = $state(false);
+  let lastIdentity = '';
+  const contentVersion = $derived(
+    pages
+      .map((item) => `${item.id}:${item.version}`)
+      .sort()
+      .join('|'),
+  );
   const parsed = $derived(wikiQuerySchema.safeParse(query));
 
   $effect(() => {
@@ -32,15 +40,21 @@
     const scopeSlug = slug;
     const scopeWorkspace = workspaceId;
     const input = parsed;
+    const identity = JSON.stringify([scopeSlug, scopeWorkspace, input.success ? input.data : text]);
+    void contentVersion;
     void retry;
-    void pages;
+    const isComposing = composing;
+    const changed = identity !== lastIdentity;
+    lastIdentity = identity;
     let active = true;
-    results = [];
-    searched = false;
+    if (changed) {
+      results = [];
+      searched = false;
+    }
     failure = text && !input.success ? t('wikiSearchInvalid') : '';
-    loading = text.length > 0 && input.success;
+    loading = text.length > 0 && input.success && !isComposing;
     const timer = setTimeout(async () => {
-      if (!text || !input.success) return;
+      if (!text || !input.success || isComposing) return;
       const result = scopeWorkspace
         ? await callOperation(
             workspaceWikiSearch,
@@ -52,8 +66,15 @@
       loading = false;
       searched = true;
       if (result.ok) results = result.data.pages;
-      else failure = t(result.error?.code === 'rate_limited' ? 'wikiSearchRateLimited' : 'wikiSearchFailed');
-    }, 250);
+      else
+        failure = t(
+          result.error?.code === 'rate_limited'
+            ? 'wikiSearchRateLimited'
+            : result.error?.code === 'wiki_search_limit'
+              ? 'wikiSearchLimit'
+              : 'wikiSearchFailed',
+        );
+    }, 800);
     return () => {
       active = false;
       clearTimeout(timer);
@@ -78,7 +99,7 @@
   aria-label={t('wikiSearch')}
   onsubmit={(event) => {
     event.preventDefault();
-    retry += 1;
+    if (!loading) retry += 1;
   }}
 >
   <div class="field">
@@ -88,12 +109,20 @@
       class="input"
       type="search"
       bind:value={query}
+      oncompositionstart={() => {
+        composing = true;
+      }}
+      oncompositionend={() => {
+        composing = false;
+      }}
       aria-invalid={query.trim() && !parsed.success ? true : undefined}
       aria-describedby={failure ? 'wiki-search-hint wiki-search-error' : 'wiki-search-hint'}
     />
     <p id="wiki-search-hint" class="field-hint">{t('wikiSearchHint')}</p>
   </div>
-  <button class="btn" type="submit">{t('wikiSearchRun')}</button>
+  <div class="form-actions">
+    <button class="btn" type="submit" aria-disabled={loading}>{t('wikiSearchRun')}</button>
+  </div>
 </form>
 <div role="status" aria-live="polite">
   {#if loading}<p class="field-hint">{t('wikiSearching')}</p>
@@ -115,10 +144,11 @@
               ? resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: item.id })
               : `${resolve('/[slug]', { slug })}/wiki/${item.id}`}
             aria-current={currentId === item.id ? 'page' : undefined}
-            >{item.title}<span class="props-note">{pathOf(item.id)}</span></a
+            >{item.title}<span class="props-note">{pathOf(item.id)}</span><span class="props-note"
+              >{t(item.matched_in === 'title' ? 'wikiSearchTitleHit' : 'wikiSearchBodyHit')}</span
+            ></a
           >
           <!-- eslint-enable svelte/no-navigation-without-resolve -->
-          <span class="field-hint">{t(item.matched_in === 'title' ? 'wikiSearchTitleHit' : 'wikiSearchBodyHit')}</span>
         </li>
       {/each}
     </ul>

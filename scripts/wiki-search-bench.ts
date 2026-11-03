@@ -34,9 +34,10 @@ async function call(query: string, org: boolean) {
     body: JSON.stringify(org ? { query } : { workspace_id: workspaceId, query }),
     signal: AbortSignal.timeout(5000),
   });
-  const data = (await response.json()) as { pages?: unknown[] };
-  if (!response.ok || !data.pages) throw new Error(`検索が失敗しました: ${response.status}`);
-  return { ms: performance.now() - start, count: data.pages.length };
+  const data = (await response.json()) as { pages?: unknown[]; error?: { code?: string } };
+  if ((!response.ok || !data.pages) && !(response.status === 409 && data.error?.code === 'wiki_search_limit'))
+    throw new Error(`検索が失敗しました: ${response.status}`);
+  return { ms: performance.now() - start, count: data.pages?.length ?? 0, status: response.status };
 }
 let server: ReturnType<typeof spawn> | undefined;
 try {
@@ -95,10 +96,12 @@ try {
         await call(query, org);
         const times: number[] = [];
         let hits = 0;
+        let status = 0;
         for (let i = 0; i < 9; i++) {
           const result = await call(query, org);
           times.push(result.ms);
           hits = result.count;
+          status = result.status;
         }
         times.sort((a, b) => a - b);
         console.log(
@@ -108,6 +111,7 @@ try {
             bodyChars: length,
             query,
             hits,
+            status,
             medianMs: Math.round(times[4]!),
             maxMs: Math.round(times.at(-1)!),
           }),

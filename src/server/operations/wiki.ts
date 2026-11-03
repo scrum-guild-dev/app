@@ -10,6 +10,8 @@ import {
 import { wikiTitle } from '../../shared/wiki.ts';
 import {
   searchWikiPages,
+  type OrganizationDb,
+  type WikiScope,
   insertWikiPage,
   readWikiPage,
   readWikiTree,
@@ -94,9 +96,14 @@ export const workspaceWikiUpdateOperation = implement(
   },
 );
 
-export const orgWikiSearchOperation = implement(orgWikiSearch, async ({ db, input }) => ({
-  pages: await searchWikiPages(db, { organizationId: db.organizationId }, input.query),
-}));
-export const workspaceWikiSearchOperation = implement(workspaceWikiSearch, async ({ db, workspace, input }) => ({
-  pages: await searchWikiPages(db, { workspaceId: workspace.workspaceId }, input.query),
-}));
+async function search(db: OrganizationDb, scope: WikiScope, query: string) {
+  const result = await searchWikiPages(db, scope, query);
+  if (result.limited) throw new ApiError(409, 'wiki_search_limit');
+  return { pages: result.pages };
+}
+export const orgWikiSearchOperation = implement(orgWikiSearch, async ({ db, input }) =>
+  search(db, { organizationId: db.organizationId }, input.query),
+);
+export const workspaceWikiSearchOperation = implement(workspaceWikiSearch, async ({ db, workspace, input }) =>
+  search(db, { workspaceId: workspace.workspaceId }, input.query),
+);
