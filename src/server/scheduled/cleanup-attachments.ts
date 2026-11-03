@@ -124,8 +124,8 @@ export async function cleanupAttachments(
     failures++;
     logFailure('掃除の進捗を保存できなかった', 1, error);
   }
-  if (deleted > 0 || limited) {
-    const line = JSON.stringify({ level: limited ? 'warn' : 'info', job: JOB, deleted, rounds, limited });
+  if (deleted > 0 || limited || complete) {
+    const line = JSON.stringify({ level: limited ? 'warn' : 'info', job: JOB, deleted, rounds, limited, complete });
     if (limited) console.warn(line);
     else console.info(line);
   }
