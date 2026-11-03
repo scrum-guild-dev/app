@@ -386,7 +386,8 @@ test.describe('運用者', () => {
     await expect(solo).not.toContainText('管理者がいない');
     // 人数 / 上限の列は空（ダッシュ）。数の上限は出さない
     const seats = solo.locator('td[data-label="人数 / 上限"]');
-    await expect(seats).toHaveText('—');
+    // 見た目のダッシュは読み上げから外し（aria-hidden）、見えない文言「人数の上限は無い」を添える
+    await expect(seats.locator('[aria-hidden="true"]')).toHaveText('—');
     await expect(seats.locator('.chip')).toHaveCount(0);
     // 添付ファイルの上限の値は出し、変更のボタンは置かない
     const quota = solo.locator('td[data-label="添付ファイルの上限"]');
@@ -400,7 +401,7 @@ test.describe('運用者', () => {
     // 停止中の自分用は、管理者の状態の印を出さず、停止の理由の切り替えと再開ができる
     const stopped = rows.filter({ has: page.locator('.mono', { hasText: /^solo-stopped$/ }) });
     await expect(stopped.locator('td.is-name .chip')).toHaveText(['自分用', '停止 2026-10-10']);
-    await expect(stopped.locator('td[data-label="人数 / 上限"]')).toHaveText('—');
+    await expect(stopped.locator('td[data-label="人数 / 上限"] [aria-hidden="true"]')).toHaveText('—');
     await expect(stopped.locator('td.is-actions').getByRole('button')).toHaveText(['停止の理由を変える', '再開する']);
     await expect(stopped.getByRole('button', { name: /人数と容量の上限を変える/ })).toHaveCount(0);
 
@@ -512,14 +513,14 @@ test.describe('運用者', () => {
     });
     await page.goto('/operator');
     const row = page.locator('.table tbody tr', { hasText: 'solo' });
-    await expect(row.locator('td[data-label="人数 / 上限"]')).toHaveText('—');
+    await expect(row.locator('td[data-label="人数 / 上限"] [aria-hidden="true"]')).toHaveText('—');
     await row.getByRole('button', { name: '「自分用」を停止する' }).click();
     const dialog = page.getByRole('dialog', { name: '組織を停止する' });
     await expect(dialog).toContainText('「自分用」を停止します');
     await dialog.getByRole('button', { name: '「自分用」を停止する' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(row.locator('.chip.is-warn')).toHaveText('停止 2026-10-26');
-    await expect(row.locator('td[data-label="人数 / 上限"]')).toHaveText('—');
+    await expect(row.locator('td[data-label="人数 / 上限"] [aria-hidden="true"]')).toHaveText('—');
     await row.getByRole('button', { name: '「自分用」を再開する' }).click();
     await expect(row.locator('.chip.is-warn')).toHaveCount(0);
     await expect(row.locator('td.is-actions').getByRole('button')).toHaveText(['停止する']);
@@ -559,7 +560,7 @@ test.describe('運用者', () => {
       // 積んだ行でも、見出しの代わりの data-label の後にダッシュだけが出る
       const seats = row.locator('td[data-label="人数 / 上限"]');
       expect(await seats.evaluate((el) => getComputedStyle(el, '::before').content)).toContain('人数 / 上限');
-      await expect(seats).toHaveText('—');
+      await expect(seats.locator('[aria-hidden="true"]')).toHaveText('—');
       const button = row.getByRole('button', { name: '「自分用」を停止する' });
       await expect(button).toBeVisible();
       const box = (await button.boundingBox())!;
