@@ -17,8 +17,13 @@
     pages,
     currentId,
     children,
-  }: { slug: string; workspaceId: string | null; pages: WikiNode[]; currentId: string | null; children: Snippet } =
-    $props();
+  }: {
+    slug: string;
+    workspaceId: string | null;
+    pages: WikiNode[];
+    currentId: string | null;
+    children: Snippet<[boolean]>;
+  } = $props();
   let query = $state('');
   let results = $state<WikiSearchResult[]>([]);
   let loading = $state(false);
@@ -137,7 +142,7 @@
       {t(results.length ? 'wikiSearchCount' : 'wikiSearchEmpty', { count: results.length })}
     </p>{/if}
 </div>
-<div hidden={Boolean(query.trim())}>{@render children()}</div>
+{@render children(Boolean(query.trim()))}
 {#if query.trim() && results.length}
   <nav aria-label={t('wikiSearchResults')}>
     <ul class="wiki-tree panel">
