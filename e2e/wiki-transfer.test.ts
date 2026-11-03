@@ -113,7 +113,8 @@ for (const lostResponse of ['通信失敗', '壊れた成功応答'] as const) {
     await expect(dialog.getByText('保存されたか確認できません。', { exact: false })).toBeVisible();
     await expect(submit).toHaveAttribute('aria-disabled', 'true');
     await dialog.getByRole('button', { name: 'ページの一覧を読み直す', exact: true }).click();
-    await expect(dialog.getByText(title, { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('listitem').filter({ hasText: title })).toHaveText(title);
+    await expect(dialog.getByRole('listitem').filter({ hasText: title })).toBeVisible();
     await expect(submit).toHaveAttribute('aria-disabled', 'true');
     expect(sent).toBe(1);
     await unroute();
