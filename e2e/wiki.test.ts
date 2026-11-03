@@ -498,7 +498,17 @@ for (const scenario of [
       page,
       scenario.scope === 'workspace' ? workspaceWikiTree : orgWikiTree,
       { slug: 'aoba' },
-      { pages: [wikiPage] },
+      {
+        pages: [
+          {
+            id: wikiPage.id,
+            parent_id: wikiPage.parent_id,
+            position: wikiPage.position,
+            title: wikiPage.title,
+            version: wikiPage.version,
+          },
+        ],
+      },
     );
     await mockOperation(page, pageOperation, { slug: 'aoba' }, { page: wikiPage });
     await mockOperation(
