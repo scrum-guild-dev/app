@@ -4,6 +4,17 @@ import { organizationInfo } from '../src/shared/operations/organization/index.ts
 import { orgWikiPage, orgWikiTree } from '../src/shared/operations/wiki/index.ts';
 import { failOperation, rewriteOperation } from './operations.ts';
 
+test('自分用の組織の Wiki は組織の表示名で案内する', async ({ page }) => {
+  await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
+    ...output,
+    organization: { ...output.organization, kind: 'personal' as const },
+  }));
+  await page.goto('/aoba/wiki');
+  await expect(page.locator('.nav-item', { hasText: '自分用の Wiki' })).toBeVisible();
+  await expect(page.locator('.page-eyebrow')).toHaveText('自分用');
+  await expect(page).toHaveTitle('Wiki・自分用 - Scrum Guild');
+});
+
 test('長い組織名がメニューに収まり、画面内の移動で権限を失ったときは見つからないと示す', async ({ page }) => {
   const name = 'A'.repeat(80);
   await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
@@ -13,8 +24,13 @@ test('長い組織名がメニューに収まり、画面内の移動で権限�
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/aoba/wiki');
   const menu = page.locator('.nav-item-label', { hasText: `${name}の Wiki` });
-  await expect(menu).toBeVisible();
-  expect(await menu.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(menu).toBeVisible();
+    expect(await menu.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    expect(await menu.evaluate((element) => element.getBoundingClientRect().width < window.innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
   await page.getByLabel('題', { exact: true }).fill('権限の変化を確認するページ');
   await page.getByLabel('本文', { exact: true }).fill('本文');
@@ -26,9 +42,11 @@ test('長い組織名がメニューに収まり、画面内の移動で権限�
   // 親の組織レイアウトが再取得されない、同じ slug の画面内での移動。
   await page.locator('.nav-item', { hasText: `${name}の Wiki` }).click();
   await expect(page.getByText('ページが見つかりません', { exact: true })).toBeVisible();
+  await expect(page.getByText('この組織の全員が、読んで書けます。', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'ページを足す', exact: true })).toHaveCount(0);
   await page.goto(url);
   await expect(page.getByText('ページが見つかりません', { exact: true })).toBeVisible();
+  await expect(page.getByText('この組織の全員が、読んで書けます。', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'ページを足す', exact: true })).toHaveCount(0);
 });
 
@@ -37,6 +55,7 @@ test('組織のメニューから Wiki を開き、親子のページを作っ�
   await page.goto('/aoba');
   await page.locator('.nav-item', { hasText: 'あおば開発の Wiki' }).click();
   await expect(page).toHaveURL(/\/aoba\/wiki$/);
+  await expect(page).toHaveTitle('Wiki・あおば開発 - Scrum Guild');
   await expect(page.locator('.page-eyebrow')).toHaveText('あおば開発');
   await expect(page.getByText('この組織の全員が、読んで書けます。', { exact: true })).toBeVisible();
   const title = `組織の手順-${crypto.randomUUID().slice(0, 8)}`;
@@ -58,6 +77,7 @@ test('組織のメニューから Wiki を開き、親子のページを作っ�
   await page.getByLabel('本文', { exact: true }).fill(`---\ntitle: 改訂-${title}\n---\n[親の手順](${parentUrl})`);
   await page.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(page.getByRole('heading', { level: 2, name: `改訂-${title}` })).toBeVisible();
+  await expect(page).toHaveTitle(`改訂-${title}・あおば開発 - Scrum Guild`);
   expect(page.url()).toBe(childUrl);
   const parentLink = page.locator('.doc-box a', { hasText: '親の手順' });
   await expect(parentLink).not.toHaveAttribute('target', '_blank');
@@ -102,7 +122,7 @@ test('組織の Wiki も競合時に書きかけを残し、権限のない人�
   await expect(other.locator('details').first()).toContainText('先に保存した本文');
   await other.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(other.getByRole('button', { name: '編集する' })).toBeVisible();
-  await expect(other.locator('.doc-box')).toContainText('手元の書きかけ');
+  await expect(other.locator('.doc-box p')).toHaveText('手元の書きかけ');
   await other.close();
   for (const who of ['leftAll', 'otherOrg'] as const) {
     await signIn(context, baseURL, who);
@@ -119,6 +139,7 @@ test('Wiki の木から親子を作り、番号の URL のまま題と本文を�
   const violations = await watchViolations(page);
   await createWorkspace(page, 'Wikiの手順書');
   await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+  await expect(page).toHaveTitle('Wiki・Wikiの手順書 - Scrum Guild');
   await expect(page.getByRole('heading', { level: 1, name: 'Wiki' })).toBeVisible();
   await expect(page.getByText('ページはまだありません', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'ページを足す', exact: true }).click();

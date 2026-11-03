@@ -204,6 +204,39 @@ describe('組織の Wiki', () => {
     }
   });
 
+  test('ページの作成はアカウントごとに30回までで、31回目にページを増やさない', async () => {
+    const target = await createTarget();
+    for (let i = 0; i < 30; i++) await create(target);
+    const denied = await call(target, orgWikiCreate, { title: '31回目', body_md: '' });
+    expect(denied.status).toBe(429);
+    expect(await errorCodeOf(denied)).toBe('rate_limited');
+    const tree = await call(target, orgWikiTree);
+    expect(((await tree.json()) as { pages: unknown[] }).pages).toHaveLength(30);
+  });
+
+  test('ページの保存はアカウントごとに30回までで、31回目に版を増やさない', async () => {
+    const target = await createTarget();
+    const page = await create(target);
+    for (let i = 1; i <= 30; i++) {
+      const saved = await call(target, orgWikiUpdate, {
+        page_id: page.id,
+        read_version: i,
+        title: page.title,
+        body_md: `第${i}回の保存`,
+      });
+      expect(saved.status).toBe(200);
+    }
+    const denied = await call(target, orgWikiUpdate, {
+      page_id: page.id,
+      read_version: 31,
+      title: page.title,
+      body_md: '31回目',
+    });
+    expect(denied.status).toBe(429);
+    expect(await errorCodeOf(denied)).toBe('rate_limited');
+    expect(await read(target, page.id)).toMatchObject({ body_md: '第30回の保存', version: 31 });
+  });
+
   test('組織の容量の上限は作成と保存に適用され、断った保存は版も変えない', async () => {
     const target = await createTarget();
     const page = await create(target);

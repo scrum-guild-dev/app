@@ -19,13 +19,12 @@ import {
   readWikiTree,
   updateWikiPage,
   wikiParentFits,
+  type WikiScope,
 } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement, type ContextOf } from './implement.ts';
 import { actorUserIdOf, throwIfClosed } from './write-guards.ts';
-
-type WikiScope = Parameters<typeof readWikiPage>[1];
 
 export const workspaceWikiTreeOperation = implement(workspaceWikiTree, async ({ db, workspace }) => ({
   pages: await readWikiTree(db, { workspaceId: workspace.workspaceId }),

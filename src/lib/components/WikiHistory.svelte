@@ -1,15 +1,13 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { beforeNavigate } from '$app/navigation';
-  import { callOperation, type ApiResult } from '../api.ts';
+  import type { ApiResult } from '../api.ts';
+  import type { WikiClient } from '../wiki-client.ts';
   import { formatDateTime } from '../format-datetime.ts';
   import { t } from '../vocabulary.svelte.ts';
   import type { InputOf, OutputOf } from '../../shared/operations/define.ts';
   import {
-    orgWikiPage,
-    orgWikiRevisions,
-    workspaceWikiPage,
-    workspaceWikiRevisions,
+    type workspaceWikiRevisions,
     type workspaceWikiUpdate,
     type WikiPage,
   } from '../../shared/operations/wiki/index.ts';
@@ -18,8 +16,7 @@
   import { parseWikiFrontmatter } from '../../shared/wiki.ts';
 
   let {
-    slug,
-    workspaceId,
+    wiki,
     current,
     canWrite,
     update,
@@ -28,8 +25,7 @@
     onbusy,
     internalLinkPrefix,
   }: {
-    slug: string;
-    workspaceId: string | null;
+    wiki: WikiClient;
     current: WikiPage;
     canWrite: boolean;
     onbusy: (busy: boolean) => void;
@@ -74,10 +70,7 @@
     selected = null;
     loading = true;
     failure = '';
-    const result =
-      workspaceId === null
-        ? await callOperation(orgWikiRevisions, { page_id: current.id }, { slug })
-        : await callOperation(workspaceWikiRevisions, { workspace_id: workspaceId, page_id: current.id }, { slug });
+    const result = await wiki.readRevisions(current.id);
     if (!active || generation !== request) return;
     loading = false;
     if (result.ok) {
@@ -92,14 +85,7 @@
     selected = null;
     loading = true;
     failure = '';
-    const result =
-      workspaceId === null
-        ? await callOperation(orgWikiPage, { page_id: current.id, revision: version }, { slug })
-        : await callOperation(
-            workspaceWikiPage,
-            { workspace_id: workspaceId, page_id: current.id, revision: version },
-            { slug },
-          );
+    const result = await wiki.readPage(current.id, version);
     if (!active || generation !== request) return;
     loading = false;
     if (result.ok) {

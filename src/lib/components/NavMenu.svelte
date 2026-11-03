@@ -57,13 +57,14 @@
       {#if href !== null}
         <a
           class="nav-item"
+          class:is-wrapping={item.label === 'orgWiki'}
           {href}
           aria-current={current === href ||
           ((item.label === 'wiki' || item.label === 'orgWiki') && current.startsWith(href + '/'))
             ? 'page'
             : undefined}
         >
-          <Icon name={item.icon} /><span class="nav-item-label" class:wrap-anywhere={item.label === 'orgWiki'}
+          <Icon name={item.icon} /><span class="nav-item-label"
             >{item.label === 'orgWiki'
               ? t('orgWiki', {
                   organization: page.data.organization ? organizationLabel(page.data.organization.organization) : '',
