@@ -16,3 +16,15 @@ test('同じオリジンの同じ Wiki のページだけを内部のリンク�
   }
   expect(isWikiPageLink(prefix + id)).toBe(false);
 });
+
+test('組織の Wiki のリンクは同じ組織のページだけを同じタブで開く', () => {
+  const prefix = 'https://example.test/aoba/wiki/';
+  const id = '019a0000-0000-7000-8000-000000000001';
+  expect(isWikiPageLink(prefix + id, prefix)).toBe(true);
+  for (const href of [
+    'https://example.test/hibari/wiki/' + id,
+    'https://example.test/aoba/w/one/wiki/' + id,
+    'https://other.test/aoba/wiki/' + id,
+  ])
+    expect(isWikiPageLink(href, prefix)).toBe(false);
+});

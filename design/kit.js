@@ -60,6 +60,9 @@
   // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
   const DICT = {
     wiki: "Wiki",
+    orgWiki: "{organization}の Wiki",
+    orgWikiAccess: "この組織の全員が、読んで書けます。",
+    orgWikiTreeLabel: "組織の Wiki のページ",
     wikiPage: "ページ",
     wikiRevision: "版",
     wikiChildPage: "子のページ",
@@ -98,6 +101,10 @@
     wikiSaveFailed: "保存できませんでした。入力は残してあります。もう一度試してください。",
     wikiDepth: "ページは10段までです。これ以上深い場所には作れません。",
     wikiFrontmatterInvalid: "frontmatter を読めません。本文として表示しています。",
+    wikiProperties: "ページの frontmatter（題を除く）",
+    wikiPropertyKey: "キー",
+    wikiPropertyValue: "値",
+    wikiPropertyEmpty: "（空）",
     wikiDiscardTitle: "書きかけを捨てますか",
     wikiDiscard: "捨てて移る",
     wikiKeepWriting: "続けて書く",
@@ -2066,7 +2073,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     "organization",
     ["today", "sun", () => "今日やること", "today.html"],
     ["notifications", "bell", () => "通知", "notifications.html", 3],
-    ["orgwiki", "file", () => `${t("organization")}の Wiki`, "wiki.html?scope=organization"],
+    ["orgwiki", "file", () => t("orgWiki").replace("{organization}", esc(orgName(D.organizations.find((k) => k.slug === D.organization) || D.organizations[0]))), "wiki.html?scope=organization"],
     "workspace",
     ["inbox", "inbox", () => t("inbox"), "inbox.html", 4],
     ["backlog", "board", () => t("backlog"), "backlog.html"],
@@ -2099,7 +2106,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       if (typeof p === "string") return `<div class="nav-group"><span class="nav-group-label">${p}</span></div>`;
       const [id, ic, label, href, badge] = p;
       const target = PAGES.indexOf(p) > PAGES.indexOf("workspace") ? `${firstHref(href)}${firstHref(href).includes("?") ? "&" : "?"}workspace=${encodeURIComponent(D.workspace)}` : firstHref(href);
-      return `<a class="nav-item" href="${target}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
+      return `<a class="nav-item${id === "orgwiki" ? " is-wrapping" : ""}" href="${target}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
     }).join("");
   }
   // 組織の切り替え。開閉するメニューで、中は各組織へのリンクと、組織の選択の画面へ戻るリンクと、最後に「組織を作る」（ダイアログを開く）。

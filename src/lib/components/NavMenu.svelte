@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
+  import { page } from '$app/state';
   import { NAV_MENU_ID } from '../nav-collapse.svelte.ts';
   import { isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
   import { t } from '../vocabulary.svelte.ts';
+  import { organizationLabel } from '../organization-label.ts';
   import type { NavigationWorkspace } from '../workspace-navigation.svelte.ts';
   import Icon from './Icon.svelte';
 
@@ -55,12 +57,20 @@
       {#if href !== null}
         <a
           class="nav-item"
+          class:is-wrapping={item.label === 'orgWiki'}
           {href}
-          aria-current={current === href || (item.label === 'wiki' && current.startsWith(href + '/'))
+          aria-current={current === href ||
+          ((item.label === 'wiki' || item.label === 'orgWiki') && current.startsWith(href + '/'))
             ? 'page'
             : undefined}
         >
-          <Icon name={item.icon} /><span class="nav-item-label">{t(item.label)}</span>
+          <Icon name={item.icon} /><span class="nav-item-label"
+            >{item.label === 'orgWiki'
+              ? t('orgWiki', {
+                  organization: page.data.organization ? organizationLabel(page.data.organization.organization) : '',
+                })
+              : t(item.label)}</span
+          >
         </a>
       {/if}
     {/each}

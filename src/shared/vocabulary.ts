@@ -12,6 +12,9 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 
 export const dictionary = defineDictionary({
   wiki: 'Wiki',
+  orgWiki: '{organization}の Wiki',
+  orgWikiAccess: 'この組織の全員が、読んで書けます。',
+  orgWikiTreeLabel: '組織の Wiki のページ',
   wikiPage: 'ページ',
   wikiRevision: '版',
   wikiChildPage: '子のページ',
@@ -50,6 +53,10 @@ export const dictionary = defineDictionary({
   wikiSaveFailed: '保存できませんでした。入力は残してあります。もう一度試してください。',
   wikiDepth: 'ページは10段までです。これ以上深い場所には作れません。',
   wikiFrontmatterInvalid: 'frontmatter を読めません。本文として表示しています。',
+  wikiProperties: 'ページの frontmatter（題を除く）',
+  wikiPropertyKey: 'キー',
+  wikiPropertyValue: '値',
+  wikiPropertyEmpty: '（空）',
   wikiDiscardTitle: '書きかけを捨てますか',
   wikiDiscard: '捨てて移る',
   wikiKeepWriting: '続けて書く',
