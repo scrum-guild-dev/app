@@ -104,7 +104,7 @@
     wikiDiscardText: "保存していない題と本文は失われます。",
     wikiPreview: "プレビュー",
 
-    workspaceSwitchLabel: "{name}。{workspace}を切り替える", workspaceSwitchListLabel: "所属する{workspace}",
+    workspaceSwitchLabel: "{workspace} {name}。切り替える", workspaceSwitchListLabel: "所属する{workspace}",
     workspace: "ワークスペース", inbox: "受信箱", backlog: "バックログ", sprint: "スプリント", plan: "計画", epic: "エピック", story: "ストーリー",
     menuCollapse: "メニューを畳む", menuExpand: "メニューを広げる", organizationMoving: "移っています",
     personalOrganizationName: "自分用", createPersonalOrganizationAction: "自分用を作る",

@@ -17,6 +17,11 @@ function list(body: string): string {
 }
 
 describe('ワークスペースの切り替え', () => {
+  test('読み上げの名前に、見えるワークスペースと名前を同じ順序で含める', () => {
+    const label = /aria-label="([^"]+)"/.exec(html())![1];
+    expect(label).toContain(`${word('workspace')} ${current.name}`);
+  });
+
   test('閉じたボタンと名前付き一覧を持ち、今のリンクにだけ aria-current とチェックを出す', () => {
     const body = html();
     expect(body).toContain('aria-expanded="false"');
