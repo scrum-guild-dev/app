@@ -180,7 +180,7 @@ function renderMd(src) {
 
 // ---- 部分の HTML ----
 const person = (id) => `<span class="person">${avatarOf(id)}${esc(user(id).name)}</span>`;
-const fmTable = (rows) => `<div class="table-wrap"><table class="table"><caption class="visually-hidden">ページの frontmatter（題を除く）</caption>
+const fmTable = (rows) => `<div class="table-wrap"><table class="table is-properties"><caption class="visually-hidden">ページの frontmatter（題を除く）</caption>
   <thead><tr><th scope="col">キー</th><th scope="col">値</th></tr></thead>
   <tbody>${rows.map(([k, v]) => `<tr><th scope="row" class="mono is-wrap">${esc(k)}</th><td class="is-wrap">${esc(v) || '<span class="props-note">（空）</span>'}</td></tr>`).join("")}</tbody></table></div>`;
 // ページの頭の表と本文。題に使った title は表に出さない。読めない frontmatter は、表を出さずに知らせ、全文を本文として描く
