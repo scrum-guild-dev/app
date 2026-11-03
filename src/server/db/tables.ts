@@ -24,7 +24,14 @@ export const commonTableColumns = {
     created_at: text,
     updated_at: text,
   },
-  sessions: { token_hash: text, account_id: text, created_at: text, last_used_at: text, expires_at: text },
+  sessions: {
+    token_hash: text,
+    account_id: text,
+    created_at: text,
+    last_used_at: text,
+    expires_at: text,
+    api_token_seen_at: textOrNull,
+  },
   // migrations/0012_add_api_tokens.sql で足した
   api_tokens: {
     token_hash: text,

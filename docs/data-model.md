@@ -162,6 +162,7 @@
 | token_hash | TEXT | PK、`CHECK (length(token_hash) = 64 AND token_hash NOT GLOB '*[^0-9a-f]*')` | Cookie に入れたランダムな ID（32 バイトの乱数の base64url、43文字）の SHA-256 を小文字の16進（64文字）にしたもの。ハッシュする前の値を入れる取り違えを DB で止める。`claim_token_hash` の列（`oauth_states`、`users`、`invitations`）も同じ CHECK を持つ |
 | account_id | TEXT | NOT NULL、FK accounts | |
 | created_at | TEXT | NOT NULL | ログイン（セッションの作成）の時刻。セッションの延長では変えない。`token-create` は、この時刻から `API_TOKEN_REAUTH_MINUTES` 分以内に限る（ちょうどの時刻も含む） |
+| api_token_seen_at | TEXT | UTC のミリ秒付き ISO 8601（24文字、`strftime` と一致）の CHECK。NULL 可 | このセッションが確かめた API トークンの発行日時。NULL は `created_at` を UTC ミリ秒表記へ揃えて読む（旧版と seed の互換用）。既存行も追加時に同じ変換で埋める。読めない作成日時は NULL を残し、読み取りでは最古値 `0000-01-01T00:00:00.000Z` として未確認を隠さない |
 | last_used_at | TEXT | NOT NULL | 使うたびに書き直す |
 | expires_at | TEXT | NOT NULL | `last_used_at` の30日後 |
 
@@ -169,6 +170,8 @@
 - 組織に入れるかは、リクエストのたびにその組織の `users`、`memberships`、`invitations` で確かめる。1つの組織で無効にされたり外れたりしても、セッションは消さない。
 - 書き込みを減らすため、`last_used_at` は前回から1時間以上たったときだけ書き直す。
 - `expires_at <= 定期処理の基準の時刻` の行を、毎分の定期処理で消す（「期限切れの行の掃除」）。
+- 新しいセッションの `api_token_seen_at` は、同じアカウントの有効なセッション（`expires_at` が今より後）の確認日時の最小を引き継ぐ。他に無ければ新しいログインの時刻。置き換える古いセッションも含め、挿入と同じ文の副問い合わせで読む。発行時は、トークンの挿入と同じバッチで発行したセッションだけを発行日時まで進める。確認日時は戻さない。
+- `token-notice-seen` は画面が見せた最新の発行日時まで進める。そのアカウントの最新の発行日時を上限とし、未来の日時でも以後の発行を確認済みにはしない。他のセッションは書き換えない。
 
 ### api_tokens
 
@@ -190,7 +193,7 @@
 - 入れる組織を失ったことでは取り消さない（`sessions` と同じ。アカウントがあれば、組織の外の操作で使える）。`revoked_at` を書くのは、本人が取り消したときと、設定の全失効（`credentials-revoke-all`。「書き込みの単位」）を実行したときだけ。取り消したトークンは戻さない。
 - 行数の上限: 1アカウントの有効な行（`revoked_at` が空で、`expires_at` が基準の時刻より後）は20件まで（`API_TOKEN_MAX_ACTIVE`）。発行の `INSERT` を `INSERT ... SELECT ... WHERE (有効な行の数) < 20` の1文にして守り、同時に発行しても超えない。入らなかったとき（`changes` が 0）は 409 の `conflict`（`details.reason` は `limit`）。取り消し済みと期限切れの行は数えない。一覧は上限と同じ件数までを返す（超えないはずの保険）。
 - 取り消し済みの行も、`expires_at` を過ぎるまで残す。期限を過ぎた行（`expires_at <= 定期処理の基準の時刻`）を、毎分の定期処理で消す（「期限切れの行の掃除」）。
-- 発行、一覧、取り消しは、マイプロフィールの画面から行う操作（`token-create`、`token-list`、`token-revoke`。どれも Cookie のセッションだけ）。発行は 1 行を `INSERT` し、生の値は応答で1回だけ返す。一覧は呼んだ人の、`revoked_at` が空で `expires_at` が今より後の行を、`created_at` の新しい順に返し、値は返さない（`id` は `token_hash`）。取り消しは呼んだ人の行だけを指し、他人の行と存在しない行は同じ 404。先に行を読んで 404 と成功を分け、書く文は `revoked_at IS NULL` の行だけを `UPDATE` するので、取り消し済みの行の `revoked_at` は書き直さない。
+- 発行、一覧、取り消しは、マイプロフィールの画面から行う操作（`token-create`、`token-list`、`token-revoke`。どれも Cookie のセッションだけ）。発行は 1 行を `INSERT` し、発行したセッションの確認日時の更新を同じバッチで行う。生の値は応答で1回だけ返す。一覧は呼んだ人の、`revoked_at` が空で `expires_at` が今より後の行を、`created_at` の新しい順に返し、値は返さない（`id` は `token_hash`）。取り消しは呼んだ人の行だけを指し、他人の行と存在しない行は同じ 404。先に行を読んで 404 と成功を分け、書く文は `revoked_at IS NULL` の行だけを `UPDATE` するので、取り消し済みの行の `revoked_at` は書き直さない。
 
 ### account_consents
 

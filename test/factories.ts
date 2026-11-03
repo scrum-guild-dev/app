@@ -133,6 +133,7 @@ export async function createSession(accountId: string, overrides: Partial<Row<Co
     created_at: new Date().toISOString(),
     last_used_at: AT,
     expires_at: '2026-11-19T00:00:00.000Z',
+    api_token_seen_at: null,
     ...overrides,
   };
   const db = commonDb(env);

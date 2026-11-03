@@ -7,6 +7,7 @@ vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 import { load } from '../routes/[slug]/+layout.ts';
 import { operationPath } from '../shared/operations/define.ts';
 import { myOrganizations, organizationInfo } from '../shared/operations/organization/index.ts';
+import { tokenNotice } from '../shared/operations/session/token-notice.ts';
 import { invitationList } from '../shared/operations/workspace/index.ts';
 
 type Reply = { status: number; body: unknown };
@@ -49,9 +50,10 @@ async function run(replies: Record<string, Reply>) {
     const reply = replies[String(input)] ?? { status: 500, body: 'no reply' };
     return Promise.resolve(new Response(JSON.stringify(reply.body), { status: reply.status }));
   }) as typeof fetch;
-  const event = { params: { slug: 'aoba' }, fetch: fake, url: new URL('http://localhost/aoba') };
-  const data = (await (load as (e: unknown) => Promise<{ invitationCount: number }>)(event)) as {
+  const event = { params: { slug: 'aoba' }, fetch: fake, url: new URL('http://localhost/aoba'), depends: vi.fn() };
+  const data = (await (load as (e: unknown) => Promise<{ invitationCount: number; tokenNotice: unknown }>)(event)) as {
     invitationCount: number;
+    tokenNotice: unknown;
   };
   return { data, calls };
 }
@@ -84,4 +86,20 @@ test('招待が届いていても invitation-list が読めなければ 0（印�
     [listPath]: { status: 500, body: { error: { code: 'internal', message: 'x' } } },
   });
   expect(data.invitationCount).toBe(0);
+});
+
+test('発行の知らせは専用の操作で読み、読めなくても組織の画面を残す', async () => {
+  const notice = {
+    count: 1,
+    latest: { name: '手元の CLI', scope: 'read', created_at: '2026-11-04T01:30:00.000Z', revoked: false },
+  };
+  const success = await run({
+    [orgPath]: organization,
+    [minePath]: mine([]),
+    [operationPath(tokenNotice)]: { status: 200, body: notice },
+  });
+  expect(success.data.tokenNotice).toEqual(notice);
+  const failure = await run({ [orgPath]: organization, [minePath]: mine([]) });
+  expect(failure.data.tokenNotice).toBeNull();
+  expect(failure.data.invitationCount).toBe(0);
 });

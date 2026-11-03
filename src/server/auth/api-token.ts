@@ -7,7 +7,7 @@ import {
   API_TOKEN_PATTERN,
   type ApiTokenScope,
 } from '../../shared/api-token.ts';
-import { commonDb, type CommonDb, type Statement } from '../db/index.ts';
+import { apiTokenSeenAt, commonDb, previousStatementChanged, type CommonDb, type Statement } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { randomToken, sha256Hex } from './tokens.ts';
 
@@ -39,7 +39,14 @@ export type IssuedApiToken = { raw: string; tokenHash: string; expiresAt: string
 // 一覧と応答に出す id（ハッシュ）と期限も返す
 export async function issueApiTokenWith(
   db: CommonDb,
-  input: { accountId: string; name: string; scope: ApiTokenScope; now: Date; lifetimeDays?: number },
+  input: {
+    accountId: string;
+    name: string;
+    scope: ApiTokenScope;
+    now: Date;
+    lifetimeDays?: number;
+    sessionTokenHash?: string;
+  },
 ): Promise<IssuedApiToken> {
   const lifetimeDays = input.lifetimeDays ?? API_TOKEN_MAX_LIFETIME_DAYS;
   if (!Number.isInteger(lifetimeDays) || lifetimeDays < 1 || lifetimeDays > API_TOKEN_MAX_LIFETIME_DAYS) {
@@ -50,7 +57,7 @@ export async function issueApiTokenWith(
   const expiresAt = new Date(input.now.getTime() + lifetimeDays * DAY_MS).toISOString();
   const createdAt = input.now.toISOString();
   // 有効な行の数の確かめと INSERT を1文にする。読んでから書くと、同時の発行が揃って上限を超える
-  const [inserted] = await db.batch([
+  const statements: Statement<'common'>[] = [
     db.statement((q) =>
       q
         .insertInto('api_tokens')
@@ -90,7 +97,27 @@ export async function issueApiTokenWith(
             ),
         ),
     ),
-  ]);
+  ];
+  const sessionTokenHash = input.sessionTokenHash;
+  if (sessionTokenHash !== undefined) {
+    // 上限で発行できなかったときは確認を進めない。発行と同じバッチで自分のセッションだけを更新する。
+    statements.push(
+      db.statement((q) =>
+        q
+          .updateTable('sessions')
+          .set((eb) => ({
+            api_token_seen_at: eb.fn<string>('max', [
+              apiTokenSeenAt(eb.ref('api_token_seen_at'), eb.ref('created_at')),
+              eb.val(createdAt),
+            ]),
+          }))
+          .where('account_id', '=', input.accountId)
+          .where('token_hash', '=', sessionTokenHash)
+          .where(previousStatementChanged),
+      ),
+    );
+  }
+  const [inserted] = await db.batch(statements);
   if (inserted.changes === 0) throw new ApiError(409, 'conflict', { reason: API_TOKEN_LIMIT_REASON });
   return { raw, tokenHash, expiresAt };
 }
