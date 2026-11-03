@@ -655,7 +655,7 @@ export const dictionary = defineDictionary({
   // 自分用の行の人数 / 上限の列。値は無い（空）ことを示すダッシュ
   operatorSeatsNone: '—',
   // ダッシュは読み上げで意味が伝わらないので、見た目のダッシュは読み上げから外し、同じ場所に見えない文言を添える
-  operatorSeatsNoneLabel: '人数の上限は無い',
+  operatorSeatsNoneLabel: '本人1人だけ',
   // {size} は GB か MB の数（1 GB 未満は MB。src/lib/format.ts の quotaSize）。空白は不可分の空白
   operatorQuotaSize: '{size} GB',
   operatorQuotaSizeMb: '{size} MB',

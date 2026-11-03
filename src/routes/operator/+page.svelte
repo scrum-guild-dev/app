@@ -252,7 +252,7 @@
                   </td>
                   <td class="is-num" data-label={t('operatorColumnSeats')}>
                     {#if organization.kind === 'personal'}
-                      <!-- 自分用は人数が本人1人で上限を持たないので、空（ダッシュ）にし、「上限に達した」も付けない -->
+                      <!-- 自分用は本人1人だけ（人数の守りは上限の値でなく kind で行う）なので、空（ダッシュ）にし、「上限に達した」も付けない -->
                       <span class="props-note" aria-hidden="true">{t('operatorSeatsNone')}</span>
                       <span class="visually-hidden">{t('operatorSeatsNoneLabel')}</span>
                     {:else}
