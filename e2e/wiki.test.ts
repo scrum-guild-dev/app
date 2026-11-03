@@ -7,7 +7,7 @@ import { failOperation, rewriteOperation } from './operations.ts';
 test('自分用の組織の Wiki は組織の表示名で案内する', async ({ page }) => {
   await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
     ...output,
-    organization: { ...output.organization, kind: 'personal' },
+    organization: { ...output.organization, kind: 'personal' as const },
   }));
   await page.goto('/aoba/wiki');
   await expect(page.locator('.nav-item', { hasText: '自分用の Wiki' })).toBeVisible();
