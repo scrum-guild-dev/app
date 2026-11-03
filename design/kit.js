@@ -1731,7 +1731,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     closeWorkspace: () => {
       const target = D.admin.workspaces.find((w) => !w.closed);
       return openDialog(`「${esc(target ? target.name : "")}」を終了しますか？`,
-        `<p>終了すると読み取り専用になり、中の書き込みはすべてできなくなります。この画面からいつでも再開できます。</p>`,
+        `<p>終了すると読み取り専用になり、中の書き込みはすべてできなくなります。再開はこの画面から行えます。</p>`,
         `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("workspace")}を終了しました">終了する</button>`);
     },
     // ユーザーを無効にする前の確認（本番の UsersSetting の ConfirmDialog）。押した行の data-name と data-admin で文を作る。
