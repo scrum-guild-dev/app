@@ -25,9 +25,8 @@ import {
   validatePlan,
 } from './plan.mjs';
 import { locate, probeExec } from './probe.mjs';
+import { contextOptions } from './context.mjs';
 
-// 録画の画面。上に 80px の帯を足して 1280×720 にする（compose.py）
-const VIEWPORT = { width: 1280, height: 640 };
 const MARK_STYLE = '4px solid #ff8c3c';
 
 function fail(message) {
@@ -53,7 +52,7 @@ function readPlan(path) {
 
 // ワークツリーの根（cwd）の Playwright、seed のセッション、ポートで、seed のセッションを持つブラウザを開く。
 // 録画と試しで、向き先と外へ出さない制限を同じにする
-async function openSession(plan, contextOptions) {
+async function openSession(plan, videoDir) {
   // 別のコピーの値を混ぜない
   const root = process.cwd();
   const { chromium } = createRequire(join(root, 'package.json'))('@playwright/test');
@@ -70,7 +69,7 @@ async function openSession(plan, contextOptions) {
 
   const browser = await chromium.launch();
   try {
-    const context = await browser.newContext({ viewport: VIEWPORT, timezoneId: 'Asia/Tokyo', ...contextOptions });
+    const context = await browser.newContext(contextOptions(plan, videoDir));
     await context.addCookies([
       { name: sessionCookieName(base), value: SEED_SESSIONS[who].token, url: base, httpOnly: true },
     ]);
@@ -118,7 +117,7 @@ async function main(planPath, outArg) {
   mkdirSync(out, { recursive: true });
   console.log(`見積もり: ${seconds.toFixed(1)} 秒`);
 
-  const { browser, context, base } = await openSession(plan, { recordVideo: { dir: out, size: VIEWPORT } });
+  const { browser, context, base } = await openSession(plan, out);
   try {
     const page = await context.newPage();
 

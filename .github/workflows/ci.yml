@@ -115,6 +115,8 @@ jobs:
       - uses: ./.github/actions/setup
       # scripts/acceptance-video.test.ts が、判定の HTML を chromium で動かす。無いとそのテストがスキップされる
       - uses: ./.github/actions/playwright
+      # 実録画の固定寸法を ffprobe で検査する。未導入によるスキップを防ぐ
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: pnpm test:node
 
   migration:

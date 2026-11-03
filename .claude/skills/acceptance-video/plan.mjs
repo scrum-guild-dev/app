@@ -20,7 +20,7 @@ export const MAX_CAPTION_CHARS = 38;
 const VERBS = ['goto', 'click', 'check', 'select', 'fill', 'wait', 'pause'];
 const ACTION_EXTRA_KEYS = { select: ['label'], fill: ['text'], wait: ['state'] };
 const WAIT_STATES = ['visible', 'hidden', 'attached', 'detached'];
-const PLAN_KEYS = ['who', 'steps'];
+const PLAN_KEYS = ['who', 'screen', 'steps'];
 const STEP_KEYS = ['caption', 'read', 'hold', 'mark', 'actions'];
 const TARGET_KEYS = ['css', 'role', 'label'];
 const LOCATOR_KEYS = [...TARGET_KEYS, 'name', 'exact', 'within', 'nth'];
@@ -110,6 +110,21 @@ export function pausesAfter(actions, i) {
 export function validatePlan(plan) {
   if (!isObject(plan)) return ['手順書がオブジェクトでない'];
   const problems = unknownKeys(plan, PLAN_KEYS, '手順書');
+  if (plan.screen !== undefined) {
+    if (!isObject(plan.screen)) problems.push('screen は width、height、touch のオブジェクト');
+    else {
+      problems.push(...unknownKeys(plan.screen, ['width', 'height', 'touch'], 'screen'));
+      for (const key of ['width', 'height']) {
+        const value = plan.screen[key];
+        if (value !== undefined && !(Number.isInteger(value) && value >= 320 && value <= 3840)) {
+          problems.push(`screen.${key} は 320 から 3840 の整数`);
+        }
+      }
+      if (plan.screen.touch !== undefined && typeof plan.screen.touch !== 'boolean') {
+        problems.push('screen.touch は true か false');
+      }
+    }
+  }
   if (plan.who !== undefined && !isText(plan.who)) problems.push('who は seed のセッションの名前（admin など）');
   if (!Array.isArray(plan.steps) || plan.steps.length === 0) return [...problems, 'steps が空'];
   plan.steps.forEach((step, i) => problems.push(...stepProblems(step, `steps[${i}]`)));

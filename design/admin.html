@@ -45,7 +45,7 @@ SQ.mount("admin", () => `
   ], `<button class="btn is-primary" type="button" data-dialog="createWorkspace">${icon("plus")}${t("workspace")}を作る</button>`)}
   <div class="settings">
     ${setting("お試し", "継続して使うには、運用者に問い合わせてください。", `
-      <p class="mono">お試しの期限（UTC）: 2026-11-19</p>
+      <p class="mono">${esc(SQ.formatTrialStopDateTime("2026-11-19"))} ごろに止まります</p>
       ${TRIAL_STATE === "expired"
         ? `<p><span class="chip is-danger">${icon("alert")}お試しの期限を過ぎています</span></p>`
         : TRIAL_STATE === "lastday"

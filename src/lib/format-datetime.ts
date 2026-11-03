@@ -19,3 +19,10 @@ export function formatDateTime(iso: string, timeZone?: string): string {
     .format(time)
     .replace(/\s/, NO_BREAK_SPACE);
 }
+
+// お試しは UTC の期限日の翌日 0 時から、毎時の定期処理で止まる。
+export function formatTrialStopDateTime(endsOn: string, timeZone?: string): string {
+  const date = new Date(`${endsOn}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return formatDateTime(date.toISOString(), timeZone);
+}

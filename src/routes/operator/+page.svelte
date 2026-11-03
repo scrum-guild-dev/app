@@ -15,7 +15,7 @@
   import ReassignAdminDialog from '../../lib/components/ReassignAdminDialog.svelte';
   import { focusPageHeading } from '../../lib/focus-heading.ts';
   import { formatCount, formatUtcDate, quotaSize } from '../../lib/format.ts';
-  import { formatDateTime } from '../../lib/format-datetime.ts';
+  import { formatDateTime, formatTrialStopDateTime } from '../../lib/format-datetime.ts';
   import { isUnauthenticated, loginUrl } from '../../lib/login-redirect.ts';
   import { showToast } from '../../lib/toast.svelte.ts';
   import { t } from '../../lib/vocabulary.svelte.ts';
@@ -221,7 +221,9 @@
                     >
                     {#if organization.self_created}<span class="chip">{t('operatorSelfCreated')}</span>{/if}
                     {#if organization.trial_ends_on !== null}
-                      <span class="chip">{t('orgTrialEndsOn', { date: organization.trial_ends_on })}</span>
+                      <span class="chip"
+                        >{t('orgTrialEndsOn', { datetime: formatTrialStopDateTime(organization.trial_ends_on) })}</span
+                      >
                       {#if organization.trial_expired}<span class="chip is-danger"
                           ><Icon name="alert" />{t('trialExpired')}</span
                         >{/if}
