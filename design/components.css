@@ -1751,7 +1751,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
    今開いているページは aria-current="page" で、色に加えて太字と左の線で示す。ARIA の tree の役割は使わない（矢印キーの移動を持たず、
    行は Tab で移る普通のリンクのため）。並べ替えは、「並べ替える」を押している間だけ行に出る .order-actions のボタンで行う */
 .layout-wiki { display: grid; grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); gap: var(--space-8); align-items: start; }
-.wiki-side > .field-hint { overflow-wrap: anywhere; }
+.wiki-side .field-hint { overflow-wrap: anywhere; }
 .wiki-side { display: grid; gap: var(--space-3); min-width: 0; align-content: start; }
 .wiki-main { display: grid; gap: var(--space-5); min-width: 0; align-content: start; }
 .wiki-head { display: grid; gap: var(--space-3); min-width: 0; }
