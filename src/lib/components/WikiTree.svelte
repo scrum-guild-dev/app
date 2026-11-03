@@ -19,11 +19,13 @@
     wiki,
     currentId,
     canWrite = false,
+    searching = false,
   }: {
     pages: OutputOf<typeof workspaceWikiTree>['pages'];
     wiki: WikiClient;
     currentId: string | null;
     canWrite?: boolean;
+    searching?: boolean;
   } = $props();
   let ordering = $state(false);
   let busy = $state(false);
@@ -242,28 +244,30 @@
   {/each}
 {/snippet}
 
-{#if canWrite}<button
-    class="btn"
-    type="button"
-    disabled={busy}
-    aria-pressed={ordering}
-    class:is-on={ordering}
-    onclick={() => {
-      ordering = !ordering;
-    }}>{t('wikiReorder')}</button
-  >{/if}
-<p class="field-hint" class:callout={failed} class:is-warn={failed}>{feedback}</p>
-<nav aria-label={t(wiki.treeLabel)}>
-  <ul class="wiki-tree panel">{@render branch(null, 1)}</ul>
-</nav>
+{#if !searching}
+  {#if canWrite}<button
+      class="btn"
+      type="button"
+      disabled={busy}
+      aria-pressed={ordering}
+      class:is-on={ordering}
+      onclick={() => {
+        ordering = !ordering;
+      }}>{t('wikiReorder')}</button
+    >{/if}
+  <p class="field-hint" class:callout={failed} class:is-warn={failed}>{feedback}</p>
+  <nav aria-label={t(wiki.treeLabel)}>
+    <ul class="wiki-tree panel">{@render branch(null, 1)}</ul>
+  </nav>
 
-<p class="drag-note" role="status">
-  {dropId
-    ? t(dropPart === 'child' ? 'wikiDropChild' : dropPart === 'before' ? 'wikiDropBefore' : 'wikiDropAfter', {
-        title: pages.find((item) => item.id === dropId)?.title ?? '',
-      })
-    : ''}
-</p>
+  <p class="drag-note" role="status">
+    {dropId
+      ? t(dropPart === 'child' ? 'wikiDropChild' : dropPart === 'before' ? 'wikiDropBefore' : 'wikiDropAfter', {
+          title: pages.find((item) => item.id === dropId)?.title ?? '',
+        })
+      : ''}
+  </p>
+{/if}
 <WikiMoveDialog
   bind:this={moveDialog}
   {pages}
