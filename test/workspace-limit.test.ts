@@ -326,6 +326,8 @@ describe('作成と再開の並行操作', () => {
     async (first, second) => {
       const { target, a, b } = await closedTarget();
       let fired = false;
+      let activeBeforeOther: number | undefined;
+      let otherStatus: number | undefined;
       let afterOther: Awaited<ReturnType<typeof countRows>> | undefined;
       const requestEnv = envWithD1Hooks(testEnv, {
         afterQuery: async (sql) => {
@@ -335,15 +337,17 @@ describe('作成と再開の並行操作', () => {
             sql.includes('"closed_at" is null')
           ) {
             fired = true;
-            expect(await activeCount(target)).toBe(2);
+            activeBeforeOther = await activeCount(target);
             const res = second === '作成' ? await create(target) : await reopen(target, b.id);
-            expect(res.status).toBe(200);
+            otherStatus = res.status;
             afterOther = await countRows(target.organization);
           }
         },
       });
       const res = first === '作成' ? await create(target, requestEnv) : await reopen(target, a.id, requestEnv);
       expect(fired).toBe(true);
+      expect(activeBeforeOther).toBe(2);
+      expect(otherStatus).toBe(200);
       expect(res.status).toBe(409);
       expect(await res.json()).toMatchObject({
         error: { code: 'workspace_limit_reached', details: { used: 3, limit: 3 } },

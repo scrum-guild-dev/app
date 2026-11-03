@@ -79,7 +79,7 @@ SQ.mount("admin", () => `
           <td class="mono" data-label="最後に入った日">10/20</td>
           <td class="is-actions"></td></tr></tbody></table></div>
       <p class="props-note">自分用の${t("organization")}（<code>kind</code> が <code>personal</code>）の表示の見本です。${t("admin")}の切り替えは全員の行で押せなくし、理由を表の上に出して、読み上げの説明にも結びます。サーバーも指名と解除を 409 の <code>personal_organization</code> で断ります。</p>`)}
-    ${setting(t("workspace"), `終了した${t("workspace")}は読み取り専用になり、${t("connection")}はすべて止まります。再開はこの画面から行います。${t("member")}の数は${t("leader")}を含みます。`, !A.workspaces.length
+    ${setting(t("workspace"), `作った${t("workspace")}の一覧です。終了した${t("workspace")}も含みます。${t("member")}の数は${t("leader")}を含みます。`, !A.workspaces.length
       ? SQ.emptyState("users", `まだ${t("workspace")}がありません`,
           `チームや用途ごとに作ります。${t("member")}の招待は、作った${t("workspace")}の${t("leader")}が行います。`,
           `<button class="btn is-sm" type="button" data-dialog="createWorkspace">${icon("plus")}${t("workspace")}を作る</button>`)

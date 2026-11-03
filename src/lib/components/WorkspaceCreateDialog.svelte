@@ -31,7 +31,18 @@
   // 完了の表示を×、Esc、背景で閉じたら、今の画面に残る。
   // 自分用の組織の個数の上限（409 の workspace_limit_reached）で断られたら、上限と今の個数を、ダイアログの中の警告（callout is-warn）に出す。
   // 送り始めた後に部品が外れた（画面を離れた、組織が替わった）ときは、古い応答で完了の表示にせず、状態も更新しない（generation）
-  let { slug, meId, oncreated }: { slug: string; meId: string; oncreated?: (workspaceId: string) => void } = $props();
+  let {
+    slug,
+    meId,
+    manageHere = false,
+    oncreated,
+  }: {
+    slug: string;
+    meId: string;
+    // 管理画面の一覧から開いたときは、同じ画面で枠を空ける方法を案内する。
+    manageHere?: boolean;
+    oncreated?: (workspaceId: string) => void;
+  } = $props();
 
   type Candidate = { id: string; name: string };
 
@@ -245,7 +256,11 @@
         } else if (result.status === 409 && result.error?.code === 'workspace_limit_reached') {
           // 数が読めない応答（details が無いか不正）は、数を含まない文言にする
           const limit = workspaceLimitDetailsOf(result.error.details);
-          const common = { workspace: t('workspace'), adminPage: t('pageOrgAdmin') };
+          const workspace = t('workspace');
+          const guidance = manageHere
+            ? t('workspaceLimitCreateHere', { workspace })
+            : t('workspaceLimitCreateElsewhere', { workspace, adminPage: t('pageOrgAdmin') });
+          const common = { workspace, guidance };
           limitMessage =
             limit === undefined
               ? t('workspaceLimitReachedUnknown', common)
