@@ -1315,7 +1315,7 @@ export const dictionary = defineDictionary({
   // お試しの期限（組織の管理の画面。期限の日付は運用者の一覧も使う）
   orgTrialTitle: 'お試し',
   orgTrialDesc: '継続して使うには、運用者に問い合わせてください。',
-  orgTrialEndsOn: 'お試しの期限（UTC）: {date}',
+  orgTrialEndsOn: '{datetime} ごろに止まります',
   orgTrialDaysLeft: '残り {days} 日',
   // 期限の当日（days_left が 0）。当日まで使えることを伝え、「残り 0 日」を終了済みに読ませない
   orgTrialLastDay: '今日までです',

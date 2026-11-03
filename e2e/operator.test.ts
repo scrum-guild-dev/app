@@ -110,7 +110,10 @@ test.describe('運用者', () => {
     ]);
     await page.goto('/operator');
     const rows = page.locator('.table tbody tr');
-    await expect(rows.filter({ hasText: 'あおば開発' })).toContainText('お試しの期限（UTC）: 2026-11-30');
+    await expect(rows.filter({ hasText: 'あおば開発' })).toContainText('2026/12/01 09:00 ごろに止まります');
+    await expect(rows.filter({ hasText: 'あおば開発' })).not.toContainText('UTC');
+    await expect(rows.filter({ hasText: '期限を過ぎた組織' })).toContainText('2026/11/01 09:00 ごろに止まります');
+    await expect(rows.filter({ hasText: '期限のない組織' })).not.toContainText('ごろに止まります');
     await expect(rows.filter({ hasText: 'あおば開発' })).not.toContainText('お試しの期限を過ぎています');
     await expect(rows.filter({ hasText: '期限を過ぎた組織' }).locator('.chip.is-danger')).toHaveText(
       'お試しの期限を過ぎています',
