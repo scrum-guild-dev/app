@@ -24,7 +24,7 @@ const { t, icon, esc } = SQ;
 function render() {
   document.getElementById("gate").innerHTML = `<div class="gate"><div class="gate-stack">
     <section class="gate-sheet">
-      <div class="gate-brand">${SQ.brandMark}<span class="brand-name">Scrum Guild</span></div>
+      <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
       <h1 class="gate-title">ログイン</h1>
       <p>いずれかの${t("organization")}に所属しているか、招待されている人がログインできます。招待されたときの手段でログインしてください。</p>
       <button class="btn is-wide" type="button">${icon("git")}GitHub でログイン</button>
@@ -34,7 +34,7 @@ function render() {
       <div class="form-actions" role="group" aria-label="利用規約とプライバシーポリシー"><a class="btn is-sm is-quiet" href="#">利用規約</a><a class="btn is-sm is-quiet" href="#">プライバシーポリシー</a></div>
     </section>
     <section class="gate-sheet">
-      <div class="gate-brand">${SQ.brandMark}<span class="brand-name">Scrum Guild</span></div>
+      <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
       <h1 class="gate-title">会員登録</h1>
       <p>GitHub か Google のアカウントで、アカウントを作ります。アカウントだけ作った人は無料で、招待されて入る人も無料です。自分の${t("organization")}を作った場合は、30日間お試しで使い始められます。</p>
       <button class="btn is-wide" type="button">${icon("git")}GitHub で会員登録</button>
@@ -76,7 +76,7 @@ function render() {
   </div></div>
   <div class="gate is-reading" style="min-height:0"><div class="gate-stack">
     <section class="gate-sheet">
-      <div class="gate-brand">${SQ.brandMark}<span class="brand-name">Scrum Guild</span></div>
+      <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
       <h2 class="gate-title">プライバシーポリシー</h2>
       <p>改定日: 2026-10-31</p>
       <div class="doc-box">

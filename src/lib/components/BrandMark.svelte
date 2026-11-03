@@ -1,11 +1,17 @@
-<!-- ロゴのマーク。static/favicon.svg と kit.js の brandMark と同じ形と色で、テーマで変えない（scripts/design-parity.test.ts が突き合わせる） -->
-<svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"
-  ><path fill="#b58020" d="M7 2h18a3 3 0 0 1 3 3v25L16 22 4 30V5a3 3 0 0 1 3-3Z" /><path
-    d="m10 13 4 4 8-8"
-    fill="none"
-    stroke="#fffaf0"
-    stroke-width="3.5"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  /></svg
->
+<script lang="ts">
+  import { asset } from '$app/paths';
+</script>
+
+<!-- kit.js の brandMark と同じ画像。読み上げ名は呼び出し元が受け持つ -->
+<span class="brand-art" aria-hidden="true">
+  <img
+    class="brand-name"
+    src={asset('brand/header/logo-transparent-600.png')}
+    srcset={`${asset('brand/header/logo-transparent-600.png')} 600w, ${asset('brand/header/logo-transparent-1200.png')} 1200w`}
+    sizes="240px"
+    width="600"
+    height="200"
+    alt=""
+  />
+  <img class="brand-mark" src={asset('brand/master/symbol.png')} width="629" height="678" alt="" />
+</span>

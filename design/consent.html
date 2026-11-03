@@ -44,7 +44,7 @@ const form = (id, checked, busy = false) => `<label class="choice is-static is-c
 </div><span class="field-hint is-reserved" id="${id}" aria-hidden="${checked ? "true" : "false"}">${t("consentSubmitHint")}</span>`;
 const warn = (text) => `<div class="callout is-warn" role="alert">${icon("alert")}<span>${text}</span></div>`;
 const sheet = (body, note) => `<section class="gate-sheet">
-  <div class="gate-brand">${SQ.brandMark}<span class="brand-name">${app}</span></div>
+  <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">${app}</span></div>
   <h1 class="gate-title">${t("consentTitle")}</h1>
   ${body}
   <p class="gate-note">${note}</p>

@@ -193,7 +193,7 @@ test.describe('高さの低い指で押す画面の左のメニュー', () => {
     await signIn(context, baseURL, 'admin');
   });
 
-  // overflows: 列が画面より長く、中で送る必要がある高さ（Wiki を含む全項目は 1024×600 でも溢れる）
+  // overflows: 横組みロゴと Wiki を含む列は 1024×600 で溢れ、1024×768 では余白まで収まる。
   for (const viewport of [
     { width: 844, height: 390, overflows: true },
     { width: 1024, height: 600, overflows: true },

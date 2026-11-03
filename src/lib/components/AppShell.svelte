@@ -42,7 +42,7 @@
       <div class="binding-head">
         <a class="brand" href={resolve('/[slug]', { slug })}>
           <BrandMark />
-          <span class="brand-name">{t('appName')}</span>
+          <span class="visually-hidden">{t('appName')}</span>
         </a>
         <button
           class="nav-toggle"

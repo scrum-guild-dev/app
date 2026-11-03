@@ -240,13 +240,13 @@ const SECTIONS = [
        <div class="cat-row"><span class="cat-name" style="width:110px">--shadow-sheet</span><span style="width:120px;height:44px;background:var(--color-surface);border:1px solid var(--color-line);box-shadow:var(--shadow-sheet)"></span></div>
      </div></div>`,
     ["影は「貼り紙」（--shadow-sheet）、ゲームの面の光（--shadow-panel、現代風だけ）、上に浮く物（--shadow-float、引き出しなど）の3つだけ。", "区切りの線（--rule-double）は、画面の見出しの下、メニューの境、台帳と木の左端、列の見出しの下に使う。中世風では二重罫になる。"])],
-  ["logo", "ロゴ", () => block("logo", "ロゴ", "金色の旗と生成りのチェックのマークに、名前を横に組む。マークは favicon（static/favicon.svg）と同じ形と色。",
+  ["logo", "ロゴ", () => block("logo", "ロゴ", "提供されたオレンジとチャコールの横組みロゴ。全テーマで白い下地に載せ、畳んだメニューだけマーク単体にする。",
     `<div class="two">
-      <div class="field"><span class="field-label">左のメニューの上（26px）</span><span class="brand">${SQ.brandMark}<span class="brand-name">Scrum Guild</span></span></div>
-      <div class="field"><span class="field-label">枠の外の画面の先頭（34px）</span><div class="gate-brand">${SQ.brandMark}<span class="brand-name">Scrum Guild</span></div></div>
+      <div class="field"><span class="field-label">左のメニューの上（最大168px）</span><span class="brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></span></div>
+      <div class="field"><span class="field-label">枠の外の画面の先頭（最大240px）</span><div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div></div>
     </div>`,
-    ["マークの色はテーマで変えない。タブの favicon と画面のロゴを同じ印に見せるため。", "マークは aria-hidden にし、名前は横の文字で読ませる（読み上げは「Scrum Guild」の1回）。", "マークだけを置かない。名前は通常の文字の大きさなら1行に収まり、文字を拡大したときは、はみ出さずに折り返す。", "形や色を変えるときは、static/favicon.svg、kit.js の brandMark、BrandMark.svelte をそろえて直し（scripts/design-parity.test.ts が突き合わせる）、static/favicon.ico を scripts/generate-favicon.ts で作り直す。"],
-    ".brand .brand-mark .brand-name / .gate-brand / SQ.brandMark")],
+    ["画像の形と色はテーマで変えない。白い下地でダークテーマでも名前を読めるようにする。", "画像は aria-hidden にし、視覚的に隠した名前で「Scrum Guild」と1回だけ読ませる。", "横組みロゴには名前が含まれるので、文字を横に重ねて表示しない。メニューを畳んだときだけマーク単体を出す。", "原本は design/brand/。pnpm exec node scripts/generate-favicon.ts で static/brand/ に同期する。"],
+    ".brand .brand-art .brand-name .brand-mark / .gate-brand / SQ.brandMark")],
   ["icons", "アイコン", () => block("icons", "アイコン", "24px の格子に線だけで描く。icons.js を読み込むとスプライトが入る。",
     `<div class="field"><span class="field-label">ゲームの物</span><div class="cat-grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${GAME_ICONS.map(([n, word, tone, role]) => `<div class="icon-cell">${icon(n, tone)}<b>${word}</b><span>${n}</span><span>${role}</span></div>`).join("")}</div></div>
      <div class="field"><span class="field-label">すべて</span><div class="cat-grid" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr))">${(window.SQ_ICONS || []).map((n) => `<div class="icon-cell">${icon(n)}<span>${n}</span></div>`).join("")}</div></div>`,
@@ -537,7 +537,7 @@ const SECTIONS = [
     ["ボタンで開き、Tab でリンクを選び、Enter で移る。矢印キーだけでは移らない。", "Esc、外側を押す、Tab で外へ出る、リンクを押すと閉じる。中にフォーカスがあればボタンへ戻す。", "一覧の高さは 40vh まで。組織の切り替えと同じスタイルで、長い名前は折り返す。"],
     ".ws-menu .ws-menu-button .ws-menu-list / SQ.workspaceMenuHtml()")],
   ["nav-collapse", "左のメニューの折りたたみ", () => block("nav-collapse", "左のメニューの折りたたみ", "761px 以上では、ブランド横のボタンで左のメニューを 64px のアイコン列へ畳む。もう一度押すと 240px に戻る。下の見本は、ホバーのできる端末（マウスやトラックパッド）で見る。指だけのタブレットでは畳まないので、広げた列で出る。",
-    `<div class="app" data-nav-collapsed="true" style="min-height:260px"><aside class="binding"><div class="binding-inner"><div class="binding-head"><a class="brand" href="#nav-collapse">${SQ.brandMark}<span class="brand-name">Scrum Guild</span></a><button class="nav-toggle" type="button" aria-expanded="false" aria-controls="cat-nav" aria-label="${t("menuExpand")}">${icon("panel")}<span class="nav-tip" aria-hidden="true">${t("menuExpand")}</span></button></div><div class="org-menu"><button class="org-menu-button" type="button" aria-label="あおば開発。組織を切り替える。届いた招待あり"><span class="org-menu-label">${t("organization")}</span><b>あおば開発</b><span class="org-menu-invite" aria-hidden="true"></span>${icon("swap")}${icon("chevron")}<span class="nav-tip" aria-hidden="true">あおば開発<small>届いた招待あり</small></span></button></div><nav class="nav" id="cat-nav"><div class="nav-group"><span class="nav-group-label">${t("workspace")}</span></div><a class="nav-item" href="#nav-collapse" aria-current="page">${icon("sun")}<span class="nav-item-label">${t("pageToday")}</span></a><a class="nav-item" href="#nav-collapse">${icon("board")}<span class="nav-item-label">${t("backlog")}</span></a></nav></div></aside><div class="sheet"><main class="content"><p>本文の幅が広がる見本</p></main></div></div>`,
+    `<div class="app" data-nav-collapsed="true" style="min-height:260px"><aside class="binding"><div class="binding-inner"><div class="binding-head"><a class="brand" href="#nav-collapse">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></a><button class="nav-toggle" type="button" aria-expanded="false" aria-controls="cat-nav" aria-label="${t("menuExpand")}">${icon("panel")}<span class="nav-tip" aria-hidden="true">${t("menuExpand")}</span></button></div><div class="org-menu"><button class="org-menu-button" type="button" aria-label="あおば開発。組織を切り替える。届いた招待あり"><span class="org-menu-label">${t("organization")}</span><b>あおば開発</b><span class="org-menu-invite" aria-hidden="true"></span>${icon("swap")}${icon("chevron")}<span class="nav-tip" aria-hidden="true">あおば開発<small>届いた招待あり</small></span></button></div><nav class="nav" id="cat-nav"><div class="nav-group"><span class="nav-group-label">${t("workspace")}</span></div><a class="nav-item" href="#nav-collapse" aria-current="page">${icon("sun")}<span class="nav-item-label">${t("pageToday")}</span></a><a class="nav-item" href="#nav-collapse">${icon("board")}<span class="nav-item-label">${t("backlog")}</span></a></nav></div></aside><div class="sheet"><main class="content"><p>本文の幅が広がる見本</p></main></div></div>`,
     ["畳んだ列は 64px。ブランドはマークだけにし（名前は読み上げに残す）、開閉のボタンはマークの下に来る。組織は swap のアイコンと、届いた招待があるときだけ印を見せる。", "項目のラベルはマウスを載せるかキーボードでフォーカスしたときだけ列の横に浮かせる（:focus-within にしない。マウスで押した後に出続けるため）。", "開閉のボタンと畳んだ組織のボタンはアイコンだけなので、同じ札（.nav-tip、aria-hidden）で名前を横に見せる。読み上げは aria-label と aria-expanded が受け持つ。", "綴じは本文より上の層に置き、札と一覧がバックログの行などに隠れないようにする。", "今のページは、太字が名前と一緒に見えなくなるので、左の縦棒（縁で描き、強制カラーでも残る）でも示す。", "組織を移っている最中（SQ.orgMenuHtml の moving。見本は「組織の切り替え」）は、一覧を閉じていれば札に「移っています」を出したままにする。", "ホバーで出す札は (hover: hover) の端末だけ。ホバーのできない端末（指だけのタブレット）では畳まず、開閉のボタンも出さない。", "本番の状態は端末の localStorage に覚え、761px 未満では上の帯の形に戻す。"],
     ".binding-head / .app[data-nav-collapsed=\"true\"] .binding / .nav-toggle / .nav-item-label")],
   ["account-menu", "アカウントのメニュー", () => block("account-menu", "アカウントのメニュー", "上の帯の右端に置く、自分の名前のボタンと、押すと開くメニュー。中は「マイプロフィール」「組織の管理」（管理者だけ）「ログアウト」の順。招待が届いているとボタンに点、「マイプロフィール」に件数を出す。枠の外の画面（組織の選択、運用の画面）には置かず、紙の一番下の静かなボタン（btn is-sm is-quiet）でログアウトする。",
@@ -554,7 +554,7 @@ const SECTIONS = [
   ["gate", "枠の外の画面", () => block("gate", "枠の外の画面（ゲート）", "ログイン、組織の選択、見つからない、運用の仮の画面のように、左のメニューを出さない画面。.gate が画面いっぱいに中央寄せし、中の .gate-stack が紙（.gate-sheet）を縦に並べる。本番では Gate.svelte が外側、GateSheet.svelte が紙1枚。",
     `<div class="gate-stack">
       <section class="gate-sheet">
-        <div class="gate-brand">${SQ.brandMark}<span class="brand-name">Scrum Guild</span></div>
+        <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
         <h1 class="gate-title">${t("organization")}を選ぶ</h1>
         <p>先頭の紙には、ブランドと画面の見出し（h1）を置く。</p>
         <p class="gate-note">補足は gate-note に書く。</p>
@@ -575,7 +575,7 @@ const SECTIONS = [
     <div class="gate is-reading" style="min-height:0">
       <div class="gate-stack">
         <section class="gate-sheet">
-          <div class="gate-brand">${SQ.brandMark}<span class="brand-name">Scrum Guild</span></div>
+          <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
           <h2 class="gate-title">利用規約</h2>
           <p>改定日: 2026-10-31</p>
           <div class="doc-box">

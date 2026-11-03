@@ -25,7 +25,7 @@ function pngSize(path: string): [number, number] {
   return [png.readUInt32BE(16), png.readUInt32BE(20)];
 }
 
-// app.html の <link> の href を、static/ からの絶対パス（/apple-touch-icon.png）で返す
+// app.html の <link> の href を、static/ からの絶対パス（/brand/app/icon-white-180.png）で返す
 function linkHref(rel: string): string {
   const tag = new RegExp(`<link\\s[^>]*rel="${rel}"[^>]*>`).exec(appHtml)?.[0];
   assert.ok(tag, `app.html に rel="${rel}" の link がない`);
@@ -44,11 +44,36 @@ describe('ホーム画面アイコン', () => {
     }
   });
 
-  test('マニフェストは 192 と 512 のアイコンを any と maskable の両方で宣言する', () => {
-    for (const purpose of ['any', 'maskable']) {
-      const sizes = manifest.icons.filter((icon) => icon.purpose === purpose).map((icon) => icon.sizes);
-      assert.deepEqual(sizes.sort(), ['192x192', '512x512'], `purpose ${purpose}`);
-    }
+  test('通常用は192 / 512px、maskableは余白のある専用512px画像を宣言する', () => {
+    assert.deepEqual(
+      manifest.icons
+        .filter((icon) => icon.purpose === 'any')
+        .map((icon) => icon.sizes)
+        .sort(),
+      ['192x192', '512x512'],
+    );
+    assert.deepEqual(
+      manifest.icons.filter((icon) => icon.purpose === 'maskable'),
+      [
+        {
+          src: '/brand/app/icon-maskable-512.png',
+          sizes: '512x512',
+          type: 'image/png',
+          purpose: 'maskable',
+        },
+      ],
+    );
+  });
+
+  test('画像の白背景とマニフェストの背景色が揃う', () => {
+    const colors = manifest as typeof manifest & { background_color: string; theme_color: string };
+    assert.equal(colors.background_color, '#ffffff');
+    assert.equal(colors.theme_color, '#ffffff');
+  });
+
+  test('表示方法を変えず、素材側のstandalone設定を持ち込まない', () => {
+    assert.equal('display' in manifest, false);
+    assert.equal('scope' in manifest, false);
   });
 
   test('app.html の apple-touch-icon は、static/ にある 180px の PNG を指す', () => {

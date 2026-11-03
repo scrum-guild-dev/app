@@ -64,7 +64,7 @@ function readKitDictionary(): Record<string, string> {
 }
 
 // SVG の要素の属性を、属性の並びによらずに比べられる形で取り出す
-function readElements(source: string, tag: 'svg' | 'path'): Record<string, string>[] {
+function readElements(source: string, tag: 'svg' | 'path' | 'img'): Record<string, string>[] {
   return [...source.matchAll(new RegExp(`<${tag}\\b([^>]*?)\\/?>`, 'g'))].map(([, attrs]) =>
     Object.fromEntries([...attrs.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, name, value]) => [name, value]).sort()),
   );
@@ -76,25 +76,26 @@ const readSvg = (source: string) => readElements(source, 'svg')[0];
 const readTags = (source: string) => [...source.matchAll(/<([a-zA-Z][\w-]*)\b/g)].map(([, tag]) => tag);
 
 describe('見本との照合', () => {
-  test('ロゴのマークは favicon、見本、本番で同じ形と色', () => {
-    const faviconSource = readFileSync(new URL('../static/favicon.svg', import.meta.url), 'utf8');
-    const favicon = readPaths(faviconSource);
-    assert.equal(favicon.length, 2, 'favicon の path を読めなかった');
+  test('ロゴは見本と本番で同じ画像、寸法、読み上げの扱い', () => {
     const brandMark = /const brandMark = `([^`]*)`/.exec(read('kit.js'))?.[1];
-    assert.ok(brandMark, 'design/kit.js に brandMark が見つからない（書き方を変えたら、このテストの取り出し方も直す）');
+    assert.ok(brandMark, 'design/kit.js に brandMark が見つからない');
     const component = readFileSync(new URL('../src/lib/components/BrandMark.svelte', import.meta.url), 'utf8');
-    for (const [label, source] of [
-      ['見本の brandMark', brandMark],
-      ['本番の BrandMark.svelte', component],
-    ]) {
-      assert.deepEqual(readTags(source), readTags(faviconSource), `${label} の要素`);
-      assert.deepEqual(readPaths(source), favicon, `${label} の path`);
-      // 名前は横の文字が読ませるので、マークは読み上げから外す。class は components.css の大きさの指定に要る
-      assert.deepEqual(
-        readSvg(source),
-        { 'aria-hidden': 'true', class: 'brand-mark', viewBox: readSvg(faviconSource).viewBox },
-        `${label} の svg`,
-      );
+    // Svelte の asset() を見本と同じ相対パスにそろえる
+    const normalized = component
+      .replaceAll(/\$\{asset\('([^']+)'\)\}/g, '$1')
+      .replaceAll(/\{asset\('([^']+)'\)\}/g, '"$1"')
+      .replaceAll(/\{`([^`]+)`\}/g, '"$1"');
+    const images = readElements(brandMark, 'img');
+    assert.equal(images.length, 2);
+    assert.deepEqual(readElements(normalized, 'img'), images);
+    for (const source of [brandMark, normalized]) {
+      assert.match(source, /<span class="brand-art" aria-hidden="true">/);
+      for (const image of readElements(source, 'img')) {
+        assert.equal(image.alt, '');
+        const png = readFileSync(new URL(`../design/${image.src}`, import.meta.url));
+        assert.equal(Number(image.width), png.readUInt32BE(16));
+        assert.equal(Number(image.height), png.readUInt32BE(20));
+      }
     }
   });
 

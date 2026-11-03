@@ -51,8 +51,10 @@ h1, h2, h3 { text-wrap: balance; }
 .binding-foot { margin-top: auto; font-size: var(--text-xs); color: var(--color-faint); padding-inline: var(--space-2); }
 
 .brand { display: flex; align-items: center; gap: var(--space-2); padding-inline: var(--space-2); }
-.brand-mark { display: block; flex: none; width: 26px; height: 26px; }
-.brand-name { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-lg); letter-spacing: 0.02em; }
+/* 画像のチャコールの文字を全テーマで読めるよう、ロゴの下地だけ白にする。色と縦横比は素材のまま。 */
+.brand-art { display: block; flex: none; width: 168px; max-width: 100%; padding: 4px; background: #fff; border-radius: var(--radius-1); }
+.brand-name { display: block; width: 100%; height: auto; }
+.brand-mark { display: none; width: 100%; height: auto; object-fit: contain; }
 /* ブランドと開閉のボタンの行。畳んだ列では縦に積み、ボタンはマークの下に来る */
 .binding-head { display: flex; align-items: center; gap: var(--space-1); }
 .binding-head .brand { flex: 1 1 auto; min-width: 0; }
@@ -175,7 +177,9 @@ h1, h2, h3 { text-wrap: balance; }
   }
   .app[data-nav-collapsed="true"] .binding-head { flex-direction: column; }
   .app[data-nav-collapsed="true"] .brand { justify-content: center; width: 44px; min-height: 44px; padding: 0; }
-  /* マークは aria-hidden なので、名前は見た目だけ隠して読み上げに残す（リンクの名前を無くさない） */
+  .app[data-nav-collapsed="true"] .brand-art { width: 34px; }
+  .app[data-nav-collapsed="true"] .brand-mark { display: block; height: 26px; }
+  /* 横組み画像を隠してマークだけにする。読み上げ名は別の visually-hidden に残る */
   .app[data-nav-collapsed="true"] .brand-name {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
   }
@@ -1499,7 +1503,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .gate-stack { display: grid; gap: var(--space-6); width: min(440px, 100%); }
 .gate-sheet { width: min(440px, 100%); display: grid; gap: var(--space-5); background: var(--color-surface); border: 1px solid var(--color-line); border-top: 5px solid var(--color-accent); box-shadow: var(--shadow-sheet); padding: var(--space-8) var(--space-6); border-radius: var(--radius-1); }
 .gate-brand { display: flex; align-items: center; gap: var(--space-2); }
-.gate-brand .brand-mark { width: 34px; height: 34px; }
+.gate-brand .brand-art { width: 240px; }
 .gate-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-2xl); line-height: var(--leading-tight); }
 .gate-note { font-size: var(--text-xs); color: var(--color-muted); }
 /* ログインの手段の間の区切り（外の手段のボタンと、メールアドレスとパスワードの欄の間。パスワードの手段を開いたときだけ使い、初版は閉じていて出さない）。両側に線を引き、間に短い語を置く */
