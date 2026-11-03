@@ -12,6 +12,7 @@
   import InvitationInbox from '../../lib/components/InvitationInbox.svelte';
   import LoadFailed from '../../lib/components/LoadFailed.svelte';
   import OrganizationSwitcher from '../../lib/components/OrganizationSwitcher.svelte';
+  import TokenNotice from '../../lib/components/TokenNotice.svelte';
   import WorkspaceSwitcher from '../../lib/components/WorkspaceSwitcher.svelte';
   import { hasPersonalOrganization, organizationLabel } from '../../lib/organization-label.ts';
   import { applyOrganization } from '../../lib/organization.svelte.ts';
@@ -119,6 +120,11 @@
       />
     {/if}
   {/snippet}
+  {#snippet notice()}
+    {#key navigationScope}
+      <TokenNotice notice={data.tokenNotice} slug={data.slug} />
+    {/key}
+  {/snippet}
   <AppShell
     current={page.url.pathname}
     slug={data.slug}
@@ -128,6 +134,7 @@
     {organizationSwitcher}
     workspaceSwitcher={navigationWorkspace ? workspaceSwitcher : undefined}
     {account}
+    {notice}
   >
     {@render children()}
   </AppShell>

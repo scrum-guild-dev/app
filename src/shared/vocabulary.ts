@@ -2020,6 +2020,19 @@ export const dictionary = defineDictionary({
   // アカウントのメニューの「マイプロフィール」に付ける、届いた招待の件数。{count} は件数
   navInvitationsBadge: '招待 {count}',
   navInvitationsLabel: '、届いた招待 {count}件',
+  // セッションごとの API トークンの発行の知らせ
+  tokenNoticeLabel: 'API トークンの発行の知らせ',
+  tokenNoticeTitle: '未確認の API トークンの発行が{count}件あります',
+  tokenNoticeLatest: '最新: {name} / {scope}',
+  tokenNoticeRevoked: '取り消し済み',
+  tokenNoticeHint: '身に覚えがなければ、設定でトークンを確かめ、すべての端末とトークンを締め出してください。',
+  tokenNoticeSettings: '設定を開く',
+  tokenNoticeSeen: '確かめた',
+  tokenNoticeSaved: 'API トークンの発行を確かめました',
+  tokenNoticeSaving: '確認を保存しています',
+  tokenNoticeSeenFailed: '確認を保存できませんでした。もう一度「確かめた」を押してください。',
+  tokenNoticeLoadFailed: 'API トークンの発行の知らせを読み込めませんでした。',
+  tokenNoticeUpdateFailed: 'API トークンの発行の知らせを更新できませんでした。もう一度試してください。',
   // API トークン（マイプロフィールの節。docs/development.md の「API トークン」）。組織の外の画面なので、言葉は organization
   apiTokenTitle: 'API トークン',
   apiTokenDesc: 'CLI や MCP に渡す鍵。発行した人と同じ権限の範囲で、画面を通さずに API を呼べます。',

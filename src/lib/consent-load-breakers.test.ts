@@ -48,7 +48,7 @@ async function redirectOf(run: () => Promise<unknown>): Promise<{ status: number
 }
 
 function slugRun(url: string, replies: Record<string, Reply>) {
-  const event = { params: { slug: 'aoba' }, fetch: fakeFetch(replies), url: new URL(url) };
+  const event = { params: { slug: 'aoba' }, fetch: fakeFetch(replies), url: new URL(url), depends: vi.fn() };
   return () => (slugLoad as (e: unknown) => Promise<unknown>)(event);
 }
 

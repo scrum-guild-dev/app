@@ -302,6 +302,25 @@ h1, h2, h3 { text-wrap: balance; }
   display: grid; gap: var(--space-8); align-content: start;
 }
 
+/* アカウントの新しいトークンの発行。組織の枠の上部に置き、長い名前も全文を折り返す。 */
+.token-notice {
+  margin: var(--space-2) var(--space-8) var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-warn);
+  border-radius: var(--radius-1);
+  background: var(--color-warn-soft);
+  display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+}
+.token-notice-body { flex: 1 1 20rem; min-width: 0; overflow-wrap: anywhere; display: grid; gap: var(--space-2); }
+.token-notice-body p { margin: 0; }
+.token-notice-title { font-weight: 700; }
+.token-notice-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.token-notice-actions .btn { min-width: 44px; min-height: 44px; }
+@media (max-width: 760px) {
+  .token-notice { margin-inline: var(--space-4); }
+}
+
 /* 本文と脇（記録など）の2列。狭いと1列 */
 .layout-aside { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-8); align-items: start; }
 .layout-main { display: grid; gap: var(--space-8); min-width: 0; }

@@ -17,6 +17,7 @@ export const tokenCreateOperation = implement(tokenCreate, async ({ db, accountI
   if (!canCreateToken(session.createdAt, now)) throw new ApiError(403, 'reauth_required');
   const issued = await issueApiTokenWith(db, {
     accountId,
+    sessionTokenHash: session.tokenHash,
     name: input.name,
     scope: input.scope,
     now,
