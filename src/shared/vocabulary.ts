@@ -2032,6 +2032,7 @@ export const dictionary = defineDictionary({
   tokenNoticeSaving: '確認を保存しています',
   tokenNoticeSeenFailed: '確認を保存できませんでした。もう一度「確かめた」を押してください。',
   tokenNoticeLoadFailed: 'API トークンの発行の知らせを読み込めませんでした。',
+  tokenNoticeUpdateFailed: 'API トークンの発行の知らせを更新できませんでした。もう一度試してください。',
   // API トークン（マイプロフィールの節。docs/development.md の「API トークン」）。組織の外の画面なので、言葉は organization
   apiTokenTitle: 'API トークン',
   apiTokenDesc: 'CLI や MCP に渡す鍵。発行した人と同じ権限の範囲で、画面を通さずに API を呼べます。',

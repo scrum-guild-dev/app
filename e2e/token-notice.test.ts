@@ -196,3 +196,31 @@ test('設定へのリンクを押すと API トークンの節に着く', async 
   await expect(page).toHaveURL(/\/aoba\/me#api-tokens$/);
   await expect(page.locator('#api-tokens')).toBeInViewport();
 });
+
+test('確認が成功して再取得だけ失敗したら、確認済みを復活させず更新失敗と再試行を出す', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signIn(context, baseURL, 'admin');
+  let reads = 0;
+  await routeOperation(page, tokenNotice, async (call) => {
+    reads++;
+    if (reads === 1) await call.fulfill({ count: 1, latest });
+    else if (reads === 2) await call.fail(500, 'internal');
+    else await call.fulfill({ count: 0, latest: null });
+  });
+  await mockOperation(page, tokenNoticeSeen, {});
+  await page.goto('/aoba/me');
+  const notice = page.getByRole('region', { name: label });
+  await expect(notice).toContainText(latest.name);
+  await notice.getByRole('button', { name: '確かめた', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'API トークンの発行を確かめました' })).toBeVisible();
+  await expect(notice.getByRole('alert')).toHaveText(
+    'API トークンの発行の知らせを更新できませんでした。もう一度試してください。',
+  );
+  await expect(notice).not.toContainText(latest.name);
+  await expect(notice.getByRole('button', { name: '確かめた', exact: true })).toHaveCount(0);
+  await notice.getByRole('button', { name: 'もう一度試す', exact: true }).click();
+  await expect(notice).toHaveCount(0);
+});

@@ -18,6 +18,7 @@
   let saving = $state(false);
   let failed = $state(false);
   let retrying = $state(false);
+  let updateFailed = $state(false);
   let confirmButton = $state<HTMLButtonElement>();
   let active = true;
   let request = 0;
@@ -47,7 +48,13 @@
     const result = await callOperation(tokenNotice, {});
     if (!active || serial !== request || notice !== initial) return;
     beforeApply?.();
-    fetched = { initial, data: result.ok ? result.data : null };
+    if (result.ok) {
+      fetched = { initial, data: result.data };
+      updateFailed = false;
+    } else {
+      // 読めていた発行は消さない。確認の成功と、最新の知らせを読めたかは別に扱う。
+      updateFailed = true;
+    }
   }
 
   // 普段の本文をクリック可能なフォーカス先にしない。確認で移す間だけ属性を借り、離れたら戻す。
@@ -126,28 +133,38 @@
       >
     </div>
   </section>
-{:else if visible && latest !== null}
+{:else if visible || updateFailed}
   <section class="token-notice" aria-label={t('tokenNoticeLabel')}>
     <div class="token-notice-body">
-      <p class="token-notice-title">{t('tokenNoticeTitle', { count: current.count })}</p>
-      <p>
-        {t('tokenNoticeLatest', {
-          name: latest.name,
-          scope: t(latest.scope === 'read' ? 'apiTokenScopeRead' : 'apiTokenScopeWrite'),
-        })}
-        / <time class="mono" datetime={latest.created_at}>{formatDateTime(latest.created_at)}</time>
-        {#if latest.revoked}
-          / {t('tokenNoticeRevoked')}{/if}
-      </p>
-      <p>{t('tokenNoticeHint')}</p>
+      {#if visible && latest !== null}
+        <p class="token-notice-title">{t('tokenNoticeTitle', { count: current.count })}</p>
+        <p>
+          {t('tokenNoticeLatest', {
+            name: latest.name,
+            scope: t(latest.scope === 'read' ? 'apiTokenScopeRead' : 'apiTokenScopeWrite'),
+          })}
+          / <time class="mono" datetime={latest.created_at}>{formatDateTime(latest.created_at)}</time>
+          {#if latest.revoked}
+            / {t('tokenNoticeRevoked')}{/if}
+        </p>
+        <p>{t('tokenNoticeHint')}</p>
+      {/if}
+      {#if updateFailed}<p class="field-error" role="alert">{t('tokenNoticeUpdateFailed')}</p>{/if}
       {#if failed}<p class="field-error" role="alert">{t('tokenNoticeSeenFailed')}</p>{/if}
       <span class="visually-hidden" role="status">{saving ? t('tokenNoticeSaving') : ''}</span>
     </div>
     <div class="token-notice-actions">
       <a class="btn" href={resolve('/[slug]/me#api-tokens', { slug })}>{t('tokenNoticeSettings')}</a>
-      <button class="btn" type="button" bind:this={confirmButton} aria-disabled={saving} onclick={confirm}
-        >{t(saving ? 'tokenNoticeSaving' : 'tokenNoticeSeen')}</button
-      >
+      {#if visible}
+        <button class="btn" type="button" bind:this={confirmButton} aria-disabled={saving} onclick={confirm}
+          >{t(saving ? 'tokenNoticeSaving' : 'tokenNoticeSeen')}</button
+        >
+      {/if}
+      {#if updateFailed}
+        <button class="btn" type="button" aria-disabled={retrying} onclick={retry}
+          >{t(retrying ? 'retrying' : 'retry')}</button
+        >
+      {/if}
     </div>
   </section>
 {/if}
