@@ -7,12 +7,14 @@ import { tokenCreate, tokenList, tokenRevoke } from '../src/shared/operations/se
 import { word } from '../src/shared/vocabulary.ts';
 import { expect, test } from './fixtures.ts';
 import { signIn, waitForSettled, watchViolations } from './helpers.ts';
+import { resetApiTokenRateLimits } from './local-d1.ts';
 import { failOperation, mockOperation } from './operations.ts';
 
 const TOKEN_PATTERN = /^sgp_[A-Za-z0-9_-]{43}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 test.beforeEach(async ({ context, baseURL }) => {
+  await resetApiTokenRateLimits();
   await signIn(context, baseURL, 'admin');
 });
 
@@ -201,6 +203,20 @@ test('発行に失敗したら、入力を残したまま理由を出し、値�
 
   await revoke(page, name);
   await expect(rowOf(page, name)).toHaveCount(0);
+});
+
+test('発行中にセッションが失効して401なら、値を表示せずログインの画面へ戻る', async ({ page }) => {
+  await page.goto('/aoba/me');
+  const section = sectionOf(page);
+  await expect(section.getByRole('table', { name: '発行済みの API トークン' })).toBeVisible();
+  const unroute = await failOperation(page, tokenCreate, 401, 'unauthenticated');
+  await section.getByLabel('名前', { exact: true }).fill(uniqueName('失効の確かめ'));
+  await section.getByRole('button', { name: '発行する' }).click();
+
+  await expect(page).toHaveURL(/\/login\?return_to=%2Faoba%2Fme$/);
+  await expect(page.getByRole('dialog', { name: 'API トークンを発行しました' })).toHaveCount(0);
+  await expect(page.getByLabel('トークンの値')).toHaveCount(0);
+  await unroute();
 });
 
 test('一覧が空なら空の状態を出し、読めなければこの節にだけ失敗と「もう一度試す」を出す（ほかの節は生かす）', async ({

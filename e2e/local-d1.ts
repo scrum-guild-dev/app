@@ -133,6 +133,15 @@ export async function resetPasswordLoginRateLimits(): Promise<void> {
   await executeLocalD1([`DELETE FROM rate_limits WHERE key LIKE 'password%';`]);
 }
 
+// API トークンの画面テストが共有の admin で発行・取消を繰り返しても、10分30回の枠を使い切らないよう場面ごとに戻す。
+// 上限そのものは Workers の API テストで確かめ、ここでは本物の発行・取消の操作を使う。
+export async function resetApiTokenRateLimits(): Promise<void> {
+  const keys = ['token-create', 'token-revoke']
+    .map((name) => `'operation:${name}:${SEED_SESSIONS.admin.accountId}'`)
+    .join(', ');
+  await executeLocalD1([`DELETE FROM rate_limits WHERE key IN (${keys});`]);
+}
+
 // Wikiの画面テストが共有seedで繰り返す作成・編集・検索の枠を場面ごとに戻す。
 // 作成は10分30回なので、wikiとwiki-moveを合わせて繰り返すと枠を使い切る。
 // 上限そのものはAPIの検査で確かめ、画面では毎回本物の操作を呼ぶ。
