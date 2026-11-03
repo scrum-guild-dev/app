@@ -1,6 +1,6 @@
 ---
 name: rename-session
-description: セッション名を、受け持つ Issue と PR の番号から決まった形で付ける。`backlog-refine`、`increment-build`、`pr-create` が、Issue が決まった後と PR の番号が分かった後に呼ぶ。「セッション名を付けて」「rename-session」と言われたときにも使う。
+description: セッション名を、受け持つ Issue と PR の番号から決まった形で付ける。`backlog-refine`、`increment-build`、`pr` が、Issue が決まった後と PR の番号が分かった後に呼ぶ。「セッション名を付けて」「rename-session」と言われたときにも使う。
 ---
 
 # rename-session

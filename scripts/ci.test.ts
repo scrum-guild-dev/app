@@ -21,7 +21,7 @@ describe('isDocsOnly', () => {
       isDocsOnly([
         'docs/development.md',
         'CLAUDE.md',
-        '.claude/skills/pr-create/SKILL.md',
+        '.claude/skills/pr/create.md',
         '.claude/agents/code-reviewer.md',
         '.claude/checklists/multi-tenant.md',
         '.github/ISSUE_TEMPLATE/plan.md',

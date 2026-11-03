@@ -1,6 +1,6 @@
 ---
 name: add-operation
-description: API の操作を1つ足す型紙。権限の選択、定義（src/shared/operations/）、処理（src/server/operations/）、一覧への登録、組織の分離のテスト用の関数、画面から呼ぶ口までを一続きで作る。ルートを直に書かず、組織の中の表を必ず組織かワークスペースで絞る。API を足す、エンドポイントを足す、操作を足す、操作の定義を書くときに使う。
+description: API の操作やエンドポイントを追加する。操作定義、権限、組織の分離のテストと画面の呼び口を揃えるときに使う。
 ---
 
 # add-operation

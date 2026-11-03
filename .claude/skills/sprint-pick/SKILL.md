@@ -17,7 +17,7 @@ GitHub の今の状態から、今のスプリントで自分が着手できる 
 
 `gh api` の REST で読む。クラウドのセッションでは、GraphQL を使う `gh issue` と `gh pr` が 403 で止まるため。
 `{owner}` と `{repo}` は `gh` がカレントのリポジトリに置き換える。`gh` は1行に1つで打ち、パイプやリダイレクトでつながない（加工は `--jq` で行う）。
-`gh` が無いか認証で失敗するときは、`pr-create/github-mcp.md` に従い、GitHub の MCP ツールで代える（Issue は `list_issues`、親は `issue_read` の `get_parent`、`subs` は `get` の `sub_issues_summary`、`blocked` は `issue_dependency_read` で引く。どれも1件ずつ引くので、時間がかかる）。
+`gh` が無いか認証で失敗するときは、`pr/github-mcp.md` に従い、GitHub の MCP ツールで代える（Issue は `list_issues`、親は `issue_read` の `get_parent`、`subs` は `get` の `sub_issues_summary`、`blocked` は `issue_dependency_read` で引く。どれも1件ずつ引くので、時間がかかる）。
 
 ## 手順
 

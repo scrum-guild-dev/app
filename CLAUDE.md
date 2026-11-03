@@ -42,7 +42,8 @@ Node は `.node-version`（26）、pnpm は `package.json` の `packageManager` 
 ## 守ること
 
 - `main` に直接コミットも push もしない。文書だけの変更も PR を通す。1 Issue に 1 ブランチ、1 PR。ブランチ名は `<Issue番号>-<短い名前>`（クラウドのセッションの `claude/*` はそのまま）。手元では同じ名前のワークツリー（`./worktrees/<ブランチ名>`）を切って作業する（`docs/development.md` の「ワークツリーで作業する」）。`main` の作業コピーのファイルは Write と Edit をフックが止めるので、書く前にワークツリーを切る。Bash で書いて迂回しない。マージは squash で行う。手元の対話のセッションは、`needs-human` の無い PR で `label` と `ci-ok` が成功し、AI レビューの CRITICAL と HIGH が残っていなければ、人に聞かずにマージする。`needs-human` の PR と確かめを満たさない PR、クラウドのセッション、非対話の実行（`claude -p`、CI の中）は人に任せる（`docs/development.md` の「マージの判定」）。GitHub のブランチ保護は無く、`.claude/` のフックと `.githooks/` は踏み線にすぎないので、この決まりは自分で守る
-- 実装を終えたら、確認を取らずにコミットし、`done-check` を通して PR を作る。`pr-create` も承認を取らずに作成まで進め、作った後に内容を報告する（作業ブランチのコミットと PR は後から直せるため）。承認を取るのは `pr-create` の Step 4 に挙げた場合（直さなかった CRITICAL か HIGH が残る、done-check を省いた、既存の PR を書き換える）だけ。マージはこの決まりと別で、`pr-feedback` の確かめを満たせば承認を取らずに行う
+- 実装を終えたら、確認を取らずにコミットし、`done-check` を通して PR を作る。`pr` も承認を取らずに作成まで進め、作った後に内容を報告する（作業ブランチのコミットと PR は後から直せるため）。承認を取るのは `pr/create.md` の Step 4 に挙げた場合（直さなかった CRITICAL か HIGH が残る、done-check を省いた、既存の PR を書き換える）だけ。マージはこの決まりと別で、`pr` の確かめを満たせば承認を取らずに行う
+- AI レビューの指摘は全件、対応方針と結果を返信し、インラインのスレッドは解決済みを確認して対応完了とする。修正・検査・必要なベース取り込みを済ませ、ローカルのコミットをまとめて1回で push する。指摘ごと・コミットごとに push しない（詳細は `docs/development.md` の「AI レビューへの対応と push」）
 - セッションは手元で e2e を走らせない（フックが止める。例外も認めない）。変えた画面を開く e2e のテストを差分に足し、PR の CI に任せる。落ちたときの直し方は `docs/development.md` の「CI の e2e が落ちたとき」と「開発の流れ」
 - 本番に触らない。`wrangler deploy`、`wrangler versions deploy`、`wrangler rollback`、`--remote` を付けた `wrangler d1` は Cloudflare の Workers Builds だけが実行する
 - 組織の中の表を読み書きするときは、必ず組織で絞る。共通の表と組織の中の表を結合せず、1回の `batch()` に混ぜない（`docs/data-model.md` の「データベースの分け方」）

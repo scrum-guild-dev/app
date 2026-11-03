@@ -7,14 +7,14 @@ import { test } from 'node:test';
 import { load } from 'js-yaml';
 
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
-const prCreate = read('.claude/skills/pr-create/SKILL.md');
-const stack = read('.claude/skills/pr-create/stack.md');
+const prCreate = read('.claude/skills/pr/create.md');
+const stack = read('.claude/skills/pr/stack.md');
 
 test('作成のひな形は、本文と draft=false を渡して通常の PR を1回で作る', (t) => {
   const section = prCreate.split('## Step 5-A: 作成モード')[1]?.split('## Step 5-B:')[0];
   const template = /```bash\n([\s\S]*?)```/.exec(section ?? '')?.[1];
   assert.ok(template, 'PR 作成コマンドが無い');
-  const dir = mkdtempSync(join(tmpdir(), 'pr-create-'));
+  const dir = mkdtempSync(join(tmpdir(), 'pr-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const body = 'Refs #789\n\n## 概要\n本文を作成前に用意する。\n';
   writeFileSync(join(dir, 'pr-body.md'), body);
@@ -91,10 +91,10 @@ test('作成状態の再取得と、層ごとのベース指定を省かない',
   assert.ok(prCreate.includes(`--jq '.state == "open" and .draft == false'`));
   assert.ok(stack.includes('比較のベース `origin/<その層の base>` を明示して渡す'));
   assert.ok(stack.includes('層ごとに回し直す'));
-  const feedback = read('.claude/skills/pr-feedback/SKILL.md');
+  const feedback = read('.claude/skills/pr/feedback.md');
   assert.ok(feedback.includes('目印のあるドラフトのうち、文書だけの PR'));
   assert.ok(read('docs/development.md').includes('base が `main` の層では AI レビューも同時に走らせる'));
-  assert.ok(read('.claude/skills/pr-create/github-mcp.md').includes('`draft: false` を明示'));
+  assert.ok(read('.claude/skills/pr/github-mcp.md').includes('`draft: false` を明示'));
   for (const document of [prCreate, feedback, read('docs/development.md')]) {
     assert.ok(!document.includes('gh stack submit'), 'ドラフトを一括作成する経路を復活させない');
   }

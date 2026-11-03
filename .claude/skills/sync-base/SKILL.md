@@ -8,20 +8,21 @@ description: 進んだベースブランチを fetch して、現在のブラン
 ## 仕事
 
 現在のブランチに、最新のベースを merge で取り込む。
-終わりは「ベースの最新が HEAD の祖先になり、通常の push を終えた」状態。
+通常の終わりは「ベースの最新が HEAD の祖先になり、通常の push を終えた」状態。呼び出し元が push 保留を指定した場合は、取り込みと検査までを終え、push は呼び出し元に戻して他の修正とまとめる。
 merge で取り込む（理由: squash merge なので main の履歴には影響せず、レビューで読まれたコミットの SHA を保てる）。
 
 force push は使わない。PR の指摘への対応と done-check の修正は、通常の push で積む。
 
 ## 入力
 
+- push 保留（任意）。pr などが修正をまとめて push する場合に指定する。指定時は手順 6 の push を実行しない
 - 取り込むブランチ名（任意）。`origin/` 付きでも無しでも受ける
 - 省略時は次の順で決める
   1. 現在のブランチの PR のベース: `gh api "repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=open" --jq '.[0].base.ref'`
   2. PR が無ければ（出力が空か `null`）デフォルトブランチ: `gh api repos/{owner}/{repo} --jq .default_branch`
 
 GitHub の操作は `gh api` の REST で行う（クラウドのセッションでは、GraphQL を使う `gh pr` が 403 で止まる）。`{owner}` `{repo}` `{branch}` が置き換わらずに 404 になるときは、`git remote get-url origin` と `git branch --show-current` から読んで直に書く。
-`gh` が無いか認証で失敗するときは、`pr-create/github-mcp.md` に従い、GitHub の MCP ツールで代える（PR のベースは `list_pull_requests` の `head` で絞って `base` を見る）。
+`gh` が無いか認証で失敗するときは、`pr/github-mcp.md` に従い、GitHub の MCP ツールで代える（PR のベースは `list_pull_requests` の `head` で絞って `base` を見る）。
 
 決めたベースは着手時に一文で伝える。
 
@@ -121,6 +122,8 @@ ls migrations | cut -c1-4 | sort | uniq -d             # 何も出ないこと
 - 両方とも未マージ（ベースに無い）なら止まって伝える（マイグレーションを含む PR は同時に1本までの決まりに反している）
 
 ### 6. push して報告する
+
+push 保留の指定があれば、下の push を飛ばして取り込み・検査の結果と push 未実施を報告し、呼び出し元に戻る。
 
 ```bash
 git push origin <branch>    # リモートに無ければ git push -u origin <branch>
