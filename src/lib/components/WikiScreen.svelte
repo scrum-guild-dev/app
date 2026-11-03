@@ -18,6 +18,9 @@
   import PageHead from './PageHead.svelte';
   import WikiTree from './WikiTree.svelte';
   import WikiSearch from './WikiSearch.svelte';
+  import WikiHistory from './WikiHistory.svelte';
+  let historyBusy = $state(false);
+  let historyPage = $state<string | null>(null);
 
   let {
     data,
@@ -75,9 +78,12 @@
     return found;
   });
   const depth = $derived(ancestors.length + 1);
+  $effect(() => {
+    if (historyPage !== null && historyPage !== current?.id) historyPage = null;
+  });
 
   async function mayDiscard(): Promise<boolean> {
-    if (saving) return false;
+    if (saving || historyBusy) return false;
     return (
       !dirty ||
       ((await discardDialog?.ask(document.activeElement instanceof HTMLElement ? document.activeElement : null)) ??
@@ -85,7 +91,7 @@
     );
   }
   beforeNavigate((navigation) => {
-    if (!dirty && !saving) return;
+    if (!dirty && !saving && !historyBusy) return;
     if (navigation.type === 'leave') {
       navigation.cancel();
       return;
@@ -103,6 +109,7 @@
   });
   async function begin(create: boolean, parent: string | null = null): Promise<void> {
     if (!canWrite || !(await mayDiscard())) return;
+    historyPage = null;
     editGeneration += 1;
     parentId = parent;
     title = create ? '' : (current?.title ?? '');
@@ -159,11 +166,16 @@
           : await wiki.updatePage(current!.id, version, { title, body_md: body });
       if (result.ok) {
         const unchanged = mode === 'edit' && result.data.page.version === version;
-        mode = 'read';
-        saving = false;
         notice = t(unchanged ? 'wikiUnchanged' : 'wikiSaved');
         conflict = false;
-        await invalidate('app:wiki');
+        // 保存は確定済み。読み直しが失敗しても、同じフォームで再送しない。
+        try {
+          await invalidate('app:wiki');
+        } catch {
+          notice += ` ${t('wikiReadFailed')}`;
+        }
+        mode = 'read';
+        saving = false;
         await goto(wiki.pageHref(result.data.page.id));
       } else {
         const code = result.error?.code;
@@ -200,8 +212,11 @@
 >
 
 <PageHead title={t('wiki')} eyebrow={name}>
-  {#snippet actions()}{#if canWrite}<button class="btn is-primary" type="button" onclick={() => begin(true)}
-        >{t('wikiAdd')}</button
+  {#snippet actions()}{#if canWrite}<button
+        class="btn is-primary"
+        type="button"
+        aria-disabled={historyBusy}
+        onclick={() => begin(true)}>{t('wikiAdd')}</button
       >{/if}{/snippet}
   {#snippet meta()}{#if data.wikiPages !== null && !data.wikiNotFound}<p class="section-hint">
         {t(wiki.accessLabel)}
@@ -226,7 +241,7 @@
                   {pages}
                   {wiki}
                   {searching}
-                  canWrite={canWrite && mode === 'read' && !saving}
+                  canWrite={canWrite && mode === 'read' && !saving && !historyBusy}
                   currentId={current?.id ?? null}
                 />{:else}<p class="section-hint" hidden={searching}>
                   {t('wikiTreeEmpty')}
@@ -308,10 +323,47 @@
         </form>
       {:else if data.wikiNotFound}
         <EmptyState icon="search" title={t('wikiNotFound')} />
+      {:else if current && historyPage === current.id}
+        {#key current.id}
+          <WikiHistory
+            {wiki}
+            {current}
+            {canWrite}
+            onbusy={(busy) => {
+              historyBusy = busy;
+            }}
+            internalLinkPrefix={`${page.url.origin}${wiki.rootHref}/`}
+            onclose={async () => {
+              historyPage = null;
+              await invalidate('app:wiki');
+              await tick();
+              document.getElementById('wiki-page-title')?.focus();
+            }}
+            update={({ page_id, read_version, title, body_md }) =>
+              wiki.updatePage(page_id, read_version, { title, body_md })}
+            onrestored={async (saved) => {
+              historyPage = null;
+              notice = t(saved.version === current.version ? 'wikiRestoreUnchanged' : 'wikiRestored', {
+                version: saved.version,
+              });
+              await invalidate('app:wiki');
+              await tick();
+              document.getElementById('wiki-page-title')?.focus();
+            }}
+          />
+        {/key}
       {:else if current}
         <div class="wiki-head">
-          <h2 class="section-title">{current.title}</h2>
-          {#if canWrite}<div class="form-actions">
+          <h2 id="wiki-page-title" tabindex="-1" class="section-title wrap-anywhere">{current.title}</h2>
+          <div class="form-actions">
+            <button
+              class="btn"
+              type="button"
+              onclick={() => {
+                historyPage = current.id;
+              }}>{t('wikiHistory')}</button
+            >
+            {#if canWrite}
               <button class="btn" type="button" onclick={() => begin(false)}>{t('wikiEdit')}</button>
               <button
                 class="btn"
@@ -321,7 +373,8 @@
               >{#if depth < 10}<button class="btn" type="button" onclick={() => begin(true, current.id)}
                   >{t('wikiAddChild')}</button
                 >{:else}<p class="field-hint">{t('wikiDepth')}</p>{/if}
-            </div>{/if}
+            {/if}
+          </div>
         </div>
         <WikiContent source={current.body_md} internalLinkPrefix={`${page.url.origin}${wiki.rootHref}/`} />
       {:else if pages.length}

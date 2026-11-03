@@ -90,6 +90,7 @@ export {
   insertUploadedAttachment,
   organizationStorageBytes,
   readWikiPage,
+  readWikiRevisions,
   readWikiTree,
   searchWikiPages,
   insertWikiPage,
