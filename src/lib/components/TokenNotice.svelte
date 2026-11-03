@@ -6,6 +6,7 @@
   import { formatDateTime } from '../format-datetime.ts';
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
+  import { shouldRefreshTokenNotice } from '../token-notice-navigation.ts';
   import { tokenNoticeSeen, tokenNotice } from '../../shared/operations/session/token-notice.ts';
   import type { OutputOf } from '../../shared/operations/define.ts';
 
@@ -22,7 +23,6 @@
   let confirmButton = $state<HTMLButtonElement>();
   let active = true;
   let request = 0;
-  let initialNavigation = true;
   let clearContentFocus: (() => void) | undefined;
   onDestroy(() => {
     active = false;
@@ -33,13 +33,16 @@
   const latest = $derived(current?.latest ?? null);
   const visible = $derived(latest !== null && (acknowledged === null || latest.created_at > acknowledged));
 
-  // 初回は load が読んだので重ねて取らない。組織内の経路移動では通知だけを読む。
-  afterNavigate(({ from, to }) => {
-    if (initialNavigation) {
-      initialNavigation = false;
-      return;
+  // 初回と別の組織からの移動は load の結果を使う。同じ組織へ戻る再マウントも読み直す。
+  afterNavigate(({ type, from, to }) => {
+    if (
+      shouldRefreshTokenNotice(
+        { type, fromSlug: from?.params?.slug, fromPath: from?.url.pathname, toPath: to?.url.pathname },
+        slug,
+      )
+    ) {
+      void refresh();
     }
-    if (from?.url.pathname !== to?.url.pathname) void refresh();
   });
 
   async function refresh(beforeApply?: () => void): Promise<void> {
