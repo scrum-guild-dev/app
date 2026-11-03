@@ -454,7 +454,7 @@ test('同じ題の検索結果を親の道筋で区別し、現在のページ�
   await page.getByRole('searchbox', { name: 'Wiki の題と本文を探す', exact: true }).fill('同じ手順');
   const results = page.getByRole('navigation', { name: 'Wiki の検索結果', exact: true });
   await expect(results.getByRole('link')).toHaveCount(2);
-  await expect(results.locator('a[aria-current="page"]').locator('.props-note')).toHaveText('Wiki / 同じ手順');
+  await expect(results.locator('a[aria-current="page"]').locator('.props-note').first()).toHaveText('Wiki / 同じ手順');
   await results
     .getByRole('link')
     .filter({ has: page.getByText('Wiki', { exact: true }) })
