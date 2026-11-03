@@ -386,7 +386,7 @@ test.describe('運用者', () => {
     await expect(solo).not.toContainText('管理者がいない');
     // 人数 / 上限の列は空（ダッシュ）。数の上限は出さない
     const seats = solo.locator('td[data-label="人数 / 上限"]');
-    // 見た目のダッシュは読み上げから外し（aria-hidden）、見えない文言「人数の上限は無い」を添える
+    // 見た目のダッシュは読み上げから外し（aria-hidden）、見えない文言「本人1人だけ」を添える
     await expect(seats.locator('[aria-hidden="true"]')).toHaveText('—');
     await expect(seats.locator('.chip')).toHaveCount(0);
     // 添付ファイルの上限の値は出し、変更のボタンは置かない
@@ -470,10 +470,12 @@ test.describe('運用者', () => {
         attachment_quota_bytes: 1024 ** 3,
       }),
     ]);
+    const collect = await watchViolations(page);
     await page.goto('/operator');
     const seats = page.locator('.table tbody tr td[data-label="人数 / 上限"]');
     await expect(seats.locator('[aria-hidden="true"]')).toHaveText('—');
-    await expect(seats.locator('.visually-hidden')).toHaveText('人数の上限は無い');
+    await expect(seats.locator('.visually-hidden')).toHaveText('本人1人だけ');
+    expect(await collect()).toEqual([]);
   });
 
   test('自分用の行も、停止のダイアログで停止でき、再開は確認なしで送れる', async ({ page }) => {
