@@ -46,7 +46,15 @@
 
 ### Workers Builds の接続
 
-Workers & Pages の「Create application」→「Continue with GitHub」で、リポジトリ `ucan-lab/scrum-guild` を選び、Project name を `scrum-guild`（`wrangler.jsonc` の `name` と同じ）にして作る。Worker が既にあるときは、その Worker の Settings の Builds でつなぐ。GitHub の Cloudflare のアプリには、このリポジトリだけを許可してある。
+Workers & Pages の「Create application」→「Continue with GitHub」で、リポジトリ `scrum-guild-dev/app` を選び、Project name を `scrum-guild`（`wrangler.jsonc` の `name` と同じ）にして作る。Worker が既にあるときは、その Worker の Settings の Builds でつなぐ。GitHub の Cloudflare のアプリには、このリポジトリだけを許可する。
+
+2026-11-03 に個人所有の `ucan-lab/scrum-guild` から Organization の `scrum-guild-dev/app` へ移管した。移管後は、GitHub の新しい Organization で Cloudflare のアプリの許可と、既存の本番・見本の両 Worker の Builds の接続先を確認する。Worker、D1、R2、公開 URL は移管で作り直さない。GitHub のリポジトリの移管だけで Builds の再接続が済んだとは扱わない。Cloudflare 側の GitHub 接続フローから新しい Organization を認可する。GitHub の App のページから直接インストールしただけでは、Cloudflare の接続先として登録されない場合がある。
+
+同日に、Cloudflare Workers and Pages の GitHub App を `scrum-guild-dev/app` の1件だけに許可した。
+本番 Worker は旧接続を切り、新しい Organization の接続を保存した。接続するときだけ「Disable builds」を有効にして初回のビルドを起こさず、保存後に通常の有効状態へ戻した。
+ビルド・デプロイのコマンド、ルート、既存の API トークン、キャッシュ、プレビュー無効、監視パスを復元して保存し、再読み込みで確認した。
+見本の Worker も移管先のリポジトリを参照し、Git 連携のエラーが無いことと、既存のコマンド・監視パス・トークンの選択が維持されていることを確認した。
+本番の `/api/health` は `status: ok`、`database: ok`、版 `0ffa585f7e3ea2e1d0d10357227e1dfc3ea85f92` のまま。再接続後の実際のビルドは、次の `main` への反映で確認する。
 
 | 項目 | 値 |
 | --- | --- |
@@ -55,7 +63,7 @@ Workers & Pages の「Create application」→「Continue with GitHub」で、�
 | デプロイのコマンド | `node scripts/deploy-production.ts` |
 | ルートのディレクトリ（Path） | `/`（リポジトリのルート） |
 | preview builds（Enable Preview builds） | 無効 |
-| build watch paths | Include は `*`。Exclude は `docs/*`、`CLAUDE.md`、`.claude/skills/*`、`.claude/agents/*`、`.claude/checklists/*`、`.github/ISSUE_TEMPLATE/*`（`docs/development.md` の「文書だけの PR」と同じ範囲） |
+| build watch paths | Include は `*`。Exclude は `docs/*`、`HANDOFF.md`、`CLAUDE.md`、`.claude/skills/*`、`.claude/agents/*`、`.claude/checklists/*`、`.github/ISSUE_TEMPLATE/*`（`docs/development.md` の「文書だけの PR」の範囲に、既存の `HANDOFF.md` の除外を加えたもの） |
 | API トークン | 下の「API トークン」 |
 
 - Node の版は `.node-version`、pnpm の版は `package.json` の `packageManager` から入る（2026-10-25 に確かめた）

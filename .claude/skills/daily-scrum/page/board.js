@@ -12,7 +12,7 @@
 /** @typedef {{ id: string, name: string, screens: string, note?: string, features: Feature[] }} FeatureArea */
 /** @typedef {{ areas: FeatureArea[], notGoals: string[] }} Features */
 
-export const REPO_URL = 'https://github.com/ucan-lab/scrum-guild';
+export const REPO_URL = 'https://github.com/scrum-guild-dev/app';
 export const issueUrl = (/** @type {number} */ n) => `${REPO_URL}/issues/${n}`;
 export const pullUrl = (/** @type {number} */ n) => `${REPO_URL}/pull/${n}`;
 

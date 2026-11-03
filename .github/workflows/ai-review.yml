@@ -10,17 +10,48 @@ on:
       - "**/*.md"
 
 jobs:
-  review:
-    # action は .claude/ を base のブランチから戻すので、レビュー済みの main を base にした PR だけで動かす
-    # fork と Bot（Dependabot など）の PR にはシークレットが渡らないので回さない
-    # 書き込みの権限の無い人も、このリポジトリの既存のブランチから PR を開ける。シークレット付きで本文を読ませないよう、作成者の区分でも絞る。
-    # MEMBER は組織に入っていることしか表さず、書き込みの権限を保証しないので入れない
+  # 区分では Organization の書き手と読むだけの人を見分けられない。
+  # コードを checkout せず、秘密を使うジョブの前に GitHub API で実権限を確認する。
+  authorize:
     if: >-
       github.event.pull_request.draft == false &&
       github.event.pull_request.base.ref == 'main' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.type != 'Bot' &&
-      contains(fromJSON('["OWNER","COLLABORATOR"]'), github.event.pull_request.author_association) &&
+      github.event.pull_request.user.type == 'User' &&
+      (github.event.action != 'labeled' || github.event.label.name == 'ai-review')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      allowed: ${{ steps.permission.outputs.allowed }}
+    steps:
+      - name: PR 作成者の書き込み権限を確認する
+        id: permission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+          allowed=false
+          if [[ "$REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*/[a-zA-Z0-9_.-]+$ ]] &&
+             [[ "$PR_AUTHOR" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*$ ]] &&
+             permission=$(gh api "repos/$REPO/collaborators/$PR_AUTHOR/permission" --jq '.permission' 2>/dev/null); then
+            case "$permission" in
+              write|maintain|admin) allowed=true ;;
+            esac
+          fi
+          printf 'allowed=%s\n' "$allowed" >> "$GITHUB_OUTPUT"
+
+  review:
+    needs: authorize
+    if: >-
+      needs.authorize.outputs.allowed == 'true' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.type == 'User' &&
       (github.event.action != 'labeled' || github.event.label.name == 'ai-review')
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -38,6 +69,8 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          # 認可と整形のコードを PR の head で差し替えさせない。差分は明示した base/head の SHA で取る。
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -74,6 +107,14 @@ jobs:
           gh api --paginate --slurp "repos/$REPO/issues/$PR_NUMBER/comments" > "$RAW_DIR/issue-comments.json"
           gh api --paginate --slurp "repos/$REPO/pulls/$PR_NUMBER/comments" > "$RAW_DIR/review-comments.json"
 
+      - name: 書いた人の書き込み権限を確認する
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RAW_DIR: ${{ runner.temp }}/pr-raw
+        run: node scripts/github-write-permissions.ts "$RAW_DIR" "$RAW_DIR/write-users.json"
+
       # done-check と前の AI レビューの印から、今回見る範囲の起点を決める。印が読めないときは全体に倒す。
       - name: 起点を決める
         id: scope
@@ -99,7 +140,10 @@ jobs:
           set -euo pipefail
           trap 'rm -rf "$RAW_DIR"' EXIT
           mkdir -p "$CONTEXT_DIR"
-          node scripts/ai-review-context.ts "$RAW_DIR" "$CONTEXT_DIR"
+          # この変更の初回 PR では base に新スクリプトが無い。旧 CLI の区分判定へ戻さず差分だけを見る。
+          test -f scripts/github-write-permissions.ts
+          test -f "$RAW_DIR/write-users.json"
+          node scripts/ai-review-context.ts "$RAW_DIR" "$CONTEXT_DIR" "$RAW_DIR/write-users.json"
 
       # Claude には Bash を許さないので、差分はここで書き出して pr-context で渡す。
       # 起点の段が落ちたか、書くはずのファイルが欠けていれば、PR 全体の差分に倒す。

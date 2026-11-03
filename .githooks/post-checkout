@@ -48,7 +48,7 @@ gh_api() {
   fi
 }
 # 書き込み先は固定する。{owner}/{repo} にすると、GH_REPO や複数の remote（fork の upstream）で別のリポジトリの Issue に書くため
-repo=ucan-lab/scrum-guild
+repo=scrum-guild-dev/app
 # 日付で始まるブランチ（2026-10-25-x）や閉じた Issue、PR の番号に付けないよう、開いた Issue かを先に確かめる
 # クラウドのセッションと同じ REST を使う（GraphQL の gh issue はクラウドで 403 になる）
 if ! state=$(gh_api "repos/$repo/issues/$number" --jq '.state + " " + (.pull_request != null | tostring)' 2>&1); then

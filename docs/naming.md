@@ -4,7 +4,9 @@
 
 ## 決めたこと
 
-名前は Scrum Guild（スクラムギルド）にする。リポジトリ、パッケージ、ドメインは `scrum-guild`。
+名前は Scrum Guild（スクラムギルド）にする。パッケージ、ドメインは `scrum-guild`。
+
+2026-11-03 に、製品紹介サイトも別リポジトリで持つため、GitHub の Organization `scrum-guild-dev`（Free）を作り、`ucan-lab/scrum-guild` を `scrum-guild-dev/app` に移管した。Issue と PR は既存のものを引き継ぐ。製品名、パッケージ名、Worker の名前と公開 URL は変えない。紹介サイト用の `website` は今後作る。
 
 ## 経緯
 
@@ -38,7 +40,7 @@ Team Leveling を決めたとき（2026-10-20）に「ギルドの帳簿」の�
 | 確認先 | 結果 |
 | --- | --- |
 | npm | `scrum-guild`、`scrumguild` は空いていた |
-| GitHub | Organization の `scrum-guild` があった（2025 年に作られ、中身のほぼ無いリポジトリが1つ）。リポジトリは `ucan-lab/scrum-guild` にするので重ならない |
+| GitHub | Organization の `scrum-guild` があった（2025 年に作られ、中身のほぼ無いリポジトリが1つ）。当時は `ucan-lab/scrum-guild` として区別した。現在の置き場所は上の「決めたこと」を参照 |
 | Web | 「Scrum Guild」は、会社の中のスクラムマスターの集まり（Leaseweb など）の呼び名として使われていた。同じ名前のタスク管理の製品は見つからなかった |
 | 商標（J-PlatPat） | 未確認 |
 | ドメイン | `scrum-guild.dev`、`scrumguild.dev`、`scrum-guild.com` に空きがあった。`scrumguild.com` は取られていた |
