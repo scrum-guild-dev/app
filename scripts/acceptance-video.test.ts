@@ -69,6 +69,45 @@ describe('録画と試しの画面設定', () => {
   });
 
   test(
+    '広い画面とタッチ画面の実録画は字幕合成が受け取る1280×640になる',
+    {
+      skip:
+        !existsSync(chromium.executablePath()) || spawnSync('ffprobe', ['-version']).status !== 0
+          ? 'Playwright の chromium か ffprobe が無い'
+          : false,
+    },
+    async () => {
+      await inTempDirAsync({}, async (path) => {
+        const browser = await chromium.launch();
+        try {
+          for (const screen of [
+            { width: 2200, height: 900 },
+            { width: 844, height: 390, touch: true },
+          ]) {
+            const context = await browser.newContext(options({ screen }, path('videos')));
+            const page = await context.newPage();
+            await page.setContent('<meta name="viewport" content="width=device-width, initial-scale=1"><p>録画</p>');
+            await page.waitForTimeout(250);
+            const video = page.video();
+            assert.ok(video);
+            await context.close();
+            const result = spawnSync(
+              'ffprobe',
+              ['-v', 'error', '-show_entries', 'stream=width,height', '-of', 'json', await video.path()],
+              { encoding: 'utf8' },
+            );
+            assert.equal(result.status, 0, result.stderr);
+            const { width, height } = JSON.parse(result.stdout).streams[0];
+            assert.deepEqual({ width, height }, { width: 1280, height: 640 });
+          }
+        } finally {
+          await browser.close();
+        }
+      });
+    },
+  );
+
+  test(
     '広い画面とタッチ端末で、録画と試しの設定が一致し出力寸法は固定',
     { skip: !existsSync(chromium.executablePath()) && 'Playwright の chromium が無い' },
     async () => {
