@@ -457,8 +457,8 @@
         : `<span class="wiki-slot" aria-hidden="true"></span>`;
       const move = (dir, label, off) => `<button class="btn is-quiet" type="button" data-wiki-move="${n.id}:${dir}" aria-label="${label}: ${esc(n.title)}" ${off ? 'aria-disabled="true"' : ""}>${label}</button>`;
       const moves = reorder ? `<div class="form-actions">${move("up", "上へ", i === 0)}${move("down", "下へ", i === list.length - 1)}<button class="btn is-quiet" type="button" data-wiki="move:${n.id}" aria-label="親を移す: ${esc(n.title)}">親を移す</button></div>` : "";
-      const grip = reorder ? `<span class="grip" aria-hidden="true" title="上端・下端で並べ替え、中央で子へ移します。ボタンでも移せます。">${icon("grip")}</span>` : "";
-      return `<li><div class="wiki-node">${caret}<a class="wiki-link" href="#${n.id}" data-wiki-page="${n.id}"${n.id === current ? ' aria-current="page"' : ""}>${esc(n.title)}</a>${grip}</div>${moves}${kids.length ? `<ul id="${cid}" ${opened ? "" : "hidden"}>${kids.map(row).join("")}</ul>` : ""}</li>`;
+      const grip = reorder ? `<span class="grip" data-wiki-grip="${n.id}" draggable="true" aria-hidden="true" title="上端・下端で並べ替え、中央で子へ移します。ボタンでも移せます。">${icon("grip")}</span>` : "";
+      return `<li data-wiki-node="${n.id}"${n.drop === "before" || n.drop === "after" ? ` data-drop="${n.drop}"` : ""}><div class="wiki-node" data-wiki-row="${n.id}"${n.drop === "child" ? ' data-drop="child"' : ""}>${caret}<a class="wiki-link" href="#${n.id}" data-wiki-page="${n.id}"${n.id === current ? ' aria-current="page"' : ""}>${esc(n.title)}</a>${grip}</div>${moves}${kids.length ? `<ul id="${cid}" ${opened ? "" : "hidden"}>${kids.map(row).join("")}</ul>` : ""}</li>`;
     };
     return `<ul class="wiki-tree">${nodes.map(row).join("")}</ul>`;
   }

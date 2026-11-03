@@ -106,7 +106,12 @@
       dropTargetForElements({
         element,
         canDrop: ({ source }) =>
-          canWrite && ordering && !busy && source.data.wikiTree === treeId && source.data.id !== current.id,
+          canWrite &&
+          ordering &&
+          !busy &&
+          source.data.wikiTree === treeId &&
+          source.data.id !== current.id &&
+          !wikiAncestorIds(pages, current.id).some((id) => id === source.data.id),
         onDrag: ({ location }) => {
           const rect = element.getBoundingClientRect();
           const fraction = (location.current.input.clientY - rect.top) / rect.height;
@@ -167,12 +172,12 @@
 {#snippet branch(parentId: string | null, depth: number)}
   {#each childrenByParent.get(parentId) ?? [] as item (item.id)}
     {@const children = depth < 10 && (childrenByParent.get(item.id)?.length ?? 0) > 0}
-    <li>
+    <li data-drop={dropId === item.id && dropPart !== 'child' ? dropPart : undefined}>
       <div
         class="wiki-node"
         use:dnd={item}
         class:is-dragging={dragged === item.id}
-        data-drop={dropId === item.id ? dropPart : undefined}
+        data-drop={dropId === item.id && dropPart === 'child' ? 'child' : undefined}
       >
         {#if children}
           <button
@@ -252,11 +257,13 @@
   <ul class="wiki-tree panel">{@render branch(null, 1)}</ul>
 </nav>
 
-{#if dropId}<p class="field-hint" role="status">
-    {t(dropPart === 'child' ? 'wikiDropChild' : dropPart === 'before' ? 'wikiDropBefore' : 'wikiDropAfter', {
-      title: pages.find((item) => item.id === dropId)?.title ?? '',
-    })}
-  </p>{/if}
+<p class="drag-note" role="status">
+  {dropId
+    ? t(dropPart === 'child' ? 'wikiDropChild' : dropPart === 'before' ? 'wikiDropBefore' : 'wikiDropAfter', {
+        title: pages.find((item) => item.id === dropId)?.title ?? '',
+      })
+    : ''}
+</p>
 <WikiMoveDialog
   bind:this={moveDialog}
   {pages}

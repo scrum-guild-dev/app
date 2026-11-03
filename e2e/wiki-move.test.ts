@@ -90,6 +90,13 @@ test('Wiki のつまみをドラッグして兄弟の間と子へ移す', async 
   expect(page.url()).toBe(url);
   await page.reload();
   await expect(page.locator('.crumbs')).toContainText('親の手順');
+  await page.getByRole('button', { name: '並べ替える', exact: true }).click();
+  const box = await target.boundingBox();
+  expect(box).not.toBeNull();
+  await handle.dragTo(target, { targetPosition: { x: 80, y: box!.height - 2 } });
+  await expect(page.locator('.crumbs')).not.toContainText('親の手順');
+  await expect(page.locator('.wiki-tree > li > .wiki-node > a')).toHaveText(['親の手順', '動かす手順']);
+  expect(page.url()).toBe(url);
 });
 
 test('遅い移動応答が編集中のフォーカスを奪わない', async ({ page }) => {

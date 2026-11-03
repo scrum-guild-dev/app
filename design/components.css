@@ -1755,6 +1755,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .wiki-main { display: grid; gap: var(--space-5); min-width: 0; align-content: start; }
 .wiki-head { display: grid; gap: var(--space-3); min-width: 0; }
 .wiki-tree:not(.panel), .wiki-tree ul { list-style: none; margin: 0; padding: 0; }
+.wiki-tree li { --row-indent: 0px; position: relative; }
 .wiki-tree.panel { list-style: none; margin: 0; }
 .wiki-tree ul { margin-left: 12px; padding-left: var(--space-1); border-left: 1px solid var(--color-rule); }
 /* 4段目からは字下げを増やさない（深さは10段までで、字下げを重ねると題の幅が数文字に潰れる） */
