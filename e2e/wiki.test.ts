@@ -11,7 +11,7 @@ import {
   workspaceWikiUpdate,
   workspaceWikiRevisions,
 } from '../src/shared/operations/wiki/index.ts';
-import { failOperation, mockOperation, rewriteOperation } from './operations.ts';
+import { failOperation, mockOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 test('自分用の組織の Wiki は組織の表示名で案内する', async ({ page }) => {
   await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
@@ -510,7 +510,22 @@ for (const scenario of [
         ],
       },
     );
-    await mockOperation(page, pageOperation, { slug: 'aoba' }, { page: wikiPage });
+    let historicalReads = 0;
+    await routeOperation(page, pageOperation, { slug: 'aoba' }, async (call) => {
+      expect(call.input.page_id).toBe(wikiPage.id);
+      let responsePage = wikiPage;
+      if (call.input.revision !== undefined) {
+        expect(call.input.revision).toBe(1);
+        historicalReads++;
+        responsePage = {
+          ...wikiPage,
+          body_md: '前の本文',
+          version: 1,
+          updated_at: wikiPage.created_at,
+        };
+      }
+      await call.fulfill({ page: responsePage });
+    });
     await mockOperation(
       page,
       scenario.scope === 'workspace' ? workspaceWikiRevisions : orgWikiRevisions,
@@ -519,21 +534,16 @@ for (const scenario of [
         revisions: [2, 1].map((version) => ({
           version,
           title: wikiPage.title,
-          saved_by: '019a0000-0000-7000-8000-000000000308',
+          saved_by: '019a0000-0000-7000-8000-000000000301',
           saved_by_name: 'ミナト',
-          saved_at: wikiPage.updated_at,
+          saved_at: version === 1 ? wikiPage.created_at : wikiPage.updated_at,
         })),
       },
     );
     await page.goto(`${root}/${wikiPage.id}`);
     await page.getByRole('button', { name: '版の一覧', exact: true }).click();
-    await mockOperation(
-      page,
-      pageOperation,
-      { slug: 'aoba' },
-      { page: { ...wikiPage, body_md: '前の本文', version: 1 } },
-    );
     await page.getByRole('button', { name: 'この版を見る（第1版）', exact: true }).click();
+    await expect.poll(() => historicalReads).toBe(1);
     await failOperation(
       page,
       scenario.scope === 'workspace' ? workspaceWikiUpdate : orgWikiUpdate,
