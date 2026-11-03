@@ -92,6 +92,7 @@ export {
   readWikiPage,
   readWikiRevisions,
   readWikiTree,
+  searchWikiPages,
   insertWikiPage,
   updateWikiPage,
   wikiParentFits,

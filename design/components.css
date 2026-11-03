@@ -1751,7 +1751,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
    今開いているページは aria-current="page" で、色に加えて太字と左の線で示す。ARIA の tree の役割は使わない（矢印キーの移動を持たず、
    行は Tab で移る普通のリンクのため）。並べ替えは、「並べ替える」を押している間だけ行に出る .order-actions のボタンで行う */
 .layout-wiki { display: grid; grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); gap: var(--space-8); align-items: start; }
-.wiki-side > .field-hint { overflow-wrap: anywhere; }
+.wiki-side .field-hint { overflow-wrap: anywhere; }
 .wiki-side { display: grid; gap: var(--space-3); min-width: 0; align-content: start; }
 .wiki-main { display: grid; gap: var(--space-5); min-width: 0; align-content: start; }
 .wiki-head { display: grid; gap: var(--space-3); min-width: 0; }
@@ -1772,7 +1772,6 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .wiki-link[aria-current="page"] { background: var(--color-accent-soft); font-weight: 700; box-shadow: inset 3px 0 0 var(--color-accent); }
 /* 探した結果の行。題の下に、そのページの道筋と、当たった場所（題か本文）を添える */
 .wiki-link .props-note { display: block; font-weight: 400; }
-.wiki-link .chip { margin-left: var(--space-1); vertical-align: 0.1em; }
 .wiki-node[data-drop="child"] { background: var(--color-accent-soft); outline: 1px solid var(--color-accent); }
 .wiki-node .order-actions { padding-right: var(--space-1); }
 /* ページの道筋（最上段から今のページまで）。区切りは見た目だけの文字で、読み上げには出さない（対応しない環境では区切りも読まれるだけ） */

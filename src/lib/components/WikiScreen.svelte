@@ -17,6 +17,7 @@
   import WikiContent from './WikiContent.svelte';
   import PageHead from './PageHead.svelte';
   import WikiTree from './WikiTree.svelte';
+  import WikiSearch from './WikiSearch.svelte';
   import WikiHistory from './WikiHistory.svelte';
   let historyBusy = $state(false);
   let historyPage = $state<string | null>(null);
@@ -228,17 +229,25 @@
 {:else}
   <div class="layout-wiki">
     <aside class="wiki-side">
-      {#key wiki.rootHref}
-        {#if pages.length}<WikiTree
-            bind:this={wikiTree}
+      {#if data.wikiPages !== null}{#key wiki.rootHref}<WikiSearch
+            {slug}
+            workspaceId={workspaceId || null}
             {pages}
-            {wiki}
-            canWrite={canWrite && mode === 'read' && !saving && !historyBusy}
             currentId={current?.id ?? null}
-          />{:else}<p class="section-hint">
-            {t('wikiTreeEmpty')}
-          </p>{/if}
-      {/key}
+          >
+            {#snippet children(searching)}
+              {#if pages.length}<WikiTree
+                  bind:this={wikiTree}
+                  {pages}
+                  {wiki}
+                  {searching}
+                  canWrite={canWrite && mode === 'read' && !saving && !historyBusy}
+                  currentId={current?.id ?? null}
+                />{:else}<p class="section-hint" hidden={searching}>
+                  {t('wikiTreeEmpty')}
+                </p>{/if}
+            {/snippet}
+          </WikiSearch>{/key}{/if}
     </aside>
     <section class="wiki-main" aria-label={t('wikiPage')}>
       <nav class="crumbs" aria-label={t('wikiCrumbs')}>

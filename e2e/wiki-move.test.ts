@@ -2,9 +2,11 @@ import { expect, test } from './fixtures.ts';
 import type { Page } from '@playwright/test';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { failOperation } from './operations.ts';
+import { resetWikiRateLimits } from './local-d1.ts';
 import { workspaceWikiMove } from '../src/shared/operations/wiki/index.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
+  await resetWikiRateLimits();
   await signIn(context, baseURL, 'admin');
 });
 
@@ -30,6 +32,23 @@ for (const scope of ['org', 'workspace'] as const) {
     const url = await add(page, second);
     await page.getByRole('button', { name: '並べ替える', exact: true }).click();
     const up = page.getByRole('button', { name: `上へ: ${second}`, exact: true });
+    // 検索で木を隠しても、戻ると並べ替えモードを保つ。
+    const search = page.getByRole('searchbox', { name: 'Wiki の題と本文を探す' });
+    await search.fill(suffix);
+    await expect(up).toBeHidden();
+    await expect(page.getByRole('navigation', { name: 'Wiki の検索結果' }).getByRole('link')).toHaveCount(2);
+    // 検索結果を出している間も、ページ側から親移動のダイアログを開ける。
+    const pageMove = page.locator('#wiki-parent-action');
+    await pageMove.click();
+    const searchDialog = page.getByRole('dialog');
+    await expect(searchDialog).toBeVisible();
+    await expect(searchDialog.getByRole('combobox')).toBeFocused();
+    await searchDialog.getByRole('button', { name: 'やめる', exact: true }).click();
+    await expect(searchDialog).toBeHidden();
+    await expect(pageMove).toBeFocused();
+    await expect(search).toHaveValue(suffix);
+    await search.clear();
+    await expect(up).toBeVisible();
     let release!: () => void;
     let received!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -58,7 +77,7 @@ for (const scope of ['org', 'workspace'] as const) {
     } finally {
       release();
     }
-    await expect(page.locator('.wiki-side > .field-hint')).toContainText('移しました。');
+    await expect(page.locator('.wiki-side .field-hint:has(+ nav)')).toContainText('移しました。');
     const tree = page.locator('.wiki-tree');
     await expect
       .poll(async () => {
@@ -86,7 +105,7 @@ for (const scope of ['org', 'workspace'] as const) {
     await dialog.getByRole('combobox').selectOption({ label: '最上段' });
     await dialog.getByRole('button', { name: '移す', exact: true }).click();
     await expect(page.locator('.crumbs')).not.toContainText(first);
-    await expect(page.locator('.wiki-side > .field-hint')).toHaveText(`「${second}」を移しました。`);
+    await expect(page.locator('.wiki-side .field-hint:has(+ nav)')).toHaveText(`「${second}」を移しました。`);
     expect(page.url()).toBe(url);
     await expect(tree.locator('[data-wiki-handle]').first()).toHaveAttribute('aria-hidden', 'true');
     for (const width of [1280, 1024, 390, 320]) {
@@ -110,7 +129,7 @@ test('Wiki のつまみをドラッグして兄弟の間と子へ移す', async 
     .locator('[data-wiki-handle]');
   const target = page.locator('.wiki-node').filter({ has: page.getByRole('link', { name: '親の手順', exact: true }) });
   await handle.dragTo(target, { targetPosition: { x: 80, y: 2 } });
-  await expect(page.locator('.wiki-side > .field-hint')).toContainText('移しました。');
+  await expect(page.locator('.wiki-side .field-hint:has(+ nav)')).toContainText('移しました。');
   await expect(page.locator('.wiki-tree > li > .wiki-node > a').first()).toHaveText('動かす手順');
   await handle.dragTo(target);
   await expect(page.locator('.crumbs')).toContainText('親の手順');
@@ -154,7 +173,7 @@ test('遅い移動応答が編集中のフォーカスを奪わない', async ({
   } finally {
     release();
   }
-  await expect(page.locator('.wiki-side > .field-hint')).toContainText('移しました。');
+  await expect(page.locator('.wiki-side .field-hint:has(+ nav)')).toContainText('移しました。');
   await expect(page.locator('.wiki-tree > li > .wiki-node > a').first()).toHaveText('編集中のページ');
   await expect(page.getByLabel('本文', { exact: true })).toBeFocused();
   await expect(page.getByLabel('本文', { exact: true })).toHaveValue('書きかけを保つ');
@@ -173,7 +192,7 @@ test('移動が失敗したらトーストと木の上に理由を残す', async
   await expect(
     page.locator('.toast:visible').filter({ hasText: '子のページを含めて10段を超えるため、移せません。' }),
   ).toBeVisible();
-  const feedback = page.locator('.wiki-side > .field-hint');
+  const feedback = page.locator('.wiki-side .field-hint:has(+ nav)');
   await expect(feedback).toHaveText('子のページを含めて10段を超えるため、移せません。');
   expect(await feedback.evaluate((element) => !!element.nextElementSibling?.matches('nav'))).toBe(true);
   expect(page.url()).toBe(url);
@@ -189,7 +208,7 @@ test('別の Wiki へ画面内で移ると移動結果と並べ替えモード�
   await add(page, '移すページ');
   await page.getByRole('button', { name: '並べ替える', exact: true }).click();
   await page.getByRole('button', { name: '上へ: 移すページ', exact: true }).click();
-  await expect(page.locator('.wiki-side > .field-hint')).toHaveText('「移すページ」を移しました。');
+  await expect(page.locator('.wiki-side .field-hint:has(+ nav)')).toHaveText('「移すページ」を移しました。');
   // 同じ +page の id だけを変える画面内のリンク。両側にページを置き、木を描く分岐も保つ。
   await page.evaluate((href) => {
     document.body.dataset.wikiNavigation = 'same-document';
@@ -203,6 +222,6 @@ test('別の Wiki へ画面内で移ると移動結果と並べ替えモード�
   await expect(page.locator('body')).toHaveAttribute('data-wiki-navigation', 'same-document');
   await expect(page.getByRole('heading', { level: 2, name: '移動先だけのページ' })).toBeVisible();
   await expect(page.getByRole('button', { name: '並べ替える', exact: true })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.locator('.wiki-side > .field-hint')).toBeEmpty();
+  await expect(page.locator('.wiki-side .field-hint:has(+ nav)')).toBeEmpty();
   await expect(page.getByRole('button', { name: '上へ: 移動先だけのページ', exact: true })).toHaveCount(0);
 });

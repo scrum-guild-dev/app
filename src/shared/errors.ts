@@ -13,6 +13,8 @@ export const errorCodes = [
   'terms_required',
   'conflict',
   'attachment_quota_exceeded',
+  // Wiki の検索対象が5,000ページか32MiBを超える。409。本文の走査を始めずに断る
+  'wiki_search_limit',
   // クリアか中止した（終わった）エピックの討伐隊・報酬・依頼主を変える操作（epic-party-join、epic-party-leave、epic-party-assign、
   // epic-reward-update、epic-requester-update）の 409。書き込みの競合に 3 回続けて負けたときは conflict のまま。画面は「終わっているので変えられません」を出す
   'epic_finished',

@@ -1,5 +1,7 @@
 import { now } from '../../shared/clock.ts';
 import {
+  orgWikiSearch,
+  workspaceWikiSearch,
   orgWikiRevisions,
   workspaceWikiRevisions,
   orgWikiCreate,
@@ -13,13 +15,15 @@ import {
 } from '../../shared/operations/wiki/index.ts';
 import { wikiTitle } from '../../shared/wiki.ts';
 import {
+  searchWikiPages,
+  type OrganizationDb,
+  type WikiScope,
   insertWikiPage,
   readWikiPage,
   readWikiRevisions,
   readWikiTree,
   updateWikiPage,
   wikiParentFits,
-  type WikiScope,
 } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { uuidv7 } from '../uuid.ts';
@@ -122,3 +126,15 @@ export const orgWikiRevisionsOperation = implement(orgWikiRevisions, async ({ db
   if (revisions === undefined) throw new ApiError(404, 'not_found');
   return { revisions };
 });
+
+async function search(db: OrganizationDb, scope: WikiScope, query: string) {
+  const result = await searchWikiPages(db, scope, query);
+  if (result.limited) throw new ApiError(409, 'wiki_search_limit');
+  return { pages: result.pages };
+}
+export const orgWikiSearchOperation = implement(orgWikiSearch, async ({ db, input }) =>
+  search(db, { organizationId: db.organizationId }, input.query),
+);
+export const workspaceWikiSearchOperation = implement(workspaceWikiSearch, async ({ db, workspace, input }) =>
+  search(db, { workspaceId: workspace.workspaceId }, input.query),
+);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { backlogQuerySchema } from '../../backlog-filter.ts';
 import { idSchema } from '../../id.ts';
 import { wikiBodyProblem, wikiTitle } from '../../wiki.ts';
 import { defineOperation } from '../define.ts';
@@ -69,6 +70,34 @@ export const workspaceWikiUpdate = defineOperation({
     .object({ workspace_id: idSchema, page_id: idSchema, read_version: z.number().int().min(1), ...content })
     .superRefine(validateContent),
   output: z.object({ page: wikiPageSchema }),
+});
+export const wikiQuerySchema = backlogQuerySchema.refine((query) => query.length > 0, '検索の語を入れてください');
+export const wikiSearchResultSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  matched_in: z.enum(['title', 'body']),
+});
+export type WikiSearchResult = z.infer<typeof wikiSearchResultSchema>;
+const searchOutput = z.object({ pages: z.array(wikiSearchResultSchema).max(50) });
+export const orgWikiSearch = defineOperation({
+  name: 'org-wiki-search',
+  rateLimit: { max: 30, windowSeconds: 60 },
+  description: '組織の Wiki の題と本文を探す',
+  mode: 'read',
+  permission: 'organization',
+  input: z.object({ query: wikiQuerySchema }),
+  output: searchOutput,
+});
+export const workspaceWikiSearch = defineOperation({
+  name: 'workspace-wiki-search',
+  rateLimit: { max: 30, windowSeconds: 60 },
+  description: 'ワークスペースの Wiki の題と本文を探す',
+  mode: 'read',
+  permission: 'member',
+  workspace: true,
+  hideForbiddenWorkspace: true,
+  input: z.object({ workspace_id: idSchema, query: wikiQuerySchema }),
+  output: searchOutput,
 });
 export const orgWikiTree = defineOperation({
   name: 'org-wiki-tree',
@@ -163,6 +192,8 @@ export const wikiOperations = [
   workspaceWikiPage,
   workspaceWikiCreate,
   workspaceWikiUpdate,
+  orgWikiSearch,
+  workspaceWikiSearch,
   orgWikiTree,
   orgWikiPage,
   orgWikiCreate,

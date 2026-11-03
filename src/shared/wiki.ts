@@ -2,6 +2,8 @@ import { CORE_SCHEMA, constructFromEvents, parseEvents } from 'js-yaml';
 
 export const WIKI_BODY_MAX_LENGTH = 100_000;
 export const WIKI_TITLE_MAX_LENGTH = 100;
+export const WIKI_SEARCH_MAX_PAGES = 5000;
+export const WIKI_SEARCH_MAX_BYTES = 32 * 1024 * 1024;
 const FRONTMATTER_MAX_LENGTH = 16_384;
 
 export type WikiFrontmatter = {

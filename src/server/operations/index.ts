@@ -1,5 +1,7 @@
 import { orgWikiMoveOperation, workspaceWikiMoveOperation } from './wiki-move.ts';
 import {
+  orgWikiSearchOperation,
+  workspaceWikiSearchOperation,
   orgWikiTreeOperation,
   orgWikiPageOperation,
   orgWikiCreateOperation,
@@ -126,6 +128,8 @@ import {
 
 // 呼べる操作の一覧（operation-list）が載せる、ほかの操作
 const listedOperations: readonly ImplementedOperation[] = [
+  orgWikiSearchOperation,
+  workspaceWikiSearchOperation,
   orgWikiMoveOperation,
   workspaceWikiMoveOperation,
   orgWikiTreeOperation,
