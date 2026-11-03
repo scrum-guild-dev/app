@@ -54,7 +54,13 @@
           : null
         : resolve(item.href, { slug })}
       {#if href !== null}
-        <a class="nav-item" {href} aria-current={current === href ? 'page' : undefined}>
+        <a
+          class="nav-item"
+          {href}
+          aria-current={current === href || (item.label === 'wiki' && current.startsWith(href + '/'))
+            ? 'page'
+            : undefined}
+        >
           <Icon name={item.icon} /><span class="nav-item-label">{t(item.label)}</span>
         </a>
       {/if}

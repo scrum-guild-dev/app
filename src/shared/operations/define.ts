@@ -67,6 +67,8 @@ export type OperationDefinition<Input extends z.ZodType = z.ZodType, Output exte
       readonly workspace: true;
       // 閉じたワークスペースでも通す書き込み（開き直す操作）。無印の write は、閉じていれば 409 の workspace_closed になる
       readonly allowClosed?: true;
+      // Wiki のように、所属していない人には存在を隠す操作だけが指定する。
+      readonly hideForbiddenWorkspace?: true;
     });
 
 export type AnyOperationDefinition = OperationDefinition;

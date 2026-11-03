@@ -335,7 +335,10 @@ async function execute(
       // 別の組織のワークスペースは、存在しないときと同じ 404
       const workspace = await verifyWorkspace(db, actor, (input as { workspace_id: string }).workspace_id);
       if (workspace === undefined) throw new ApiError(404, 'not_found');
-      if (!isAllowedInWorkspace(definition.permission, actor, workspace)) throw new ApiError(403, 'forbidden');
+      if (!isAllowedInWorkspace(definition.permission, actor, workspace)) {
+        if (definition.hideForbiddenWorkspace === true) throw new ApiError(404, 'not_found');
+        throw new ApiError(403, 'forbidden');
+      }
       // 閉じたワークスペースは読み取り専用。開き直す操作だけが通る
       if (workspace.closed && definition.mode === 'write' && definition.allowClosed !== true) {
         throw new ApiError(409, 'workspace_closed');

@@ -67,6 +67,20 @@ export function purgeOrganizationStatements(organizationId: string): string[] {
   const id = quotedId(organizationId);
   const guard = `EXISTS (SELECT 1 FROM organizations WHERE id = ${id} AND suspended_at IS NOT NULL AND purge_on IS NOT NULL AND purge_on < date('now'))`;
   return [
+    ...[
+      'organization_id = ' + id,
+      'workspace_id IN (SELECT id FROM workspaces WHERE organization_id = ' + id + ')',
+    ].map(
+      (scope) =>
+        `DELETE FROM wiki_page_revisions WHERE (page_id, version) IN (SELECT r.page_id, r.version FROM wiki_page_revisions r JOIN wiki_pages p ON p.id = r.page_id WHERE p.${scope} ORDER BY r.page_id, r.version LIMIT 32) AND ${guard}`,
+    ),
+    ...[
+      'organization_id = ' + id,
+      'workspace_id IN (SELECT id FROM workspaces WHERE organization_id = ' + id + ')',
+    ].map(
+      (scope) =>
+        `DELETE FROM wiki_pages WHERE id IN (SELECT p.id FROM wiki_pages p WHERE p.${scope} AND NOT EXISTS (SELECT 1 FROM wiki_page_revisions r WHERE r.page_id = p.id) AND NOT EXISTS (SELECT 1 FROM wiki_pages c WHERE c.parent_id = p.id) ORDER BY p.id LIMIT 32) AND ${guard}`,
+    ),
     ...TABLES.map(([table, scope]) => `DELETE FROM ${table} WHERE ${scopeOf(scope, id)} AND ${guard}`),
     `DELETE FROM organizations WHERE id = ${id} AND ${guard}`,
   ];
@@ -87,6 +101,8 @@ export function purgeOrganizationCountSql(organizationId: string): string {
     `(SELECT suspended_at FROM organizations WHERE id = ${id}) AS suspended_at`,
     `(SELECT purge_on FROM organizations WHERE id = ${id}) AS purge_on`,
     `(SELECT count(*) FROM organizations WHERE id = ${id}) AS organizations`,
+    `((SELECT count(*) FROM wiki_pages WHERE organization_id = ${id}) + (SELECT count(*) FROM wiki_pages WHERE workspace_id IN (SELECT id FROM workspaces WHERE organization_id = ${id}))) AS wiki_pages`,
+    `((SELECT count(*) FROM wiki_page_revisions WHERE page_id IN (SELECT id FROM wiki_pages WHERE organization_id = ${id})) + (SELECT count(*) FROM wiki_page_revisions WHERE page_id IN (SELECT id FROM wiki_pages WHERE workspace_id IN (SELECT id FROM workspaces WHERE organization_id = ${id})))) AS wiki_page_revisions`,
     ...TABLES.map(([table, scope]) => `(SELECT count(*) FROM ${table} WHERE ${scopeOf(scope, id)}) AS ${table}`),
   ];
   return `SELECT ${columns.join(', ')}\n`;

@@ -453,14 +453,15 @@ export function defineOperationChecks(
         });
         break;
       case 'member':
-        test('所属していない人は 403、メンバーと管理者は成功する', async () => {
+        test('所属していない人は拒否し、メンバーと管理者は成功する', async () => {
           const res = await post(app, definition, {
             slug: own.slug,
             ...(await as(own.bystander)),
             body: await input(own),
           });
-          expect(res.status).toBe(403);
-          expect(await errorCodeOf(res)).toBe('forbidden');
+          const hidden = definition.workspace === true && definition.hideForbiddenWorkspace === true;
+          expect(res.status).toBe(hidden ? 404 : 403);
+          expect(await errorCodeOf(res)).toBe(hidden ? 'not_found' : 'forbidden');
           // 入力は呼ぶ人ごとに作る（自分のコメントを直すように、呼んだ人の行を指す操作のため）
           for (const person of [own.member, own.leader, own.admin]) {
             await expectOk(

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { MarkdownBlock, MarkdownInline } from '../markdown.ts';
   import { MARKDOWN_PAGE_SIZE, pagesOf } from '../markdown-render.ts';
+  import { isWikiPageLink } from '../wiki-link.ts';
   import { t } from '../vocabulary.svelte.ts';
 
   // 変換済みの安全な節（markdown.ts の MarkdownBlock）を再帰で描く。枠は components.css の .doc-box。
@@ -11,7 +12,8 @@
     blocks,
     headingStart = 3,
     busy = false,
-  }: { blocks: MarkdownBlock[]; headingStart?: number; busy?: boolean } = $props();
+    internalLinkPrefix,
+  }: { blocks: MarkdownBlock[]; headingStart?: number; busy?: boolean; internalLinkPrefix?: string } = $props();
 
   // チェックリストの箱と項目の中身を結ぶ id は、同じ画面に本文が並んでも衝突しないよう、部品ごとの id を前に付ける
   const uid = $props.id();
@@ -32,10 +34,15 @@
     {:else if node.type === 'delete'}<del>{@render inlines(node.children)}</del>
     {:else if node.type === 'link'}
       <!-- 外の絶対 URL（markdown.ts が http と https に絞る）で、画面の経路ではないので resolve() は通さない -->
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-      <a href={node.href} rel="noopener noreferrer" target="_blank" aria-describedby={newTabId}
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- Markdown の検証済みの絶対 URL を使う -->
+      <a
+        href={node.href}
+        rel="noopener noreferrer"
+        target={isWikiPageLink(node.href, internalLinkPrefix) ? undefined : '_blank'}
+        aria-describedby={isWikiPageLink(node.href, internalLinkPrefix) ? undefined : newTabId}
         >{@render inlines(node.children)}</a
       >
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
     {/if}
   {/each}
 {/snippet}
