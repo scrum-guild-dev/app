@@ -29,6 +29,11 @@ test('長い組織名がメニューに収まり、画面内の移動で権限�
     await expect(menu).toBeVisible();
     expect(await menu.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     expect(await menu.evaluate((element) => element.getBoundingClientRect().width < window.innerWidth)).toBe(true);
+    if (width <= 390) {
+      const ordinary = page.getByRole('link', { name: '今日やること', exact: true });
+      const menuHeight = await menu.evaluate((element) => element.closest('.nav-item')!.getBoundingClientRect().height);
+      expect(await ordinary.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(menuHeight);
+    }
   }
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
