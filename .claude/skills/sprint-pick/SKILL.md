@@ -46,7 +46,7 @@ gh api repos/{owner}/{repo}/issues/<番号>/dependencies/blocked_by --jq '[.[] |
 gh api "repos/{owner}/{repo}/issues?labels=sprint-log&state=open" --jq '.[] | {number, title, body}'
 ```
 
-Issue を指す開いた PR は、ブランチ名の `<番号>-` の先頭か、本文の `Refs #<番号>` で引く。クラウドのセッションのブランチ（`claude/*`）は番号を持たないため。決まりの前に立てた PR は `Closes` で指しているので、`Closes #<番号>` も拾い続ける。
+Issue を指す開いた PR は、ブランチ名の `<番号>-` の先頭か、本文の `Refs #<番号>` で引く。クラウドのセッションのブランチ（`claude/*`）は番号を持たないため。自動クローズの対象は `Closes` で指すので、`Closes #<番号>` も拾い続ける。
 
 ### 2. 分ける
 
