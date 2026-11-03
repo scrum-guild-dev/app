@@ -26,6 +26,7 @@ const scripts = {
   'r2:get': 'wrangler r2 object get b/k --local',
   // package.json の e2e と同じ中身（#521）
   e2e: 'playwright test',
+  'e2e:preflight': 'node scripts/e2e-preflight.ts',
 };
 const ctx = (branch) => ({ cwd: '/repo', branchOf: () => branch, scriptOf: (dir, name) => (dir ? scripts[name] : undefined) });
 const verdict = (command, branch = '21-claude-settings') => judgeBash(command, ctx(branch));
@@ -5005,8 +5006,8 @@ describe('bash-rules: #356 = の形の - で始まる値と - を重ねた名前
     // 前の区切りの npm_config_call は、pnpx の経由先の npx と、exec の前の npm のフラグの後ろにも効く
     ['export npm_config_call=x; pnpx npx foo', 'ask'],
     [`export npm_config_call=x; npm --call 'echo hi' exec`, 'ask'],
-    // 今の通る形（完了条件の「今の通る形の判定は変わらない」）。e2e を走らせる npx playwright test は #521 で止める
-    ['npx playwright test', 'deny'],
+    // e2e のクラウド許可に追従し、フック自身の実環境で期待値を分ける（コマンドの前置きでは変えない）。
+    ['npx playwright test', process.env.CLAUDE_CODE_REMOTE === 'true' ? 'allow' : 'deny'],
     ['npx playwright show-trace t.zip', 'allow'],
     ['npx tsc --noEmit', 'allow'],
     ['npx eslint .', 'allow'],
@@ -5185,8 +5186,22 @@ describe('bash-rules: #356 nopt の値の取り方と npm init と create の --
   }
 });
 
-describe('bash-rules: #521 e2e は手元で走らせず CI で確かめる', () => {
-  // Claude のセッションの Bash では e2e（Playwright のテストの実行）を deny にする。確認を挟むとクラウドのセッションが承認の待ちで止まるので ask にしない。
+describe('bash-rules: e2e はローカルで禁止しクラウドで許可する', () => {
+  // 実行中のテストの環境に依存せず、フック自身が受け取った環境を再現する。
+  const withRemote = (remote, fn) => {
+    const saved = process.env.CLAUDE_CODE_REMOTE;
+    if (remote === undefined) delete process.env.CLAUDE_CODE_REMOTE;
+    else process.env.CLAUDE_CODE_REMOTE = remote;
+    try {
+      return fn();
+    } finally {
+      if (saved === undefined) delete process.env.CLAUDE_CODE_REMOTE;
+      else process.env.CLAUDE_CODE_REMOTE = saved;
+    }
+  };
+  const verdict = (command, remote) => withRemote(remote, () => judgeBash(command, ctx('cloud-e2e-preflight')));
+  const decision = (command, remote) => verdict(command, remote)?.[0] ?? 'allow';
+  // ローカルのセッションの Bash では e2e を deny にし、フック自身のクラウド判定だけを例外にする。
   // 人の端末にはフックが効かないので、E2E_LOCAL=1 のような前置きの抜け道も、1ファイルだけの例外も作らない。
   // 止めるのは e2e を走らせる書き方だけで、show-trace、install、--version などの Playwright の道具と、pnpm test などは今の判定のまま。
   // pnpm e2e は scripts の e2e（package.json と同じ playwright test）の中身として判定する
@@ -5288,6 +5303,110 @@ describe('bash-rules: #521 e2e は手元で走らせず CI で確かめる', () 
   for (const [kind, command, expected] of cases) {
     test(`[${kind}] ${command} は ${expected}`, () => assert.equal(decision(command), expected, command));
   }
+
+
+  const executionCommands = [
+    'pnpm e2e',
+    'pnpm run e2e',
+    'pnpm e2e e2e/members.test.ts',
+    'pnpm exec playwright test',
+    'npx playwright test',
+    'node node_modules/@playwright/test/cli.js test',
+    'pnpm e2e:preflight',
+    'pnpm run e2e:preflight -- origin/main',
+    'node scripts/e2e-preflight.ts',
+  ];
+  for (const command of executionCommands) {
+    test(`[完了条件] クラウドで許可する: ${command}`, () => {
+      assert.equal(decision(command, 'true'), 'allow', command);
+    });
+    for (const remote of [undefined, 'false', '1', 'TRUE', '']) {
+      test(`[断る場合] クラウドでない環境 ${JSON.stringify(remote)}: ${command}`, () => {
+        assert.equal(decision(command, remote), 'deny', command);
+      });
+    }
+  }
+
+  for (const command of [
+    'CLAUDE_CODE_REMOTE=true pnpm e2e',
+    'env CLAUDE_CODE_REMOTE=true pnpm e2e',
+    'export CLAUDE_CODE_REMOTE=true; pnpm e2e',
+    'CLAUDE_CODE_REMOTE=true pnpm e2e:preflight',
+    'CI=1 pnpm e2e:preflight',
+    'bash -c "pnpm e2e:preflight"',
+    'cd sub && pnpm e2e:preflight',
+    'echo x > "$(pnpm e2e:preflight)"',
+    "bash <<'EOF'\npnpm e2e:preflight\nEOF",
+  ]) {
+    test(`[すり抜け] コマンド内の環境変更やラッパーでローカル禁止を外せない: ${command}`, () => {
+      assert.equal(decision(command), 'deny', command);
+    });
+  }
+
+  for (const command of [
+    'wrangler deploy',
+    'wrangler versions deploy',
+    'wrangler d1 execute DB --remote --command "SELECT 1"',
+    'pnpm e2e && wrangler deploy',
+    'pnpm e2e:preflight && wrangler d1 migrations apply DB --remote',
+  ]) {
+    test(`[断る場合] クラウドでも本番操作を許可しない: ${command}`, () => {
+      assert.equal(decision(command, 'true'), 'deny', command);
+    });
+  }
+
+  for (const command of [
+    'cd scripts && node e2e-run.ts normal',
+    'cd scripts && node e2e-preflight.ts',
+    'pnpm -C scripts exec node e2e-run.ts normal',
+    'node scripts/e2e-prefligh?.ts',
+    'node scripts/e2e-r?n.ts normal',
+    'node --run e2e:preflight',
+  ]) {
+    test(`[すり抜け・反証1巡目] 作業場所・glob・Node の script 実行でも禁止する: ${command}`, () => {
+      assert.equal(decision(command), 'deny', command);
+    });
+  }
+
+  for (const command of [
+    'node ./scripts/./e2e-run.ts normal',
+    'cd scripts; node ../scripts/e2e-run.ts normal',
+  ]) {
+    test(`[すり抜け・反証1巡目] パスの正規化で禁止を外せない: ${command}`, () => {
+      assert.equal(decision(command), 'deny', command);
+      assert.equal(decision(command, 'true'), 'allow', command);
+    });
+  }
+
+  for (const command of [
+    'pnpm exec prettier --write scripts/e2e-run.ts',
+    'pnpm exec prettier --check scripts/e2e-preflight.ts',
+    'pnpm exec eslint scripts/e2e-preflight.ts',
+    'node --check scripts/e2e-run.ts',
+    'cat scripts/e2e-run.ts',
+    'rg runPreflight scripts/e2e-preflight.ts',
+  ]) {
+    test(`[断る場合・反証2巡目] 実行せずにコードを検査・参照する道具は許可する: ${command}`, () => {
+      assert.equal(decision(command), 'allow', command);
+    });
+  }
+
+  for (const command of [
+    'pnpm exec -- node scripts/e2e-run.ts normal',
+    'corepack pnpm exec node scripts/e2e-run.ts normal',
+    'node --run=e2e:preflight',
+    'pnpm exec prettier --check scripts/e2e-run.ts && pnpm e2e:preflight',
+    'pnpm exec eslint scripts/e2e-run.ts; node scripts/e2e-run.ts normal',
+    'prettier scripts/e2e-run.ts --check $(node scripts/e2e-run.ts normal)',
+  ]) {
+    test(`[すり抜け・反証3巡目] 静的検査の例外と package manager の再判定を実行許可に広げない: ${command}`, () => {
+      assert.equal(decision(command), 'deny', command);
+    });
+  }
+
+  test('[止めない・反証3巡目] Node のオプション終端後の構文検査は実行しない', () => {
+    assert.equal(decision('node --check -- scripts/e2e-run.ts'), 'allow');
+  });
 
   test('止めた理由に CI で確かめることが出る', () => {
     for (const command of ['pnpm e2e', 'pnpm run e2e', 'pnpm e2e e2e/members.test.ts', 'pnpm exec playwright test', 'npx playwright test']) {

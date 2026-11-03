@@ -21,6 +21,7 @@
     "test:vitest": "node scripts/prepare.ts && vitest run",
     "test:node": "node --test scripts/*.test.ts && node --test cli/lib/*.test.ts",
     "e2e": "playwright test",
+    "e2e:preflight": "node scripts/e2e-preflight.ts",
     "db:migrate:fresh": "node scripts/migrate-fresh.ts",
     "db:seed": "node scripts/db-seed.ts",
     "bench:backlog": "node scripts/prepare.ts && node scripts/backlog-bench.ts"
