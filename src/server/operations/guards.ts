@@ -38,7 +38,8 @@ export async function readBodyText(c: Context<AppEnv>, maxBytes: number = MAX_BO
   const body = c.req.raw.body;
   if (body === null) return '';
   const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
+  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false });
+  const chunks: string[] = [];
   let received = 0;
   for (;;) {
     const { done, value } = await reader.read();
@@ -48,15 +49,19 @@ export async function readBodyText(c: Context<AppEnv>, maxBytes: number = MAX_BO
       await reader.cancel();
       throw new ApiError(413, 'invalid_input');
     }
-    chunks.push(value);
+    try {
+      chunks.push(decoder.decode(value, { stream: true }));
+    } catch {
+      await reader.cancel();
+      throw new ApiError(400, 'invalid_input');
+    }
   }
-  const bytes = new Uint8Array(received);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
+  try {
+    chunks.push(decoder.decode());
+    return chunks.join('');
+  } catch {
+    throw new ApiError(400, 'invalid_input');
   }
-  return new TextDecoder().decode(bytes);
 }
 
 // 入力は JSON の本文、binary の操作だけ X-Operation-Input。URL のクエリは読まない。
@@ -65,6 +70,7 @@ export async function readInput<Schema extends z.ZodType>(
   c: Context<AppEnv>,
   schema: Schema,
   bodyType?: 'binary',
+  maxBodyBytes?: number,
 ): Promise<z.output<Schema>> {
   let body: unknown;
   try {
@@ -75,7 +81,9 @@ export async function readInput<Schema extends z.ZodType>(
     } else {
       const contentType = c.req.header('Content-Type')?.split(';')[0]?.trim().toLowerCase();
       if (contentType !== 'application/json') throw new ApiError(400, 'invalid_input');
-      body = JSON.parse(await readBodyText(c));
+      const text = await readBodyText(c, maxBodyBytes);
+      if (maxBodyBytes !== undefined && maxBodyBytes > MAX_BODY_BYTES) checkLargeJsonStructure(text);
+      body = JSON.parse(text);
     }
   } catch (err) {
     if (err instanceof ApiError) throw err;
@@ -93,6 +101,26 @@ export async function readInput<Schema extends z.ZodType>(
       message: issue.message,
     })),
   );
+}
+
+// JSON.parseの前に構造の量を制限し、大量の空オブジェクト等を実体化させない。
+// 大きな入力であっても、正規の入力は少数の長文ファイル。文字列内の記号は数えない。
+function checkLargeJsonStructure(text: string) {
+  let quoted = false;
+  let escaped = false;
+  let structures = 0;
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]!;
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') quoted = false;
+    } else if (char === '"') {
+      quoted = true;
+    } else if ('{}[],:'.includes(char) && ++structures > 512) {
+      throw new ApiError(400, 'invalid_input');
+    }
+  }
 }
 
 // ヘッダーの入力を検証した後、ワークスペースを確かめる前に呼ぶ。本文はここでは読まない。

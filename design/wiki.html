@@ -261,7 +261,7 @@ function topHtml() {
     ${top.length ? `<ul class="wiki-tree panel">${top.map((p) => `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"><span>${esc(p.title)}</span><span class="props-note">${kids(p.id).length ? `子のページ ${kids(p.id).length} 件・` : ""}${esc(user(p.by).name)}が ${fmt(p.at)} に保存</span></a></li>`).join("")}</ul>
       <p class="props-note">左の木からページを選ぶと、ここに開きます。</p>`
       : emptyState("file", "ページはまだありません", "手順書や決まりを、最初のページとして書きましょう。.md がすでにあるときは、まとめて上げられます。",
-        `<button class="btn is-primary" type="button" data-wiki="new-root">${icon("plus")}ページを足す</button><button class="btn" type="button" data-wiki="upload">${icon("upload")}.md をアップロード</button>`)}</section>`;
+        `<button class="btn is-primary" type="button" data-wiki="new-root">${icon("plus")}ページを足す</button><button class="btn" type="button" data-wiki="upload">${icon("upload")}${t("wikiUpload")}</button>`)}</section>`;
 }
 function notFoundHtml() {
   return `<section class="section" aria-labelledby="wiki-main-title">
@@ -371,6 +371,9 @@ function statesHtml() {
         <div class="field"><label class="field-label" for="wk-draft">書いていた本文（そのまま残る）</label><textarea class="textarea" id="wk-draft" rows="6" spellcheck="false">${esc(draft)}</textarea></div>
         <details class="section is-folded"><summary class="section-head"><span class="field-label">今の版を見る</span><span class="section-hint">第 5 版・開くと本文を表示</span></summary>
           <div class="doc-box"><h3 class="doc-h1">本番へ出す前の確認</h3><p>管理画面での確認を、付与と取り消しの2つに分けた。</p></div></details>`)}
+      ${panel("ファイルを読めないとき", `<div class="file-row is-error">${icon("alert")}<div class="file-main"><span class="file-name">連絡網.md</span><span class="file-meta">${t("wikiUploadUnread")}</span><span class="file-meta">${t("wikiUploadUtf8")}</span></div><button class="btn is-sm" type="button" data-toast="見本のため、外しません">${t("wikiUploadRemove")}</button></div>`)}
+      ${panel("取り込みの成否を確認するとき", `<div class="callout is-warn"><p>${t("wikiUploadUncertain")}</p><button class="btn" type="button" data-toast="見本のため、読み直しません">${t("wikiUploadRefresh")}</button><p>${t("wikiUploadNewPages", { count: 1 })}</p><ul><li>障害対応の連絡網</li></ul><label><input type="checkbox">${t("wikiUploadAcknowledge")}</label></div>`)}
+      ${panel("書き出した内容が上限を超えるとき", `<p class="callout is-warn" role="status">${t("wikiDownloadTooLong")}</p>`)}
       ${panel("保存を送っている間", `
         <div class="form-actions"><button class="btn is-primary" type="button" aria-disabled="true">保存しています</button><button class="btn is-quiet" type="button" aria-disabled="true">やめる</button><span class="props-note" role="status">保存しています</span></div>
         <p class="props-note">送っている間は、保存とやめるを押せなくし（二重に送らない）、入力欄はそのまま残します。終わったらページを読む表示に戻ります。</p>`)}
@@ -403,13 +406,13 @@ function statesHtml() {
           <option>最上段（親なし）</option><option>${esc(cur.title)}</option><option disabled>深さ 10 段のページ（10 段を超えるため選べません）</option></select>
           ${parentHint("wk-deep-hint", 1)}</div>`)}
       ${panel("ページがまだないとき", emptyState("file", "ページはまだありません", "手順書や決まりを、最初のページとして書きましょう。.md がすでにあるときは、まとめて上げられます。",
-          `<button class="btn is-primary" type="button" data-toast="見本のため、足しません">${icon("plus")}ページを足す</button><button class="btn" type="button" data-wiki="upload">${icon("upload")}.md をアップロード</button>`))}
+          `<button class="btn is-primary" type="button" data-toast="見本のため、足しません">${icon("plus")}ページを足す</button><button class="btn" type="button" data-wiki="upload">${icon("upload")}${t("wikiUpload")}</button>`))}
     </div></section>`;
 }
 
 function render() {
   const head = pageHead(store.name, "Wiki", [["", "file", "ページ", store.pages.length]],
-    `<button class="btn is-primary" type="button" data-wiki="new-root">${icon("plus")}ページを足す</button><button class="btn" type="button" data-wiki="upload">${icon("upload")}.md をアップロード</button>`,
+    `<button class="btn is-primary" type="button" data-wiki="new-root">${icon("plus")}ページを足す</button><button class="btn" type="button" data-wiki="upload">${icon("upload")}${t("wikiUpload")}</button>`,
     `<p class="props-note">${isOrg ? `${t("organization")}の Wiki。${t("organization")}のユーザーの全員が見て、全員が書けます。` : `${t("workspace")}の Wiki。メンバー全員（${t("admin")}を含む）が見て、全員が書けます。`}</p>`);
   // リンクの説明（新しいタブで開く）。本文のリンクの aria-describedby が指す、画面で1つだけの隠した文
   return `${head}<span id="wiki-newtab" hidden>${t("markdownNewTab")}</span><div class="layout-wiki">${sideHtml()}<div class="wiki-main" id="wiki-main">${mainHtml()}</div></div>${statesHtml()}`;
@@ -488,7 +491,7 @@ const SAMPLE_FILES = [
 const uploadTitle = (f) => titleOf(f.md, f.name.replace(/\.md$/i, ""));
 const uploadProblem = (f) => !/\.md$/i.test(f.name) ? ".md ではないため、足せません。"
   : f.chars > 100000 ? "本文が 10 万字を超えているため、足せません。"
-  : cpLen(uploadTitle(f)) < 1 || cpLen(uploadTitle(f)) > 100 ? "題が 1〜100 字に収まらないため、足せません。"
+  : cpLen(uploadTitle(f)) < 1 || cpLen(uploadTitle(f)) > 100 ? t("wikiUploadTitleInvalid")
   : "";
 function uploadParts() {
   const u = S.upload;
@@ -513,7 +516,7 @@ function uploadParts() {
 }
 function uploadDialog() {
   const { body, foot } = uploadParts();
-  openDialog(".md をページとして足す", body, foot);
+  openDialog(t("wikiUpload"), body, foot);
 }
 // 開いたままのダイアログの中身だけを差し替える（開いた元の要素を引き継ぐため、開き直さない）
 function refreshUpload(focus) {

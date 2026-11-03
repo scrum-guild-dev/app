@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { backlogQuerySchema } from '../../backlog-filter.ts';
 import { idSchema } from '../../id.ts';
 import { wikiBodyProblem, wikiTitle } from '../../wiki.ts';
+import { WIKI_UPLOAD_MAX_FILES, WIKI_UPLOAD_MAX_REQUEST_BYTES, wikiUploadProblem } from '../../wiki-transfer.ts';
 import { defineOperation } from '../define.ts';
 
 export const wikiNodeSchema = z.object({
@@ -185,7 +186,52 @@ export const workspaceWikiMove = defineOperation({
   input: z.object({ workspace_id: idSchema, ...moveInput }),
   output: z.object({ page_id: z.string(), parent_id: z.string().nullable() }),
 });
+const uploadFiles = z
+  .array(
+    z.object({ file_name: z.string(), body_md: z.string() }).superRefine((file, ctx) => {
+      const problem = wikiUploadProblem(file);
+      if (problem)
+        ctx.addIssue({
+          code: 'custom',
+          path: [problem === 'extension' || problem === 'file_name' ? 'file_name' : 'body_md'],
+          message: problem,
+        });
+    }),
+  )
+  .min(1)
+  .max(WIKI_UPLOAD_MAX_FILES);
+const uploadLimit = {
+  max: 30,
+  windowSeconds: 600,
+  weight: (input: unknown) => (input as { files: unknown[] }).files.length,
+};
+export const orgWikiUpload = defineOperation({
+  name: 'org-wiki-upload',
+  description: '.mdを組織のWikiへまとめて取り込む',
+  mode: 'write',
+  permission: 'organization',
+  weightedRateLimit: uploadLimit,
+  requestRateLimit: { max: 60, windowSeconds: 60 },
+  maxBodyBytes: WIKI_UPLOAD_MAX_REQUEST_BYTES,
+  input: z.object({ parent_id: idSchema.nullable().default(null), files: uploadFiles }),
+  output: z.object({ pages: z.array(wikiNodeSchema) }),
+});
+export const workspaceWikiUpload = defineOperation({
+  name: 'workspace-wiki-upload',
+  description: '.mdをワークスペースのWikiへまとめて取り込む',
+  mode: 'write',
+  permission: 'member',
+  workspace: true,
+  hideForbiddenWorkspace: true,
+  weightedRateLimit: uploadLimit,
+  requestRateLimit: { max: 60, windowSeconds: 60 },
+  maxBodyBytes: WIKI_UPLOAD_MAX_REQUEST_BYTES,
+  input: z.object({ workspace_id: idSchema, parent_id: idSchema.nullable().default(null), files: uploadFiles }),
+  output: z.object({ pages: z.array(wikiNodeSchema) }),
+});
 export const wikiOperations = [
+  orgWikiUpload,
+  workspaceWikiUpload,
   orgWikiMove,
   workspaceWikiMove,
   workspaceWikiTree,

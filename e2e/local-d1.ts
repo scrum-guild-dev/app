@@ -144,9 +144,14 @@ export async function resetWikiRateLimits(): Promise<void> {
     'workspace-wiki-create',
     'workspace-wiki-update',
     'workspace-wiki-search',
+    'org-wiki-upload',
+    'workspace-wiki-upload',
   ];
   const keys = names.map((name) => `'operation:${name}:${SEED_SESSIONS.admin.accountId}'`).join(', ');
-  await executeLocalD1([`DELETE FROM rate_limits WHERE key IN (${keys});`]);
+  const requests = ['org-wiki-upload', 'workspace-wiki-upload']
+    .map((name) => `'request:${name}:${SEED_SESSIONS.admin.accountId}'`)
+    .join(', ');
+  await executeLocalD1([`DELETE FROM rate_limits WHERE key IN (${keys}, ${requests});`]);
 }
 
 // seed のセッションの行を、無ければ入れ直す（あればそのまま）。ログアウトの e2e が消す専用の行を、消す前に戻すのに使う

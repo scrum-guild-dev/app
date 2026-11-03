@@ -220,13 +220,25 @@ function checkTokenScope(definition: AnyOperationDefinition, apiToken: ApiToken 
   if (!tokenAllows(definition, apiToken.scope)) throw new ApiError(403, 'forbidden');
 }
 
-// 定義の rateLimit を、アカウントと操作ごとに数える。権限の検査の後、入力を読む前に行う
+// 通常の操作枠と、長文取り込みの要求枠を入力を読む前に数える。
+// 検証後のファイル件数とはキーを分ける。
 async function enforceRateLimit(
   c: Context<AppEnv>,
   definition: AnyOperationDefinition,
   accountId: string,
 ): Promise<void> {
   const { rateLimit } = definition;
+  const requestLimit = definition.requestRateLimit;
+  if (
+    requestLimit &&
+    !(await consumeRateLimit(
+      c.env,
+      `request:${definition.name}:${accountId}`,
+      { max: requestLimit.max, windowMs: requestLimit.windowSeconds * 1000 },
+      new Date(),
+    ))
+  )
+    throw new ApiError(429, 'rate_limited');
   if (rateLimit === undefined) return;
   const allowed = await consumeRateLimit(
     c.env,
@@ -235,6 +247,26 @@ async function enforceRateLimit(
     new Date(),
   );
   if (!allowed) throw new ApiError(429, 'rate_limited');
+}
+
+async function enforceWeightedRateLimit(
+  c: Context<AppEnv>,
+  definition: AnyOperationDefinition,
+  accountId: string,
+  input: unknown,
+) {
+  const limit = definition.weightedRateLimit;
+  if (!limit) return;
+  if (
+    !(await consumeRateLimit(
+      c.env,
+      `operation:${definition.name}:${accountId}`,
+      { max: limit.max, windowMs: limit.windowSeconds * 1000 },
+      new Date(),
+      limit.weight(input),
+    ))
+  )
+    throw new ApiError(429, 'rate_limited');
 }
 
 async function execute(
@@ -306,7 +338,8 @@ async function execute(
       );
     }
     await enforceRateLimit(c, definition, accountId);
-    const input = await readInput(c, definition.input);
+    const input = await readInput(c, definition.input, undefined, definition.maxBodyBytes);
+    await enforceWeightedRateLimit(c, definition, accountId, input);
     result = await handler({
       db: commonDb(c.env),
       accountId,
@@ -342,7 +375,7 @@ async function execute(
     const input =
       definition.response === 'binary'
         ? readDownloadInput(c, definition.input)
-        : await readInput(c, definition.input, definition.body);
+        : await readInput(c, definition.input, definition.body, definition.maxBodyBytes);
     const binary = definition.body === 'binary' ? { binary: readBinaryBody(c), requestId: c.get('requestId') } : {};
     const download =
       definition.response === 'binary'
@@ -368,8 +401,10 @@ async function execute(
         throw new ApiError(409, 'workspace_closed');
       }
       assertVerifiedWorkspace(workspace);
+      await enforceWeightedRateLimit(c, definition, accountId, input);
       result = await handler({ db, actor, organization, tools, input, workspace, defer: deferred.defer, ...binary });
     } else {
+      await enforceWeightedRateLimit(c, definition, accountId, input);
       result = await handler({ db, actor, organization, tools, input, defer: deferred.defer, ...binary, ...download });
     }
   }

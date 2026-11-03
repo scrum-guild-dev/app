@@ -1,4 +1,4 @@
-import { generateKeyBetween } from 'fractional-indexing';
+import { generateNKeysBetween } from 'fractional-indexing';
 import { sql, type RawBuilder } from 'kysely';
 import { crossOrganizationEntries, type OrganizationDb } from './entries.ts';
 import { compileOnlyKysely } from './entry.ts';
@@ -188,7 +188,34 @@ export async function insertWikiPage(
   content: Content,
   quota: number,
 ): Promise<boolean> {
-  const bytes = new TextEncoder().encode(content.title).length + new TextEncoder().encode(content.body_md).length;
+  return (
+    (await insertWikiPages(
+      db,
+      scope,
+      parentId,
+      [{ id: pageId, title: content.title, body_md: content.body_md }],
+      content.userId,
+      content.at,
+      quota,
+    )) !== null
+  );
+}
+
+export async function insertWikiPages(
+  db: OrganizationDb,
+  scope: WikiScope,
+  parentId: string | null,
+  pages: { id: string; title: string; body_md: string }[],
+  userId: string,
+  at: string,
+  quota: number,
+) {
+  const bytes =
+    pages.reduce(
+      (total, page) =>
+        total + new TextEncoder().encode(page.title).length + new TextEncoder().encode(page.body_md).length,
+      0,
+    ) * 2;
   const last = await db.first(
     db.statement((q) =>
       q
@@ -202,26 +229,41 @@ export async function insertWikiPage(
         .limit(1),
     ),
   );
-  const position = generateKeyBetween(last?.position ?? null, null);
-  const [inserted] = await db.batch([
-    raw(
-      db,
-      sql`${ancestors(scope, parentId)}
+  const positions = generateNKeysBetween(last?.position ?? null, null, pages.length);
+  const nodes = pages.map((page, index) => ({
+    id: page.id,
+    parent_id: parentId,
+    position: positions[index]!,
+    title: page.title,
+    version: 1,
+  }));
+  // 最初のINSERTだけで全件の容量を確かめる。残りは、この要求の先頭ページが入ったことを条件にする。
+  // batch内には他の要求が割り込まない。条件不成立がSQLエラーにならなくても一部成功させない。
+  const [inserted] = await db.batch(
+    pages.flatMap((content, index) => [
+      raw(
+        db,
+        sql`${ancestors(scope, parentId)}
       INSERT INTO wiki_pages(id, organization_id, workspace_id, parent_id, title, version, position, created_by, updated_by, created_at, updated_at, deleted_at, deleted_by, body_md)
-      SELECT ${pageId}, ${'organizationId' in scope ? scope.organizationId : null}, ${'workspaceId' in scope ? scope.workspaceId : null}, ${parentId}, ${content.title}, 1,
-        ${position},
-        ${content.userId}, ${content.userId}, ${content.at}, ${content.at}, NULL, NULL, ${content.body_md}
+      SELECT ${content.id}, ${'organizationId' in scope ? scope.organizationId : null}, ${'workspaceId' in scope ? scope.workspaceId : null}, ${parentId}, ${content.title}, 1,
+        ${positions[index]},
+        ${userId}, ${userId}, ${at}, ${at}, NULL, NULL, ${content.body_md}
       WHERE ${openScope(db, scope)} AND (${parentId} IS NULL OR EXISTS (SELECT 1 FROM ancestors WHERE parent_id IS NULL AND depth <= 9))
-        AND ${organizationStorageBytes(db)} + ${bytes * 2} <= ${quota}`,
-    ),
-    raw(
-      db,
-      sql`INSERT INTO wiki_page_revisions(page_id, version, title, body_md, saved_by, saved_at)
+        AND ${
+          index === 0
+            ? sql<boolean>`${organizationStorageBytes(db)} + ${bytes} <= ${quota}`
+            : sql<boolean>`EXISTS (SELECT 1 FROM wiki_pages p WHERE p.id = ${pages[0]!.id} AND ${scopeOf('p', scope)} AND p.deleted_at IS NULL)`
+        }`,
+      ),
+      raw(
+        db,
+        sql`INSERT INTO wiki_page_revisions(page_id, version, title, body_md, saved_by, saved_at)
       SELECT id, version, title, body_md, updated_by, updated_at FROM wiki_pages p
-      WHERE id = ${pageId} AND ${scopeOf('p', scope)} AND p.deleted_at IS NULL AND changes() > 0`,
-    ),
-  ]);
-  return inserted.changes > 0;
+      WHERE id = ${content.id} AND ${scopeOf('p', scope)} AND p.deleted_at IS NULL AND changes() > 0`,
+      ),
+    ]),
+  );
+  return inserted!.changes > 0 ? nodes : null;
 }
 
 export async function updateWikiPage(

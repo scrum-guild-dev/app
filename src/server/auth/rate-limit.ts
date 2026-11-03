@@ -78,7 +78,9 @@ export function longestRateLimitWindowMs(definitions: readonly AnyOperationDefin
     ...Object.values(CLIENT_ERROR_RATE_LIMITS).map((policy) => policy.windowMs),
     ...Object.values(PASSWORD_LOGIN_RATE_LIMITS).map((policy) => policy.windowMs),
     ...definitions.flatMap((definition) =>
-      definition.rateLimit === undefined ? [] : [definition.rateLimit.windowSeconds * 1000],
+      [definition.rateLimit, definition.weightedRateLimit, definition.requestRateLimit].flatMap((limit) =>
+        limit === undefined ? [] : [limit.windowSeconds * 1000],
+      ),
     ),
   ];
   return Math.max(...windows);
@@ -117,7 +119,14 @@ function ipRateLimits(
 }
 
 // 数えて、上限の内なら true。超えたら false
-export async function consumeRateLimit(env: Env, key: string, policy: RateLimitPolicy, now: Date): Promise<boolean> {
+export async function consumeRateLimit(
+  env: Env,
+  key: string,
+  policy: RateLimitPolicy,
+  now: Date,
+  weight = 1,
+): Promise<boolean> {
+  if (!Number.isSafeInteger(weight) || weight < 1) throw new Error('レート制限の重みは1以上の整数');
   // 最長の窓に入っていない枠を足すと、掃除が窓の途中で行を消し、上限が緩む（src/server/scheduled/cleanup-expired.ts）
   if (policy.windowMs > LONGEST_WINDOW_MS) {
     throw new Error(`レート制限の窓 ${policy.windowMs}ms が、掃除の境目の最長の窓を超えている`);
@@ -131,7 +140,7 @@ export async function consumeRateLimit(env: Env, key: string, policy: RateLimitP
     db.statement((q) =>
       q
         .insertInto('rate_limits')
-        .values({ key, window_start_at: at, count: 1 })
+        .values({ key, window_start_at: at, count: weight })
         .onConflict((conflict) =>
           conflict.column('key').doUpdateSet((eb) => ({
             window_start_at: eb
@@ -143,8 +152,8 @@ export async function consumeRateLimit(env: Env, key: string, policy: RateLimitP
             count: eb
               .case()
               .when('rate_limits.window_start_at', '<=', cutoff)
-              .then(1)
-              .else(eb('rate_limits.count', '+', 1))
+              .then(weight)
+              .else(eb('rate_limits.count', '+', weight))
               .end(),
           })),
         )
