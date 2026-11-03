@@ -45,6 +45,8 @@ type Common<Input, Output> = {
   readonly input: Input;
   readonly output: Output;
   readonly rateLimit?: RateLimit;
+  // 長文の取り込みで本文を読む前に要求数を制限する。ファイル件数の枠とは別。
+  readonly requestRateLimit?: RateLimit;
   // 入力と権限を検証した後、件数の重みで数える。通常のrateLimitとは排他的。
   readonly weightedRateLimit?: RateLimit & { readonly weight: (input: unknown) => number };
   readonly maxBodyBytes?: number;
@@ -141,6 +143,14 @@ export function assertOperationDefinition(definition: AnyOperationDefinition): v
   )
     throw new Error(`操作 ${name} の本文の上限は1〜16MiB`);
   const rateLimit = definition.rateLimit ?? definition.weightedRateLimit;
+  if (
+    definition.requestRateLimit &&
+    (!Number.isSafeInteger(definition.requestRateLimit.max) ||
+      definition.requestRateLimit.max < 1 ||
+      !Number.isSafeInteger(definition.requestRateLimit.windowSeconds) ||
+      definition.requestRateLimit.windowSeconds < 1)
+  )
+    throw new Error(`操作 ${name} の要求の回数と窓は1以上の整数`);
 
   if (rateLimit !== undefined && !(Number.isInteger(rateLimit.max) && rateLimit.max > 0)) {
     throw new Error(`操作 ${name} の rateLimit.max は 1 以上の整数`);

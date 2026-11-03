@@ -16,11 +16,13 @@
     pages,
     busy = $bindable(false),
     onuploaded,
+    onrefresh,
   }: {
     wiki: WikiClient;
     pages: readonly WikiNode[];
     busy?: boolean;
     onuploaded: (count: number) => Promise<void>;
+    onrefresh: () => Promise<boolean>;
   } = $props();
   let dialog = $state<ReturnType<typeof Dialog>>();
   let open = $state(false);
@@ -30,6 +32,11 @@
   let over = $state(false);
   let failure = $state('');
   let parentError = $state('');
+  let uncertain = $state(false);
+  let refreshed = $state(false);
+  let acknowledged = $state(false);
+  let beforeIds = $state<string[]>([]);
+  const addedPages = $derived(refreshed ? pages.filter((page) => !beforeIds.includes(page.id)) : []);
   let picker: HTMLInputElement;
   let chooseButton = $state<HTMLButtonElement>();
   let generation = 0;
@@ -42,6 +49,7 @@
       files.every((file) => file.problem === null) &&
       !reading &&
       !busy &&
+      (!uncertain || (refreshed && acknowledged)) &&
       (parent === '' || parents.some((item) => item.id === parent && !item.disabled)),
   );
   $effect(() => {
@@ -51,6 +59,9 @@
       failure = '';
       parentError = '';
       over = false;
+      uncertain = false;
+      refreshed = false;
+      acknowledged = false;
     }
   });
   export function show(trigger: HTMLElement, parentId: string | null) {
@@ -87,6 +98,10 @@
     busy = true;
     failure = '';
     parentError = '';
+    beforeIds = pages.map((page) => page.id);
+    uncertain = false;
+    refreshed = false;
+    acknowledged = false;
     try {
       const result = await wiki.upload(
         files.map(({ file_name, body_md }) => ({ file_name, body_md })),
@@ -99,6 +114,7 @@
         await onuploaded(count);
       } else {
         const code = result.error?.code;
+        uncertain = result.status === 0 || result.status >= 500 || result.status < 400;
         const details = result.error?.details;
         if (code === 'invalid_input' && Array.isArray(details)) {
           files = files.map((file, index) => {
@@ -145,6 +161,17 @@
     await tick();
     chooseButton?.focus();
   }
+  async function refreshResult() {
+    if (busy) return;
+    busy = true;
+    try {
+      refreshed = await onrefresh();
+      acknowledged = false;
+      if (!refreshed) failure = t('wikiUploadRefreshFailed');
+    } finally {
+      busy = false;
+    }
+  }
   function problem(file: SelectedWikiFile) {
     switch (file.problem) {
       case 'extension':
@@ -156,7 +183,7 @@
       case 'invalid_character':
         return t('wikiBodyInvalid');
       case 'title':
-        return t('wikiTitleInvalid');
+        return t('wikiUploadTitleInvalid');
       case 'utf8':
         return t('wikiUploadUtf8');
       case 'read':
@@ -241,13 +268,13 @@
         <Icon name={file.problem ? 'alert' : 'file'} />
         <div class="file-main">
           <span class="file-name">{file.file_name}</span>
-          <span class="file-meta"
-            >{t('wikiUploadTitle', { title: wikiUploadTitle(file) ?? '—' })}
-            {t(parseWikiFrontmatter(file.body_md).title ? 'wikiUploadFromTitle' : 'wikiUploadFromName')}・{t(
-              'wikiUploadLength',
-              { count: [...file.body_md].length },
-            )}</span
-          >
+          {#if file.contentRead}<span class="file-meta"
+              >{t('wikiUploadTitle', { title: wikiUploadTitle(file) ?? '—' })}
+              {t(parseWikiFrontmatter(file.body_md).title ? 'wikiUploadFromTitle' : 'wikiUploadFromName')}・{t(
+                'wikiUploadLength',
+                { count: [...file.body_md].length },
+              )}</span
+            >{:else}<span class="file-meta">{t('wikiUploadUnread')}</span>{/if}
           {#if file.problem}<span class="file-meta">{problem(file)}</span>{/if}
         </div>
         <div class="file-actions">
@@ -262,10 +289,25 @@
       </div>
     {/each}
     <p class="field-hint" role="status">
-      {reading ? t('wikiUploadReading') : t('wikiUploadCount', { count: files.length })}
+      {busy ? t('wikiUploadSaving') : reading ? t('wikiUploadReading') : t('wikiUploadCount', { count: files.length })}
     </p>
     {#if files.some((file) => file.problem)}<p class="field-hint">{t('wikiUploadFix')}</p>{/if}
     {#if failure}<p class="callout is-warn" role="alert" id={`${id}-failure`} tabindex="-1">{failure}</p>{/if}
+    {#if uncertain}
+      <section class="callout is-warn">
+        <p>{t('wikiUploadUncertain')}</p>
+        <button type="button" class="btn" aria-disabled={busy} onclick={refreshResult}>{t('wikiUploadRefresh')}</button>
+        {#if refreshed}
+          <p>{t('wikiUploadNewPages', { count: addedPages.length })}</p>
+          {#if addedPages.length}<ul>
+              {#each addedPages as item (item.id)}<li class="wrap-anywhere">{item.title}</li>{/each}
+            </ul>{/if}
+          <label
+            ><input type="checkbox" bind:checked={acknowledged} disabled={busy} />{t('wikiUploadAcknowledge')}</label
+          >
+        {/if}
+      </section>
+    {/if}
   </form>
   {#snippet footer(close)}
     <button type="button" class="btn" aria-disabled={busy} onclick={close}>{t('cancel')}</button>

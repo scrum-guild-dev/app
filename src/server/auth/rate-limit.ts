@@ -78,7 +78,7 @@ export function longestRateLimitWindowMs(definitions: readonly AnyOperationDefin
     ...Object.values(CLIENT_ERROR_RATE_LIMITS).map((policy) => policy.windowMs),
     ...Object.values(PASSWORD_LOGIN_RATE_LIMITS).map((policy) => policy.windowMs),
     ...definitions.flatMap((definition) =>
-      [definition.rateLimit, definition.weightedRateLimit].flatMap((limit) =>
+      [definition.rateLimit, definition.weightedRateLimit, definition.requestRateLimit].flatMap((limit) =>
         limit === undefined ? [] : [limit.windowSeconds * 1000],
       ),
     ),

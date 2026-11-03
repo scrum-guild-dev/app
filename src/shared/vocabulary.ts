@@ -34,6 +34,14 @@ export const dictionary = defineDictionary({
   wikiAdd: 'ページを足す',
   wikiAddChild: '子のページを足す',
   wikiUpload: '.md を上げる',
+  wikiUploadUnread: '本文を読み取れないため、題と字数は表示できません。',
+  wikiUploadTitleInvalid:
+    '題を決められません。ファイル名を1〜100字にするか、frontmatterのtitleを直して選び直してください。',
+  wikiUploadUncertain: '保存されたか確認できません。同じページを重ねて作らないよう、一覧を読み直して確認してください。',
+  wikiUploadRefresh: 'ページの一覧を読み直す',
+  wikiUploadNewPages: '送信後に増えたページは{count}件です。',
+  wikiUploadAcknowledge: '一覧を確認しました。重複する可能性を了承して再送します。',
+  wikiUploadRefreshFailed: 'ページの一覧を読めませんでした。もう一度読み直してください。',
   wikiDownloadMetadataLimit:
     '書き出したfrontmatterは読み取りの上限を超えます。上げ直す前にfrontmatterを短くしてください。',
   wikiUploadParent: '足す場所（親のページ）',
@@ -63,8 +71,7 @@ export const dictionary = defineDictionary({
   wikiUploadRate: '取り込む件数の上限に達しました。しばらく待ってから、もう一度試してください。',
   wikiUploadGone: '足す先が見つからないか、利用できなくなりました。親を選び直すか、Wikiを読み直してください。',
   wikiUploadInvalid: '取り込めないファイルがあります。ファイルの内容を確かめ、外して選び直してください。',
-  wikiUploadFailed:
-    'ページを足せませんでした。選んだファイルは残してあります。通信に失敗した場合は、ページが増えていないか確かめてから再度送ってください。',
+  wikiUploadFailed: 'ページを足せませんでした。選んだファイルは残してあります。',
   wikiDownload: '.md で落とす',
   wikiDownloadAddedTitle: '題をfrontmatterに補って書き出しました。',
   wikiDownloadRaw: 'frontmatterを読めないため、題を足さず本文のまま書き出しました。',

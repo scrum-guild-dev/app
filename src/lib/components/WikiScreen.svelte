@@ -218,6 +218,16 @@
     }
     showToast(notice);
   }
+  async function refreshWiki() {
+    try {
+      await invalidate('app:wiki');
+      await tick();
+      return !data.wikiFailed && data.wikiPages !== null;
+    } catch {
+      showToast(t('wikiUploadRefreshFailed'));
+      return false;
+    }
+  }
   function download() {
     if (!current) return;
     const source = wikiDownloadSource(current.title, current.body_md);
@@ -235,7 +245,10 @@
     else if (!frontmatter.title) messages.push(t('wikiDownloadAddedTitle'));
     if (wikiBodyProblem(source) === 'too_long') messages.push(t('wikiDownloadTooLong'));
     if (!frontmatter.invalid && parseWikiFrontmatter(source).invalid) messages.push(t('wikiDownloadMetadataLimit'));
-    if (messages.length) showToast(messages.join(' '));
+    if (messages.length) {
+      notice = messages.join(' ');
+      showToast(notice);
+    }
   }
 </script>
 
@@ -443,5 +456,12 @@
   danger><p>{t('wikiDiscardText')}</p></ConfirmDialog
 >
 {#key wiki.rootHref}
-  <WikiUploadDialog bind:this={uploadDialog} {wiki} {pages} bind:busy={uploadBusy} onuploaded={uploaded} />
+  <WikiUploadDialog
+    bind:this={uploadDialog}
+    {wiki}
+    {pages}
+    bind:busy={uploadBusy}
+    onuploaded={uploaded}
+    onrefresh={refreshWiki}
+  />
 {/key}

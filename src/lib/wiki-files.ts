@@ -3,6 +3,7 @@ import { wikiUploadProblem, type WikiUploadFile, type WikiUploadProblem } from '
 
 export type SelectedWikiFile = WikiUploadFile & {
   key: string;
+  contentRead: boolean;
   problem: WikiUploadProblem | 'utf8' | 'read' | null;
 };
 
@@ -10,6 +11,7 @@ export async function readWikiFile(file: File): Promise<SelectedWikiFile> {
   const result: SelectedWikiFile = {
     file_name: file.name,
     body_md: '',
+    contentRead: false,
     key: JSON.stringify([file.name, file.size, file.lastModified]),
     problem: null,
   };
@@ -24,6 +26,7 @@ export async function readWikiFile(file: File): Promise<SelectedWikiFile> {
   }
   try {
     result.body_md = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+    result.contentRead = true;
   } catch {
     return { ...result, problem: 'utf8' };
   }

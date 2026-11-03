@@ -220,13 +220,25 @@ function checkTokenScope(definition: AnyOperationDefinition, apiToken: ApiToken 
   if (!tokenAllows(definition, apiToken.scope)) throw new ApiError(403, 'forbidden');
 }
 
-// 定義の rateLimit を、アカウントと操作ごとに数える。権限の検査の後、入力を読む前に行う
+// 通常の操作枠と、長文取り込みの要求枠を入力を読む前に数える。
+// 検証後のファイル件数とはキーを分ける。
 async function enforceRateLimit(
   c: Context<AppEnv>,
   definition: AnyOperationDefinition,
   accountId: string,
 ): Promise<void> {
   const { rateLimit } = definition;
+  const requestLimit = definition.requestRateLimit;
+  if (
+    requestLimit &&
+    !(await consumeRateLimit(
+      c.env,
+      `request:${definition.name}:${accountId}`,
+      { max: requestLimit.max, windowMs: requestLimit.windowSeconds * 1000 },
+      new Date(),
+    ))
+  )
+    throw new ApiError(429, 'rate_limited');
   if (rateLimit === undefined) return;
   const allowed = await consumeRateLimit(
     c.env,

@@ -38,7 +38,8 @@ export async function readBodyText(c: Context<AppEnv>, maxBytes: number = MAX_BO
   const body = c.req.raw.body;
   if (body === null) return '';
   const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
+  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false });
+  const chunks: string[] = [];
   let received = 0;
   for (;;) {
     const { done, value } = await reader.read();
@@ -48,16 +49,16 @@ export async function readBodyText(c: Context<AppEnv>, maxBytes: number = MAX_BO
       await reader.cancel();
       throw new ApiError(413, 'invalid_input');
     }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(received);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
+    try {
+      chunks.push(decoder.decode(value, { stream: true }));
+    } catch {
+      await reader.cancel();
+      throw new ApiError(400, 'invalid_input');
+    }
   }
   try {
-    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes);
+    chunks.push(decoder.decode());
+    return chunks.join('');
   } catch {
     throw new ApiError(400, 'invalid_input');
   }
