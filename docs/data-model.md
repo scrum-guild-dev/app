@@ -1188,20 +1188,22 @@ Wiki のページ。組織の Wiki とワークスペースの Wiki で共有す
 - 前の版に戻すときは、その版の題と本文で普通に保存する（新しい版になる。戻す専用の操作は持たない）。
 - 版の一覧は 100 件までなので、ページ分けしない。差分は返さない。
 
+実装済みの履歴操作: `org-wiki-revisions` と `workspace-wiki-revisions` は題、版番号、保存者、保存日時を最新順に返す。ページを読む操作の `revision` に残っている版番号を指定すると、その版の題と本文を返す。範囲外・削除済みのページと残っていない版は、存在しない場合と同じ404。復元は専用操作を設けず、ページを開いた時点の `read_version` と過去版の題・本文を既存の保存操作へ送る。競合時は上書きせず、過去版の表示を残す。
+
 #### 操作
 
-操作は、組織の Wiki の `org-wiki-*`（権限 `organization`）と、ワークスペースの Wiki の `workspace-wiki-*`（権限 `member`、`workspace: true`）の2系統にして、処理は共有する。`define.ts` が1つの操作に組織とワークスペースの両方の権限を持たせられないため。下の名前は `org-wiki-` と `workspace-wiki-` の後ろに付く部分で、名前と入出力の細かい形は、実装のストーリーで決める。
+操作は、組織の Wiki の `org-wiki-*`（権限 `organization`）と、ワークスペースの Wiki の `workspace-wiki-*`（権限 `member`、`workspace: true`）の2系統にして、処理は共有する。`define.ts` が1つの操作に組織とワークスペースの両方の権限を持たせられないため。下の名前は `org-wiki-` と `workspace-wiki-` の後ろに付く部分。計画上の名前を残し、実装で名前や入出力を決めたものは併記する。未実装の返り値は後続のストーリーで追加する。
 
 | 操作 | 種類 | 中身 |
 | --- | --- | --- |
 | `page-list` | 読み取り | その Wiki の削除していないページの `id`、`title`、`parent_id`、`position`、`updated_at` を、本文を載せずに1回で全部返す。ページ数に上限が無いので、応答に打ち切りの印は持たせない。ページ数と応答の大きさを測り、分けて読む形か上限を決めるのは #750 と #757 の宿題とする（測らずに、決めた数で切らない）。閉じたワークスペースでも読める |
-| `page-get` | 読み取り | 1ページの `title`、`body_md`、`version`、`parent_id`、作った人と最後に保存した人（`{ id, name }`。名前は組織で絞った `users` から読む）、`created_at`、`updated_at`、祖先の `{ id, title }`（最上段から親まで）、呼んだ人が消せるか。無い、削除した、別の Wiki のページは 404 |
+| `page-get`（実装名 `page`） | 読み取り | `page_id` と任意の `revision`（1以上の整数）。`id`、`parent_id`、`position`、`title`、`body_md`、`version`、`created_at`、`updated_at` を返す。版を指定した場合はその版の題・本文・番号・保存日時になり、親と並びは現在の値。無い、削除済み、別の Wiki のページと残っていない版は404。未実装: 作った人と最後に保存した人（`{ id, name }`。組織で絞った `users` から読む）、祖先の `{ id, title }`（最上段から親まで）、呼んだ人が消せるか。これらの返り値は後続のストーリーで追加する |
 | `page-create` | 書き込み | `parent_id`（空なら最上段）、`title`、`body_md`。作るページは兄弟の末尾に置く。親が無い、別の Wiki の親、削除した親は 404。深さが 10 段を超えるなら 409（`conflict`、`details.reason` が `too_deep`）。閉じたワークスペースは 409（`workspace_closed`）。回数の上限あり |
 | `page-update` | 書き込み | `page_id`、`title`、`body_md`、`read_version`（読んだときの `version`）。今の版が `read_version` と同じときだけ書き、違えば 409（`conflict`、`details.reason` が `changed`）。画面は書いていた題と本文を残し、今の版を読み直して見比べてもらう。回数の上限あり |
 | `page-move` | 書き込み | `page_id`、`parent_id`（空なら最上段）、`after_page_id`（空なら先頭、ID ならその直後、省くと末尾）。書き方は `task-move` と同じ（条件つきの `UPDATE`、同じ値の続きの振り直し）。自分の子孫の下は 409（`conflict`、`cycle`）、11 段目ができるなら 409（`conflict`、`too_deep`）、別の Wiki の親は 404。`version` と版は動かさない |
 | `page-delete` | 書き込み | `page_id`。作った人とリーダーと管理者だけが消せる（組織の Wiki は作った人と管理者）。それ以外は 403（`forbidden`）。子は消したページの親の下へ上がる。消えたページへの削除は 404 |
-| `revision-list` | 読み取り | `page_id`。そのページの版を新しい順に全部（多くても 100）。各版の `version`、`title`、保存した人（`{ id, name }`）、`saved_at`。本文は返さない |
-| `revision-get` | 読み取り | `page_id`、`version`。1つの版の `title`、`body_md`、保存した人、`saved_at`。消えた版（一番古い版を消した後の番号）は 404 |
+| `revision-list`（実装名 `revisions`） | 読み取り | `page_id`。そのページの版を新しい順に100件まで返す。各版の `version`、`title`、`saved_by`、`saved_by_name`、`saved_at`。本文は返さない |
+| `revision-get`（`page` の `revision` に統合） | 読み取り | 特定の版の題と本文は `page_id` と `revision` を付けた `page` で読む。保存者と保存日時は一覧から得る。残っていない版は404 |
 | `search` | 読み取り | `query`。題と本文で、その Wiki の中だけを探す（上の検索の決まり）。一致したページの `id`、`title`、一致した場所（`title` か `body`。上の検索の決まり）を返す。本文は返さない。件数の上限と並びは #757 |
 | `upload` | 書き込み | `parent_id`（空なら最上段）、`files`（`file_name` と `body_md` の組を 20 件まで）。1ファイルを1つの新しいページ（と 1 版目）にする。ダウンロードは専用の操作を持たず、`page-get` の応答から画面が .md を組み立てる（frontmatter に `title` が無ければ題を足す）。次のどれか1件でもあれば、何も作らずに全体を 400（`invalid_input`）で断る（サーバー側の検査）: 決まる題が前後の空白を除いて 1〜100 字に収まらない、本文が 10 万字を超える、本文に NUL がある、`file_name` が `.md` で終わらない、`file_name` が長すぎる（255 字を超える。コードポイントで数える）、本文が UTF-8 でない、ファイルが 21 件以上か 0 件。どのファイルが、なぜ断られたかを `details` に返す。画面は、足せない行を先に外させてから送る。回数の上限あり（1 回の `upload` は、ファイル数ぶん数える。20 件なら 20 回分） |
 

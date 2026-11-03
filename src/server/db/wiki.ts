@@ -48,7 +48,25 @@ export async function readWikiPage(
   db: OrganizationDb,
   scope: WikiScope,
   pageId: string,
+  revision?: number,
 ): Promise<WikiPage | undefined> {
+  if (revision !== undefined) {
+    const page = await readWikiPage(db, scope, pageId);
+    if (page === undefined) return undefined;
+    const historical = await db.first(
+      db.statement((q) =>
+        q
+          .selectFrom('wiki_page_revisions as r')
+          .innerJoin('wiki_pages as p', 'p.id', 'r.page_id')
+          .select(['r.title', 'r.body_md', 'r.version', 'r.saved_at as updated_at'])
+          .where('p.id', '=', pageId)
+          .where(scopeOf('p', scope))
+          .where('p.deleted_at', 'is', null)
+          .where('r.version', '=', revision),
+      ),
+    );
+    return historical === undefined ? undefined : { ...page, ...historical };
+  }
   return db.first(
     db.statement((q) =>
       q
@@ -60,6 +78,28 @@ export async function readWikiPage(
     ),
   );
 }
+
+export async function readWikiRevisions(db: OrganizationDb, scope: WikiScope, pageId: string) {
+  const page = await readWikiPage(db, scope, pageId);
+  if (page === undefined) return undefined;
+  return db.rows(
+    db.statement((q) =>
+      q
+        .selectFrom('wiki_page_revisions as r')
+        .innerJoin('wiki_pages as p', 'p.id', 'r.page_id')
+        .innerJoin('users as u', (join) =>
+          join.onRef('u.id', '=', 'r.saved_by').on('u.organization_id', '=', db.organizationId),
+        )
+        .select(['r.version', 'r.title', 'r.saved_by', 'u.name as saved_by_name', 'r.saved_at'])
+        .where('p.id', '=', pageId)
+        .where(scopeOf('p', scope))
+        .where('p.deleted_at', 'is', null)
+        .orderBy('r.version', 'desc')
+        .limit(100),
+    ),
+  );
+}
+
 export async function readWikiTree(db: OrganizationDb, scope: WikiScope) {
   return db.rows(
     db.statement((q) =>

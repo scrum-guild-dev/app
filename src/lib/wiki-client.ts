@@ -4,10 +4,12 @@ import {
   orgWikiCreate,
   orgWikiMove,
   orgWikiPage,
+  orgWikiRevisions,
   orgWikiUpdate,
   workspaceWikiCreate,
   workspaceWikiMove,
   workspaceWikiPage,
+  workspaceWikiRevisions,
   workspaceWikiUpdate,
 } from '../shared/operations/wiki/index.ts';
 
@@ -26,10 +28,14 @@ export function wikiClient(slug: string, workspaceId: string | null) {
         : resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId }),
     accessLabel: workspaceId === null ? ('orgWikiAccess' as const) : ('wikiAccess' as const),
     treeLabel: workspaceId === null ? ('orgWikiTreeLabel' as const) : ('wikiTreeLabel' as const),
-    readPage: (pageId: string) =>
+    readPage: (pageId: string, revision?: number) =>
       workspaceId === null
-        ? callOperation(orgWikiPage, { page_id: pageId }, { slug })
-        : callOperation(workspaceWikiPage, { workspace_id: workspaceId, page_id: pageId }, { slug }),
+        ? callOperation(orgWikiPage, { page_id: pageId, revision }, { slug })
+        : callOperation(workspaceWikiPage, { workspace_id: workspaceId, page_id: pageId, revision }, { slug }),
+    readRevisions: (pageId: string) =>
+      workspaceId === null
+        ? callOperation(orgWikiRevisions, { page_id: pageId }, { slug })
+        : callOperation(workspaceWikiRevisions, { workspace_id: workspaceId, page_id: pageId }, { slug }),
     createPage: (content: Content, parentId: string | null) =>
       workspaceId === null
         ? callOperation(orgWikiCreate, { ...content, parent_id: parentId }, { slug })
