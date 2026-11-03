@@ -475,6 +475,8 @@ test.describe('運用者', () => {
     const seats = page.locator('.table tbody tr td[data-label="人数 / 上限"]');
     await expect(seats.locator('[aria-hidden="true"]')).toHaveText('—');
     await expect(seats.locator('.visually-hidden')).toHaveText('本人1人だけ');
+    // セル全体の文字は、ダッシュと読み上げ用の文言だけ。「1 / 1」のような数が足されたら落ちる
+    await expect(seats).toHaveText('— 本人1人だけ');
     expect(await collect()).toEqual([]);
   });
 
