@@ -103,7 +103,7 @@ describe('メニュー', () => {
 
   test('行き先の無い（href が null の）項目と、項目の無い見出しは出さない', () => {
     const shown = visibleNav(undefined, { isAdmin: true });
-    // ワークスペースの経路の項目は、ワークスペースの画面を開いている間だけ出る（次のテスト）
+    // ワークスペースの経路の項目は、メニューに対象があるときだけ出る（次のテスト）
     const withDestination = navSections
       .flatMap((section) => section.items)
       .filter((item) => item.href !== null && !isWorkspaceRoute(item.href));
@@ -126,29 +126,27 @@ describe('メニュー', () => {
     assert.ok(!labelsInNav.includes('pageMe'));
   });
 
-  test('ワークスペースの経路の項目は、ワークスペースの画面を開いている間（ID があるとき）だけ出す', () => {
+  test('ワークスペースの経路の項目は、メニューの対象の ID があるときだけ出す', () => {
     const labels = (options: Parameters<typeof visibleNav>[1]) =>
       visibleNav(undefined, options).flatMap((section) => section.items.map((item) => item.label));
     const members = navSections.flatMap((section) => section.items).find((item) => item.label === 'pageMembers');
     assert.equal(members?.href, '/[slug]/w/[id]/members');
-    // 組織の画面（ID なし）と、ID だけで画面を開いていない場合は出さない
+    // 対象なし（ID なし）と、ID だけでメニューを出していない場合は出さない
     assert.ok(!labels({ hasWorkspace: true, isAdmin: true }).includes('pageMembers'));
     assert.ok(!labels({ hasWorkspace: true, workspaceId: 'w1' }).includes('pageMembers'));
-    assert.ok(!labels({ hasWorkspace: true, inWorkspaceScreen: true, workspaceId: null }).includes('pageMembers'));
+    assert.ok(!labels({ hasWorkspace: true, hasWorkspaceMenu: true, workspaceId: null }).includes('pageMembers'));
     // 空の ID は壊れたリンクになるので、ID が無いのと同じに扱う
-    assert.ok(!labels({ hasWorkspace: true, inWorkspaceScreen: true, workspaceId: '' }).includes('pageMembers'));
+    assert.ok(!labels({ hasWorkspace: true, hasWorkspaceMenu: true, workspaceId: '' }).includes('pageMembers'));
     // 所属していない管理者にも、開いている間は出す
     assert.ok(
-      labels({ hasWorkspace: false, isAdmin: true, inWorkspaceScreen: true, workspaceId: 'w1' }).includes(
-        'pageMembers',
-      ),
+      labels({ hasWorkspace: false, isAdmin: true, hasWorkspaceMenu: true, workspaceId: 'w1' }).includes('pageMembers'),
     );
-    assert.ok(labels({ hasWorkspace: true, inWorkspaceScreen: true, workspaceId: 'w1' }).includes('pageMembers'));
+    assert.ok(labels({ hasWorkspace: true, hasWorkspaceMenu: true, workspaceId: 'w1' }).includes('pageMembers'));
   });
 
-  test('ワークスペースの設定は、開いているワークスペースのリーダーと管理者にだけ出す', () => {
+  test('ワークスペースの設定は、メニューの対象のリーダーと管理者にだけ出す', () => {
     const labels = (options: Parameters<typeof visibleNav>[1]) =>
-      visibleNav(undefined, { hasWorkspace: true, inWorkspaceScreen: true, workspaceId: 'w1', ...options }).flatMap(
+      visibleNav(undefined, { hasWorkspace: true, hasWorkspaceMenu: true, workspaceId: 'w1', ...options }).flatMap(
         (section) => section.items.map((item) => item.label),
       );
     const settings = navSections.flatMap((section) => section.items).find((item) => item.label === 'pageSettings');
@@ -156,12 +154,12 @@ describe('メニュー', () => {
     assert.ok(labels({ isLeader: true }).includes('pageSettings'));
     assert.ok(labels({ isAdmin: true }).includes('pageSettings'));
     assert.ok(!labels({}).includes('pageSettings'));
-    // ワークスペースの外では、リーダーでも出さない
-    assert.ok(!labels({ inWorkspaceScreen: false, isLeader: true }).includes('pageSettings'));
+    // メニューを出さないときは、リーダーでも設定を出さない
+    assert.ok(!labels({ hasWorkspaceMenu: false, isLeader: true }).includes('pageSettings'));
   });
 
   test('ワークスペースの画面を開いている間は、バックログへ戻る項目を出す', () => {
-    const items = visibleNav(undefined, { hasWorkspace: true, inWorkspaceScreen: true, workspaceId: 'w1' }).flatMap(
+    const items = visibleNav(undefined, { hasWorkspace: true, hasWorkspaceMenu: true, workspaceId: 'w1' }).flatMap(
       (section) => section.items,
     );
     assert.equal(items.find((item) => item.label === 'backlog')?.href, '/[slug]/w/[id]');
@@ -176,11 +174,11 @@ describe('メニュー', () => {
     assert.deepEqual(headings({ hasWorkspace: true, isAdmin: true }), [undefined]);
     assert.deepEqual(headings({ hasWorkspace: false, isAdmin: true }), [undefined]);
     // 所属の無い管理者がワークスペースの画面を開く。切り替えの置き場所を持つ節だけが、項目が無くても残る
-    assert.deepEqual(headings({ hasWorkspace: false, isAdmin: true, inWorkspaceScreen: true }), [
+    assert.deepEqual(headings({ hasWorkspace: false, isAdmin: true, hasWorkspaceMenu: true }), [
       undefined,
       'workspace',
     ]);
-    const workspaceSection = visibleNav(undefined, { hasWorkspace: false, inWorkspaceScreen: true }).find(
+    const workspaceSection = visibleNav(undefined, { hasWorkspace: false, hasWorkspaceMenu: true }).find(
       (section) => section.slot === 'workspace',
     );
     assert.deepEqual(workspaceSection?.items, []);

@@ -41,6 +41,16 @@ describe('ワークスペースの切り替え', () => {
     expect(body).not.toContain('disabled');
   });
 
+  test('今日やることでは対象の名前とチェックを出すが、ワークスペースの画面を現在地にしない', () => {
+    const body = render(WorkspaceSwitcher, {
+      props: { workspaces: [current, other], currentWorkspace: current, inWorkspaceScreen: false, slug: 'sample' },
+    }).body;
+    expect(body).toContain(current.name);
+    expect(body.match(/#i-check/g)).toHaveLength(1);
+    expect(body).not.toContain('aria-current');
+    expect(body).toContain('href="/sample/w/one"');
+  });
+
   test('所属していない管理者の今のものは先頭に押せない現在地の行として出し、所属先だけをリンクにする', () => {
     const body = html([other]);
     const rows = list(body);
