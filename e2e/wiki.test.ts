@@ -31,9 +31,11 @@ test('長い組織名がメニューに収まり、画面内の移動で権限�
   // 親の組織レイアウトが再取得されない、同じ slug の画面内での移動。
   await page.locator('.nav-item', { hasText: `${name}の Wiki` }).click();
   await expect(page.getByText('ページが見つかりません', { exact: true })).toBeVisible();
+  await expect(page.getByText('この組織の全員が、読んで書けます。', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'ページを足す', exact: true })).toHaveCount(0);
   await page.goto(url);
   await expect(page.getByText('ページが見つかりません', { exact: true })).toBeVisible();
+  await expect(page.getByText('この組織の全員が、読んで書けます。', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'ページを足す', exact: true })).toHaveCount(0);
 });
 

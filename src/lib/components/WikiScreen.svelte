@@ -226,7 +226,9 @@
   {#snippet actions()}{#if canWrite}<button class="btn is-primary" type="button" onclick={() => begin(true)}
         >{t('wikiAdd')}</button
       >{/if}{/snippet}
-  {#snippet meta()}<p class="section-hint">{t(workspaceId === null ? 'orgWikiAccess' : 'wikiAccess')}</p>{/snippet}
+  {#snippet meta()}{#if data.wikiPages !== null && !data.wikiNotFound}<p class="section-hint">
+        {t(workspaceId === null ? 'orgWikiAccess' : 'wikiAccess')}
+      </p>{/if}{/snippet}
 </PageHead>
 {#if workspaceId !== null && !canWrite}<p class="callout is-info">{t('wikiClosed')}</p>{/if}
 <p role="status" class="field-hint">{notice}</p>
