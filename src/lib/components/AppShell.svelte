@@ -71,6 +71,6 @@
       </div>
     {/if}
     {@render notice?.()}
-    <main class="content" id="content" tabindex="-1">{@render children()}</main>
+    <main class="content" id="content">{@render children()}</main>
   </div>
 </div>

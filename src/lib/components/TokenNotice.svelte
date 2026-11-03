@@ -22,9 +22,11 @@
   let active = true;
   let request = 0;
   let initialNavigation = true;
+  let clearContentFocus: (() => void) | undefined;
   onDestroy(() => {
     active = false;
     request++;
+    clearContentFocus?.();
   });
 
   const latest = $derived(current?.latest ?? null);
@@ -46,6 +48,28 @@
     if (!active || serial !== request || notice !== initial) return;
     beforeApply?.();
     fetched = { initial, data: result.ok ? result.data : null };
+  }
+
+  // 普段の本文をクリック可能なフォーカス先にしない。確認で移す間だけ属性を借り、離れたら戻す。
+  function focusContent(): void {
+    clearContentFocus?.();
+    const content = document.getElementById('content');
+    if (content === null || !content.isConnected) return;
+    const previous = content.getAttribute('tabindex');
+    const cleanup = () => {
+      content.removeEventListener('blur', cleanup);
+      // ほかの処理が属性を変えていたら、その値を保つ。
+      if (content.getAttribute('tabindex') === '-1') {
+        if (previous === null) content.removeAttribute('tabindex');
+        else content.setAttribute('tabindex', previous);
+      }
+      if (clearContentFocus === cleanup) clearContentFocus = undefined;
+    };
+    clearContentFocus = cleanup;
+    content.setAttribute('tabindex', '-1');
+    content.addEventListener('blur', cleanup, { once: true });
+    content.focus({ preventScroll: true });
+    if (document.activeElement !== content) cleanup();
   }
 
   async function confirm(): Promise<void> {
@@ -74,7 +98,7 @@
         !visible &&
         (document.activeElement === document.body || document.activeElement === confirmButton)
       ) {
-        document.getElementById('content')?.focus({ preventScroll: true });
+        focusContent();
       }
     } else {
       saving = false;

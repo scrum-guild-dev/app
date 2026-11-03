@@ -138,6 +138,7 @@ for (const initialFailure of [false, true]) {
     await page.goto('/aoba/me');
     const heading = page.getByRole('heading', { level: 2, name: 'API トークン', exact: true });
     await expect(heading).toBeVisible();
+    await expect(page.locator('main#content')).not.toHaveAttribute('tabindex');
     const notice = page.getByRole('region', { name: label });
     if (initialFailure) {
       await expect(notice).toContainText('API トークンの発行の知らせを読み込めませんでした。');
@@ -147,7 +148,13 @@ for (const initialFailure of [false, true]) {
       await notice.getByRole('button', { name: '確かめた', exact: true }).click();
       await expect(notice).toHaveCount(0);
       await expect(page.getByRole('status').filter({ hasText: 'API トークンの発行を確かめました' })).toBeVisible();
-      await expect(page.locator('main#content')).toBeFocused();
+      const content = page.locator('main#content');
+      await expect(content).toBeFocused();
+      await expect(content).toHaveAttribute('tabindex', '-1');
+      const field = page.getByRole('region', { name: 'API トークン', exact: true }).getByLabel('名前', { exact: true });
+      await field.focus();
+      await expect(field).toBeFocused();
+      await expect(content).not.toHaveAttribute('tabindex');
     }
     await expect(heading).toBeVisible();
     expect(orgCalls).toBe(1);
