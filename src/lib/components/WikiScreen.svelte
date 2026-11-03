@@ -214,21 +214,24 @@
 {:else}
   <div class="layout-wiki">
     <aside class="wiki-side">
-      {#if data.wikiPages !== null}{#key slug + (workspaceId ?? '')}<WikiSearch
+      {#if data.wikiPages !== null}{#key wiki.rootHref}<WikiSearch
             {slug}
             workspaceId={workspaceId || null}
             {pages}
             currentId={current?.id ?? null}
           >
-            {#if pages.length}<WikiTree
-                bind:this={wikiTree}
-                {pages}
-                {wiki}
-                canWrite={canWrite && mode === 'read' && !saving}
-                currentId={current?.id ?? null}
-              />{:else}<p class="section-hint">
-                {t('wikiTreeEmpty')}
-              </p>{/if}
+            {#snippet children(searching)}
+              {#if pages.length}<WikiTree
+                  bind:this={wikiTree}
+                  {pages}
+                  {wiki}
+                  {searching}
+                  canWrite={canWrite && mode === 'read' && !saving}
+                  currentId={current?.id ?? null}
+                />{:else}<p class="section-hint" hidden={searching}>
+                  {t('wikiTreeEmpty')}
+                </p>{/if}
+            {/snippet}
           </WikiSearch>{/key}{/if}
     </aside>
     <section class="wiki-main" aria-label={t('wikiPage')}>
