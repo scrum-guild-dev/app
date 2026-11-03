@@ -2,8 +2,14 @@ import { expect, test } from './fixtures.ts';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { executeLocalD1 } from './local-d1.ts';
 import { SEED_SESSIONS } from '../seed/sessions.ts';
+import { operationPath } from '../src/shared/operations/define.ts';
 import { organizationInfo } from '../src/shared/operations/organization/index.ts';
-import { orgWikiPage, orgWikiTree, workspaceWikiSearch } from '../src/shared/operations/wiki/index.ts';
+import {
+  orgWikiPage,
+  orgWikiTree,
+  workspaceWikiCreate,
+  workspaceWikiSearch,
+} from '../src/shared/operations/wiki/index.ts';
 import { failOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 test('自分用の組織の Wiki は組織の表示名で案内する', async ({ page }) => {
@@ -231,7 +237,15 @@ test('Wiki の木から親子を作り、番号の URL のまま題と本文を�
   await page.getByLabel('本文', { exact: true }).fill('---\ntitle: 子の手順\n---\n## 準備');
   await expect(page.getByLabel('題', { exact: true })).toHaveValue('子の手順');
   await expect(page.getByLabel('題', { exact: true })).toHaveAttribute('readonly');
+  const created = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+      operationPath(workspaceWikiCreate, new URL(page.url()).pathname.split('/')[1]!),
+  );
   await page.getByRole('button', { name: '保存する', exact: true }).click();
+  const response = await created;
+  await response.finished();
+  expect(response.status()).toBe(200);
   await expect(page.getByRole('heading', { level: 2, name: '子の手順' })).toBeVisible();
   const childUrl = page.url();
   await page.getByRole('button', { name: '編集する' }).click();
@@ -338,6 +352,12 @@ test('Wiki の題・本文を全語で探し、結果から開け、0件・上�
     await query.fill(text);
     await expect(results.getByRole('link', { name: new RegExp('^' + title) })).toBeVisible();
   }
+  for (const width of [320, 390, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(query).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  expect(await violations()).toEqual([]);
   const stopRefreshFailure = await routeOperation(
     page,
     workspaceWikiSearch,
@@ -356,12 +376,6 @@ test('Wiki の題・本文を全語で探し、結果から開け、0件・上�
   await expect(page).toHaveURL(pageUrl);
   await expect(query).toHaveValue('');
   await expect(page.getByRole('heading', { level: 2, name: title, exact: true })).toBeVisible();
-  for (const width of [320, 390, 1024, 1280]) {
-    await page.setViewportSize({ width, height: 800 });
-    await expect(query).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  }
-  expect(await violations()).toEqual([]);
   await query.fill('存在しない語');
   await expect(page.getByText('当たるページはありません。語を変えて探してください。', { exact: true })).toBeVisible();
   await expect(results).toHaveCount(0);
@@ -519,25 +533,40 @@ test('検索の800ms待ち・変換中・空白だけの変更を区別する', 
       await call.fulfill({ pages: [] });
     },
   );
+  // 送信時点をブラウザで同期的に記録する。Node側のroute到着前に否定の判定が通るのを防ぐ。
+  await page.evaluate(() => {
+    const state = window as typeof window & { wikiSearchSends: string[] };
+    state.wikiSearchSends = [];
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (...args: Parameters<typeof fetch>) => {
+      const [input, init] = args;
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.endsWith('/workspace-wiki-search') && typeof init?.body === 'string')
+        state.wikiSearchSends.push((JSON.parse(init.body) as { query: string }).query);
+      return originalFetch(...args);
+    };
+  });
+  const sent = () => page.evaluate(() => (window as typeof window & { wikiSearchSends: string[] }).wikiSearchSends);
   const clockStart = Date.now();
   await page.clock.install({ time: new Date(clockStart) });
   await page.clock.pauseAt(new Date(clockStart + 60000));
   const query = page.getByRole('searchbox', { name: 'Wiki の題と本文を探す', exact: true });
   await query.fill('最初');
   await page.clock.fastForward(799);
-  expect(calls).toEqual([]);
+  expect(await sent()).toEqual([]);
   await page.clock.fastForward(1);
   await expect.poll(() => calls).toEqual(['最初']);
+  expect(await sent()).toEqual(['最初']);
   await query.dispatchEvent('compositionstart');
   await query.fill('変換した語');
   await page.clock.fastForward(5000);
-  expect(calls).toEqual(['最初']);
+  expect(await sent()).toEqual(['最初']);
   await query.dispatchEvent('compositionend');
   await page.clock.fastForward(800);
   await expect.poll(() => calls).toEqual(['最初', '変換した語']);
   await query.fill('  変換した語　');
   await page.clock.fastForward(1600);
-  expect(calls).toEqual(['最初', '変換した語']);
+  expect(await sent()).toEqual(['最初', '変換した語']);
   await query.dispatchEvent('compositionstart');
   await query.fill('離れた語');
   await query.blur();
