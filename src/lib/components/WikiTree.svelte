@@ -3,28 +3,25 @@
   import { untrack, tick } from 'svelte';
   import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
   import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
-  import { callOperation } from '../api.ts';
   import { invalidate } from '$app/navigation';
-  import { orgWikiMove, workspaceWikiMove, type WikiNode } from '../../shared/operations/wiki/index.ts';
+  import { type WikiNode } from '../../shared/operations/wiki/index.ts';
   import Icon from './Icon.svelte';
   import { wikiAncestorIds } from '../wiki-move.ts';
   import { showToast } from '../toast.svelte.ts';
   import WikiMoveDialog from './WikiMoveDialog.svelte';
-  import { resolve } from '$app/paths';
   import { t } from '../vocabulary.svelte.ts';
   import type { OutputOf } from '../../shared/operations/define.ts';
   import { workspaceWikiTree } from '../../shared/operations/wiki/index.ts';
+  import type { WikiClient } from '../wiki-client.ts';
 
   let {
     pages,
-    slug,
-    workspaceId,
+    wiki,
     currentId,
     canWrite = false,
   }: {
     pages: OutputOf<typeof workspaceWikiTree>['pages'];
-    slug: string;
-    workspaceId: string | null;
+    wiki: WikiClient;
     currentId: string | null;
     canWrite?: boolean;
   } = $props();
@@ -43,18 +40,10 @@
     feedback = '';
     failed = false;
     const focused = document.activeElement;
-    const scopeKey = `${slug}/${workspaceId ?? ''}`;
+    const scopeKey = wiki.rootHref;
     try {
-      const input = {
-        page_id: item.id,
-        parent_id: parentId,
-        ...(afterId !== undefined ? { after_page_id: afterId } : {}),
-      };
-      const result =
-        workspaceId === null
-          ? await callOperation(orgWikiMove, input, { slug })
-          : await callOperation(workspaceWikiMove, { workspace_id: workspaceId, ...input }, { slug });
-      if (scopeKey !== `${slug}/${workspaceId ?? ''}`) return;
+      const result = await wiki.movePage(item.id, parentId, afterId);
+      if (scopeKey !== wiki.rootHref) return;
       failed = !result.ok;
       const details = result.ok ? undefined : result.error?.details;
       const reason = details && typeof details === 'object' && 'reason' in details ? details.reason : undefined;
@@ -193,9 +182,7 @@
         <a
           id={`${treeId}-${item.id}`}
           class="wiki-link"
-          href={workspaceId === null
-            ? resolve('/[slug]/wiki/[pageId]', { slug, pageId: item.id })
-            : resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: item.id })}
+          href={wiki.pageHref(item.id)}
           aria-current={currentId === item.id ? 'page' : undefined}>{item.title}</a
         >
         <button
@@ -255,7 +242,7 @@
       ordering = !ordering;
     }}>{t('wikiReorder')}</button
   >{/if}
-<nav aria-label={t(workspaceId === null ? 'orgWikiTreeLabel' : 'wikiTreeLabel')}>
+<nav aria-label={t(wiki.treeLabel)}>
   <ul class="wiki-tree panel">{@render branch(null, 1)}</ul>
 </nav>
 

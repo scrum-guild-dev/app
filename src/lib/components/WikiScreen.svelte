@@ -1,10 +1,9 @@
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity';
   import { beforeNavigate, goto, invalidate } from '$app/navigation';
-  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { tick } from 'svelte';
-  import { callOperation } from '../api.ts';
+  import { wikiClient } from '../wiki-client.ts';
   import type { WikiData } from '../wiki-load.ts';
   import type { WorkspaceView } from '../workspace.ts';
   import { organizationLabel } from '../organization-label.ts';
@@ -12,14 +11,6 @@
   import type { organizationInfo } from '../../shared/operations/organization/index.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { parseWikiFrontmatter, wikiBodyProblem, wikiTitle } from '../../shared/wiki.ts';
-  import {
-    orgWikiCreate,
-    orgWikiPage,
-    orgWikiUpdate,
-    workspaceWikiCreate,
-    workspaceWikiPage,
-    workspaceWikiUpdate,
-  } from '../../shared/operations/wiki/index.ts';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import EmptyState from './EmptyState.svelte';
   import LoadFailed from './LoadFailed.svelte';
@@ -34,6 +25,14 @@
   } = $props();
   const slug = $derived(page.params.slug ?? '');
   const workspaceId = $derived(page.params.id ?? null);
+  const wiki = $derived(wikiClient(slug, workspaceId));
+  const name = $derived(
+    workspaceId === null
+      ? data.organization
+        ? organizationLabel(data.organization.organization)
+        : undefined
+      : data.workspace?.name,
+  );
   const current = $derived(data.wikiPage);
   const pages = $derived(data.wikiPages ?? []);
   const canWrite = $derived(
@@ -131,10 +130,7 @@
     const pageId = current.id;
     const generation = editGeneration;
     const request = ++comparisonRequest;
-    const result =
-      workspaceId === null
-        ? await callOperation(orgWikiPage, { page_id: current.id }, { slug })
-        : await callOperation(workspaceWikiPage, { workspace_id: workspaceId, page_id: current.id }, { slug });
+    const result = await wiki.readPage(current.id);
     if (mode !== 'edit' || current?.id !== pageId || editGeneration !== generation || request !== comparisonRequest)
       return;
     if (result.ok) {
@@ -157,24 +153,8 @@
     try {
       const result =
         mode === 'create'
-          ? workspaceId === null
-            ? await callOperation(orgWikiCreate, { parent_id: parentId, title, body_md: body }, { slug })
-            : await callOperation(
-                workspaceWikiCreate,
-                { workspace_id: workspaceId, parent_id: parentId, title, body_md: body },
-                { slug },
-              )
-          : workspaceId === null
-            ? await callOperation(
-                orgWikiUpdate,
-                { page_id: current!.id, title, body_md: body, read_version: version },
-                { slug },
-              )
-            : await callOperation(
-                workspaceWikiUpdate,
-                { workspace_id: workspaceId, page_id: current!.id, title, body_md: body, read_version: version },
-                { slug },
-              );
+          ? await wiki.createPage({ title, body_md: body }, parentId)
+          : await wiki.updatePage(current!.id, version, { title, body_md: body });
       if (result.ok) {
         const unchanged = mode === 'edit' && result.data.page.version === version;
         mode = 'read';
@@ -182,11 +162,7 @@
         notice = t(unchanged ? 'wikiUnchanged' : 'wikiSaved');
         conflict = false;
         await invalidate('app:wiki');
-        await goto(
-          workspaceId === null
-            ? resolve('/[slug]/wiki/[pageId]', { slug, pageId: result.data.page.id })
-            : resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: result.data.page.id }),
-        );
+        await goto(wiki.pageHref(result.data.page.id));
       } else {
         const code = result.error?.code;
         conflict = code === 'conflict' && mode === 'edit';
@@ -212,20 +188,22 @@
   }
 </script>
 
-<svelte:head><title>{t('pageTitle', { page: current?.title ?? t('wiki'), app: t('appName') })}</title></svelte:head>
-
-<PageHead
-  title={t('wiki')}
-  eyebrow={workspaceId === null
-    ? data.organization
-      ? organizationLabel(data.organization.organization)
-      : undefined
-    : data.workspace?.name}
+<svelte:head
+  ><title
+    >{t('pageTitle', {
+      page: name ? `${current?.title ?? t('wiki')}・${name}` : (current?.title ?? t('wiki')),
+      app: t('appName'),
+    })}</title
+  ></svelte:head
 >
+
+<PageHead title={t('wiki')} eyebrow={name}>
   {#snippet actions()}{#if canWrite}<button class="btn is-primary" type="button" onclick={() => begin(true)}
         >{t('wikiAdd')}</button
       >{/if}{/snippet}
-  {#snippet meta()}<p class="section-hint">{t(workspaceId === null ? 'orgWikiAccess' : 'wikiAccess')}</p>{/snippet}
+  {#snippet meta()}{#if data.wikiPages !== null && !data.wikiNotFound}<p class="section-hint">
+        {t(wiki.accessLabel)}
+      </p>{/if}{/snippet}
 </PageHead>
 {#if workspaceId !== null && !canWrite}<p class="callout is-info">{t('wikiClosed')}</p>{/if}
 <p role="status" class="field-hint">{notice}</p>
@@ -236,8 +214,7 @@
     <aside class="wiki-side">
       {#if pages.length}<WikiTree
           {pages}
-          {slug}
-          {workspaceId}
+          {wiki}
           canWrite={canWrite && mode === 'read' && !saving}
           currentId={current?.id ?? null}
         />{:else}<p class="section-hint">
@@ -248,19 +225,10 @@
       <nav class="crumbs" aria-label={t('wikiCrumbs')}>
         <ol>
           <li>
-            <a
-              href={workspaceId === null
-                ? resolve('/[slug]/wiki', { slug })
-                : resolve('/[slug]/w/[id]/wiki', { slug, id: workspaceId })}>{t('wiki')}</a
-            >
+            <a href={wiki.rootHref}>{t('wiki')}</a>
           </li>
           {#each ancestors as ancestor (ancestor.id)}<li>
-              <a
-                href={workspaceId === null
-                  ? resolve('/[slug]/wiki/[pageId]', { slug, pageId: ancestor.id })
-                  : resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: ancestor.id })}
-                >{ancestor.title}</a
-              >
+              <a href={wiki.pageHref(ancestor.id)}>{ancestor.title}</a>
             </li>{/each}
           {#if current}<li><span aria-current="page">{current.title}</span></li>{/if}
         </ol>
@@ -337,19 +305,12 @@
                 >{:else}<p class="field-hint">{t('wikiDepth')}</p>{/if}
             </div>{/if}
         </div>
-        <WikiContent
-          source={current.body_md}
-          internalLinkPrefix={`${page.url.origin}${workspaceId === null ? resolve('/[slug]/wiki', { slug }) : resolve('/[slug]/w/[id]/wiki', { slug, id: workspaceId })}/`}
-        />
+        <WikiContent source={current.body_md} internalLinkPrefix={`${page.url.origin}${wiki.rootHref}/`} />
       {:else if pages.length}
         <h2 class="section-title">{t('wikiTop')}</h2>
         <ul>
           {#each pages.filter((item) => item.parent_id === null) as item (item.id)}<li>
-              <a
-                href={workspaceId === null
-                  ? resolve('/[slug]/wiki/[pageId]', { slug, pageId: item.id })
-                  : resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: item.id })}>{item.title}</a
-              >
+              <a href={wiki.pageHref(item.id)}>{item.title}</a>
             </li>{/each}
         </ul>
       {:else}
