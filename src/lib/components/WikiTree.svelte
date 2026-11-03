@@ -1,20 +1,18 @@
 <script lang="ts">
   import { SvelteSet, SvelteMap } from 'svelte/reactivity';
   import { untrack } from 'svelte';
-  import { resolve } from '$app/paths';
   import { t } from '../vocabulary.svelte.ts';
   import type { OutputOf } from '../../shared/operations/define.ts';
   import { workspaceWikiTree } from '../../shared/operations/wiki/index.ts';
+  import type { WikiClient } from '../wiki-client.ts';
 
   let {
     pages,
-    slug,
-    workspaceId,
+    wiki,
     currentId,
   }: {
     pages: OutputOf<typeof workspaceWikiTree>['pages'];
-    slug: string;
-    workspaceId: string | null;
+    wiki: Pick<WikiClient, 'pageHref' | 'treeLabel'>;
     currentId: string | null;
   } = $props();
   const expanded = new SvelteSet<string>();
@@ -59,12 +57,8 @@
             onclick={() => toggle(item.id)}>{expanded.has(item.id) ? '▾' : '▸'}</button
           >
         {:else}<span class="wiki-slot"></span>{/if}
-        <a
-          class="wiki-link"
-          href={workspaceId === null
-            ? resolve('/[slug]/wiki/[pageId]', { slug, pageId: item.id })
-            : resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: item.id })}
-          aria-current={currentId === item.id ? 'page' : undefined}>{item.title}</a
+        <a class="wiki-link" href={wiki.pageHref(item.id)} aria-current={currentId === item.id ? 'page' : undefined}
+          >{item.title}</a
         >
       </div>
       {#if children}<ul id={`wiki-branch-${item.id}`} hidden={!expanded.has(item.id)}>
@@ -74,6 +68,6 @@
   {/each}
 {/snippet}
 
-<nav aria-label={t(workspaceId === null ? 'orgWikiTreeLabel' : 'wikiTreeLabel')}>
+<nav aria-label={t(wiki.treeLabel)}>
   <ul class="wiki-tree panel">{@render branch(null, 1)}</ul>
 </nav>
