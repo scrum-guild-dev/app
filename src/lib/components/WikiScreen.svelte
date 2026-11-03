@@ -165,12 +165,16 @@
           : await wiki.updatePage(current!.id, version, { title, body_md: body });
       if (result.ok) {
         const unchanged = mode === 'edit' && result.data.page.version === version;
-        // 読み直し後の移動が、次の編集を途中で遮らないよう、完了まで保存中を保つ。
-        await invalidate('app:wiki');
-        mode = 'read';
-        saving = false;
         notice = t(unchanged ? 'wikiUnchanged' : 'wikiSaved');
         conflict = false;
+        // 保存は確定済み。読み直しが失敗しても、同じフォームで再送しない。
+        try {
+          await invalidate('app:wiki');
+        } catch {
+          notice += ` ${t('wikiReadFailed')}`;
+        }
+        mode = 'read';
+        saving = false;
         await goto(wiki.pageHref(result.data.page.id));
       } else {
         const code = result.error?.code;
