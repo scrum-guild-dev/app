@@ -11,7 +11,7 @@
   {#if brand}
     <div class="gate-brand">
       <BrandMark />
-      <span class="brand-name">{t('appName')}</span>
+      <span class="visually-hidden">{t('appName')}</span>
     </div>
   {/if}
   {#if title}
