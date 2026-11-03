@@ -203,7 +203,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (args[0] === '--verify' && args.length >= 2 && args.length <= 3) {
     verifyPreflight(args[1]!, args[2]);
     console.log('[e2e:preflight] 成功記録と現在のコードが一致する');
-  } else if (args.length <= 1) {
+  } else if (args.length <= 1 && args[0] !== '--verify') {
     runPreflight(args[0]);
   } else {
     throw new Error('使い方: pnpm e2e:preflight [base-ref] | --verify <result.json> [base-ref]');

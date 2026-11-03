@@ -264,3 +264,15 @@ test('hash は公開の設定例と壊れたシンボリックリンクの行き
   symlinkSync('missing-b', join(cwd, 'link'));
   assert.notEqual(inputFingerprint(cwd), linked);
 });
+
+test('CLI の --verify に結果ファイルが無いときは起動前に使い方を示す', (t) => {
+  const cwd = fixture(t);
+  const result = spawnSync(process.execPath, [new URL('./e2e-preflight.ts', import.meta.url).pathname, '--verify'], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 10_000,
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /使い方: pnpm e2e:preflight .*--verify <result\.json>/);
+  assert.equal(existsSync(join(cwd, '.e2e-preflight')), false);
+});
