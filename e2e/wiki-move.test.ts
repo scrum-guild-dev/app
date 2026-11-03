@@ -35,7 +35,7 @@ for (const scope of ['org', 'workspace'] as const) {
     await search.fill(suffix);
     await expect(up).toBeHidden();
     await expect(page.getByRole('navigation', { name: 'Wiki の検索結果' }).getByRole('link')).toHaveCount(2);
-    // 木の祖先が hidden でも、ページ側から開くネイティブmodalは最上位に描かれる。
+    // 検索結果を出している間も、ページ側から親移動のダイアログを開ける。
     const pageMove = page.locator('#wiki-parent-action');
     await pageMove.click();
     const searchDialog = page.getByRole('dialog');
