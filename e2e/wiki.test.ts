@@ -223,3 +223,103 @@ test('保存前の入力を捨てるときは確かめ、文字数の誤りは�
   await page.getByRole('button', { name: '捨てて移る' }).click();
   await expect(page.getByText('ページはまだありません', { exact: true })).toBeVisible();
 });
+
+for (const scope of ['organization', 'workspace'] as const) {
+  test(`${scope}: 前の版の題と本文を読み、確認して戻し、競合時は上書きしない`, async ({ page, context }) => {
+    const violations = await watchViolations(page);
+    if (scope === 'workspace') {
+      await createWorkspace(page, 'Wikiの版を戻す');
+      await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+    } else await page.goto('/aoba/wiki');
+    const title = 'A'.repeat(100);
+    await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
+    await page.getByLabel('題', { exact: true }).fill(title);
+    await page.getByLabel('本文', { exact: true }).fill('# 以前の本文');
+    await page.getByRole('button', { name: '保存する', exact: true }).click();
+    await expect(page).toHaveURL(/\/wiki\/[0-9a-f-]{36}$/);
+    await page.getByRole('button', { name: '編集する', exact: true }).click();
+    await page.getByLabel('題', { exact: true }).fill('新しい題');
+    await page.getByLabel('本文', { exact: true }).fill(`# 新しい本文\n\n[同じページ](${page.url()})`);
+    await page.getByRole('button', { name: '保存する', exact: true }).click();
+    await expect(page.getByRole('button', { name: '編集する', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '版の一覧', exact: true }).click();
+    const rows = page.locator('tbody tr');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toContainText('第2版');
+    await expect(rows.last()).toContainText(title);
+    for (const width of [320, 390, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+    await page.getByRole('button', { name: '第1版を見る', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 2, name: title })).toBeFocused();
+    await expect(page.locator('.doc-box')).toContainText('以前の本文');
+    await page.getByRole('button', { name: 'この版に戻す', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText('第3版として足されます');
+    await dialog.getByRole('button', { name: 'やめる', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible();
+    await page.getByRole('button', { name: 'この版に戻す', exact: true }).click();
+    let release!: () => void;
+    let received!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pending = new Promise<void>((resolve) => {
+      received = resolve;
+    });
+    const operation = scope === 'workspace' ? '**/workspace-wiki-update' : '**/org-wiki-update';
+    await page.route(operation, async (route) => {
+      const response = await route.fetch();
+      received();
+      await gate;
+      await route.fulfill({ response });
+    });
+    await dialog.getByRole('button', { name: 'この版に戻す', exact: true }).click();
+    await pending;
+    try {
+      await expect(page.getByRole('button', { name: 'ページを足す', exact: true })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await page.getByRole('button', { name: 'ページを足す', exact: true }).click({ force: true });
+      await expect(page.getByLabel('題', { exact: true })).toHaveCount(0);
+      await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible();
+    } finally {
+      release();
+    }
+    await expect(page.getByRole('status').filter({ hasText: '第3版として保存しました' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible();
+    await page.unroute(operation);
+    await page.getByRole('button', { name: '版の一覧', exact: true }).click();
+    await expect(rows).toHaveCount(3);
+    await expect(rows.first()).toContainText('第3版');
+    await page.getByRole('button', { name: '第2版を見る', exact: true }).click();
+    await expect(page.locator('.doc-box a', { hasText: '同じページ' })).not.toHaveAttribute('target', '_blank');
+    const other = await context.newPage();
+    await other.goto(page.url());
+    await other.getByRole('button', { name: '編集する', exact: true }).click();
+    await other.getByLabel('本文', { exact: true }).fill('# 他の人の本文');
+    await other.getByRole('button', { name: '保存する', exact: true }).click();
+    await expect(other.getByRole('button', { name: '編集する', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'この版に戻す', exact: true }).click();
+    await dialog.getByRole('button', { name: 'この版に戻す', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('他の人が先に保存したため、戻せませんでした');
+    await page.getByRole('button', { name: '版の一覧を読み直す', exact: true }).click();
+    await expect(rows.first()).toContainText('第4版');
+    await expect(rows.first()).toContainText('今の版');
+    await page.getByRole('button', { name: '第4版を見る', exact: true }).click();
+    await expect(page.getByText('第4版を見ています。今の版は第4版です。')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'この版に戻す', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'ページへ戻る', exact: true }).click();
+    await expect(page.locator('.doc-box')).toContainText('他の人の本文');
+    await page.getByRole('button', { name: '版の一覧', exact: true }).click();
+    await expect(rows).toHaveCount(4);
+    for (const width of [320, 390, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+    expect(await violations()).toEqual([]);
+    await other.close();
+  });
+}

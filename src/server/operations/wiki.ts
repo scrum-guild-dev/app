@@ -1,5 +1,7 @@
 import { now } from '../../shared/clock.ts';
 import {
+  orgWikiRevisions,
+  workspaceWikiRevisions,
   orgWikiCreate,
   orgWikiPage,
   orgWikiTree,
@@ -10,7 +12,14 @@ import {
   workspaceWikiUpdate,
 } from '../../shared/operations/wiki/index.ts';
 import { wikiTitle } from '../../shared/wiki.ts';
-import { insertWikiPage, readWikiPage, readWikiTree, updateWikiPage, wikiParentFits } from '../db/index.ts';
+import {
+  insertWikiPage,
+  readWikiPage,
+  readWikiRevisions,
+  readWikiTree,
+  updateWikiPage,
+  wikiParentFits,
+} from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement, type ContextOf } from './implement.ts';
@@ -22,7 +31,7 @@ export const workspaceWikiTreeOperation = implement(workspaceWikiTree, async ({ 
   pages: await readWikiTree(db, { workspaceId: workspace.workspaceId }),
 }));
 export const workspaceWikiPageOperation = implement(workspaceWikiPage, async ({ db, workspace, input }) => {
-  const page = await readWikiPage(db, { workspaceId: workspace.workspaceId }, input.page_id);
+  const page = await readWikiPage(db, { workspaceId: workspace.workspaceId }, input.page_id, input.revision);
   if (page === undefined) throw new ApiError(404, 'not_found');
   return { page };
 });
@@ -93,7 +102,7 @@ export const orgWikiTreeOperation = implement(orgWikiTree, async ({ db }) => ({
   pages: await readWikiTree(db, { organizationId: db.organizationId }),
 }));
 export const orgWikiPageOperation = implement(orgWikiPage, async ({ db, input }) => {
-  const page = await readWikiPage(db, { organizationId: db.organizationId }, input.page_id);
+  const page = await readWikiPage(db, { organizationId: db.organizationId }, input.page_id, input.revision);
   if (page === undefined) throw new ApiError(404, 'not_found');
   return { page };
 });
@@ -103,3 +112,14 @@ export const orgWikiCreateOperation = implement(orgWikiCreate, (context) =>
 export const orgWikiUpdateOperation = implement(orgWikiUpdate, (context) =>
   updatePage(context, { organizationId: context.db.organizationId }),
 );
+
+export const workspaceWikiRevisionsOperation = implement(workspaceWikiRevisions, async ({ db, workspace, input }) => {
+  const revisions = await readWikiRevisions(db, { workspaceId: workspace.workspaceId }, input.page_id);
+  if (revisions === undefined) throw new ApiError(404, 'not_found');
+  return { revisions };
+});
+export const orgWikiRevisionsOperation = implement(orgWikiRevisions, async ({ db, input }) => {
+  const revisions = await readWikiRevisions(db, { organizationId: db.organizationId }, input.page_id);
+  if (revisions === undefined) throw new ApiError(404, 'not_found');
+  return { revisions };
+});

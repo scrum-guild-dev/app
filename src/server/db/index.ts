@@ -88,6 +88,7 @@ export {
   insertUploadedAttachment,
   organizationStorageBytes,
   readWikiPage,
+  readWikiRevisions,
   readWikiTree,
   insertWikiPage,
   updateWikiPage,

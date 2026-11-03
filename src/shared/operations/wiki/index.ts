@@ -41,7 +41,7 @@ export const workspaceWikiPage = defineOperation({
   permission: 'member',
   workspace: true,
   hideForbiddenWorkspace: true,
-  input: z.object({ workspace_id: idSchema, page_id: idSchema }),
+  input: z.object({ workspace_id: idSchema, page_id: idSchema, revision: z.number().int().min(1).optional() }),
   output: z.object({ page: wikiPageSchema }),
 });
 export const workspaceWikiCreate = defineOperation({
@@ -83,7 +83,7 @@ export const orgWikiPage = defineOperation({
   description: '組織の Wiki のページを読む',
   mode: 'read',
   permission: 'organization',
-  input: z.object({ page_id: idSchema }),
+  input: z.object({ page_id: idSchema, revision: z.number().int().min(1).optional() }),
   output: z.object({ page: wikiPageSchema }),
 });
 export const orgWikiCreate = defineOperation({
@@ -106,6 +106,32 @@ export const orgWikiUpdate = defineOperation({
     .superRefine(validateContent),
   output: z.object({ page: wikiPageSchema }),
 });
+export const wikiRevisionSchema = z.object({
+  title: z.string(),
+  version: z.number().int(),
+  saved_by: z.string(),
+  saved_by_name: z.string(),
+  saved_at: z.string(),
+});
+export const workspaceWikiRevisions = defineOperation({
+  name: 'workspace-wiki-revisions',
+  description: 'ワークスペースの Wiki の版を新しい順に読む',
+  mode: 'read',
+  permission: 'member',
+  workspace: true,
+  hideForbiddenWorkspace: true,
+  input: z.object({ workspace_id: idSchema, page_id: idSchema }),
+  output: z.object({ revisions: z.array(wikiRevisionSchema) }),
+});
+export const orgWikiRevisions = defineOperation({
+  name: 'org-wiki-revisions',
+  description: '組織の Wiki の版を新しい順に読む',
+  mode: 'read',
+  permission: 'organization',
+  input: z.object({ page_id: idSchema }),
+  output: z.object({ revisions: z.array(wikiRevisionSchema) }),
+});
+
 export const wikiOperations = [
   workspaceWikiTree,
   workspaceWikiPage,
@@ -115,4 +141,6 @@ export const wikiOperations = [
   orgWikiPage,
   orgWikiCreate,
   orgWikiUpdate,
+  workspaceWikiRevisions,
+  orgWikiRevisions,
 ] as const;

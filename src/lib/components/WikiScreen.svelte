@@ -26,6 +26,9 @@
   import Markdown from './Markdown.svelte';
   import PageHead from './PageHead.svelte';
   import WikiTree from './WikiTree.svelte';
+  import WikiHistory from './WikiHistory.svelte';
+  let historyBusy = $state(false);
+  let historyPage = $state<string | null>(null);
 
   let {
     data,
@@ -77,7 +80,7 @@
   const depth = $derived(ancestors.length + 1);
 
   async function mayDiscard(): Promise<boolean> {
-    if (saving) return false;
+    if (saving || historyBusy) return false;
     return (
       !dirty ||
       ((await discardDialog?.ask(document.activeElement instanceof HTMLElement ? document.activeElement : null)) ??
@@ -85,7 +88,7 @@
     );
   }
   beforeNavigate((navigation) => {
-    if (!dirty && !saving) return;
+    if (!dirty && !saving && !historyBusy) return;
     if (navigation.type === 'leave') {
       navigation.cancel();
       return;
@@ -103,6 +106,7 @@
   });
   async function begin(create: boolean, parent: string | null = null): Promise<void> {
     if (!canWrite || !(await mayDiscard())) return;
+    historyPage = null;
     editGeneration += 1;
     parentId = parent;
     title = create ? '' : (current?.title ?? '');
@@ -223,8 +227,11 @@
       : undefined
     : data.workspace?.name}
 >
-  {#snippet actions()}{#if canWrite}<button class="btn is-primary" type="button" onclick={() => begin(true)}
-        >{t('wikiAdd')}</button
+  {#snippet actions()}{#if canWrite}<button
+        class="btn is-primary"
+        type="button"
+        aria-disabled={historyBusy}
+        onclick={() => begin(true)}>{t('wikiAdd')}</button
       >{/if}{/snippet}
   {#snippet meta()}<p class="section-hint">{t(workspaceId === null ? 'orgWikiAccess' : 'wikiAccess')}</p>{/snippet}
 </PageHead>
@@ -324,9 +331,48 @@
         </form>
       {:else if data.wikiNotFound}
         <EmptyState icon="search" title={t('wikiNotFound')} />
+      {:else if current && historyPage === current.id}
+        {#key current.id}
+          <WikiHistory
+            {slug}
+            {workspaceId}
+            {current}
+            {canWrite}
+            onbusy={(busy) => {
+              historyBusy = busy;
+            }}
+            internalLinkPrefix={`${page.url.origin}${workspaceId === null ? resolve('/[slug]/wiki', { slug }) : resolve('/[slug]/w/[id]/wiki', { slug, id: workspaceId })}/`}
+            onclose={async () => {
+              historyPage = null;
+              await invalidate('app:wiki');
+              await tick();
+              document.getElementById('wiki-page-title')?.focus();
+            }}
+            update={(input) =>
+              workspaceId === null
+                ? callOperation(orgWikiUpdate, input, { slug })
+                : callOperation(workspaceWikiUpdate, { workspace_id: workspaceId, ...input }, { slug })}
+            onrestored={async (saved) => {
+              historyPage = null;
+              notice = t(saved.version === current.version ? 'wikiUnchanged' : 'wikiRestored', {
+                version: saved.version,
+              });
+              await invalidate('app:wiki');
+              await tick();
+              document.getElementById('wiki-page-title')?.focus();
+            }}
+          />
+        {/key}
       {:else if current}
         <div class="wiki-head">
-          <h2 class="section-title">{current.title}</h2>
+          <h2 id="wiki-page-title" tabindex="-1" class="section-title wrap-anywhere">{current.title}</h2>
+          <button
+            class="btn"
+            type="button"
+            onclick={() => {
+              historyPage = current.id;
+            }}>{t('wikiHistory')}</button
+          >
           {#if canWrite}<div class="form-actions">
               <button class="btn" type="button" onclick={() => begin(false)}>{t('wikiEdit')}</button
               >{#if depth < 10}<button class="btn" type="button" onclick={() => begin(true, current.id)}
