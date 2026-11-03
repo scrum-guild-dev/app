@@ -15,3 +15,4 @@ build/
 worktrees/
 test-results/
 playwright-report/
+.e2e-preflight/

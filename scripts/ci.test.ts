@@ -84,6 +84,8 @@ describe('needsDevBuild', () => {
     'vite.config.ts',
     'playwright.config.ts',
     'scripts/e2e-server.ts',
+    'scripts/e2e-run.ts',
+    'scripts/e2e-preflight.ts',
     'scripts/dev-warnings.ts',
     '.github/workflows/ci.yml',
     // build と e2e のサーバー、CI の用意、e2e が開くデータ

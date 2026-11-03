@@ -157,7 +157,7 @@ jobs:
       # 空のまま pnpm e2e に渡すと Playwright が全件を走らせるので、スクリプトが空なら非 0 で落とす
       - run: |
           FILES=$(node scripts/e2e-shard.ts ${{ matrix.shard }} ${{ strategy.job-total }})
-          pnpm e2e $FILES
+          node scripts/e2e-run.ts normal $FILES
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -195,7 +195,7 @@ jobs:
       # 空のまま pnpm e2e に渡すと Playwright が全件を走らせるので、スクリプトが空なら非 0 で落とす
       - run: |
           FILES=$(node scripts/e2e-shard.ts ${{ matrix.shard }} ${{ strategy.job-total }})
-          pnpm e2e $FILES
+          node scripts/e2e-run.ts dev $FILES
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -243,7 +243,7 @@ jobs:
       # ファイルが少ないとテストの無いシャードができるので、--pass-with-no-tests を付ける
       - if: steps.count.outputs.run == 'true'
         run: >-
-          pnpm e2e --workers=1 --repeat-each=5 --retries=0 --pass-with-no-tests
+          node scripts/e2e-run.ts repeat
           --shard=${{ matrix.shard }}/${{ strategy.job-total }} $REPEAT_FILES
       - if: ${{ !cancelled() && steps.count.outputs.run == 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

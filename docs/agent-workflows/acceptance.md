@@ -7,7 +7,7 @@
 - Issue と `docs/` に無い判断を置いたら、報告に根拠付きで並べる
 - アプリのコード・依存・ビルド設定の変更は `pnpm check`、`pnpm lint`、`pnpm format:check`、`pnpm test`、`pnpm build` が通る。文書・スキルだけなら、変更ファイルの整形、リンク・参照節・メタデータ・設定構文と、影響する手順のテストを確かめる。検査の再利用は [validation.md](validation.md) に従う
 - マイグレーションを足したら `pnpm db:migrate:fresh` が通る（書き方は `d1-migration`）
-- 画面か API の流れを変えたら、変えた画面と流れを開く e2e のテストを差分に足し、手元では走らせない。通るかは PR の CI（`e2e`、`e2e-dev`、`e2e-repeat`）で確かめる。落ちたときの直し方は `docs/development.md` の「CI の e2e が落ちたとき」に従う
+- 画面か API の流れを変えたら、変えた画面と流れを開く e2e のテストを差分に足し、ローカルでは走らせない。クラウドでは PR 前に `pnpm e2e:preflight [base-ref]` を通す（`docs/development.md` の「クラウドで PR 前に e2e を確かめる」）。PR の CI も省略せず（`e2e`、`e2e-dev`、`e2e-repeat`）で確かめる。落ちたときの直し方は `docs/development.md` の「CI の e2e が落ちたとき」に従う
 - `.claude/hooks/` を変えたら `node --test .claude/hooks/*.test.mjs` が通る
 
 API の追加は `add-operation`、マイグレーションは `d1-migration`、画面は `ui-polish` を必要なときだけ読む。委譲時はワークツリー、目的、完了条件、担当範囲、該当する受け入れ条件と必要なスキルの絶対パスを渡す。他の作業を戻さず、範囲を超える必要があれば報告する。
