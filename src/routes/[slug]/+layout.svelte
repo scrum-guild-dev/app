@@ -17,6 +17,7 @@
   import { applyOrganization } from '../../lib/organization.svelte.ts';
   import { t } from '../../lib/vocabulary.svelte.ts';
   import { workspaceViewOf } from '../../lib/workspace.ts';
+  import { WorkspaceNavigation } from '../../lib/workspace-navigation.svelte.ts';
   import type { LayoutData } from './$types';
 
   // 組織の枠。組織の操作の結果で data-theme を当て、左のメニューと上の帯を出す。
@@ -37,6 +38,15 @@
   // 今開いているワークスペース（/[slug]/w/[id] の枠が読み込む）。メニューにワークスペースの節を出し、
   // 所属していない管理者には印を出す。ワークスペースの画面の外では null
   const openWorkspace = $derived(workspaceViewOf(page.data));
+  const navigation = new WorkspaceNavigation();
+  const navigationScope = $derived(`${data.slug}/${organization?.me.id ?? ''}`);
+  const navigationWorkspace = $derived(
+    organization ? navigation.select(navigationScope, organization.workspaces, openWorkspace) : null,
+  );
+
+  $effect(() => {
+    navigation.remember(navigationScope, organization?.workspaces ?? [], openWorkspace);
+  });
 
   $effect(() => {
     if (organization) applyOrganization(organization);
@@ -100,8 +110,13 @@
     />
   {/snippet}
   {#snippet workspaceSwitcher()}
-    {#if openWorkspace}
-      <WorkspaceSwitcher workspaces={organization.workspaces} currentWorkspace={openWorkspace} slug={data.slug} />
+    {#if navigationWorkspace}
+      <WorkspaceSwitcher
+        workspaces={organization.workspaces}
+        currentWorkspace={navigationWorkspace}
+        inWorkspaceScreen={openWorkspace !== null}
+        slug={data.slug}
+      />
     {/if}
   {/snippet}
   <AppShell
@@ -109,9 +124,9 @@
     slug={data.slug}
     hasWorkspace={organization.workspaces.length > 0}
     isAdmin={organization.me.is_admin}
-    workspaceId={openWorkspace?.id}
+    workspace={navigationWorkspace ?? undefined}
     {organizationSwitcher}
-    workspaceSwitcher={openWorkspace ? workspaceSwitcher : undefined}
+    workspaceSwitcher={navigationWorkspace ? workspaceSwitcher : undefined}
     {account}
   >
     {@render children()}

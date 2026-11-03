@@ -7,10 +7,12 @@
   let {
     workspaces,
     currentWorkspace,
+    inWorkspaceScreen = true,
     slug,
   }: {
     workspaces: readonly { id: string; name: string }[];
     currentWorkspace: { id: string; name: string };
+    inWorkspaceScreen?: boolean;
     slug: string;
   } = $props();
 
@@ -53,7 +55,7 @@
       <li>
         <a
           href={resolve('/[slug]/w/[id]', { slug, id: workspace.id })}
-          aria-current={current ? 'page' : undefined}
+          aria-current={current && inWorkspaceScreen ? 'page' : undefined}
           onclick={menu.close}
         >
           <span class="org-menu-name">{workspace.name}</span>

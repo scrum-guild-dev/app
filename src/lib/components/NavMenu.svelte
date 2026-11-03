@@ -6,29 +6,29 @@
   import { isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { organizationLabel } from '../organization-label.ts';
-  import { workspaceViewOf } from '../workspace.ts';
+  import type { NavigationWorkspace } from '../workspace-navigation.svelte.ts';
   import Icon from './Icon.svelte';
 
   // kit.js の navHtml。current は今の画面のパス、slug は今の組織。画面のある項目だけを出す（nav.ts の visibleNav）。
   // アカウントと組織の入口は上の帯の AccountMenu に置く。所属するワークスペースが無い人（hasWorkspace が偽）には、組織の画面だけを出す。
-  // workspaceSwitcher を渡すのは、ワークスペースの画面を開いている間。所属していない管理者にも、
+  // workspaceSwitcher は、メニューの対象があれば組織の画面でも渡す。所属していない管理者にも、
   // ワークスペースの節の見出しと、所属するワークスペースへの切り替えを出す。
-  // ワークスペースの経路の項目（メンバーなど）は、workspaceId を渡したときだけ出す。渡すのは、開いているワークスペースの ID。
+  // ワークスペースの経路の項目（メンバーなど）は、対象の ID があるときだけ出す。
   // 組織の切り替えはメニューの外（AppShell のブランドの下）に置く。
-  // ワークスペースの設定は、開いているワークスペースのリーダーと管理者にだけ出す。ロールは、ワークスペースの枠が読み込んだ値（page.data）から取る。
+  // ワークスペースの設定は、対象のリーダーと管理者にだけ出す。
   let {
     current,
     slug,
     hasWorkspace,
     isAdmin,
-    workspaceId,
+    workspace,
     workspaceSwitcher,
   }: {
     current: string;
     slug: string;
     hasWorkspace: boolean;
     isAdmin: boolean;
-    workspaceId?: string;
+    workspace?: NavigationWorkspace;
     workspaceSwitcher?: Snippet;
   } = $props();
 
@@ -36,9 +36,9 @@
     visibleNav(undefined, {
       hasWorkspace,
       isAdmin,
-      isLeader: workspaceViewOf(page.data)?.role === 'leader',
-      inWorkspaceScreen: workspaceSwitcher !== undefined,
-      workspaceId: workspaceId ?? null,
+      isLeader: workspace?.role === 'leader',
+      hasWorkspaceMenu: workspaceSwitcher !== undefined,
+      workspaceId: workspace?.id ?? null,
     }),
   );
 </script>
@@ -50,8 +50,8 @@
     {#each section.items as item (item.label)}
       <!-- ワークスペースの経路は、ID が無ければ行き先が決まらないので描かない（visibleNav も同じ条件で外す） -->
       {@const href = isWorkspaceRoute(item.href)
-        ? isWorkspaceId(workspaceId)
-          ? resolve(item.href, { slug, id: workspaceId })
+        ? isWorkspaceId(workspace?.id)
+          ? resolve(item.href, { slug, id: workspace.id })
           : null
         : resolve(item.href, { slug })}
       {#if href !== null}

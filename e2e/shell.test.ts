@@ -699,11 +699,11 @@ test('画面の題名は「画面 - Scrum Guild」で、メニューには画面
   for (const item of await page.locator('.nav-item').all()) await expect(item).toHaveAttribute('href', /^\/aoba/);
   await expect(page.locator('.nav-item[aria-current="page"]')).toHaveCount(1);
   await expect(page.locator('.is-later')).toHaveCount(0);
-  // 項目が1つも無いグループは、見出しごと出さない（見出しの次は必ず項目）
+  // 項目も切り替えも無いグループは、見出しごと出さない。
   const emptyGroups = await page
     .locator('.nav-group')
     .evaluateAll(
-      (groups) => groups.filter((group) => !group.nextElementSibling?.classList.contains('nav-item')).length,
+      (groups) => groups.filter((group) => !group.nextElementSibling?.matches('.nav-item, .ws-menu')).length,
     );
   expect(emptyGroups).toBe(0);
 });
