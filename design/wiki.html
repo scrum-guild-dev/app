@@ -361,7 +361,7 @@ function statesHtml() {
   const cur = byId(S.page) || store.pages[0];
   const badMd = ["---", "title: 連絡先と当番", "owner リン", "---", "## 今月の当番", "", "- 平日の昼: ソウタ"].join("\n");
   const draft = ["---", "title: 本番へ出す前の確認", "owner: ハルカ", "---", "# 本番へ出す前の確認", "", "- [x] マイグレーションを当てた", "- [x] 管理画面で付与を試した（書きかけ）"].join("\n");
-  const delWho = isOrg ? `作った人と${t("admin")}` : `作った人と${t("leader")}`;
+  const delWho = isOrg ? `作った人と${t("admin")}` : `作った人、${t("leader")}、${t("admin")}`;
   const panel = (title, body) => `<div class="panel"><div class="panel-title"><b>${title}</b></div>${body}</div>`;
   return `<section class="section" aria-labelledby="wiki-states"><div class="section-head"><h2 class="section-title" id="wiki-states">状態の見本</h2><span class="section-hint">動かない表示の見本です</span></div>
     <div class="grid-2">
@@ -395,12 +395,11 @@ function statesHtml() {
         <p class="props-note">YAML が読めなくても、保存は断りません。表を出さず、全文を本文として描きます。</p>`)}
       ${panel(isOrg ? "消せないとき" : `終了した${t("workspace")}の Wiki`, isOrg
         ? `<p class="field-hint">消せるのは${delWho}です。</p>
-           <div class="toolbar"><button class="btn is-sm is-quiet is-danger" type="button" aria-disabled="true">${icon("trash")}消す</button></div>
-           <p class="props-note">作った人でも${t("admin")}でもない人には、「消す」を押せなくして、消せる人を添えます。</p>`
+           <p class="props-note">作った人でも${t("admin")}でもない人には、「消す」を出しません。</p>`
         : `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の Wiki は、読み取りだけできます。</span></div>
            <div class="toolbar"><button class="btn is-primary" type="button" aria-disabled="true">${icon("pen")}編集する</button><button class="btn" type="button" aria-disabled="true">${icon("clock")}版の一覧</button></div>
            <p class="props-note">書く操作（足す、編集、移す、消す、上げる）は出さないか押せなくし、読む操作（開く、版を見る、.md で落とす、探す）は使えます。書こうとしたときは、終了しているため書けないことを伝えます。</p>
-           <p class="field-hint">消せるのは${delWho}です。作った人でも${t("leader")}でもない人には、「消す」を押せなくして、消せる人を添えます。</p>`)}
+           <p class="field-hint">終了した${t("workspace")}では、消せる人にも「消す」を出しません。</p>`)}
       ${panel("親を移すとき、深さが上限に届くとき", `
         <div class="field"><label class="field-label" for="wk-deep">親のページ</label><select class="select" id="wk-deep" aria-describedby="wk-deep-hint">
           <option>最上段（親なし）</option><option>${esc(cur.title)}</option><option disabled>深さ 10 段のページ（10 段を超えるため選べません）</option></select>
@@ -472,8 +471,8 @@ function deleteDialog(p) {
   openDialog("ページを消す",
     `<p class="wrap-anywhere">「${esc(p.title)}」を消します。消したページは画面から消え、この版では戻せません。</p>
      <p>${n ? `子のページ ${n} 件は、消したページの親の下（${up}）へ上がります。` : "子のページはありません。"}</p>
-     <p class="field-hint">消せるのは、作った人と${isOrg ? t("admin") : t("leader")}です。</p>`,
-    `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-wiki="delete-do">消す</button>`);
+     <p class="field-hint">消せるのは、${isOrg ? `作った人と${t("admin")}` : `作った人、${t("leader")}、${t("admin")}`}です。</p>`,
+    `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-wiki="delete-do">消す</button>`);
   document.querySelector(".dialog-sheet").classList.add("is-danger");
 }
 function restoreDialog(p) {

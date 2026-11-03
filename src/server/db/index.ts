@@ -99,5 +99,6 @@ export {
   wikiParentFits,
   wikiMoveProblem,
   writeWikiMove,
+  deleteWikiPage,
   type WikiScope,
 } from './wiki.ts';

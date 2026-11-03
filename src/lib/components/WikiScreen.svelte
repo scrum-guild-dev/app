@@ -44,6 +44,22 @@
   );
   const current = $derived(data.wikiPage);
   const pages = $derived(data.wikiPages ?? []);
+  let deletePending = $state(false);
+  let deleting = $state(false);
+  let deletedPageId = $state<string | null>(null);
+  let deleteFailure = $state('');
+  let deleteFailurePath = $state('');
+  let deleteTarget = $state<{ id: string; title: string; parent: string; children: number } | null>(null);
+  let deleteDialog = $state<ReturnType<typeof ConfirmDialog>>();
+  const canDelete = $derived(
+    current !== null &&
+      current.id !== deletedPageId &&
+      data.organization !== null &&
+      (workspaceId === null || (data.workspace != null && data.workspace.closedAt === null)) &&
+      (data.organization.me.is_admin ||
+        data.organization.me.id === current.created_by ||
+        (workspaceId !== null && data.workspace?.role === 'leader')),
+  );
   const canWrite = $derived(
     workspaceId === null
       ? data.organization !== null && data.wikiPages !== null
@@ -88,7 +104,7 @@
   });
 
   async function mayDiscard(): Promise<boolean> {
-    if (saving || historyBusy || uploadBusy) return false;
+    if (saving || historyBusy || uploadBusy || deletePending) return false;
     return (
       !dirty ||
       ((await discardDialog?.ask(document.activeElement instanceof HTMLElement ? document.activeElement : null)) ??
@@ -96,7 +112,7 @@
     );
   }
   beforeNavigate((navigation) => {
-    if (uploadBusy) {
+    if (uploadBusy || deletePending) {
       navigation.cancel();
       return;
     }
@@ -117,7 +133,7 @@
       });
   });
   async function begin(create: boolean, parent: string | null = null): Promise<void> {
-    if (!canWrite || !(await mayDiscard())) return;
+    if (!canWrite || current?.id === deletedPageId || !(await mayDiscard())) return;
     historyPage = null;
     editGeneration += 1;
     parentId = parent;
@@ -209,6 +225,61 @@
       saving = false;
     }
   }
+  async function removePage(trigger: HTMLElement): Promise<void> {
+    if (!canDelete || !current || deletePending || saving || historyBusy || uploadBusy) return;
+    const target = current;
+    const client = wiki;
+    const destination = target.parent_id === null ? client.rootHref : client.pageHref(target.parent_id);
+    deleteTarget = {
+      id: target.id,
+      title: target.title,
+      parent: pages.find((item) => item.id === target.parent_id)?.title ?? t('wikiMoveRoot'),
+      children: pages.filter((item) => item.parent_id === target.id).length,
+    };
+    deleteFailure = '';
+    deleteFailurePath = page.url.pathname;
+    deletePending = true;
+    try {
+      if (!(await deleteDialog?.ask(trigger))) return;
+      // 確認中に表示が変わっても、別のページを消さない。
+      if (!canDelete || current?.id !== target.id || wiki.rootHref !== client.rootHref || mode !== 'read') return;
+      deleting = true;
+      const result = await client.deletePage(target.id, target.parent_id);
+      if (!result.ok) {
+        deleteFailure = t(
+          result.status === 403
+            ? 'wikiDeleteForbidden'
+            : result.status === 404
+              ? 'wikiDeleteGone'
+              : result.error?.code === 'workspace_closed'
+                ? 'wikiClosed'
+                : result.error?.code === 'conflict'
+                  ? 'wikiDeleteConflict'
+                  : 'wikiDeleteFailed',
+        );
+        return;
+      }
+      // 削除は確定済み。読み直しが失敗しても、消したページから再送させない。
+      deletedPageId = target.id;
+      notice = t('wikiDeleted', { title: target.title });
+      showToast(notice);
+      try {
+        await invalidate('app:wiki');
+      } catch {
+        deleteFailure = t('wikiDeleteRefreshFailed');
+      }
+      deletePending = false;
+      try {
+        await goto(destination);
+      } catch {
+        deleteFailure = t('wikiDeleteRefreshFailed');
+      }
+    } finally {
+      deletePending = false;
+      deleting = false;
+      deleteTarget = null;
+    }
+  }
   async function uploaded(count: number) {
     notice = t('wikiUploadDone', { count });
     try {
@@ -265,14 +336,15 @@
   {#snippet actions()}{#if canWrite}{#if mode === 'read'}<button
           class="btn"
           type="button"
-          aria-disabled={historyBusy || uploadBusy}
+          aria-disabled={historyBusy || uploadBusy || deletePending}
           onclick={(event) => {
-            if (!historyBusy && !uploadBusy) uploadDialog?.show(event.currentTarget, current?.id ?? null);
+            if (!historyBusy && !uploadBusy && !deletePending)
+              uploadDialog?.show(event.currentTarget, current?.id ?? null);
           }}>{t('wikiUpload')}</button
         >{/if}<button
         class="btn is-primary"
         type="button"
-        aria-disabled={historyBusy || uploadBusy}
+        aria-disabled={historyBusy || uploadBusy || deletePending}
         onclick={() => begin(true)}>{t('wikiAdd')}</button
       >{/if}{/snippet}
   {#snippet meta()}{#if data.wikiPages !== null && !data.wikiNotFound}<p class="section-hint">
@@ -298,7 +370,13 @@
                   {pages}
                   {wiki}
                   {searching}
-                  canWrite={canWrite && mode === 'read' && !saving && !historyBusy && !uploadBusy}
+                  canWrite={canWrite &&
+                    !deletePending &&
+                    current?.id !== deletedPageId &&
+                    mode === 'read' &&
+                    !saving &&
+                    !historyBusy &&
+                    !uploadBusy}
                   currentId={current?.id ?? null}
                 />{:else}<p class="section-hint" hidden={searching}>
                   {t('wikiTreeEmpty')}
@@ -318,6 +396,10 @@
           {#if current}<li><span aria-current="page">{current.title}</span></li>{/if}
         </ol>
       </nav>
+      {#if deleteFailure && page.url.pathname === deleteFailurePath}<p class="callout is-warn" role="alert">
+          {deleteFailure}
+        </p>{/if}
+      {#if deleting}<p role="status">{t('wikiDeleting')}</p>{/if}
       {#if mode !== 'read'}
         <h2 class="section-title">{t(mode === 'create' ? 'wikiAdd' : 'wikiEdit')}</h2>
         {#if failure}<div class="callout is-warn" role="alert">
@@ -413,25 +495,47 @@
         <div class="wiki-head">
           <h2 id="wiki-page-title" tabindex="-1" class="section-title wrap-anywhere">{current.title}</h2>
           <div class="form-actions">
-            <button class="btn" type="button" onclick={download}>{t('wikiDownload')}</button>
             <button
               class="btn"
               type="button"
+              aria-disabled={deletePending}
               onclick={() => {
-                historyPage = current.id;
+                if (!deletePending) download();
+              }}>{t('wikiDownload')}</button
+            >
+            <button
+              class="btn"
+              type="button"
+              aria-disabled={deletePending}
+              onclick={() => {
+                if (!deletePending) historyPage = current.id;
               }}>{t('wikiHistory')}</button
             >
-            {#if canWrite}
-              <button class="btn" type="button" onclick={() => begin(false)}>{t('wikiEdit')}</button>
+            {#if canWrite && current.id !== deletedPageId}
+              <button class="btn" type="button" aria-disabled={deletePending} onclick={() => begin(false)}
+                >{t('wikiEdit')}</button
+              >
               <button
                 class="btn"
                 type="button"
                 id="wiki-parent-action"
-                onclick={(event) => wikiTree?.showMove(event.currentTarget, current)}>{t('moveParent')}</button
-              >{#if depth < 10}<button class="btn" type="button" onclick={() => begin(true, current.id)}
-                  >{t('wikiAddChild')}</button
+                aria-disabled={deletePending}
+                onclick={(event) => {
+                  if (!deletePending) wikiTree?.showMove(event.currentTarget, current);
+                }}>{t('moveParent')}</button
+              >{#if depth < 10}<button
+                  class="btn"
+                  type="button"
+                  aria-disabled={deletePending}
+                  onclick={() => begin(true, current.id)}>{t('wikiAddChild')}</button
                 >{:else}<p class="field-hint">{t('wikiDepth')}</p>{/if}
             {/if}
+            {#if canDelete}<button
+                class="btn is-danger"
+                type="button"
+                aria-disabled={deletePending || uploadBusy || historyBusy}
+                onclick={(event) => removePage(event.currentTarget)}>{t('wikiDelete')}</button
+              >{/if}
           </div>
         </div>
         <WikiContent source={current.body_md} internalLinkPrefix={`${page.url.origin}${wiki.rootHref}/`} />
@@ -448,6 +552,18 @@
     </section>
   </div>
 {/if}
+<ConfirmDialog
+  bind:this={deleteDialog}
+  title={t('wikiDeleteTitle')}
+  confirmLabel={t('wikiDelete')}
+  cancelLabel={t('cancel')}
+  danger
+>
+  <p class="wrap-anywhere">{t('wikiDeleteText', { title: deleteTarget?.title ?? '' })}</p>
+  {#if deleteTarget && deleteTarget.children > 0}<p class="wrap-anywhere">
+      {t('wikiDeleteChildren', { count: deleteTarget.children, parent: deleteTarget.parent })}
+    </p>{/if}
+</ConfirmDialog>
 <ConfirmDialog
   bind:this={discardDialog}
   title={t('wikiDiscardTitle')}

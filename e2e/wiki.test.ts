@@ -510,6 +510,7 @@ for (const scenario of [
       title: '復元を断る手順',
       body_md: '今の本文',
       version: 2,
+      created_by: crypto.randomUUID(),
       created_at: '2026-11-03T00:00:00.000Z',
       updated_at: '2026-11-03T01:00:00.000Z',
     };
