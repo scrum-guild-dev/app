@@ -17,6 +17,11 @@ function list(body: string): string {
 }
 
 describe('ワークスペースの切り替え', () => {
+  test('読み上げの名前に、見えるワークスペースと名前を同じ順序で含める', () => {
+    const label = /aria-label="([^"]+)"/.exec(html())![1];
+    expect(label).toContain(`${word('workspace')} ${current.name}`);
+  });
+
   test('閉じたボタンと名前付き一覧を持ち、今のリンクにだけ aria-current とチェックを出す', () => {
     const body = html();
     expect(body).toContain('aria-expanded="false"');
@@ -39,6 +44,16 @@ describe('ワークスペースの切り替え', () => {
     expect(body).toContain('<button');
     expect(body).toContain('href="/sample/w/one"');
     expect(body).not.toContain('disabled');
+  });
+
+  test('今日やることでは対象の名前とチェックを出すが、ワークスペースの画面を現在地にしない', () => {
+    const body = render(WorkspaceSwitcher, {
+      props: { workspaces: [current, other], currentWorkspace: current, inWorkspaceScreen: false, slug: 'sample' },
+    }).body;
+    expect(body).toContain(current.name);
+    expect(body.match(/#i-check/g)).toHaveLength(1);
+    expect(body).not.toContain('aria-current');
+    expect(body).toContain('href="/sample/w/one"');
   });
 
   test('所属していない管理者の今のものは先頭に押せない現在地の行として出し、所属先だけをリンクにする', () => {

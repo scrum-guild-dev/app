@@ -14,7 +14,8 @@
 //     取り出し（{ name } と、Reflect.get、Reflect.getOwnPropertyDescriptor、Object.getOwnPropertyDescriptor の文字列のキー））。
 //     使えるのは運用者の道具 src/server/operations/operator-tools.ts だけ。
 //     組織の中の表に運用者が書く口と、組織で絞らずに数える口を、処理から直に呼ばせない
-//   - 定期処理の履歴の関数 appendScheduledChangeLog（運用者の道具だけの関数と同じ形で止める）。
+//   - 定期処理の履歴の appendScheduledChangeLog と未添付の掃除の deleteExpiredAttachments
+//     （運用者の道具だけの関数と同じ形で止める）。
 //     使えるのは定期処理 src/server/scheduled/ のファイルだけ。operator-tools.ts や、ほかの場所からは使えない。
 //     運用者の道具だけの関数とは別の集合で、appendOperatorChangeLog は定期処理から使えないまま
 // Reflect と Object のプロパティを読むメソッドは、直に呼ぶ形だけを見る。.call、.apply、取り出した get、カンマ式で呼ぶ形は
@@ -40,7 +41,8 @@ const OPERATOR_TOOLS_ONLY = new Set([
 const OPERATOR_TOOLS = 'src/server/operations/operator-tools.ts';
 // 定期処理（src/server/scheduled/）だけが使える db/ の関数。
 // appendScheduledChangeLog は、既にある組織の変更の履歴に operator も actor_user_id も空で足す口（組織の中の入口を渡さない）
-const SCHEDULED_ONLY = new Set(['appendScheduledChangeLog']);
+// deleteExpiredAttachments は、共通の表で確認した組織の ID を受けて期限切れの未添付の行だけを消す口
+const SCHEDULED_ONLY = new Set(['appendScheduledChangeLog', 'deleteExpiredAttachments']);
 const SCHEDULED_DIR = 'src/server/scheduled/';
 // 第2引数に名前を取って、プロパティを読む関数
 const PROPERTY_READERS = new Set(['get', 'getOwnPropertyDescriptor']);
@@ -72,7 +74,7 @@ const rule = {
       operatorToolsOnly:
         '運用者の履歴の関数、管理者の指名し直しの関数、組織をまたいで数える関数は、運用者の道具（src/server/operations/operator-tools.ts）だけが使う。処理には道具が包んだ関数を渡す',
       scheduledOnly:
-        '定期処理の履歴の関数は、定期処理（src/server/scheduled/）のファイルだけが使う。運用者の道具やほかの処理から、operator も操作した人も空の履歴を足させない',
+        '定期処理専用の関数は、定期処理（src/server/scheduled/）のファイルだけが使う。ほかの処理から組織の確認を経ずに履歴や未添付の行を書き換えさせない',
       createRequire:
         'createRequire と process.getBuiltinModule を使わない。import の検査を抜けて kysely と db/ の内部のファイルを読めてしまう',
       binding: 'D1 の binding（DB）を直に使わない。src/server/db/ の入口（commonDb、orgDb）から問い合わせる',

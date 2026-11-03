@@ -442,7 +442,9 @@ function go(fn) {
     `<button class="btn is-quiet" type="button" data-close-dialog>続けて書く</button><button class="btn is-danger" type="button" data-close-dialog data-wiki="discard-do">捨てて移る</button>`);
   document.querySelector(".dialog-sheet").classList.add("is-danger");
 }
+let movingPageId = null;
 function moveDialog(p) {
+  movingPageId = p.id;
   const ex = [p.id, ...descendants(p.id)];
   const { html, over } = parentOptions(p.parent, { exclude: ex, height: subtreeHeight(p.id) });
   openDialog("親を移す",
@@ -512,6 +514,49 @@ function refreshUpload(focus) {
 }
 const readParent = (id) => document.getElementById(id)?.value || null;
 
+// つまみのドラッグは、ボタンと同じ並び・親の変更を使う。
+let draggingWikiId = null;
+let wikiDrop = null;
+function clearWikiDrop() {
+  document.querySelectorAll('[data-wiki-node][data-drop], [data-wiki-row][data-drop]').forEach((node) => node.removeAttribute('data-drop'));
+}
+document.addEventListener('dragstart', (event) => {
+  const grip = event.target.closest('[data-wiki-grip]');
+  if (!grip) return;
+  draggingWikiId = grip.dataset.wikiGrip;
+  event.dataTransfer.setData('text/plain', draggingWikiId);
+  event.dataTransfer.effectAllowed = 'move';
+});
+document.addEventListener('dragover', (event) => {
+  const row = event.target.closest('[data-wiki-row]');
+  if (!draggingWikiId || !row) { wikiDrop = null; clearWikiDrop(); return; }
+  const target = byId(row.dataset.wikiRow);
+  if (target.id === draggingWikiId || descendants(draggingWikiId).includes(target.id)) { wikiDrop = null; clearWikiDrop(); return; }
+  event.preventDefault();
+  clearWikiDrop();
+  const rect = row.getBoundingClientRect();
+  const fraction = (event.clientY - rect.top) / rect.height;
+  const part = fraction < .25 ? 'before' : fraction > .75 ? 'after' : 'child';
+  (part === 'child' ? row : row.closest('[data-wiki-node]')).dataset.drop = part;
+  wikiDrop = { target, part };
+});
+document.addEventListener('drop', (event) => {
+  if (!draggingWikiId || !wikiDrop || event.target.closest('[data-wiki-row]')?.dataset.wikiRow !== wikiDrop.target.id) return;
+  event.preventDefault();
+  const moving = byId(draggingWikiId), { target, part } = wikiDrop;
+  const parent = part === 'child' ? target.id : target.parent;
+  if ((parent ? depthOf(parent) : 0) + subtreeHeight(moving.id) > MAX_DEPTH) toast(`${icon('alert')}子のページを含めて10段を超えるため、移せません。`);
+  else {
+    store.pages = store.pages.filter((item) => item !== moving);
+    moving.parent = parent;
+    if (part === 'child') store.pages.push(moving);
+    else store.pages.splice(store.pages.indexOf(target) + (part === 'after' ? 1 : 0), 0, moving);
+    if (parent) S.open.add(parent);
+    redraw(); toast(`${icon('check')}「${esc(moving.title)}」を移しました`);
+  }
+  draggingWikiId = null; wikiDrop = null; clearWikiDrop();
+});
+document.addEventListener('dragend', () => { draggingWikiId = null; wikiDrop = null; clearWikiDrop(); });
 document.addEventListener("click", (ev) => {
   const crumb = ev.target.closest("[data-crumbs-more]");
   if (crumb) { document.querySelectorAll("[data-crumb-mid]").forEach((li) => (li.hidden = false)); const first = document.querySelector("[data-crumb-mid] a"); crumb.closest("li").remove(); first?.focus(); return; }
@@ -552,8 +597,10 @@ document.addEventListener("click", (ev) => {
   else if (act === "new-child") go(() => { S.mode = "new"; S.draft = null; S.newParent = S.page; redraw("#wk-title"); });
   else if (act === "discard-do") { const fn = S.pending; S.pending = null; S.draft = null; S.mode = "read"; if (fn) fn(); }
   else if (act === "download") toast(`${icon("check")}「${esc(p.title)}.md」を落としました${splitMd(p.md).bad ? "（frontmatter を読めないページなので、題を足さず本文のまま書き出しています）" : fmTitle(p.md) ? "" : "（frontmatter に title が無いので、題を足して書き出しています）"}`);
-  else if (act === "move") moveDialog(p);
+  else if (act === "move") moveDialog(arg ? byId(arg) : p);
   else if (act === "move-do") {
+    const p = byId(movingPageId ?? S.page);
+    movingPageId = null;
     const to = readParent("wk-move"); // 値は閉じる前に読む
     closeDialog();
     if (to === p.parent) { toast(`${icon("check")}親は変わっていません`); return; }

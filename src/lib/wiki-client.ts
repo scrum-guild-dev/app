@@ -2,10 +2,12 @@ import { resolve } from '$app/paths';
 import { callOperation } from './api.ts';
 import {
   orgWikiCreate,
+  orgWikiMove,
   orgWikiPage,
   orgWikiRevisions,
   orgWikiUpdate,
   workspaceWikiCreate,
+  workspaceWikiMove,
   workspaceWikiPage,
   workspaceWikiRevisions,
   workspaceWikiUpdate,
@@ -38,6 +40,14 @@ export function wikiClient(slug: string, workspaceId: string | null) {
       workspaceId === null
         ? callOperation(orgWikiCreate, { ...content, parent_id: parentId }, { slug })
         : callOperation(workspaceWikiCreate, { ...content, workspace_id: workspaceId, parent_id: parentId }, { slug }),
+    movePage: (pageId: string, parentId: string | null, afterId?: string | null) =>
+      workspaceId === null
+        ? callOperation(orgWikiMove, { page_id: pageId, parent_id: parentId, after_page_id: afterId }, { slug })
+        : callOperation(
+            workspaceWikiMove,
+            { workspace_id: workspaceId, page_id: pageId, parent_id: parentId, after_page_id: afterId },
+            { slug },
+          ),
     updatePage: (pageId: string, readVersion: number, content: Content) =>
       workspaceId === null
         ? callOperation(orgWikiUpdate, { ...content, page_id: pageId, read_version: readVersion }, { slug })

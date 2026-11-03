@@ -25,6 +25,9 @@ test.each([
   await wiki.readRevisions('page-1');
   await wiki.createPage(content, 'parent-1');
   await wiki.updatePage('page-1', 3, content);
+  await wiki.movePage('page-1', 'parent-1');
+  await wiki.movePage('page-1', null, null);
+  await wiki.movePage('page-1', 'parent-1', 'before-1');
   const calls = vi.mocked(fetch).mock.calls;
   expect(calls.map(([url]) => url)).toEqual([
     `/api/aoba/${prefix}-page`,
@@ -32,6 +35,9 @@ test.each([
     `/api/aoba/${prefix}-revisions`,
     `/api/aoba/${prefix}-create`,
     `/api/aoba/${prefix}-update`,
+    `/api/aoba/${prefix}-move`,
+    `/api/aoba/${prefix}-move`,
+    `/api/aoba/${prefix}-move`,
   ]);
   const scope = workspaceId === null ? {} : { workspace_id: workspaceId };
   expect(calls.map(([, init]) => JSON.parse(init!.body as string))).toEqual([
@@ -40,5 +46,8 @@ test.each([
     { ...scope, page_id: 'page-1' },
     { ...scope, ...content, parent_id: 'parent-1' },
     { ...scope, ...content, page_id: 'page-1', read_version: 3 },
+    { ...scope, page_id: 'page-1', parent_id: 'parent-1' },
+    { ...scope, page_id: 'page-1', parent_id: null, after_page_id: null },
+    { ...scope, page_id: 'page-1', parent_id: 'parent-1', after_page_id: 'before-1' },
   ]);
 });

@@ -298,3 +298,74 @@ describe('定期処理の履歴の関数（appendScheduledChangeLog）', () => {
     }
   });
 });
+
+describe('未添付ファイルを消す定期処理の関数（deleteExpiredAttachments）', () => {
+  const forms: Record<string, string> = {
+    import: `import { deleteExpiredAttachments } from './db/index.ts'; export const a = deleteExpiredAttachments;`,
+    '別名の import': `import { deleteExpiredAttachments as cleanup } from './db/index.ts'; export const a = cleanup;`,
+    'export from': `export { deleteExpiredAttachments } from './db/index.ts';`,
+    '別名の export from': `export { deleteExpiredAttachments as cleanup } from './db/index.ts';`,
+    名前空間からの参照: `import * as db from './db/index.ts'; export const a = db.deleteExpiredAttachments;`,
+    '名前空間からの参照（文字列のキー）': `import * as db from './db/index.ts'; export const a = db['deleteExpiredAttachments'];`,
+    '名前空間からの参照（テンプレートのキー）':
+      'import * as db from "./db/index.ts"; export const a = db[`deleteExpiredAttachments`];',
+    '名前空間からの参照（optional chaining）': `import * as db from './db/index.ts'; export const a = db?.deleteExpiredAttachments;`,
+    名前空間からの別名の取り出し: `import * as db from './db/index.ts'; const { deleteExpiredAttachments: cleanup } = db; export const a = cleanup;`,
+    '名前空間からの取り出し（文字列のキー）': `import * as db from './db/index.ts'; const { ['deleteExpiredAttachments']: cleanup } = db; export const a = cleanup;`,
+    '動的な import の取り出し': `const { deleteExpiredAttachments } = await import('./db/index.ts'); export const a = deleteExpiredAttachments;`,
+    '動的な import の別名の取り出し': `const { deleteExpiredAttachments: cleanup } = await import('./db/index.ts'); export const a = cleanup;`,
+    '動的な import からの参照': `export const a = (await import('./db/index.ts')).deleteExpiredAttachments;`,
+    '名前空間から Reflect.get': `import * as db from './db/index.ts'; export const a = Reflect.get(db, 'deleteExpiredAttachments');`,
+    '名前空間から Reflect.getOwnPropertyDescriptor': `import * as db from './db/index.ts'; export const a = Reflect.getOwnPropertyDescriptor(db, 'deleteExpiredAttachments');`,
+    '名前空間から Object.getOwnPropertyDescriptor': `import * as db from './db/index.ts'; export const a = Object.getOwnPropertyDescriptor(db, 'deleteExpiredAttachments');`,
+    '動的な import から Reflect.get': `export const a = Reflect.get(await import('./db/index.ts'), 'deleteExpiredAttachments');`,
+    '動的な import から Object.getOwnPropertyDescriptor': `export const a = Object.getOwnPropertyDescriptor(await import('./db/index.ts'), 'deleteExpiredAttachments');`,
+  };
+
+  for (const [name, code] of Object.entries(forms)) {
+    test(`操作の処理では落ちる: ${name}`, async () => {
+      assert.ok((await violations('src/server/operations/attachment.ts', code)) >= 1, `落ちなかった: ${code}`);
+    });
+  }
+
+  for (const file of [
+    ...outside,
+    'src/server/operations/operator-tools.ts',
+    'src/server/operations/operator-suspension.ts',
+    'src/server/scheduled-old/cleanup.ts',
+    'src/server/operations/scheduled.ts',
+  ]) {
+    test(`${file}: 定期処理の外では落ちる`, async () => {
+      for (const [name, code] of Object.entries(forms)) {
+        assert.ok((await violations(file, code)) >= 1, `落ちなかった: ${name}`);
+      }
+    });
+  }
+
+  for (const file of [
+    'src/server/scheduled/cleanup-attachments.ts',
+    'src/server/scheduled/index.ts',
+    'src/server/db/index.ts',
+    'src/server/db/cleanup-attachments.ts',
+  ]) {
+    test(`${file}: 定期処理とdb内部は使える`, async () => {
+      for (const [name, code] of Object.entries(forms)) {
+        assert.equal(await violations(file, code), 0, name);
+      }
+    });
+  }
+
+  test('似た名前の関数や別名の共通の入口は誤って断らない', async () => {
+    const allowed = [
+      `import { commonDb as deleteExpiredAttachments } from './db/index.ts'; export const a = deleteExpiredAttachments;`,
+      `import { commonDb as deleteExpiredAttachmentsForDisplay } from './db/index.ts'; export const a = deleteExpiredAttachmentsForDisplay;`,
+      `import { deleteExpiredAttachment } from './db/index.ts'; export const a = deleteExpiredAttachment;`,
+      `import * as db from './db/index.ts'; export const a = db.deleteExpiredAttachmentsLater;`,
+      `import * as db from './db/index.ts'; export const a = Reflect.get(db, 'deleteExpiredAttachment');`,
+      `const { deleteExpiredAttachmentsForDisplay } = await import('./db/index.ts'); export const a = deleteExpiredAttachmentsForDisplay;`,
+    ];
+    for (const file of outside) {
+      for (const code of allowed) assert.equal(await violations(file, code), 0, `${file}: ${code}`);
+    }
+  });
+});

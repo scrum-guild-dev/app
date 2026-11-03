@@ -49,6 +49,8 @@ export { hasSeatInvitationOfLogin, personKey, seatHoldersOf, seatHoldersOfWorksp
 export { appendOperatorChangeLog, type OperatorChangeLog } from './operator-change-log.ts';
 // お試しの期限切れの組織を止める1文（定期処理が呼ぶ）
 export { SUSPEND_EXPIRED_TRIALS_LIMIT, suspendExpiredTrials } from './suspend-expired-trials.ts';
+// 未添付の行を消し、実際に消した R2 のキーだけを定期処理へ返す
+export { deleteExpiredAttachments } from './cleanup-attachments.ts';
 // 定期処理（src/server/scheduled/）だけが import できる（eslint.config.db-entry.js）
 export { appendScheduledChangeLog, type ScheduledChangeLog } from './scheduled-change-log.ts';
 // 運用者の道具（operations/operator-tools.ts）だけが import できる（eslint.config.db-entry.js）
@@ -93,5 +95,7 @@ export {
   insertWikiPage,
   updateWikiPage,
   wikiParentFits,
+  wikiMoveProblem,
+  writeWikiMove,
   type WikiScope,
 } from './wiki.ts';
