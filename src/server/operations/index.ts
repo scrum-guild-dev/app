@@ -1,4 +1,6 @@
 import {
+  orgWikiSearchOperation,
+  workspaceWikiSearchOperation,
   workspaceWikiTreeOperation,
   workspaceWikiPageOperation,
   workspaceWikiCreateOperation,
@@ -119,6 +121,8 @@ import {
 
 // 呼べる操作の一覧（operation-list）が載せる、ほかの操作
 const listedOperations: readonly ImplementedOperation[] = [
+  orgWikiSearchOperation,
+  workspaceWikiSearchOperation,
   workspaceWikiTreeOperation,
   workspaceWikiPageOperation,
   workspaceWikiCreateOperation,

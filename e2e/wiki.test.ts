@@ -1,7 +1,15 @@
 import { expect, test } from './fixtures.ts';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { routeOperation } from './operations.ts';
+import { executeLocalD1 } from './local-d1.ts';
+import { SEED_SESSIONS } from '../seed/sessions.ts';
+import { workspaceWikiSearch } from '../src/shared/operations/wiki/index.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
+  // 検索の上限はAPIテストで確かめる。画面の繰り返しで共有seedの検索枠を使い切らない。
+  await executeLocalD1([
+    `DELETE FROM rate_limits WHERE key IN ('operation:workspace-wiki-search:${SEED_SESSIONS.admin.accountId}', 'operation:org-wiki-search:${SEED_SESSIONS.admin.accountId}');`,
+  ]);
   await signIn(context, baseURL, 'admin');
 });
 
@@ -177,4 +185,132 @@ test('保存前の入力を捨てるときは確かめ、文字数の誤りは�
   await page.getByRole('button', { name: 'やめる', exact: true }).click();
   await page.getByRole('button', { name: '捨てて移る' }).click();
   await expect(page.getByText('ページはまだありません', { exact: true })).toBeVisible();
+});
+
+test('Wiki の題・本文を全語で探し、結果から開け、0件・上限・失敗から再検索できる', async ({ page }) => {
+  const violations = await watchViolations(page);
+  await createWorkspace(page, 'Wikiの検索');
+  await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+  const title = '検索の手順';
+  await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
+  await page.getByLabel('題', { exact: true }).fill(title);
+  await page.getByLabel('本文', { exact: true }).fill('Release の準備');
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await expect(page).toHaveURL(/\/wiki\/[0-9a-f-]{36}$/);
+  const pageUrl = page.url();
+  await page.locator('.wiki-main .crumbs a').first().click();
+  await expect(page).toHaveURL(pageUrl.replace(/\/[^/]+$/, ''));
+  const query = page.getByRole('searchbox', { name: 'Wiki の題と本文を探す', exact: true });
+  const results = page.getByRole('navigation', { name: 'Wiki の検索結果', exact: true });
+  for (const text of ['検索', 'release', '手順　RELEASE']) {
+    await query.fill(text);
+    await expect(results.getByRole('link', { name: new RegExp('^' + title) })).toBeVisible();
+  }
+  await results.getByRole('link', { name: new RegExp('^' + title) }).click();
+  await expect(page).toHaveURL(pageUrl);
+  await expect(page.getByRole('heading', { level: 2, name: title, exact: true })).toBeVisible();
+  for (const width of [320, 390, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(query).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await query.fill('存在しない語');
+  await expect(page.getByText('当たるページはありません。語を変えて探してください。', { exact: true })).toBeVisible();
+  await expect(results).toHaveCount(0);
+  await query.fill('a b c d e f');
+  await expect(query).toHaveAttribute('aria-invalid', 'true');
+  await query.fill('　 ');
+  await expect(results).toHaveCount(0);
+  await expect(query).not.toHaveAttribute('aria-invalid', 'true');
+  expect(await violations()).toEqual([]);
+  const stopFailure = await routeOperation(
+    page,
+    workspaceWikiSearch,
+    { slug: new URL(page.url()).pathname.split('/')[1]! },
+    (call) => call.fail(500, 'internal'),
+  );
+  await query.fill('準備');
+  await expect(
+    page.getByText('検索できませんでした。「探す」を押してもう一度試してください。', { exact: true }),
+  ).toBeVisible();
+  await stopFailure();
+  await page.getByRole('button', { name: '探す', exact: true }).click();
+  await expect(results.getByRole('link', { name: new RegExp('^' + title) })).toBeVisible();
+  await expect(results.getByText('本文に一致', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '編集する', exact: true }).click();
+  await page.getByLabel('本文', { exact: true }).fill('検索に当たらない新しい内容');
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await expect(page.getByText('当たるページはありません。語を変えて探してください。', { exact: true })).toBeVisible();
+  await expect(results).toHaveCount(0);
+});
+
+test('遅い検索の応答が、新しい語の0件表示を上書きしない', async ({ page }) => {
+  await createWorkspace(page, 'Wiki検索の応答順');
+  await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+  let release: (() => void) | undefined;
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let started: (() => void) | undefined;
+  const firstRequest = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  await routeOperation(
+    page,
+    workspaceWikiSearch,
+    { slug: new URL(page.url()).pathname.split('/')[1]! },
+    async (call) => {
+      if (call.input.query === '古い語') {
+        started?.();
+        await waiting;
+        await call.fulfill({
+          pages: [{ id: '019a0000-0000-7000-8000-000000000001', title: '古い結果', matched_in: 'title' }],
+        });
+      } else await call.passThrough();
+    },
+  );
+  const query = page.getByRole('searchbox', { name: 'Wiki の題と本文を探す', exact: true });
+  await query.fill('古い語');
+  await firstRequest;
+  await query.fill('新しい語');
+  await expect(page.getByText('当たるページはありません。語を変えて探してください。', { exact: true })).toBeVisible();
+  const completed = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/workspace-wiki-search') && response.request().postDataJSON().query === '古い語',
+  );
+  release?.();
+  await completed;
+  await expect(page.getByRole('navigation', { name: 'Wiki の検索結果', exact: true })).toHaveCount(0);
+  await expect(query).toHaveValue('新しい語');
+});
+
+test('同じ題の検索結果を親の道筋で区別し、現在のページを示す', async ({ page }) => {
+  await createWorkspace(page, 'Wiki検索の道筋');
+  await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+  await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
+  await page.getByLabel('題', { exact: true }).fill('同じ手順');
+  await page.getByLabel('本文', { exact: true }).fill('最上段の本文');
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await expect(page.getByRole('button', { name: '子のページを足す', exact: true })).toBeVisible();
+  const parentUrl = page.url();
+  await page.getByRole('button', { name: '子のページを足す', exact: true }).click();
+  await page.getByLabel('題', { exact: true }).fill('同じ手順');
+  await page.getByLabel('本文', { exact: true }).fill('子だけの本文');
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name: '同じ手順', exact: true })).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Wiki の題と本文を探す', exact: true }).fill('同じ手順');
+  const results = page.getByRole('navigation', { name: 'Wiki の検索結果', exact: true });
+  await expect(results.getByRole('link')).toHaveCount(2);
+  await expect(results.locator('a[aria-current="page"]').locator('.props-note')).toHaveText('Wiki / 同じ手順');
+  await results
+    .getByRole('link')
+    .filter({ has: page.getByText('Wiki', { exact: true }) })
+    .click();
+  await expect(page).toHaveURL(parentUrl);
+  await expect(page.locator('.doc-box')).toContainText('最上段の本文');
+  await page.getByRole('searchbox', { name: 'Wiki の題と本文を探す', exact: true }).fill('');
+  // 検索前に子のページを見て開いていた枝を、検索後も保つ。
+  await expect(
+    page.getByRole('navigation', { name: 'ワークスペースの Wiki のページ', exact: true }).getByRole('link'),
+  ).toHaveCount(2);
 });

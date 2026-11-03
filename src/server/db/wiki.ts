@@ -8,7 +8,8 @@ function raw<Row>(db: Pick<OrganizationDb, 'statement'>, query: RawBuilder<Row>)
   return db.statement(() => ({ compile: () => query.compile(compiler) }));
 }
 
-import type { WikiPage } from '../../shared/operations/wiki/index.ts';
+import { searchWordsOf } from '../../shared/backlog-filter.ts';
+import type { WikiSearchResult, WikiPage } from '../../shared/operations/wiki/index.ts';
 
 // 同じ処理を、組織の Wiki の操作からも使えるよう、Wiki の範囲を明示する。
 export type WikiScope = { workspaceId: string } | { organizationId: string };
@@ -71,6 +72,36 @@ export async function readWikiTree(db: OrganizationDb, scope: WikiScope) {
         .orderBy('parent_id')
         .orderBy('position')
         .orderBy('id'),
+    ),
+  );
+}
+
+// LIMIT -1 はサブクエリの平坦化を防ぎ、lower(body_md) をページごとに1回だけ計算する。
+// 語は検証済み（1〜5語）。結果に本文を載せず、Wiki の索引で範囲を絞ってから走査する。
+export async function searchWikiPages(
+  db: OrganizationDb,
+  scope: WikiScope,
+  query: string,
+): Promise<WikiSearchResult[]> {
+  const words = searchWordsOf(query);
+  const titleHits = words.map((word) => sql<boolean>`instr(p.title_search, lower(${word})) > 0`);
+  const hits = words.map(
+    (word, index) => sql<boolean>`(${titleHits[index]} OR instr(p.body_search, lower(${word})) > 0)`,
+  );
+  return db.rows(
+    raw(
+      db,
+      sql<WikiSearchResult>`
+    WITH pages AS (
+      SELECT id, title, lower(title) AS title_search, lower(body_md) AS body_search, updated_at
+      FROM wiki_pages p WHERE ${scopeOf('p', scope)} AND p.deleted_at IS NULL LIMIT -1
+    )
+    SELECT p.id, p.title, CASE WHEN (${sql.join(titleHits, sql` OR `)}) THEN 'title' ELSE 'body' END AS matched_in
+    FROM pages p
+    WHERE ${sql.join(hits, sql` AND `)}
+    ORDER BY (${sql.join(titleHits, sql` AND `)}) DESC, p.updated_at DESC, p.id
+    LIMIT 50
+  `,
     ),
   );
 }

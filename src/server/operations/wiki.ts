@@ -1,12 +1,21 @@
 import { now } from '../../shared/clock.ts';
 import {
+  orgWikiSearch,
+  workspaceWikiSearch,
   workspaceWikiCreate,
   workspaceWikiPage,
   workspaceWikiTree,
   workspaceWikiUpdate,
 } from '../../shared/operations/wiki/index.ts';
 import { wikiTitle } from '../../shared/wiki.ts';
-import { insertWikiPage, readWikiPage, readWikiTree, updateWikiPage, wikiParentFits } from '../db/index.ts';
+import {
+  searchWikiPages,
+  insertWikiPage,
+  readWikiPage,
+  readWikiTree,
+  updateWikiPage,
+  wikiParentFits,
+} from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
@@ -84,3 +93,10 @@ export const workspaceWikiUpdateOperation = implement(
     return { page };
   },
 );
+
+export const orgWikiSearchOperation = implement(orgWikiSearch, async ({ db, input }) => ({
+  pages: await searchWikiPages(db, { organizationId: db.organizationId }, input.query),
+}));
+export const workspaceWikiSearchOperation = implement(workspaceWikiSearch, async ({ db, workspace, input }) => ({
+  pages: await searchWikiPages(db, { workspaceId: workspace.workspaceId }, input.query),
+}));

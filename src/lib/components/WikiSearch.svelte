@@ -1,0 +1,126 @@
+<script lang="ts">
+  import type { Snippet } from 'svelte';
+  import { resolve } from '$app/paths';
+  import { callOperation } from '../api.ts';
+  import { t } from '../vocabulary.svelte.ts';
+  import {
+    orgWikiSearch,
+    workspaceWikiSearch,
+    wikiQuerySchema,
+    type WikiSearchResult,
+    type WikiNode,
+  } from '../../shared/operations/wiki/index.ts';
+
+  let {
+    slug,
+    workspaceId,
+    pages,
+    currentId,
+    children,
+  }: { slug: string; workspaceId: string | null; pages: WikiNode[]; currentId: string | null; children: Snippet } =
+    $props();
+  let query = $state('');
+  let results = $state<WikiSearchResult[]>([]);
+  let loading = $state(false);
+  let searched = $state(false);
+  let failure = $state('');
+  let retry = $state(0);
+  const parsed = $derived(wikiQuerySchema.safeParse(query));
+
+  $effect(() => {
+    const text = query.trim();
+    const scopeSlug = slug;
+    const scopeWorkspace = workspaceId;
+    const input = parsed;
+    void retry;
+    void pages;
+    let active = true;
+    results = [];
+    searched = false;
+    failure = text && !input.success ? t('wikiSearchInvalid') : '';
+    loading = text.length > 0 && input.success;
+    const timer = setTimeout(async () => {
+      if (!text || !input.success) return;
+      const result = scopeWorkspace
+        ? await callOperation(
+            workspaceWikiSearch,
+            { workspace_id: scopeWorkspace, query: input.data },
+            { slug: scopeSlug },
+          )
+        : await callOperation(orgWikiSearch, { query: input.data }, { slug: scopeSlug });
+      if (!active) return;
+      loading = false;
+      searched = true;
+      if (result.ok) results = result.data.pages;
+      else failure = t(result.error?.code === 'rate_limited' ? 'wikiSearchRateLimited' : 'wikiSearchFailed');
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  });
+  function pathOf(id: string): string {
+    const path: string[] = [];
+    let parent = pages.find((item) => item.id === id)?.parent_id;
+    for (let depth = 0; parent && depth < 10; depth++) {
+      const node = pages.find((item) => item.id === parent);
+      if (!node) break;
+      path.unshift(node.title);
+      parent = node.parent_id;
+    }
+    return [t('wiki'), ...path].join(' / ');
+  }
+</script>
+
+<form
+  class="form"
+  role="search"
+  aria-label={t('wikiSearch')}
+  onsubmit={(event) => {
+    event.preventDefault();
+    retry += 1;
+  }}
+>
+  <div class="field">
+    <label for="wiki-search">{t('wikiSearch')}</label>
+    <input
+      id="wiki-search"
+      class="input"
+      type="search"
+      bind:value={query}
+      aria-invalid={query.trim() && !parsed.success ? true : undefined}
+      aria-describedby={failure ? 'wiki-search-hint wiki-search-error' : 'wiki-search-hint'}
+    />
+    <p id="wiki-search-hint" class="field-hint">{t('wikiSearchHint')}</p>
+  </div>
+  <button class="btn" type="submit">{t('wikiSearchRun')}</button>
+</form>
+<div role="status" aria-live="polite">
+  {#if loading}<p class="field-hint">{t('wikiSearching')}</p>
+  {:else if failure}<p id="wiki-search-error" class="field-error">{failure}</p>
+  {:else if searched}<p class="field-hint">
+      {t(results.length ? 'wikiSearchCount' : 'wikiSearchEmpty', { count: results.length })}
+    </p>{/if}
+</div>
+<div hidden={Boolean(query.trim())}>{@render children()}</div>
+{#if query.trim() && results.length}
+  <nav aria-label={t('wikiSearchResults')}>
+    <ul class="wiki-tree panel">
+      {#each results as item (item.id)}
+        <li>
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- 組織Wikiのルート型は並行する #751 が追加する。既存ルートのresolveでbaseを付けてからWiki内のURLを組む -->
+          <a
+            class="wiki-link"
+            href={workspaceId
+              ? resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: item.id })
+              : `${resolve('/[slug]', { slug })}/wiki/${item.id}`}
+            aria-current={currentId === item.id ? 'page' : undefined}
+            >{item.title}<span class="props-note">{pathOf(item.id)}</span></a
+          >
+          <!-- eslint-enable svelte/no-navigation-without-resolve -->
+          <span class="field-hint">{t(item.matched_in === 'title' ? 'wikiSearchTitleHit' : 'wikiSearchBodyHit')}</span>
+        </li>
+      {/each}
+    </ul>
+  </nav>
+{/if}

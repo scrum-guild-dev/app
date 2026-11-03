@@ -16,6 +16,7 @@
   import WikiContent from './WikiContent.svelte';
   import PageHead from './PageHead.svelte';
   import WikiTree from './WikiTree.svelte';
+  import WikiSearch from './WikiSearch.svelte';
 
   let { data }: { data: WikiData & { workspace: WorkspaceView | null } } = $props();
   const slug = $derived(page.params.slug ?? '');
@@ -194,11 +195,18 @@
 {:else}
   <div class="layout-wiki">
     <aside class="wiki-side">
-      {#if pages.length}<WikiTree {pages} {slug} {workspaceId} currentId={current?.id ?? null} />{:else}<p
-          class="section-hint"
+      {#key slug + (workspaceId ?? '')}<WikiSearch
+          {slug}
+          workspaceId={workspaceId || null}
+          {pages}
+          currentId={current?.id ?? null}
         >
-          {t('wikiTreeEmpty')}
-        </p>{/if}
+          {#if pages.length}<WikiTree {pages} {slug} {workspaceId} currentId={current?.id ?? null} />{:else}<p
+              class="section-hint"
+            >
+              {t('wikiTreeEmpty')}
+            </p>{/if}
+        </WikiSearch>{/key}
     </aside>
     <section class="wiki-main" aria-label={t('wikiPage')}>
       <nav class="crumbs" aria-label={t('wikiCrumbs')}>

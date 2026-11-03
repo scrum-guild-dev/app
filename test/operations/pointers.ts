@@ -130,6 +130,8 @@ async function wikiFor(target: Target) {
 }
 
 export const pointers: Pointers = {
+  'org-wiki-search': { noReference: { query: '手順' } },
+  'workspace-wiki-search': async (target) => ({ workspace_id: target.workspace.id, query: '手順' }),
   'workspace-wiki-tree': async (target) => ({ workspace_id: target.workspace.id }),
   'workspace-wiki-create': async (target) => ({ workspace_id: target.workspace.id, title: '手順', body_md: '本文' }),
   'workspace-wiki-page': async (target) => ({ workspace_id: target.workspace.id, page_id: await wikiFor(target) }),

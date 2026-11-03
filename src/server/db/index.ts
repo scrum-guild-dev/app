@@ -89,6 +89,7 @@ export {
   organizationStorageBytes,
   readWikiPage,
   readWikiTree,
+  searchWikiPages,
   insertWikiPage,
   updateWikiPage,
   wikiParentFits,
