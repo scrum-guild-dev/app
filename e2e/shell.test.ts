@@ -193,10 +193,11 @@ test.describe('高さの低い指で押す画面の左のメニュー', () => {
     await signIn(context, baseURL, 'admin');
   });
 
-  // overflows: 列が画面より長く、中で送る必要がある高さ（1024×600 は項目が収まる）
+  // overflows: 横組みロゴを含む列が画面より長く、中で送れる高さ。680px高では余白まで収まる。
   for (const viewport of [
     { width: 844, height: 390, overflows: true },
-    { width: 1024, height: 600, overflows: false },
+    { width: 1024, height: 600, overflows: true },
+    { width: 1024, height: 680, overflows: false },
   ]) {
     test(`${viewport.width}×${viewport.height} の広げた列で、最後の項目とブランドの両方に届く`, async ({ page }) => {
       await page.setViewportSize(viewport);
@@ -214,7 +215,11 @@ test.describe('高さの低い指で押す画面の左のメニュー', () => {
       const overflow = await inner.evaluate((element) => element.scrollHeight - element.clientHeight);
       if (viewport.overflows) {
         expect(overflow).toBeGreaterThan(0);
+        // 600px高では最後の項目は見えていて、下の余白だけがはみ出すこともある。
+        // scrollIntoView が動かない場合も、列の下端まで送れることを確かめる。
+        await inner.evaluate((element) => element.scrollTo(0, element.scrollHeight));
         await expect.poll(() => inner.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+        await expect(last).toBeInViewport({ ratio: 1 });
       } else {
         expect(overflow).toBeLessThanOrEqual(0);
       }

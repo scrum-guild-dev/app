@@ -36,7 +36,7 @@
 
 ### 素材の原本と同期
 
-提供元は `/Users/ucan/work/ucan-lab/scrum-guild-assets` のオレンジ案（主な色は `#F58220` / `#303740`、画素の色には微差がある）。PNG / ICO が原本で、SVG は無い。必要な画像と提供元の README を `design/brand/` に取り込み、見本の Worker がそのまま配信できるようにする。本番用の同じ画像は `static/brand/` に置く。実行時・ビルド時に元のローカルディレクトリを読まない。
+提供元は #775 のオレンジ案（主な色は `#F58220` / `#303740`、画素の色には微差がある）。PNG / ICO が原本で、SVG は無い。必要な画像と提供元の README を `design/brand/` に取り込み、見本の Worker がそのまま配信できるようにする。本番用の同じ画像は `static/brand/` に置く。実行時・ビルド時に元のローカルディレクトリを読まない。
 
 素材を差し替えるときは `design/brand/` を更新し、`pnpm exec node scripts/generate-favicon.ts` で `static/brand/` へ同期する。`static/brand/` は生成物として一度消してからコピーするため、手で編集しない。画像を描き直さず、PNG / ICO をそのままコピーする。Chromium は不要。原本と本番の画像を同じコミットに含める。`scripts/brand-assets.test.ts` がファイルの一覧とバイトの一致を確かめる。
 
