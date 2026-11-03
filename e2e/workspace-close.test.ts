@@ -319,7 +319,8 @@ test.describe('管理者（あおば開発のミナト）', () => {
       const refusal = refusalOf(page);
       await expect(refusal).toBeVisible();
       await expect(refusal).toContainText('利用中のものを3個まで使えます（今3個）');
-      await expect(refusal).toContainText('今あるワークスペースを終了して枠を空けてください');
+      await expect(refusal).toContainText('この一覧で今あるワークスペースを終了して枠を空けてください');
+      await expect(refusal).not.toContainText('組織の管理');
       await expect.poll(listCalls).toBe(2);
       await expect(row.locator('.chip')).toContainText('終了');
       await expect(button).toBeFocused();
@@ -360,7 +361,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
       .getByRole('button', { name: `「${SEED_NAME}」を再開する` })
       .click();
     await expect(refusalOf(page)).toContainText('利用中の個数が上限に達しています');
-    await expect(refusalOf(page)).toContainText('今あるワークスペースを終了して枠を空けてください');
+    await expect(refusalOf(page)).toContainText('この一覧で今あるワークスペースを終了して枠を空けてください');
     await expect(refusalOf(page)).not.toContainText('{');
   });
 

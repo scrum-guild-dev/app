@@ -297,16 +297,19 @@ export const dictionary = defineDictionary({
   workspaceOpen: '開く',
   workspaceCreateFailed: '作れませんでした。もう一度試してください。',
   workspaceLeaderRejected: '選んだ人は、いま最初の{leader}に指せません。選び直してください。',
-  // 自分用の組織の{workspace}の個数の上限（409 の workspace_limit_reached）。作成のダイアログと再開の断りに出す。
+  // 自分用の組織の{workspace}の個数の上限（409 の workspace_limit_reached）。作成のダイアログと再開の断りに出す（行き先の案内はそれぞれ別の文）。
   // {limit} は上限、{used} は利用中の個数。終了すると枠が空く。
   // 数が読めない応答（details が無いか不正）は数を含まない文言にする。
-  // 自分用の組織は、組織を選ぶ画面と運用者の一覧のほかでは「組織」と見せないので、{organization} を入れない（#732）
+  // 自分用の組織は、組織を選ぶ画面と運用者の一覧のほかでは「組織」と見せないので、{organization} を入れない（#732）。作成時の行き先は実際の画面名 {adminPage} で案内する
   workspaceLimitReached:
-    '自分用の{workspace}は、利用中のものを{limit}個まで使えます（今{used}個）。「{adminPage}」で今ある{workspace}を終了して枠を空けてください。',
+    '自分用の{workspace}は、利用中のものを{limit}個まで使えます（今{used}個）。アカウントのメニューの「{adminPage}」で今ある{workspace}を終了して枠を空けてください。',
   workspaceLimitReachedUnknown:
-    '自分用の{workspace}は、利用中の個数が上限に達しています。「{adminPage}」で今ある{workspace}を終了して枠を空けてください。',
+    '自分用の{workspace}は、利用中の個数が上限に達しています。アカウントのメニューの「{adminPage}」で今ある{workspace}を終了して枠を空けてください。',
 
-  workspaceReopenWorkspaceLimit: '「{name}」は再開できません。{reason}',
+  workspaceReopenWorkspaceLimit:
+    '「{name}」は再開できません。自分用の{workspace}は、利用中のものを{limit}個まで使えます（今{used}個）。この一覧で今ある{workspace}を終了して枠を空けてください。',
+  workspaceReopenWorkspaceLimitUnknown:
+    '「{name}」は再開できません。自分用の{workspace}は、利用中の個数が上限に達しています。この一覧で今ある{workspace}を終了して枠を空けてください。',
 
   // ワークスペースの枠と画面。見つからない画面は、組織の枠の中に出す
   notMemberAdminChip: '所属せず{admin}として開いています',

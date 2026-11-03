@@ -335,6 +335,7 @@ describe('作成と再開の並行操作', () => {
             sql.includes('"closed_at" is null')
           ) {
             fired = true;
+            expect(await activeCount(target)).toBe(2);
             const res = second === '作成' ? await create(target) : await reopen(target, b.id);
             expect(res.status).toBe(200);
             afterOther = await countRows(target.organization);
