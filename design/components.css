@@ -1751,7 +1751,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 /* 4段目からは字下げを増やさない（深さは10段までで、字下げを重ねると題の幅が数文字に潰れる） */
 .wiki-tree ul ul ul { margin-left: 0; padding-left: 0; border-left: 0; }
 .wiki-head .section-title { overflow-wrap: anywhere; min-width: 0; }
-.wiki-node { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; }
+.wiki-node { --row-indent: 0px; position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; }
 .wiki-node > .tree-caret { width: 24px; height: 28px; }
 .wiki-slot { width: 24px; }
 .wiki-link { display: block; padding: 5px var(--space-2); border-radius: var(--radius-1); color: var(--color-fg); text-decoration: none; font-size: var(--text-sm); line-height: var(--leading-tight); overflow-wrap: anywhere; }
@@ -1760,6 +1760,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 /* 探した結果の行。題の下に、そのページの道筋と、当たった場所（題か本文）を添える */
 .wiki-link .props-note { display: block; font-weight: 400; }
 .wiki-link .chip { margin-left: var(--space-1); vertical-align: 0.1em; }
+.wiki-node[data-drop="child"] { background: var(--color-accent-soft); outline: 1px solid var(--color-accent); }
 .wiki-node .order-actions { padding-right: var(--space-1); }
 /* ページの道筋（最上段から今のページまで）。区切りは見た目だけの文字で、読み上げには出さない（対応しない環境では区切りも読まれるだけ） */
 .crumbs ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); font-size: var(--text-sm); color: var(--color-muted); }
@@ -1777,7 +1778,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   .wiki-slot { width: 44px; }
   .wiki-link { display: flex; flex-wrap: wrap; align-items: center; min-height: 44px; }
   .wiki-link .props-note { flex-basis: 100%; }
-  .wiki-node .order-actions .icon-btn { width: 44px; height: 44px; }
+  .wiki-node > .icon-btn, .wiki-node .order-actions .icon-btn { width: 44px; height: 44px; }
   .crumbs a, .crumbs .link-btn { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
   .wiki-side .search { min-height: 44px; }
 }

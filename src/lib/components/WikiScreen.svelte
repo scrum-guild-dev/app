@@ -235,9 +235,13 @@
 {:else}
   <div class="layout-wiki">
     <aside class="wiki-side">
-      {#if pages.length}<WikiTree {pages} {slug} {workspaceId} currentId={current?.id ?? null} />{:else}<p
-          class="section-hint"
-        >
+      {#if pages.length}<WikiTree
+          {pages}
+          {slug}
+          {workspaceId}
+          canWrite={canWrite && mode === 'read' && !saving}
+          currentId={current?.id ?? null}
+        />{:else}<p class="section-hint">
           {t('wikiTreeEmpty')}
         </p>{/if}
     </aside>
