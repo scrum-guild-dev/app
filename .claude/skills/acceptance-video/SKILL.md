@@ -46,6 +46,16 @@ gh api repos/{owner}/{repo}/issues/<番号> --jq '{state, author: .user.login, t
 - 画面の言葉はスクラムの言葉に固定なので、手順書に言葉づかいは書かない。要素の名前と字幕は、`src/shared/vocabulary.ts` の辞書の `scrum` の言葉に合わせる。e2e の名前は辞書の言葉と同じだが、辞書を変えた Issue では引き直す
 - 手順書はスクラッチパッドに書く。形は `example-574.json`（#574 の録画）が見本
 
+手順書の先頭に任意の `screen` を書くと、録画と `--probe` の画面サイズと入力端末を変えられる。
+
+```json
+{ "screen": { "width": 2200, "height": 900 }, "steps": [{ "actions": [{ "goto": "/aoba" }] }] }
+```
+
+指で押す横長の画面なら `"screen": { "width": 844, "height": 390, "touch": true }` とする。`touch: true` は Playwright の `hasTouch` と `isMobile` を有効にし、`(pointer: coarse)` が真になる。画面サイズは CSS px で幅・高さとも 320〜3840 の整数。各項目は省略でき、幅 1280、高さ 640、`touch: false` が既定値。`screen` 全体を省いた既存の手順書もそのまま使える。未知のキーや範囲外の値は `--check` が断る。
+
+出力の録画は常に 1280×640。画面の縦横比を保ち、全体が収まるように縮小する（小さい画面は拡大しない）。残りは Playwright が右と下に余白を付ける。`compose.py` は従来どおり上に 80px の字幕帯を足し、1280×720 の mp4 を出す。
+
 場面は `caption`（字幕）、`mark`（枠で示す要素）、`actions`（操作）、`read`（字幕を出してから操作までの待ち）、`hold`（操作のあとの待ち）を持つ。
 
 | 操作 | 書き方 |

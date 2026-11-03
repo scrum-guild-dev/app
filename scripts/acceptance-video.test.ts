@@ -38,6 +38,71 @@ async function inTempDirAsync(
   }
 }
 
+describe('録画と試しの画面設定', () => {
+  const options = (plan: unknown, dir?: string) => {
+    const url = JSON.stringify(pathToFileURL(join(skillDir, 'context.mjs')).href);
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `import { contextOptions } from ${url}; console.log(JSON.stringify(contextOptions(${JSON.stringify(plan)}, ${JSON.stringify(dir) ?? 'undefined'})));`,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+  };
+
+  test('画面を省けば従来の寸法で、録画を指定した場合だけ動画を保存する', () => {
+    assert.deepEqual(options({}), {
+      viewport: { width: 1280, height: 640 },
+      hasTouch: false,
+      isMobile: false,
+      timezoneId: 'Asia/Tokyo',
+    });
+    assert.deepEqual(options({}, '/tmp/video').recordVideo, {
+      dir: '/tmp/video',
+      size: { width: 1280, height: 640 },
+    });
+    assert.deepEqual(options({ screen: { height: 900 } }).viewport, { width: 1280, height: 900 });
+  });
+
+  test(
+    '広い画面とタッチ端末で、録画と試しの設定が一致し出力寸法は固定',
+    { skip: !existsSync(chromium.executablePath()) && 'Playwright の chromium が無い' },
+    async () => {
+      const browser = await chromium.launch();
+      try {
+        for (const screen of [
+          { width: 2200, height: 900 },
+          { width: 844, height: 390, touch: true },
+        ]) {
+          const probe = options({ screen });
+          const recording = options({ screen }, '/tmp/video');
+          const { recordVideo, ...rest } = recording;
+          assert.deepEqual(rest, probe);
+          assert.deepEqual(recordVideo.size, { width: 1280, height: 640 });
+          const context = await browser.newContext(probe);
+          const page = await context.newPage();
+          await page.setContent('<meta name="viewport" content="width=device-width, initial-scale=1">');
+          assert.deepEqual(
+            await page.evaluate(() => ({
+              width: innerWidth,
+              height: innerHeight,
+              touch: matchMedia('(pointer: coarse)').matches,
+            })),
+            { ...screen, touch: screen.touch ?? false },
+          );
+          await context.close();
+        }
+      } finally {
+        await browser.close();
+      }
+    },
+  );
+});
+
 describe('record.mjs --check', () => {
   const checkRaw = (text: string) =>
     inTempDir({ 'steps.json': text }, (path) => {
@@ -71,6 +136,26 @@ describe('record.mjs --check', () => {
     const steps = [{ hold: 1000 }];
     assert.equal(check({ steps }).status, 0);
     rejected({ vocabulary: 'scrum', steps }, /vocabulary/);
+  });
+
+  test('screen の既定値、部分指定、境界値を通す', () => {
+    for (const screen of [{}, { touch: true }, { width: 2200, height: 900 }, { width: 320, height: 3840 }]) {
+      const result = check({ screen, steps: [{ hold: 1000 }] });
+      assert.equal(result.status, 0, result.stderr);
+    }
+  });
+
+  test('screen の形、寸法、touch、未知のキーの誤りを断る', () => {
+    for (const screen of [null, [], '2200x900']) {
+      rejected({ screen, steps: [{ hold: 1000 }] }, /screen は/);
+    }
+    for (const key of ['width', 'height']) {
+      for (const value of [null, true, '900', 319, 3841, 844.5, 0, -1]) {
+        rejected({ screen: { [key]: value }, steps: [{ hold: 1000 }] }, new RegExp(`screen.${key}`));
+      }
+    }
+    rejected({ screen: { touch: 'true' }, steps: [{ hold: 1000 }] }, /screen.touch/);
+    rejected({ screen: { widht: 2200 }, steps: [{ hold: 1000 }] }, /screen: widht/);
   });
 
   test('steps が空の手順書は断る', () => {
