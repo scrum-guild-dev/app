@@ -52,8 +52,9 @@
   }
   if (first) Object.assign(D, freshData(first));
   try {
-    const selected = new URLSearchParams(location.search).get("workspace");
+    const selected = new URLSearchParams(location.search).get("workspace") || sessionStorage.getItem("sq-design-workspace");
     if (selected && Object.hasOwn(D.workspaces, selected)) D.workspace = selected;
+    if (Object.hasOwn(D.workspaces, D.workspace)) sessionStorage.setItem("sq-design-workspace", D.workspace);
   } catch (e) { /* URL を読めない場合は既定の見本 */ }
 
   // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
@@ -110,7 +111,7 @@
     wikiDiscardText: "保存していない題と本文は失われます。",
     wikiPreview: "プレビュー",
 
-    workspaceSwitchLabel: "{name}。{workspace}を切り替える", workspaceSwitchListLabel: "所属する{workspace}",
+    workspaceSwitchLabel: "{workspace} {name}。切り替える", workspaceSwitchListLabel: "所属する{workspace}",
     workspace: "ワークスペース", inbox: "受信箱", backlog: "バックログ", sprint: "スプリント", plan: "計画", epic: "エピック", story: "ストーリー",
     menuCollapse: "メニューを畳む", menuExpand: "メニューを広げる", organizationMoving: "移っています",
     personalOrganizationName: "自分用", createPersonalOrganizationAction: "自分用を作る",
@@ -2101,10 +2102,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       // 組織の切り替えは、メニューの外（ブランドの下）の orgMenuHtml
       if (p === "organization") return "";
       if (p === "workspace") return `<div class="nav-group"><span class="nav-group-label">${t("workspace")}</span></div>
-        ${["today", "notifications", "orgwiki", "me", "admin", "operator"].includes(current) ? "" : `<div id="ws-menu-slot">${workspaceMenuHtml()}</div>`}`;
+        <div id="ws-menu-slot">${workspaceMenuHtml()}</div>`;
       if (typeof p === "string") return `<div class="nav-group"><span class="nav-group-label">${p}</span></div>`;
       const [id, ic, label, href, badge] = p;
-      return `<a class="nav-item${id === "orgwiki" ? " is-wrapping" : ""}" href="${firstHref(href)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
+      const target = PAGES.indexOf(p) > PAGES.indexOf("workspace") ? `${firstHref(href)}${firstHref(href).includes("?") ? "&" : "?"}workspace=${encodeURIComponent(D.workspace)}` : firstHref(href);
+      return `<a class="nav-item${id === "orgwiki" ? " is-wrapping" : ""}" href="${target}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
     }).join("");
   }
   // 組織の切り替え。開閉するメニューで、中は各組織へのリンクと、組織の選択の画面へ戻るリンクと、最後に「組織を作る」（ダイアログを開く）。
@@ -2146,12 +2148,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // ワークスペースの切り替え。組織と同じ開閉と通常のリンクを使い、移動先はバックログ。
   let workspaceMenuOpen = false;
-  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] } } = {}) {
+  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] }, inWorkspaceScreen = !page || !["today", "notifications", "orgwiki", "me", "admin", "operator"].includes(page.current) } = {}) {
     const name = workspaces.find((w) => w.id === current.id)?.name || current.name;
     const label = t("workspaceSwitchLabel").replace("{name}", name).replace("{workspace}", t("workspace"));
     const listLabel = t("workspaceSwitchListLabel").replace("{workspace}", t("workspace"));
     return `<div class="ws-menu"><button class="ws-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-ws-menu" : ""}><span class="ws-menu-label">${t("workspace")}</span><b>${esc(name)}</b>${icon("chevron")}</button>
-      <ul class="ws-menu-list" id="${id}" aria-label="${esc(listLabel)}" ${open ? "" : "hidden"}>${workspaces.some((w) => w.id === current.id) ? "" : `<li class="ws-menu-current"><span aria-current="page">${esc(current.name)}</span>${icon("check")}</li>`}${workspaces.map((w) => `<li><a href="${firstHref("backlog.html")}${first ? "&" : "?"}workspace=${encodeURIComponent(w.id)}" ${live ? `data-ws-target="${esc(w.id)}"` : ""}${w.id === current.id ? ' aria-current="page"' : ""}><span class="org-menu-name">${esc(w.name)}</span>${w.id === current.id ? icon("check") : ""}</a></li>`).join("")}</ul></div>`;
+      <ul class="ws-menu-list" id="${id}" aria-label="${esc(listLabel)}" ${open ? "" : "hidden"}>${workspaces.some((w) => w.id === current.id) ? "" : `<li class="ws-menu-current"><span aria-current="page">${esc(current.name)}</span>${icon("check")}</li>`}${workspaces.map((w) => `<li><a href="${firstHref("backlog.html")}${first ? "&" : "?"}workspace=${encodeURIComponent(w.id)}" ${live ? `data-ws-target="${esc(w.id)}"` : ""}${w.id === current.id && inWorkspaceScreen ? ' aria-current="page"' : ""}><span class="org-menu-name">${esc(w.name)}</span>${w.id === current.id ? icon("check") : ""}</a></li>`).join("")}</ul></div>`;
   }
   function setWorkspaceMenu(open, focus) {
     workspaceMenuOpen = open;

@@ -6,17 +6,18 @@
   import BrandMark from './BrandMark.svelte';
   import NavMenu from './NavMenu.svelte';
   import Icon from './Icon.svelte';
+  import type { NavigationWorkspace } from '../workspace-navigation.svelte.ts';
 
   // kit.js の mount が組む画面の枠。左のメニュー（綴じ）と、上の帯と本文（帳面）。slug は今の組織で、組織の中の画面だけが使う。
   // 組織の切り替え（ブランドの下）、ワークスペースの切り替え、アシスタントのボタンは置き場所だけで、中身は snippet で渡す。
-  // workspaceSwitcher と workspaceId を渡すのは、ワークスペースの画面を開いている間（メニューにワークスペースの節を出す）。
+  // workspace はメニューの対象。「今日やること」など組織の画面でも渡す。
   // 上の帯は、assistant か account のどちらかを渡したときだけ出す（空の帯を出さない）。account はログインしている人の表示
   let {
     current,
     slug,
     hasWorkspace,
     isAdmin,
-    workspaceId,
+    workspace,
     organizationSwitcher,
     workspaceSwitcher,
     assistant,
@@ -27,7 +28,7 @@
     slug: string;
     hasWorkspace: boolean;
     isAdmin: boolean;
-    workspaceId?: string;
+    workspace?: NavigationWorkspace;
     organizationSwitcher?: Snippet;
     workspaceSwitcher?: Snippet;
     assistant?: Snippet;
@@ -57,7 +58,7 @@
         </button>
       </div>
       {#if organizationSwitcher}{@render organizationSwitcher()}{/if}
-      <NavMenu {current} {slug} {hasWorkspace} {isAdmin} {workspaceId} {workspaceSwitcher} />
+      <NavMenu {current} {slug} {hasWorkspace} {isAdmin} {workspace} {workspaceSwitcher} />
     </div>
   </aside>
   <div class="sheet">
