@@ -227,6 +227,12 @@ gh api repos/{owner}/{repo}/pulls \
 本文は必ずファイルに書き出して `-F body=@<ファイル>` で渡す。シェルに直接埋めると改行とエスケープが壊れる。
 `-F draft=false` で boolean の `false` を明示する（`-f` は文字列になるので使わない）。MCP で作るときも `draft: false` を指定する。返った PR の `state` が `open`、`draft` が `false` であることを読み直して確かめる。作成で AI レビューが走り、そのときの本文を読む。インラインの案内のコメントは作った後に付くので、そのレビューには渡らない。初回レビューのために `ai-review` のラベルを付けない（`opened` と付与で2回走る）。
 
+作成した PR の番号を `pr.json` から読み、次のコマンドで状態を取り直す。`true` でなければ先に進まない。
+
+```bash
+gh api repos/{owner}/{repo}/pulls/<n> --jq '.state == "open" and .draft == false'
+```
+
 メタデータは作成後に付ける。決めなかった項目は呼ばない。空文字を渡さない。
 
 ```bash

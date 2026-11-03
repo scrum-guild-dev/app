@@ -60,6 +60,7 @@ test('作成のひな形は、本文と draft=false を渡して通常の PR を
   );
   assert.ok(fields.some((field) => field.value === 'base=main'));
   assert.ok(fields.some((field) => field.value === 'head=789-open-pr'));
+  assert.ok(fields.some((field) => field.value === 'title=PR を通常の状態で作る'));
   assert.equal(request.body, body);
   assert.deepEqual(JSON.parse(readFileSync(join(dir, 'pr.json'), 'utf8')), {
     number: 123,
@@ -83,4 +84,18 @@ test('AI レビューは opened が対象で、push と CI 完了を起動条件
   assert.ok(!workflow.on.pull_request.types.includes('synchronize'));
   assert.equal(workflow.jobs.authorize?.needs, undefined);
   assert.equal(workflow.jobs.review?.needs, 'authorize');
+});
+
+// 旧方式の復旧手順は残しつつ、新規作成と対象の層を文書間で一致させる。
+test('作成状態の再取得と、層ごとのベース指定を省かない', () => {
+  assert.ok(prCreate.includes(`--jq '.state == "open" and .draft == false'`));
+  assert.ok(stack.includes('比較のベース `origin/<その層の base>` を明示して渡す'));
+  assert.ok(stack.includes('層ごとに回し直す'));
+  const feedback = read('.claude/skills/pr-feedback/SKILL.md');
+  assert.ok(feedback.includes('目印のあるドラフトのうち、文書だけの PR'));
+  assert.ok(read('docs/development.md').includes('base が `main` の層では AI レビューも同時に走らせる'));
+  assert.ok(read('.claude/skills/pr-create/github-mcp.md').includes('`draft: false` を明示'));
+  for (const document of [prCreate, feedback, read('docs/development.md')]) {
+    assert.ok(!document.includes('gh stack submit'), 'ドラフトを一括作成する経路を復活させない');
+  }
 });
