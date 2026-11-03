@@ -13,11 +13,8 @@ import type { LayoutLoad } from './$types';
 // 読めなかったとき（通信、5xx）は failure をその応答にして、読み込みの失敗を出す。
 // 組織に入れる人で、組織の選択の届いた招待にこの slug があるとき（別のワークスペースから招待が届いた）だけ、同じく invitation-list を読み、
 // 件数を invitationCount に入れる（メニューの「マイプロフィール」の印に出す）。招待が無い人は追加の呼び出しをしない。読めなかったときは 0（印を出さない）。
-// pathname を読むので、組織内の移動でも発行の知らせを読み直す。
-export const load: LayoutLoad = async ({ params, fetch, url, depends }) => {
-  depends('app:token-notice');
-  // 組織の中の移動でも新しい発行を読み直す。
-  void url.pathname;
+// url は 401 と terms_required のときだけ読む（読むと、移るたびにこの load が走り直る）
+export const load: LayoutLoad = async ({ params, fetch, url }) => {
   const [organization, accountOrganizations, notice] = await Promise.all([
     callOperation(organizationInfo, {}, { slug: params.slug, fetcher: fetch }),
     callOperation(myOrganizations, {}, { fetcher: fetch }),

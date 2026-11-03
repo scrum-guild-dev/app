@@ -6,7 +6,7 @@ import TokenNotice from './TokenNotice.svelte';
 vi.mock('$app/paths', () => ({
   resolve: (route: string, params: { slug: string }) => route.replace('[slug]', params.slug),
 }));
-vi.mock('$app/navigation', () => ({ invalidate: vi.fn() }));
+vi.mock('$app/navigation', () => ({ afterNavigate: vi.fn() }));
 
 const latest = { name: '手元の CLI', scope: 'write' as const, created_at: '2026-11-04T01:30:00.000Z', revoked: false };
 const body = (notice: { count: number; latest: typeof latest | null } | null) =>

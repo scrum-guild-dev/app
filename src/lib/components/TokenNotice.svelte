@@ -1,25 +1,50 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
-  import { invalidate } from '$app/navigation';
+  import { afterNavigate } from '$app/navigation';
   import { callOperation } from '../api.ts';
   import { formatDateTime } from '../format-datetime.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { tokenNoticeSeen, tokenNotice } from '../../shared/operations/session/token-notice.ts';
   import type { OutputOf } from '../../shared/operations/define.ts';
 
-  let { notice, slug }: { notice: OutputOf<typeof tokenNotice> | null; slug: string } = $props();
+  type Notice = OutputOf<typeof tokenNotice>;
+  let { notice, slug }: { notice: Notice | null; slug: string } = $props();
+  // 初回と枠の再読込は load の結果を使う。通知だけの再読込は、その初期値に結んで別に持つ。
+  let fetched = $state.raw<{ initial: Notice | null; data: Notice | null } | null>(null);
+  const current = $derived(fetched !== null && fetched.initial === notice ? fetched.data : notice);
   let acknowledged = $state<string | null>(null);
   let saving = $state(false);
   let failed = $state(false);
   let retrying = $state(false);
   let active = true;
+  let request = 0;
+  let initialNavigation = true;
   onDestroy(() => {
     active = false;
+    request++;
   });
 
-  const latest = $derived(notice?.latest ?? null);
+  const latest = $derived(current?.latest ?? null);
   const visible = $derived(latest !== null && (acknowledged === null || latest.created_at > acknowledged));
+
+  // 初回は load が読んだので重ねて取らない。組織内の経路移動では通知だけを読む。
+  afterNavigate(({ from, to }) => {
+    if (initialNavigation) {
+      initialNavigation = false;
+      return;
+    }
+    if (from?.url.pathname !== to?.url.pathname) void refresh();
+  });
+
+  async function refresh(beforeApply?: () => void): Promise<void> {
+    const serial = ++request;
+    const initial = notice;
+    const result = await callOperation(tokenNotice, {});
+    if (!active || serial !== request || notice !== initial) return;
+    beforeApply?.();
+    fetched = { initial, data: result.ok ? result.data : null };
+  }
 
   async function confirm(): Promise<void> {
     if (saving || latest === null) return;
@@ -28,26 +53,26 @@
     failed = false;
     const result = await callOperation(tokenNoticeSeen, { created_at: shownAt });
     if (!active) return;
-    saving = false;
     if (result.ok) {
+      await refresh();
+      if (!active) return;
       acknowledged = shownAt;
-      // 表示した後に増えた発行まで隠さない。最新の読み取りは再び帯を出せる。
-      await invalidate('app:token-notice');
     } else failed = true;
+    saving = false;
   }
 
   async function retry(): Promise<void> {
     if (retrying) return;
     retrying = true;
     try {
-      await invalidate('app:token-notice');
+      await refresh();
     } finally {
       if (active) retrying = false;
     }
   }
 </script>
 
-{#if notice === null}
+{#if current === null}
   <section class="token-notice" aria-label={t('tokenNoticeLabel')}>
     <div class="token-notice-body"><p>{t('tokenNoticeLoadFailed')}</p></div>
     <div class="token-notice-actions">
@@ -57,7 +82,7 @@
 {:else if visible && latest !== null}
   <section class="token-notice" aria-label={t('tokenNoticeLabel')}>
     <div class="token-notice-body">
-      <p class="token-notice-title">{t('tokenNoticeTitle', { count: notice.count })}</p>
+      <p class="token-notice-title">{t('tokenNoticeTitle', { count: current.count })}</p>
       <p>
         {t('tokenNoticeLatest', {
           name: latest.name,

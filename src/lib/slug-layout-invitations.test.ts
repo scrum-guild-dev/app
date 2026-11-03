@@ -50,12 +50,13 @@ async function run(replies: Record<string, Reply>) {
     const reply = replies[String(input)] ?? { status: 500, body: 'no reply' };
     return Promise.resolve(new Response(JSON.stringify(reply.body), { status: reply.status }));
   }) as typeof fetch;
-  const event = { params: { slug: 'aoba' }, fetch: fake, url: new URL('http://localhost/aoba'), depends: vi.fn() };
+  const depends = vi.fn();
+  const event = { params: { slug: 'aoba' }, fetch: fake, url: new URL('http://localhost/aoba'), depends };
   const data = (await (load as (e: unknown) => Promise<{ invitationCount: number; tokenNotice: unknown }>)(event)) as {
     invitationCount: number;
     tokenNotice: unknown;
   };
-  return { data, calls };
+  return { data, calls, depends };
 }
 
 test('この組織に招待が届いていれば、invitation-list の件数を invitationCount に入れる', async () => {
@@ -102,4 +103,9 @@ test('発行の知らせは専用の操作で読み、読めなくても組織�
   const failure = await run({ [orgPath]: organization, [minePath]: mine([]) });
   expect(failure.data.tokenNotice).toBeNull();
   expect(failure.data.invitationCount).toBe(0);
+});
+
+test('通知の再取得は枠の load の依存として登録しない', async () => {
+  const { depends } = await run({ [orgPath]: organization, [minePath]: mine([]) });
+  expect(depends).not.toHaveBeenCalled();
 });
