@@ -1,0 +1,314 @@
+<script lang="ts">
+  import { SvelteSet } from 'svelte/reactivity';
+  import { beforeNavigate, goto, invalidate } from '$app/navigation';
+  import { resolve } from '$app/paths';
+  import { page } from '$app/state';
+  import { tick } from 'svelte';
+  import { callOperation } from '../api.ts';
+  import type { WikiData } from '../wiki-load.ts';
+  import type { WorkspaceView } from '../workspace.ts';
+  import { t } from '../vocabulary.svelte.ts';
+  import { parseWikiFrontmatter, wikiBodyProblem, wikiTitle } from '../../shared/wiki.ts';
+  import { workspaceWikiCreate, workspaceWikiPage, workspaceWikiUpdate } from '../../shared/operations/wiki/index.ts';
+  import ConfirmDialog from './ConfirmDialog.svelte';
+  import EmptyState from './EmptyState.svelte';
+  import LoadFailed from './LoadFailed.svelte';
+  import Markdown from './Markdown.svelte';
+  import PageHead from './PageHead.svelte';
+  import WikiTree from './WikiTree.svelte';
+
+  let { data }: { data: WikiData & { workspace: WorkspaceView | null } } = $props();
+  const slug = $derived(page.params.slug ?? '');
+  const workspaceId = $derived(page.params.id ?? '');
+  const current = $derived(data.wikiPage);
+  const pages = $derived(data.wikiPages ?? []);
+  const canWrite = $derived(data.workspace !== null && data.workspace.closedAt === null);
+  let mode = $state<'read' | 'create' | 'edit'>('read');
+  let parentId = $state<string | null>(null);
+  let title = $state('');
+  let body = $state('');
+  let originalTitle = $state('');
+  let originalBody = $state('');
+  let version = $state(1);
+  let saving = $state(false);
+  let editGeneration = 0;
+  let comparisonRequest = 0;
+  let failure = $state('');
+  let notice = $state('');
+  let titleError = $state(false);
+  let bodyError = $state(false);
+  let conflict = $state(false);
+  let comparison = $state<typeof data.wikiPage>(null);
+  let discardDialog = $state<ReturnType<typeof ConfirmDialog>>();
+  const dirty = $derived(mode !== 'read' && (title !== originalTitle || body !== originalBody));
+  const frontmatter = $derived(parseWikiFrontmatter(body));
+  const rendered = $derived(parseWikiFrontmatter(current?.body_md ?? ''));
+  const ancestors = $derived.by(() => {
+    const found: typeof pages = [];
+    let id = current?.parent_id;
+    const seen = new SvelteSet<string>();
+    while (id && !seen.has(id)) {
+      seen.add(id);
+      const ancestor = pages.find((item) => item.id === id);
+      if (!ancestor) break;
+      found.unshift(ancestor);
+      id = ancestor.parent_id;
+    }
+    return found;
+  });
+  const depth = $derived(ancestors.length + 1);
+
+  async function mayDiscard(): Promise<boolean> {
+    if (saving) return false;
+    return (
+      !dirty ||
+      ((await discardDialog?.ask(document.activeElement instanceof HTMLElement ? document.activeElement : null)) ??
+        false)
+    );
+  }
+  beforeNavigate((navigation) => {
+    if (!dirty && !saving) return;
+    if (navigation.type === 'leave') {
+      navigation.cancel();
+      return;
+    }
+    navigation.cancel();
+    const url = navigation.to?.url;
+    if (url)
+      void mayDiscard().then(async (yes) => {
+        if (yes) {
+          mode = 'read';
+          // eslint-disable-next-line svelte/no-navigation-without-resolve -- 行き先は SvelteKit が解決した navigation.to の URL
+          await goto(url);
+        }
+      });
+  });
+  async function begin(create: boolean, parent: string | null = null): Promise<void> {
+    if (!canWrite || !(await mayDiscard())) return;
+    editGeneration += 1;
+    parentId = parent;
+    title = create ? '' : (current?.title ?? '');
+    body = create ? '' : (current?.body_md ?? '');
+    originalTitle = title;
+    originalBody = body;
+    version = current?.version ?? 1;
+    mode = create ? 'create' : 'edit';
+    failure = '';
+    notice = '';
+    conflict = false;
+    comparison = null;
+    titleError = false;
+    bodyError = false;
+    await tick();
+    document.getElementById('wiki-title')?.focus();
+  }
+  async function cancel(): Promise<void> {
+    if (await mayDiscard()) {
+      editGeneration += 1;
+      mode = 'read';
+      failure = '';
+    }
+  }
+  async function readLatest(): Promise<void> {
+    if (saving || !current) return;
+    const pageId = current.id;
+    const generation = editGeneration;
+    const request = ++comparisonRequest;
+    const result = await callOperation(workspaceWikiPage, { workspace_id: workspaceId, page_id: current.id }, { slug });
+    if (mode !== 'edit' || current?.id !== pageId || editGeneration !== generation || request !== comparisonRequest)
+      return;
+    if (result.ok) {
+      comparison = result.data.page;
+      version = result.data.page.version;
+    } else failure = t('wikiReadFailed');
+  }
+  async function save(): Promise<void> {
+    if (saving) return;
+    titleError = wikiTitle(title, body) === null;
+    bodyError = wikiBodyProblem(body) !== null;
+    if (titleError || bodyError) {
+      await tick();
+      document.getElementById(titleError ? 'wiki-title' : 'wiki-body')?.focus();
+      return;
+    }
+    saving = true;
+    failure = '';
+    notice = '';
+    try {
+      const result =
+        mode === 'create'
+          ? await callOperation(
+              workspaceWikiCreate,
+              { workspace_id: workspaceId, parent_id: parentId, title, body_md: body },
+              { slug },
+            )
+          : await callOperation(
+              workspaceWikiUpdate,
+              { workspace_id: workspaceId, page_id: current!.id, title, body_md: body, read_version: version },
+              { slug },
+            );
+      if (result.ok) {
+        const unchanged = mode === 'edit' && result.data.page.version === version;
+        mode = 'read';
+        saving = false;
+        notice = t(unchanged ? 'wikiUnchanged' : 'wikiSaved');
+        conflict = false;
+        await invalidate('app:wiki');
+        await goto(resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: result.data.page.id }));
+      } else {
+        const code = result.error?.code;
+        conflict = code === 'conflict' && mode === 'edit';
+        failure = t(
+          conflict
+            ? 'wikiConflict'
+            : code === 'workspace_closed'
+              ? 'wikiClosed'
+              : code === 'rate_limited'
+                ? 'wikiRateLimited'
+                : code === 'attachment_quota_exceeded'
+                  ? 'wikiQuota'
+                  : result.status === 404
+                    ? 'wikiGone'
+                    : code === 'conflict'
+                      ? 'wikiDepth'
+                      : 'wikiSaveFailed',
+        );
+      }
+    } finally {
+      saving = false;
+    }
+  }
+</script>
+
+<svelte:head><title>{t('pageTitle', { page: current?.title ?? t('wiki'), app: t('appName') })}</title></svelte:head>
+
+<PageHead title={t('wiki')} eyebrow={data.workspace?.name}>
+  {#snippet actions()}{#if canWrite}<button class="btn is-primary" type="button" onclick={() => begin(true)}
+        >{t('wikiAdd')}</button
+      >{/if}{/snippet}
+  {#snippet meta()}<p class="section-hint">{t('wikiAccess')}</p>{/snippet}
+</PageHead>
+{#if !canWrite}<p class="callout is-info">{t('wikiClosed')}</p>{/if}
+<p role="status" class="field-hint">{notice}</p>
+{#if data.wikiFailed && mode === 'read'}
+  <LoadFailed inShell />
+{:else}
+  <div class="layout-wiki">
+    <aside class="wiki-side">
+      {#if pages.length}<WikiTree {pages} {slug} {workspaceId} currentId={current?.id ?? null} />{:else}<p
+          class="section-hint"
+        >
+          {t('wikiTreeEmpty')}
+        </p>{/if}
+    </aside>
+    <section class="wiki-main" aria-label={t('wikiPage')}>
+      <nav class="crumbs" aria-label={t('wikiCrumbs')}>
+        <ol>
+          <li><a href={resolve('/[slug]/w/[id]/wiki', { slug, id: workspaceId })}>{t('wiki')}</a></li>
+          {#each ancestors as ancestor (ancestor.id)}<li>
+              <a href={resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: ancestor.id })}
+                >{ancestor.title}</a
+              >
+            </li>{/each}
+          {#if current}<li><span aria-current="page">{current.title}</span></li>{/if}
+        </ol>
+      </nav>
+      {#if mode !== 'read'}
+        <h2 class="section-title">{t(mode === 'create' ? 'wikiAdd' : 'wikiEdit')}</h2>
+        {#if failure}<div class="callout is-warn" role="alert">
+            <p>{failure}</p>
+            {#if conflict}<button class="btn" type="button" onclick={readLatest}>{t('wikiReadLatest')}</button>{/if}
+          </div>{/if}
+        {#if comparison}<details>
+            <summary>{t('wikiCompare', { version: comparison.version })}</summary>
+            <h3>{comparison.title}</h3>
+            <Markdown source={parseWikiFrontmatter(comparison.body_md).body} />
+          </details>{/if}
+        <form
+          class="form"
+          onsubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          <div class="field">
+            <label for="wiki-title">{t('wikiTitle')}</label>
+            <input
+              id="wiki-title"
+              class="input"
+              value={frontmatter.title ?? title}
+              readonly={saving || frontmatter.title !== null}
+              aria-invalid={titleError || undefined}
+              aria-describedby={titleError ? 'wiki-title-error' : frontmatter.title ? 'wiki-title-hint' : undefined}
+              oninput={(event) => {
+                title = event.currentTarget.value;
+                titleError = false;
+              }}
+            />
+            {#if frontmatter.title}<p id="wiki-title-hint" class="field-hint">{t('wikiTitleFromBody')}</p>{/if}
+            {#if titleError}<p id="wiki-title-error" class="field-error" role="alert">{t('wikiTitleInvalid')}</p>{/if}
+          </div>
+          <div class="field">
+            <label for="wiki-body">{t('wikiBody')}</label>
+            <textarea
+              id="wiki-body"
+              class="textarea"
+              rows="20"
+              readonly={saving}
+              bind:value={body}
+              aria-invalid={bodyError || undefined}
+              aria-describedby={bodyError ? 'wiki-body-error' : 'wiki-body-hint'}
+              oninput={() => {
+                bodyError = false;
+              }}></textarea>
+            <p id="wiki-body-hint" class="field-hint">{t('wikiBodyHint')}</p>
+            {#if bodyError}<p id="wiki-body-error" class="field-error" role="alert">{t('wikiBodyInvalid')}</p>{/if}
+          </div>
+          {#if mode === 'edit'}<p class="field-hint">{t('wikiVersionHint', { version })}</p>{/if}
+          <details><summary>{t('wikiPreview')}</summary><Markdown source={frontmatter.body} /></details>
+          <div class="form-actions">
+            <button class="btn is-primary" type="submit" aria-disabled={saving}
+              >{t(saving ? 'wikiSaving' : 'wikiSave')}</button
+            ><button class="btn" type="button" aria-disabled={saving} onclick={cancel}>{t('cancel')}</button>
+          </div>
+          <span role="status">{saving ? t('wikiSaving') : ''}</span>
+        </form>
+      {:else if data.wikiNotFound}
+        <EmptyState icon="search" title={t('wikiNotFound')} />
+      {:else if current}
+        <div class="wiki-head">
+          <h2 class="section-title">{current.title}</h2>
+          {#if canWrite}<div class="form-actions">
+              <button class="btn" type="button" onclick={() => begin(false)}>{t('wikiEdit')}</button
+              >{#if depth < 10}<button class="btn" type="button" onclick={() => begin(true, current.id)}
+                  >{t('wikiAddChild')}</button
+                >{:else}<p class="field-hint">{t('wikiDepth')}</p>{/if}
+            </div>{/if}
+        </div>
+        {#if rendered.invalid}<p class="callout is-warn">{t('wikiFrontmatterInvalid')}</p>{/if}
+        <Markdown
+          source={rendered.body}
+          internalLinkPrefix={`${page.url.origin}${resolve('/[slug]/w/[id]/wiki', { slug, id: workspaceId })}/`}
+        />
+      {:else if pages.length}
+        <h2 class="section-title">{t('wikiTop')}</h2>
+        <ul>
+          {#each pages.filter((item) => item.parent_id === null) as item (item.id)}<li>
+              <a href={resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: item.id })}
+                >{item.title}</a
+              >
+            </li>{/each}
+        </ul>
+      {:else}
+        <EmptyState icon="file" title={t('wikiEmpty')} text={t('wikiEmptyText')} />
+      {/if}
+    </section>
+  </div>
+{/if}
+<ConfirmDialog
+  bind:this={discardDialog}
+  title={t('wikiDiscardTitle')}
+  confirmLabel={t('wikiDiscard')}
+  cancelLabel={t('wikiKeepWriting')}
+  danger><p>{t('wikiDiscardText')}</p></ConfirmDialog
+>

@@ -10,7 +10,11 @@
   // 時間切れ、失敗、Worker が使えないときは、本文を文字のまま出し、注記を添える（.doc-box.is-plain）。描くのは MarkdownBlocks。
   // 配線（本文が変わったら表示を頼み直し、消えたら待ちと描きかけを取り下げる）は bindMarkdownView が持つ。
   // headingStart は `#` を何段の見出しにするか（既定 3）
-  let { source, headingStart = 3 }: { source: string; headingStart?: number } = $props();
+  let {
+    source,
+    headingStart = 3,
+    internalLinkPrefix,
+  }: { source: string; headingStart?: number; internalLinkPrefix?: string } = $props();
 
   const markdown = bindMarkdownView(() => source, sharedMarkdownLoader());
 </script>
@@ -19,6 +23,7 @@
   <MarkdownBlocks
     blocks={markdown.view.blocks}
     {headingStart}
+    {internalLinkPrefix}
     busy={markdown.view.status === 'loading' || markdown.view.rendering}
   />
 {:else}

@@ -83,6 +83,30 @@ export const commonTableColumns = {
 } as const;
 
 export const organizationTableColumns = {
+  wiki_pages: {
+    id: text,
+    organization_id: textOrNull,
+    workspace_id: textOrNull,
+    parent_id: textOrNull,
+    title: text,
+    version: integer,
+    position: text,
+    created_by: text,
+    updated_by: text,
+    created_at: text,
+    updated_at: text,
+    deleted_at: textOrNull,
+    deleted_by: textOrNull,
+    body_md: text,
+  },
+  wiki_page_revisions: {
+    page_id: text,
+    version: integer,
+    title: text,
+    body_md: text,
+    saved_by: text,
+    saved_at: text,
+  },
   users: {
     id: text,
     organization_id: text,

@@ -9,6 +9,7 @@ const workspaceRoutes = [
   '/[slug]/w/[id]/plan',
   '/[slug]/w/[id]/settings',
   '/[slug]/w/[id]/sprint',
+  '/[slug]/w/[id]/wiki',
 ] as const;
 export type WorkspaceNavRoute = (typeof workspaceRoutes)[number];
 export type NavRoute = '/[slug]' | WorkspaceNavRoute;
@@ -101,6 +102,7 @@ export const navSections: NavSection[] = [
       { icon: 'columns', label: 'sprint', href: '/[slug]/w/[id]/sprint' },
       { icon: 'calendar', label: 'plan', href: '/[slug]/w/[id]/plan' },
       { icon: 'flag', label: 'epic', href: null },
+      { icon: 'file', label: 'wiki', href: '/[slug]/w/[id]/wiki' },
     ],
   },
   {

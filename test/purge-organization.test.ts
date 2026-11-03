@@ -1,6 +1,7 @@
 // 解約した組織のデータを消す SQL（scripts/purge-organization-sql.ts、docs/operations.md の「解約した組織のデータを消す」）を、
 // 人が1文ずつ `wrangler d1 execute --command` で流すのと同じく、テストの D1 に1文ずつ順に流して確かめる
 import { env } from 'cloudflare:workers';
+import { orgDb, insertWikiPage } from '../src/server/db/index.ts';
 import { describe, expect, test } from 'vitest';
 import { purgeOrganizationCountSql, purgeOrganizationSql } from '../scripts/purge-organization-sql.ts';
 import {
@@ -132,6 +133,17 @@ async function fillOrganization(organization: Awaited<ReturnType<typeof createOr
   });
   await createChangeLog(organization);
   await createOrganizationHoliday(organization, admin.id);
+  const wikiDb = orgDb(env, organization.verified);
+  for (const scope of [{ workspaceId: ws }, { organizationId: organization.id }]) {
+    await insertWikiPage(
+      wikiDb,
+      scope,
+      uuidv7(),
+      null,
+      { title: '手順', body_md: '本文', userId: admin.id, at: AT },
+      Number.MAX_SAFE_INTEGER,
+    );
+  }
 }
 
 // すべての表の、すべての行。比べると、行数だけでなく、残った行がどの組織のものかまで分かる
@@ -268,8 +280,11 @@ describe('purge-organization（解約した組織のデータを消す SQL）', 
     );
 
     expect(deleted).not.toContain(undefined);
-    expect(new Set(deleted).size).toBe(deleted.length);
-    expect([...deleted].sort()).toEqual([...organizationTables, 'organizations'].sort());
+    expect(deleted.filter((table) => table === 'wiki_pages')).toHaveLength(2);
+    expect(deleted.filter((table) => table === 'wiki_page_revisions')).toHaveLength(2);
+    const otherDeletes = deleted.filter((table) => table !== 'wiki_pages' && table !== 'wiki_page_revisions');
+    expect(new Set(otherDeletes).size).toBe(otherDeletes.length);
+    expect([...new Set(deleted)].sort()).toEqual([...organizationTables, 'organizations'].sort());
     expect(deleted.at(-1)).toBe('organizations');
 
     const counted = Object.keys((await counts(id))!);

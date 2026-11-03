@@ -82,3 +82,15 @@ export {
   type AccountOrganizations,
 } from './cross-organization.ts';
 export { sprintExtensionUnchanged, sprintExtensionNoOverlap, type SprintExtensionWrite } from './sprint-extension.ts';
+
+export {
+  cleanupDeletedWiki,
+  insertUploadedAttachment,
+  organizationStorageBytes,
+  readWikiPage,
+  readWikiTree,
+  insertWikiPage,
+  updateWikiPage,
+  wikiParentFits,
+  type WikiScope,
+} from './wiki.ts';
