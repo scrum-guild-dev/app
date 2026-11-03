@@ -4,6 +4,17 @@ import { organizationInfo } from '../src/shared/operations/organization/index.ts
 import { orgWikiPage, orgWikiTree } from '../src/shared/operations/wiki/index.ts';
 import { failOperation, rewriteOperation } from './operations.ts';
 
+test('自分用の組織の Wiki は組織の表示名で案内する', async ({ page }) => {
+  await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
+    ...output,
+    organization: { ...output.organization, kind: 'personal' },
+  }));
+  await page.goto('/aoba/wiki');
+  await expect(page.locator('.nav-item', { hasText: '自分用の Wiki' })).toBeVisible();
+  await expect(page.locator('.page-eyebrow')).toHaveText('自分用');
+  await expect(page).toHaveTitle('Wiki・自分用 - Scrum Guild');
+});
+
 test('長い組織名がメニューに収まり、画面内の移動で権限を失ったときは見つからないと示す', async ({ page }) => {
   const name = 'A'.repeat(80);
   await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
