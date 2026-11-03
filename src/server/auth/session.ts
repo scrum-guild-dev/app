@@ -1,7 +1,7 @@
 // セッションを読み、作り、消す（docs/data-model.md の `sessions`）。
 // 人が差分を読む領域（docs/development.md の「マージの判定」）
 import { SESSION_LIFETIME_DAYS, SESSION_TOKEN_PATTERN } from '../../shared/session-cookie.ts';
-import { commonDb, type CommonDb, type Statement } from '../db/index.ts';
+import { apiTokenSeenAt, commonDb, type CommonDb, type Statement } from '../db/index.ts';
 import { randomToken } from './tokens.ts';
 
 // last_used_at を書き直すのは、前回から1時間以上たったときだけ。書き込みを減らすため
@@ -96,13 +96,26 @@ export async function createSession(
   const db = commonDb(env);
   const statements: Statement<'common'>[] = [
     db.statement((q) =>
-      q.insertInto('sessions').values({
+      q.insertInto('sessions').values((eb) => ({
         token_hash: tokenHash,
         account_id: accountId,
         created_at: createdAt,
         last_used_at: createdAt,
         expires_at: new Date(now.getTime() + LIFETIME_MS).toISOString(),
-      }),
+        // 置き換える古い行を消す前に、同じ INSERT の中で最古の確認を読む。
+        api_token_seen_at: eb.fn.coalesce(
+          eb
+            .selectFrom('sessions')
+            .select((inner) =>
+              inner.fn
+                .min<string>(apiTokenSeenAt(inner.ref('api_token_seen_at'), inner.ref('created_at')))
+                .as('oldest'),
+            )
+            .where('account_id', '=', accountId)
+            .where('expires_at', '>', now.toISOString()),
+          eb.val(createdAt),
+        ),
+      })),
     ),
   ];
   if (replacedHash !== undefined) {

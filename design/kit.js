@@ -2855,7 +2855,18 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     applyTheme();
   }
 
+  // お試しの停止予定。期限の翌日の UTC 0 時をブラウザの時刻で出す（本番の formatTrialStopDateTime と同じ）。
+  function formatTrialStopDateTime(endsOn) {
+    const date = new Date(`${endsOn}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + 1);
+    return new Intl.DateTimeFormat("ja-JP", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).format(date).replace(/\s/, "\u00a0");
+  }
+
   window.SQ = {
+    formatTrialStopDateTime,
     first, firstHref, firstSteps, emptyState, art,
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer,

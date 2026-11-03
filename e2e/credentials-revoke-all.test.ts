@@ -4,7 +4,7 @@
 // admin など、並べて走るほかのテストが共有する seed のセッションがあるアカウントでは行わない（実行するのは seed のセッション、
 // 消えるのは e2e/local-d1.ts の OTHER_DEVICE_SESSION だけ）。やめる、失敗は、応答を差し替えて共有のセッション（admin）で確かめる
 import type { Page } from '@playwright/test';
-import { credentialsRevokeAll } from '../src/shared/operations/session/index.ts';
+import { credentialsRevokeAll, tokenList } from '../src/shared/operations/session/index.ts';
 import { sessionCookieName } from '../src/shared/session-cookie.ts';
 import { SEED_SESSIONS } from '../seed/sessions.ts';
 import { expect, test } from './fixtures.ts';
@@ -139,6 +139,23 @@ test.describe('応答を差し替える（共有の seed のセッションで�
   test('確認のダイアログでやめると送らず、失敗したら知らせて、一覧は残す。実行中はボタンを押しても二重に送らない', async ({
     page,
   }) => {
+    // このケースは応答の失敗だけを確かめる。並行テストの発行・取り消しで動く一覧から分離する。
+    const firstName = '全失効の失敗確認用';
+    await routeOperation(page, tokenList, async (call) => {
+      await call.fulfill({
+        can_create: true,
+        tokens: [
+          {
+            id: 'a'.repeat(64),
+            name: firstName,
+            scope: 'read',
+            created_at: '2026-11-01T00:00:00.000Z',
+            last_used_at: null,
+            expires_at: '2099-12-01T00:00:00.000Z',
+          },
+        ],
+      });
+    });
     let sent = 0;
     page.on('request', (request) => {
       if (request.url().endsWith('/api/credentials-revoke-all')) sent++;
@@ -147,9 +164,7 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     const section = sectionOf(page);
     await expect(section.getByRole('table', { name: '発行済みの API トークン' })).toBeVisible();
     const rows = section.getByRole('table', { name: '発行済みの API トークン' }).locator('tbody tr');
-    // 行数は共有の admin の並行のテスト（api-tokens.test.ts）が増減させるので、数では比べず、実行の前の最初の行の名前が残るかで見る
     await expect(rows.first()).toBeVisible();
-    const firstName = (await rows.first().locator('td.is-name').innerText()).trim();
     const button = section.getByRole('button', { name: BUTTON });
     const confirm = page.getByRole('dialog', { name: DIALOG });
 
