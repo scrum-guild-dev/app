@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { resolve } from '$app/paths';
   import { afterNavigate } from '$app/navigation';
   import { callOperation } from '../api.ts';
   import { formatDateTime } from '../format-datetime.ts';
+  import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { tokenNoticeSeen, tokenNotice } from '../../shared/operations/session/token-notice.ts';
   import type { OutputOf } from '../../shared/operations/define.ts';
@@ -17,6 +18,7 @@
   let saving = $state(false);
   let failed = $state(false);
   let retrying = $state(false);
+  let confirmButton = $state<HTMLButtonElement>();
   let active = true;
   let request = 0;
   let initialNavigation = true;
@@ -54,11 +56,30 @@
     const result = await callOperation(tokenNoticeSeen, { created_at: shownAt });
     if (!active) return;
     if (result.ok) {
-      await refresh();
+      showToast(t('tokenNoticeSaved'), 'check');
+      let restoreFocus = false;
+      // 表示した後に増えた発行まで隠さない。枠や本文を読み直さず、通知だけを確かめ直す。
+      await refresh(() => {
+        restoreFocus = document.activeElement === confirmButton;
+      });
       if (!active) return;
+      // より新しい再取得が先行した場合も、今ボタンに残るフォーカスだけを対象にする。
+      restoreFocus ||= document.activeElement === confirmButton;
       acknowledged = shownAt;
-    } else failed = true;
-    saving = false;
+      saving = false;
+      await tick();
+      if (
+        active &&
+        restoreFocus &&
+        !visible &&
+        (document.activeElement === document.body || document.activeElement === confirmButton)
+      ) {
+        document.getElementById('content')?.focus({ preventScroll: true });
+      }
+    } else {
+      saving = false;
+      failed = true;
+    }
   }
 
   async function retry(): Promise<void> {
@@ -76,7 +97,9 @@
   <section class="token-notice" aria-label={t('tokenNoticeLabel')}>
     <div class="token-notice-body"><p>{t('tokenNoticeLoadFailed')}</p></div>
     <div class="token-notice-actions">
-      <button class="btn" type="button" aria-disabled={retrying} onclick={retry}>{t('retry')}</button>
+      <button class="btn" type="button" aria-disabled={retrying} onclick={retry}
+        >{t(retrying ? 'retrying' : 'retry')}</button
+      >
     </div>
   </section>
 {:else if visible && latest !== null}
@@ -98,7 +121,9 @@
     </div>
     <div class="token-notice-actions">
       <a class="btn" href={resolve('/[slug]/me#api-tokens', { slug })}>{t('tokenNoticeSettings')}</a>
-      <button class="btn" type="button" aria-disabled={saving} onclick={confirm}>{t('tokenNoticeSeen')}</button>
+      <button class="btn" type="button" bind:this={confirmButton} aria-disabled={saving} onclick={confirm}
+        >{t(saving ? 'tokenNoticeSaving' : 'tokenNoticeSeen')}</button
+      >
     </div>
   </section>
 {/if}

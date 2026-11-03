@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures.ts';
 import { signIn, waitForSettled, watchViolations } from './helpers.ts';
 import { tokenNotice, tokenNoticeSeen } from '../src/shared/operations/session/token-notice.ts';
+import { organizationInfo } from '../src/shared/operations/organization/index.ts';
 import { failOperation, mockOperation, routeOperation } from './operations.ts';
 
 const label = 'API トークンの発行の知らせ';
@@ -107,4 +108,84 @@ test('表示した日時だけを確認に送り、その間に増えた発行�
   await expect(notice).toContainText(latest.name);
   await notice.getByRole('button', { name: '確かめた', exact: true }).click();
   await expect(notice).toContainText(newer.name);
+  await expect(notice.getByRole('button', { name: '確かめた', exact: true })).toBeFocused();
+});
+
+for (const initialFailure of [false, true]) {
+  test(`${initialFailure ? '読取失敗の再試行' : '確認'}は通知だけを読み直し、組織情報が一時的に失敗しても本文を残す`, async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await signIn(context, baseURL, 'admin');
+    let orgCalls = 0;
+    await routeOperation(page, organizationInfo, { slug: 'aoba' }, async (call) => {
+      orgCalls++;
+      if (orgCalls === 1) await call.passThrough();
+      else await call.fail(500, 'internal');
+    });
+    let noticeCalls = 0;
+    let confirmed = false;
+    await routeOperation(page, tokenNotice, async (call) => {
+      noticeCalls++;
+      if (initialFailure && noticeCalls === 1) await call.fail(500, 'internal');
+      else await call.fulfill(confirmed ? { count: 0, latest: null } : { count: 1, latest });
+    });
+    await routeOperation(page, tokenNoticeSeen, async (call) => {
+      confirmed = true;
+      await call.fulfill({});
+    });
+    await page.goto('/aoba/me');
+    const heading = page.getByRole('heading', { level: 2, name: 'API トークン', exact: true });
+    await expect(heading).toBeVisible();
+    const notice = page.getByRole('region', { name: label });
+    if (initialFailure) {
+      await expect(notice).toContainText('API トークンの発行の知らせを読み込めませんでした。');
+      await notice.getByRole('button', { name: 'もう一度試す', exact: true }).click();
+      await expect(notice).toContainText(latest.name);
+    } else {
+      await notice.getByRole('button', { name: '確かめた', exact: true }).click();
+      await expect(notice).toHaveCount(0);
+      await expect(page.getByRole('status').filter({ hasText: 'API トークンの発行を確かめました' })).toBeVisible();
+      await expect(page.locator('main#content')).toBeFocused();
+    }
+    await expect(heading).toBeVisible();
+    expect(orgCalls).toBe(1);
+    expect(noticeCalls).toBe(2);
+  });
+}
+
+test('保存中を見える文言で出し、他へ移ったフォーカスを奪わない', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'admin');
+  let confirmed = false;
+  let release!: () => void;
+  const ready = new Promise<void>((done) => {
+    release = done;
+  });
+  await routeOperation(page, tokenNotice, async (call) => {
+    await call.fulfill(confirmed ? { count: 0, latest: null } : { count: 1, latest });
+  });
+  await routeOperation(page, tokenNoticeSeen, async (call) => {
+    await ready;
+    confirmed = true;
+    await call.fulfill({});
+  });
+  await page.goto('/aoba/me');
+  const notice = page.getByRole('region', { name: label });
+  await notice.getByRole('button', { name: '確かめた', exact: true }).click();
+  await expect(notice.getByRole('button', { name: '確認を保存しています', exact: true })).toBeVisible();
+  const field = page.getByRole('region', { name: 'API トークン', exact: true }).getByLabel('名前', { exact: true });
+  await field.focus();
+  release();
+  await expect(notice).toHaveCount(0);
+  await expect(field).toBeFocused();
+});
+
+test('設定へのリンクを押すと API トークンの節に着く', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'admin');
+  await mockOperation(page, tokenNotice, { count: 1, latest });
+  await page.goto('/aoba');
+  await page.getByRole('region', { name: label }).getByRole('link', { name: '設定を開く' }).click();
+  await expect(page).toHaveURL(/\/aoba\/me#api-tokens$/);
+  await expect(page.locator('#api-tokens')).toBeInViewport();
 });
