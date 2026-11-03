@@ -121,3 +121,27 @@ export async function deleteSessionsOf(db: CommonDb, accountId: string, checkedA
     ),
   ]);
 }
+
+// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消す文。期限が切れた行も、期限内の行も消す。
+// ほかのアカウントのセッションは account_id で除く。別の文と同じ batch() に入れて送るために、文のまま返す
+export function deleteOtherSessionsStatement(
+  db: CommonDb,
+  accountId: string,
+  currentTokenHash: string,
+): Statement<'common'> {
+  return db.statement((q) =>
+    q.deleteFrom('sessions').where('account_id', '=', accountId).where('token_hash', '!=', currentTokenHash),
+  );
+}
+
+// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消し、消した行数を返す。
+// 今のセッションと、ほかのアカウントのセッションは残す。本番の道（credentials-revoke-all）は、トークンの取り消しと
+// 同じ batch() に入れるため、文（deleteOtherSessionsStatement）を直に使う。この関数を呼ぶのは今はテストだけ
+export async function deleteOtherSessionsOf(
+  db: CommonDb,
+  accountId: string,
+  currentTokenHash: string,
+): Promise<number> {
+  const [result] = await db.batch([deleteOtherSessionsStatement(db, accountId, currentTokenHash)]);
+  return result.changes;
+}

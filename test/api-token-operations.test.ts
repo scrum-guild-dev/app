@@ -313,6 +313,7 @@ describe('cookieOnly の logout', () => {
       'consent-record',
       'create-my-organization',
       'create-personal-organization',
+      'credentials-revoke-all',
       'logout',
       'token-create',
       'token-list',

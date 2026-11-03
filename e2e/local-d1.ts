@@ -141,6 +141,23 @@ export async function restoreSeedSession(who: keyof typeof SEED_SESSIONS): Promi
   await executeLocalD1([insert.replace(/^INSERT INTO /, 'INSERT OR IGNORE INTO ')]);
 }
 
+// 設定の全失効の e2e（e2e/credentials-revoke-all.test.ts）が、同じアカウントの「ほかの端末」として使う2本目のセッション。
+// 全失効は、実行したセッション以外の、そのアカウントのすべてのセッションを消す。共有の seed のセッション（admin など）が
+// あるアカウントで実行すると、並べて走るほかのテストのセッションが消えるので、ほかのテストがほとんど使わないアカウント（コハル）で行い、
+// 実行するのは seed のセッション、消えるのはこの行だけにする。トークンの形は seed のセッションと同じ（base64url の43文字）
+export const OTHER_DEVICE_SESSION: { token: string; accountId: string; description: string } = {
+  token: 'dev-e2e-other-device-0000000000000000000000',
+  accountId: SEED_SESSIONS.lookThemed.accountId,
+  description: 'lookThemed と同じアカウントの「ほかの端末」（e2e の全失効が消す）',
+};
+
+// 「ほかの端末」のセッションの行を、無ければ入れる。全失効が消した後の繰り返し（--repeat-each）の前に戻すのに使う（restoreSeedSession と同じ文）
+export async function insertOtherDeviceSession(): Promise<void> {
+  const insert = sessionInserts([OTHER_DEVICE_SESSION], new Date());
+  if (!insert.startsWith('INSERT INTO sessions ')) throw new Error('sessionInserts の文の形が変わった');
+  await executeLocalD1([insert.replace(/^INSERT INTO /, 'INSERT OR IGNORE INTO ')]);
+}
+
 // seed を流してから10分以上たっても、signIn はログイン直後の場面から始める。期限や利用日時は変えない。
 export async function refreshSeedSessionCreatedAt(who: keyof typeof SEED_SESSIONS): Promise<void> {
   await executeLocalD1([
