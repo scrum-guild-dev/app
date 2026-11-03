@@ -14,7 +14,7 @@
   import ConfirmDialog from './ConfirmDialog.svelte';
   import EmptyState from './EmptyState.svelte';
   import LoadFailed from './LoadFailed.svelte';
-  import Markdown from './Markdown.svelte';
+  import WikiContent from './WikiContent.svelte';
   import PageHead from './PageHead.svelte';
   import WikiTree from './WikiTree.svelte';
   import WikiHistory from './WikiHistory.svelte';
@@ -62,7 +62,6 @@
   let discardDialog = $state<ReturnType<typeof ConfirmDialog>>();
   const dirty = $derived(mode !== 'read' && (title !== originalTitle || body !== originalBody));
   const frontmatter = $derived(parseWikiFrontmatter(body));
-  const rendered = $derived(parseWikiFrontmatter(current?.body_md ?? ''));
   const ancestors = $derived.by(() => {
     const found: typeof pages = [];
     let id = current?.parent_id;
@@ -245,7 +244,7 @@
         {#if comparison}<details>
             <summary>{t('wikiCompare', { version: comparison.version })}</summary>
             <h3>{comparison.title}</h3>
-            <Markdown source={parseWikiFrontmatter(comparison.body_md).body} />
+            <WikiContent source={comparison.body_md} />
           </details>{/if}
         <form
           class="form"
@@ -288,7 +287,7 @@
             {#if bodyError}<p id="wiki-body-error" class="field-error" role="alert">{t('wikiBodyInvalid')}</p>{/if}
           </div>
           {#if mode === 'edit'}<p class="field-hint">{t('wikiVersionHint', { version })}</p>{/if}
-          <details><summary>{t('wikiPreview')}</summary><Markdown source={frontmatter.body} /></details>
+          <details><summary>{t('wikiPreview')}</summary><WikiContent source={body} /></details>
           <div class="form-actions">
             <button class="btn is-primary" type="submit" aria-disabled={saving}
               >{t(saving ? 'wikiSaving' : 'wikiSave')}</button
@@ -344,8 +343,7 @@
                 >{:else}<p class="field-hint">{t('wikiDepth')}</p>{/if}
             </div>{/if}
         </div>
-        {#if rendered.invalid}<p class="callout is-warn">{t('wikiFrontmatterInvalid')}</p>{/if}
-        <Markdown source={rendered.body} internalLinkPrefix={`${page.url.origin}${wiki.rootHref}/`} />
+        <WikiContent source={current.body_md} internalLinkPrefix={`${page.url.origin}${wiki.rootHref}/`} />
       {:else if pages.length}
         <h2 class="section-title">{t('wikiTop')}</h2>
         <ul>

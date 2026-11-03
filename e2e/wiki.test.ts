@@ -61,10 +61,13 @@ test('組織のメニューから Wiki を開き、親子のページを作っ�
   const title = `組織の手順-${crypto.randomUUID().slice(0, 8)}`;
   await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
   await page.getByLabel('題', { exact: true }).fill(title);
-  await page.getByLabel('本文', { exact: true }).fill('# 全体の手順\n\n![外部画像](https://example.test/org-wiki.png)');
+  await page
+    .getByLabel('本文', { exact: true })
+    .fill('---\n担当: 共通の窓口\n---\n# 全体の手順\n\n![外部画像](https://example.test/org-wiki.png)');
   await page.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(page).toHaveURL(/\/aoba\/wiki\/[0-9a-f-]{36}$/);
   const parentUrl = page.url();
+  await expect(page.getByRole('cell', { name: '共通の窓口', exact: true })).toBeVisible();
   await expect(page.locator('.doc-box img')).toHaveCount(0);
   await expect(page.locator('.doc-box a', { hasText: '外部画像' })).toHaveAttribute('target', '_blank');
   await expect(page.locator('.nav-item[aria-current="page"]')).toHaveText('あおば開発の Wiki');
@@ -133,6 +136,71 @@ test('組織の Wiki も競合時に書きかけを残し、権限のない人�
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
+});
+
+test('frontmatter を表で読み、読めない YAML と値の無いページも保存して読める', async ({ page }) => {
+  const violations = await watchViolations(page);
+  await createWorkspace(page, 'Wikiのメタデータ');
+  await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+  await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
+  const source =
+    '---\ntitle: 手順の情報\nowner: 青葉\nreviewed: 2026-11-03\npeople: [青葉, 若葉]\nreview: {done: true}\nblank: ""\nmarkup: "<img src=x> **文字**"\n' +
+    '長いキー'.repeat(30) +
+    ': ' +
+    '長い値'.repeat(100) +
+    '\n---\n## 実際の本文';
+  await page.getByLabel('本文', { exact: true }).fill(source);
+  await page.getByText('プレビュー', { exact: true }).click();
+  const properties = page.getByRole('table', { name: 'ページの frontmatter（題を除く）' });
+  await expect(properties.getByRole('rowheader', { name: 'owner', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await expect(page).toHaveURL(/\/wiki\/[0-9a-f-]{36}$/);
+  await page.reload();
+  await expect(properties).toBeVisible();
+  await expect(properties.getByRole('row')).toHaveCount(8);
+  await expect(properties.getByRole('cell', { name: '2026-11-03', exact: true })).toBeVisible();
+  await expect(properties.getByRole('cell', { name: '[ "青葉", "若葉" ]', exact: true })).toBeVisible();
+  await expect(properties.getByRole('cell', { name: '{ "done": true }', exact: true })).toBeVisible();
+  await expect(properties.getByRole('cell', { name: '<img src=x> **文字**', exact: true })).toBeVisible();
+  await expect(properties.getByRole('cell', { name: '（空）', exact: true })).toBeVisible();
+  await expect(properties.locator('img, strong, a')).toHaveCount(0);
+  await expect(properties.getByRole('rowheader', { name: 'title', exact: true })).toHaveCount(0);
+  await expect(page.locator('.doc-box')).not.toContainText('owner:');
+  await expect(page.getByRole('heading', { name: '実際の本文', exact: true })).toBeVisible();
+  for (const width of [320, 390, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(properties).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+
+  await page.getByRole('button', { name: '編集する', exact: true }).click();
+  await page.getByLabel('本文', { exact: true }).fill('---\ntitle: 123\n---\n無効な題の本文');
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await expect(page.getByRole('button', { name: '編集する', exact: true })).toBeVisible();
+  await expect(properties.getByRole('rowheader', { name: 'title', exact: true })).toBeVisible();
+  await expect(properties.getByRole('cell', { name: '123', exact: true })).toBeVisible();
+
+  for (const body of [
+    '---\nowner: [\n---\n## 読めない YAML の本文',
+    'frontmatter の無い本文',
+    '---\ntitle: 題だけのページ\n---\n題だけの本文',
+  ]) {
+    await page.getByRole('button', { name: '編集する', exact: true }).click();
+    await page.getByLabel('本文', { exact: true }).fill(body);
+    await page.getByRole('button', { name: '保存する', exact: true }).click();
+    await expect(page.getByRole('button', { name: '編集する', exact: true })).toBeVisible();
+    await expect(properties).toHaveCount(0);
+    const warning = page.getByText('frontmatter を読めません。本文として表示しています。', { exact: true });
+    if (body.includes('owner: [')) {
+      await expect(warning).toBeVisible();
+      await expect(page.locator('.doc-box')).toContainText('owner: [');
+      await expect(page.getByRole('heading', { name: '読めない YAML の本文', exact: true })).toBeVisible();
+    } else {
+      await expect(warning).toHaveCount(0);
+      await expect(page.locator('.doc-box')).toContainText(body.includes('title:') ? '題だけの本文' : body);
+    }
+  }
+  expect(await violations()).toEqual([]);
 });
 
 test('Wiki の木から親子を作り、番号の URL のまま題と本文を直せる', async ({ page }) => {
