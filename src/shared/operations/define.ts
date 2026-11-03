@@ -54,6 +54,9 @@ type Common<Input, Output> = {
   readonly skipsConsent?: true;
   // 本文がファイルのバイトの操作。入力の JSON はヘッダー X-Operation-Input で運ぶ。組織の中の write の操作だけ
   readonly body?: 'binary';
+  // ファイルを返す GET /api/<slug>/<name>/<id>。組織の直下の read だけ。
+  // 入力はパスの id、応答は Response。CLI と MCP（JSON）からは呼べない。
+  readonly response?: 'binary';
 };
 
 // ワークスペースの下の操作は、入力に workspace_id を持つ。無いと型で落ちる
@@ -116,6 +119,16 @@ export function assertOperationDefinition(definition: AnyOperationDefinition): v
   ) {
     throw new Error(`操作 ${name} の body は、組織の中の write の操作に 'binary' だけ付けられる`);
   }
+  if (
+    definition.response !== undefined &&
+    (definition.response !== 'binary' ||
+      definition.permission !== 'organization' ||
+      workspace === true ||
+      definition.mode !== 'read' ||
+      definition.body !== undefined)
+  ) {
+    throw new Error(`操作 ${name} の response は、組織の直下の read の操作に 'binary' だけ付けられる`);
+  }
   if (definition.rateLimit && definition.weightedRateLimit)
     throw new Error(`操作 ${name} は回数の上限を二重に持てない`);
   if (definition.weightedRateLimit && typeof definition.weightedRateLimit.weight !== 'function')
@@ -128,6 +141,7 @@ export function assertOperationDefinition(definition: AnyOperationDefinition): v
   )
     throw new Error(`操作 ${name} の本文の上限は1〜16MiB`);
   const rateLimit = definition.rateLimit ?? definition.weightedRateLimit;
+
   if (rateLimit !== undefined && !(Number.isInteger(rateLimit.max) && rateLimit.max > 0)) {
     throw new Error(`操作 ${name} の rateLimit.max は 1 以上の整数`);
   }
@@ -155,8 +169,15 @@ export function isWorkspaceOperation(definition: AnyOperationDefinition): defini
 }
 
 // 組織の中の操作だけ slug を取る。URL の形はここに1つだけ持つ
-export function operationPath(definition: AnyOperationDefinition, slug?: string): string {
+export function operationPath(definition: AnyOperationDefinition, slug?: string, input?: { id: string }): string {
   if (isOutsideOperation(definition)) return `/api/${definition.name}`;
   if (slug === undefined) throw new Error(`組織の中の操作 ${definition.name} には slug が要る`);
-  return `/api/${encodeURIComponent(slug)}/${definition.name}`;
+  const path = `/api/${encodeURIComponent(slug)}/${definition.name}`;
+  return definition.response === 'binary'
+    ? `${path}/${input === undefined ? ':id' : encodeURIComponent(input.id)}`
+    : path;
+}
+
+export function operationMethod(definition: AnyOperationDefinition): 'GET' | 'POST' {
+  return definition.response === 'binary' ? 'GET' : 'POST';
 }

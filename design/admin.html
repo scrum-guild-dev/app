@@ -21,6 +21,9 @@
 // 組織の管理（管理者）: ユーザー、ワークスペース、添付ファイルの合計、組織の休日、既定のテーマ、配分と積載量の合計、取り込み元の応答、AI の機能、変更の履歴
 const { D, t, icon, esc, pageHead, avatarOf, user, meter } = SQ;
 const A = D.admin;
+// ?workspace-limit は、自分用で利用中3個・終了済み1個の再開が断られた状態。
+const workspaceLimit = new URLSearchParams(location.search).has("workspace-limit");
+if (workspaceLimit) A.workspaces.push({ name: "資料整理", members: 1, leaders: 1, created: "2026-11-01" });
 // 変更の履歴の内容の文。本番の辞書（src/shared/vocabulary.ts の orgHistory*）と同じ文を作る
 const AUDIT = {
   organizationCreated: (name) => `${t("organization")}「${name}」を作りました`,
@@ -76,11 +79,12 @@ SQ.mount("admin", () => `
           <td class="mono" data-label="最後に入った日">10/20</td>
           <td class="is-actions"></td></tr></tbody></table></div>
       <p class="props-note">自分用の${t("organization")}（<code>kind</code> が <code>personal</code>）の表示の見本です。${t("admin")}の切り替えは全員の行で押せなくし、理由を表の上に出して、読み上げの説明にも結びます。サーバーも指名と解除を 409 の <code>personal_organization</code> で断ります。</p>`)}
-    ${setting(t("workspace"), `終了した${t("workspace")}は読み取り専用になり、${t("connection")}はすべて止まります。再開できます。${t("member")}の数は${t("leader")}を含みます。`, !A.workspaces.length
+    ${setting(t("workspace"), `作った${t("workspace")}の一覧です。終了した${t("workspace")}も含みます。${t("member")}の数は${t("leader")}を含みます。`, !A.workspaces.length
       ? SQ.emptyState("users", `まだ${t("workspace")}がありません`,
           `チームや用途ごとに作ります。${t("member")}の招待は、作った${t("workspace")}の${t("leader")}が行います。`,
           `<button class="btn is-sm" type="button" data-dialog="createWorkspace">${icon("plus")}${t("workspace")}を作る</button>`)
       : `
+      ${workspaceLimit ? `<div class="callout is-warn" role="alert">${icon("alert")}<span class="wrap-anywhere">「${esc(A.workspaces.find(w => w.closed)?.name || "終了した案件")}」は再開できません。自分用の${t("workspace")}は、利用中のものを3個まで使えます（今${A.workspaces.filter(w => !w.closed).length}個）。この一覧で今ある${t("workspace")}を終了して枠を空けてください。</span></div>` : ""}
       <div class="table-wrap"><table class="table is-stacked" aria-label="${t("workspace")}の一覧"><thead><tr><th class="is-name">名前</th><th class="is-num">${t("member")}数</th><th class="is-num">${t("leader")}数</th><th>作った日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
         <tbody>${A.workspaces.map((w) => `<tr><td class="is-name">${esc(w.name)}${w.closed ? ` <span class="chip">終了 ${w.closed}</span>` : ""}${!w.closed && !w.leaders ? ` <span class="chip is-warn">${t("leader")}がいない</span>` : ""}</td>
           <td class="is-num" data-label="${t("member")}数">${w.members}</td><td class="is-num" data-label="${t("leader")}数">${w.leaders}</td><td class="mono" data-label="作った日">${w.created}</td>

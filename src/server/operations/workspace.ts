@@ -66,12 +66,13 @@ function adminUsers(from: Pick<QueryCreator<Tables>, 'selectFrom'>, organization
     .where('users.is_admin', '=', 1);
 }
 
-// 組織のワークスペースの数。閉じたものも数える（closed_at で絞らない）。excludedId を渡すと、その ID の行は数えない
+// 組織の利用中のワークスペースの数（closed_at が空）。excludedId を渡すと、その ID の行は数えない
 function workspaceCount(from: Pick<QueryCreator<Tables>, 'selectFrom'>, organizationId: string, excludedId?: string) {
   const query = from
     .selectFrom('workspaces')
     .select((eb) => eb.fn.countAll<number>().as('n'))
-    .where('workspaces.organization_id', '=', organizationId);
+    .where('workspaces.organization_id', '=', organizationId)
+    .where('workspaces.closed_at', 'is', null);
   return excludedId === undefined ? query : query.where('workspaces.id', '!=', excludedId);
 }
 
@@ -111,7 +112,7 @@ function insertWhenAllowed<T extends keyof Tables>(
   );
 }
 
-// 今のワークスペースの数（閉じたものも含む）を読み、上限なら 409 の workspace_limit_reached で断る
+// 利用中のワークスペースの数を読み、上限なら 409 の workspace_limit_reached で断る
 async function throwIfWorkspaceLimitReached(db: OrganizationDb, max: number): Promise<void> {
   const row = await db.first(db.statement((q) => workspaceCount(q, db.organizationId)));
   const used = Number(row?.n ?? 0);
@@ -198,7 +199,8 @@ export function createdOn(timezone: string, createdAt: string, operation: string
   }
 }
 
-// 件数に上限を付けない。ワークスペースは組織あたり数十の想定（docs/data-model.md の workspaces の節）
+// 終了済みを含めて全件返す。自分用の利用中は3個だが、累積の総数は制限しない。
+// 総件数が千を超えるか一覧が遅くなったときに、絞り込み・ページ分けを見直す（docs/data-model.md の workspaces の節）
 export const workspaceListOperation = implement(workspaceList, async ({ db }) => {
   const organizationId = db.organizationId;
   const [workspaceResult, countResult] = await db.batch([
@@ -451,12 +453,14 @@ function closeGuard(
 // 閉じると開き直しの書き込み。change_logs の INSERT を先に、workspaces の UPDATE を後に置き、2つが同じ条件（closeGuard）を持つ。
 // 1回の batch は1つのトランザクションで文が順に走るので、先の文が通ったときは UPDATE も同じ状態を見て必ず通り、
 // 通らなかったときは UPDATE も通らない。UPDATE の後に履歴の条件を置くと、同じ時刻の2つの要求の両方に履歴が入りうる。
-// 当たらなかったときは読み直して、状態が変わっていれば 409、そうでなければ（呼んだ人が管理者でなくなった）404
+// 再開は利用中の個数が上限より小さい条件も両方の文に入れる。履歴を先に書くので、UPDATE まで個数は変わらない。
+// 当たらなければ状態と個数を読み直して 409、それ以外（管理者でなくなった）は 404
 async function writeClosedState(
   db: OrganizationDb,
   actor: { userId: string | null },
   workspaceId: string,
   change: { action: 'close' } | { action: 'reopen'; closedAt: string },
+  max: number | null = null,
 ): Promise<string> {
   // permission: 'admin' は users の行がある管理者だけを通す。型の上の null を 404 で閉じる
   const actorUserId = actorUserIdOf(actor);
@@ -486,7 +490,11 @@ async function writeClosedState(
             ])
             .where((eb) => {
               const guard = closeGuard(eb, organizationId, workspaceId, actorUserId, before);
-              return eb.and([eb.exists(guard.inState), eb.exists(guard.isAdmin)]);
+              return eb.and([
+                eb.exists(guard.inState),
+                eb.exists(guard.isAdmin),
+                ...(max === null ? [] : [eb(workspaceCount(eb, organizationId), '<', max)]),
+              ]);
             }),
         ),
     ),
@@ -498,7 +506,11 @@ async function writeClosedState(
         .where('workspaces.organization_id', '=', organizationId)
         .where((eb) => {
           const guard = closeGuard(q, organizationId, workspaceId, actorUserId, before);
-          return eb.and([eb.exists(guard.inState), eb.exists(guard.isAdmin)]);
+          return eb.and([
+            eb.exists(guard.inState),
+            eb.exists(guard.isAdmin),
+            ...(max === null ? [] : [eb(workspaceCount(q, organizationId), '<', max)]),
+          ]);
         }),
     ),
   ]);
@@ -518,6 +530,7 @@ async function writeClosedState(
   if (row.closed_at !== before) {
     throw new ApiError(409, change.action === 'close' ? 'workspace_closed' : 'conflict');
   }
+  if (max !== null) await throwIfWorkspaceLimitReached(db, max);
   throw new ApiError(404, 'not_found');
 }
 
@@ -550,20 +563,25 @@ async function throwIfReopenExceedsLimit(
   }
 }
 
-export const workspaceReopenOperation = implement(workspaceReopen, async ({ db, actor, workspace, tools }) => {
-  const row = await db.first(
-    db.statement((q) =>
-      q
-        .selectFrom('workspaces')
-        .select('workspaces.closed_at')
-        .where('workspaces.id', '=', workspace.workspaceId)
-        .where('workspaces.organization_id', '=', db.organizationId),
-    ),
-  );
-  if (row === undefined) throw new ApiError(404, 'not_found');
-  // 開いているものは開き直せない。何も書かない
-  if (row.closed_at === null) throw new ApiError(409, 'conflict');
-  await throwIfReopenExceedsLimit(db, tools, workspace.workspaceId);
-  await writeClosedState(db, actor, workspace.workspaceId, { action: 'reopen', closedAt: row.closed_at });
-  return { workspace_id: workspace.workspaceId };
-});
+export const workspaceReopenOperation = implement(
+  workspaceReopen,
+  async ({ db, actor, workspace, tools, organization }) => {
+    const row = await db.first(
+      db.statement((q) =>
+        q
+          .selectFrom('workspaces')
+          .select('workspaces.closed_at')
+          .where('workspaces.id', '=', workspace.workspaceId)
+          .where('workspaces.organization_id', '=', db.organizationId),
+      ),
+    );
+    if (row === undefined) throw new ApiError(404, 'not_found');
+    // 開いているものは開き直せない。何も書かない
+    if (row.closed_at === null) throw new ApiError(409, 'conflict');
+    await throwIfReopenExceedsLimit(db, tools, workspace.workspaceId);
+    const max = WORKSPACE_LIMITS[organization.kind];
+    if (max !== null) await throwIfWorkspaceLimitReached(db, max);
+    await writeClosedState(db, actor, workspace.workspaceId, { action: 'reopen', closedAt: row.closed_at }, max);
+    return { workspace_id: workspace.workspaceId };
+  },
+);

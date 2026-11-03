@@ -8,6 +8,7 @@ import { commonDb, orgDb } from '../../src/server/db/index.ts';
 import { createFakeGithub } from '../auth/fake-github.ts';
 import { githubUser } from '../auth/helpers.ts';
 import {
+  createAttachment,
   createBoardColumn,
   createCategory,
   createComment,
@@ -130,6 +131,13 @@ async function wikiFor(target: Target, organization = false) {
 }
 
 export const pointers: Pointers = {
+  attachments: async (target, caller) => {
+    const person = personOf(target, caller) ?? target.admin;
+    const workspaceId = person.userId === target.bystander.userId ? target.otherWorkspace.id : target.workspace.id;
+    const row = await createAttachment(target.organization, workspaceId, person.userId!);
+    await env.ATTACHMENTS.put(row.object_key, 'x');
+    return { id: row.id };
+  },
   'workspace-wiki-revisions': async (target) => ({ workspace_id: target.workspace.id, page_id: await wikiFor(target) }),
   'org-wiki-revisions': async (target) => ({ page_id: await wikiFor(target, true) }),
   'org-wiki-search': { noReference: { query: '手順' } },

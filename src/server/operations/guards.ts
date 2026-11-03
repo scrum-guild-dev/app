@@ -16,6 +16,20 @@ export function requireOrigin(c: Context<AppEnv>): void {
   if (c.req.header('Origin') !== allowed) throw new ApiError(403, 'forbidden');
 }
 
+// img/video/リンクの GET は Origin が無い。同一オリジンの読み込みと直接の移動だけを通す。
+// 古いブラウザや手元の HTTP クライアントのため、Fetch Metadata の無い呼び出しも認証へ進める。
+export function requireDownloadOrigin(c: Context<AppEnv>): void {
+  if (c.req.header('Origin') !== undefined) requireOrigin(c);
+  const site = c.req.header('Sec-Fetch-Site');
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') throw new ApiError(403, 'forbidden');
+}
+
+export function readDownloadInput<Schema extends z.ZodType>(c: Context<AppEnv>, schema: Schema): z.output<Schema> {
+  const parsed = schema.safeParse({ id: c.req.param('id') });
+  if (!parsed.success) throw new ApiError(400, 'invalid_input');
+  return parsed.data;
+}
+
 // 本文を上限（バイト）まで読む。Content-Length が無い（chunked の）本文も、読んだ分を数えて上限で止める。
 // 超えたら 413 の invalid_input。操作の定義のほか、画面のエラーの送信（src/server/client-errors.ts）が小さい上限で使う
 export async function readBodyText(c: Context<AppEnv>, maxBytes: number = MAX_BODY_BYTES): Promise<string> {

@@ -18,8 +18,8 @@ export const errorCodes = [
   // クリアか中止した（終わった）エピックの討伐隊・報酬・依頼主を変える操作（epic-party-join、epic-party-leave、epic-party-assign、
   // epic-reward-update、epic-requester-update）の 409。書き込みの競合に 3 回続けて負けたときは conflict のまま。画面は「終わっているので変えられません」を出す
   'epic_finished',
-  // ワークスペースの作成（workspace-create）が、自分用の組織のワークスペースの個数の上限（閉じたものも数える）で断られた。409。
-  // details は { used, limit }。画面は作成のダイアログの中に上限と今の個数を出す
+  // ワークスペースの作成・再開（workspace-create、workspace-reopen）が、自分用の利用中の個数の上限で断られた。409。
+  // details は { used, limit }（used は利用中の数）。画面は作成のダイアログか再開の一覧の上に、理由と枠を空ける方法を出す
   'workspace_limit_reached',
   // 閉じたワークスペースへの書き込み。読み取り専用なので書けない。409
   'workspace_closed',

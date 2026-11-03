@@ -42,8 +42,12 @@ export const metaIgnoredDirectives = ['frame-ancestors', 'report-uri', 'sandbox'
 // JSON にスクリプトは無いので、何も読ませず、埋め込ませない
 export const apiCsp = "default-src 'none'; frame-ancestors 'none'";
 
-// API は後でログインした人のデータを返すので、どの応答もキャッシュに残さない
+// API はログインした人のデータを返すので、どの応答もキャッシュに残さない
 export const apiCacheControl = 'no-store';
+
+// 添付は同じオリジンから返すため、画像・動画にも sandbox を付ける。権限の取消後にキャッシュだけで読ませない。
+export const attachmentCsp = "sandbox; default-src 'none'; frame-ancestors 'none'";
+export const attachmentCacheControl = 'private, no-store';
 
 // /_app/immutable/ の下はファイル名にハッシュが入り、中身が変わらない
 export const immutableCacheControl = 'public, max-age=31536000, immutable';

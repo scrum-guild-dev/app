@@ -107,7 +107,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await expect(row.locator('td').nth(2)).toHaveText('1');
   });
 
-  // 自分用の組織の個数の上限（#734）。サーバーの判定（4個目の拒否、閉じたものも数える、同時の作成）は test/workspace-limit.test.ts が確かめる。
+  // 自分用の組織の利用中の個数の上限（#771）。サーバーの判定（上限の拒否、終了による枠の再利用、並行操作）は test/workspace-limit.test.ts が確かめる。
   // ここは応答を書き換えて、画面の出し方だけを確かめる（自分用の組織を作ると、作った組織を後で消せないため）
   test('個数の上限で断られると、ダイアログの中に上限と今の個数が出て、閉じずに入力も残り、作った表示にはならない', async ({
     page,
@@ -124,9 +124,11 @@ test.describe('管理者（あおば開発のミナト）', () => {
 
     const alert = dialog.getByRole('alert').filter({ hasText: '自分用' });
     await expect(alert).toHaveText(
-      '自分用のワークスペースは、終了したものも含めて3個までです（今3個）。これ以上は作れないので、今あるワークスペースを使うか、終了したワークスペースがあれば再開してください。',
+      '自分用のワークスペースは、利用中のものを3個まで使えます（今3個）。このダイアログを閉じて、この画面の一覧で今あるワークスペースを終了して枠を空けてください。',
     );
     await expect(alert).toHaveClass(/is-warn/);
+    await expect(alert).not.toContainText('{');
+    await expect(alert).not.toContainText('アカウントのメニュー');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel('名前')).toHaveValue('四つ目の置き場');
     await expect(page.getByRole('dialog', { name: 'ワークスペースを作りました' })).toHaveCount(0);
@@ -145,9 +147,55 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await dialog.getByLabel('名前').fill('四つ目の置き場');
     await dialog.getByRole('button', { name: '作る' }).click();
     await expect(dialog.getByRole('alert')).toHaveText(
-      '自分用のワークスペースの個数が、終了したものも含めて上限に達しています。これ以上は作れないので、今あるワークスペースを使うか、終了したワークスペースがあれば再開してください。',
+      '自分用のワークスペースは、利用中の個数が上限に達しています。このダイアログを閉じて、この画面の一覧で今あるワークスペースを終了して枠を空けてください。',
     );
   });
+
+  for (const withDetails of [true, false]) {
+    test(`今日やることからの上限拒否（件数${withDetails ? 'あり' : 'なし'}）は、閉じてからアカウントのメニューへ進む方法を案内する`, async ({
+      page,
+    }) => {
+      await failOperation(
+        page,
+        workspaceCreate,
+        { slug: 'aoba' },
+        409,
+        'workspace_limit_reached',
+        withDetails ? { details: { used: 3, limit: 3 } } : {},
+      );
+      await mockOperation(
+        page,
+        firstSteps,
+        { slug: 'aoba' },
+        {
+          role: 'admin',
+          steps: [
+            { key: 'became_admin', done: true, optional: false, workspace: null },
+            { key: 'create_workspace', done: false, optional: false, workspace: null },
+          ],
+        },
+      );
+      await page.goto('/aoba');
+      await page
+        .getByRole('region', { name: '最初にやること', exact: true })
+        .getByRole('button', { name: 'ワークスペースを作る' })
+        .click();
+      const dialog = page.getByRole('dialog', { name: 'ワークスペースを作る' });
+      await expect(dialog.getByRole('combobox')).toBeEnabled();
+      await dialog.getByLabel('名前').fill('入れ替える案件');
+      await dialog.getByRole('button', { name: '作る' }).click();
+      const alert = dialog.getByRole('alert');
+      await expect(alert).toContainText(
+        withDetails ? '利用中のものを3個まで使えます（今3個）' : '利用中の個数が上限に達しています',
+      );
+      await expect(alert).toContainText(
+        'このダイアログを閉じて、アカウントのメニューの「組織の管理」で今あるワークスペースを終了して枠を空けてください',
+      );
+      await expect(alert).not.toContainText('この画面の一覧');
+      await expect(alert).not.toContainText('{');
+      await expect(dialog.getByLabel('名前')).toHaveValue('入れ替える案件');
+    });
+  }
 
   test('別の人をリーダーに作ると、所属していない印が出る', async ({ page }) => {
     await page.goto('/aoba/admin');

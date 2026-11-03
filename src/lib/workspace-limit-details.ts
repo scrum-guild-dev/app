@@ -1,4 +1,4 @@
-// 409 の workspace_limit_reached の details（{ used, limit }）から、画面に出す数を取り出す。
+// 409 の workspace_limit_reached の details（{ used, limit }）から、画面に出す利用中の数と上限を取り出す。
 // details は unknown なので、形と値を確かめ、読めないときは undefined を返す
 export type WorkspaceLimitDetails = { used: number; limit: number };
 

@@ -5,6 +5,7 @@ import {
   isOutsideOperation,
   isWorkspaceOperation,
   operationPath,
+  operationMethod,
   type AnyOperationDefinition,
 } from '../../src/shared/operations/define.ts';
 import { sessionCookieName } from '../../src/shared/session-cookie.ts';
@@ -132,11 +133,21 @@ export async function post(app: App, definition: AnyOperationDefinition, options
     headers.set('Cookie', `${sessionCookieName(env.PUBLIC_ORIGIN)}=${options.token}`);
   }
   if (options.bearer !== undefined) headers.set('Authorization', `Bearer ${options.bearer}`);
-  const body = binary ? binaryRequest(options, headers) : (options.rawBody ?? JSON.stringify(options.body ?? {}));
+  const download = definition.response === 'binary';
+  const body = download
+    ? undefined
+    : binary
+      ? binaryRequest(options, headers)
+      : (options.rawBody ?? JSON.stringify(options.body ?? {}));
   return app.request(
-    operationPath(definition, options.slug),
+    operationPath(definition, options.slug, download ? (options.body as { id: string }) : undefined),
     // 本文が ReadableStream のときは Content-Length が付かない（chunked と同じ）
-    { method: 'POST', headers, body, ...(typeof body === 'string' ? {} : { duplex: 'half' }) } as RequestInit,
+    {
+      method: operationMethod(definition),
+      headers,
+      body,
+      ...(body === undefined || typeof body === 'string' ? {} : { duplex: 'half' }),
+    } as RequestInit,
     env,
     options.executionCtx,
   );
@@ -210,7 +221,10 @@ export function defineOperationChecks(
   // API トークンでは呼べない操作（運用者の操作、cookieOnly、本文がバイナリの操作）。どの人が呼んでも 403
   const refusesToken = (definition: AnyOperationDefinition) =>
     credential === 'bearer' &&
-    (definition.permission === 'operator' || definition.cookieOnly === true || definition.body === 'binary');
+    (definition.permission === 'operator' ||
+      definition.cookieOnly === true ||
+      definition.body === 'binary' ||
+      definition.response === 'binary');
   const as = (person: Person) => credentialOf(person, credential);
 
   describe.each(operations.map((operation) => operation.definition))('$name（$permission）', (definition) => {
@@ -238,7 +252,12 @@ export function defineOperationChecks(
     // 成功の応答が定義の出力の形であることまで確かめる
     const expectOk = async (res: Response) => {
       expect(res.status).toBe(200);
-      expect(definition.output.safeParse(await res.json()).success).toBe(true);
+      if (definition.response === 'binary') {
+        expect(definition.output.safeParse(res).success).toBe(true);
+        await res.arrayBuffer();
+      } else {
+        expect(definition.output.safeParse(await res.json()).success).toBe(true);
+      }
     };
     // 組織の外の操作は運用者が呼ぶので、入力が呼ぶ人の行を指す操作（token-revoke）には運用者を渡す
     const input = (target: Target, caller?: Person) =>
@@ -247,14 +266,24 @@ export function defineOperationChecks(
     const caller = () => as(isOutsideOperation(definition) ? operator : own.admin);
 
     if (credential === 'cookie') {
-      test('Origin が公開する URL と違う、または無いと 403', async () => {
-        const body = await input(own);
-        for (const origin of ['https://evil.example', `${testEnv.PUBLIC_ORIGIN}.evil.example`, null]) {
-          const res = await post(app, definition, { slug: own.slug, ...(await caller()), origin, body });
-          expect(res.status, String(origin)).toBe(403);
-          expect(await errorCodeOf(res)).toBe('forbidden');
-        }
-      });
+      test(
+        definition.response === 'binary'
+          ? 'Origin が公開する URL と違うと 403'
+          : 'Origin が公開する URL と違う、または無いと 403',
+        async () => {
+          const body = await input(own);
+          const origins = [
+            'https://evil.example',
+            `${testEnv.PUBLIC_ORIGIN}.evil.example`,
+            ...(definition.response === 'binary' ? [] : [null]),
+          ];
+          for (const origin of origins) {
+            const res = await post(app, definition, { slug: own.slug, ...(await caller()), origin, body });
+            expect(res.status, String(origin)).toBe(403);
+            expect(await errorCodeOf(res)).toBe('forbidden');
+          }
+        },
+      );
     } else if (refusesToken(definition)) {
       test('API トークンでは、Origin によらず 403', async () => {
         for (const origin of [testEnv.PUBLIC_ORIGIN, 'https://evil.example', null]) {
