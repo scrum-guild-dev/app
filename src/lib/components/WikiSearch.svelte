@@ -137,18 +137,16 @@
     <ul class="wiki-tree panel">
       {#each results as item (item.id)}
         <li>
-          <!-- eslint-disable svelte/no-navigation-without-resolve -- 組織Wikiのルート型は並行する #751 が追加する。既存ルートのresolveでbaseを付けてからWiki内のURLを組む -->
           <a
             class="wiki-link"
             href={workspaceId
               ? resolve('/[slug]/w/[id]/wiki/[pageId]', { slug, id: workspaceId, pageId: item.id })
-              : `${resolve('/[slug]', { slug })}/wiki/${item.id}`}
+              : resolve('/[slug]/wiki/[pageId]', { slug, pageId: item.id })}
             aria-current={currentId === item.id ? 'page' : undefined}
             >{item.title}<span class="props-note">{pathOf(item.id)}</span><span class="props-note"
               >{t(item.matched_in === 'title' ? 'wikiSearchTitleHit' : 'wikiSearchBodyHit')}</span
             ></a
           >
-          <!-- eslint-enable svelte/no-navigation-without-resolve -->
         </li>
       {/each}
     </ul>

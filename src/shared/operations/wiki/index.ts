@@ -99,6 +99,42 @@ export const workspaceWikiSearch = defineOperation({
   input: z.object({ workspace_id: idSchema, query: wikiQuerySchema }),
   output: searchOutput,
 });
+export const orgWikiTree = defineOperation({
+  name: 'org-wiki-tree',
+  description: '組織の Wiki の木を読む',
+  mode: 'read',
+  permission: 'organization',
+  input: z.object({}),
+  output: z.object({ pages: z.array(wikiNodeSchema) }),
+});
+export const orgWikiPage = defineOperation({
+  name: 'org-wiki-page',
+  description: '組織の Wiki のページを読む',
+  mode: 'read',
+  permission: 'organization',
+  input: z.object({ page_id: idSchema }),
+  output: z.object({ page: wikiPageSchema }),
+});
+export const orgWikiCreate = defineOperation({
+  name: 'org-wiki-create',
+  description: '組織の Wiki にページを作る',
+  mode: 'write',
+  permission: 'organization',
+  rateLimit: { max: 30, windowSeconds: 600 },
+  input: z.object({ parent_id: idSchema.nullable().default(null), ...content }).superRefine(validateContent),
+  output: z.object({ page: wikiPageSchema }),
+});
+export const orgWikiUpdate = defineOperation({
+  name: 'org-wiki-update',
+  description: '読んだ版が変わっていなければ組織の Wiki のページを保存する',
+  mode: 'write',
+  permission: 'organization',
+  rateLimit: { max: 30, windowSeconds: 600 },
+  input: z
+    .object({ page_id: idSchema, read_version: z.number().int().min(1), ...content })
+    .superRefine(validateContent),
+  output: z.object({ page: wikiPageSchema }),
+});
 export const wikiOperations = [
   workspaceWikiTree,
   workspaceWikiPage,
@@ -106,4 +142,8 @@ export const wikiOperations = [
   workspaceWikiUpdate,
   orgWikiSearch,
   workspaceWikiSearch,
+  orgWikiTree,
+  orgWikiPage,
+  orgWikiCreate,
+  orgWikiUpdate,
 ] as const;

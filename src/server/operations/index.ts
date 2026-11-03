@@ -1,6 +1,10 @@
 import {
   orgWikiSearchOperation,
   workspaceWikiSearchOperation,
+  orgWikiTreeOperation,
+  orgWikiPageOperation,
+  orgWikiCreateOperation,
+  orgWikiUpdateOperation,
   workspaceWikiTreeOperation,
   workspaceWikiPageOperation,
   workspaceWikiCreateOperation,
@@ -123,6 +127,10 @@ import {
 const listedOperations: readonly ImplementedOperation[] = [
   orgWikiSearchOperation,
   workspaceWikiSearchOperation,
+  orgWikiTreeOperation,
+  orgWikiPageOperation,
+  orgWikiCreateOperation,
+  orgWikiUpdateOperation,
   workspaceWikiTreeOperation,
   workspaceWikiPageOperation,
   workspaceWikiCreateOperation,

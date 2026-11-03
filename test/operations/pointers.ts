@@ -92,7 +92,7 @@ function newGithubUser() {
   return user;
 }
 
-async function wikiFor(target: Target) {
+async function wikiFor(target: Target, organization = false) {
   const id = crypto.randomUUID();
   const db = orgDb(env, target.organization.verified);
   const stamp = '2026-11-03T00:00:00.000Z';
@@ -100,8 +100,8 @@ async function wikiFor(target: Target) {
     db.statement((q) =>
       q.insertInto('wiki_pages').values({
         id,
-        organization_id: null,
-        workspace_id: target.workspace.id,
+        organization_id: organization ? target.organization.id : null,
+        workspace_id: organization ? null : target.workspace.id,
         parent_id: null,
         title: '手順',
         body_md: '本文',
@@ -132,6 +132,15 @@ async function wikiFor(target: Target) {
 export const pointers: Pointers = {
   'org-wiki-search': { noReference: { query: '手順' } },
   'workspace-wiki-search': async (target) => ({ workspace_id: target.workspace.id, query: '手順' }),
+  'org-wiki-tree': { noReference: {} },
+  'org-wiki-create': async (target) => ({ parent_id: await wikiFor(target, true), title: '手順', body_md: '本文' }),
+  'org-wiki-page': async (target) => ({ page_id: await wikiFor(target, true) }),
+  'org-wiki-update': async (target) => ({
+    page_id: await wikiFor(target, true),
+    read_version: 1,
+    title: '新しい手順',
+    body_md: '直した本文',
+  }),
   'workspace-wiki-tree': async (target) => ({ workspace_id: target.workspace.id }),
   'workspace-wiki-create': async (target) => ({ workspace_id: target.workspace.id, title: '手順', body_md: '本文' }),
   'workspace-wiki-page': async (target) => ({ workspace_id: target.workspace.id, page_id: await wikiFor(target) }),

@@ -59,6 +59,9 @@
   // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
   const DICT = {
     wiki: "Wiki",
+    orgWiki: "{organization}の Wiki",
+    orgWikiAccess: "この組織の全員が、読んで書けます。",
+    orgWikiTreeLabel: "組織の Wiki のページ",
     wikiPage: "ページ",
     wikiRevision: "版",
     wikiChildPage: "子のページ",
@@ -2069,7 +2072,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     "organization",
     ["today", "sun", () => "今日やること", "today.html"],
     ["notifications", "bell", () => "通知", "notifications.html", 3],
-    ["orgwiki", "file", () => `${t("organization")}の Wiki`, "wiki.html?scope=organization"],
+    ["orgwiki", "file", () => t("orgWiki").replace("{organization}", esc(orgName(D.organizations.find((k) => k.slug === D.organization) || D.organizations[0]))), "wiki.html?scope=organization"],
     "workspace",
     ["inbox", "inbox", () => t("inbox"), "inbox.html", 4],
     ["backlog", "board", () => t("backlog"), "backlog.html"],
@@ -2101,7 +2104,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${["today", "notifications", "orgwiki", "me", "admin", "operator"].includes(current) ? "" : `<div id="ws-menu-slot">${workspaceMenuHtml()}</div>`}`;
       if (typeof p === "string") return `<div class="nav-group"><span class="nav-group-label">${p}</span></div>`;
       const [id, ic, label, href, badge] = p;
-      return `<a class="nav-item" href="${firstHref(href)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
+      return `<a class="nav-item${id === "orgwiki" ? " is-wrapping" : ""}" href="${firstHref(href)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
     }).join("");
   }
   // 組織の切り替え。開閉するメニューで、中は各組織へのリンクと、組織の選択の画面へ戻るリンクと、最後に「組織を作る」（ダイアログを開く）。
