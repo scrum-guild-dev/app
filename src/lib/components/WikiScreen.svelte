@@ -213,15 +213,17 @@
 {:else}
   <div class="layout-wiki">
     <aside class="wiki-side">
-      {#if pages.length}<WikiTree
-          bind:this={wikiTree}
-          {pages}
-          {wiki}
-          canWrite={canWrite && mode === 'read' && !saving}
-          currentId={current?.id ?? null}
-        />{:else}<p class="section-hint">
-          {t('wikiTreeEmpty')}
-        </p>{/if}
+      {#key wiki.rootHref}
+        {#if pages.length}<WikiTree
+            bind:this={wikiTree}
+            {pages}
+            {wiki}
+            canWrite={canWrite && mode === 'read' && !saving}
+            currentId={current?.id ?? null}
+          />{:else}<p class="section-hint">
+            {t('wikiTreeEmpty')}
+          </p>{/if}
+      {/key}
     </aside>
     <section class="wiki-main" aria-label={t('wikiPage')}>
       <nav class="crumbs" aria-label={t('wikiCrumbs')}>

@@ -152,3 +152,31 @@ test('移動が失敗したらトーストと木の上に理由を残す', async
   expect(await feedback.evaluate((element) => !!element.nextElementSibling?.matches('nav'))).toBe(true);
   expect(page.url()).toBe(url);
 });
+
+test('別の Wiki へ画面内で移ると移動結果と並べ替えモードを持ち越さない', async ({ page }) => {
+  await createWorkspace(page, '移動先のWiki');
+  await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+  const destination = await add(page, '移動先だけのページ');
+  await createWorkspace(page, '移動元のWiki');
+  await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+  await add(page, '先にあるページ');
+  await add(page, '移すページ');
+  await page.getByRole('button', { name: '並べ替える', exact: true }).click();
+  await page.getByRole('button', { name: '上へ: 移すページ', exact: true }).click();
+  await expect(page.locator('.wiki-side > .field-hint')).toHaveText('「移すページ」を移しました。');
+  // 同じ +page の id だけを変える画面内のリンク。両側にページを置き、木を描く分岐も保つ。
+  await page.evaluate((href) => {
+    document.body.dataset.wikiNavigation = 'same-document';
+    const link = document.createElement('a');
+    link.href = href;
+    link.textContent = '別のWikiへ移る';
+    document.body.append(link);
+  }, destination);
+  await page.getByRole('link', { name: '別のWikiへ移る', exact: true }).click();
+  await expect(page).toHaveURL(destination);
+  await expect(page.locator('body')).toHaveAttribute('data-wiki-navigation', 'same-document');
+  await expect(page.getByRole('heading', { level: 2, name: '移動先だけのページ' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '並べ替える', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.wiki-side > .field-hint')).toBeEmpty();
+  await expect(page.getByRole('button', { name: '上へ: 移動先だけのページ', exact: true })).toHaveCount(0);
+});

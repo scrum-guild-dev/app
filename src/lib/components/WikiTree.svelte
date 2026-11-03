@@ -1,6 +1,6 @@
 <script lang="ts">
   import { SvelteSet, SvelteMap } from 'svelte/reactivity';
-  import { untrack, tick } from 'svelte';
+  import { untrack, tick, onDestroy } from 'svelte';
   import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
   import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
   import { invalidate } from '$app/navigation';
@@ -34,6 +34,10 @@
   let dropPart = $state<'before' | 'child' | 'after'>('child');
   let moveDialog = $state<ReturnType<typeof WikiMoveDialog>>();
   const treeId = $props.id();
+  let live = true;
+  onDestroy(() => {
+    live = false;
+  });
   let dialogFocusId: string | undefined;
   export function showMove(trigger: HTMLElement, item: WikiNode) {
     if (busy || !canWrite) return;
@@ -49,7 +53,7 @@
     const scopeKey = wiki.rootHref;
     try {
       const result = await wiki.movePage(item.id, parentId, afterId);
-      if (scopeKey !== wiki.rootHref) return;
+      if (!live || scopeKey !== wiki.rootHref) return;
       failed = !result.ok;
       const details = result.ok ? undefined : result.error?.details;
       const reason = details && typeof details === 'object' && 'reason' in details ? details.reason : undefined;
