@@ -69,7 +69,7 @@ for (const definition of definitions) {
       const db = orgDb(env, target.organization.verified);
       function scopedUpdate(id: string) {
         return db.statement((q) => {
-          const update = q.updateTable('wiki_pages').set({ deleted_at: new Date().toISOString() }).where('id', '=', id);
+          const update = q.updateTable('wiki_pages').set({ deleted_at: new Date().toISOString(), deleted_by: target.member.userId! }).where('id', '=', id);
           return definition.workspace
             ? update.where('workspace_id', '=', target.workspace.id)
             : update.where('organization_id', '=', target.organization.id);
