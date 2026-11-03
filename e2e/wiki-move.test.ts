@@ -2,9 +2,11 @@ import { expect, test } from './fixtures.ts';
 import type { Page } from '@playwright/test';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { failOperation } from './operations.ts';
+import { resetWikiRateLimits } from './local-d1.ts';
 import { workspaceWikiMove } from '../src/shared/operations/wiki/index.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
+  await resetWikiRateLimits();
   await signIn(context, baseURL, 'admin');
 });
 
