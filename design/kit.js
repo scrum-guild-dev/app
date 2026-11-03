@@ -99,6 +99,21 @@
     wikiQuota: "組織の容量の上限に達したため保存できません。管理者に相談してください。入力は残してあります。",
     wikiGone: "ページが見つからないため保存できません。入力は残してあります。",
     wikiSaveFailed: "保存できませんでした。入力は残してあります。もう一度試してください。",
+    wikiReorder: '並べ替える',
+    wikiMoved: '「{title}」を移しました。',
+    wikiMoveCycle: '自分自身や子孫のページの下へは移せません。',
+    wikiMoveDepth: '子のページを含めて10段を超えるため、移せません。',
+    wikiMoveFailed: 'ページを移せませんでした。木を読み直して、もう一度試してください。',
+    wikiMoveRoot: '最上段',
+    wikiMoveUnchanged: '親は変わっていません。',
+    wikiMoveUnavailable: '（10段を超えるため選べません）',
+    wikiMoveUnavailableCount: '深さのため選べない親は{count}件です。',
+    wikiMoveHint: '子のページも一緒に、同じ Wiki の移す先の末尾へ移します。自分や子孫の下、子を含めて10段を超える場所には移せません。組織とワークスペースの Wiki の間では移せません。',
+    wikiDrag: 'ドラッグして移す: {title}',
+    wikiDragHint: '上端・下端で並べ替え、中央で子へ移します。ボタンでも移せます。',
+    wikiDropChild: '「{title}」の子へ移します',
+    wikiDropBefore: '「{title}」の前へ移します',
+    wikiDropAfter: '「{title}」の後へ移します',
     wikiDepth: "ページは10段までです。これ以上深い場所には作れません。",
     wikiFrontmatterInvalid: "frontmatter を読めません。本文として表示しています。",
     wikiProperties: "ページの frontmatter（題を除く）",
@@ -441,9 +456,10 @@
       const caret = kids.length
         ? `<button class="tree-caret" type="button" data-tree-toggle="${cid}" data-tree-title="${esc(n.title)}" aria-expanded="${opened}" aria-controls="${cid}" aria-label="${esc(n.title)}${opened ? "を閉じる" : "を開く"}">${icon("chevron")}</button>`
         : `<span class="wiki-slot" aria-hidden="true"></span>`;
-      const move = (dir, label, ic, off) => `<button class="icon-btn" type="button" data-wiki-move="${n.id}:${dir}" aria-label="${esc(n.title)}を${label}" title="${label}" ${off ? 'aria-disabled="true"' : ""}>${icon(ic)}</button>`;
-      const moves = reorder ? `<span class="order-actions">${move("up", "上へ", "up", i === 0)}${move("down", "下へ", "down", i === list.length - 1)}</span>` : "";
-      return `<li><div class="wiki-node">${caret}<a class="wiki-link" href="#${n.id}" data-wiki-page="${n.id}"${n.id === current ? ' aria-current="page"' : ""}>${esc(n.title)}</a>${moves}</div>${kids.length ? `<ul id="${cid}" ${opened ? "" : "hidden"}>${kids.map(row).join("")}</ul>` : ""}</li>`;
+      const move = (dir, label, off) => `<button class="btn is-quiet" type="button" data-wiki-move="${n.id}:${dir}" aria-label="${label}: ${esc(n.title)}" ${off ? 'aria-disabled="true"' : ""}>${label}</button>`;
+      const moves = reorder ? `<div class="form-actions">${move("up", "上へ", i === 0)}${move("down", "下へ", i === list.length - 1)}<button class="btn is-quiet" type="button" data-wiki="move:${n.id}" aria-label="親を移す: ${esc(n.title)}">親を移す</button></div>` : "";
+      const grip = reorder ? `<span class="grip" data-wiki-grip="${n.id}" draggable="true" aria-hidden="true" title="上端・下端で並べ替え、中央で子へ移します。ボタンでも移せます。">${icon("grip")}</span>` : "";
+      return `<li data-wiki-node="${n.id}"${n.drop === "before" || n.drop === "after" ? ` data-drop="${n.drop}"` : ""}><div class="wiki-node" data-wiki-row="${n.id}"${n.drop === "child" ? ' data-drop="child"' : ""}>${caret}<a class="wiki-link" href="#${n.id}" data-wiki-page="${n.id}"${n.id === current ? ' aria-current="page"' : ""}>${esc(n.title)}</a>${grip}</div>${moves}${kids.length ? `<ul id="${cid}" ${opened ? "" : "hidden"}>${kids.map(row).join("")}</ul>` : ""}</li>`;
     };
     return `<ul class="wiki-tree">${nodes.map(row).join("")}</ul>`;
   }

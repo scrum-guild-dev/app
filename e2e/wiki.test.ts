@@ -29,6 +29,11 @@ test('長い組織名がメニューに収まり、画面内の移動で権限�
     await expect(menu).toBeVisible();
     expect(await menu.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     expect(await menu.evaluate((element) => element.getBoundingClientRect().width < window.innerWidth)).toBe(true);
+    if (width <= 390) {
+      const ordinary = page.getByRole('link', { name: '今日やること', exact: true });
+      const menuHeight = await menu.evaluate((element) => element.closest('.nav-item')!.getBoundingClientRect().height);
+      expect(await ordinary.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(menuHeight);
+    }
   }
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
@@ -125,7 +130,7 @@ test('組織の Wiki も競合時に書きかけを残し、権限のない人�
   await expect(other.locator('details').first()).toContainText('先に保存した本文');
   await other.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(other.getByRole('button', { name: '編集する' })).toBeVisible();
-  await expect(other.locator('.doc-box p')).toHaveText('手元の書きかけ');
+  await expect(other.locator('.doc-box > p')).toHaveText('手元の書きかけ');
   await other.close();
   for (const who of ['leftAll', 'otherOrg'] as const) {
     await signIn(context, baseURL, who);

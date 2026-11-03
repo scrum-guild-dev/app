@@ -94,5 +94,7 @@ export {
   insertWikiPage,
   updateWikiPage,
   wikiParentFits,
+  wikiMoveProblem,
+  writeWikiMove,
   type WikiScope,
 } from './wiki.ts';

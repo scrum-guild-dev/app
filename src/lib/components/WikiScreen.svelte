@@ -40,6 +40,7 @@
       ? data.organization !== null && data.wikiPages !== null
       : data.workspace != null && data.workspace.closedAt === null,
   );
+  let wikiTree = $state<ReturnType<typeof WikiTree>>();
   let mode = $state<'read' | 'create' | 'edit'>('read');
   let parentId = $state<string | null>(null);
   let title = $state('');
@@ -212,9 +213,17 @@
 {:else}
   <div class="layout-wiki">
     <aside class="wiki-side">
-      {#if pages.length}<WikiTree {pages} {wiki} currentId={current?.id ?? null} />{:else}<p class="section-hint">
-          {t('wikiTreeEmpty')}
-        </p>{/if}
+      {#key wiki.rootHref}
+        {#if pages.length}<WikiTree
+            bind:this={wikiTree}
+            {pages}
+            {wiki}
+            canWrite={canWrite && mode === 'read' && !saving}
+            currentId={current?.id ?? null}
+          />{:else}<p class="section-hint">
+            {t('wikiTreeEmpty')}
+          </p>{/if}
+      {/key}
     </aside>
     <section class="wiki-main" aria-label={t('wikiPage')}>
       <nav class="crumbs" aria-label={t('wikiCrumbs')}>
@@ -294,7 +303,12 @@
         <div class="wiki-head">
           <h2 class="section-title">{current.title}</h2>
           {#if canWrite}<div class="form-actions">
-              <button class="btn" type="button" onclick={() => begin(false)}>{t('wikiEdit')}</button
+              <button class="btn" type="button" onclick={() => begin(false)}>{t('wikiEdit')}</button>
+              <button
+                class="btn"
+                type="button"
+                id="wiki-parent-action"
+                onclick={(event) => wikiTree?.showMove(event.currentTarget, current)}>{t('moveParent')}</button
               >{#if depth < 10}<button class="btn" type="button" onclick={() => begin(true, current.id)}
                   >{t('wikiAddChild')}</button
                 >{:else}<p class="field-hint">{t('wikiDepth')}</p>{/if}
