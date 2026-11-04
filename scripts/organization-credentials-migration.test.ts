@@ -16,16 +16,22 @@ function oldDatabase() {
   return db;
 }
 
-test('既に無効の人の線をdisabled_atで補完する。有効な人はNULL', () => {
+test('既に無効の人は移行時刻で止め、無効化後に旧Cookieで作った既存トークンも拒む。有効な人はNULL', () => {
   const db = oldDatabase();
   try {
     db.prepare('INSERT INTO users (id, disabled_at) VALUES (?, ?)').run('disabled', UTC);
     db.prepare('INSERT INTO users (id, disabled_at) VALUES (?, ?)').run('active', null);
+    const issuedAfterDisable = '2026-10-31T10:01:00.000Z';
+    db.prepare('INSERT INTO api_tokens VALUES (?, ?)').run('stolen-cookie-token', issuedAfterDisable);
+    const before = new Date().toISOString();
     db.exec(migration);
-    assert.equal(
-      db.prepare('SELECT credentials_not_before FROM users WHERE id = ?').get('disabled')?.credentials_not_before,
-      UTC,
-    );
+    const after = new Date().toISOString();
+    const cutoff = db
+      .prepare('SELECT credentials_not_before FROM users WHERE id = ?')
+      .get('disabled')?.credentials_not_before;
+    assert.ok(typeof cutoff === 'string');
+    assert.ok(cutoff >= before && cutoff <= after, '線はmigration実行前後の範囲内');
+    assert.ok(cutoff > issuedAfterDisable, '無効化後に旧Cookieから発行した既存トークンも線より前になる');
     assert.equal(
       db.prepare('SELECT credentials_not_before FROM users WHERE id = ?').get('active')?.credentials_not_before,
       null,
@@ -93,3 +99,27 @@ test('認証の線は文字列で比較できる固定3桁ミリ秒UTCだけを�
     db.close();
   }
 });
+
+for (const disabledAt of [
+  '2026-10-31T19:00:00+09:00',
+  '2026-10-31T10:00:00Z',
+  '2026-10-31T10:00:00.1Z',
+  '2026-99-99T10:00:00.000Z',
+]) {
+  test(`旧disabled_atが${disabledAt}でも、無効な人の線は有効なUTCの移行時刻になる`, () => {
+    const db = oldDatabase();
+    try {
+      db.prepare('INSERT INTO users (id, disabled_at) VALUES (?, ?)').run('disabled', disabledAt);
+      const before = new Date().toISOString();
+      assert.doesNotThrow(() => db.exec(migration));
+      const after = new Date().toISOString();
+      const cutoff = db.prepare('SELECT credentials_not_before FROM users').get()?.credentials_not_before;
+      assert.ok(typeof cutoff === 'string');
+      assert.match(cutoff, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      assert.equal(new Date(cutoff).toISOString(), cutoff);
+      assert.ok(cutoff >= before && cutoff <= after, '古いdisabled_atではなくmigration時刻を保存');
+    } finally {
+      db.close();
+    }
+  });
+}
