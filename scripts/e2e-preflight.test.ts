@@ -320,15 +320,17 @@ test('CLI の --verify に結果ファイルが無いときは起動前に使い
   assert.equal(existsSync(join(cwd, '.e2e-preflight')), false);
 });
 
-test('明示対象は既存の関連テストも通常・開発・繰り返しへ渡し、理由と所要時間を残す', (t) => {
+test('明示対象は削除を除き、変更と既存関連テストを実行・記録・照合する', (t) => {
   const cwd = fixture(t);
   writeFileSync(join(cwd, 'e2e/related.test.ts'), 'existing related test');
-  const committed = spawnSync('git', ['add', 'e2e/related.test.ts'], { cwd, encoding: 'utf8' });
+  writeFileSync(join(cwd, 'e2e/deleted.test.ts'), 'test to delete');
+  const committed = spawnSync('git', ['add', 'e2e/related.test.ts', 'e2e/deleted.test.ts'], { cwd, encoding: 'utf8' });
   assert.equal(committed.status, 0, committed.stderr);
   const commit = spawnSync('git', ['commit', '-qm', 'existing related test'], { cwd, encoding: 'utf8' });
   assert.equal(commit.status, 0, commit.stderr);
   const base = spawnSync('git', ['branch', '-f', 'base'], { cwd, encoding: 'utf8' });
   assert.equal(base.status, 0, base.stderr);
+  rmSync(join(cwd, 'e2e/deleted.test.ts'));
   const options = {
     files: ['e2e/new.test.ts', 'e2e/related.test.ts'],
     reason: 'Wiki の保存と削除を通る関連画面',
