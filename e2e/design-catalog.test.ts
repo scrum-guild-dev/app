@@ -90,3 +90,61 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
     });
   }
 }
+
+test('見本の引き出し: タブと言葉を切り替えても、書きかけのコメントを残す', async ({ page }) => {
+  // スプリントの見本を共有の見本ファイルのまま返す（アプリの配信対象外）。
+  const files: Record<string, string> = {
+    'sprint.html': 'text/html',
+    'tokens.css': 'text/css',
+    'components.css': 'text/css',
+    'icons.js': 'text/javascript',
+    'art.js': 'text/javascript',
+    'sample-data.js': 'text/javascript',
+    'kit.js': 'text/javascript',
+  };
+  await page.route('**/__design-catalog/**', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').pop()!;
+    const contentType = files[name];
+    if (!contentType) return route.fulfill({ status: 404, body: '' });
+    await route.fulfill({ contentType, body: readFileSync(new URL(`../design/${name}`, import.meta.url)) });
+  });
+  for (const host of ['fonts.googleapis.com', 'fonts.gstatic.com']) {
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ body: '' }));
+  }
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/__design-catalog/sprint.html');
+  const tasks = page.locator('[data-task]');
+  await tasks.first().click();
+  const drawer = page.locator('#drawer');
+  const comment = drawer.locator('#new-comment');
+  await comment.fill('書きかけのコメント');
+  // 引き出しの要素を覚え、タブの切り替えで作り直されないことを確かめる
+  await drawer.evaluate((el) => {
+    (el as HTMLElement & { __kept?: Element | null }).__kept = el.querySelector('#new-comment');
+  });
+
+  await drawer.locator('[data-tab="history"]').click();
+  await expect(drawer.locator('[data-tab="history"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(drawer.locator('#drawer-panel-comments')).toBeHidden();
+  await expect(drawer.locator('#drawer-panel-history')).toBeVisible();
+  await drawer.locator('[data-tab="comments"]').click();
+  await expect(drawer.locator('[data-tab="comments"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(comment).toHaveValue('書きかけのコメント');
+  const kept = await drawer.evaluate(
+    (el) => (el as HTMLElement & { __kept?: Element | null }).__kept === el.querySelector('#new-comment'),
+  );
+  expect(kept).toBe(true);
+
+  // 言葉（テーマ）を切り替えて引き出しを作り直しても、書きかけを戻す
+  await page.locator('[data-switch="theme"]').dispatchEvent('click');
+  await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
+
+  // 別のタスクを開くと、コメント欄は空になる
+  await drawer.locator('.drawer-close').click();
+  await page.getByRole('button', { name: '捨てる' }).click();
+  await expect(drawer).toBeHidden();
+  await tasks.nth(1).click();
+  await expect(drawer.locator('#new-comment')).toHaveValue('');
+  expect(errors).toEqual([]);
+});
