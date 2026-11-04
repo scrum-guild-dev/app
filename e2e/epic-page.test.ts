@@ -83,13 +83,15 @@ test('seed の受託開発チーム: 木のエピックの題から画面が開�
   await expect(page.locator('.tally > div')).toHaveText(['完了のポイント 2', '残りのポイント 0', '参加者 2']);
 
   // 作成者でリーダーのミナトは参加者にいるので、参加者の面の下に「参加をやめる」と「参加者に割り振る」、
-  // 「クリア報酬を変える」、リーダーだけの「作成者を替える」が出る。クリア、中止はまだ出さない。直す口は見出しの横のボタン
+  // 「クリア報酬を変える」、リーダーだけの「作成者を替える」が出る。クリアは参加者の面の下の専用の面にあり（e2e/epic-clear.test.ts）、
+  // seed の配下のストーリーは未完了なので押せない。中止はまだ出さない。直す口は見出しの横のボタン
   await expect(party.getByRole('button', { name: '参加をやめる' })).toBeVisible();
   await expect(party.getByRole('button', { name: '参加する' })).toHaveCount(0);
   await expect(party.getByRole('button', { name: '参加者に割り振る' })).toBeVisible();
   await expect(party.getByRole('button', { name: 'クリア報酬を変える' })).toBeVisible();
   await expect(party.getByRole('button', { name: '作成者を替える' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'エピックを完了にする' })).toHaveCount(0);
+  await expect(party.getByRole('button', { name: 'エピックを完了にする' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'エピックを完了にする' })).toHaveAttribute('aria-disabled', 'true');
   await expect(page.getByRole('button', { name: 'エピックを直す' })).toBeVisible();
 
   // バックログへ戻る
