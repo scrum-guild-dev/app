@@ -1,8 +1,10 @@
 // エピックのクリアと取り消し（エピックの画面の「エピックを完了にする」と「完了を取り消す」）と、クリアの演出。
-// seed の受託開発チームのエピック「ポイントの交換先を増やす」は、作成者がミナト（管理者）で、配下のストーリーは完了している。
+// seed の受託開発チームのエピック「ポイントの交換先を増やす」は、作成者がミナト（管理者）で、配下のストーリーは（タスクは完了しているが）ストーリー自体は完了していないので、
+// クリアできる状態は epic-detail の応答を書き換えて作る。
 // 書き込みの応答は差し替えて確かめるので、seed の行は書き換えない（ほかのファイルと並べて走るため）。
 // 演出は動きを減らす設定（reducedMotion: 'reduce'）では出さず、トーストだけにする
 import { epicComplete, epicDetail, epicReopen } from '../src/shared/operations/epic/index.ts';
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { signIn, watchViolations } from './helpers.ts';
 import { failOperation, mockOperation, rewriteOperation } from './operations.ts';
@@ -13,27 +15,41 @@ const EPIC_ID = '019a0000-0000-7000-8000-000000000b01';
 const EPIC_TITLE = 'ポイントの交換先を増やす';
 const CLEARED_AT = '2026-10-22T00:00:00.000Z';
 
+const CLEAR_RESPONSE = { epic_id: EPIC_ID, completed_at: CLEARED_AT, reward_xp: 300, recipient_count: 2 };
+
 test.use({ timezoneId: 'Asia/Tokyo' });
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
 
-test('配下がすべて完了していれば「エピックを完了にする」が押せ、クリアすると演出が1回出て、閉じるとボタンへフォーカスが戻る', async ({
+// 配下のストーリーをすべて完了にした epic-detail にする
+function allStoriesDone(page: Page) {
+  return rewriteOperation(page, epicDetail, AOBA, (output) => ({
+    ...output,
+    stories: output.stories.map((story) => ({ ...story, completed_at: story.completed_at ?? CLEARED_AT })),
+  }));
+}
+
+// クリア済みの epic-detail にする
+function clearedEpic(page: Page) {
+  return rewriteOperation(page, epicDetail, AOBA, (output) => ({
+    ...output,
+    epic: { ...output.epic, completed_at: CLEARED_AT },
+  }));
+}
+
+test('配下がすべて完了していれば「エピックを完了にする」が押せ、クリアすると演出が1回出て、Tab は閉じるボタンに留まる', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const collect = await watchViolations(page);
-  await mockOperation(page, epicComplete, AOBA, {
-    epic_id: EPIC_ID,
-    completed_at: CLEARED_AT,
-    reward_xp: 300,
-    recipient_count: 2,
-  });
+  await allStoriesDone(page);
+  await mockOperation(page, epicComplete, AOBA, CLEAR_RESPONSE);
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
 
   const panel = page.getByRole('region', { name: 'エピックの完了' });
-  await expect(panel.getByText('配下のストーリーがすべて完了です。')).toBeVisible();
+  await expect(panel.getByText('配下のストーリーはすべて完了になっています。')).toBeVisible();
   const clear = panel.getByRole('button', { name: 'エピックを完了にする' });
   await expect(clear).toHaveAttribute('aria-disabled', 'false');
   await clear.click();
@@ -54,12 +70,8 @@ test('配下がすべて完了していれば「エピックを完了にする�
 
 test('動きを減らす設定では演出を出さず、トーストだけで知らせる', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await mockOperation(page, epicComplete, AOBA, {
-    epic_id: EPIC_ID,
-    completed_at: CLEARED_AT,
-    reward_xp: 300,
-    recipient_count: 2,
-  });
+  await allStoriesDone(page);
+  await mockOperation(page, epicComplete, AOBA, CLEAR_RESPONSE);
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   await page.getByRole('button', { name: 'エピックを完了にする' }).click();
   await expect(page.locator('.toasts:visible .toast').last()).toHaveText(
@@ -68,34 +80,28 @@ test('動きを減らす設定では演出を出さず、トーストだけで�
   await expect(page.locator('.celebrate')).toHaveCount(0);
 });
 
-test('未完了のストーリーが残っていると押せず、理由を横に出す。配下が無いときも同じ', async ({ page }) => {
-  await rewriteOperation(page, epicDetail, AOBA, (output) => ({
-    ...output,
-    stories: output.stories.map((story) => ({ ...story, completed_at: null })),
-  }));
+test('未完了のストーリーが残っていると押せず、理由を横に出す', async ({ page }) => {
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   const panel = page.getByRole('region', { name: 'エピックの完了' });
   await expect(panel.getByText('未完了のストーリーが 1 件残っているあいだは、完了にできません。')).toBeVisible();
   const clear = panel.getByRole('button', { name: 'エピックを完了にする' });
   await expect(clear).toHaveAttribute('aria-disabled', 'true');
-  await clear.click();
+  // aria-disabled の押せないボタン。押しても何も送らず、演出も出ない
+  await clear.click({ force: true });
   await expect(page.locator('.celebrate')).toHaveCount(0);
+});
 
-  await page.unrouteAll();
+test('配下のストーリーが無いエピックは押せず、理由を横に出す', async ({ page }) => {
   await rewriteOperation(page, epicDetail, AOBA, (output) => ({ ...output, stories: [] }));
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
+  const panel = page.getByRole('region', { name: 'エピックの完了' });
   await expect(panel.getByText('ストーリーが1件も無いエピックは、完了にできません。')).toBeVisible();
   await expect(panel.getByRole('button', { name: 'エピックを完了にする' })).toHaveAttribute('aria-disabled', 'true');
 });
 
-test('クリアしたエピックは「完了を取り消す」が出て、取り消しに演出は出さない。断られたときはトーストで知らせる', async ({
-  page,
-}) => {
+test('クリアしたエピックは「完了を取り消す」が出て、取り消しに演出は出さない', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await rewriteOperation(page, epicDetail, AOBA, (output) => ({
-    ...output,
-    epic: { ...output.epic, completed_at: CLEARED_AT },
-  }));
+  await clearedEpic(page);
   await mockOperation(page, epicReopen, AOBA, { epic_id: EPIC_ID });
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   const panel = page.getByRole('region', { name: 'エピックの完了' });
@@ -103,12 +109,10 @@ test('クリアしたエピックは「完了を取り消す」が出て、取�
   await panel.getByRole('button', { name: '完了を取り消す' }).click();
   await expect(page.locator('.toasts:visible .toast').last()).toContainText('の完了を取り消しました');
   await expect(page.locator('.celebrate')).toHaveCount(0);
+});
 
-  await page.unrouteAll();
-  await rewriteOperation(page, epicDetail, AOBA, (output) => ({
-    ...output,
-    epic: { ...output.epic, completed_at: CLEARED_AT },
-  }));
+test('取り消しが断られたら、理由ごとにトーストで知らせる', async ({ page }) => {
+  await clearedEpic(page);
   await failOperation(page, epicReopen, AOBA, 409, 'conflict', { details: { reason: 'not_completed' } });
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   await page.getByRole('button', { name: '完了を取り消す' }).click();
