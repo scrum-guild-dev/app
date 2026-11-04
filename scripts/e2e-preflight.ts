@@ -292,7 +292,7 @@ export function runPreflight(
 }
 
 const USAGE =
-  '使い方: pnpm e2e:preflight [base-ref] [--files <e2e/*.test.ts…> --reason <理由> | --all --reason <理由>] | --verify <result.json> [base-ref] [同じ対象指定]';
+  '使い方: pnpm e2e:preflight [base-ref] [--files <e2e/*.test.ts…> --reason <理由> | --all --reason <理由>] | --verify <result.json> [base-ref] [同じ対象指定]（base-ref は --files より前に指定する）';
 
 export function parsePreflightArgs(args: string[]): { base: string; result?: string; options: SelectionOptions } {
   let base: string | undefined;
