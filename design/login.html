@@ -61,6 +61,10 @@ function render() {
       <p class="gate-note">ログインできないときの表示の見本です。</p>
     </section>
     <section class="gate-sheet">
+      <div class="callout is-warn" role="alert">${icon("alert")}<span>この${t("organization")}に入るには、ログインし直してください。API トークンも、ログインし直してから発行し直す必要があります。</span></div>
+      <p class="gate-note">組織から再ログインを求められたときのログインの画面の見本です。見出しの下、ログインのボタンの上に出し、ログインのあとに元の画面へ戻ります。</p>
+    </section>
+    <section class="gate-sheet">
       <h2 class="dialog-title">届いた招待</h2>
       <p>ひばり工房から届いた招待です。承諾すると、その${t("workspace")}に入れます。</p>
       <div class="choice-list">
