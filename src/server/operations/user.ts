@@ -367,7 +367,15 @@ export const userDisableOperation = implement(userDisable, async ({ db, actor, i
     db.statement((q) =>
       q
         .updateTable('users')
-        .set({ disabled_at: stamp, is_admin: 0, updated_at: stamp })
+        .set((eb) => ({
+          disabled_at: stamp,
+          is_admin: 0,
+          updated_at: stamp,
+          credentials_not_before: eb.fn<string>('max', [
+            eb.fn.coalesce(eb.ref('credentials_not_before'), eb.val(stamp)),
+            eb.val(stamp),
+          ]),
+        }))
         .where((eb) =>
           eb.and([
             eb('id', '=', userId),

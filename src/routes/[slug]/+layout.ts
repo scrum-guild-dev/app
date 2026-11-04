@@ -1,6 +1,12 @@
 import { redirect } from '@sveltejs/kit';
 import { callOperation } from '../../lib/api.ts';
-import { consentUrl, isTermsRequired, isUnauthenticated, loginUrl } from '../../lib/login-redirect.ts';
+import {
+  consentUrl,
+  isTermsRequired,
+  isUnauthenticated,
+  loginUrl,
+  organizationReauthUrl,
+} from '../../lib/login-redirect.ts';
 import { myOrganizations, organizationInfo } from '../../shared/operations/organization/index.ts';
 import { invitationList } from '../../shared/operations/workspace/index.ts';
 import { tokenNotice } from '../../shared/operations/session/token-notice.ts';
@@ -20,6 +26,9 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
     callOperation(myOrganizations, {}, { fetcher: fetch }),
     callOperation(tokenNotice, {}, { fetcher: fetch }),
   ]);
+  if (!organization.ok && organization.error?.code === 'organization_reauth_required') {
+    redirect(307, organizationReauthUrl(url));
+  }
   // 同意していない（403 の terms_required）ときは、どちらの呼び出しでも同意の画面へ移す。401 の確かめより先に見る
   if (isTermsRequired(organization) || isTermsRequired(accountOrganizations)) {
     redirect(307, consentUrl(url));

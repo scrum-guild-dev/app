@@ -200,6 +200,7 @@ export async function createUser(
     work_start_on: null,
     work_end_on: null,
     disabled_at: null,
+    credentials_not_before: null,
     last_seen_at: null,
     theme: null,
     created_at: AT,

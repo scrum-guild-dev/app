@@ -1104,6 +1104,8 @@ export const dictionary = defineDictionary({
 
   // ログインの画面。{organization} {workspace} {leader} は、それぞれ辞書の同じ名前の項目で埋める
   loginTitle: 'ログイン',
+  loginErrorOrganizationReauthRequired:
+    'この{organization}に入るには、ログインし直してください。API トークンも、ログインし直してから発行し直す必要があります。',
   loginLead:
     'いずれかの{organization}に所属しているか、招待されている人がログインできます。招待されたときの手段でログインしてください。',
   loginWithGithub: 'GitHub でログイン',

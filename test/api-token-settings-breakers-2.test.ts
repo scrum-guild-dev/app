@@ -374,6 +374,7 @@ describe('docs との突き合わせ', () => {
       ['last_used_at', 0, 0],
       ['expires_at', 1, 0],
       ['revoked_at', 0, 0],
+      ['authenticated_at', 0, 0],
     ]);
     const indexes = await env.DB.prepare(
       "select il.name as name from pragma_index_list('api_tokens') il join pragma_index_info(il.name) ii where il.origin = 'c' and ii.name = 'account_id'",
