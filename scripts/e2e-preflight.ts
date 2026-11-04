@@ -96,6 +96,7 @@ export function preflightPlan(
 ): { mode: Mode; files: string[] }[] {
   const selection = selectTests(changed, addedOrModified, options);
   if (selection.scope === 'docs-only') return [];
+  // 対象を絞った検査では、CI の全件 dev 判定に関係なく選んだ画面の開発時の警告も確かめる。
   if (selection.scope === 'targeted')
     return ['normal', 'dev', 'repeat'].map((mode) => ({ mode: mode as Mode, files: selection.files }));
   const plan: { mode: Mode; files: string[] }[] = [{ mode: 'normal', files: [] }];
