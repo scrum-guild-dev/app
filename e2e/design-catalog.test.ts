@@ -91,7 +91,7 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
   }
 }
 
-test('見本の引き出し: タブと言葉を切り替えても、書きかけのコメントを残す', async ({ page }) => {
+test('見本の引き出し: タブを切り替えても、作り直しても、書きかけのコメントを残す', async ({ page }) => {
   // スプリントの見本を共有の見本ファイルのまま返す（アプリの配信対象外）。
   const files: Record<string, string> = {
     'sprint.html': 'text/html',
@@ -115,32 +115,56 @@ test('見本の引き出し: タブと言葉を切り替えても、書きかけ
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/__design-catalog/sprint.html');
   const tasks = page.locator('[data-task]');
+  const firstId = await tasks.first().getAttribute('data-task');
+  const secondId = await tasks.nth(1).getAttribute('data-task');
+  expect(secondId).not.toBe(firstId);
   await tasks.first().click();
   const drawer = page.locator('#drawer');
   const comment = drawer.locator('#new-comment');
   await comment.fill('書きかけのコメント');
-  // 引き出しの要素を覚え、タブの切り替えで作り直されないことを確かめる
-  await drawer.evaluate((el) => {
-    (el as HTMLElement & { __kept?: Element | null }).__kept = el.querySelector('#new-comment');
-  });
+  // 要素を覚え、タブの切り替えで引き出しが作り直されないこと（同じ要素のままなこと）を確かめる
+  const mark = () => comment.evaluate((el) => ((window as unknown as { __kept?: Element }).__kept = el));
+  const isKept = () => comment.evaluate((el) => (window as unknown as { __kept?: Element }).__kept === el);
+  await mark();
+  const comments = drawer.locator('[data-tab="comments"]');
+  const history = drawer.locator('[data-tab="history"]');
+  const expectTab = async (on: typeof comments, off: typeof comments) => {
+    await expect(on).toHaveAttribute('aria-selected', 'true');
+    await expect(on).toHaveAttribute('tabindex', '0');
+    await expect(on).toBeFocused();
+    await expect(off).toHaveAttribute('aria-selected', 'false');
+    await expect(off).toHaveAttribute('tabindex', '-1');
+  };
 
-  await drawer.locator('[data-tab="history"]').click();
-  await expect(drawer.locator('[data-tab="history"]')).toHaveAttribute('aria-selected', 'true');
+  // クリックで往復する
+  await history.click();
+  await expectTab(history, comments);
   await expect(drawer.locator('#drawer-panel-comments')).toBeHidden();
   await expect(drawer.locator('#drawer-panel-history')).toBeVisible();
-  await drawer.locator('[data-tab="comments"]').click();
-  await expect(drawer.locator('[data-tab="comments"]')).toHaveAttribute('aria-selected', 'true');
+  await comments.click();
+  await expectTab(comments, history);
   await expect(comment).toHaveValue('書きかけのコメント');
-  const kept = await drawer.evaluate(
-    (el) => (el as HTMLElement & { __kept?: Element | null }).__kept === el.querySelector('#new-comment'),
-  );
-  expect(kept).toBe(true);
+  expect(await isKept()).toBe(true);
 
-  // 言葉（テーマ）を切り替えて引き出しを作り直しても、書きかけを戻す
-  await page.locator('[data-switch="theme"]').dispatchEvent('click');
+  // 矢印キーと End / Home でも、引き出しを作り直さずに切り替わる
+  await comments.focus();
+  await page.keyboard.press('ArrowRight');
+  await expectTab(history, comments);
+  await page.keyboard.press('Home');
+  await expectTab(comments, history);
+  await page.keyboard.press('End');
+  await expectTab(history, comments);
+  await page.keyboard.press('ArrowLeft');
+  await expectTab(comments, history);
+  await expect(comment).toHaveValue('書きかけのコメント');
+  expect(await isKept()).toBe(true);
+
+  // 引き出しを実際に作り直す操作（狭い幅への切り替えで renderDrawer が走る）でも、書きかけを戻す
+  await page.setViewportSize({ width: 600, height: 900 });
   await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
+  expect(await isKept()).toBe(false);
 
-  // 別のタスクを開くと、コメント欄は空になる
+  // 閉じて別のタスクを開くと、コメント欄は空になる
   await drawer.locator('.drawer-close').click();
   await page.getByRole('button', { name: '捨てる' }).click();
   await expect(drawer).toBeHidden();
