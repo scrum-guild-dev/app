@@ -1,6 +1,18 @@
+<script module lang="ts">
+  // 最上段への遷移はページ部品が替わるため、復旧要求は部品の外で保持する。
+  let recovery = $state({
+    failure: '',
+    path: '',
+    destination: null as string | null,
+    busy: false,
+    failed: false,
+    pagesMissing: false,
+  });
+</script>
+
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity';
-  import { beforeNavigate, goto, invalidate } from '$app/navigation';
+  import { beforeNavigate, goto, invalidate, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { tick } from 'svelte';
   import { wikiClient } from '../wiki-client.ts';
@@ -45,15 +57,16 @@
   const current = $derived(data.wikiPage);
   const pages = $derived(data.wikiPages ?? []);
   let deletePending = $state(false);
+  const deleteBlocked = $derived(deletePending || recovery.busy || Boolean(recovery.failure));
   let deleting = $state(false);
   let deletedPageId = $state<string | null>(null);
-  let deleteFailure = $state('');
-  let deleteFailurePath = $state('');
   let deleteTarget = $state<{ id: string; title: string; parent: string; children: number } | null>(null);
   let deleteDialog = $state<ReturnType<typeof ConfirmDialog>>();
   const canDelete = $derived(
     current !== null &&
       current.id !== deletedPageId &&
+      !recovery.failure &&
+      !recovery.busy &&
       data.organization !== null &&
       (workspaceId === null || (data.workspace != null && data.workspace.closedAt === null)) &&
       (data.organization.me.is_admin ||
@@ -100,11 +113,15 @@
   });
   const depth = $derived(ancestors.length + 1);
   $effect(() => {
+    recovery.failed = data.wikiFailed;
+    recovery.pagesMissing = data.wikiPages === null;
+  });
+  $effect(() => {
     if (historyPage !== null && historyPage !== current?.id) historyPage = null;
   });
 
   async function mayDiscard(): Promise<boolean> {
-    if (saving || historyBusy || uploadBusy || deletePending) return false;
+    if (saving || historyBusy || uploadBusy || deletePending || recovery.busy || recovery.failure) return false;
     return (
       !dirty ||
       ((await discardDialog?.ask(document.activeElement instanceof HTMLElement ? document.activeElement : null)) ??
@@ -112,11 +129,17 @@
     );
   }
   beforeNavigate((navigation) => {
-    if (uploadBusy || deletePending) {
+    if (uploadBusy || deletePending || (recovery.busy && navigation.to?.url.pathname !== recovery.destination)) {
       navigation.cancel();
       return;
     }
-    if (!dirty && !saving && !historyBusy) return;
+    if (!dirty && !saving && !historyBusy) {
+      if (!deleting && !recovery.busy && navigation.to?.url.pathname !== page.url.pathname) {
+        recovery.failure = '';
+        recovery.destination = null;
+      }
+      return;
+    }
     if (navigation.type === 'leave') {
       navigation.cancel();
       return;
@@ -236,8 +259,8 @@
       parent: pages.find((item) => item.id === target.parent_id)?.title ?? t('wikiMoveRoot'),
       children: pages.filter((item) => item.parent_id === target.id).length,
     };
-    deleteFailure = '';
-    deleteFailurePath = page.url.pathname;
+    recovery.failure = '';
+    recovery.path = page.url.pathname;
     deletePending = true;
     try {
       if (!(await deleteDialog?.ask(trigger))) return;
@@ -246,7 +269,7 @@
       deleting = true;
       const result = await client.deletePage(target.id, target.parent_id);
       if (!result.ok) {
-        deleteFailure = t(
+        recovery.failure = t(
           result.status === 403
             ? 'wikiDeleteForbidden'
             : result.status === 404
@@ -263,21 +286,36 @@
       deletedPageId = target.id;
       notice = t('wikiDeleted', { title: target.title });
       showToast(notice);
-      try {
-        await invalidate('app:wiki');
-      } catch {
-        deleteFailure = t('wikiDeleteRefreshFailed');
-      }
+      recovery.destination = destination;
       deletePending = false;
-      try {
-        await goto(destination);
-      } catch {
-        deleteFailure = t('wikiDeleteRefreshFailed');
-      }
+      await recoverDeletion();
     } finally {
       deletePending = false;
       deleting = false;
       deleteTarget = null;
+    }
+  }
+  async function recoverDeletion(): Promise<void> {
+    if (recovery.busy || deletePending) return;
+    recovery.busy = true;
+    try {
+      // 成功済みなら先に行き先へ移る。削除したURLを invalidate しない。
+      if (recovery.destination !== null) {
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- wikiClient の resolve 済みの行き先
+        await goto(recovery.destination, { invalidateAll: true, replaceState: true });
+      } else await invalidateAll();
+      await tick();
+      if (recovery.failed || recovery.pagesMissing) {
+        recovery.failure = t(recovery.destination !== null ? 'wikiDeleteRefreshFailed' : 'wikiReadFailed');
+      } else {
+        recovery.failure = '';
+        recovery.destination = null;
+      }
+    } catch {
+      recovery.failure = t(recovery.destination !== null ? 'wikiDeleteRefreshFailed' : 'wikiReadFailed');
+    } finally {
+      recovery.path = page.url.pathname;
+      recovery.busy = false;
     }
   }
   async function uploaded(count: number) {
@@ -336,15 +374,15 @@
   {#snippet actions()}{#if canWrite}{#if mode === 'read'}<button
           class="btn"
           type="button"
-          aria-disabled={historyBusy || uploadBusy || deletePending}
+          aria-disabled={historyBusy || uploadBusy || deleteBlocked}
           onclick={(event) => {
-            if (!historyBusy && !uploadBusy && !deletePending)
+            if (!historyBusy && !uploadBusy && !deleteBlocked)
               uploadDialog?.show(event.currentTarget, current?.id ?? null);
           }}>{t('wikiUpload')}</button
         >{/if}<button
         class="btn is-primary"
         type="button"
-        aria-disabled={historyBusy || uploadBusy || deletePending}
+        aria-disabled={historyBusy || uploadBusy || deleteBlocked}
         onclick={() => begin(true)}>{t('wikiAdd')}</button
       >{/if}{/snippet}
   {#snippet meta()}{#if data.wikiPages !== null && !data.wikiNotFound}<p class="section-hint">
@@ -353,6 +391,15 @@
 </PageHead>
 {#if workspaceId !== null && !canWrite}<p class="callout is-info">{t('wikiClosed')}</p>{/if}
 <p role="status" class="field-hint">{notice}</p>
+{#if recovery.failure && page.url.pathname === recovery.path}
+  <div class="callout is-warn" role="alert">
+    <p>{recovery.failure}</p>
+    <button class="btn" type="button" aria-disabled={recovery.busy || deletePending} onclick={recoverDeletion}
+      >{t('wikiReload')}</button
+    >
+    <span role="status">{recovery.busy ? t('retrying') : ''}</span>
+  </div>
+{/if}
 {#if data.wikiFailed && mode === 'read'}
   <LoadFailed inShell />
 {:else}
@@ -371,7 +418,7 @@
                   {wiki}
                   {searching}
                   canWrite={canWrite &&
-                    !deletePending &&
+                    !deleteBlocked &&
                     current?.id !== deletedPageId &&
                     mode === 'read' &&
                     !saving &&
@@ -396,9 +443,6 @@
           {#if current}<li><span aria-current="page">{current.title}</span></li>{/if}
         </ol>
       </nav>
-      {#if deleteFailure && page.url.pathname === deleteFailurePath}<p class="callout is-warn" role="alert">
-          {deleteFailure}
-        </p>{/if}
       {#if deleting}<p role="status">{t('wikiDeleting')}</p>{/if}
       {#if mode !== 'read'}
         <h2 class="section-title">{t(mode === 'create' ? 'wikiAdd' : 'wikiEdit')}</h2>
@@ -498,42 +542,42 @@
             <button
               class="btn"
               type="button"
-              aria-disabled={deletePending}
+              aria-disabled={deleteBlocked}
               onclick={() => {
-                if (!deletePending) download();
+                if (!deleteBlocked) download();
               }}>{t('wikiDownload')}</button
             >
             <button
               class="btn"
               type="button"
-              aria-disabled={deletePending}
+              aria-disabled={deleteBlocked}
               onclick={() => {
-                if (!deletePending) historyPage = current.id;
+                if (!deleteBlocked) historyPage = current.id;
               }}>{t('wikiHistory')}</button
             >
             {#if canWrite && current.id !== deletedPageId}
-              <button class="btn" type="button" aria-disabled={deletePending} onclick={() => begin(false)}
+              <button class="btn" type="button" aria-disabled={deleteBlocked} onclick={() => begin(false)}
                 >{t('wikiEdit')}</button
               >
               <button
                 class="btn"
                 type="button"
                 id="wiki-parent-action"
-                aria-disabled={deletePending}
+                aria-disabled={deleteBlocked}
                 onclick={(event) => {
-                  if (!deletePending) wikiTree?.showMove(event.currentTarget, current);
+                  if (!deleteBlocked) wikiTree?.showMove(event.currentTarget, current);
                 }}>{t('moveParent')}</button
               >{#if depth < 10}<button
                   class="btn"
                   type="button"
-                  aria-disabled={deletePending}
+                  aria-disabled={deleteBlocked}
                   onclick={() => begin(true, current.id)}>{t('wikiAddChild')}</button
                 >{:else}<p class="field-hint">{t('wikiDepth')}</p>{/if}
             {/if}
             {#if canDelete}<button
                 class="btn is-danger"
                 type="button"
-                aria-disabled={deletePending || uploadBusy || historyBusy}
+                aria-disabled={deleteBlocked || uploadBusy || historyBusy}
                 onclick={(event) => removePage(event.currentTarget)}>{t('wikiDelete')}</button
               >{/if}
           </div>

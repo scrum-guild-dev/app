@@ -122,7 +122,8 @@
     wikiDeleteGone: "ページが見つかりません。すでに消された可能性があります。Wikiを読み直してください。",
     wikiDeleteConflict: "ページの状態が変わったため消せませんでした。Wikiを読み直してください。",
     wikiDeleteFailed: "ページを消せませんでした。Wikiを読み直して、もう一度試してください。",
-    wikiDeleteRefreshFailed: "ページは消しましたが、画面を読み直せませんでした。Wikiを開き直してください。",
+    wikiReload: "Wikiを読み直す",
+    wikiDeleteRefreshFailed: "ページは消しましたが、画面を読み直せませんでした。Wikiを読み直してください。",
 
     wikiAccess: "このワークスペースのメンバー全員が、読んで書けます。",
     wikiClosed: "終了したワークスペースの Wiki は読むだけです。",
