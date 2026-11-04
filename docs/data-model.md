@@ -763,15 +763,15 @@
   - クリア（`epic-complete`）の条件は、配下の削除していないストーリーが1件以上あり、すべて完了していること。未完了が残っていれば 409（`conflict`、`details.reason` は `open_stories`）、配下が1件も無ければ 409（`empty`。何も無いレイドをクリアして報酬を払わないため）、すでにクリアしていれば 409（`completed`。2つの画面から同時にクリアした後の方を含む）。配下のストーリーの下にタスクが残るかは見ない（ストーリーの完了が、配下のタスクの完了を条件にしているため）。討伐隊が0人でもクリアでき、報酬は誰にも付かない。
   - クリアは1回の `batch()` で、先に `epics`、配下の件数、討伐隊を読み、`epics` の条件つきの `UPDATE`（`completed_at`、`completed_by`、`updated_at`。条件は `completed_at IS NULL`、`canceled_at IS NULL`、読んだ `reward_tier` のまま、依頼主かリーダーであること、配下のストーリーが1件以上で未完了が無いこと、読んだ討伐隊の外に今所属している人が増えていないこと、閉じていないワークスペース）、直前の文に結んだ `change_logs`（`entity_type = 'epic'`、`action = 'complete'`、`{"completed_at": [null, 日時], "completed_by": [null, {id, name}]}`）、その履歴の行を条件にした `xp_grants`（`epic_reward`、`epic_id` に元のエピック、`amount` はクリアした時点の `reward_tier` の額（`XP_EPIC_REWARD`）、受け取るのは読んだ討伐隊のうち今そのワークスペースに所属している人で1人1行）を書く。討伐隊が読んでから増えて通らなかったら読み直してやり直し（3回まで。使い切ったら 409 の `changed`）。同時に2回クリアしても、片方の `UPDATE` が通らず履歴も付与も入らないので、1人1行になる。
   - 取り消し（`epic-reopen`）は、`completed_at` と `completed_by` を空に戻し、打ち消されていない `epic_reward` を打ち消しの明細（元の行の `user_id`、`action`、`epic_id` を写し、`amount` を負にして `reverses_grant_id` に元の行を指す）で取り消す。`UPDATE` は読んだ `completed_at` のままであることを条件にし、履歴は `action = 'reopen'`（`{"completed_at": [前, null], "completed_by": [前, null]}`）。クリアしていなければ 409（`not_completed`）。受け取った人が所属を外れていても打ち消す。もう一度クリアすると、新しい `completed_at` の回として付け直す。
-  - クリアしたエピックの下へのストーリーの移動は、`story-move` の「完了か中止したエピックでない」条件で 409（`parent_completed`）になる。ストーリーの作成は親を持たずに作るので、クリア済みのエピックの下には作れない。
+  - クリアか中止したエピックの下へのストーリーの移動も、そこからの移動も、`story-move` が 409（`parent_completed`）で断る（出すと、クリア済みのエピックが空になり、同じ完了済みのストーリーで別のエピックをもう一度クリアできてしまうため）。応答の `recipient_count` は、付与の文が実際に行を足した数で、読んでから書くまでに討伐隊を抜けた人には付かない（書く文は、討伐隊にいることも条件にする）。クリアした後にエピックを削除すると取り消せなくなる（ストーリーの完了と同じ扱い）。ストーリーの作成は親を持たずに作るので、クリア済みのエピックの下には作れない。
 - エピックの画面の読み取り（`epic-detail`）。`member` の読み取りで、入力は `workspace_id`、`epic_id`。1回の `batch()` で、エピック、討伐隊、配下のストーリー、討伐隊の経験値の合計、ワークスペースの設定を読む。読む表はどれも組織の中の表で、`epics`、`stories`、`tasks` はワークスペースで絞り、`epic_party_members` は `workspace_id` を持たないので、ワークスペースで絞ったエピックを結んで引く。無い（別の組織、別のワークスペース、削除済みを含む）ときは 404 で、閉じたワークスペースでも読める。返すもの:
   - エピックの欄（`id`、`title`、`body_md`、`due_on`、`link_url`、区分（同じワークスペースの削除していない区分の ID と名前。無ければ `null`）、`completed_at`、`canceled_at`）。
   - 依頼主（`id`、`name`、`left`）。名前は組織で絞った `users` から読み、離脱済みでも出す。`left` は、そのワークスペースに今の所属（`memberships.left_at` が空の行）が無いこと（`task-detail` の担当の `left` と同じ判定）。
-  - クリア報酬の段階（`reward_tier`）と額（`reward_xp`）。段階の並びと額は `src/shared/experience.ts` の `epicRewardTiers` と `XP_EPIC_REWARD`（小 100、中 300、大 600）。払うのはクリア（#65 の続き）で、この操作は額を出すだけ。
+  - クリア報酬の段階（`reward_tier`）と額（`reward_xp`）。段階の並びと額は `src/shared/experience.ts` の `epicRewardTiers` と `XP_EPIC_REWARD`（小 100、中 300、大 600）。払うのはクリア（`epic-complete`）で、この操作は額を出すだけ。
   - 討伐隊（`party`）。`epic_party_members` の行を `joined_at`、`user_id` の順に、各人の `id`、`name`、`left`（依頼主と同じ判定）、`joined_via`、`level` で返す。抜けた人の行も、行を消すまでは含む。`level` は組織の中の本人の経験値の合計（`xp_grants.amount` の和。閉じたワークスペースと抜けたワークスペースの分も含む）から `levelOf` で出し、合計は返さない。合計は討伐隊の人で絞って1つの文（`GROUP BY user_id`）で読む（今の所属では絞らない）。
   - 配下のストーリー（`stories`）。削除していないものを `position`、`id` の順に、`id`、`title`、`completed_at`、`points_done`、`points_all` で返す。ポイントは `backlog-tree` と同じ数え方で、削除していないバックログのタスク（`tray = 'backlog'`）の `points`（未見積もりは 0）の合計。`points_done` は完了したタスクだけ。
   - `today` と `week_start`（ワークスペースのタイムゾーンの今日と週の始まり。期日の印を決める）。
-  - `can_manage`: 呼んだ人が依頼主か、リーダー（管理者を含む）か。割り振りとクリア報酬の変更、クリア、中止の口を出す側の値で、読み取りの権限には使わない。
+  - `can_manage`: 呼んだ人が依頼主か、リーダー（管理者を含む）か。割り振りとクリア報酬の変更、クリア、取り消し、中止の口を出す側の値で、読み取りの権限には使わない。
   - `can_change_requester`: 呼んだ人がリーダー（管理者を含む）か。依頼主を替える口を出す側の値で、読み取りの権限には使わない。依頼主本人（一般のメンバー）は偽。
   - `can_join`: 呼んだ人が討伐隊に入れる人か（そのワークスペースに今所属し、無効でなく `login_subject` のある人。受注の書く文と同じ `activeMemberName`。所属していない管理者は偽）。`joined`: 呼んだ人の行が、このエピックの討伐隊にあるか（入り方を問わない）。どちらも受注と抜けるの口を出す側の値。`can_join` の読み取りは同じ `batch()` に1文足す。
 - クリア報酬の段階の変更（`epic-reward-update`）と依頼主の変更（`epic-requester-update`）。どちらも書き込みで、入力は `workspace_id`、`epic_id`、段階（`reward_tier`。`small`、`medium`、`large`）か替え先（`user_id`）。
@@ -1343,9 +1343,9 @@ Wiki のページ。組織の Wiki とワークスペースの Wiki で共有す
   - レビュー: `review:<completion_id>`（依頼の回ごとに完了の記録が分かれる）
   - 手助け: `help:<thank_id>:<completion_id>`
   - ストーリーの完了: `story_completed:<story_id>:<user_id>:<completed_at>`
-  - クリア報酬: `epic_reward:<epic_id>:<user_id>:<completed_at>`
+  - クリア報酬: `epic_reward:<epic_id>:<user_id>:<completed_at>:<履歴の id>`（履歴の id はその要求だけの値。止めた時計で同じ時刻にクリア、取り消し、クリアを流しても付け直せる）
   - 打ち消し: `reversal:<元の id>`
-- 「同じタスクの同じ行動で有効な付与は1回だけ」は、上のキーと、付与の前に「打ち消されていない同じ行動の付与がないか」をアプリが見ることで守る。ストーリーの完了は例外で、付与の前に見ない。完了の文が `completed_at IS NULL` を条件にするので、完了の回ごとに1回しか通らず、回のキー（`completed_at` を含む）が一意制約で重複を止める（開発用の時計で同じ時刻に完了、取り消し、完了を流したときは、同じキーの行が残っているので付け直さない）。
+- 「同じタスクの同じ行動で有効な付与は1回だけ」は、上のキーと、付与の前に「打ち消されていない同じ行動の付与がないか」をアプリが見ることで守る。ストーリーの完了は例外で、付与の前に見ない。完了の文が `completed_at IS NULL` を条件にするので、完了の回ごとに1回しか通らず、回のキー（`completed_at` を含む）が一意制約で重複を止める（開発用の時計で同じ時刻に完了、取り消し、完了を流したときは、同じキーの行が残っているので付け直さない。エピックのクリア報酬は、キーにクリアの要求の履歴の id も含めるので、同じ時刻でも付け直す）。
 - 起票、詳細、完了、手助けは、タスクを完了にしたときに同じバッチで付け、未完了に戻したときに同じバッチで打ち消す。
 - ストーリーの完了（`story_completed`、`XP_STORY_COMPLETED` の 20）は、ストーリーを完了にしたときに同じバッチで付け、取り消したときに同じバッチで打ち消す。受け取るのは、配下の削除していないタスクで打ち消されていない完了の経験値（`task_completed`）を受け取った人のうち、今そのワークスペースに所属している人で、1人1回ずつ（`story_id` に元のストーリー、`task_id` と `completion_id` は空）。打ち消しの行は、元の行の `user_id`、`action`、`story_id` を写し、`amount` を負にして `reverses_grant_id` に元の行を指す。
 - クリア報酬（`epic_reward`、`XP_EPIC_REWARD` の段階ごとの額）は、エピックをクリアしたときに同じバッチで付け、クリアを取り消したときに同じバッチで打ち消す。受け取るのは、クリアした時点の討伐隊（`epic_party_members`）のうち今そのワークスペースに所属している人で、1人1行（`epic_id` に元のエピック、`task_id`、`story_id`、`completion_id` は空）。額はクリアした時点の `reward_tier` で決め、その後に段階を変えても付いた額は動かない（クリアした後は段階を変えられない）。クリアの回のキー（`completed_at` を含む）が一意制約で重複を止める。

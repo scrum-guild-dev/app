@@ -23,7 +23,8 @@ export function epicClearConflictReasonOf(details: unknown): EpicClearConflictRe
 // 無いエピック（別の組織を含む）は 404、閉じたワークスペースは 409 の workspace_closed
 export const epicComplete = defineOperation({
   name: 'epic-complete',
-  description: '配下のストーリーがすべて完了したエピックをクリアし、討伐隊の全員にクリア報酬の経験値を付ける',
+  description:
+    '配下のストーリーがすべて完了したエピックをクリアし、今所属している討伐隊の人にクリア報酬の経験値を付ける',
   mode: 'write',
   permission: 'member',
   workspace: true,

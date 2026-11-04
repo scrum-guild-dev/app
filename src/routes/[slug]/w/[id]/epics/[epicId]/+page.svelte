@@ -162,6 +162,13 @@
     else focusPageHeading();
   }
 
+  // 演出を閉じたら、クリアの面の「取り消す」へ（押した主ボタンは読み直しで替わっている）。無ければ見出しへ
+  function focusClearControl(): void {
+    const button = document.querySelector<HTMLElement>('[data-epic-reopen], [data-epic-clear]');
+    if (button) button.focus();
+    else focusPageHeading();
+  }
+
   // クリアと取り消し。断られた理由ごとに知らせ、どれも読み直す。クリアは成功したら演出（動きを減らす設定ではトーストだけ）
   async function runClear(clearing: boolean, trigger: HTMLElement): Promise<void> {
     if (clearBusy || workspace === null || detail === null) return;
@@ -173,6 +180,8 @@
       party: t('party'),
       reward: t('reward'),
       workspace: t('workspace'),
+      requester: t('requester'),
+      leader: t('leader'),
     };
     const title = detail.epic.title;
     clearBusy = true;
@@ -194,10 +203,12 @@
           const rewardText =
             count === 0
               ? t('epicCelebrateRewardNone', words)
-              : t('epicCelebrateReward', { party: t('party'), count, xp });
+              : t('epicCelebrateReward', { party: t('party'), count, xp, unit: t('xpUnit') });
           if (prefersReducedMotion()) {
             showToast(
-              count === 0 ? t('epicClearedToastEmpty', words) : t('epicClearedToast', { ...words, count, xp }),
+              count === 0
+                ? t('epicClearedToastEmpty', words)
+                : t('epicClearedToast', { ...words, count, xp, unit: t('xpUnit') }),
               'check',
             );
           } else {
@@ -208,8 +219,11 @@
         }
       } else {
         const reason = epicClearConflictReasonOf(result.error?.details);
-        if (result.status === 403) showToast(t('epicClearForbidden', words), 'alert');
-        else if (result.error?.code === 'workspace_closed') {
+        if (result.status === 403) {
+          // 権限を失った（ワークスペースから外された）。もう一度押しても直らないので、枠も読み直す
+          showToast(t('epicClearForbidden', words), 'alert');
+          await invalidate('app:workspace');
+        } else if (result.error?.code === 'workspace_closed') {
           showToast(t('workspaceClosedReadOnly', words), 'alert');
           await invalidate('app:workspace');
         } else if (result.error?.code === 'epic_finished') showToast(t('epicClearFinished', words), 'alert');
@@ -218,7 +232,7 @@
         else if (reason === 'completed') showToast(t('epicClearAlready', words), 'alert');
         else if (reason === 'not_completed') showToast(t('epicNotCleared', words), 'alert');
         else if (reason === 'changed') showToast(t('epicClearChanged', words), 'alert');
-        else if (result.status === 404) showToast(t('epicPartyGone', words), 'alert');
+        else if (result.status === 404) showToast(t('epicClearGone', words), 'alert');
         else showToast(t(clearing ? 'epicClearFailed' : 'epicReopenFailed', words), 'alert');
       }
       await saved();
@@ -508,7 +522,12 @@
     </aside>
   </div>
 
-  <ClearCelebration bind:open={celebrating} title={celebrateTitle} reward={celebrateReward} />
+  <ClearCelebration
+    bind:open={celebrating}
+    title={celebrateTitle}
+    reward={celebrateReward}
+    onclosed={focusClearControl}
+  />
 
   <EpicDialog
     bind:this={epicDialog}

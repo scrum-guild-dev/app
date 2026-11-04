@@ -162,7 +162,9 @@ describe('epic-complete', () => {
         [target.leader.userId, 'epic_reward', 300, null, body.completed_at],
       ].sort(),
     );
-    expect(grants.every((g) => g.dedupe_key === `epic_reward:${epic.id}:${g.user_id}:${body.completed_at}`)).toBe(true);
+    expect(
+      grants.every((g) => g.dedupe_key.startsWith(`epic_reward:${epic.id}:${g.user_id}:${body.completed_at}:`)),
+    ).toBe(true);
     const logs = await logsOf(target, epic.id);
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({ actor: target.leader.userId, action: 'complete' });
@@ -317,6 +319,24 @@ describe('epic-complete', () => {
     expect(await logsOf(target, epic.id)).toEqual([]);
   });
 
+  test('クリアしたエピックからも、ストーリーを移し出せない（同じストーリーで別のエピックをもう一度クリアできてしまうため）', async () => {
+    const target = await createTarget();
+    const epic = await readyEpic(target);
+    const story = await storyUnder(target, epic.id, { position: 'a1' });
+    expect((await clear(target, epic.id)).status).toBe(200);
+    const other = await epicOf(target);
+    for (const destination of [other.id, null]) {
+      const res = await post(app, storyMove, {
+        slug: target.slug,
+        token: target.member.token,
+        body: { workspace_id: target.workspace.id, story_id: story.id, epic_id: destination },
+        env: testEnv,
+      });
+      expect(res.status).toBe(409);
+      expect(await errorOf(res)).toMatchObject({ code: 'conflict', reason: 'parent_completed' });
+    }
+  });
+
   test('クリアしたエピックの下へは、ストーリーを移せない', async () => {
     const target = await createTarget();
     const epic = await readyEpic(target);
@@ -369,17 +389,54 @@ describe('epic-reopen', () => {
     });
   });
 
-  test('止めた時計で、クリア、取り消し、クリアを同じ時刻に流しても落ちず、2回目のクリアは同じキーの報酬を付け直さない', async () => {
+  test('止めた時計で、クリア、取り消し、クリアを同じ時刻に流しても落ちず、2回目のクリアで報酬を付け直す', async () => {
     const target = await createTarget();
     const epic = await readyEpic(target);
     const frozen = clockAt('2026-10-26T01:00:00.000Z');
     expect((await clear(target, epic.id, target.leader, frozen)).status).toBe(200);
     expect((await reopen(target, epic.id, target.leader, frozen)).status).toBe(200);
-    expect((await clear(target, epic.id, target.leader, frozen)).status).toBe(200);
+    const again = await clear(target, epic.id, target.leader, frozen);
+    expect(again.status).toBe(200);
+    expect(await again.json()).toMatchObject({ recipient_count: 2 });
     expect((await epicRow(target, epic.id)).completed_at).toBe('2026-10-26T01:00:00.000Z');
-    // 開発用の時計だけで起きる。クリアの回のキー（クリアした日時を含む）が同じなので、付与と打ち消しの組だけが残る
-    expect(await rewardGrants(target, epic.id)).toHaveLength(4);
+    // 付与2行、打ち消し2行、付け直し2行。合計は 300 ずつ
+    expect(await rewardGrants(target, epic.id)).toHaveLength(6);
+    expect(await balances(target, epic.id)).toEqual({ [target.member.userId!]: 300, [target.leader.userId!]: 300 });
+  });
+
+  test('クリアと取り消しを2回ずつ流しても、合計は 0 で、打ち消しは元の付与を1回ずつだけ指す', async () => {
+    const target = await createTarget();
+    const epic = await readyEpic(target);
+    for (let round = 0; round < 2; round++) {
+      expect((await clear(target, epic.id)).status).toBe(200);
+      expect((await reopen(target, epic.id)).status).toBe(200);
+    }
+    const grants = await rewardGrants(target, epic.id);
+    expect(grants).toHaveLength(8);
     expect(await balances(target, epic.id)).toEqual({ [target.member.userId!]: 0, [target.leader.userId!]: 0 });
+    const reversed = grants.filter((g) => g.reverses_grant_id !== null).map((g) => g.reverses_grant_id);
+    expect(new Set(reversed).size).toBe(4);
+  });
+
+  test('読んでから書くまでに受け取り手が所属を外れたら、その人には付けず、応答の人数も付いた数にする', async () => {
+    const target = await createTarget();
+    const epic = await readyEpic(target);
+    const raced = racing(readsEpic, async () => {
+      const db = orgDb(env, target.organization.verified);
+      await db.run(
+        db.statement((q) =>
+          q
+            .updateTable('memberships')
+            .set({ left_on: '2026-10-30', left_at: AT })
+            .where('workspace_id', '=', target.workspace.id)
+            .where('user_id', '=', target.member.userId!),
+        ),
+      );
+    });
+    const res = await clear(target, epic.id, target.leader, raced);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ recipient_count: 1 });
+    expect(await balances(target, epic.id)).toEqual({ [target.leader.userId!]: 300 });
   });
 
   test('受け取った人が所属を外れていても、取り消すと打ち消す', async () => {

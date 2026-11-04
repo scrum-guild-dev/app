@@ -44,6 +44,9 @@ test('配下がすべて完了していれば「エピックを完了にする�
   await expect(celebrate.locator('.celebrate-reward')).toHaveText('参加者の 2 人に 300 XP');
   const close = celebrate.getByRole('button', { name: '閉じる' });
   await expect(close).toBeFocused();
+  // Tab を押しても、背後の画面へフォーカスが出ない
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(celebrate).toBeHidden();
   expect(await collect()).toEqual([]);
@@ -60,7 +63,7 @@ test('動きを減らす設定では演出を出さず、トーストだけで�
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   await page.getByRole('button', { name: 'エピックを完了にする' }).click();
   await expect(page.locator('.toasts:visible .toast').last()).toHaveText(
-    `${'エピック'}を完了にしました。参加者の 2 人に 300 XP`,
+    'エピックを完了にしました。参加者の 2 人に 300 XP',
   );
   await expect(page.locator('.celebrate')).toHaveCount(0);
 });

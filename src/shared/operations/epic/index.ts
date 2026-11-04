@@ -1,5 +1,5 @@
 // エピックの読み取り（ダイアログの欄と、画面の中身）、作成、変更、並べ替え、削除、討伐隊の受注、抜ける、割り振り、
-// クリア報酬の段階と依頼主の変更の操作の定義。クリアと中止は #65 で足す
+// クリア報酬の段階と依頼主の変更の操作の定義。クリアとその取り消しは epic-clear.ts。中止は #65 で足す
 import type { AnyOperationDefinition } from '../define.ts';
 import { epicComplete, epicReopen } from './epic-clear.ts';
 import { epicCreate } from './epic-create.ts';

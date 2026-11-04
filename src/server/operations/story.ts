@@ -507,6 +507,8 @@ function movingStory(db: OrganizationDb, workspaceId: string, storyId: string) {
           'stories.epic_id',
           'stories.category_id',
           'epics.title as epic_title',
+          'epics.completed_at as epic_completed_at',
+          'epics.canceled_at as epic_canceled_at',
           'categories.name as category_name',
         ])
         .where('stories.id', '=', storyId)
@@ -528,6 +530,15 @@ export const storyMoveOperation = implement(storyMove, async ({ db, actor, works
   if (current === undefined) throw new ApiError(404, 'not_found');
   const parentId = input.epic_id;
   const parentChanged = current.epic_id !== parentId;
+  // クリアか中止したエピックの配下は動かさない。完了したストーリーを出すと、クリア済みのエピックが空になり、
+  // 同じストーリーで別のエピックをもう一度クリアでき、完了の取り消しの守り（parent_completed）も外れる
+  if (
+    parentChanged &&
+    current.epic_id !== null &&
+    (current.epic_completed_at !== null || current.epic_canceled_at !== null)
+  ) {
+    throw moveConflict('parent_completed');
+  }
   const parent = parentId === null ? null : await readMoveEpic(db, workspaceId, parentId, parentChanged);
   // エピックの下へ移して区分が消えるときは、前の区分を履歴に残す。親が変わってエピックの下へ移すときは、
   // 書く文は区分が読んだ値（空も含む）のままであることも条件にする。読んだ後に付いた区分を、履歴なしに消さないため
@@ -570,6 +581,20 @@ export const storyMoveOperation = implement(storyMove, async ({ db, actor, works
           qb.where('category_id', current.category_id === null ? 'is' : '=', current.category_id),
         )
         .where((eb) => eb.exists(openWorkspace(q, organizationId, workspaceId)))
+        // 読んだ今の親が、書くときにも完了も中止もしていない（親を変えるときだけ）
+        .$if(parentChanged && current.epic_id !== null, (qb) =>
+          qb.where((eb) =>
+            eb.not(
+              eb.exists(
+                epicRow(q, workspaceId, current.epic_id!)
+                  .select('epics.id')
+                  .where((sb) =>
+                    sb.or([sb('epics.completed_at', 'is not', null), sb('epics.canceled_at', 'is not', null)]),
+                  ),
+              ),
+            ),
+          ),
+        )
         .$if(parentId !== null, (qb) =>
           qb.where((eb) =>
             eb.exists(

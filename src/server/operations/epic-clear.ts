@@ -253,7 +253,8 @@ export const epicCompleteOperation = implement(epicComplete, async ({ db, actor,
       ),
       // 受け取り手に1人1行ずつ。書くときにも、討伐隊にいて今所属していることを確かめる
       ...recipients.map((recipient) => {
-        const dedupeKey = `epic_reward:${epicId}:${recipient}:${completedAt}`;
+        // 回のキー。止めた時計（DEV_NOW）で、クリア、取り消し、クリアを同じ時刻に流しても付け直せるよう、この要求の履歴の ID も含める
+        const dedupeKey = `epic_reward:${epicId}:${recipient}:${completedAt}:${logId}`;
         return db.statement((q) =>
           q
             .insertInto('xp_grants')
@@ -277,10 +278,13 @@ export const epicCompleteOperation = implement(epicComplete, async ({ db, actor,
                     eb.exists(
                       recipientRows(eb, workspaceId, epicId).select('p.user_id').where('p.user_id', '=', recipient),
                     ),
-                    // 止めた時計（DEV_NOW）で、クリア、取り消し、クリアを同じ時刻に流すと、同じキーの行が残っている
                     eb.not(
                       eb.exists(
-                        eb.selectFrom('xp_grants').select('xp_grants.id').where('xp_grants.dedupe_key', '=', dedupeKey),
+                        eb
+                          .selectFrom('xp_grants')
+                          .select('xp_grants.id')
+                          .where('xp_grants.workspace_id', '=', workspaceId)
+                          .where('xp_grants.dedupe_key', '=', dedupeKey),
                       ),
                     ),
                   ]),
@@ -291,7 +295,9 @@ export const epicCompleteOperation = implement(epicComplete, async ({ db, actor,
     ]);
 
     if ((results[0]?.changes ?? 0) > 0) {
-      return { epic_id: epicId, completed_at: completedAt, reward_xp: amount, recipient_count: recipients.length };
+      // 付けた人数は、付与の文が実際に行を足した数（読んでから書くまでに討伐隊を抜けた人には付かない）
+      const granted = results.slice(2).filter((result) => (result.changes ?? 0) > 0).length;
+      return { epic_id: epicId, completed_at: completedAt, reward_xp: amount, recipient_count: granted };
     }
     // 閉じていれば 409 の workspace_closed。そうでなければ読み直して決め直す（上の順）。それでも断る理由が無ければ、やり直す
     await throwIfClosed(db, workspaceId);
