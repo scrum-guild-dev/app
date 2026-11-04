@@ -165,6 +165,9 @@
         } else {
           submitError = t('taskDeleteForbidden', { leader: t('leader') });
         }
+      } else if (result.status === 409 && result.error?.code === 'epic_finished') {
+        // クリア済みの<エピック>は、配下を親なしで残して削除できない（完了した<ストーリー>で、もう一度クリアできてしまうため）
+        submitError = t('treeDeleteClearedKeep', { epic: t('epic'), done: t('done'), story: t('story') });
       } else if (result.status === 409 && result.error?.code === 'workspace_closed') {
         submitError = t('workspaceClosedReadOnly', { workspace: t('workspace') });
         onfinish('closed');

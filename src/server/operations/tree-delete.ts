@@ -59,7 +59,24 @@ function liveRoot(from: From, workspaceId: string, root: Root, forbidCleared = f
         .where('root.id', '=', root.id)
         .where('root.workspace_id', '=', workspaceId)
         .where('root.deleted_at', 'is', null)
-        .$if(forbidCleared, (qb) => qb.where('root.completed_at', 'is', null))
+        // クリア済みで、削除していない配下のストーリーがあるエピックは、配下を残して削除しない
+        .$if(forbidCleared, (qb) =>
+          qb.where((eb) =>
+            eb.or([
+              eb('root.completed_at', 'is', null),
+              eb.not(
+                eb.exists(
+                  eb
+                    .selectFrom('stories as ks')
+                    .select('ks.id')
+                    .whereRef('ks.epic_id', '=', 'root.id')
+                    .where('ks.workspace_id', '=', workspaceId)
+                    .where('ks.deleted_at', 'is', null),
+                ),
+              ),
+            ]),
+          ),
+        )
     : from
         .selectFrom('stories as root')
         .select('root.id')
@@ -700,7 +717,8 @@ async function readRoot(db: OrganizationDb, workspaceId: string, root: Root) {
       );
 }
 
-// エピックがクリア済みか（削除していない、同じワークスペースのもの）
+// エピックがクリア済みで、削除していない配下のストーリーがあるか（削除していない、同じワークスペースのもの）。
+// 配下が無ければ、完了したストーリーが親なしで残ることは無いので、配下を残す削除でも通す
 async function isCleared(db: OrganizationDb, workspaceId: string, epicId: string): Promise<boolean> {
   const row = await db.first(
     db.statement((q) =>
@@ -709,7 +727,17 @@ async function isCleared(db: OrganizationDb, workspaceId: string, epicId: string
         .select('epics.completed_at')
         .where('epics.id', '=', epicId)
         .where('epics.workspace_id', '=', workspaceId)
-        .where('epics.deleted_at', 'is', null),
+        .where('epics.deleted_at', 'is', null)
+        .where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('stories as ks')
+              .select('ks.id')
+              .whereRef('ks.epic_id', '=', 'epics.id')
+              .where('ks.workspace_id', '=', workspaceId)
+              .where('ks.deleted_at', 'is', null),
+          ),
+        ),
     ),
   );
   return row?.completed_at != null;

@@ -593,8 +593,8 @@ export const dictionary = defineDictionary({
   moveParentNone: '親なし',
   moveParentHint: '移す先の末尾に置きます。',
   moveParentSubmit: '移す',
-  // ストーリーの親（エピック）を移すときの、完了か中止したエピックの下へは移せない知らせ
-  moveEpicDone: '{done}か中止した{epic}の配下の{story}は、{epic}の外へも中へも移せません。一覧を読み直します',
+  // ストーリーの親（エピック）を移すときの、完了か中止した{epic}が移す元か移す先のとき（向きは問わない）の知らせ
+  moveEpicDone: '{done}か中止した{epic}との間では、{story}を移せません。一覧を読み直します',
 
   // エピックの行（木の最上段）。{title} はエピックの題
   epicCreate: '{epic}を作る',
@@ -1695,6 +1695,8 @@ export const dictionary = defineDictionary({
   storyDeleteKeepHint:
     '{task} {tasks} 件は親なしの{task}として末尾へ移ります。{category}は{story}の{category}を写します。',
   storyDeleteAllHint: '{task} {tasks} 件を削除します。取り込んだ{task}は削除せず、{archive}へ移します。',
+  treeDeleteClearedKeep:
+    '{done}した{epic}は、配下の{story}を親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先に{epic}の{done}を取り消してください。',
   treeDeleteAllLeaderOnly: '配下に他の人が作ったものがあるため、まとめて削除できるのは{leader}だけです。',
   epicDeleteNoChildren: '配下の{story}はありません。',
   storyDeleteNoChildren: '配下の{task}はありません。',

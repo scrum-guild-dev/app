@@ -6,6 +6,7 @@ import { XP_EPIC_REWARD } from '../src/shared/experience.ts';
 import { epicComplete, epicDelete, epicReopen } from '../src/shared/operations/epic/index.ts';
 import { storyMove } from '../src/shared/operations/story/index.ts';
 import { createApp } from '../src/server/app.ts';
+import { deleteStatements } from '../src/server/operations/tree-delete.ts';
 import { orgDb } from '../src/server/db/index.ts';
 import { envWithD1Hooks } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
@@ -362,6 +363,46 @@ describe('epic-complete', () => {
     expect((await remove(epic.id, 'delete')).status).toBe(200);
     const open = await epicOf(target);
     expect((await remove(open.id, 'keep')).status).toBe(200);
+  });
+
+  test('配下の無いクリア済みのエピックは、配下を残す削除でも通る', async () => {
+    const target = await createTarget();
+    const epic = await epicOf(target, { completed_at: AT, completed_by: target.admin.userId! });
+    const res = await post(app, epicDelete, {
+      slug: target.slug,
+      token: target.leader.token,
+      body: { workspace_id: target.workspace.id, epic_id: epic.id, children: 'keep' },
+      env: testEnv,
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test('書く文の条件: 読んだ後にクリアされたエピックは、配下を残す削除の文が行を変えない', async () => {
+    const target = await createTarget();
+    const epic = await epicOf(target, { completed_at: AT, completed_by: target.admin.userId! });
+    const story = await storyUnder(target, epic.id);
+    const db = orgDb(env, target.organization.verified);
+    const context = {
+      organizationId: target.organization.id,
+      workspaceId: target.workspace.id,
+      actorUserId: target.leader.userId!,
+      at: new Date(AT),
+      deletedAt: AT,
+      ownerOnly: null,
+      forbidCleared: true,
+    };
+    const { statements, rootIndex } = deleteStatements(db, context, { kind: 'epic', id: epic.id }, 'keep');
+    const results = await db.batch(statements);
+    expect(results[rootIndex]?.changes ?? 0).toBe(0);
+    expect((await epicRow(target, epic.id)).deleted_at).toBeNull();
+    const still = await db.first(
+      db.statement((q) => q.selectFrom('stories').select('epic_id').where('id', '=', story.id)),
+    );
+    expect(still?.epic_id).toBe(epic.id);
+    // 同じ文でも、forbidCleared を付けなければ通る（クリアしていないエピックの keep と同じ）
+    const open = deleteStatements(db, { ...context, forbidCleared: false }, { kind: 'epic', id: epic.id }, 'keep');
+    const opened = await db.batch(open.statements);
+    expect(opened[open.rootIndex]?.changes ?? 0).toBeGreaterThan(0);
   });
 
   test('クリアしたエピックの下へは、ストーリーを移せない', async () => {
