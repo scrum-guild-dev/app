@@ -42,3 +42,5 @@ API の追加は `add-operation`、マイグレーションは `d1-migration`、
 最後に、変更内容、完了条件の充足状況、検査と未検証の項目、Issue と文書に無い判断を報告する。
 PR を求められている場合は `.agents/skills/pr/SKILL.md` に従い、承認範囲で作成・CI とレビュー対応まで進める。
 外部への操作は `AGENTS.md` の承認の範囲に従う。未承認ならローカルの差分と PR 案までで渡し、実装・検証の前に承認待ちで止まらない。
+
+コミットや工程の移動だけで入力が同じなら e2e を再実行しない。実行時と同じ対象指定で `pnpm e2e:preflight --verify <result.json> [base-ref] [同じ選定オプション]` を使い、元の結果と両HEAD・入力の一致を示す照合記録を引き継ぐ。条件は `docs/agent-workflows/validation.md` と `docs/development.md` の「クラウドで PR 前に e2e を確かめる」に従う。

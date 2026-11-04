@@ -51,3 +51,5 @@ Claude の道具名やモデル指定は引き継がない。
 レビュー後に直した差分は、そのレビューで確認済みとはしない。
 未コミットの点検結果を、CI の差分省略に使う Claude 用の done-check 印に変換しない。
 コミットや外部への書き込みは `AGENTS.md` の承認の範囲に従う。
+
+コミットや工程の移動だけで入力が同じなら e2e を再実行しない。実行時と同じ対象指定で `pnpm e2e:preflight --verify <result.json> [base-ref] [同じ選定オプション]` を使い、元の結果と両HEAD・入力の一致を示す照合記録を引き継ぐ。条件は `docs/agent-workflows/validation.md` と `docs/development.md` の「クラウドで PR 前に e2e を確かめる」に従う。
