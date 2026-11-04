@@ -4,6 +4,7 @@
   import { ATTACHMENT_MAX_BYTES } from '../../shared/operations/attachment/index.ts';
   import {
     attachmentMarkdown,
+    clipboardTextToInsert,
     AttachmentUploadError,
     moveAttachmentAnchor,
     moveMarkdownInsertion,
@@ -244,7 +245,7 @@
     if (!clipboard?.files.length) return;
     event.preventDefault();
     if (readonly) return;
-    const text = clipboard.getData('text/plain').replace(/\r\n?/g, '\n');
+    const text = clipboardTextToInsert(clipboard.getData('text/plain'), Array.from(clipboard.files));
     const start = input?.selectionStart ?? value.length;
     const end = input?.selectionEnd ?? start;
     let caret = start;

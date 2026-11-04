@@ -166,3 +166,11 @@ export function moveMarkdownInsertion(
   if (after.slice(start, start + insertion.text.length) !== insertion.text) return undefined;
   return { start, text: insertion.text };
 }
+
+// File-copy clipboards can expose names as text/plain; only that exact metadata is omitted.
+export function clipboardTextToInsert(raw: string, files: readonly { name: string }[]): string {
+  const text = raw.replace(/\r\n?/g, '\n');
+  const names = files.map((file) => file.name).join('\n');
+  if (files.length > 0 && (text === names || text === `${names}\n`)) return '';
+  return text;
+}

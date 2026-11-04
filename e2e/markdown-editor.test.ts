@@ -427,6 +427,19 @@ test('文字と画像を一緒に貼り付けると選択範囲を文字で置�
   const form = input.locator('xpath=ancestor::form');
   await input.fill('前半置換後半');
   await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(2, 4));
+  // ファイルをコピーしたクリップボードのファイル名は、本文の文字としては差し込まない。
+  await input.evaluate((element) => {
+    const clipboard = new DataTransfer();
+    clipboard.setData('text/plain', '手順.pdf');
+    clipboard.items.add(new File(['%PDF-1.7\n確認の手順'], '手順.pdf', { type: 'application/pdf' }));
+    element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: clipboard, bubbles: true, cancelable: true }));
+  });
+  await expect(form.locator('.file-row', { hasText: '手順.pdf' })).toContainText('保存すると添付されます');
+  await expect(input).toHaveValue('前半置換後半');
+  await expect.poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(2);
+  await expect.poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionEnd)).toBe(4);
+
+  // ファイル名と異なる実際の文章は、選択範囲へ文字として貼り付ける。
   await input.evaluate(
     (element, bytes) => {
       const clipboard = new DataTransfer();
@@ -447,6 +460,10 @@ test('文字と画像を一緒に貼り付けると選択範囲を文字で置�
     .poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionEnd))
     .toBe(pasted.length - 2);
   await expect(form.getByRole('button', { name: '送る', exact: true })).toHaveAttribute('aria-disabled', 'false');
+  await routeOperation(page, commentCreate, { slug: 'aoba' }, async (call) => {
+    expect(call.input.attachment_ids).toHaveLength(2);
+    await call.passThrough();
+  });
   await form.getByRole('button', { name: '送る', exact: true }).click();
   const comment = drawer.locator('.comment').filter({ hasText: '前半貼った文章' });
   await expect(comment).toContainText('次の行');
