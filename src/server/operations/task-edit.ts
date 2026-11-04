@@ -1,3 +1,5 @@
+import { checkAttachments, attachmentChanges } from './attachment-save.ts';
+import { attachmentsReady, attachFilesStatement } from '../db/index.ts';
 import { readThanks } from './thanks.ts';
 import { now, todayIn } from '../../shared/clock.ts';
 import { taskAssign, taskDelete, taskDetail, taskUpdate, type TaskDetail } from '../../shared/operations/task/index.ts';
@@ -307,6 +309,7 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
   const organizationId = db.organizationId;
   const workspaceId = workspace.workspaceId;
   const taskId = input.task_id;
+  const attachmentSave = { workspaceId, userId: actorUserId, ids: input.attachment_ids ?? [] };
 
   // 読んだ値からの差を、「読んだ値のままなら」という条件つきで書く。読んでから書くまでに別の要求が同じ欄を変えていたら、
   // 更新は通らない（履歴の「前」がずれるのと、同じ値の指定が取りこぼされるのを防ぐ）。通らなかったら読み直して、差を作り直す。
@@ -318,7 +321,7 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
       throw new ApiError(404, 'not_found');
     }
     const draft = diffOf(current, input, { category: null, repository: null });
-    if (draft.isEmpty) {
+    if (draft.isEmpty && attachmentSave.ids.length === 0) {
       // 書くものが無くても、閉じたワークスペースは断る
       await throwIfClosed(db, workspaceId);
       return { task: await detailOf(db, current, actor, workspace) };
@@ -327,6 +330,8 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
     // 振る区分とリポジトリは、同じワークスペースの削除していないものだけ（無ければ 404）。書く文にも同じ条件を入れる
     const next = await readNextRefs(db, workspaceId, current, input);
     const { values, changes } = diffOf(current, input, next);
+    await throwIfClosed(db, workspaceId);
+    await checkAttachments(db, attachmentSave);
 
     const at = now();
     const updatedAt = at.toISOString();
@@ -340,6 +345,7 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
               eb('id', '=', taskId),
               eb('workspace_id', '=', workspaceId),
               eb('deleted_at', 'is', null),
+              attachmentsReady(eb, attachmentSave),
               eb.exists(openWorkspace(q, organizationId, workspaceId)),
               // 書く欄が、読んだときの値のまま
               ...(values.title === undefined ? [] : [eb('title', 'is', current.title)]),
@@ -379,12 +385,15 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
                 eb.val('task').as('entity_type'),
                 eb.val(taskId).as('entity_id'),
                 eb.val('update').as('action'),
-                eb.val(JSON.stringify(changes)).as('changes_json'),
+                eb.val(JSON.stringify({ ...changes, ...attachmentChanges(attachmentSave.ids) })).as('changes_json'),
                 eb.val(updatedAt).as('created_at'),
               ])
               .where(previousStatementChanged),
           ),
       ),
+      ...(attachmentSave.ids.length === 0
+        ? []
+        : [attachFilesStatement(db, attachmentSave, { task_id: taskId }, updatedAt)]),
     ]);
 
     if ((results[0]?.changes ?? 0) > 0) {
@@ -396,6 +405,7 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
     // （完了にされていたか親の下へ移されていたら、次の周の assertEditable が 409 に、区分かリポジトリが削除されていたら、次の周の読み取りが 404 にする）
     await throwIfClosed(db, workspaceId);
     if ((await readTask(db, workspaceId, taskId)) === undefined) throw new ApiError(404, 'not_found');
+    await checkAttachments(db, attachmentSave);
   }
   throw new ApiError(409, 'conflict');
 });

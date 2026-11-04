@@ -121,6 +121,7 @@ function detailFieldLine(change: TaskHistoryEntry['changes'][number], t: Transla
 
 function lineOf(change: TaskHistoryEntry['changes'][number], created: boolean, t: Translate): HistoryLine {
   if (change.field === 'field') return detailFieldLine(change, t);
+  if (change.field === 'attachments') return { label: null, text: t('historyAttachmentsAdded') };
   const label = historyFieldLabel(change.field, t);
   // 本文と知らない列は、値を出さず、直したことだけを出す
   if (VALUELESS_FIELDS.has(change.field) || !FIELD_LABELS.has(change.field)) {

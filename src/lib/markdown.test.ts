@@ -327,3 +327,44 @@ describe('出力の上限', () => {
     expect(parseMarkdown(paragraphs(1000))).not.toBeNull();
   }, 30_000);
 });
+
+describe('添付ファイルだけを Markdown の画像にする', () => {
+  const src = '/api/aoba/attachments/019abcde-1234-7123-8123-0123456789ab';
+
+  test('本文途中と参照形式の添付は画像になり、前後の文字を残す', () => {
+    expect(firstInlines(`前 ![図](${src}) 後`)).toEqual([
+      { type: 'text', value: '前 ' },
+      { type: 'image', src, alt: '図' },
+      { type: 'text', value: ' 後' },
+    ]);
+    expect(firstInlines(`![図][添付]\n\n[添付]: ${src}`)).toEqual([{ type: 'image', src, alt: '図' }]);
+    expect(firstInlines(`![](${src})`)).toEqual([{ type: 'image', src, alt: '' }]);
+  });
+
+  test.each([
+    '//example.com/api/aoba/attachments/019abcde-1234-7123-8123-0123456789ab',
+    'https://example.com/api/aoba/attachments/019abcde-1234-7123-8123-0123456789ab',
+    '/api/aoba/attachments/../019abcde-1234-7123-8123-0123456789ab',
+    '/api/aoba/attachments/%30%31%39abcde-1234-7123-8123-0123456789ab',
+    '/api/aoba%2fother/attachments/019abcde-1234-7123-8123-0123456789ab',
+    '/api/aoba/attachments/019abcde-1234-7123-8123-0123456789ab?download=1',
+    '/api/aoba/attachments/019abcde-1234-7123-8123-0123456789ab#x',
+    '/api/Aoba/attachments/019abcde-1234-7123-8123-0123456789ab',
+    '/api/login/attachments/019abcde-1234-7123-8123-0123456789ab',
+    '/api/aoba/attachments/not-an-id',
+    '/api/aoba/attachments/019abcde-1234-7123-8123-0123456789ab/extra',
+  ])('%s を画像にしない', (url) => {
+    expect(firstInlines(`![図](${url})`).some((node) => node.type === 'image')).toBe(false);
+  });
+
+  test('リンク内の添付は画像や入れ子のリンクにせず、代わりの文字だけを残す', () => {
+    expect(firstInlines(`[![図](${src})](https://example.com/)`)).toEqual([
+      { type: 'link', href: 'https://example.com/', children: [{ type: 'text', value: '図' }] },
+    ]);
+  });
+
+  test('添付 URL と代わりの文字も出力文字数の上限に含む', () => {
+    const source = `![${'図'.repeat(1000)}](${src})`.repeat(400);
+    expect(parseMarkdown(source)).toBeNull();
+  });
+});
