@@ -50,6 +50,38 @@ test('対象限定は通常・開発・繰り返しを先に確認し、全件�
   assert.throws(() => preflightPlan(['e2e/bad name.test.ts'], ['e2e/bad name.test.ts']));
 });
 
+test('複数の変更 e2e の一部だけを明示すると、不足したファイルを示して拒否する', () => {
+  for (const files of [['e2e/a.test.ts'], ['e2e/b.test.ts']]) {
+    assert.throws(
+      () =>
+        preflightPlan(['e2e/a.test.ts', 'e2e/b.test.ts'], ['e2e/a.test.ts', 'e2e/b.test.ts'], {
+          files,
+          reason: '変更テストの一部だけ',
+        }),
+      {
+        message:
+          files[0] === 'e2e/a.test.ts'
+            ? '--files に追加・変更した e2e をすべて含める: ["e2e/b.test.ts"]'
+            : '--files に追加・変更した e2e をすべて含める: ["e2e/a.test.ts"]',
+      },
+    );
+  }
+});
+
+test('削除した e2e は明示対象に要求せず、存在する変更テストで計画できる', () => {
+  assert.deepEqual(
+    preflightPlan(['e2e/a.test.ts', 'e2e/deleted.test.ts'], ['e2e/a.test.ts'], {
+      files: ['e2e/a.test.ts'],
+      reason: '存在する変更テストを検査',
+    }),
+    [
+      { mode: 'normal', files: ['e2e/a.test.ts'] },
+      { mode: 'dev', files: ['e2e/a.test.ts'] },
+      { mode: 'repeat', files: ['e2e/a.test.ts'] },
+    ],
+  );
+});
+
 test('未コミットと新規テストを検査し、版・対象hash・各結果を記録する', (t) => {
   const cwd = fixture(t);
   writeFileSync(join(cwd, 'app.ts'), 'changed');
@@ -290,22 +322,52 @@ test('CLI の --verify に結果ファイルが無いときは起動前に使い
 
 test('明示対象は既存の関連テストも通常・開発・繰り返しへ渡し、理由と所要時間を残す', (t) => {
   const cwd = fixture(t);
-  const options = { files: ['e2e/new.test.ts'], reason: 'Wiki の保存と削除を通る関連画面' };
-  const calls: string[] = [];
+  writeFileSync(join(cwd, 'e2e/related.test.ts'), 'existing related test');
+  const committed = spawnSync('git', ['add', 'e2e/related.test.ts'], { cwd, encoding: 'utf8' });
+  assert.equal(committed.status, 0, committed.stderr);
+  const commit = spawnSync('git', ['commit', '-qm', 'existing related test'], { cwd, encoding: 'utf8' });
+  assert.equal(commit.status, 0, commit.stderr);
+  const base = spawnSync('git', ['branch', '-f', 'base'], { cwd, encoding: 'utf8' });
+  assert.equal(base.status, 0, base.stderr);
+  const options = {
+    files: ['e2e/new.test.ts', 'e2e/related.test.ts'],
+    reason: 'Wiki の保存と削除を通る関連画面',
+  };
+  const calls: { mode: string; files: string[] }[] = [];
   const result = runPreflight('base', {
     cwd,
     ...options,
     run(mode, files) {
-      calls.push(mode);
-      assert.deepEqual(files, options.files);
+      calls.push({ mode, files });
       return 'passed';
     },
   });
   const report = JSON.parse(readFileSync(result, 'utf8'));
-  assert.equal(report.selection.scope, 'targeted');
-  assert.equal(report.selection.source, 'explicit');
-  assert.equal(report.selection.reason, options.reason);
-  assert.deepEqual(calls, ['normal', 'dev', 'repeat']);
+  assert.deepEqual(report.selection, {
+    scope: 'targeted',
+    source: 'explicit',
+    files: ['e2e/new.test.ts', 'e2e/related.test.ts'],
+    reason: 'Wiki の保存と削除を通る関連画面',
+  });
+  const expected = [
+    { mode: 'normal', files: ['e2e/new.test.ts', 'e2e/related.test.ts'], status: 'passed' },
+    { mode: 'dev', files: ['e2e/new.test.ts', 'e2e/related.test.ts'], status: 'passed' },
+    { mode: 'repeat', files: ['e2e/new.test.ts', 'e2e/related.test.ts'], status: 'passed' },
+  ];
+  assert.deepEqual(
+    calls,
+    expected.map(({ mode, files }) => ({ mode, files })),
+  );
+  assert.deepEqual(
+    report.checks.map(({ mode, files, status }: { mode: string; files: string[]; status: string }) => ({
+      mode,
+      files,
+      status,
+    })),
+    expected,
+  );
+  assert.equal(report.success, true);
+  assert.equal(report.status, 'passed');
   assert.ok(report.durationMs >= 0);
   assert.ok(report.checks.every((step: { durationMs: number }) => step.durationMs >= 0));
   verifyPreflight(result, 'base', cwd, options);
