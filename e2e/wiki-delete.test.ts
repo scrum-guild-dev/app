@@ -8,6 +8,8 @@ import { operationPath } from '../src/shared/operations/define.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
 
 // 実際に作った親子を消し、ダイアログと保存後の木を同じ流れで確かめる。
+// 組織の最上段は他ファイルの並べ替えテストと共有するため、組織では残す親の配下だけを消す。
+// 最上段の削除は、テストごとに作ったワークスペースで確かめる。
 test.beforeEach(async ({ context, baseURL }) => {
   await resetWikiRateLimits();
   await signIn(context, baseURL, 'admin');
@@ -86,15 +88,20 @@ for (const scope of ['organization', 'workspace'] as const) {
     await expect(page.getByText('ページが見つかりません', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '消す', exact: true })).toHaveCount(0);
     await page.goto(outer);
-    await page.getByRole('button', { name: '消す', exact: true }).click();
-    await expect(dialog).toContainText('子のページ2件は「最上段」の末尾へ上がります。');
-    await dialog.getByRole('button', { name: '消す', exact: true }).click();
-    await expect(page).toHaveURL(new URL(root, outer).href);
-    await expect(page.locator('.wiki-tree > li > .wiki-node > a').filter({ hasText: new RegExp(suffix) })).toHaveText([
-      siblingTitle,
-      childTitle,
-    ]);
-    // 削除直後の再取得2回と、消したURLを明示して開いた1回だけが404になる。
+    if (scope === 'workspace') {
+      await page.getByRole('button', { name: '消す', exact: true }).click();
+      await expect(dialog).toContainText('子のページ2件は「最上段」の末尾へ上がります。');
+      await dialog.getByRole('button', { name: '消す', exact: true }).click();
+      await expect(page).toHaveURL(new URL(root, outer).href);
+      await expect(page.locator('.wiki-tree > li > .wiki-node > a').filter({ hasText: new RegExp(suffix) })).toHaveText(
+        [siblingTitle, childTitle],
+      );
+    } else {
+      await expect(page.getByRole('heading', { name: outerTitle, level: 2, exact: true })).toBeVisible();
+      await page.getByRole('button', { name: `${outerTitle}を開く`, exact: true }).click();
+      await expect(outerNode.locator(':scope > ul > li > .wiki-node > a')).toHaveText([siblingTitle, childTitle]);
+    }
+    // 消したURLの明示的な再取得と、各削除直後の再取得だけが404になる。
     // エラーを一律に除外せず、操作とページIDを含めて期待した要求に限定する。
     const pagePath = `/api/aoba/${scope === 'organization' ? 'org' : 'workspace'}-wiki-page`;
     const input = (url: string) => ({
@@ -104,10 +111,13 @@ for (const scope of ['organization', 'workspace'] as const) {
     expect(failedRequests).toEqual([
       { status: 404, path: pagePath, input: input(target) },
       { status: 404, path: pagePath, input: input(target) },
-      { status: 404, path: pagePath, input: input(outer) },
+      ...(scope === 'workspace' ? [{ status: 404, path: pagePath, input: input(outer) }] : []),
     ]);
     expect(await violations()).toEqual(
-      Array.from({ length: 3 }, () => 'Failed to load resource: the server responded with a status of 404 (Not Found)'),
+      Array.from(
+        { length: scope === 'workspace' ? 3 : 2 },
+        () => 'Failed to load resource: the server responded with a status of 404 (Not Found)',
+      ),
     );
   });
 }
@@ -119,11 +129,11 @@ test('組織の一般メンバーは人のページに消すボタンがなく�
   await page.goto(adminPage);
   await expect(page.getByRole('button', { name: '編集する', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '消す', exact: true })).toHaveCount(0);
-  await add(page, `自分のページ-${crypto.randomUUID().slice(0, 8)}`);
+  await add(page, `自分のページ-${crypto.randomUUID().slice(0, 8)}`, true);
   await expect(page.getByRole('button', { name: '消す', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '消す', exact: true }).click();
   await deletion(page).getByRole('button', { name: '消す', exact: true }).click();
-  await expect(page).toHaveURL(/\/aoba\/wiki$/);
+  await expect(page).toHaveURL(adminPage);
 });
 
 test('削除の失敗は理由を残し、再読込み後もページが残る', async ({ page }) => {
@@ -144,7 +154,8 @@ test('削除の失敗は理由を残し、再読込み後もページが残る',
 test('削除の送信中はページ移動と書き込みを止め、確定後は親へ移る', async ({ page }) => {
   await page.goto('/aoba/wiki');
   const title = `送信中のページ-${crypto.randomUUID().slice(0, 8)}`;
-  const url = await add(page, title);
+  const parent = await add(page, `送信中の確認用の親-${crypto.randomUUID().slice(0, 8)}`);
+  const url = await add(page, title, true);
   let release!: () => void;
   let received!: () => void;
   const gate = new Promise<void>((resolve) => {
@@ -174,7 +185,7 @@ test('削除の送信中はページ移動と書き込みを止め、確定後�
   } finally {
     release();
   }
-  await expect(page).toHaveURL(/\/aoba\/wiki$/);
+  await expect(page).toHaveURL(parent);
 });
 
 test('終了したワークスペースでは自分のページも消すボタンがない', async ({ page }) => {
@@ -193,7 +204,8 @@ test('終了したワークスペースでは自分のページも消すボタ�
 test('削除済みで木の読み直しが失敗しても削除ボタンを戻さない', async ({ page }) => {
   await page.goto('/aoba/wiki');
   const title = `削除後の読み直し-${crypto.randomUUID().slice(0, 8)}`;
-  const url = await add(page, title);
+  const parent = await add(page, `読み直しの確認用の親-${crypto.randomUUID().slice(0, 8)}`);
+  const url = await add(page, title, true);
   let calls = 0;
   await routeOperation(page, orgWikiDelete, { slug: 'aoba' }, async (call) => {
     calls++;
@@ -203,7 +215,7 @@ test('削除済みで木の読み直しが失敗しても削除ボタンを戻�
   });
   await page.getByRole('button', { name: '消す', exact: true }).click();
   await deletion(page).getByRole('button', { name: '消す', exact: true }).click();
-  await expect(page).toHaveURL(/\/aoba\/wiki$/);
+  await expect(page).toHaveURL(parent);
   await expect(page.locator('.toast:visible')).toContainText(`「${title}」を消しました。`);
   await expect(page.getByRole('button', { name: '消す', exact: true })).toHaveCount(0);
   expect(calls).toBe(1);
