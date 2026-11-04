@@ -458,3 +458,29 @@ console.log('[e2e-run:result] {"status":"passed"}');`,
   );
   runPreflight('base', { cwd });
 });
+
+test('明示対象から追加・変更した e2e を外した検査と照合を拒否する', (t) => {
+  const cwd = fixture(t);
+  const result = runPreflight('base', { cwd, run: () => 'passed' });
+  const omitted = { files: ['e2e/related.test.ts'], reason: '関連だけを誤って指定' };
+  assert.throws(() => preflightPlan(['e2e/new.test.ts'], ['e2e/new.test.ts'], omitted), /追加・変更/);
+  assert.throws(
+    () =>
+      runPreflight('base', {
+        cwd,
+        ...omitted,
+        run() {
+          assert.fail('must not run');
+        },
+      }),
+    /追加・変更/,
+  );
+  assert.throws(() => verifyPreflight(result, 'base', cwd, omitted), /追加・変更/);
+  assert.deepEqual(
+    preflightPlan(['e2e/new.test.ts'], ['e2e/new.test.ts'], {
+      files: ['e2e/related.test.ts', 'e2e/new.test.ts'],
+      reason: '変更と関連を含める',
+    }),
+    ['normal', 'dev', 'repeat'].map((mode) => ({ mode, files: ['e2e/new.test.ts', 'e2e/related.test.ts'] })),
+  );
+});

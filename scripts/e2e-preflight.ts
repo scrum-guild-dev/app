@@ -69,6 +69,8 @@ function selectTests(changed: string[], addedOrModified: string[], options: Sele
     const selected = repeatFiles(files);
     if (!files.length || selected.length !== new Set(files).size)
       throw new Error('--files は e2e のテストを1つ以上指定する');
+    const missing = repeatFiles(addedOrModified).filter((file) => !selected.includes(file));
+    if (missing.length) throw new Error(`--files に追加・変更した e2e をすべて含める: ${JSON.stringify(missing)}`);
     return { scope: 'targeted', source: 'explicit', files: selected, reason: reason!.trim() };
   }
   if (isDocsOnly(changed))
