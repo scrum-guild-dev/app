@@ -3,6 +3,7 @@ import {
   attachmentMarkdown,
   AttachmentUploadError,
   moveAttachmentAnchor,
+  moveMarkdownInsertion,
   uploadAttachment,
 } from './attachment-upload.ts';
 
@@ -27,6 +28,26 @@ describe('attachment Markdown', () => {
     expect(moveAttachmentAnchor('abcdef', 'abef', 3)).toBe(2);
     expect(moveAttachmentAnchor('abcdef', 'abcdeXYZf', 3)).toBe(3);
     expect(moveAttachmentAnchor('abcdef', 'abcXYZdef', 3)).toBe(6);
+  });
+});
+
+describe('pending image removal tracking', () => {
+  const token = '![image](/api/aoba/attachments/id)';
+  const before = `left${token}right`;
+  const insertion = { start: 4, text: token };
+
+  it('tracks untouched tokens through edits before and after them', () => {
+    expect(moveMarkdownInsertion(before, `prefix${before}`, insertion)).toEqual({ start: 10, text: token });
+    expect(moveMarkdownInsertion(before, `${before}suffix`, insertion)).toEqual(insertion);
+    expect(moveMarkdownInsertion(before, token + 'right', insertion)).toEqual({ start: 0, text: token });
+    expect(moveMarkdownInsertion(before, `leftX${token}right`, insertion)).toEqual({ start: 5, text: token });
+    expect(moveMarkdownInsertion(before, `left${token}Xright`, insertion)).toEqual(insertion);
+  });
+
+  it('preserves user edits and never targets another copy of an edited token', () => {
+    expect(moveMarkdownInsertion(before, before.replace('image', 'edited'), insertion)).toBeUndefined();
+    expect(moveMarkdownInsertion(before, `leftXright${token}`, insertion)).toBeUndefined();
+    expect(moveMarkdownInsertion(before, 'leftright', insertion)).toBeUndefined();
   });
 });
 

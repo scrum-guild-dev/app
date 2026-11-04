@@ -309,3 +309,67 @@ test('50 MBを超えるファイルは送らず、ファイルごとの容量と
   await expect(row.getByRole('alert')).toContainText('上限50 MB');
   expect(requests).toBe(0);
 });
+
+test('保存前の添付を外すと次の保存から外れ、画像の前後と編集済みの本文は残る', async ({ page, baseURL }) => {
+  const drawer = await openTask(page, baseURL);
+  await drawer
+    .getByText('本文', { exact: true })
+    .locator('..')
+    .getByRole('button', { name: '編集', exact: true })
+    .click();
+  const input = drawer.getByRole('textbox', { name: '本文', exact: true });
+  const form = input.locator('xpath=ancestor::form');
+  await input.fill('前半後半');
+  await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(2, 2));
+  await form.locator('input[type="file"]').setInputFiles([
+    { name: '外す手順.txt', mimeType: 'text/plain', buffer: Buffer.from('保存しない手順') },
+    { name: '外す画像.png', mimeType: 'image/png', buffer: PNG },
+    { name: '編集する画像.png', mimeType: 'image/png', buffer: PNG },
+  ]);
+  await expect(form.getByRole('button', { name: '保存', exact: true })).toHaveAttribute('aria-disabled', 'false');
+  await expect(input).toHaveValue(/^前半!\[外す画像\.png\].*!\[編集する画像\.png\].*後半$/s);
+  const original = await input.inputValue();
+  await form.getByRole('button', { name: '外す手順.txt を添付から外す', exact: true }).click();
+  await expect(form.locator('.file-row', { hasText: '外す手順.txt' })).toHaveCount(0);
+  await expect(input).toHaveValue(original);
+
+  // 自動で差し込んだままの画像だけを外し、カーソルの前の削除量を反映する。
+  await input.evaluate((element: HTMLTextAreaElement) =>
+    element.setSelectionRange(element.value.length - 1, element.value.length - 1),
+  );
+  const withoutImage = original.replace(/!\[外す画像\.png\]\([^)]+\)/, '');
+  await form.getByRole('button', { name: '外す画像.png を添付から外す', exact: true }).click();
+  await expect(input).toHaveValue(withoutImage);
+  await expect
+    .poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionStart))
+    .toBe(withoutImage.length - 1);
+  await expect
+    .poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionEnd))
+    .toBe(withoutImage.length - 1);
+
+  // 自分で編集した画像の Markdown は、添付の保留から外しても書き換えない。
+  const edited = withoutImage.replace('編集する画像.png', '自分で直した説明');
+  await input.fill(edited);
+  await form.getByRole('button', { name: '編集する画像.png を添付から外す', exact: true }).click();
+  await expect(input).toHaveValue(edited);
+  await expect(form.locator('.file-row')).toHaveCount(0);
+
+  // 追加し直したファイルだけを送り、取り除いた ID は保存しない。
+  const readdedResponse = page.waitForResponse(
+    (response) => response.url().endsWith('/attachment-upload') && response.status() === 200,
+  );
+  await form
+    .locator('input[type="file"]')
+    .setInputFiles({ name: '保存する手順.txt', mimeType: 'text/plain', buffer: Buffer.from('保存する手順') });
+  await expect(form.getByRole('button', { name: '保存', exact: true })).toHaveAttribute('aria-disabled', 'false');
+  await expect(form.locator('.file-row', { hasText: '保存する手順.txt' })).toBeVisible();
+  const readded = attachmentUpload.output.parse(await (await readdedResponse).json());
+  let sentIds: readonly string[] | undefined;
+  await routeOperation(page, taskUpdate, { slug: 'aoba' }, async (call) => {
+    sentIds = call.input.attachment_ids;
+    await call.passThrough();
+  });
+  await form.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(input).toBeHidden();
+  expect(sentIds).toEqual([readded.id]);
+});

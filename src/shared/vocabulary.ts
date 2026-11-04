@@ -17,6 +17,8 @@ export const dictionary = defineDictionary({
     'すでに保存された添付ファイルがあります。本文は残っています。内容を確認してから保存し直してください。',
 
   attachmentChoose: 'ファイルを選ぶ',
+  attachmentRemove: '外す',
+  attachmentRemoveLabel: '{name} を添付から外す',
   attachmentDrop: 'ここにファイルをドラッグして添付',
   attachmentDropHint: '1ファイル50 MBまで。複数を選べます。画像は本文に貼り付けても添付できます。',
   attachmentUploading: '上げています {percent}%・{size} MB',

@@ -99,3 +99,31 @@ export function moveAttachmentAnchor(before: string, after: string, anchor: numb
   if (anchor >= before.length - suffix) return Math.max(start, anchor + after.length - before.length);
   return after.length - suffix;
 }
+
+export type MarkdownInsertion = { start: number; text: string };
+
+// A pending image can be removed automatically only while its original token is untouched.
+// Edits around the token move it; an edit inside it gives ownership of that text to the writer.
+export function moveMarkdownInsertion(
+  before: string,
+  after: string,
+  insertion: MarkdownInsertion,
+): MarkdownInsertion | undefined {
+  let changeStart = 0;
+  while (changeStart < before.length && changeStart < after.length && before[changeStart] === after[changeStart])
+    changeStart++;
+  let suffix = 0;
+  while (
+    suffix < before.length - changeStart &&
+    suffix < after.length - changeStart &&
+    before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+  )
+    suffix++;
+  const beforeEnd = before.length - suffix;
+  const tokenEnd = insertion.start + insertion.text.length;
+  let start = insertion.start;
+  if (beforeEnd <= insertion.start) start += after.length - before.length;
+  else if (changeStart < tokenEnd) return undefined;
+  if (after.slice(start, start + insertion.text.length) !== insertion.text) return undefined;
+  return { start, text: insertion.text };
+}

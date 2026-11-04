@@ -6,6 +6,8 @@
     attachmentMarkdown,
     AttachmentUploadError,
     moveAttachmentAnchor,
+    moveMarkdownInsertion,
+    type MarkdownInsertion,
     uploadAttachment,
   } from '../attachment-upload.ts';
   import { t } from '../vocabulary.svelte.ts';
@@ -50,6 +52,7 @@
     error: string | null;
     controller: AbortController;
     attachmentId?: string;
+    insertion?: MarkdownInsertion;
   };
   let files = $state<Upload[]>([]);
   let picker: HTMLInputElement;
@@ -67,7 +70,7 @@
   });
   $effect(() => {
     if (value !== previous) {
-      for (const file of files) file.anchor = moveAttachmentAnchor(previous, value, file.anchor);
+      updatePositions(previous, value);
       previous = value;
     }
   });
@@ -77,9 +80,31 @@
     uploading = false;
   });
 
+  function updatePositions(before: string, after: string): void {
+    for (const file of files) {
+      file.anchor = moveAttachmentAnchor(before, after, file.anchor);
+      if (file.insertion) file.insertion = moveMarkdownInsertion(before, after, file.insertion);
+    }
+  }
+
+  function applyEdit(start: number, end: number, text: string): void {
+    const delta = text.length - (end - start);
+    value = value.slice(0, start) + text + value.slice(end);
+    for (const file of files) {
+      if (file.anchor >= end) file.anchor += delta;
+      else if (file.anchor >= start) file.anchor = start + text.length;
+      if (file.insertion) {
+        if (end <= file.insertion.start) file.insertion.start += delta;
+        else if (start < file.insertion.start + file.insertion.text.length) file.insertion = undefined;
+      }
+    }
+    previous = value;
+    oninput?.();
+  }
+
   function changed(): void {
     // Run synchronously, before an upload completion can insert using an old position.
-    for (const file of files) file.anchor = moveAttachmentAnchor(previous, value, file.anchor);
+    updatePositions(previous, value);
     previous = value;
     oninput?.();
   }
@@ -138,10 +163,8 @@
             const at = Math.min(file.anchor, value.length);
             const start = input?.selectionStart ?? 0;
             const end = input?.selectionEnd ?? 0;
-            value = value.slice(0, at) + markdown + value.slice(at);
-            for (const other of files) if (other.anchor >= at) other.anchor += markdown.length;
-            previous = value;
-            oninput?.();
+            applyEdit(at, at, markdown);
+            file.insertion = { start: at, text: markdown };
             await tick();
             input?.setSelectionRange(
               start >= at ? start + markdown.length : start,
@@ -171,6 +194,24 @@
     } finally {
       pumping = false;
     }
+  }
+
+  async function remove(file: Upload): Promise<void> {
+    if (readonly) return;
+    attachmentIds = attachmentIds.filter((id) => id !== file.attachmentId);
+    const insertion = file.insertion;
+    if (insertion && value.slice(insertion.start, insertion.start + insertion.text.length) === insertion.text) {
+      const start = input?.selectionStart ?? 0;
+      const end = input?.selectionEnd ?? 0;
+      const at = insertion.start;
+      const tokenEnd = at + insertion.text.length;
+      const selectionAfterRemoval = (position: number) =>
+        position <= at ? position : Math.max(at, position - (tokenEnd - at));
+      applyEdit(at, tokenEnd, '');
+      await tick();
+      input?.setSelectionRange(selectionAfterRemoval(start), selectionAfterRemoval(end));
+    }
+    files = files.filter((other) => other.key !== file.key);
   }
 
   function cancel(file: Upload): void {
@@ -255,7 +296,17 @@
           <progress class="attachment-progress" value={file.percent} max="100" aria-label={file.file.name}></progress>
         {/if}
       </div>
-      {#if file.state !== 'done'}
+      {#if file.state === 'done'}
+        <div class="file-actions">
+          <button
+            type="button"
+            class="btn is-sm is-quiet"
+            disabled={readonly}
+            aria-label={t('attachmentRemoveLabel', { name: file.file.name })}
+            onclick={() => void remove(file)}>{t('attachmentRemove')}</button
+          >
+        </div>
+      {:else}
         <div class="file-actions">
           <button
             type="button"
