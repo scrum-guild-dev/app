@@ -54,7 +54,9 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
           width: el.getBoundingClientRect().width,
           scroll: el.scrollWidth,
           height: el.getBoundingClientRect().height,
-          fontSize: parseFloat(getComputedStyle(el).fontSize),
+          lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+          clientHeight: el.clientHeight,
+          scrollHeight: el.scrollHeight,
           left: el.getBoundingClientRect().left,
           right: el.getBoundingClientRect().right,
           itemLeft: el.parentElement!.getBoundingClientRect().left,
@@ -64,7 +66,8 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
         expect(size.left).toBeGreaterThanOrEqual(size.itemLeft);
         expect(size.right).toBeLessThanOrEqual(size.itemRight + 1);
         if (width <= 760) expect(size.width).toBeLessThanOrEqual(192.1);
-        if (width > 760 && index > 0) expect(size.height).toBeGreaterThan(size.fontSize * 1.5);
+        if (width > 760 && index > 0) expect(size.height).toBeGreaterThanOrEqual(size.lineHeight * 2 - 1);
+        expect(size.scrollHeight).toBeLessThanOrEqual(size.clientHeight + 1);
         if (width <= 390) {
           const scroll = await nav.evaluate((el) => ({ width: el.clientWidth, content: el.scrollWidth }));
           expect(scroll.content).toBeGreaterThan(scroll.width);
