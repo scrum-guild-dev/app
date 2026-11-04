@@ -212,7 +212,10 @@ test('組織の上限では残りの追加を止め、管理者への依頼を�
       .toBeLessThanOrEqual(1);
     if (width === 390) {
       await form.scrollIntoViewIfNeeded();
-      await form.screenshot({ path: '/tmp/738-editor-390.png' });
+      await test.info().attach('markdown-editor-390', {
+        body: await form.screenshot(),
+        contentType: 'image/png',
+      });
     }
   }
 });
