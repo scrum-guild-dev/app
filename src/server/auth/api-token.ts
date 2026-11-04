@@ -13,7 +13,7 @@ import { randomToken, sha256Hex } from './tokens.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type ApiToken = { accountId: string; tokenHash: string; scope: ApiTokenScope };
+export type ApiToken = { accountId: string; tokenHash: string; scope: ApiTokenScope; authenticatedAt: string };
 
 // 生の値は、ハッシュする前の `sgp_` + 乱数。DB にはこの SHA-256 の小文字の16進だけを持つ
 export function hashApiToken(token: string): Promise<string> {
@@ -46,6 +46,7 @@ export async function issueApiTokenWith(
     now: Date;
     lifetimeDays?: number;
     sessionTokenHash?: string;
+    sessionCreatedAt?: string;
   },
 ): Promise<IssuedApiToken> {
   const lifetimeDays = input.lifetimeDays ?? API_TOKEN_MAX_LIFETIME_DAYS;
@@ -57,6 +58,25 @@ export async function issueApiTokenWith(
   const expiresAt = new Date(input.now.getTime() + lifetimeDays * DAY_MS).toISOString();
   const createdAt = input.now.toISOString();
   const sessionTokenHash = input.sessionTokenHash;
+  let sourceCreatedAt = input.sessionCreatedAt;
+  if (sessionTokenHash !== undefined && sourceCreatedAt === undefined) {
+    const source = await db.first(
+      db.statement((q) =>
+        q
+          .selectFrom('sessions')
+          .select('created_at')
+          .where('token_hash', '=', sessionTokenHash)
+          .where('account_id', '=', input.accountId)
+          .where('expires_at', '>', createdAt),
+      ),
+    );
+    if (source === undefined) throw new ApiError(401, 'unauthenticated');
+    sourceCreatedAt = source.created_at;
+  }
+  // 組織の線の比較と同じ JS の日時の解釈を使う。SQL の strftime は RFC 表記を読めず、小数を丸める。
+  const sourceTime = Date.parse(sessionTokenHash === undefined ? createdAt : (sourceCreatedAt ?? ''));
+  if (!Number.isFinite(sourceTime)) throw new ApiError(401, 'unauthenticated');
+  const authenticatedAt = new Date(sourceTime).toISOString();
   // 上限と発行元のセッションを INSERT と同じ文で確かめ、全失効との競合でトークンを残さない。
   const statements: Statement<'common'>[] = [
     db.statement((q) =>
@@ -68,6 +88,7 @@ export async function issueApiTokenWith(
           'name',
           'scope',
           'created_at',
+          'authenticated_at',
           'last_used_at',
           'expires_at',
           'revoked_at',
@@ -80,6 +101,7 @@ export async function issueApiTokenWith(
               eb.val(input.name).as('name'),
               eb.val(input.scope).as('scope'),
               eb.val(createdAt).as('created_at'),
+              eb.val(authenticatedAt).as('authenticated_at'),
               eb.val(null).as('last_used_at'),
               eb.val(expiresAt).as('expires_at'),
               eb.val(null).as('revoked_at'),
@@ -104,6 +126,7 @@ export async function issueApiTokenWith(
                       .selectFrom('sessions')
                       .select('token_hash')
                       .where('token_hash', '=', sessionTokenHash)
+                      .where('created_at', '=', sourceCreatedAt ?? '')
                       .where('account_id', '=', input.accountId)
                       .where('expires_at', '>', createdAt),
                   ),
@@ -138,6 +161,7 @@ export async function issueApiTokenWith(
             .selectFrom('sessions')
             .select('token_hash')
             .where('token_hash', '=', sessionTokenHash)
+            .where('created_at', '=', sourceCreatedAt ?? '')
             .where('account_id', '=', input.accountId)
             .where('expires_at', '>', createdAt),
         ),
@@ -234,7 +258,7 @@ export async function readApiToken(env: Env, token: string | undefined, now: Dat
     db.statement((q) =>
       q
         .selectFrom('api_tokens')
-        .select(['account_id', 'scope', 'expires_at', 'revoked_at'])
+        .select(['account_id', 'scope', 'expires_at', 'revoked_at', 'authenticated_at', 'created_at'])
         .where('token_hash', '=', tokenHash),
     ),
   );
@@ -264,7 +288,12 @@ export async function readApiToken(env: Env, token: string | undefined, now: Dat
       }),
     );
   }
-  return { accountId: row.account_id, tokenHash, scope: row.scope };
+  return {
+    accountId: row.account_id,
+    tokenHash,
+    scope: row.scope,
+    authenticatedAt: row.authenticated_at ?? row.created_at,
+  };
 }
 
 // その人のトークンを、checkedAt までに作られたものだけ取り消す。checkedAt より後に発行したトークンは残す（deleteSessionsOf と同じ）。

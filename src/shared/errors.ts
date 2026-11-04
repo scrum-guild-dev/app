@@ -4,6 +4,8 @@ export const errorCodes = [
   'invalid_input',
   // セッションが無いか切れた。401。画面はこれを見てログインの画面へ戻す
   'unauthenticated',
+  // この組織が受け付ける認証の時刻より古い。401。ログインし直す案内を出す
+  'organization_reauth_required',
   // ログインしていて、権限が無い。Origin が公開する URL と違うときも
   'forbidden',
   // パスワードでのログインの、違うパスワード、無いメールアドレス、そろえ方に合わない入力。401。どれも同じ本文にする

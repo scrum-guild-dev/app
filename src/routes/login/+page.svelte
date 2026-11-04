@@ -14,9 +14,10 @@
 
   // ログインの画面（枠の外）。ログインしていない人の移し先で、ログイン後に戻る先は return_to（自分のサイトのパス。
   // 無いか不正なら /）。ログインの開始は GET のリダイレクトなので、ボタンはリンクにして、画面の遷移を通さず直に開く。
-  // ?error= はサーバーが付ける（src/server/auth/login-routes.ts の LoginError）。知らない値は出さない
+  // ?error= はサーバー（LoginError）と、組織の 401 からの画面誘導が付ける。知らない値は出さない
   const errorMessages: Record<string, DictionaryKey> = {
     denied: 'loginErrorDenied',
+    organization_reauth_required: 'loginErrorOrganizationReauthRequired',
     retry: 'loginErrorRetry',
     too_many: 'loginErrorTooMany',
     unavailable: 'loginErrorUnavailable',
@@ -81,8 +82,8 @@
 
 <Gate>
   <GateSheet brand title={t('loginTitle')}>
-    <!-- ほかの手段の ?error= の理由。パスワードで断られた後は、フォームの中の理由だけを出す -->
-    {#if errorKey && !formError}
+    <!-- ?error= の理由。組織の再ログイン案内は、パスワードの入力エラーと一緒にも出す -->
+    {#if errorKey && (!formError || errorKey === 'loginErrorOrganizationReauthRequired')}
       <div class="callout is-warn" role="alert"><Icon name="alert" /><span>{t(errorKey, words)}</span></div>
     {:else if loggedOut && !formError}
       <div class="callout is-info"><Icon name="shield" /><span>{t('loggedOut')}</span></div>

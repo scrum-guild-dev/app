@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   attachmentMarkdown,
   AttachmentUploadError,
@@ -169,4 +169,24 @@ describe('binary upload', () => {
     ).rejects.toMatchObject({ code: 'cancelled' });
     expect(skipped.sent).toBeUndefined();
   });
+});
+
+afterEach(() => vi.unstubAllGlobals());
+
+it('XHRの添付でも、組織の古い認証を断られたらログインへ移す', async () => {
+  const replace = vi.fn();
+  vi.stubGlobal('window', { location: { pathname: '/aoba/me', search: '', replace } });
+  const xhr = request();
+  xhr.status = 401;
+  xhr.responseText = JSON.stringify({ error: { code: 'organization_reauth_required', message: '再認証' } });
+  const result = uploadAttachment(new File(['x'], 'a'), {
+    slug: 'aoba',
+    workspaceId: 'w',
+    signal: new AbortController().signal,
+    progress: () => {},
+    createRequest: () => xhr as unknown as XMLHttpRequest,
+  });
+  xhr.onload?.();
+  await expect(result).rejects.toMatchObject({ code: 'organization_reauth_required' });
+  expect(replace).toHaveBeenCalledWith('/login?return_to=%2Faoba%2Fme&error=organization_reauth_required');
 });
