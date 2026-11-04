@@ -656,6 +656,32 @@ export const dictionary = defineDictionary({
   // 受注と抜けるが 404。エピックが消えたか、呼んだ人がもう所属していない
   epicPartyGone: '{epic}が見つからないか、{workspace}に所属していないため、{party}を変えられません',
   epicPartyFailed: '{party}を更新できませんでした。もう一度試してください',
+  // エピックの完了（クリア）と取り消し。操作は依頼主とリーダーだけに出す。完了にできない理由は、押せない操作の横に出す
+  epicClearPanel: '{epic}の{done}',
+  epicClearNoteOpen: '未完了の{story}が {count} 件残っているあいだは、{done}にできません。',
+  epicClearNoteEmpty: '{story}が1件も無い{epic}は、{done}にできません。',
+  epicClearNoteReady: '配下の{story}がすべて{done}です。{done}にすると、{party}全員に{reward}が入ります。',
+  epicClearNoteCleared: '{done}を取り消すと、入った{reward}もすべて取り消されます。',
+  epicReopen: '{done}を取り消す',
+  epicClearing: '{epic}を{done}にしています',
+  epicReopening: '{epic}の{done}を取り消しています',
+  epicClearedToast: '{epic}を{done}にしました。{party}の {count} 人に {xp} XP',
+  epicClearedToastEmpty: '{epic}を{done}にしました',
+  epicReopened: '{epic}の{done}を取り消しました。入った{reward}も取り消しました',
+  // 演出。判子の文字と、閉じる前に読ませる額
+  epicCelebrateStamp: 'クリア',
+  epicCelebrateReward: '{party}の {count} 人に {xp} XP',
+  epicCelebrateRewardNone: '{party}はいませんでした',
+  // 断られたとき。画面は読み直す
+  epicClearOpenStories: '未完了の{story}が残っているため、{done}にできません。最新の内容を表示しています',
+  epicClearEmpty: '{story}が1件も無いため、{done}にできません。最新の内容を表示しています',
+  epicClearAlready: 'この{epic}は、すでに{done}です。最新の内容を表示しています',
+  epicNotCleared: 'この{epic}は{done}していません。最新の内容を表示しています',
+  epicClearForbidden: '{done}にできるのは、依頼主とリーダーだけです',
+  epicClearFinished: 'この{epic}は中止しているので、{done}にも取り消しにもできません',
+  epicClearChanged: 'ほかの画面で変わったため、できませんでした。最新の内容を表示しています',
+  epicClearFailed: '{done}にできませんでした。もう一度試してください',
+  epicReopenFailed: '{done}を取り消せませんでした。もう一度試してください',
   // 割り振りのダイアログ。候補は member-list の今所属している人のうち、討伐隊にいない人
   epicAssignField: '割り振る人',
   epicAssignHint: '{workspace}に今所属していて、まだ{party}にいない人から選びます。',

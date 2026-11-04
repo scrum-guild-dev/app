@@ -19,7 +19,8 @@ export const XP_HELP_WEEKLY_LIMIT = 3;
 export const XP_STORY_COMPLETED = 20;
 
 // エピックのクリア報酬の段階（epics.reward_tier の CHECK と同じ並び）と、段階ごとの経験値。
-// 1人1スプリントで約 400 の尺度に対し、大は 1.5 スプリント分。画面に額を出すために持つ。払うのはクリアの処理
+// 1人1スプリントで約 400 の尺度に対し、大は 1.5 スプリント分。画面に額を出すために持つ。払うのはクリアの処理（epic-complete）で、
+// クリアした時点の段階の額を、そのときの討伐隊のうち今そのワークスペースに所属している人に、1人1行ずつ付ける（取り消すと打ち消す）
 export const epicRewardTiers = ['small', 'medium', 'large'] as const;
 export type EpicRewardTier = (typeof epicRewardTiers)[number];
 

@@ -467,6 +467,29 @@ export const pointers: Pointers = {
     });
     return { workspace_id: target.workspace.id, epic_id: epic.id, reward_tier: 'large' };
   },
+  // 呼ぶたびに、配下が完了したストーリーを持つエピックを作る（クリアすると2回目は 409 になるため）。依頼主は呼ぶ人
+  'epic-complete': async (target, caller) => {
+    const requester = personOf(target, caller) ?? target.admin;
+    const epic = await createEpic(target.organization, target.workspace.id, target.admin.userId!, {
+      requester_user_id: requester.userId!,
+    });
+    await createStory(target.organization, target.workspace.id, target.admin.userId!, {
+      epic_id: epic.id,
+      completed_at: '2026-10-22T00:00:00.000Z',
+      completed_by: target.admin.userId!,
+    });
+    return { workspace_id: target.workspace.id, epic_id: epic.id };
+  },
+  // 呼ぶたびにクリア済みのエピックを作る。依頼主は呼ぶ人
+  'epic-reopen': async (target, caller) => {
+    const requester = personOf(target, caller) ?? target.admin;
+    const epic = await createEpic(target.organization, target.workspace.id, target.admin.userId!, {
+      requester_user_id: requester.userId!,
+      completed_at: '2026-10-22T00:00:00.000Z',
+      completed_by: target.admin.userId!,
+    });
+    return { workspace_id: target.workspace.id, epic_id: epic.id };
+  },
   // 呼ぶたびにエピックを作る（依頼主を替えた後に同じ人を送ると何も書かないため）。依頼主は管理者で、替え先は対象の一般のメンバー
   // （今所属している）。リーダーだけが呼べる
   'epic-requester-update': async (target) => ({
