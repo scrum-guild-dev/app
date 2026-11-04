@@ -54,6 +54,8 @@
     attachmentId?: string;
     insertion?: MarkdownInsertion;
   };
+  const uid = $props.id();
+  const quotaId = `${uid}-quota`;
   let files = $state<Upload[]>([]);
   let picker: HTMLInputElement;
   let sequence = 0;
@@ -177,14 +179,14 @@
             code === 'cancelled'
               ? 'attachmentCancelled'
               : code === 'attachment_quota_exceeded'
-                ? 'attachmentQuota'
+                ? 'attachmentQuotaFile'
                 : 'attachmentFailed',
           );
           file.state = 'error';
           if (code === 'attachment_quota_exceeded') {
             quota = true;
             for (const queued of files.filter((entry) => entry.state === 'queued')) {
-              queued.error = t('attachmentQuota');
+              queued.error = t('attachmentQuotaFile');
               queued.state = 'error';
             }
           }
@@ -256,7 +258,7 @@
     {readonly}
     {placeholder}
     aria-invalid={invalid}
-    aria-describedby={describedby}
+    aria-describedby={[describedby, quota ? quotaId : undefined].filter(Boolean).join(' ') || undefined}
     data-comment-input={dataCommentInput}
     oninput={(event) => {
       value = event.currentTarget.value;
@@ -294,7 +296,7 @@
       >{t('attachmentChoose')}</button
     >
   </div>
-  {#if quota}<p class="field-error" role="alert">{t('attachmentQuota')}</p>{/if}
+  {#if quota}<p class="field-error" id={quotaId} role="alert"><Icon name="alert" />{t('attachmentQuota')}</p>{/if}
   {#if notice}<p class="field-error" role="alert">{notice}</p>{/if}
   {#each files.filter((file) => file.state !== 'done' || attachmentIds.includes(file.attachmentId ?? '')) as file (file.key)}
     <div class="file-row" class:is-error={file.error !== null}>

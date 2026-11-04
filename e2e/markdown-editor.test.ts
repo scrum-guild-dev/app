@@ -184,8 +184,21 @@ test('組織の上限では残りの追加を止め、管理者への依頼を�
     { name: '二枚目.png', mimeType: 'image/png', buffer: PNG },
   ]);
   await expect(form.getByRole('button', { name: 'ファイルを選ぶ', exact: true })).toBeDisabled();
-  await expect(form).toContainText('管理者');
-  await expect(form.locator('.file-row.is-error')).toHaveCount(2);
+  // 対処方法は欄全体に一度だけ知らせ、入力欄から説明としてたどれる。
+  const quotaSummary = form.getByRole('alert').filter({ hasText: '管理者' });
+  await expect(quotaSummary).toHaveCount(1);
+  await expect(quotaSummary).toContainText('運用者に上限の変更を依頼');
+  await expect(quotaSummary).toHaveAttribute('id', /\S+/);
+  const quotaId = await quotaSummary.getAttribute('id');
+  await expect(page.locator(`[id="${quotaId}"]`)).toHaveCount(1);
+  expect((await input.getAttribute('aria-describedby'))?.split(/\s+/)).toContain(quotaId);
+  await expect(quotaSummary.locator('svg use[href="#i-alert"]')).toHaveCount(1);
+  const fileErrors = form.locator('.file-row.is-error');
+  await expect(fileErrors).toHaveCount(2);
+  for (const row of await fileErrors.all()) {
+    await expect(row.getByRole('alert')).toContainText('上限');
+    await expect(row.getByRole('alert')).not.toContainText('管理者');
+  }
   expect(requests).toBe(1);
   // 上限後もブラウザ自身のファイル表示へ移動させず、追加せずに欄を残す。
   for (const target of [input, form.locator('.dropzone')]) {

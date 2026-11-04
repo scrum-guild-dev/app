@@ -29,6 +29,7 @@ export const dictionary = defineDictionary({
   attachmentCancelLabel: '{name} のアップロードをやめる',
   attachmentTooLarge: '{size} MBです。1ファイルの上限50 MBを超えています。',
   attachmentTooMany: '1回の保存で添付できるのは20件までです。先に保存してから追加してください。',
+  attachmentQuotaFile: '容量の上限により添付できません。',
   attachmentQuota:
     '組織の添付容量の上限に達しました。管理者が不要なファイルを消すか、運用者に上限の変更を依頼すると添付できます。',
   attachmentFailed: '上げられませんでした。接続と権限を確認して、もう一度ファイルを選んでください。',
