@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { A11Y_THEMES, applyTheme, createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { resetWikiRateLimits } from './local-d1.ts';
 import { operationPath } from '../src/shared/operations/define.ts';
 import { organizationInfo } from '../src/shared/operations/organization/index.ts';
@@ -28,27 +28,54 @@ test('自分用の組織の Wiki は組織の表示名で案内する', async ({
   await expect(page).toHaveTitle('Wiki・自分用 - Scrum Guild');
 });
 
-test('長い組織名がメニューに収まり、画面内の移動で権限を失ったときは見つからないと示す', async ({ page }) => {
-  const name = 'A'.repeat(80);
-  await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
-    ...output,
-    organization: { ...output.organization, name },
-  }));
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/aoba/wiki');
-  const menu = page.locator('.nav-item-label', { hasText: `${name}の Wiki` });
-  for (const width of [1280, 1024, 390, 320]) {
-    await page.setViewportSize({ width, height: 800 });
-    await expect(menu).toBeVisible();
-    expect(await menu.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-    expect(await menu.evaluate((element) => element.getBoundingClientRect().width < window.innerWidth)).toBe(true);
-    if (width <= 390) {
-      const ordinary = page.getByRole('link', { name: '今日やること', exact: true });
-      const menuHeight = await menu.evaluate((element) => element.closest('.nav-item')!.getBoundingClientRect().height);
-      expect(await ordinary.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(menuHeight);
+for (const theme of A11Y_THEMES) {
+  test(`長い組織名を全文読め、狭い幅の隣のメニューは伸びず上端が揃う（${theme}）`, async ({ page }) => {
+    const name = 'A'.repeat(80);
+    await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
+      ...output,
+      organization: { ...output.organization, name },
+    }));
+    await page.goto('/aoba/wiki');
+    const menu = page.locator('.nav-item', { hasText: `${name}の Wiki` });
+    const label = menu.locator('.nav-item-label');
+    const ordinary = page.getByRole('link', { name: '今日やること', exact: true });
+    await expect(label).toBeVisible();
+    await applyTheme(page, theme);
+    for (const width of [1280, 1024, 390, 320]) {
+      await page.setViewportSize({ width, height: 800 });
+      await expect(label).toBeVisible();
+      await expect(label).toHaveText(`${name}の Wiki`);
+      expect(await label.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      expect(await label.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+      expect(await label.evaluate((element) => element.getBoundingClientRect().width < window.innerWidth)).toBe(true);
+      if (width <= 390) {
+        const wikiBox = (await menu.boundingBox())!;
+        const todayBox = (await ordinary.boundingBox())!;
+        expect(todayBox.height).toBeLessThan(wikiBox.height);
+        expect(Math.abs(todayBox.y - wikiBox.y)).toBeLessThanOrEqual(1);
+      }
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     }
-  }
-  await page.setViewportSize({ width: 1280, height: 800 });
+    // 狭い幅でも隣の項目と本文を操作できる。
+    await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
+    await expect(page.getByLabel('題', { exact: true })).toBeVisible();
+    await ordinary.click();
+    await expect(page).toHaveURL(/\/aoba$/);
+    await menu.click();
+    await expect(page).toHaveURL(/\/aoba\/wiki$/);
+    // 広い幅では長い名前のまま畳み、再び全文を表示できる。
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.getByRole('button', { name: 'メニューを畳む' }).click();
+    await expect(page.locator('.app')).toHaveAttribute('data-nav-collapsed', 'true');
+    await expect(label).toHaveCSS('opacity', '0');
+    await expect(menu).toBeVisible();
+    await page.getByRole('button', { name: 'メニューを広げる' }).click();
+    await expect(label).toHaveCSS('opacity', '1');
+  });
+}
+
+test('画面内の移動で Wiki の権限を失ったときは見つからないと示す', async ({ page }) => {
+  await page.goto('/aoba/wiki');
   await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
   await page.getByLabel('題', { exact: true }).fill('権限の変化を確認するページ');
   await page.getByLabel('本文', { exact: true }).fill('本文');
@@ -58,7 +85,7 @@ test('長い組織名がメニューに収まり、画面内の移動で権限�
   await failOperation(page, orgWikiTree, { slug: 'aoba' }, 404, 'not_found');
   await failOperation(page, orgWikiPage, { slug: 'aoba' }, 404, 'not_found');
   // 親の組織レイアウトが再取得されない、同じ slug の画面内での移動。
-  await page.locator('.nav-item', { hasText: `${name}の Wiki` }).click();
+  await page.locator('.nav-item', { hasText: 'あおば開発の Wiki' }).click();
   await expect(page.getByText('ページが見つかりません', { exact: true })).toBeVisible();
   await expect(page.getByText('この組織の全員が、読んで書けます。', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'ページを足す', exact: true })).toHaveCount(0);

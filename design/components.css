@@ -738,6 +738,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .ws-menu, .nav-group, .binding-foot { display: none; }
   .nav-toggle { display: none; }
   .org-menu { flex: 1 1 12rem; }
+  /* 折り返す長い組織名に合わせて、隣の短い項目を縦に伸ばさず上端を揃える。 */
   .nav { display: flex; align-items: flex-start; overflow-x: auto; width: 100%; gap: var(--space-1); }
   .nav-item { white-space: nowrap; }
   .nav-item.is-wrapping .nav-item-label { max-width: 12rem; }
