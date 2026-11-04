@@ -2,6 +2,7 @@
   import { taskFieldConflictReasonOf, taskFieldSet, type TaskFieldValue } from '../../shared/operations/task/index.ts';
   import { STORY_TEXT_MAX_LENGTH, longTextProblem, normalizeLongText } from '../../shared/story.ts';
   import { callOperation } from '../api.ts';
+  import { attachmentSaveFailure } from '../attachment-save.ts';
   import { EditBases } from '../field-edit.ts';
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
@@ -69,14 +70,21 @@
   }
 
   // 書く。成功は null、失敗はエラーの文
-  async function save(field: TaskFieldValue, raw: string): Promise<string | null> {
+  async function save(field: TaskFieldValue, raw: string, attachmentIds: string[]): Promise<string | null> {
     const next = normalizeLongText(raw);
     // 読んだ値は、保存の時点の欄の値でなく、直し始めた時点の値（直している間に読み直しで別の人の値が入っても、黙って上書きしない）
     const read = bases.readFor(field.id, field.value_md);
-    if (next === read) return null;
+    if (next === read && attachmentIds.length === 0) return null;
     const result = await callOperation(
       taskFieldSet,
-      { workspace_id: workspaceId, task_id: taskId, field_id: field.id, value_md: next, read_md: read },
+      {
+        workspace_id: workspaceId,
+        task_id: taskId,
+        field_id: field.id,
+        value_md: next,
+        read_md: read,
+        attachment_ids: attachmentIds,
+      },
       { slug },
     );
     if (result.ok) {
@@ -85,6 +93,8 @@
       showToast(t('taskSaved'), 'check');
       return null;
     }
+    const attachmentError = attachmentSaveFailure(result.status, result.error, attachmentIds);
+    if (attachmentError !== null) return attachmentError;
     if (result.status === 404) {
       // 読み直して欄が一覧から外れていたときだけ、削除されたと言う（読み直せなかったときは言い切らない）
       return (await onmissing(field.id)) ? t('fieldValueGone') : t('taskSaveFailed');
@@ -131,9 +141,10 @@
         value={field.value_md ?? ''}
         label={field.name}
         multiline
+        markdown={{ slug, workspaceId }}
         hint={t('bodyEditHint')}
         problem={(raw) => problemOf(field, raw)}
-        save={(raw) => save(field, raw)}
+        save={(raw, attachmentIds) => save(field, raw, attachmentIds)}
         normalize={(raw) => normalizeLongText(raw) ?? ''}
         ondirty={(dirty) => setDirty(field.id, dirty)}
         onbegin={(started) => bases.begin(field.id, normalizeLongText(started))}

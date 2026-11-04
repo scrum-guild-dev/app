@@ -51,6 +51,15 @@ describe('Markdown.svelte の悪い入力', () => {
     expect(html('<script>alert(1)</script>')).toContain('&lt;script>alert(1)&lt;/script>');
   });
 
+  test('添付の経路だけを画像で描き、説明を属性としてエスケープする', () => {
+    const src = '/api/aoba/attachments/019abcde-1234-7123-8123-0123456789ab';
+    const out = html(`前 ![図 "説明"](${src}) 後`);
+    expect(out).toContain(`<img src="${src}" alt="図 &quot;説明&quot;" loading="lazy"`);
+    expect(out).toContain('前 ');
+    expect(out).toContain(' 後');
+    expect(html(`<img src="${src}">`)).not.toContain('<img');
+  });
+
   test('外部の画像は img でなくリンクとして出る', () => {
     const out = html('![x](https://example.com/a.png)');
     expect(out).not.toContain('<img');
@@ -70,7 +79,7 @@ describe('Markdown.svelte の悪い入力', () => {
     expect(out).toContain('<p>a b</p>');
   });
 
-  test.each(['./Markdown.svelte', './MarkdownBlocks.svelte', './MarkdownPlain.svelte'])(
+  test.each(['./Markdown.svelte', './MarkdownBlocks.svelte', './MarkdownPlain.svelte', './AttachmentImage.svelte'])(
     '%s は HTML を差し込む記法とインラインの style を使っていない',
     (file) => {
       const component = readFileSync(new URL(file, import.meta.url), 'utf8');

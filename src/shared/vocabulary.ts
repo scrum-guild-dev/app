@@ -11,6 +11,27 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 }
 
 export const dictionary = defineDictionary({
+  attachmentImageMissing: 'ファイルが見つかりません',
+  attachmentMissing: '添付ファイルが見つかりません。本文を残したまま、ファイルをもう一度追加してください。',
+  attachmentAlreadyAttached:
+    'すでに保存された添付ファイルがあります。本文は残っています。内容を確認してから保存し直してください。',
+
+  attachmentChoose: 'ファイルを選ぶ',
+  attachmentDrop: 'ここにファイルをドラッグして添付',
+  attachmentDropHint: '1ファイル50 MBまで。複数を選べます。画像は本文に貼り付けても添付できます。',
+  attachmentUploading: '上げています {percent}%・{size} MB',
+  attachmentReady: '保存すると添付されます・{size} MB',
+  attachmentCancel: 'やめる',
+  attachmentDismiss: '閉じる',
+  attachmentCancelLabel: '{name} のアップロードをやめる',
+  attachmentTooLarge: '{size} MBです。1ファイルの上限50 MBを超えています。',
+  attachmentTooMany: '1回の保存で添付できるのは20件までです。先に保存してから追加してください。',
+  attachmentQuota:
+    '組織の添付容量の上限に達しました。管理者が不要なファイルを消すか、運用者に上限の変更を依頼すると添付できます。',
+  attachmentFailed: '上げられませんでした。接続と権限を確認して、もう一度ファイルを選んでください。',
+  attachmentCancelled: 'アップロードをやめました。',
+  attachmentEmpty: '空のファイルは添付できません（0 MB）。',
+
   wikiSearch: 'Wiki の題と本文を探す',
   wikiSearchHint: 'この Wiki の中だけを探します。空白で区切って5語・100字まで。すべての語を含むページを探します。',
   wikiSearchRun: '探す',

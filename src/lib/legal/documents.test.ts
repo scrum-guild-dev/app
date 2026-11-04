@@ -12,6 +12,7 @@ function textOf(nodes: MarkdownInline[]): string {
     .map((node) => {
       if (node.type === 'text' || node.type === 'literal' || node.type === 'code') return node.value;
       if (node.type === 'break') return '\n';
+      if (node.type === 'image') return node.alt;
       return textOf(node.children);
     })
     .join('');
