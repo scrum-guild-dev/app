@@ -1,42 +1,42 @@
 import { readFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
 
-test('長い名前のメニューの見本を各幅とテーマで読める', async ({ page }) => {
-  // カタログはアプリの配信対象外なので、共有の見本ファイルをそのまま返す。
-  const files: Record<string, string> = {
-    'index.html': 'text/html',
-    'tokens.css': 'text/css',
-    'components.css': 'text/css',
-    'icons.js': 'text/javascript',
-    'art.js': 'text/javascript',
-    'sample-data.js': 'text/javascript',
-    'kit.js': 'text/javascript',
-  };
-  await page.route('**/__design-catalog/**', async (route) => {
-    const name = new URL(route.request().url()).pathname.split('/').pop()!;
-    const contentType = files[name];
-    if (!contentType) return route.fulfill({ status: 404, body: '' });
-    await route.fulfill({
-      contentType,
-      body: readFileSync(new URL(`../design/${name}`, import.meta.url)),
-    });
-  });
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.setViewportSize({ width: 390, height: 1000 });
-  await page.goto('/__design-catalog/index.html');
-  await page.locator('#toc a[href="#nav-wrapping"]').click();
-  await expect(page).toHaveURL(/#nav-wrapping$/);
-  const section = page.locator('#nav-wrapping');
-  const labels = section.locator('.is-wrapping .nav-item-label');
-  await expect(labels).toHaveCount(3);
-  await expect(labels.nth(0)).toHaveText('こもれび工房の Wiki');
-  await expect(labels.nth(1)).toContainText('共同研究開発チーム');
-  const longName = (await labels.nth(2).innerText()).replace('の Wiki', '');
-  expect(longName).toMatch(/^[a-zA-Z0-9]{80}$/);
-  for (const width of [1280, 1024, 390, 320]) {
-    await page.setViewportSize({ width, height: 1000 });
-    for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+for (const width of [1280, 1024, 390, 320]) {
+  for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+    test(`長い名前のメニューの見本: ${width}px / ${theme}`, async ({ page }) => {
+      // カタログはアプリの配信対象外なので、共有の見本ファイルをそのまま返す。
+      const files: Record<string, string> = {
+        'index.html': 'text/html',
+        'tokens.css': 'text/css',
+        'components.css': 'text/css',
+        'icons.js': 'text/javascript',
+        'art.js': 'text/javascript',
+        'sample-data.js': 'text/javascript',
+        'kit.js': 'text/javascript',
+      };
+      await page.route('**/__design-catalog/**', async (route) => {
+        const name = new URL(route.request().url()).pathname.split('/').pop()!;
+        const contentType = files[name];
+        if (!contentType) return route.fulfill({ status: 404, body: '' });
+        await route.fulfill({
+          contentType,
+          body: readFileSync(new URL(`../design/${name}`, import.meta.url)),
+        });
+      });
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.setViewportSize({ width: 390, height: 1000 });
+      await page.goto('/__design-catalog/index.html');
+      await page.locator('#toc a[href="#nav-wrapping"]').click();
+      await expect(page).toHaveURL(/#nav-wrapping$/);
+      const section = page.locator('#nav-wrapping');
+      const labels = section.locator('.is-wrapping .nav-item-label');
+      await expect(labels).toHaveCount(3);
+      await expect(labels.nth(0)).toHaveText('こもれび工房の Wiki');
+      await expect(labels.nth(1)).toContainText('共同研究開発チーム');
+      const longName = (await labels.nth(2).innerText()).replace('の Wiki', '');
+      expect(longName).toMatch(/^[a-zA-Z0-9]{80}$/);
+      await page.setViewportSize({ width, height: 1000 });
       await page.locator(`[data-pick-theme][value="${theme}"]`).check();
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       for (const nav of await section.locator('.nav').all()) {
@@ -58,7 +58,7 @@ test('長い名前のメニューの見本を各幅とテーマで読める', as
         });
         await expect(nav.locator('.nav-item').last()).toBeInViewport();
       }
-    }
+      expect(errors).toEqual([]);
+    });
   }
-  expect(errors).toEqual([]);
-});
+}
