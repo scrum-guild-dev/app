@@ -93,7 +93,7 @@ function newGithubUser() {
   return user;
 }
 
-async function wikiFor(target: Target, organization = false) {
+async function wikiFor(target: Target, organization = false, author = target.member) {
   const id = crypto.randomUUID();
   const db = orgDb(env, target.organization.verified);
   const stamp = '2026-11-03T00:00:00.000Z';
@@ -108,8 +108,8 @@ async function wikiFor(target: Target, organization = false) {
         body_md: '本文',
         version: 1,
         position: 'a0',
-        created_by: target.member.userId!,
-        updated_by: target.member.userId!,
+        created_by: author.userId!,
+        updated_by: author.userId!,
         created_at: stamp,
         updated_at: stamp,
         deleted_at: null,
@@ -122,7 +122,7 @@ async function wikiFor(target: Target, organization = false) {
         version: 1,
         title: '手順',
         body_md: '本文',
-        saved_by: target.member.userId!,
+        saved_by: author.userId!,
         saved_at: stamp,
       }),
     ),
@@ -131,6 +131,13 @@ async function wikiFor(target: Target, organization = false) {
 }
 
 export const pointers: Pointers = {
+  'org-wiki-delete': async (target, caller) => ({
+    page_id: await wikiFor(target, true, personOf(target, caller) ?? target.admin),
+  }),
+  'workspace-wiki-delete': async (target, caller) => ({
+    workspace_id: target.workspace.id,
+    page_id: await wikiFor(target, false, personOf(target, caller) ?? target.admin),
+  }),
   attachments: async (target, caller) => {
     const person = personOf(target, caller) ?? target.admin;
     const workspaceId = person.userId === target.bystander.userId ? target.otherWorkspace.id : target.workspace.id;

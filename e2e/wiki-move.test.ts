@@ -10,8 +10,8 @@ test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
 
-async function add(page: Page, title: string) {
-  await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
+async function add(page: Page, title: string, child = false) {
+  await page.getByRole('button', { name: child ? '子のページを足す' : 'ページを足す', exact: true }).click();
   await page.getByLabel('題', { exact: true }).fill(title);
   await page.getByLabel('本文', { exact: true }).fill(`本文 ${title}`);
   await page.getByRole('button', { name: '保存する', exact: true }).click();
@@ -28,8 +28,12 @@ for (const scope of ['org', 'workspace'] as const) {
     const suffix = crypto.randomUUID().slice(0, 8);
     const first = `${'A'.repeat(80)}-${suffix}`,
       second = `${'B'.repeat(80)}-${suffix}`;
-    await add(page, first);
-    const url = await add(page, second);
+    // 組織の最上段はほかのファイルも使う。兄弟の順序は、このテストだけの親の下で確かめる。
+    const containerTitle = `並べ替えの親-${crypto.randomUUID()}`;
+    const containerUrl = await add(page, containerTitle);
+    await add(page, first, true);
+    await page.goto(containerUrl);
+    const url = await add(page, second, true);
     await page.getByRole('button', { name: '並べ替える', exact: true }).click();
     const up = page.getByRole('button', { name: `上へ: ${second}`, exact: true });
     // 検索で木を隠しても、戻ると並べ替えモードを保つ。
@@ -79,9 +83,14 @@ for (const scope of ['org', 'workspace'] as const) {
     }
     await expect(page.locator('.wiki-side .field-hint:has(+ nav)')).toContainText('移しました。');
     const tree = page.locator('.wiki-tree');
+    const siblings = tree
+      .locator('.wiki-node')
+      .filter({ has: page.getByRole('link', { name: containerTitle, exact: true }) })
+      .locator('..')
+      .locator(':scope > ul > li > .wiki-node > a');
     await expect
       .poll(async () => {
-        const titles = await tree.locator(':scope > li > .wiki-node > a').allTextContents();
+        const titles = await siblings.allTextContents();
         return titles.indexOf(second) >= 0 && titles.indexOf(second) < titles.indexOf(first);
       })
       .toBe(true);

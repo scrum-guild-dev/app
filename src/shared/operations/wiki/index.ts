@@ -14,6 +14,7 @@ export const wikiNodeSchema = z.object({
 });
 export const wikiPageSchema = wikiNodeSchema.extend({
   body_md: z.string(),
+  created_by: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -229,7 +230,27 @@ export const workspaceWikiUpload = defineOperation({
   input: z.object({ workspace_id: idSchema, parent_id: idSchema.nullable().default(null), files: uploadFiles }),
   output: z.object({ pages: z.array(wikiNodeSchema) }),
 });
+export const orgWikiDelete = defineOperation({
+  name: 'org-wiki-delete',
+  description: '組織の Wiki のページを消し、子を1つ上へ移す',
+  mode: 'write',
+  permission: 'organization',
+  input: z.object({ page_id: idSchema, read_parent_id: idSchema.nullable().optional() }),
+  output: z.object({ page_id: z.string() }),
+});
+export const workspaceWikiDelete = defineOperation({
+  name: 'workspace-wiki-delete',
+  description: 'ワークスペースの Wiki のページを消し、子を1つ上へ移す',
+  mode: 'write',
+  permission: 'member',
+  workspace: true,
+  hideForbiddenWorkspace: true,
+  input: z.object({ workspace_id: idSchema, page_id: idSchema, read_parent_id: idSchema.nullable().optional() }),
+  output: z.object({ page_id: z.string() }),
+});
 export const wikiOperations = [
+  orgWikiDelete,
+  workspaceWikiDelete,
   orgWikiUpload,
   workspaceWikiUpload,
   orgWikiMove,

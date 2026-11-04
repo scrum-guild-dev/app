@@ -3,6 +3,7 @@ import { sql, type RawBuilder } from 'kysely';
 import { crossOrganizationEntries, type OrganizationDb } from './entries.ts';
 import { compileOnlyKysely } from './entry.ts';
 import type { OrganizationTables } from './tables.ts';
+import { tailPosition } from './tail-position.ts';
 const compiler = compileOnlyKysely<OrganizationTables>();
 function raw<Row>(db: Pick<OrganizationDb, 'statement'>, query: RawBuilder<Row>) {
   return db.statement(() => ({ compile: () => query.compile(compiler) }));
@@ -45,7 +46,17 @@ export function organizationStorageBytes(db: OrganizationDb): RawBuilder<number>
   )`;
 }
 
-const pageColumns = ['id', 'parent_id', 'position', 'title', 'body_md', 'version', 'created_at', 'updated_at'] as const;
+const pageColumns = [
+  'id',
+  'parent_id',
+  'position',
+  'title',
+  'body_md',
+  'version',
+  'created_by',
+  'created_at',
+  'updated_at',
+] as const;
 export async function readWikiPage(
   db: OrganizationDb,
   scope: WikiScope,
@@ -296,6 +307,52 @@ export async function updateWikiPage(
     ),
   ]);
   return updated.changes > 0;
+}
+
+export async function deleteWikiPage(
+  db: OrganizationDb,
+  scope: WikiScope,
+  current: Pick<WikiPage, 'id' | 'created_by' | 'parent_id'>,
+  userId: string,
+  at: string,
+): Promise<boolean> {
+  // 子は書く時点で集める。読む間に子が増えても、消した親の下へ取り残さない。
+  // window関数で元の順と末尾の位置を一度だけ確定し、行の更新に引きずらせない。
+  const positions = sql`
+    SELECT c.id, ${tailPosition(
+      sql`(SELECT sibling.position FROM wiki_pages sibling
+        WHERE ${scopeOf('sibling', scope)} AND sibling.parent_id IS ${current.parent_id}
+          AND sibling.deleted_at IS NULL
+        ORDER BY sibling.position DESC, sibling.id DESC LIMIT 1)`,
+      sql`row_number() OVER (ORDER BY c.position, c.id)`,
+      sql`count(*) OVER ()`,
+    )} AS position
+    FROM wiki_pages c WHERE ${scopeOf('c', scope)}
+      AND c.parent_id = ${current.id} AND c.deleted_at IS NULL`;
+  const [deleted] = await db.batch([
+    raw(
+      db,
+      sql`UPDATE wiki_pages AS p SET deleted_at = ${at}, deleted_by = ${userId}
+      WHERE p.id = ${current.id} AND ${scopeOf('p', scope)} AND p.deleted_at IS NULL
+        AND p.created_by = ${current.created_by} AND p.parent_id IS ${current.parent_id}
+        AND ${openScope(db, scope)}
+        AND (${current.parent_id} IS NULL OR EXISTS (
+          SELECT 1 FROM wiki_pages parent WHERE parent.id = ${current.parent_id}
+            AND ${scopeOf('parent', scope)} AND parent.deleted_at IS NULL
+        ))`,
+    ),
+    raw(
+      db,
+      sql`WITH positions AS MATERIALIZED (${positions})
+      UPDATE wiki_pages AS p
+      SET parent_id = ${current.parent_id}, position = (SELECT position FROM positions WHERE id = p.id)
+      WHERE ${scopeOf('p', scope)} AND p.parent_id = ${current.id} AND p.deleted_at IS NULL
+        AND p.id IN (SELECT id FROM positions) AND changes() > 0
+        AND EXISTS (SELECT 1 FROM wiki_pages deleted WHERE deleted.id = ${current.id}
+          AND ${scopeOf('deleted', scope)} AND deleted.deleted_at = ${at} AND deleted.deleted_by = ${userId})`,
+    ),
+  ]);
+  return deleted.changes > 0;
 }
 
 export async function insertUploadedAttachment(
