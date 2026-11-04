@@ -373,3 +373,36 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
   await expect(input).toBeHidden();
   expect(sentIds).toEqual([readded.id]);
 });
+
+test('文字と画像を一緒に貼り付けると選択範囲を文字で置き換え、続けて画像を差し込む', async ({ page, baseURL }) => {
+  const drawer = await openTask(page, baseURL);
+  const input = drawer.getByRole('textbox', { name: 'コメントを書く', exact: true });
+  const form = input.locator('xpath=ancestor::form');
+  await input.fill('前半置換後半');
+  await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(2, 4));
+  await input.evaluate(
+    (element, bytes) => {
+      const clipboard = new DataTransfer();
+      clipboard.setData('text/plain', '貼った文章\n次の行');
+      clipboard.items.add(new File([new Uint8Array(bytes)], '一緒に貼る.png', { type: 'image/png' }));
+      element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: clipboard, bubbles: true, cancelable: true }));
+    },
+    [...PNG],
+  );
+  await expect(input).toHaveValue(
+    /^前半貼った文章\n次の行!\[一緒に貼る\.png\]\(\/api\/aoba\/attachments\/[^)]+\)後半$/,
+  );
+  const pasted = await input.inputValue();
+  await expect
+    .poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionStart))
+    .toBe(pasted.length - 2);
+  await expect
+    .poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionEnd))
+    .toBe(pasted.length - 2);
+  await expect(form.getByRole('button', { name: '送る', exact: true })).toHaveAttribute('aria-disabled', 'false');
+  await form.getByRole('button', { name: '送る', exact: true }).click();
+  const comment = drawer.locator('.comment').filter({ hasText: '前半貼った文章' });
+  await expect(comment).toContainText('次の行');
+  await expect(comment).toContainText('後半');
+  await expect(comment.locator('img[alt="一緒に貼る.png"]')).toBeVisible();
+});

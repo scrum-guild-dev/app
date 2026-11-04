@@ -109,10 +109,9 @@
     oninput?.();
   }
 
-  function add(list: FileList | File[]): void {
+  function add(list: FileList | File[], anchor = input?.selectionStart ?? value.length): void {
     if (readonly || quota) return;
     notice = null;
-    const anchor = input?.selectionStart ?? value.length;
     for (const file of Array.from(list)) {
       if (attachmentIds.length + active().length >= ATTACHMENTS_PER_SAVE) {
         notice = t('attachmentTooMany');
@@ -219,6 +218,27 @@
     files = files.filter((other) => other.key !== file.key);
   }
 
+  function paste(event: ClipboardEvent): void {
+    const clipboard = event.clipboardData;
+    if (!clipboard?.files.length) return;
+    event.preventDefault();
+    if (readonly) return;
+    const text = clipboard.getData('text/plain').replace(/\r\n?/g, '\n');
+    const start = input?.selectionStart ?? value.length;
+    const end = input?.selectionEnd ?? start;
+    let caret = start;
+    if (text !== '') {
+      applyEdit(start, end, text);
+      caret = start + text.length;
+      // Update selection synchronously so uploads and the next keystroke use the pasted position.
+      if (input) {
+        input.value = value;
+        input.setSelectionRange(caret, caret);
+      }
+    }
+    add(clipboard.files, caret);
+  }
+
   function drop(event: DragEvent): void {
     if (!event.dataTransfer?.types.includes('Files') && !event.dataTransfer?.files.length) return;
     event.preventDefault();
@@ -246,12 +266,7 @@
       if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
     }}
     ondrop={drop}
-    onpaste={(event) => {
-      if (!readonly && event.clipboardData?.files.length) {
-        event.preventDefault();
-        add(event.clipboardData.files);
-      }
-    }}></textarea>
+    onpaste={paste}></textarea>
   <div
     class="dropzone"
     class:is-disabled={readonly || quota}
