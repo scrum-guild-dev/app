@@ -382,6 +382,8 @@ function statesHtml() {
           <div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、送りません">もう一度保存する</button></div></div>
         <div class="callout is-warn">${icon("alert")}<span>保存の回数が多すぎます。しばらくしてから、もう一度保存してください。書いていた題と本文は、この画面に残してあります。</span></div>
         <p class="props-note">どちらも、入力は消さず、直す欄の上に理由を出します。ページ同士の競合（他の人が先に保存した）は、上の「同時に直されたとき」です。</p>`)}
+      ${panel("削除に失敗して読み直すとき", `<div class="callout is-warn" role="alert">${icon("alert")}<span>${t("wikiDeleteConflict")}</span><div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、読み直しません">${t("wikiReload")}</button></div></div>`)}
+      ${panel("削除後の更新に失敗したとき", `<div class="callout is-warn" role="alert">${icon("alert")}<span>${t("wikiDeleteRefreshFailed")}</span><div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、読み直しません">${t("wikiReload")}</button></div></div>`)}
       ${panel("木を読み込んでいる間と、読み込めなかったとき", `
         <p class="props-note" role="status">読み込んでいます</p>
         <div class="callout is-danger">${icon("alert")}<span>ページの木を読み込めませんでした。時間をおいて、もう一度試してください。</span>

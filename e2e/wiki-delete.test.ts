@@ -150,6 +150,7 @@ for (const scope of ['organization', 'workspace'] as const) {
     await page.getByRole('button', { name: '消す', exact: true }).click();
     await deletion(page).getByRole('button', { name: '消す', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('このページを消す権限がありません。Wikiを読み直してください。');
+    await expect(page.getByRole('button', { name: 'Wikiを読み直す', exact: true })).toBeFocused();
     await expect(page.getByRole('heading', { name: title, level: 2, exact: true })).toBeVisible();
     expect(page.url()).toBe(url);
     await unroute();
@@ -207,7 +208,7 @@ for (const scope of ['organization', 'workspace'] as const) {
       release();
     }
     await expect(page.getByRole('alert')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: title, level: 2, exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: title, level: 2, exact: true })).toBeFocused();
     await expect(page.getByRole('button', { name: '消す', exact: true })).toHaveCount(0);
   });
 }
@@ -292,6 +293,7 @@ for (const scope of ['organization', 'workspace'] as const) {
       expect(calls).toBe(1);
       const warning = page.getByRole('alert');
       await expect(warning).toContainText('ページは消しましたが、画面を読み直せませんでした。');
+      await expect(page.getByRole('button', { name: 'もう一度試す', exact: true })).toHaveCount(0);
       for (const width of [320, 390, 1024, 1280]) {
         await page.setViewportSize({ width, height: 900 });
         await expect(warning.getByRole('button', { name: 'Wikiを読み直す' })).toBeVisible();
@@ -459,5 +461,43 @@ for (const scope of ['organization', 'workspace'] as const) {
     await page.goBack();
     await expect(page).toHaveURL(target);
     await expect(page.getByRole('alert')).toHaveCount(0);
+  });
+}
+
+for (const scope of ['organization', 'workspace'] as const) {
+  test(`${scope}: 削除失敗後の読み直し500は専用の理由と再試行を残す`, async ({ page }) => {
+    if (scope === 'workspace') await createWorkspace(page, `再取得の失敗-${crypto.randomUUID().slice(0, 8)}`);
+    await page.goto(scope === 'organization' ? '/aoba/wiki' : new URL(page.url()).pathname + '/wiki');
+    const title = `読み直しを試す-${crypto.randomUUID().slice(0, 8)}`;
+    await add(page, title);
+    let calls = 0;
+    await routeOperation(
+      page,
+      scope === 'organization' ? orgWikiDelete : workspaceWikiDelete,
+      { slug: 'aoba' },
+      async (call) => {
+        calls++;
+        await call.fail(500, 'internal');
+      },
+    );
+    await page.getByRole('button', { name: '消す', exact: true }).click();
+    await deletion(page).getByRole('button', { name: '消す', exact: true }).click();
+    const restoreTree = await failOperation(
+      page,
+      scope === 'organization' ? orgWikiTree : workspaceWikiTree,
+      { slug: 'aoba' },
+      500,
+      'internal',
+    );
+    await page.getByRole('button', { name: 'Wikiを読み直す', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText(
+      'Wikiを読み直せませんでした。「Wikiを読み直す」で、もう一度試してください。',
+    );
+    await expect(page.getByRole('button', { name: 'Wikiを読み直す', exact: true })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'もう一度試す', exact: true })).toHaveCount(0);
+    await restoreTree();
+    await page.getByRole('button', { name: 'Wikiを読み直す', exact: true }).click();
+    await expect(page.getByRole('heading', { name: title, exact: true, level: 2 })).toBeFocused();
+    expect(calls).toBe(1);
   });
 }
