@@ -82,8 +82,8 @@
 
 <Gate>
   <GateSheet brand title={t('loginTitle')}>
-    <!-- ほかの手段の ?error= の理由。パスワードで断られた後は、フォームの中の理由だけを出す -->
-    {#if errorKey && !formError}
+    <!-- ?error= の理由。組織の再ログイン案内は、パスワードの入力エラーと一緒にも出す -->
+    {#if errorKey && (!formError || errorKey === 'loginErrorOrganizationReauthRequired')}
       <div class="callout is-warn" role="alert"><Icon name="alert" /><span>{t(errorKey, words)}</span></div>
     {:else if loggedOut && !formError}
       <div class="callout is-info"><Icon name="shield" /><span>{t('loggedOut')}</span></div>
