@@ -681,6 +681,13 @@ const SECTIONS = [
      <div class="field"><span class="field-label">使っている量と上限</span><div class="grid-2">${SQ.meter(3.1, 10)}${SQ.meter(8.3, 10)}${SQ.meter(10, 10)}<div class="panel">${SQ.meter(21.7, 50, { small: true })}</div></div></div>`,
     ["画像（PNG、JPEG、GIF、WebP）と動画（MP4、WebM）は画面で見せる。それ以外はダウンロードだけ。", "失敗は理由と数字を出す（何 MB を超えたか）。上限に達したら、上げる場所を止めて、誰が何をすれば添付できるかを書く。", "量の色は 80% を超えたら警告、上限で危険。色だけでなく、割合と文字を添える。", "消すときは、戻せないことと、差し込んだ所がどうなるかを確認のダイアログで伝える。"],
     ".files .file-thumb .file-thumb-label .file-art .is-video / .file-row .file-main .file-name .file-meta .file-actions .is-error .file-bar / .dropzone .is-over .is-disabled / .md-figure .comment-files .composer-foot / .preview .dialog-sheet.is-wide / .meter .meter-small .is-warn .is-full")],
+  ["markdown-editor", "Markdown を書く欄", () => block("markdown-editor", "Markdown を書く欄", "本文・受け入れ基準・決まった欄・コメントで使う共通の入力欄。ファイルを複数まとめて選択、ドロップ、貼り付けして追加できる。見本ではアップロードの進みを再現し、実際の保存や送信は行わない。",
+    SQ.markdownEditor("catalog-editor", { label: "Markdown の本文", value: "## 確認すること\n\n- [ ] 画像と手順を添付する", files: [
+      { id: "catalog-editor-progress", name: "確認画面.png", type: "image", size: "1.8 MB", state: "uploading", pct: 60 },
+      { id: "catalog-editor-error", name: "動作確認の録画.mp4", type: "video", size: "82.1 MB", state: "error", error: "50 MB を超えているため添付できません（82.1 MB）" },
+    ] }),
+    [".markdown-editor は入力欄、上げる場所、ファイル行を --space-2 の間隔で並べる。狭い幅では上げる場所の説明とボタンが折り返す。", "ファイルの選択は複数選択。進捗の行は「やめる」、失敗の行は「閉じる」で取り除ける。下の行だけを更新し、書いている本文を消さない。", "1ファイル50 MBまで。画像は Markdown の ![ファイル名](…) で差し込み、画像以外は本文に差し込まず添付する。生の HTML は許さない。"],
+    ".markdown-editor / .textarea / .dropzone / .files .file-row .file-main .file-name .file-meta .file-actions .is-error .file-bar")],
   ["markdown", "Markdown の本文", () => block("markdown", "Markdown の本文", "タスクの本文、コメント、決まった欄、ストーリーとエピックの本文を描く。生の HTML は文字で出し、リンクは http と https の絶対 URL だけにする。",
     `<div class="field"><span class="field-label">見出し、段落、リスト、チェックリスト、引用、コード、区切り線、表</span>${SQ.markdownSample()}</div>
      <div class="field"><span class="field-label">リンクにしないもの（HTML、相対リンク、mailto:、外部の画像）</span>${SQ.markdownSample("unsafe")}</div>

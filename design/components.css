@@ -1593,6 +1593,8 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .table td.is-wrap { overflow-wrap: anywhere; min-width: 12ch; }
 
 /* ===== 添付ファイル ===== */
+/* Markdown を書く欄と、上げる場所・ファイルごとの状態を同じ間隔で並べる。 */
+.markdown-editor { display: grid; gap: var(--space-2); min-width: 0; }
 /* 添付ファイルの一覧は、画像も動画もそれ以外も1行ずつ（容量、上げた人、日時）。縮小した絵（.file-thumb）は本文に差し込んだ画像にだけ使う */
 .files { display: grid; gap: var(--space-2); }
 .file-thumb { display: grid; gap: 4px; padding: 0; border: 1px solid var(--color-line); border-radius: var(--radius-1); background: var(--color-surface); text-align: left; overflow: hidden; }

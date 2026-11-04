@@ -901,6 +901,17 @@
       ${list.map(fileRow).join("")}
       ${opts.noDrop ? "" : dropzone(key, opts)}</div>`;
   }
+  // 本文を書く共通部品。テーマ切り替えなどで見本を描き直しても、書きかけを保つ。
+  const markdownDrafts = new Map();
+  function markdownEditor(key, opts = {}) {
+    if (!D.files[key]) D.files[key] = opts.files || [];
+    const inputId = `markdown-editor-${key}`;
+    return `<div class="field"><label class="field-label" for="${esc(inputId)}">${esc(opts.label || "本文")}</label>
+      <div class="markdown-editor" data-markdown-editor="${esc(key)}">
+        <textarea class="textarea" id="${esc(inputId)}" data-markdown-input="${esc(key)}" rows="5">${esc(markdownDrafts.get(key) ?? opts.value ?? "")}</textarea>
+        ${dropzone(key, { full: false })}${attachments(key, { noDrop: true })}
+      </div></div>`;
+  }
   // Markdown に差し込んだ画像。消したファイルは「見つかりません」と出す
   function mdImage(alt, id) {
     const hit = findFile(id);
@@ -2764,6 +2775,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function fakeUpload(key, files) {
     if (!files || !files.length) return; // ファイルでないものを落としたときは何もしない
     const picked = Array.from(files);
+    const editor = Array.from(document.querySelectorAll("textarea[data-markdown-input]")).find((el) => el.dataset.markdownInput === key);
+    let insertionAt = editor?.selectionStart || 0;
     let pending = picked.length, done = 0;
     const finish = () => { if (--pending === 0 && done) toast(`${icon("check")}${done} 件を添付しました`); };
     picked.forEach((file) => {
@@ -2779,7 +2792,18 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const timer = setInterval(() => {
         if (!findFile(f.id)) { clearInterval(timer); finish(); return; }
         f.pct = Math.min(100, f.pct + 25);
-        if (f.pct === 100) { clearInterval(timer); delete f.state; done += 1; finish(); }
+        if (f.pct === 100) {
+          clearInterval(timer); delete f.state; done += 1;
+          if (editor?.isConnected && f.type === "image") {
+            const alt = f.name.replace(/[\\[\]`*_<>]/g, "\\$&").replace(/[\r\n]/g, " ");
+            const markdown = `![${alt}](${f.id})`;
+            const at = Math.min(insertionAt, editor.value.length);
+            editor.setRangeText(markdown, at, at, "preserve");
+            insertionAt = at + markdown.length;
+            editor.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+          finish();
+        }
         redrawFiles(key);
       }, 350);
     });
@@ -2796,7 +2820,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // 落とし先の外では dropEffect を none にして落とせないことを示し、それでも落とされたら drop を打ち消す。
   // ページが受けないと、ブラウザが落としたファイルを開いてページが離れるため
   const isFileDrag = (ev) => Boolean(ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes("Files"));
-  const fileZone = (ev) => (ev.target.closest ? ev.target.closest(".dropzone[data-drop]") : null);
+  const fileZone = (ev) => (ev.target.closest ? ev.target.closest(".dropzone[data-drop], textarea[data-markdown-input]") : null);
   let overZone = null;
   document.addEventListener("dragover", (ev) => {
     if (!isFileDrag(ev)) return;
@@ -2817,7 +2841,19 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     ev.preventDefault();
     const zone = fileZone(ev);
     if (overZone) { overZone.classList.remove("is-over"); overZone = null; }
-    if (zone) fakeUpload(zone.dataset.drop, ev.dataTransfer.files);
+    if (zone) fakeUpload(zone.dataset.drop || zone.dataset.markdownInput, ev.dataTransfer.files);
+  });
+
+  document.addEventListener("input", (ev) => {
+    const key = ev.target.dataset && ev.target.dataset.markdownInput;
+    if (key) markdownDrafts.set(key, ev.target.value);
+  });
+  // 貼り付けたファイルも、選択・ドロップと同じ見本のアップロードへ渡す。
+  document.addEventListener("paste", (ev) => {
+    const key = ev.target.dataset && ev.target.dataset.markdownInput;
+    if (!key || !ev.clipboardData?.files.length) return;
+    ev.preventDefault();
+    fakeUpload(key, ev.clipboardData.files);
   });
 
   const extraRedraws = [];
@@ -2874,7 +2910,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
     card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml,
-    filesOf, fileThumb, fileRow, dropzone, attachments, mdBody, markdownSample, meter,
+    filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
     enableAssistOnCatalog: () => { assistOnCatalog = true; },
   };
