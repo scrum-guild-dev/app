@@ -377,6 +377,34 @@ describe('epic-complete', () => {
     expect(res.status).toBe(200);
   });
 
+  test('クリア後に配下のストーリーを削除したエピックは、配下を残す削除が通り、削除の印と履歴が残る', async () => {
+    const target = await createTarget();
+    const epic = await readyEpic(target);
+    const deleted = await storyUnder(target, epic.id, { position: 'a1', deleted_at: AT });
+    expect((await clear(target, epic.id)).status).toBe(200);
+    const db = orgDb(env, target.organization.verified);
+    // 削除済みのストーリーは配下に数えない。生きたストーリーも全部削除した状態にする
+    await db.run(
+      db.statement((q) =>
+        q
+          .updateTable('stories')
+          .set({ deleted_at: AT })
+          .where('epic_id', '=', epic.id)
+          .where('workspace_id', '=', target.workspace.id),
+      ),
+    );
+    expect(deleted.deleted_at).toBe(AT);
+    const res = await post(app, epicDelete, {
+      slug: target.slug,
+      token: target.leader.token,
+      body: { workspace_id: target.workspace.id, epic_id: epic.id, children: 'keep' },
+      env: testEnv,
+    });
+    expect(res.status).toBe(200);
+    expect((await epicRow(target, epic.id)).deleted_at).not.toBeNull();
+    expect((await logsOf(target, epic.id)).map((log) => log.action)).toEqual(['complete', 'delete']);
+  });
+
   test('書く文の条件: 読んだ後にクリアされたエピックは、配下を残す削除の文が行を変えない', async () => {
     const target = await createTarget();
     const epic = await epicOf(target, { completed_at: AT, completed_by: target.admin.userId! });
