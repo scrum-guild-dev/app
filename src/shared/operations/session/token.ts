@@ -13,7 +13,7 @@ const scope = z.enum(['read', 'write']);
 
 export const tokenCreate = defineOperation({
   name: 'token-create',
-  description: `API トークンを発行する。ログインから${API_TOKEN_REAUTH_MINUTES}分以内（ちょうども含む）のセッションに限り、超えたら 403 の reauth_required。名前（前後の空白を除いて1〜${API_TOKEN_NAME_MAX_LENGTH}文字）、範囲（read か write）、有効日数（1〜${API_TOKEN_MAX_LIFETIME_DAYS}の整数。省略は${API_TOKEN_MAX_LIFETIME_DAYS}日）を選ぶ。有効な（取り消していない、期限前の）トークンは1アカウントに${API_TOKEN_MAX_ACTIVE}件までで、超えたら 409 の conflict（details.reason は limit）。生の値はこの応答で1回だけ返る`,
+  description: `API トークンを発行する。ログインから${API_TOKEN_REAUTH_MINUTES}分以内（ちょうども含む）のセッションに限り、超えたら 403 の reauth_required。書き込み時にも発行元のセッションの存在・アカウント・期限を確かめ、無効なら発行せず 401 の unauthenticated。名前（前後の空白を除いて1〜${API_TOKEN_NAME_MAX_LENGTH}文字）、範囲（read か write）、有効日数（1〜${API_TOKEN_MAX_LIFETIME_DAYS}の整数。省略は${API_TOKEN_MAX_LIFETIME_DAYS}日）を選ぶ。有効な（取り消していない、期限前の）トークンは1アカウントに${API_TOKEN_MAX_ACTIVE}件までで、超えたら 409 の conflict（details.reason は limit）。生の値はこの応答で1回だけ返る`,
   mode: 'write',
   permission: 'login',
   cookieOnly: true,

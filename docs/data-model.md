@@ -194,7 +194,7 @@
 - 行数の上限: 1アカウントの有効な行（`revoked_at` が空で、`expires_at` が基準の時刻より後）は20件まで（`API_TOKEN_MAX_ACTIVE`）。発行の `INSERT` を `INSERT ... SELECT ... WHERE (有効な行の数) < 20` の1文にして守り、同時に発行しても超えない。発行元のセッションが有効でも入らなかったとき（`changes` が 0）は 409 の `conflict`（`details.reason` は `limit`）。取り消し済みと期限切れの行は数えない。一覧は上限と同じ件数までを返す（超えないはずの保険）。
 - Cookie からの発行は、同じ `INSERT ... SELECT ... WHERE` の中で、発行元の `sessions` の行が `token_hash` と `account_id` で一致し、`expires_at` が発行の基準時刻より後であることも確かめる。全失効などでセッションが消えていればトークンを作らず、401 の `unauthenticated`。`changes` が 0 のときはセッションを読み直し、上限の409と区別する。セッションを渡さないテスト・seed の発行にはこの条件を付けない。
 - 取り消し済みの行も、`expires_at` を過ぎるまで残す。期限を過ぎた行（`expires_at <= 定期処理の基準の時刻`）を、毎分の定期処理で消す（「期限切れの行の掃除」）。
-- 発行、一覧、取り消しは、マイプロフィールの画面から行う操作（`token-create`、`token-list`、`token-revoke`。どれも Cookie のセッションだけ）。発行は 1 行を `INSERT` し、発行したセッションの確認日時の更新を同じバッチで行う。生の値は応答で1回だけ返す。一覧は呼んだ人の、`revoked_at` が空で `expires_at` が今より後の行を、`created_at` の新しい順に返し、値は返さない（`id` は `token_hash`）。取り消しは呼んだ人の行だけを指し、他人の行と存在しない行は同じ 404。先に行を読んで 404 と成功を分け、書く文は `revoked_at IS NULL` の行だけを `UPDATE` するので、取り消し済みの行の `revoked_at` は書き直さない。
+- 発行、一覧、取り消しは、マイプロフィールの画面から行う操作（`token-create`、`token-list`、`token-revoke`。どれも Cookie のセッションだけ）。発行は、上のセッション検査と件数上限を条件に 1 行を `INSERT` し、挿入0件なら401と409を区別する。発行したセッションの確認日時の更新を同じバッチで行う。生の値は応答で1回だけ返す。一覧は呼んだ人の、`revoked_at` が空で `expires_at` が今より後の行を、`created_at` の新しい順に返し、値は返さない（`id` は `token_hash`）。取り消しは呼んだ人の行だけを指し、他人の行と存在しない行は同じ 404。先に行を読んで 404 と成功を分け、書く文は `revoked_at IS NULL` の行だけを `UPDATE` するので、取り消し済みの行の `revoked_at` は書き直さない。
 
 ### account_consents
 
