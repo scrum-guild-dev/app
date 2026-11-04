@@ -309,6 +309,36 @@ export const membershipLeaveOperation = implement(membershipLeave, async ({ db, 
           ]),
         ),
     ),
+    ...(removingOther
+      ? [
+          db.statement((q) =>
+            q
+              .updateTable('users')
+              .set((eb) => ({
+                credentials_not_before: eb.fn<string>('max', [
+                  eb.fn.coalesce(eb.ref('credentials_not_before'), eb.val(leftAt)),
+                  eb.val(leftAt),
+                ]),
+              }))
+              .where('id', '=', userId)
+              .where('organization_id', '=', organizationId)
+              .where((eb) => eb.exists(endedHere(q)))
+              .where((eb) =>
+                eb.not(
+                  eb.exists(
+                    q
+                      .selectFrom('memberships as remaining')
+                      .innerJoin('workspaces as rw', 'rw.id', 'remaining.workspace_id')
+                      .select('remaining.id')
+                      .where('rw.organization_id', '=', organizationId)
+                      .where('remaining.user_id', '=', userId)
+                      .where('remaining.left_at', 'is', null),
+                  ),
+                ),
+              ),
+          ),
+        ]
+      : []),
   ]);
 
   if ((results[0]?.changes ?? 0) === 0) {
