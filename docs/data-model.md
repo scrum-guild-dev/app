@@ -187,7 +187,7 @@
 | last_used_at | TEXT | | 最後に使った日時。一度も使っていなければ空。使うたびに今へ書き直す（前の値が今より前のときだけ） |
 | expires_at | TEXT | NOT NULL | 発行の日時から90日以内の固定の日時（`API_TOKEN_MAX_LIFETIME_DAYS`）。使っても延ばさない |
 | revoked_at | TEXT | | 取り消した日時。取り消していなければ空 |
-| authenticated_at | TEXT | NULL 可、UTC の日時の CHECK | 発行元のセッションの `created_at`。組織の認証の線と比べる。旧版の行や seed の NULL は `created_at` として読み、既存行は追加時に新しい CHECK の UTC 形式に合う `created_at` だけで埋め、合わない行は NULL のまま読み取り時に元の値へフォールバックする |
+| authenticated_at | TEXT | NULL 可、`????-??-??T??:??:??*Z` の GLOB CHECK（ミリ秒の桁数は固定しない） | 発行元のセッションの `created_at`。組織の認証の線と比べる。旧版の行や seed の NULL は `created_at` として読み、既存行は追加時に新しい CHECK の UTC 形式に合う `created_at` だけで埋め、合わない行は NULL のまま読み取り時に元の値へフォールバックする |
 
 - 索引: `(account_id)`。その人のトークンを取り消すときと、一覧が引く。
 - 読めるのは、`token_hash` の行があり、`revoked_at` が空で、`expires_at` が基準の時刻より後のとき。形が違う値（`API_TOKEN_PATTERN` に合わない）は DB を引かずに断る。
@@ -334,7 +334,7 @@
 | work_start_on | TEXT | | 稼働開始日。空なら区切らない |
 | work_end_on | TEXT | | 稼働終了日。空なら区切らない |
 | disabled_at | TEXT | | 無効にした日時。入っていればこの組織に入れない |
-| credentials_not_before | TEXT | NULL 可、24文字・ミリ秒3桁の UTC ISO 形式の CHECK | この日時以前の認証では、この組織に入れない。初期値は NULL（制限なし）。既存の無効なユーザーは24文字・ミリ秒3桁の UTC ISO 形式の CHECK に合う `disabled_at` で補完し、ほかの既存行は NULL |
+| credentials_not_before | TEXT | NULL 可、24文字・ミリ秒3桁の UTC ISO 形式の CHECK | この日時以前の認証では、この組織に入れない。初期値は NULL（制限なし）。既存の無効なユーザー（`disabled_at IS NOT NULL`）はマイグレーション実行時刻で補完し、有効な既存行は NULL |
 | last_seen_at | TEXT | | この組織に最後に入った日時。1時間に1回まで書く |
 | theme | TEXT | `organizations.theme` と同じ値か NULL | 自分で選んだテーマ。NULL なら組織の既定に従う。マイプロフィールの画面（`me-theme-update`）で変え、変えると `updated_at` が動く。変更の履歴（`change_logs`）には残さない |
 | created_at、updated_at | TEXT | NOT NULL | |
@@ -342,7 +342,7 @@
 - 表の制約: `CHECK ((login_subject IS NULL) = (login_email IS NOT NULL))`、`CHECK ((login_email IS NULL) = (claim_token_hash IS NULL) AND (login_email IS NULL) = (claim_expires_at IS NULL))`、`CHECK (login_email IS NULL OR (login_provider IN ('google', 'password') AND login_email = lower(trim(login_email))))`。
 - 一意: `(organization_id, login_provider, login_subject)`。`login_subject` が空の行どうしは、SQLite では NULL が重ならないので当たらない。待っている指名は、運用者が指名し直すと消すので、メールアドレスの一意は持たない。
 - 一意: `(organization_id, account_id) WHERE account_id IS NOT NULL`。アカウントと組織の組に1行。1つのアカウントに複数のログインの手段を結んだ後も、同じ人が1つの組織に2行持たないようにする。
-- 既存行の認証の線の補完では日時を推定・変換しない。`disabled_at` が24文字・ミリ秒3桁の UTC ISO 形式の CHECK に合わなければ NULL を残すため、そのような旧データの無効化時点は復元できない。線を24文字の固定形式だけにすることで、`max()` の文字列比較と時刻順を揃える。形式に合っても暦として読めない値は、入場時の日時比較が安全側に拒否する。管理者の所属を外すだけでは、管理者として入れる資格が残るので線を進めない。管理者の指名の解除だけも失効の対象外で、再指名時に古い認証で入れる場合がある（既に別の線が残っていれば、その線は守る）。
+- 既存の無効なユーザーの線は、マイグレーション実行時刻（`strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`）で補完する。旧トークンには元のセッションの作成時刻がなく、無効化の後に古い Cookie から発行したトークンもありうるため、`disabled_at` のコピーではそのトークンを止められない。元の認証時刻は復元できないので、移行時点までの認証を保守的に止める。`disabled_at` の値は参照・変換せず、形式が異なる値や不正な暦の値を線へ複製しない。線を24文字の固定形式だけにすることで、`max()` の文字列比較と時刻順を揃える。形式に合っても暦として読めない値は、入場時の日時比較が安全側に拒否する。管理者の所属を外すだけでは、管理者として入れる資格が残るので線を進めない。管理者の指名の解除だけも失効の対象外で、再指名時に古い認証で入れる場合がある（既に別の線が残っていれば、その線は守る）。
 - 索引: `(login_provider, login_subject)`。ログインのときに入れる組織を引く。
 - 表示するログイン名とアバターは `account_logins` から引く。
 - 会員が組織を作るとき（`create-my-organization`）は、作った人が最初の管理者になる。`is_admin = 1`、`account_id` は呼んだアカウント、ログインの手段と ID と `name` は、そのアカウントの最も早いログイン（`account_logins` を `created_at`、`login_provider`、`login_subject` の順に並べた先頭）の値。`change_logs` の `actor_user_id` は作った人の `users` の ID。運用者の指名の解決も結び直しも要らない。

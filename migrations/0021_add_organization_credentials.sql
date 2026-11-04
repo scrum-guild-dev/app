@@ -3,9 +3,10 @@
 ALTER TABLE users ADD COLUMN credentials_not_before TEXT
   CHECK (credentials_not_before IS NULL OR
     (length(credentials_not_before) = 24 AND credentials_not_before GLOB '????-??-??T??:??:??.???Z'));
--- 既に無効な旧アプリ行にも線を残す。形式が異なる旧データの日時は推定しない。
-UPDATE users SET credentials_not_before = disabled_at
-  WHERE length(disabled_at) = 24 AND disabled_at GLOB '????-??-??T??:??:??.???Z';
+-- 元の認証時刻を持たない旧トークンも止めるため、既に無効な人は移行時点までの認証を断る。
+-- disabled_at の形式や暦を引き継がず、有効な UTC ミリ秒の線を保存する。
+UPDATE users SET credentials_not_before = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  WHERE disabled_at IS NOT NULL;
 
 -- 古い版が書く NULL は、読む側で created_at として扱う。
 ALTER TABLE api_tokens ADD COLUMN authenticated_at TEXT
