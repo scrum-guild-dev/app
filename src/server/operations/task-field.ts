@@ -281,13 +281,15 @@ export const taskFieldSetOperation = implement(taskFieldSet, async ({ db, actor,
               eb.val('update').as('action'),
               eb
                 .fn<string>('json_patch', [
-                  eb.fn<string>('json_object', [
-                    eb.val('field'),
-                    eb.fn('json_array', [
-                      read === null ? eb.lit(null) : fieldRef(eb),
-                      next === null ? eb.lit(null) : fieldRef(eb),
-                    ]),
-                  ]),
+                  next === read
+                    ? eb.val('{}')
+                    : eb.fn<string>('json_object', [
+                        eb.val('field'),
+                        eb.fn('json_array', [
+                          read === null ? eb.lit(null) : fieldRef(eb),
+                          next === null ? eb.lit(null) : fieldRef(eb),
+                        ]),
+                      ]),
                   eb.val(JSON.stringify(attachmentChanges(attachmentSave.ids))),
                 ])
                 .as('changes_json'),

@@ -11,6 +11,7 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 }
 
 export const dictionary = defineDictionary({
+  historyAttachmentsAdded: '添付ファイルを追加した',
   attachmentImageMissing: 'ファイルが見つかりません',
   attachmentMissing: '添付ファイルが見つかりません。本文を残したまま、ファイルをもう一度追加してください。',
   attachmentAlreadyAttached:

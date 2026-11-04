@@ -224,3 +224,8 @@ test('感謝の履歴は相手の名前と「なし」を出す', () => {
     historyEntryView(entry({ changes: [{ field: 'thanks', before: member, after: null }] }), 'UTC', t).lines,
   ).toEqual([{ label: '感謝', text: `${member.name} → なし` }]);
 });
+
+test('添付の追加は値を出さず専用の文で示す', () => {
+  const view = historyEntryView(entry({ changes: [{ field: 'attachments', before: null, after: null }] }), 'UTC', t);
+  expect(view.lines).toEqual([{ label: null, text: '添付ファイルを追加した' }]);
+});
