@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { attachmentIdsSchema } from '../../attachment.ts';
 import { idSchema } from '../../id.ts';
 import { dueOnSchema, linkUrlSchema, longTextSchema } from '../../story.ts';
 import { taskPointsSchema, taskTitleSchema } from '../../task.ts';
@@ -25,6 +26,7 @@ export const taskUpdate = defineOperation({
   input: z.object({
     workspace_id: idSchema,
     task_id: idSchema,
+    attachment_ids: attachmentIdsSchema.optional(),
     title: taskTitleSchema.optional(),
     points: taskPointsSchema.nullable().optional(),
     due_on: dueOnSchema.optional(),

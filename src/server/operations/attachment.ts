@@ -20,12 +20,44 @@ export const attachmentDownloadOperation = implement(attachmentDownload, async (
         .select(['a.id', 'a.workspace_id', 'a.object_key', 'a.file_name', 'a.content_type'])
         .where('w.organization_id', '=', db.organizationId)
         .where('a.id', '=', input.id)
-        .where('a.uploaded_by', '=', userId)
-        .where('a.attached_at', 'is', null)
-        .where('a.task_id', 'is', null)
-        .where('a.story_id', 'is', null)
-        .where('a.epic_id', 'is', null)
-        .where('a.comment_id', 'is', null)
+        .where((eb) =>
+          eb.or([
+            eb.and([
+              eb('a.uploaded_by', '=', userId),
+              eb('a.attached_at', 'is', null),
+              eb('a.task_id', 'is', null),
+              eb('a.story_id', 'is', null),
+              eb('a.epic_id', 'is', null),
+              eb('a.comment_id', 'is', null),
+            ]),
+            eb.and([
+              eb('a.attached_at', 'is not', null),
+              eb('a.story_id', 'is', null),
+              eb('a.epic_id', 'is', null),
+              eb.or([
+                eb.exists(
+                  eb
+                    .selectFrom('tasks as t')
+                    .select('t.id')
+                    .whereRef('t.id', '=', 'a.task_id')
+                    .whereRef('t.workspace_id', '=', 'a.workspace_id')
+                    .where('t.deleted_at', 'is', null),
+                ),
+                eb.exists(
+                  eb
+                    .selectFrom('comments as c')
+                    .innerJoin('tasks as t', 't.id', 'c.task_id')
+                    .select('c.id')
+                    .whereRef('c.id', '=', 'a.comment_id')
+                    .whereRef('c.workspace_id', '=', 'a.workspace_id')
+                    .whereRef('t.workspace_id', '=', 'a.workspace_id')
+                    .where('c.deleted_at', 'is', null)
+                    .where('t.deleted_at', 'is', null),
+                ),
+              ]),
+            ]),
+          ]),
+        )
         .where((eb) =>
           actor.isAdmin
             ? eb.val(true)
@@ -40,7 +72,7 @@ export const attachmentDownloadOperation = implement(attachmentDownload, async (
         ),
     ),
   );
-  // 付く先のある行の権限は、付ける操作と一緒に扱う。この版では本人の未添付だけを返す。
+  // 未添付は本人だけ。確定した添付は、削除されていないタスクかコメントを今読める人だけ。
   if (row === undefined || row.object_key !== `${db.organizationId}/${row.workspace_id}/${row.id}`) {
     throw new ApiError(404, 'not_found');
   }

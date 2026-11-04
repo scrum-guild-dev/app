@@ -103,3 +103,5 @@ export {
   deleteWikiPage,
   type WikiScope,
 } from './wiki.ts';
+
+export { attachmentsReady, attachFilesStatement, type AttachmentSave } from './attach-files.ts';

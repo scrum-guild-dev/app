@@ -870,16 +870,21 @@
     return `<button class="file-thumb" type="button" data-file="${f.id}" aria-label="${esc(f.name)}（${FILE_KIND[f.type]}、${f.size}）を開く">${fileArt(f)}<span class="file-thumb-label"><b>${esc(f.name)}</b><span>${f.size}</span></span></button>`;
   }
   // 1行。f.state が uploading なら進み、error なら理由を出す
-  function fileRow(f) {
+  function fileRow(f, opts = {}) {
     if (f.state === "uploading") {
       return `<div class="file-row">${icon("upload")}<div class="file-main"><span class="file-name">${esc(f.name)}</span>
-        <span class="file-meta">上げています ${f.pct}%・${f.size}</span>
-        <span class="file-bar" role="progressbar" aria-valuenow="${f.pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(f.name)} を上げています"><span style="width:${f.pct}%"></span></span></div>
-        <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-cancel-file="${f.id}">やめる</button></div></div>`;
+        <span class="file-meta">${f.snapshot ? "進捗表示の見本（固定）" : "上げています"} ${f.pct}%・${f.size}</span>
+        <span class="file-bar" role="progressbar" aria-valuenow="${f.pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(f.name)} ${f.snapshot ? "の進捗表示の見本" : "を上げています"}"><span style="width:${f.pct}%"></span></span></div>
+        <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-cancel-file="${f.id}" aria-label="${esc(f.name)} ${f.snapshot ? "の進捗表示の見本を閉じる" : "のアップロードをやめる"}">${f.snapshot ? "閉じる" : "やめる"}</button></div></div>`;
     }
     if (f.state === "error") {
-      return `<div class="file-row is-error" role="alert">${icon("alert")}<div class="file-main"><span class="file-name">${esc(f.name)}</span><span class="file-meta">${esc(f.error)}</span></div>
-        <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-cancel-file="${f.id}">閉じる</button></div></div>`;
+      return `<div class="file-row is-error"${opts.quota ? "" : ' role="alert"'}>${icon("alert")}<div class="file-main"><span class="file-name">${esc(f.name)}</span><span class="file-meta">${esc(f.error)}</span></div>
+        <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-cancel-file="${f.id}" aria-label="${esc(f.name)} のエラー表示を閉じる">閉じる</button></div></div>`;
+    }
+    if (opts.editor) {
+      return `<div class="file-row">${icon("file")}<div class="file-main"><span class="file-name">${esc(f.name)}</span>
+        <span class="file-meta">保存すると添付されます・${esc(f.size)}</span></div>
+        <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-remove-editor-file="${esc(f.id)}" aria-label="${esc(f.name)} を添付から外す"${opts.readonly ? " disabled" : ""}>外す</button></div></div>`;
     }
     const nb = (s) => String(s).replace(/ /g, " ");
     return `<div class="file-row">${icon(FILE_ICON[f.type])}<div class="file-main"><button class="file-name" type="button" data-file="${f.id}" aria-label="${esc(f.name)}（${FILE_KIND[f.type]}）を開く">${esc(f.name)}</button>
@@ -887,10 +892,18 @@
       <div class="file-actions"><button class="icon-btn" type="button" data-toast="ダウンロードを始めました" aria-label="${esc(f.name)} をダウンロード" title="ダウンロード">${icon("download")}</button>
         <button class="icon-btn is-danger" type="button" data-delete-file="${f.id}" aria-label="${esc(f.name)} を消す" title="消す">${icon("trash")}</button></div></div>`;
   }
-  // 上げる場所。opts.button なら小さなボタンだけ、opts.full なら上限に達した状態
+  // 上げる場所。使えないときは操作を促さず、理由を読み上げと結ぶ。
+  let dropzoneSequence = 0;
   function dropzone(key, opts = {}) {
     if (opts.full ?? D.storage.used >= D.storage.quota) {
-      return `<div class="dropzone is-disabled">${icon("alert")}<span class="dropzone-text"><b>${t("organization")}の添付ファイルが上限（${D.storage.quota} GB）に達しているため、添付できません</b><span>${t("admin")}が不要なファイルを消すか、上限を上げると添付できます</span></span></div>`;
+      const reasonId = `dropzone-full-${++dropzoneSequence}`;
+      return `<div class="dropzone is-disabled" aria-disabled="true" aria-describedby="${reasonId}">${icon("alert")}<span class="dropzone-text"><b>${t("organization")}の添付ファイルが上限（${D.storage.quota} GB）に達しているため、添付できません</b><span id="${reasonId}">${t("admin")}が不要なファイルを消すか、上限を上げると添付できます</span></span></div>`;
+    }
+    if (opts.readonly || opts.quota) {
+      const reasonId = opts.describedby || `dropzone-disabled-${++dropzoneSequence}`;
+      return `<div class="dropzone is-disabled" aria-disabled="true" aria-describedby="${esc(reasonId)}">${icon("alert")}
+        <span class="dropzone-text"><b>${opts.quota ? "容量上限のため、ファイルを追加できません" : "この欄は読み取り専用です"}</b><span${opts.describedby ? "" : ` id="${esc(reasonId)}"`}>${opts.quota ? "組織の添付容量が上限に達しています。" : "ファイルの追加はできません。"}</span></span>
+        <button class="btn is-sm" type="button" disabled aria-describedby="${esc(reasonId)}">${icon("clip")}ファイルの追加はできません</button></div>`;
     }
     if (opts.button) return `<div><button class="btn is-sm is-quiet" type="button" data-pick-file="${key}">${icon("clip")}ファイルを添付</button></div>`;
     return `<div class="dropzone ${opts.over ? "is-over" : ""}" data-drop="${key}">${icon("upload")}
@@ -901,8 +914,28 @@
   function attachments(key, opts = {}) {
     const list = filesOf(key);
     return `<div class="files" data-files-for="${key}" data-files-opts='${JSON.stringify(opts)}'>
-      ${list.map(fileRow).join("")}
+      ${list.map((file) => fileRow(file, opts)).join("")}
       ${opts.noDrop ? "" : dropzone(key, opts)}</div>`;
+  }
+  // 本文を書く共通部品。テーマ切り替えなどで見本を描き直しても、書きかけを保つ。
+  const markdownDrafts = new Map();
+  const markdownOptions = new Map();
+  function markdownEditor(key, opts = {}) {
+    if (!D.files[key]) D.files[key] = opts.files || [];
+    markdownOptions.set(key, opts);
+    const inputId = `markdown-editor-${key}`;
+    const quotaId = `${inputId}-quota`;
+    const readonlyId = `${inputId}-readonly`;
+    const description = opts.quota ? quotaId : opts.readonly ? readonlyId : null;
+    return `<div class="field"><label class="field-label" for="${esc(inputId)}">${esc(opts.label || "本文")}</label>
+      <div class="markdown-editor" data-markdown-editor="${esc(key)}">
+        <textarea class="textarea" id="${esc(inputId)}" data-markdown-input="${esc(key)}" rows="5"${opts.readonly ? " readonly" : ""}${description ? ` aria-describedby="${esc(description)}"` : ""}>${esc(markdownDrafts.get(key) ?? opts.value ?? "")}</textarea>
+        ${dropzone(key, { full: false, readonly: opts.readonly, quota: opts.quota, describedby: description })}
+        ${opts.quota ? `<p class="field-error" id="${esc(quotaId)}" role="alert">${icon("alert")}組織の添付容量の上限に達しました。管理者が不要なファイルを消すか、運用者に上限の変更を依頼すると添付できます。</p>` : ""}
+        ${opts.readonly ? `<p class="field-hint" id="${esc(readonlyId)}">ワークスペースが終了しているため、読むことだけできます。</p>` : ""}
+        ${attachments(key, { noDrop: true, editor: true, readonly: opts.readonly, quota: opts.quota })}
+        <span class="visually-hidden" role="status" data-editor-notice="${esc(key)}"></span>
+      </div></div>`;
   }
   // Markdown に差し込んだ画像。消したファイルは「見つかりません」と出す
   function mdImage(alt, id) {
@@ -2648,6 +2681,25 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       DIALOGS[el.dataset.dialog](el);
       return;
     }
+    if ((el = hit("data-remove-editor-file"))) {
+      const found = findFile(el.dataset.removeEditorFile);
+      if (found && !markdownOptions.get(found.key)?.readonly) {
+        const editor = Array.from(document.querySelectorAll("textarea[data-markdown-input]")).find((input) => input.dataset.markdownInput === found.key);
+        const insertion = found.f.insertion;
+        let removedMarkdown = false;
+        if (editor && insertion && editor.value.slice(insertion.start, insertion.start + insertion.text.length) === insertion.text) {
+          editor.setRangeText("", insertion.start, insertion.start + insertion.text.length, "preserve");
+          editor.dispatchEvent(new Event("input", { bubbles: true }));
+          removedMarkdown = true;
+        }
+        D.files[found.key] = D.files[found.key].filter((file) => file !== found.f);
+        redrawFiles(found.key);
+        editor?.focus();
+        const notice = Array.from(document.querySelectorAll("[data-editor-notice]")).find((item) => item.dataset.editorNotice === found.key);
+        if (notice) notice.textContent = `${found.f.name} を添付から外しました。${removedMarkdown ? "本文の画像の記法も外しました。" : "本文はそのまま残しています。"}`;
+      }
+      return;
+    }
     if ((el = hit("data-file"))) { DIALOGS.previewFile(el.dataset.file); return; }
     if ((el = hit("data-delete-file"))) { closeDialog(); DIALOGS.deleteFile(el.dataset.deleteFile); return; }
     if ((el = hit("data-confirm-delete-file"))) {
@@ -2658,7 +2710,17 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if ((el = hit("data-pick-file"))) { pickFiles(el.dataset.pickFile); return; }
     if ((el = hit("data-cancel-file"))) {
       const found = findFile(el.dataset.cancelFile);
-      if (found) { D.files[found.key] = D.files[found.key].filter((x) => x !== found.f); redrawFiles(found.key); }
+      if (found) {
+        D.files[found.key] = D.files[found.key].filter((x) => x !== found.f);
+        redrawFiles(found.key);
+        const editor = Array.from(document.querySelectorAll("textarea[data-markdown-input]")).find((input) => input.dataset.markdownInput === found.key);
+        if (editor) {
+          editor.focus();
+          const notice = Array.from(document.querySelectorAll("[data-editor-notice]")).find((item) => item.dataset.editorNotice === found.key);
+          const action = found.f.state === "error" ? "エラー表示を閉じました" : found.f.snapshot ? "進捗表示の見本を閉じました" : "アップロードをやめました";
+          if (notice) notice.textContent = `${found.f.name} の${action}。本文はそのまま残しています。`;
+        }
+      }
       return;
     }
     if ((el = hit("data-celebrate"))) {
@@ -2766,7 +2828,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   const nowLabel = () => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
   function fakeUpload(key, files) {
     if (!files || !files.length) return; // ファイルでないものを落としたときは何もしない
+    const editorOptions = markdownOptions.get(key);
+    if (editorOptions?.readonly || editorOptions?.quota) return;
     const picked = Array.from(files);
+    const editor = Array.from(document.querySelectorAll("textarea[data-markdown-input]")).find((el) => el.dataset.markdownInput === key);
+    let insertionAt = editor?.selectionStart || 0;
     let pending = picked.length, done = 0;
     const finish = () => { if (--pending === 0 && done) toast(`${icon("check")}${done} 件を添付しました`); };
     picked.forEach((file) => {
@@ -2782,7 +2848,19 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const timer = setInterval(() => {
         if (!findFile(f.id)) { clearInterval(timer); finish(); return; }
         f.pct = Math.min(100, f.pct + 25);
-        if (f.pct === 100) { clearInterval(timer); delete f.state; done += 1; finish(); }
+        if (f.pct === 100) {
+          clearInterval(timer); delete f.state; done += 1;
+          if (editor?.isConnected && f.type === "image") {
+            const alt = f.name.replace(/[\\[\]`*_<>]/g, "\\$&").replace(/[\r\n]/g, " ");
+            const markdown = `![${alt}](${f.id})`;
+            const at = Math.min(insertionAt, editor.value.length);
+            editor.setRangeText(markdown, at, at, "preserve");
+            insertionAt = at + markdown.length;
+            editor.dispatchEvent(new Event("input", { bubbles: true }));
+            f.insertion = { start: at, text: markdown };
+          }
+          finish();
+        }
         redrawFiles(key);
       }, 350);
     });
@@ -2799,7 +2877,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // 落とし先の外では dropEffect を none にして落とせないことを示し、それでも落とされたら drop を打ち消す。
   // ページが受けないと、ブラウザが落としたファイルを開いてページが離れるため
   const isFileDrag = (ev) => Boolean(ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes("Files"));
-  const fileZone = (ev) => (ev.target.closest ? ev.target.closest(".dropzone[data-drop]") : null);
+  const fileZone = (ev) => {
+    const zone = ev.target.closest ? ev.target.closest(".dropzone[data-drop], textarea[data-markdown-input]") : null;
+    const key = zone && (zone.dataset.drop || zone.dataset.markdownInput);
+    const opts = markdownOptions.get(key);
+    return opts?.readonly || opts?.quota ? null : zone;
+  };
   let overZone = null;
   document.addEventListener("dragover", (ev) => {
     if (!isFileDrag(ev)) return;
@@ -2820,7 +2903,42 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     ev.preventDefault();
     const zone = fileZone(ev);
     if (overZone) { overZone.classList.remove("is-over"); overZone = null; }
-    if (zone) fakeUpload(zone.dataset.drop, ev.dataTransfer.files);
+    if (zone) fakeUpload(zone.dataset.drop || zone.dataset.markdownInput, ev.dataTransfer.files);
+  });
+
+  document.addEventListener("input", (ev) => {
+    const key = ev.target.dataset && ev.target.dataset.markdownInput;
+    if (!key) return;
+    const before = markdownDrafts.get(key) ?? markdownOptions.get(key)?.value ?? "";
+    const after = ev.target.value;
+    let start = 0;
+    while (start < before.length && start < after.length && before[start] === after[start]) start++;
+    let suffix = 0;
+    while (suffix < before.length - start && suffix < after.length - start && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix++;
+    const end = before.length - suffix;
+    const delta = after.length - before.length;
+    for (const file of filesOf(key)) {
+      if (!file.insertion) continue;
+      if (end <= file.insertion.start) file.insertion.start += delta;
+      else if (start < file.insertion.start + file.insertion.text.length) delete file.insertion;
+    }
+    markdownDrafts.set(key, after);
+  });
+  // ファイル名だけのメタデータは差し込まず、一緒にコピーした本文は選択範囲へ残す。
+  document.addEventListener("paste", (ev) => {
+    const key = ev.target.dataset && ev.target.dataset.markdownInput;
+    if (!key || !ev.clipboardData?.files.length) return;
+    ev.preventDefault();
+    if (markdownOptions.get(key)?.readonly) return;
+    const text = ev.clipboardData.getData("text/plain").replace(/\r\n?/g, "\n");
+    const fileNames = Array.from(ev.clipboardData.files, (file) => file.name).join("\n");
+    const comparableText = text.normalize("NFC");
+    const comparableNames = fileNames.normalize("NFC");
+    if (text && comparableText !== comparableNames && comparableText !== `${comparableNames}\n`) {
+      ev.target.setRangeText(text, ev.target.selectionStart, ev.target.selectionEnd, "end");
+      ev.target.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    fakeUpload(key, ev.clipboardData.files);
   });
 
   const extraRedraws = [];
@@ -2877,7 +2995,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
     card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml,
-    filesOf, fileThumb, fileRow, dropzone, attachments, mdBody, markdownSample, meter,
+    filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
     enableAssistOnCatalog: () => { assistOnCatalog = true; },
   };

@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { generatedStream, recordingBucket, textBytes, upload, type UploadOutput } from './attachment-helpers.ts';
 import { download, expectDownloadHeaders, expectSafeDisposition, storedFile } from './attachment-download-helpers.ts';
-import { createComment, createEpic, createStory, createTask } from './factories.ts';
+import { createEpic, createStory } from './factories.ts';
 import { bearerFor } from './operations/api-token.ts';
 import { errorCodeOf } from './operations/harness.ts';
 import { createPerson, createTarget, type Target } from './operations/world.ts';
@@ -300,19 +300,12 @@ describe('未添付の所有者だけに返し、存在や保存先を漏らさ�
     expect(await errorCodeOf(response)).toBe('not_found');
   });
 
-  test('付く先がある行は本人・リーダー・管理者にも安全に 404', async () => {
-    const [task, story, epic] = await Promise.all([
-      createTask(target.organization, target.workspace.id, target.member.userId!),
+  test('未対応のストーリー・エピックの添付は本人・リーダー・管理者にも安全に 404', async () => {
+    const [story, epic] = await Promise.all([
       createStory(target.organization, target.workspace.id, target.member.userId!),
       createEpic(target.organization, target.workspace.id, target.member.userId!),
     ]);
-    const comment = await createComment(target.organization, target.workspace.id, task.id, target.member.userId!);
-    for (const linked of [
-      { task_id: task.id },
-      { story_id: story.id },
-      { epic_id: epic.id },
-      { comment_id: comment.id },
-    ]) {
+    for (const linked of [{ story_id: story.id }, { epic_id: epic.id }]) {
       const { row } = await storedFile(target, { row: { ...linked, attached_at: new Date().toISOString() } });
       for (const person of [target.member, target.leader, target.admin]) await expectHidden(row.id, person);
     }
