@@ -65,6 +65,7 @@
   let destroyed = false;
   let quota = $state(false);
   let notice = $state<string | null>(null);
+  let removalNotice = $state('');
   let previous = value;
   let pendingInput: (TextEditRange & { before: string; inputType: string }) | undefined;
   const size = (file: File) => (file.size / 1_048_576).toFixed(2);
@@ -209,20 +210,28 @@
 
   async function remove(file: Upload): Promise<void> {
     if (readonly) return;
+    let start = input?.selectionStart ?? 0;
+    let end = input?.selectionEnd ?? 0;
+    removalNotice = '';
     attachmentIds = attachmentIds.filter((id) => id !== file.attachmentId);
     const insertion = file.insertion;
     if (insertion && value.slice(insertion.start, insertion.start + insertion.text.length) === insertion.text) {
-      const start = input?.selectionStart ?? 0;
-      const end = input?.selectionEnd ?? 0;
       const at = insertion.start;
       const tokenEnd = at + insertion.text.length;
       const selectionAfterRemoval = (position: number) =>
         position <= at ? position : Math.max(at, position - (tokenEnd - at));
+      start = selectionAfterRemoval(start);
+      end = selectionAfterRemoval(end);
       applyEdit(at, tokenEnd, '');
-      await tick();
-      input?.setSelectionRange(selectionAfterRemoval(start), selectionAfterRemoval(end));
     }
     files = files.filter((other) => other.key !== file.key);
+    await tick();
+    if (destroyed) return;
+    removalNotice = t('attachmentRemoved', { name: file.file.name });
+    if (!readonly) {
+      input?.focus();
+      input?.setSelectionRange(start, end);
+    }
   }
 
   function cancel(file: Upload): void {
@@ -260,6 +269,7 @@
 </script>
 
 <div class="markdown-editor" aria-busy={uploading}>
+  <span class="visually-hidden" role="status" aria-live="polite">{removalNotice}</span>
   <textarea
     class="textarea"
     {id}

@@ -19,6 +19,7 @@ export const dictionary = defineDictionary({
 
   attachmentChoose: 'ファイルを選ぶ',
   attachmentRemove: '外す',
+  attachmentRemoved: '{name} を添付から外しました。',
   attachmentRemoveLabel: '{name} を添付から外す',
   attachmentDrop: 'ここにファイルをドラッグして添付',
   attachmentDropHint: '1ファイル50 MBまで。複数を選べます。画像は本文に貼り付けても添付できます。',

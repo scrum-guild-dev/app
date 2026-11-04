@@ -349,6 +349,11 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
   await expect(input).toHaveValue(/^前半!\[外す画像\.png\].*!\[編集する画像\.png\].*後半$/s);
   const original = await input.inputValue();
   await form.getByRole('button', { name: '外す手順.txt を添付から外す', exact: true }).click();
+  await expect(input).toBeFocused();
+  await expect(form.getByRole('status').filter({ hasText: '外す手順.txt を添付から外しました。' })).toHaveAttribute(
+    'aria-live',
+    'polite',
+  );
   await expect(form.locator('.file-row', { hasText: '外す手順.txt' })).toHaveCount(0);
   await expect(input).toHaveValue(original);
 
@@ -365,6 +370,11 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
   );
   const withoutImage = withPrefix.replace(/!\[外す画像\.png\]\([^)]+\)/, '');
   await form.getByRole('button', { name: '外す画像.png を添付から外す', exact: true }).click();
+  await expect(input).toBeFocused();
+  await expect(form.getByRole('status').filter({ hasText: '外す画像.png を添付から外しました。' })).toHaveAttribute(
+    'aria-live',
+    'polite',
+  );
   await expect(input).toHaveValue(withoutImage);
   await expect
     .poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionStart))
@@ -383,6 +393,11 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
   await page.keyboard.insertText('自分で直した説明');
   await expect(input).toHaveValue(edited);
   await form.getByRole('button', { name: '編集する画像.png を添付から外す', exact: true }).click();
+  await expect(input).toBeFocused();
+  await expect(form.getByRole('status').filter({ hasText: '編集する画像.png を添付から外しました。' })).toHaveAttribute(
+    'aria-live',
+    'polite',
+  );
   await expect(input).toHaveValue(edited);
   await expect(form.locator('.file-row')).toHaveCount(0);
 
