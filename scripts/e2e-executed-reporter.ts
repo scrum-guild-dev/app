@@ -8,7 +8,7 @@ export default class ExecutedReporter implements Reporter {
     if (result.status !== 'skipped') this.executed++;
   }
 
-  onEnd(result: FullResult): { status: 'failed' } | undefined {
+  async onEnd(result: FullResult): Promise<{ status: 'failed' } | undefined> {
     if (this.executed === 0 && result.status === 'passed') {
       console.error('e2e:preflight: 実行されたテストが0件（全件省略を含む）。関連する対象を選び直す');
       return { status: 'failed' };

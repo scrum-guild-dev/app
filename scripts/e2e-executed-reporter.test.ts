@@ -12,19 +12,21 @@ const passed = { status: 'passed' } as FullResult;
 const testCase = {} as TestCase;
 
 for (const statuses of [[], ['skipped'], ['skipped', 'skipped']] as TestResult['status'][][]) {
-  test(`実行0件を失敗にする（${statuses.join(',') || '対象なし'}）`, () => {
+  test(`実行0件を失敗にする（${statuses.join(',') || '対象なし'}）`, async () => {
     const reporter = new ExecutedReporter();
     for (const status of statuses) reporter.onTestEnd(testCase, { status } as TestResult);
-    assert.deepEqual(reporter.onEnd(passed), { status: 'failed' });
+    const completion = reporter.onEnd(passed);
+    assert.ok(completion instanceof Promise);
+    assert.deepEqual(await completion, { status: 'failed' });
   });
 }
 
 for (const status of ['passed', 'failed', 'timedOut', 'interrupted'] as const) {
-  test(`${status} は実行に数え、Playwright 自身の結果を上書きしない`, () => {
+  test(`${status} は実行に数え、Playwright 自身の結果を上書きしない`, async () => {
     const reporter = new ExecutedReporter();
     reporter.onTestEnd(testCase, { status: 'skipped' } as TestResult);
     reporter.onTestEnd(testCase, { status } as TestResult);
-    assert.equal(reporter.onEnd(passed), undefined);
+    assert.equal(await reporter.onEnd(passed), undefined);
   });
 }
 
