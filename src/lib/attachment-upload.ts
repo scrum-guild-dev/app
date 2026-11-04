@@ -171,6 +171,8 @@ export function moveMarkdownInsertion(
 export function clipboardTextToInsert(raw: string, files: readonly { name: string }[]): string {
   const text = raw.replace(/\r\n?/g, '\n');
   const names = files.map((file) => file.name).join('\n');
-  if (files.length > 0 && (text === names || text === `${names}\n`)) return '';
+  const comparableText = text.normalize('NFC');
+  const comparableNames = names.normalize('NFC');
+  if (files.length > 0 && (comparableText === comparableNames || comparableText === `${comparableNames}\n`)) return '';
   return text;
 }

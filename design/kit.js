@@ -2929,7 +2929,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (markdownOptions.get(key)?.readonly) return;
     const text = ev.clipboardData.getData("text/plain").replace(/\r\n?/g, "\n");
     const fileNames = Array.from(ev.clipboardData.files, (file) => file.name).join("\n");
-    if (text && text !== fileNames && text !== `${fileNames}\n`) {
+    const comparableText = text.normalize("NFC");
+    const comparableNames = fileNames.normalize("NFC");
+    if (text && comparableText !== comparableNames && comparableText !== `${comparableNames}\n`) {
       ev.target.setRangeText(text, ev.target.selectionStart, ev.target.selectionEnd, "end");
       ev.target.dispatchEvent(new Event("input", { bubbles: true }));
     }
