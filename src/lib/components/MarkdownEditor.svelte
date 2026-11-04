@@ -216,6 +216,7 @@
     removalNotice = '';
     attachmentIds = attachmentIds.filter((id) => id !== file.attachmentId);
     const insertion = file.insertion;
+    let removedMarkdown = false;
     if (insertion && value.slice(insertion.start, insertion.start + insertion.text.length) === insertion.text) {
       const at = insertion.start;
       const tokenEnd = at + insertion.text.length;
@@ -224,11 +225,14 @@
       start = selectionAfterRemoval(start);
       end = selectionAfterRemoval(end);
       applyEdit(at, tokenEnd, '');
+      removedMarkdown = true;
     }
     files = files.filter((other) => other.key !== file.key);
     await tick();
     if (destroyed) return;
-    removalNotice = t('attachmentRemoved', { name: file.file.name });
+    removalNotice = t(removedMarkdown ? 'attachmentRemovedImage' : 'attachmentRemovedKeepBody', {
+      name: file.file.name,
+    });
     if (!readonly) {
       input?.focus();
       input?.setSelectionRange(start, end);
