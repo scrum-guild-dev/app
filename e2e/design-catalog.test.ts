@@ -23,6 +23,10 @@ for (const width of [1280, 1024, 390, 320]) {
           body: readFileSync(new URL(`../design/${name}`, import.meta.url)),
         });
       });
+      // CI のネットワークやフォント取得の成否で寸法が変わらないようにする。
+      for (const host of ['fonts.googleapis.com', 'fonts.gstatic.com']) {
+        await page.route(`https://${host}/**`, (route) => route.fulfill({ body: '' }));
+      }
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       await page.setViewportSize({ width: 390, height: 1000 });
