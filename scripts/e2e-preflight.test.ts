@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { inputFingerprint, preflightPlan, runPreflight } from './e2e-preflight.ts';
+import { inputFingerprint, preflightPlan, runPreflight, verifyPreflight } from './e2e-preflight.ts';
 
 function fixture(t: { after(fn: () => void): void }): string {
   const cwd = mkdtempSync(join(tmpdir(), 'e2e-preflight-'));
@@ -149,4 +158,121 @@ test('上限で省略した繰り返しを skipped と記録し、前の成果�
   assert.equal(report.success, true);
   assert.equal(report.checks[2].status, 'skipped');
   assert.equal(existsSync(join(result, '../repeat/test-results')), false);
+});
+
+// 実ブラウザを呼ばず、既定 run の spawnSync・ログの読み取り・終了状態を通す。
+function runnerStub(cwd: string, body: string): void {
+  mkdirSync(join(cwd, 'scripts'), { recursive: true });
+  writeFileSync(join(cwd, 'scripts/e2e-run.ts'), body);
+}
+
+for (const status of ['passed', 'skipped']) {
+  test(`既定 run が子の ${status} を読み、結果行の後の警告を許容する`, (t) => {
+    const cwd = fixture(t);
+    runnerStub(
+      cwd,
+      `console.log('[e2e-run:result] ' + JSON.stringify({status: process.argv[2] === 'repeat' ? '${status}' : 'passed'})); console.error('late warning');`,
+    );
+    mkdirSync(join(cwd, 'e2e'));
+    writeFileSync(join(cwd, 'e2e/new.test.ts'), 'test');
+    const result = runPreflight('base', { cwd });
+    const report = JSON.parse(readFileSync(result, 'utf8'));
+    assert.equal(report.success, true);
+    assert.deepEqual(
+      report.checks.map((x: { status: string }) => x.status),
+      ['passed', 'passed', status],
+    );
+    assert.match(readFileSync(report.checks[0].log, 'utf8'), /late warning/);
+  });
+}
+
+for (const [name, body] of [
+  ['非0終了', `console.log('[e2e-run:result] {"status":"passed"}'); process.exitCode = 2;`],
+  ['結果行欠落', `console.log('no result');`],
+  ['不明な結果', `console.log('[e2e-run:result] {"status":"unknown"}');`],
+  ['結果行重複', `console.log('[e2e-run:result] {"status":"passed"}\\n[e2e-run:result] {"status":"passed"}');`],
+  ['通常全件の省略', `console.log('[e2e-run:result] {"status":"skipped"}');`],
+]) {
+  test(`既定 run は ${name} を成功とせず、後続を起動しない`, (t) => {
+    const cwd = fixture(t);
+    runnerStub(cwd, body);
+    assert.throws(() => runPreflight('base', { cwd }));
+    const dirs = readdirSync(join(cwd, '.e2e-preflight'));
+    const report = JSON.parse(readFileSync(join(cwd, '.e2e-preflight', dirs[0]!, 'result.json'), 'utf8'));
+    assert.equal(report.success, false);
+    assert.equal(report.checks[0].status, 'failed');
+    assert.ok(report.finished);
+  });
+}
+
+test('verify は成功記録だけを受け付け、コード・base・HEAD・実行環境の変化を断る', (t) => {
+  const cwd = fixture(t);
+  writeFileSync(join(cwd, 'app.ts'), 'changed');
+  const result = runPreflight('base', {
+    cwd,
+    run() {
+      return 'passed';
+    },
+  });
+  verifyPreflight(result, 'base', cwd);
+  writeFileSync(join(cwd, 'app.ts'), 'after');
+  assert.throws(() => verifyPreflight(result, 'base', cwd));
+  writeFileSync(join(cwd, 'app.ts'), 'changed');
+  writeFileSync(join(cwd, 'new.ts'), 'new');
+  assert.throws(() => verifyPreflight(result, 'base', cwd));
+  rmSync(join(cwd, 'new.ts'));
+  const original = JSON.parse(readFileSync(result, 'utf8'));
+  for (const patch of [
+    { success: false },
+    { finished: '' },
+    { base: 'wrong' },
+    { head: 'wrong' },
+    { node: 'wrong' },
+    { pnpm: 'wrong' },
+    { cwd: 'other-worktree' },
+    { checks: [] },
+    { checks: [{ ...original.checks[0], status: 'running' }] },
+  ]) {
+    writeFileSync(result, JSON.stringify({ ...original, ...patch }));
+    assert.throws(() => verifyPreflight(result, 'base', cwd));
+  }
+  writeFileSync(result, JSON.stringify(original));
+  verifyPreflight(result, 'base', cwd);
+  const cli = spawnSync(
+    process.execPath,
+    [new URL('./e2e-preflight.ts', import.meta.url).pathname, '--verify', result, 'base'],
+    { cwd, encoding: 'utf8' },
+  );
+  assert.equal(cli.status, 0, cli.stderr);
+});
+
+test('base のオプションを検査前に断る', (t) => {
+  const cwd = fixture(t);
+  assert.throws(() => runPreflight('--help', { cwd }), /base/);
+});
+
+test('hash は公開の設定例と壊れたシンボリックリンクの行き先を検出する', (t) => {
+  const cwd = fixture(t);
+  const before = inputFingerprint(cwd);
+  writeFileSync(join(cwd, '.dev.vars.example'), 'PUBLIC=value');
+  assert.notEqual(inputFingerprint(cwd), before);
+  const example = inputFingerprint(cwd);
+  symlinkSync('missing-a', join(cwd, 'link'));
+  const linked = inputFingerprint(cwd);
+  assert.notEqual(linked, example);
+  rmSync(join(cwd, 'link'));
+  symlinkSync('missing-b', join(cwd, 'link'));
+  assert.notEqual(inputFingerprint(cwd), linked);
+});
+
+test('CLI の --verify に結果ファイルが無いときは起動前に使い方を示す', (t) => {
+  const cwd = fixture(t);
+  const result = spawnSync(process.execPath, [new URL('./e2e-preflight.ts', import.meta.url).pathname, '--verify'], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 10_000,
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /使い方: pnpm e2e:preflight .*--verify <result\.json>/);
+  assert.equal(existsSync(join(cwd, '.e2e-preflight')), false);
 });

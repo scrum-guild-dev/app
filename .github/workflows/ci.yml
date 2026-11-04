@@ -156,7 +156,7 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/playwright
       # 割り当ては scripts/e2e-shard.ts（ファイルごとの重みで割る）。FILES=$(...) の失敗（不正な引数、空のシャード）は -e で止める。
-      # 空のまま pnpm e2e に渡すと Playwright が全件を走らせるので、スクリプトが空なら非 0 で落とす
+      # ファイル引数なしの e2e-run normal/dev は全件を走らせるので、割り当てスクリプトが空なら非 0 で落とす
       - run: |
           FILES=$(node scripts/e2e-shard.ts ${{ matrix.shard }} ${{ strategy.job-total }})
           node scripts/e2e-run.ts normal $FILES
@@ -194,7 +194,7 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/playwright
       # 割り当ては scripts/e2e-shard.ts（ファイルごとの重みで割る）。FILES=$(...) の失敗（不正な引数、空のシャード）は -e で止める。
-      # 空のまま pnpm e2e に渡すと Playwright が全件を走らせるので、スクリプトが空なら非 0 で落とす
+      # ファイル引数なしの e2e-run normal/dev は全件を走らせるので、割り当てスクリプトが空なら非 0 で落とす
       - run: |
           FILES=$(node scripts/e2e-shard.ts ${{ matrix.shard }} ${{ strategy.job-total }})
           node scripts/e2e-run.ts dev $FILES
@@ -233,6 +233,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
 
+      # 導入前の判定で不要な Chromium の導入を省く。共有ランナー側も単独実行のため同じ上限を確認する。
       # --list はサーバーを立てず、global-setup も動かさない。件数はシャードと繰り返しを付けずに数え、どのシャードでも同じ答えにする
       - id: count
         name: 繰り返すテストの件数を上限と比べる

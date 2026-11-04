@@ -50,7 +50,11 @@ export async function runE2eWith(
   const env = e2eEnvironment(mode, inherited);
   const prefix = ['exec', 'playwright', 'test'];
   if (mode === 'repeat') {
-    const listed = await execute({ args: [...prefix, '--list', '--reporter=json', ...files!], env, capture: true });
+    const listed = await execute({
+      args: [...prefix, '--list', '--reporter=json', '--global-timeout=1800000', ...files!],
+      env,
+      capture: true,
+    });
     const { run, count } = repeatVerdict(JSON.parse(listed) as ListReport, files!.length);
     if (!run) {
       console.error(`e2e-repeat: ${count} 件が上限 ${REPEAT_TEST_LIMIT} 件を超えたので繰り返さない`);
@@ -61,6 +65,8 @@ export async function runE2eWith(
     mode === 'repeat'
       ? ['--workers=1', '--repeat-each=5', '--retries=0', '--pass-with-no-tests']
       : ['--workers=2', '--retries=0'];
+  // Playwright 自身に終了処理を任せ、webServer を止めてから非0で返す。
+  flags.push('--global-timeout=1800000');
   if (shard !== undefined) flags.push(`--shard=${shard}`);
   await execute({ args: [...prefix, ...flags, ...(files ?? [])], env, capture: false });
   return 'passed';

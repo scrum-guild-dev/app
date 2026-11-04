@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
+import { load } from 'js-yaml';
 import { e2eEnvironment, parseE2eArgs, runE2eWith, type Execute, type Invocation } from './e2e-run.ts';
 
 function harness(count = 2) {
@@ -25,7 +26,14 @@ describe('CI とクラウドで共有する e2e の実行', () => {
       });
       assert.equal(status, 'passed');
       assert.equal(calls.length, 1);
-      assert.deepEqual(calls[0]!.args, ['exec', 'playwright', 'test', '--workers=2', '--retries=0']);
+      assert.deepEqual(calls[0]!.args, [
+        'exec',
+        'playwright',
+        'test',
+        '--workers=2',
+        '--retries=0',
+        '--global-timeout=1800000',
+      ]);
       assert.equal(calls[0]!.env.CI, 'true');
       assert.equal(calls[0]!.env.E2E_REUSE_SERVER, undefined);
       assert.equal(calls[0]!.env.E2E_DEV_BUILD, mode === 'dev' ? '1' : undefined);
@@ -41,7 +49,7 @@ describe('CI とクラウドで共有する e2e の実行', () => {
     assert.deepEqual(
       calls.map((call) => call.args),
       [
-        ['exec', 'playwright', 'test', '--list', '--reporter=json', ...files],
+        ['exec', 'playwright', 'test', '--list', '--reporter=json', '--global-timeout=1800000', ...files],
         [
           'exec',
           'playwright',
@@ -50,6 +58,7 @@ describe('CI とクラウドで共有する e2e の実行', () => {
           '--repeat-each=5',
           '--retries=0',
           '--pass-with-no-tests',
+          '--global-timeout=1800000',
           '--shard=2/3',
           ...files,
         ],
@@ -141,10 +150,23 @@ describe('CI とクラウドで共有する e2e の実行', () => {
   });
 
   test('CI の3種類が共通ランナーを使い、repeat は導入前の上限確認も残す', () => {
-    const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
-    for (const mode of ['normal', 'dev', 'repeat']) assert.ok(workflow.includes(`node scripts/e2e-run.ts ${mode}`));
-    assert.ok(workflow.includes('node scripts/e2e-repeat-count.ts $REPEAT_FILES'));
-    assert.ok(workflow.includes("if: steps.count.outputs.run == 'true'"));
+    const workflow = load(readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')) as {
+      jobs: Record<string, { steps: { run?: string; if?: string; uses?: string }[] }>;
+    };
+    for (const [job, mode] of [
+      ['e2e', 'normal'],
+      ['e2e-dev', 'dev'],
+      ['e2e-repeat', 'repeat'],
+    ]) {
+      assert.ok(workflow.jobs[job!]!.steps.some((step) => step.run?.includes(`node scripts/e2e-run.ts ${mode}`)));
+    }
+    const repeat = workflow.jobs['e2e-repeat']!.steps;
+    assert.ok(repeat.some((step) => step.run?.includes('node scripts/e2e-repeat-count.ts $REPEAT_FILES')));
+    assert.ok(
+      repeat.some(
+        (step) => step.uses === './.github/actions/playwright' && step.if === "steps.count.outputs.run == 'true'",
+      ),
+    );
   });
 
   test('CLI はテストを起動しない空の選択も skipped として最後の行に記録する', () => {
