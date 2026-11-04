@@ -7,7 +7,7 @@ import { epicComplete, epicDetail, epicReopen } from '../src/shared/operations/e
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { signIn, watchViolations } from './helpers.ts';
-import { failOperation, mockOperation, rewriteOperation } from './operations.ts';
+import { failOperation, mockOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 const AOBA = { slug: 'aoba' };
 const WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
@@ -23,9 +23,20 @@ test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
 
+// epic-detail の応答を、本物の応答を1回だけ取って書き換えた値にそろえる。クリアと取り消しの後の読み直しも同じ値を返す
+// （読み直しのたびに本物を取りに行くと、応答を差し替えた操作の後の読み直しで、本物の応答が JSON でないと判定されて落ちた）
+type Detail = Parameters<Parameters<typeof rewriteOperation<typeof epicDetail>>[3]>[0];
+function serveDetail(page: Page, change: (output: Detail) => Detail) {
+  let served: Detail | undefined;
+  return routeOperation(page, epicDetail, AOBA, async (call) => {
+    served ??= change(await call.fetch());
+    await call.fulfill(served);
+  });
+}
+
 // 配下のストーリーをすべて完了にした epic-detail にする
 function allStoriesDone(page: Page) {
-  return rewriteOperation(page, epicDetail, AOBA, (output) => ({
+  return serveDetail(page, (output) => ({
     ...output,
     stories: output.stories.map((story) => ({ ...story, completed_at: story.completed_at ?? CLEARED_AT })),
   }));
@@ -33,7 +44,7 @@ function allStoriesDone(page: Page) {
 
 // クリア済みの epic-detail にする
 function clearedEpic(page: Page) {
-  return rewriteOperation(page, epicDetail, AOBA, (output) => ({
+  return serveDetail(page, (output) => ({
     ...output,
     epic: { ...output.epic, completed_at: CLEARED_AT },
   }));
