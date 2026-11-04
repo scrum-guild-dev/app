@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures.ts';
 
-for (const width of [1280, 1024, 390, 320]) {
+for (const width of [1280, 1024, 761, 760, 390, 320]) {
   for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
     test(`長い名前のメニューの見本: ${width}px / ${theme}`, async ({ page }) => {
       // カタログはアプリの配信対象外なので、共有の見本ファイルをそのまま返す。
@@ -43,7 +43,7 @@ for (const width of [1280, 1024, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.locator(`[data-pick-theme][value="${theme}"]`).check();
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-      for (const nav of await section.locator('.nav').all()) {
+      for (const [index, nav] of (await section.locator('.nav').all()).entries()) {
         await nav.scrollIntoViewIfNeeded();
         await expect(nav).toHaveCSS('display', width <= 760 ? 'flex' : 'grid');
         await expect(nav.locator('svg use')).toHaveCount(3);
@@ -53,15 +53,36 @@ for (const width of [1280, 1024, 390, 320]) {
         const size = await label.evaluate((el) => ({
           width: el.getBoundingClientRect().width,
           scroll: el.scrollWidth,
+          height: el.getBoundingClientRect().height,
+          fontSize: parseFloat(getComputedStyle(el).fontSize),
+          left: el.getBoundingClientRect().left,
+          right: el.getBoundingClientRect().right,
+          itemLeft: el.parentElement!.getBoundingClientRect().left,
+          itemRight: el.parentElement!.getBoundingClientRect().right,
         }));
         expect(size.scroll).toBeLessThanOrEqual(size.width + 1);
+        expect(size.left).toBeGreaterThanOrEqual(size.itemLeft);
+        expect(size.right).toBeLessThanOrEqual(size.itemRight + 1);
         if (width <= 760) expect(size.width).toBeLessThanOrEqual(192.1);
+        if (width > 760 && index > 0) expect(size.height).toBeGreaterThan(size.fontSize * 1.5);
+        if (width <= 390) {
+          const scroll = await nav.evaluate((el) => ({ width: el.clientWidth, content: el.scrollWidth }));
+          expect(scroll.content).toBeGreaterThan(scroll.width);
+        }
         // 帯を最後まで送ると、隣の短い項目にも届く。
         await nav.evaluate((el) => {
           el.scrollLeft = el.scrollWidth;
         });
         await expect(nav.locator('.nav-item').last()).toBeInViewport();
       }
+      const bounds = await section.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      // 他の既存の見本は 320/390px で横にはみ出す。今回の見本が幅を増やさないことを確かめる。
+      const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      await section.evaluate((el) => el.remove());
+      const existingWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(pageWidth).toBeLessThanOrEqual(Math.max(width, existingWidth));
       expect(errors).toEqual([]);
     });
   }
