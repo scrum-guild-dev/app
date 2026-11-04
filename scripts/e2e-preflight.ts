@@ -37,13 +37,11 @@ export function inputFingerprint(cwd: string): string {
   for (const path of paths) {
     // 秘密の値を検査記録のために読むことも避ける。
     if (/(^|\/)(\.env|\.dev\.vars)(\.|$)/.test(path) && !/(^|\/)(\.env|\.dev\.vars)\.example$/.test(path)) continue;
-    hash.update(`${path}\0`);
     const file = join(cwd, path);
     const stat = lstatSync(file, { throwIfNoEntry: false });
-    if (!stat) {
-      hash.update('deleted\0');
-      continue;
-    }
+    // 削除を stage/commit しても実際の入力は同じ。存在しないパスは含めない。
+    if (!stat) continue;
+    hash.update(`${path}\0`);
     hash.update(`${stat.mode}\0`);
     hash.update(stat.isSymbolicLink() ? readlinkSync(file) : readFileSync(file));
     hash.update('\0');
@@ -143,13 +141,15 @@ export function verifyPreflight(
   base = 'origin/main',
   cwd = process.cwd(),
   options: SelectionOptions = {},
-): void {
-  const report = JSON.parse(readFileSync(resolve(cwd, result), 'utf8'));
+) {
+  const resultPath = resolve(cwd, result);
+  const original = readFileSync(resultPath, 'utf8');
+  const report = JSON.parse(original);
   const baseSha = resolveBase(cwd, base);
   const head = git(cwd, 'rev-parse', 'HEAD').trim();
   const { mergeBase, selection, plan } = currentPlan(cwd, baseSha, head, options);
   if (
-    report.formatVersion !== 2 ||
+    report.formatVersion !== 3 ||
     JSON.stringify(report.selection) !== JSON.stringify(selection) ||
     report.status !== (selection.scope === 'docs-only' ? 'skipped' : 'passed') ||
     report.platform !== process.platform ||
@@ -160,7 +160,8 @@ export function verifyPreflight(
     report.success !== true ||
     !report.finished ||
     report.base !== baseSha ||
-    report.head !== head ||
+    typeof report.head !== 'string' ||
+    !/^[0-9a-f]{40,64}$/.test(report.head) ||
     report.mergeBase !== mergeBase ||
     report.fingerprint !== inputFingerprint(cwd) ||
     report.node !== process.version ||
@@ -178,6 +179,28 @@ export function verifyPreflight(
   ) {
     throw new Error('成功記録と現在のコード・base・HEAD・実行環境が一致しない。e2e:preflight をやり直す');
   }
+  // 同じ作業履歴でコミットした場合だけ許す。rebase/reset/別履歴への流用は拒む。
+  if (git(cwd, 'merge-base', report.head, head).trim() !== report.head)
+    throw new Error('実行時 HEAD が現在の HEAD の祖先ではない。e2e:preflight をやり直す');
+  const verification = {
+    verifiedAt: new Date().toISOString(),
+    result: resultPath,
+    resultSha256: createHash('sha256').update(original).digest('hex'),
+    executedHead: report.head,
+    verifiedHead: head,
+    basis: 'same-input-and-conditions; executed-head-is-ancestor',
+    fingerprint: report.fingerprint,
+    base: baseSha,
+    mergeBase,
+    selection,
+    checks: plan,
+    status: report.status,
+  };
+  const verificationPath = join(cwd, '.e2e-preflight', `verification-${randomUUID()}.json`);
+  mkdirSync(join(cwd, '.e2e-preflight'), { recursive: true });
+  writeFileSync(verificationPath, JSON.stringify(verification, null, 2) + '\n');
+  console.log(`[e2e:preflight] 照合記録: ${verificationPath}`);
+  return verification;
 }
 
 export function runPreflight(
@@ -193,7 +216,7 @@ export function runPreflight(
   mkdirSync(dir, { recursive: true });
   const startedAt = Date.now();
   const report = {
-    formatVersion: 2,
+    formatVersion: 3,
     selection,
     platform: process.platform,
     arch: process.arch,

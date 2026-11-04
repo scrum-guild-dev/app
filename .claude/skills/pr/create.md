@@ -48,7 +48,7 @@ done-check でコミットが増えたら、push してから Step 1 に進む�
 
 ### クラウドの PR 前検査
 
-クラウドでは、作成前の最終コードで `pnpm e2e:preflight <base-ref> --files … --reason …` を通す（通常は `origin/main`、スタックは PR の base）。対象の通常・開発・関連する繰り返しを確認し、全件は CI に任せる。必要時だけ `--all --reason …` を使い、全件成功を通常の PR 前条件にしない。実行前に対象・モード・所要時間の見込みを共有する。詳細は `docs/development.md` の「クラウドで PR 前に e2e を確かめる」。`pnpm e2e:preflight --verify <result.json> <base-ref> <同じ選定オプション>` を実行して成功記録と現在のコード・base・HEAD・実行環境を照合し、結果と未検証事項を本文に書く。検査後のコード変更は影響する検査をやり直し、必要な検査が失敗・未実施なら PR 作成を止めて理由を報告する。ローカルでは実行せず、PR の CI で確かめる。
+クラウドでは、作成前の最終コードで `pnpm e2e:preflight <base-ref> --files … --reason …` を通す（通常は `origin/main`、スタックは PR の base）。対象の通常・開発・関連する繰り返しを確認し、全件は CI に任せる。必要時だけ `--all --reason …` を使い、全件成功を通常の PR 前条件にしない。実行前に対象・モード・所要時間の見込みを共有する。詳細は `docs/development.md` の「クラウドで PR 前に e2e を確かめる」。`pnpm e2e:preflight --verify <result.json> <base-ref> <同じ選定オプション>` を実行して成功記録と現在のコード・base・HEADの来歴・実行環境を照合し、結果と未検証事項を本文に書く。検査後のコード変更は影響する検査をやり直し、必要な検査が失敗・未実施なら PR 作成を止めて理由を報告する。ローカルでは実行せず、PR の CI で確かめる。
 
 ## Step 1: リポジトリの慣習を収集
 
@@ -401,3 +401,5 @@ gh api -X POST "repos/{owner}/{repo}/pulls/<n>/reviews/<review_id>/events" -f ev
 - 承認を取る条件（Step 4）に当たるときは、承認前にPRを作らない
 - 本文に画像を載せない。`## スクリーンショット / 動画` の節は作成モードでは消し、更新モードで人が貼った節は残す。UI が変わる PR では、変えた画面と e2e のファイルを `## テストと動作確認` に書く
 - 既にPRがある場合の本文修正だけが目的なら、手元では `pr-description-review` を使う。こちらの方が保守的に直す
+
+コミットや工程の移動だけで入力が同じで、実行時HEADが現在のHEADの祖先なら e2e を再実行しない。amend・squash・rebaseなどで祖先関係が失われた場合は再実行する。実行時と同じ対象指定で `pnpm e2e:preflight --verify <result.json> [base-ref] [同じ選定オプション]` を使い、元の結果と両HEAD・入力の一致を示す照合記録を引き継ぐ。条件は `docs/agent-workflows/validation.md` と `docs/development.md` の「クラウドで PR 前に e2e を確かめる」に従う。

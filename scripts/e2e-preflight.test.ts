@@ -464,6 +464,8 @@ test('照合は旧形式・対象・モード・状態・時間・環境の改�
   const original = JSON.parse(readFileSync(result, 'utf8'));
   for (const patch of [
     { formatVersion: 1 },
+    { formatVersion: 2 },
+    { mergeBase: 'wrong' },
     { selection: { ...original.selection, scope: 'all' } },
     { selection: { ...original.selection, files: [] } },
     { platform: 'other' },
@@ -547,4 +549,97 @@ test('明示対象から追加・変更した e2e を外した検査と照合を
     }),
     ['normal', 'dev', 'repeat'].map((mode) => ({ mode, files: ['e2e/new.test.ts', 'e2e/related.test.ts'] })),
   );
+});
+
+function commit(cwd: string, message: string): void {
+  for (const args of [
+    ['add', '-A'],
+    ['commit', '-qm', message],
+  ]) {
+    const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  }
+}
+
+for (const scope of ['targeted', 'all', 'docs-only']) {
+  test(`${scope}: 未コミット・新規・削除を内容を変えず複数コミットしても再実行せず照合する`, (t) => {
+    const cwd = fixture(t);
+    if (scope === 'docs-only') {
+      rmSync(join(cwd, 'e2e'), { recursive: true });
+      mkdirSync(join(cwd, 'docs'));
+      writeFileSync(join(cwd, 'docs/new.md'), 'documentation');
+    } else {
+      writeFileSync(join(cwd, 'app.ts'), 'changed');
+      writeFileSync(join(cwd, '.dev.vars.example'), 'PUBLIC=example');
+      writeFileSync(join(cwd, 'pnpm-lock.yaml'), 'lock');
+    }
+    const options = scope === 'all' ? { all: true, reason: '基盤の確認' } : {};
+    let calls = 0;
+    const result = runPreflight('base', {
+      cwd,
+      ...options,
+      run: () => {
+        calls++;
+        return 'passed';
+      },
+    });
+    const original = readFileSync(result, 'utf8');
+    const fingerprint = inputFingerprint(cwd);
+    const before = verifyPreflight(result, 'base', cwd, options);
+    commit(cwd, 'same input');
+    assert.equal(inputFingerprint(cwd), fingerprint);
+    const after = verifyPreflight(result, 'base', cwd, options);
+    assert.equal(after.executedHead, before.executedHead);
+    assert.notEqual(after.verifiedHead, after.executedHead);
+    assert.equal(after.fingerprint, fingerprint);
+    assert.match(after.basis, /same-input/);
+    assert.match(after.resultSha256, /^[0-9a-f]{64}$/);
+    const receipts = readdirSync(join(cwd, '.e2e-preflight')).filter((path) => path.startsWith('verification-'));
+    assert.equal(receipts.length, 2);
+    assert.ok(
+      receipts.some(
+        (path) =>
+          JSON.parse(readFileSync(join(cwd, '.e2e-preflight', path), 'utf8')).verifiedHead === after.verifiedHead,
+      ),
+    );
+    assert.equal(readFileSync(result, 'utf8'), original);
+    const empty = spawnSync('git', ['commit', '--allow-empty', '-qm', 'empty'], { cwd });
+    assert.equal(empty.status, 0);
+    verifyPreflight(result, 'base', cwd, options);
+    assert.equal(calls, scope === 'docs-only' ? 0 : 3);
+    assert.equal(after.status, scope === 'docs-only' ? 'skipped' : 'passed');
+
+    rmSync(join(cwd, 'app.ts'));
+    if (scope === 'docs-only') return; // 文書のみからコード削除へは対象の再選定が必要。
+    const deleted = runPreflight('base', { cwd, ...options, run: () => 'passed' });
+    const deletedHash = inputFingerprint(cwd);
+    commit(cwd, 'delete input');
+    assert.equal(inputFingerprint(cwd), deletedHash);
+    verifyPreflight(deleted, 'base', cwd, options);
+  });
+}
+
+for (const path of ['app.ts', 'new.ts', '.dev.vars.example', 'pnpm-lock.yaml', 'wrangler.jsonc']) {
+  test(`コミット後も ${path} の入力変更を拒否する`, (t) => {
+    const cwd = fixture(t);
+    const result = runPreflight('base', { cwd, run: () => 'passed' });
+    commit(cwd, 'same input');
+    writeFileSync(join(cwd, path), 'different');
+    commit(cwd, 'different input');
+    assert.throws(() => verifyPreflight(result, 'base', cwd));
+  });
+}
+
+test('同じ内容でも実行時HEADを含まない履歴とbaseの移動を拒否する', (t) => {
+  const cwd = fixture(t);
+  commit(cwd, 'test input');
+  const result = runPreflight('base', { cwd, files: ['e2e/new.test.ts'], reason: '履歴', run: () => 'passed' });
+  const options = { files: ['e2e/new.test.ts'], reason: '履歴' };
+  const originalHash = inputFingerprint(cwd);
+  assert.equal(spawnSync('git', ['reset', '--soft', 'base'], { cwd }).status, 0);
+  commit(cwd, 'replacement history');
+  assert.equal(inputFingerprint(cwd), originalHash);
+  assert.throws(() => verifyPreflight(result, 'base', cwd, options), /祖先/);
+  assert.equal(spawnSync('git', ['branch', '-f', 'base', 'HEAD'], { cwd }).status, 0);
+  assert.throws(() => verifyPreflight(result, 'base', cwd, options));
 });
