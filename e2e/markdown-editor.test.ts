@@ -15,16 +15,22 @@ const PNG = Buffer.from(
   'base64',
 );
 
-async function openTask(page: Page, baseURL: string | undefined): Promise<Locator> {
+async function openTask(page: Page, baseURL: string | undefined, who: 'admin' | 'member' = 'admin'): Promise<Locator> {
   if (baseURL === undefined) throw new Error('baseURL が無い');
   const title = `添付を確かめる ${crypto.randomUUID()}`;
   // seed の既存タスクには不正な順序キーがあるため、各テスト専用のワークスペースを作る。
   const createdWorkspace = await page.request.post(`/api/aoba/${workspaceCreate.name}`, {
     headers: { Origin: new URL(baseURL).origin },
-    data: { name: title, timezone: 'Asia/Tokyo', leader_user_id: '019a0000-0000-7000-8000-000000000301' },
+    data: {
+      name: title,
+      timezone: 'Asia/Tokyo',
+      leader_user_id: who === 'admin' ? '019a0000-0000-7000-8000-000000000301' : '019a0000-0000-7000-8000-000000000302',
+    },
   });
   expect(createdWorkspace.ok()).toBe(true);
   const { workspace_id: workspaceId } = workspaceCreate.output.parse(await createdWorkspace.json());
+  // 繰り返しでも1人60件/10分のアップロード制限内で、実際のメンバー権限を確認する。
+  if (who === 'member') await signIn(page.context(), baseURL, who);
   const response = await page.request.post(`/api/aoba/${taskCreate.name}`, {
     headers: { Origin: new URL(baseURL).origin },
     data: {
@@ -324,7 +330,7 @@ test('50 MBを超えるファイルは送らず、ファイルごとの容量と
 });
 
 test('保存前の添付を外すと次の保存から外れ、画像の前後と編集済みの本文は残る', async ({ page, baseURL }) => {
-  const drawer = await openTask(page, baseURL);
+  const drawer = await openTask(page, baseURL, 'member');
   await drawer
     .getByText('本文', { exact: true })
     .locator('..')
@@ -388,7 +394,7 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
 });
 
 test('文字と画像を一緒に貼り付けると選択範囲を文字で置き換え、続けて画像を差し込む', async ({ page, baseURL }) => {
-  const drawer = await openTask(page, baseURL);
+  const drawer = await openTask(page, baseURL, 'member');
   const input = drawer.getByRole('textbox', { name: 'コメントを書く', exact: true });
   const form = input.locator('xpath=ancestor::form');
   await input.fill('前半置換後半');
