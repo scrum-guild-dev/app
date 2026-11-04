@@ -14,7 +14,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { beforeNavigate, goto, invalidate, refreshAll } from '$app/navigation';
   import { page } from '$app/state';
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { wikiClient } from '../wiki-client.ts';
   import type { WikiData } from '../wiki-load.ts';
   import type { WorkspaceView } from '../workspace.ts';
@@ -129,6 +129,15 @@
   });
   $effect(() => {
     if (historyPage !== null && historyPage !== current?.id) historyPage = null;
+  });
+
+  onDestroy(() => {
+    // 削除後の内部遷移では引き継ぎ、それ以外で Wiki を離れたときは破棄する。
+    if (!recovery.busy) {
+      recovery.failure = '';
+      recovery.destination = null;
+      recovery.path = '';
+    }
   });
 
   async function mayDiscard(): Promise<boolean> {
@@ -305,12 +314,15 @@
       deleteTarget = null;
       if (recovery.failure) {
         await tick();
-        document.getElementById('wiki-reload')?.focus();
+        const active = document.activeElement;
+        if (active === document.body || active === trigger || active === null)
+          document.getElementById('wiki-reload')?.focus();
       }
     }
   }
   async function recoverDeletion(): Promise<void> {
     if (recovery.busy || deletePending) return;
+    const trigger = document.activeElement;
     recovery.busy = true;
     try {
       // 成功済みなら先に行き先へ移る。削除したURLを invalidate しない。
@@ -333,11 +345,14 @@
       recovery.path = page.url.pathname;
       recovery.busy = false;
       await tick();
-      if (recovery.failure) document.getElementById('wiki-reload')?.focus();
-      else {
-        const heading = document.getElementById('wiki-page-title');
-        if (heading) heading.focus();
-        else focusPageHeading();
+      const active = document.activeElement;
+      if (active === document.body || active === trigger || active === null) {
+        if (recovery.failure) document.getElementById('wiki-reload')?.focus();
+        else {
+          const heading = document.getElementById('wiki-page-title');
+          if (heading) heading.focus();
+          else focusPageHeading();
+        }
       }
     }
   }

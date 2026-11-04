@@ -382,13 +382,16 @@ function statesHtml() {
           <div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、送りません">もう一度保存する</button></div></div>
         <div class="callout is-warn">${icon("alert")}<span>保存の回数が多すぎます。しばらくしてから、もう一度保存してください。書いていた題と本文は、この画面に残してあります。</span></div>
         <p class="props-note">どちらも、入力は消さず、直す欄の上に理由を出します。ページ同士の競合（他の人が先に保存した）は、上の「同時に直されたとき」です。</p>`)}
-      ${panel("削除に失敗して読み直すとき", `<div class="callout is-warn" role="alert">${icon("alert")}<span>${t("wikiDeleteConflict")}</span><div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、読み直しません">${t("wikiReload")}</button></div></div>`)}
-      ${panel("削除後の更新に失敗したとき", `<div class="callout is-warn" role="alert">${icon("alert")}<span>${t("wikiDeleteRefreshFailed")}</span><div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、読み直しません">${t("wikiReload")}</button></div></div>`)}
+      ${panel("削除に失敗して読み直すとき", `<div class="callout is-warn">${icon("alert")}<span>${t("wikiDeleteConflict")}</span><div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、読み直しません">${t("wikiReload")}</button></div></div>`)}
+      ${panel("削除後の更新に失敗したとき", `<div class="callout is-warn">${icon("alert")}<span>${t("wikiDeleteRefreshFailed")}</span><div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、読み直しません">${t("wikiReload")}</button></div></div>`)}
+      ${panel("読み直しも失敗したとき", `<div class="callout is-warn">${icon("alert")}<span>${t("wikiReloadFailed")}</span><div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、読み直しません">${t("wikiReload")}</button></div></div>`)}
+      ${panel("Wikiを読み直している間", `<div class="callout is-warn">${icon("alert")}<span>${t("wikiDeleteConflict")}</span><div class="callout-actions"><button class="btn" type="button" aria-disabled="true">${t("wikiReload")}</button></div></div><p class="field-hint">${t("wikiReloading")}</p>`)}
+      ${panel("削除の警告があり、木も読めないとき", `<div class="callout is-warn">${icon("alert")}<span>${t("wikiDeleteRefreshFailed")}</span><div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、読み直しません">${t("wikiReload")}</button></div></div><p class="props-note">木と本文は表示せず、この操作だけで読み直します。汎用の「もう一度試す」は重ねません。</p>`)}
       ${panel("木を読み込んでいる間と、読み込めなかったとき", `
         <p class="props-note" role="status">読み込んでいます</p>
         <div class="callout is-danger">${icon("alert")}<span>ページの木を読み込めませんでした。時間をおいて、もう一度試してください。</span>
           <div class="callout-actions"><button class="btn" type="button" data-toast="見本のため、読み直しません">${t("retry")}</button></div></div>
-        <p class="props-note">読み込み中は木の場所に1行だけ出し、読み込めなかったときは、検索の欄と木の場所に理由と「もう一度試す」を置く。ページ（右の欄）の読み込みも同じ形。</p>`)}
+        <p class="props-note">読み込み中は木の場所に1行だけ出し、読み込めなかったときは、検索の欄と木の場所に理由と「もう一度試す」を置く。ページ（右の欄）の読み込みも同じ形。削除の警告が出ている場合は、上の専用操作だけを置きます。</p>`)}
       ${panel("ページが見つからないとき", `
         ${emptyState("alert", "ページが見つかりません", "消されたか、URL が違うか、この Wiki のページではありません。", `<button class="btn" type="button" data-wiki-page="">Wiki の最上段へ</button>`)}
         <p class="props-note">消したページと、別の Wiki や別の${t("workspace")}のページの URL は、同じ表示になります（どちらかは区別して伝えません）。上の本文のページ同士のリンクのうち、消したページへのリンクを押すと、この表示が実際に出ます。</p>`)}

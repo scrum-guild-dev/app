@@ -198,6 +198,7 @@ for (const scope of ['organization', 'workspace'] as const) {
     await page.getByRole('button', { name: 'Wikiを読み直す', exact: true }).click();
     await pending;
     try {
+      await expect(page.getByRole('status').filter({ hasText: 'Wikiを読み直しています' })).toBeVisible();
       await page.locator('.crumbs').getByRole('link', { name: 'Wiki', exact: true }).click();
       await expect(page).toHaveURL(url);
       await expect(page.getByRole('button', { name: 'Wikiを読み直す', exact: true })).toHaveAttribute(
@@ -208,7 +209,9 @@ for (const scope of ['organization', 'workspace'] as const) {
       release();
     }
     await expect(page.getByRole('alert')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: title, level: 2, exact: true })).toBeFocused();
+    await expect(page.getByRole('heading', { name: title, level: 2, exact: true })).toBeVisible();
+    // 待っている間に利用者が移したフォーカスは、復旧完了で奪わない。
+    await expect(page.locator('.crumbs').getByRole('link', { name: 'Wiki', exact: true })).toBeFocused();
     await expect(page.getByRole('button', { name: '消す', exact: true })).toHaveCount(0);
   });
 }
@@ -482,6 +485,7 @@ for (const scope of ['organization', 'workspace'] as const) {
     );
     await page.getByRole('button', { name: '消す', exact: true }).click();
     await deletion(page).getByRole('button', { name: '消す', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Wikiを読み直す', exact: true })).toBeFocused();
     const restoreTree = await failOperation(
       page,
       scope === 'organization' ? orgWikiTree : workspaceWikiTree,
@@ -495,9 +499,38 @@ for (const scope of ['organization', 'workspace'] as const) {
     );
     await expect(page.getByRole('button', { name: 'Wikiを読み直す', exact: true })).toBeFocused();
     await expect(page.getByRole('button', { name: 'もう一度試す', exact: true })).toHaveCount(0);
+    for (const width of [320, 390, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.getByRole('button', { name: 'Wikiを読み直す', exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
     await restoreTree();
     await page.getByRole('button', { name: 'Wikiを読み直す', exact: true }).click();
     await expect(page.getByRole('heading', { name: title, exact: true, level: 2 })).toBeFocused();
     expect(calls).toBe(1);
+  });
+}
+
+for (const scope of ['organization', 'workspace'] as const) {
+  test(`${scope}: Wikiの外へ出て同じページへ戻っても古い警告を残さない`, async ({ page }) => {
+    if (scope === 'workspace') await createWorkspace(page, `Wiki外への移動-${crypto.randomUUID().slice(0, 8)}`);
+    await page.goto(scope === 'organization' ? '/aoba/wiki' : new URL(page.url()).pathname + '/wiki');
+    const target = await add(page, `戻ったページ-${crypto.randomUUID().slice(0, 8)}`);
+    await failOperation(
+      page,
+      scope === 'organization' ? orgWikiDelete : workspaceWikiDelete,
+      { slug: 'aoba' },
+      409,
+      'conflict',
+    );
+    await page.getByRole('button', { name: '消す', exact: true }).click();
+    await deletion(page).getByRole('button', { name: '消す', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Wikiを読み直す', exact: true })).toBeFocused();
+    await page.getByRole('link', { name: '今日やること', exact: true }).click();
+    await expect(page).toHaveURL(/\/aoba$/);
+    await page.goBack();
+    await expect(page).toHaveURL(target);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '消す', exact: true })).toBeVisible();
   });
 }
