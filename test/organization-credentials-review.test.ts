@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import { createApp } from '../src/server/app.ts';
 import { orgDb } from '../src/server/db/index.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
-import { organizationInfo } from '../src/shared/operations/organization/index.ts';
+import { organizationInfo, userAdminUpdate } from '../src/shared/operations/organization/index.ts';
 import { tokenCreate } from '../src/shared/operations/session/index.ts';
 import { invitationAccept, membershipLeave } from '../src/shared/operations/workspace/index.ts';
 import { createInvitation, createSessionWithToken } from './factories.ts';
@@ -96,4 +96,43 @@ describe('管理者は最後の所属を外されても組織に入れる', () =
       expect(await errorCodeOf(response)).toBe('organization_reauth_required');
     }
   });
+});
+
+test('最後の所属を外された管理者の指名解除単独は失効対象外で、再招待後も旧Cookieと旧トークンは使える', async () => {
+  const target = await createTarget();
+  const person = await createPerson({
+    organization: target.organization,
+    admin: true,
+    membership: { workspaceId: target.workspace.id, role: 'member' },
+    sessionOverrides: { created_at: new Date(Date.now() - 60_000).toISOString() },
+  });
+  const token = await issue(person);
+  await remove(target, target.admin, person);
+  expect(
+    (
+      await post(app, userAdminUpdate, {
+        slug: target.slug,
+        token: target.admin.token,
+        body: { user_id: person.userId, is_admin: false },
+      })
+    ).status,
+  ).toBe(200);
+  const invitation = await createInvitation(
+    target.organization,
+    target.workspace.id,
+    target.admin.userId!,
+    person.login,
+  );
+  expect(
+    (
+      await post(app, invitationAccept, {
+        slug: target.slug,
+        token: person.token,
+        body: { invitation_id: invitation.id },
+      })
+    ).status,
+  ).toBe(200);
+  for (const credential of [{ token: person.token }, { bearer: token }]) {
+    expect((await post(app, organizationInfo, { slug: target.slug, ...credential, body: {} })).status).toBe(200);
+  }
 });
