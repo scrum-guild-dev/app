@@ -13,6 +13,7 @@
   } from '../../shared/operations/task/index.ts';
   import { normalizeLongText } from '../../shared/story.ts';
   import { callOperation } from '../api.ts';
+  import { attachmentSaveFailure } from '../attachment-save.ts';
   import { reloadView } from '../comment-thread.ts';
   import { formatHistoryTime } from '../task-history.ts';
   import { showToast } from '../toast.svelte.ts';
@@ -21,6 +22,7 @@
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
+  import MarkdownEditor from './MarkdownEditor.svelte';
 
   // 詳細の引き出しの「コメント」のタブの中身（kit.js の drawerHtml の .thread と commentHtml）。
   // 開いたら comment-list で新しい 50 件を読み、書いた順に並べる。それより前は、一覧の上の「前のコメントを読む」で足す。
@@ -58,6 +60,8 @@
 
   type EditState = {
     draft: string;
+    attachmentIds: string[];
+    uploading: boolean;
     // 直し始めたときの本文。書きかけの判定に使う
     original: string;
     error: string | null;
@@ -88,6 +92,8 @@
   let announce = $state('');
 
   let newDraft = $state('');
+  let newAttachmentIds = $state<string[]>([]);
+  let newUploading = $state(false);
   let newError = $state<string | null>(null);
   let sending = $state(false);
   let newInput = $state<HTMLTextAreaElement>();
@@ -109,8 +115,14 @@
 
   // 引き出しの書きかけ。送っている間と保存している間も数える（失敗したときに文が消えないよう、閉じる前に確かめる）
   export function hasDraft(): boolean {
-    if (sending || normalized(newDraft) !== '') return true;
-    return Object.values(edits).some((edit) => edit.saving || normalized(edit.draft) !== normalized(edit.original));
+    if (sending || newUploading || newAttachmentIds.length > 0 || normalized(newDraft) !== '') return true;
+    return Object.values(edits).some(
+      (edit) =>
+        edit.saving ||
+        edit.uploading ||
+        edit.attachmentIds.length > 0 ||
+        normalized(edit.draft) !== normalized(edit.original),
+    );
   }
 
   function problemMessage(raw: string): string | null {
@@ -234,7 +246,7 @@
   // ---- 新しいコメント ----
   async function send(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    if (sending) return;
+    if (sending || newUploading) return;
     newError = problemMessage(newDraft);
     if (newError !== null) {
       newInput?.focus();
@@ -245,7 +257,7 @@
     try {
       const result = await callOperation(
         commentCreate,
-        { workspace_id: workspaceId, task_id: taskId, body_md: newDraft },
+        { workspace_id: workspaceId, task_id: taskId, body_md: newDraft, attachment_ids: newAttachmentIds },
         { slug },
       );
       if (!alive) {
@@ -256,6 +268,7 @@
       if (result.ok) {
         record(result.data.comment);
         newDraft = '';
+        newAttachmentIds = [];
         announce = t('commentSent');
         await tick();
         if (!alive) return;
@@ -264,6 +277,12 @@
         return;
       }
       announce = '';
+      const attachmentError = attachmentSaveFailure(result.status, result.error, newAttachmentIds);
+      if (attachmentError !== null) {
+        newError = attachmentError;
+        newInput?.focus();
+        return;
+      }
       if (result.status === 404) {
         ongone();
         return;
@@ -282,6 +301,8 @@
     if (edits[comment.id] !== undefined) return;
     edits[comment.id] = {
       draft: comment.body_md,
+      attachmentIds: [],
+      uploading: false,
       original: comment.body_md,
       error: null,
       saving: false,
@@ -310,7 +331,7 @@
   async function saveEdit(event: SubmitEvent, id: string): Promise<void> {
     event.preventDefault();
     const edit = edits[id];
-    if (edit === undefined || edit.saving || edit.blocked) return;
+    if (edit === undefined || edit.saving || edit.uploading || edit.blocked) return;
     const input = container?.querySelector<HTMLTextAreaElement>(`[data-comment-input="${id}"]`);
     edit.error = problemMessage(edit.draft);
     if (edit.error !== null) {
@@ -318,7 +339,7 @@
       return;
     }
     // 直す前と同じなら送らずに戻す
-    if (normalized(edit.draft) === normalized(edit.original)) {
+    if (normalized(edit.draft) === normalized(edit.original) && edit.attachmentIds.length === 0) {
       void finishEdit(id);
       return;
     }
@@ -327,7 +348,7 @@
     try {
       const result = await callOperation(
         commentUpdate,
-        { workspace_id: workspaceId, comment_id: id, body_md: edit.draft },
+        { workspace_id: workspaceId, comment_id: id, body_md: edit.draft, attachment_ids: edit.attachmentIds },
         { slug },
       );
       if (!alive) {
@@ -341,6 +362,12 @@
         showToast(t('commentSaved'), 'check');
         edit.saving = false;
         await finishEdit(id);
+        return;
+      }
+      const attachmentError = attachmentSaveFailure(result.status, result.error, edit.attachmentIds);
+      if (attachmentError !== null) {
+        edit.error = attachmentError;
+        input?.focus();
         return;
       }
       const code = result.error?.code;
@@ -519,25 +546,29 @@
             <form class="edit-form" onsubmit={(event) => void saveEdit(event, comment.id)} novalidate>
               <div class="field" class:is-invalid={edit.error !== null}>
                 <label class="field-label visually-hidden" for={inputId}>{t('commentEditLabel')}</label>
-                <textarea
-                  class="textarea"
+                <MarkdownEditor
+                  {slug}
+                  {workspaceId}
                   id={inputId}
-                  data-comment-input={comment.id}
-                  value={edit.draft}
-                  oninput={(event) => {
-                    edit.draft = event.currentTarget.value;
+                  dataCommentInput={comment.id}
+                  bind:value={edit.draft}
+                  bind:attachmentIds={edit.attachmentIds}
+                  bind:uploading={edit.uploading}
+                  oninput={() => {
                     if (!edit.blocked) edit.error = null;
                   }}
-                  readonly={edit.saving}
-                  aria-invalid={edit.error !== null}
-                  aria-describedby={edit.error !== null ? errorId : undefined}></textarea>
+                  readonly={edit.saving || edit.blocked || !canWrite}
+                  invalid={edit.error !== null}
+                  describedby={edit.error !== null ? errorId : undefined}
+                />
                 {#if edit.error !== null}
                   <span class="field-error" id={errorId} role="alert"><Icon name="alert" />{edit.error}</span>
                 {/if}
               </div>
               <div class="edit-actions">
                 {#if !edit.blocked}
-                  <button class="btn is-primary is-sm" type="submit" aria-disabled={edit.saving}>{t('editSave')}</button
+                  <button class="btn is-primary is-sm" type="submit" aria-disabled={edit.saving || edit.uploading}
+                    >{t('editSave')}</button
                   >
                 {/if}
                 <button
@@ -562,21 +593,24 @@
 
   <!-- 新しいコメントの欄は、一覧を読めてから出す（読めるまでは件数も無く、送った行を並べる先も無い）。
        書き込めなくなった（閉じた）ときに書きかけがあれば、欄を読み取り専用で残して理由を添え、「送る」を出さない -->
-  {#if loadState === 'ready' && (canWrite || normalized(newDraft) !== '')}
+  {#if loadState === 'ready' && (canWrite || normalized(newDraft) !== '' || newAttachmentIds.length > 0)}
     <form class="edit-form" onsubmit={(event) => void send(event)} novalidate>
       <div class="field" class:is-invalid={newError !== null}>
         <label class="field-label" for={newId}>{t('commentNewLabel')}</label>
-        <textarea
-          class="textarea"
+        <MarkdownEditor
+          {slug}
+          {workspaceId}
           id={newId}
-          bind:this={newInput}
+          bind:input={newInput}
           bind:value={newDraft}
+          bind:attachmentIds={newAttachmentIds}
+          bind:uploading={newUploading}
           oninput={() => (newError = null)}
           readonly={sending || !canWrite}
           placeholder={t('commentPlaceholder')}
-          aria-invalid={newError !== null}
-          aria-describedby={[newHintId, newError !== null ? newErrorId : null].filter((id) => id !== null).join(' ')}
-        ></textarea>
+          invalid={newError !== null}
+          describedby={[newHintId, newError !== null ? newErrorId : null].filter((id) => id !== null).join(' ')}
+        />
         <span class="field-hint" id={newHintId}
           >{canWrite ? t('bodyEditHint') : t('commentDraftReadOnly', { workspace: t('workspace') })}</span
         >
@@ -586,7 +620,7 @@
       </div>
       {#if canWrite}
         <div class="composer-foot">
-          <button class="btn" type="submit" aria-disabled={sending}>{t('commentSend')}</button>
+          <button class="btn" type="submit" aria-disabled={sending || newUploading}>{t('commentSend')}</button>
         </div>
       {/if}
     </form>

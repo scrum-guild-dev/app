@@ -47,6 +47,7 @@
   import DueChip from './DueChip.svelte';
   import Icon from './Icon.svelte';
   import InlineEdit from './InlineEdit.svelte';
+  import { attachmentSaveFailure } from '../attachment-save.ts';
   import Markdown from './Markdown.svelte';
   import RepositoryPicker from './RepositoryPicker.svelte';
   import TaskComments from './TaskComments.svelte';
@@ -575,8 +576,12 @@
   // 欄を書く。成功なら null、失敗ならエラーの文。404 は閉じる側へ回す（文は返さず、taskGone を立てる）。
   // 引き出しが閉じた後に返った応答（欄を離れた直後に × を押した、ポイントを選んだ直後に閉じた）も、黙って捨てない:
   // 通ったら木を読み直してトーストで知らせ、失敗はトーストで知らせる（画面の状態は触らない）
-  async function saveFields(fields: Fields): Promise<string | null> {
-    const result = await callOperation(taskUpdate, { workspace_id: workspaceId, task_id: taskId, ...fields }, { slug });
+  async function saveFields(fields: Fields, attachmentIds: string[] = []): Promise<string | null> {
+    const result = await callOperation(
+      taskUpdate,
+      { workspace_id: workspaceId, task_id: taskId, ...fields, attachment_ids: attachmentIds },
+      { slug },
+    );
     if (result.ok) {
       if (alive && task !== null) {
         const saved = result.data.task;
@@ -593,6 +598,8 @@
       onchanged();
       return null;
     }
+    const attachmentError = attachmentSaveFailure(result.status, result.error, attachmentIds);
+    if (attachmentError !== null) return attachmentError;
     // 選んだリポジトリか区分が削除されていた（タスクはある）。一覧を読み直して、選び直してもらう
     if (result.status === 404 && (fields.repository_id != null || fields.category_id != null) && (await refresh())) {
       if (alive) void loadDefinitions();
@@ -894,9 +901,11 @@
     return null;
   }
 
-  function saveBody(raw: string): Promise<string | null> {
+  function saveBody(raw: string, attachmentIds: string[] = []): Promise<string | null> {
     const next = normalizeLongText(raw);
-    return task === null || next === task.body_md ? Promise.resolve(null) : saveFields({ body_md: next });
+    return task === null || (next === task.body_md && attachmentIds.length === 0)
+      ? Promise.resolve(null)
+      : saveFields({ body_md: next }, attachmentIds);
   }
 
   // ---- ポイント（選んだら保存する。1本ずつ送る） ----
@@ -1743,6 +1752,7 @@
           value={task.body_md ?? ''}
           label={t('fieldBody')}
           multiline
+          markdown={{ slug, workspaceId }}
           hint={t('bodyEditHint')}
           problem={bodyProblem}
           save={saveBody}

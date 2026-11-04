@@ -1,6 +1,7 @@
 // Markdown の本文を、画面に描いてよい節の木に直す。MarkdownBlocks.svelte はこの木を描くだけで、
-// リンクと画像の規則（http と https の絶対 URL だけ）、生の HTML を文字にすること、入れ子と出力の上限はここだけが持つ。
+// リンク（http と https の絶対 URL）と画像（同じオリジンの添付だけ）の規則、生の HTML を文字にすること、入れ子と出力の上限はここだけが持つ。
 // HTML の文字列を作らないので、無害化器は要らない。
+import { slugProblem } from '../shared/organization-slug.ts';
 import type { Nodes, PhrasingContent, Root, RootContent } from 'mdast';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import { gfmAutolinkLiteralFromMarkdown } from 'mdast-util-gfm-autolink-literal';
@@ -36,7 +37,8 @@ export type MarkdownInline =
   | { type: 'code'; value: string }
   | { type: 'break' }
   | { type: 'emphasis' | 'strong' | 'delete'; children: MarkdownInline[] }
-  | { type: 'link'; href: string; children: MarkdownInline[] };
+  | { type: 'link'; href: string; children: MarkdownInline[] }
+  | { type: 'image'; src: string; alt: string };
 
 export type MarkdownAlign = 'left' | 'center' | 'right' | null;
 
@@ -95,6 +97,15 @@ export function safeHref(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+// 絶対 URL や URL の正規化は使わず、添付の経路そのものだけを許す。
+// エンコードした区切り、クエリ、フラグメント、別の API への相対移動は通さない。
+export function safeAttachmentImage(url: string): string | null {
+  const match = /^\/api\/([^/]+)\/attachments\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(
+    url,
+  );
+  return match !== null && slugProblem(match[1]) === undefined ? url : null;
 }
 
 // 自動リンクの mdast の拡張が持つ `transforms` は、構文木を再帰で歩く（unist-util-visit-parents）ので、
@@ -245,8 +256,10 @@ function link(
 // リンクの中の画像は、リンクを入れ子にせず文字だけにする
 function image(url: string | null, alt: string | null | undefined, ctx: Context, inLink: boolean): MarkdownInline[] {
   const label = alt ?? '';
+  const src = url === null ? null : safeAttachmentImage(url);
+  if (src !== null && !inLink) return [made(ctx, { type: 'image', src, alt: label }, src.length + label.length)];
   const href = url === null ? null : safeHref(url);
-  if (href === null) return textOf(ctx, label);
+  if (href === null) return textOf(ctx, label || (inLink ? (src ?? '') : ''));
   if (inLink) return textOf(ctx, label || href);
   return [made(ctx, { type: 'link', href, children: textOf(ctx, label || href) }, href.length)];
 }

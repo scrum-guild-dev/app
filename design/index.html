@@ -681,6 +681,21 @@ const SECTIONS = [
      <div class="field"><span class="field-label">使っている量と上限</span><div class="grid-2">${SQ.meter(3.1, 10)}${SQ.meter(8.3, 10)}${SQ.meter(10, 10)}<div class="panel">${SQ.meter(21.7, 50, { small: true })}</div></div></div>`,
     ["画像（PNG、JPEG、GIF、WebP）と動画（MP4、WebM）は画面で見せる。それ以外はダウンロードだけ。", "失敗は理由と数字を出す（何 MB を超えたか）。上限に達したら、上げる場所を止めて、誰が何をすれば添付できるかを書く。", "量の色は 80% を超えたら警告、上限で危険。色だけでなく、割合と文字を添える。", "消すときは、戻せないことと、差し込んだ所がどうなるかを確認のダイアログで伝える。"],
     ".files .file-thumb .file-thumb-label .file-art .is-video / .file-row .file-main .file-name .file-meta .file-actions .is-error .file-bar / .dropzone .is-over .is-disabled / .md-figure .comment-files .composer-foot / .preview .dialog-sheet.is-wide / .meter .meter-small .is-warn .is-full")],
+  ["markdown-editor", "Markdown を書く欄", () => block("markdown-editor", "Markdown を書く欄", "本文・受け入れ基準・決まった欄・コメントで使う共通の入力欄。複数ファイルの選択・ドロップ・貼り付けを試せる。60%の行は固定の状態見本で、選んだファイルは進捗が動いて保存待ちになる。見本では実際の保存や送信は行わない。",
+    SQ.markdownEditor("catalog-editor", { label: "Markdown の本文", value: "## 確認すること\n\n- [ ] 画像と手順を添付する", files: [
+      { id: "catalog-editor-progress", name: "確認画面.png", type: "image", size: "1.8 MB", state: "uploading", pct: 60, snapshot: true },
+      { id: "catalog-editor-error", name: "動作確認の録画.mp4", type: "video", size: "82.1 MB", state: "error", error: "50 MB を超えているため添付できません（82.1 MB）" },
+      { id: "catalog-editor-pending", name: "確認の手順.txt", type: "file", size: "2.1 KB" },
+    ] }) +
+    SQ.markdownEditor("catalog-editor-quota", { label: "容量上限の状態（表示見本）", value: "書いている本文は残ります。", quota: true, files: [
+      { id: "catalog-editor-quota-1", name: "追加する画像.png", type: "image", size: "1.8 MB", state: "error", error: "容量の上限により添付できません。" },
+      { id: "catalog-editor-quota-2", name: "追加する手順.txt", type: "file", size: "2.1 KB", state: "error", error: "容量の上限により添付できません。" },
+    ] }) +
+    SQ.markdownEditor("catalog-editor-readonly", { label: "読み取り専用の状態（表示見本）", value: "終了したワークスペースの下書きです。", readonly: true, files: [
+      { id: "catalog-editor-readonly-1", name: "保存待ちの手順.txt", type: "file", size: "2.1 KB" },
+    ] }),
+    [".markdown-editor は入力欄、上げる場所、ファイル行を --space-2 の間隔で並べる。狭い幅では説明とボタンが折り返す。", "上げているファイルは「やめる」、失敗は「閉じる」、保存待ちは「外す」で取り除く。未編集の自動挿入画像は本文からも外し、編集済みの本文は残す。取り除いたら入力欄へフォーカスを戻し、結果を読み上げる。", "ファイルと一緒にコピーした本文は選択範囲へ貼り付ける。コピー元が渡したファイル名だけの文字列は本文に入れない。", "容量上限の案内は欄全体に1回だけ出し、各行には短い理由を示す。終了したワークスペースの欄は読むだけにし、ファイルの追加と保存待ちの取り外しを止める。", "1ファイル50 MBまで。画像は Markdown の ![ファイル名](…) で差し込み、画像以外は本文に差し込まず添付する。生の HTML は許さない。"],
+    ".markdown-editor / .textarea / .dropzone.is-disabled / .files .file-row .file-main .file-name .file-meta .file-actions .is-error .file-bar / .field-error .field-hint")],
   ["markdown", "Markdown の本文", () => block("markdown", "Markdown の本文", "タスクの本文、コメント、決まった欄、ストーリーとエピックの本文を描く。生の HTML は文字で出し、リンクは http と https の絶対 URL だけにする。",
     `<div class="field"><span class="field-label">見出し、段落、リスト、チェックリスト、引用、コード、区切り線、表</span>${SQ.markdownSample()}</div>
      <div class="field"><span class="field-label">リンクにしないもの（HTML、相対リンク、mailto:、外部の画像）</span>${SQ.markdownSample("unsafe")}</div>
