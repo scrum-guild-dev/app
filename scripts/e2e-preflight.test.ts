@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { inputFingerprint, preflightPlan, runPreflight, verifyPreflight } from './e2e-preflight.ts';
+import { inputFingerprint, parsePreflightArgs, preflightPlan, runPreflight, verifyPreflight } from './e2e-preflight.ts';
 
 function fixture(t: { after(fn: () => void): void }): string {
   const cwd = mkdtempSync(join(tmpdir(), 'e2e-preflight-'));
@@ -31,15 +31,20 @@ function fixture(t: { after(fn: () => void): void }): string {
   git('add', '.');
   git('commit', '-qm', 'initial');
   git('branch', 'base');
+  mkdirSync(join(cwd, 'e2e'), { recursive: true });
+  writeFileSync(join(cwd, 'e2e/new.test.ts'), 'test');
   return cwd;
 }
 
-test('CI の文書判定・dev判定と、追加/変更テストだけの繰り返しを使う', () => {
+test('対象限定は通常・開発・繰り返しを先に確認し、全件は明示した場合だけ実行する', () => {
   assert.deepEqual(preflightPlan(['docs/a.md'], []), []);
-  assert.deepEqual(preflightPlan(['src/server/a.ts'], []), [{ mode: 'normal', files: [] }]);
-  assert.deepEqual(preflightPlan(['e2e/a.test.ts', 'e2e/deleted.test.ts'], ['e2e/a.test.ts']), [
+  assert.throws(() => preflightPlan(['src/server/a.ts'], []), /--files/);
+  assert.deepEqual(preflightPlan(['src/server/a.ts'], [], { all: true, reason: '基盤変更' }), [
     { mode: 'normal', files: [] },
-    { mode: 'dev', files: [] },
+  ]);
+  assert.deepEqual(preflightPlan(['e2e/a.test.ts', 'e2e/deleted.test.ts'], ['e2e/a.test.ts']), [
+    { mode: 'normal', files: ['e2e/a.test.ts'] },
+    { mode: 'dev', files: ['e2e/a.test.ts'] },
     { mode: 'repeat', files: ['e2e/a.test.ts'] },
   ]);
   assert.throws(() => preflightPlan(['e2e/bad name.test.ts'], ['e2e/bad name.test.ts']));
@@ -48,7 +53,7 @@ test('CI の文書判定・dev判定と、追加/変更テストだけの繰り�
 test('未コミットと新規テストを検査し、版・対象hash・各結果を記録する', (t) => {
   const cwd = fixture(t);
   writeFileSync(join(cwd, 'app.ts'), 'changed');
-  mkdirSync(join(cwd, 'e2e'));
+  mkdirSync(join(cwd, 'e2e'), { recursive: true });
   writeFileSync(join(cwd, 'e2e/new.test.ts'), 'test');
   const calls: string[] = [];
   const versions = new Set<string>();
@@ -97,6 +102,12 @@ test('失敗を成功にせず記録し、後続検査を起動しない', (t) =
   const report = JSON.parse(readFileSync(join(log, '../result.json'), 'utf8'));
   assert.equal(report.success, false);
   assert.equal(report.checks[0].status, 'failed');
+  assert.equal(report.status, 'failed');
+  assert.deepEqual(
+    report.checks.slice(1).map((step: { status: string }) => step.status),
+    ['not-run', 'not-run'],
+  );
+  assert.throws(() => verifyPreflight(join(log, '../result.json'), 'base', cwd));
   assert.ok(report.finished);
 });
 
@@ -144,7 +155,7 @@ test('hash は新規ファイルと削除を検出し、秘密ファイルには
 
 test('上限で省略した繰り返しを skipped と記録し、前の成果物をコピーしない', (t) => {
   const cwd = fixture(t);
-  mkdirSync(join(cwd, 'e2e'));
+  mkdirSync(join(cwd, 'e2e'), { recursive: true });
   writeFileSync(join(cwd, 'e2e/new.test.ts'), 'test');
   const result = runPreflight('base', {
     cwd,
@@ -173,7 +184,7 @@ for (const status of ['passed', 'skipped']) {
       cwd,
       `console.log('[e2e-run:result] ' + JSON.stringify({status: process.argv[2] === 'repeat' ? '${status}' : 'passed'})); console.error('late warning');`,
     );
-    mkdirSync(join(cwd, 'e2e'));
+    mkdirSync(join(cwd, 'e2e'), { recursive: true });
     writeFileSync(join(cwd, 'e2e/new.test.ts'), 'test');
     const result = runPreflight('base', { cwd });
     const report = JSON.parse(readFileSync(result, 'utf8'));
@@ -275,4 +286,201 @@ test('CLI の --verify に結果ファイルが無いときは起動前に使い
   assert.equal(result.status, 1);
   assert.match(result.stderr, /使い方: pnpm e2e:preflight .*--verify <result\.json>/);
   assert.equal(existsSync(join(cwd, '.e2e-preflight')), false);
+});
+
+test('明示対象は既存の関連テストも通常・開発・繰り返しへ渡し、理由と所要時間を残す', (t) => {
+  const cwd = fixture(t);
+  const options = { files: ['e2e/new.test.ts'], reason: 'Wiki の保存と削除を通る関連画面' };
+  const calls: string[] = [];
+  const result = runPreflight('base', {
+    cwd,
+    ...options,
+    run(mode, files) {
+      calls.push(mode);
+      assert.deepEqual(files, options.files);
+      return 'passed';
+    },
+  });
+  const report = JSON.parse(readFileSync(result, 'utf8'));
+  assert.equal(report.selection.scope, 'targeted');
+  assert.equal(report.selection.source, 'explicit');
+  assert.equal(report.selection.reason, options.reason);
+  assert.deepEqual(calls, ['normal', 'dev', 'repeat']);
+  assert.ok(report.durationMs >= 0);
+  assert.ok(report.checks.every((step: { durationMs: number }) => step.durationMs >= 0));
+  verifyPreflight(result, 'base', cwd, options);
+  assert.throws(() => verifyPreflight(result, 'base', cwd));
+  assert.throws(() => verifyPreflight(result, 'base', cwd, { ...options, reason: '別の判断' }));
+  writeFileSync(join(cwd, 'e2e/other.test.ts'), 'other');
+  assert.throws(() => verifyPreflight(result, 'base', cwd, { ...options, files: ['e2e/other.test.ts'] }));
+});
+
+test('文書のみは実行しない省略記録となり、対象限定や全件成功と区別する', (t) => {
+  const cwd = fixture(t);
+  rmSync(join(cwd, 'e2e'), { recursive: true });
+  mkdirSync(join(cwd, 'docs'));
+  writeFileSync(join(cwd, 'docs/a.md'), 'documentation');
+  const result = runPreflight('base', {
+    cwd,
+    run() {
+      assert.fail('must not run');
+    },
+  });
+  const report = JSON.parse(readFileSync(result, 'utf8'));
+  assert.equal(report.status, 'skipped');
+  assert.equal(report.selection.scope, 'docs-only');
+  assert.deepEqual(report.checks, []);
+  verifyPreflight(result, 'base', cwd);
+});
+
+test('全件は明示指定だけで動き、対象限定の記録を全件成功として再利用できない', (t) => {
+  const cwd = fixture(t);
+  const options = { all: true, reason: '共通基盤のため全画面を検査' };
+  const calls: { mode: string; files: string[] }[] = [];
+  const result = runPreflight('base', {
+    cwd,
+    ...options,
+    run(mode, files) {
+      calls.push({ mode, files });
+      return 'passed';
+    },
+  });
+  assert.deepEqual(calls, [
+    { mode: 'normal', files: [] },
+    { mode: 'dev', files: [] },
+    { mode: 'repeat', files: ['e2e/new.test.ts'] },
+  ]);
+  verifyPreflight(result, 'base', cwd, options);
+  assert.throws(() => verifyPreflight(result, 'base', cwd));
+  const targeted = runPreflight('base', {
+    cwd,
+    run() {
+      return 'passed';
+    },
+  });
+  assert.throws(() => verifyPreflight(targeted, 'base', cwd, options));
+});
+
+test('空・不明・存在しない対象・全件との混在を実行前に拒否する', (t) => {
+  const cwd = fixture(t);
+  rmSync(join(cwd, 'e2e'), { recursive: true });
+  for (const options of [
+    {},
+    { files: [], reason: 'empty' },
+    { files: ['e2e/missing.test.ts'], reason: 'missing' },
+    { files: ['src/file.ts'], reason: 'not test' },
+    { files: ['--help'], reason: 'option' },
+    { files: ['e2e/../bad.test.ts'], reason: 'traversal' },
+    { all: true },
+    { files: ['e2e/a.test.ts'] },
+    { all: true, files: ['e2e/a.test.ts'], reason: 'conflict' },
+    { reason: 'without selection' },
+  ]) {
+    assert.throws(() =>
+      runPreflight('base', {
+        cwd,
+        ...options,
+        run() {
+          assert.fail('must not run');
+        },
+      }),
+    );
+  }
+  assert.equal(existsSync(join(cwd, '.e2e-preflight')), false);
+});
+
+test('照合は旧形式・対象・モード・状態・時間・環境の改変を拒否する', (t) => {
+  const cwd = fixture(t);
+  const result = runPreflight('base', {
+    cwd,
+    run() {
+      return 'passed';
+    },
+  });
+  const original = JSON.parse(readFileSync(result, 'utf8'));
+  for (const patch of [
+    { formatVersion: 1 },
+    { selection: { ...original.selection, scope: 'all' } },
+    { selection: { ...original.selection, files: [] } },
+    { platform: 'other' },
+    { arch: 'other' },
+    { status: 'skipped' },
+    { durationMs: -1 },
+    { checks: original.checks.slice(0, 2) },
+    { checks: original.checks.map((step: object) => ({ ...step, status: 'not-run' })) },
+    { checks: original.checks.map((step: object) => ({ ...step, durationMs: -1 })) },
+    { checks: [{ ...original.checks[0], mode: 'repeat' }, ...original.checks.slice(1)] },
+  ]) {
+    writeFileSync(result, JSON.stringify({ ...original, ...patch }));
+    assert.throws(() => verifyPreflight(result, 'base', cwd));
+  }
+});
+
+test('CLI は同じ対象指定を実行と照合で受け付け、誤った引数を拒否する', () => {
+  const options = { files: ['e2e/a.test.ts', 'e2e/b.test.ts'], reason: '関連画面' };
+  assert.deepEqual(parsePreflightArgs(['origin/main', '--files', ...options.files, '--reason', options.reason]), {
+    base: 'origin/main',
+    result: undefined,
+    options,
+  });
+  assert.deepEqual(parsePreflightArgs(['--verify', 'result.json', 'base', '--all', '--reason', '基盤']), {
+    base: 'base',
+    result: 'result.json',
+    options: { all: true, reason: '基盤' },
+  });
+  for (const args of [
+    ['--files'],
+    ['--files', '--reason', 'empty'],
+    ['--all'],
+    ['--all', '--all'],
+    ['--unknown'],
+    ['a', 'b'],
+    ['--reason', 'alone'],
+    ['--verify'],
+    ['--files', 'e2e/a.test.ts', '--all', '--reason', 'mixed'],
+    ['--reason', '  ', '--all'],
+    ['--reason', 'a', '--reason', 'b', '--all'],
+  ])
+    assert.throws(() => parsePreflightArgs(args));
+});
+
+test('既定の子プロセスへはファイルの完全一致正規表現を渡す', (t) => {
+  const cwd = fixture(t);
+  runnerStub(
+    cwd,
+    `import assert from 'node:assert/strict';
+assert.equal(process.argv.at(-1), '--require-executed');
+const pattern = new RegExp(process.argv[3]);
+assert.equal(pattern.test(process.cwd() + '/e2e/new.test.ts'), true);
+assert.equal(pattern.test(process.cwd() + '/e2e/newXtestXts'), false);
+assert.equal(pattern.test(process.cwd() + '/e2e/prefix-new.test.ts'), false);
+console.log('[e2e-run:result] {"status":"passed"}');`,
+  );
+  runPreflight('base', { cwd });
+});
+
+test('明示対象から追加・変更した e2e を外した検査と照合を拒否する', (t) => {
+  const cwd = fixture(t);
+  const result = runPreflight('base', { cwd, run: () => 'passed' });
+  const omitted = { files: ['e2e/related.test.ts'], reason: '関連だけを誤って指定' };
+  assert.throws(() => preflightPlan(['e2e/new.test.ts'], ['e2e/new.test.ts'], omitted), /追加・変更/);
+  assert.throws(
+    () =>
+      runPreflight('base', {
+        cwd,
+        ...omitted,
+        run() {
+          assert.fail('must not run');
+        },
+      }),
+    /追加・変更/,
+  );
+  assert.throws(() => verifyPreflight(result, 'base', cwd, omitted), /追加・変更/);
+  assert.deepEqual(
+    preflightPlan(['e2e/new.test.ts'], ['e2e/new.test.ts'], {
+      files: ['e2e/related.test.ts', 'e2e/new.test.ts'],
+      reason: '変更と関連を含める',
+    }),
+    ['normal', 'dev', 'repeat'].map((mode) => ({ mode, files: ['e2e/new.test.ts', 'e2e/related.test.ts'] })),
+  );
 });
