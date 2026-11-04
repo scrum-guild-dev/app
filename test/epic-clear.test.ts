@@ -3,7 +3,7 @@
 import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
 import { XP_EPIC_REWARD } from '../src/shared/experience.ts';
-import { epicComplete, epicReopen } from '../src/shared/operations/epic/index.ts';
+import { epicComplete, epicDelete, epicReopen } from '../src/shared/operations/epic/index.ts';
 import { storyMove } from '../src/shared/operations/story/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb } from '../src/server/db/index.ts';
@@ -335,6 +335,33 @@ describe('epic-complete', () => {
       expect(res.status).toBe(409);
       expect(await errorOf(res)).toMatchObject({ code: 'conflict', reason: 'parent_completed' });
     }
+  });
+
+  test('クリア済みのエピックを、配下を残して削除できない（親なしになった完了済みのストーリーで、もう一度クリアできてしまうため）', async () => {
+    const target = await createTarget();
+    const epic = await readyEpic(target);
+    const story = await storyUnder(target, epic.id, { position: 'a1' });
+    expect((await clear(target, epic.id)).status).toBe(200);
+    const remove = (epicId: string, children: 'keep' | 'delete') =>
+      post(app, epicDelete, {
+        slug: target.slug,
+        token: target.leader.token,
+        body: { workspace_id: target.workspace.id, epic_id: epicId, children },
+        env: testEnv,
+      });
+    const keep = await remove(epic.id, 'keep');
+    expect(keep.status).toBe(409);
+    expect(await errorOf(keep)).toEqual({ code: 'epic_finished', reason: undefined });
+    expect((await epicRow(target, epic.id)).deleted_at).toBeNull();
+    const db = orgDb(env, target.organization.verified);
+    const still = await db.first(
+      db.statement((q) => q.selectFrom('stories').select('epic_id').where('id', '=', story.id)),
+    );
+    expect(still?.epic_id).toBe(epic.id);
+    // まとめて削除は通り、クリアしていないエピックの keep も通る
+    expect((await remove(epic.id, 'delete')).status).toBe(200);
+    const open = await epicOf(target);
+    expect((await remove(open.id, 'keep')).status).toBe(200);
   });
 
   test('クリアしたエピックの下へは、ストーリーを移せない', async () => {
