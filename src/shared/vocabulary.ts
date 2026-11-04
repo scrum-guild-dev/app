@@ -594,7 +594,7 @@ export const dictionary = defineDictionary({
   moveParentHint: '移す先の末尾に置きます。',
   moveParentSubmit: '移す',
   // ストーリーの親（エピック）を移すときの、完了か中止したエピックの下へは移せない知らせ
-  moveEpicDone: '{done}か中止した{epic}の下へは移せません。一覧を読み直します',
+  moveEpicDone: '{done}か中止した{epic}の配下の{story}は、{epic}の外へも中へも移せません。一覧を読み直します',
 
   // エピックの行（木の最上段）。{title} はエピックの題
   epicCreate: '{epic}を作る',

@@ -20,6 +20,9 @@ import { actorUserIdOf, changeLogColumns, isLeaderOrAdmin, openWorkspace, throwI
 
 type Tables = OrganizationTables;
 
+// batch() の結果の並び: 0 が epics の UPDATE、1 が履歴、2 からが受け取り手ごとの付与
+const GRANTS_FROM = 2;
+
 // 同時の書き込みに負けたときにやり直す回数の上限。超えたら 409 の conflict（changed）
 const MAX_ATTEMPTS = 3;
 
@@ -278,15 +281,6 @@ export const epicCompleteOperation = implement(epicComplete, async ({ db, actor,
                     eb.exists(
                       recipientRows(eb, workspaceId, epicId).select('p.user_id').where('p.user_id', '=', recipient),
                     ),
-                    eb.not(
-                      eb.exists(
-                        eb
-                          .selectFrom('xp_grants')
-                          .select('xp_grants.id')
-                          .where('xp_grants.workspace_id', '=', workspaceId)
-                          .where('xp_grants.dedupe_key', '=', dedupeKey),
-                      ),
-                    ),
                   ]),
                 ),
             ),
@@ -296,7 +290,7 @@ export const epicCompleteOperation = implement(epicComplete, async ({ db, actor,
 
     if ((results[0]?.changes ?? 0) > 0) {
       // 付けた人数は、付与の文が実際に行を足した数（読んでから書くまでに討伐隊を抜けた人には付かない）
-      const granted = results.slice(2).filter((result) => (result.changes ?? 0) > 0).length;
+      const granted = results.slice(GRANTS_FROM).filter((result) => (result.changes ?? 0) > 0).length;
       return { epic_id: epicId, completed_at: completedAt, reward_xp: amount, recipient_count: granted };
     }
     // 閉じていれば 409 の workspace_closed。そうでなければ読み直して決め直す（上の順）。それでも断る理由が無ければ、やり直す

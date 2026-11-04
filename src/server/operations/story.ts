@@ -671,7 +671,16 @@ export const storyMoveOperation = implement(storyMove, async ({ db, actor, works
     // 読んでから書くまでに、閉じたか、ストーリーか親か直前の行が消えたか、親が完了したか、
     // 別の要求が先に親を移したか直前の行を動かした
     await throwIfClosed(db, workspaceId);
-    if ((await movingStory(db, workspaceId, storyId)) === undefined) throw new ApiError(404, 'not_found');
+    const latest = await movingStory(db, workspaceId, storyId);
+    if (latest === undefined) throw new ApiError(404, 'not_found');
+    // 読んでから書くまでに、今の親がクリアか中止した
+    if (
+      latest.epic_id !== null &&
+      latest.epic_id !== parentId &&
+      (latest.epic_completed_at !== null || latest.epic_canceled_at !== null)
+    ) {
+      throw moveConflict('parent_completed');
+    }
     if (parentId !== null) await readMoveEpic(db, workspaceId, parentId, parentChanged);
     if (afterId != null) await planStoryMove(db, workspaceId, parentId, storyId, afterId);
     throw moveConflict('changed');

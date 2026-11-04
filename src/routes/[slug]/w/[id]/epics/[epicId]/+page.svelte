@@ -220,7 +220,7 @@
       } else {
         const reason = epicClearConflictReasonOf(result.error?.details);
         if (result.status === 403) {
-          // 権限を失った（ワークスペースから外された）。もう一度押しても直らないので、枠も読み直す
+          // 依頼主でもリーダーでもなくなった、またはワークスペースから外された。もう一度押しても直らないので、枠も読み直す
           showToast(t('epicClearForbidden', words), 'alert');
           await invalidate('app:workspace');
         } else if (result.error?.code === 'workspace_closed') {
