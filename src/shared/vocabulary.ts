@@ -1697,6 +1697,8 @@ export const dictionary = defineDictionary({
   storyDeleteAllHint: '{task} {tasks} 件を削除します。取り込んだ{task}は削除せず、{archive}へ移します。',
   treeDeleteClearedKeep:
     '{done}した{epic}は、配下の{story}を親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先に{epic}の{done}を取り消してください。',
+  treeDeleteClearedKeepAsk:
+    '{done}した{epic}は、配下の{story}を親なしで残して削除できません。{requester}か{leader}に、{epic}の{done}を取り消してもらってください。',
   treeDeleteAllLeaderOnly: '配下に他の人が作ったものがあるため、まとめて削除できるのは{leader}だけです。',
   epicDeleteNoChildren: '配下の{story}はありません。',
   storyDeleteNoChildren: '配下の{task}はありません。',

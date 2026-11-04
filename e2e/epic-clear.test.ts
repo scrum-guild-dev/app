@@ -3,7 +3,7 @@
 // クリアできる状態は epic-detail の応答を書き換えて作る。
 // 書き込みの応答は差し替えて確かめるので、seed の行は書き換えない（ほかのファイルと並べて走るため）。
 // 演出は動きを減らす設定（reducedMotion: 'reduce'）では出さず、トーストだけにする
-import { epicComplete, epicDetail, epicReopen } from '../src/shared/operations/epic/index.ts';
+import { epicComplete, epicDelete, epicDetail, epicReopen } from '../src/shared/operations/epic/index.ts';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { signIn, watchViolations } from './helpers.ts';
@@ -141,4 +141,21 @@ test('取り消しが断られたら、理由ごとにトーストで知らせ�
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   await page.getByRole('button', { name: '完了を取り消す' }).click();
   await expect(page.locator('.toasts:visible .toast').last()).toContainText('このエピックは完了していません');
+});
+
+test('クリア済みで配下のあるエピックを、配下を残して削除すると断られ、理由を出して確認を閉じない', async ({ page }) => {
+  await failOperation(page, epicDelete, AOBA, 409, 'epic_finished');
+  await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
+  await page.getByRole('button', { name: 'エピックを直す' }).click();
+  const epicDialog = page.getByRole('dialog', { name: 'エピック', exact: true });
+  await epicDialog.getByRole('button', { name: 'このエピックを削除する' }).click();
+  const confirm = page.getByRole('dialog', { name: 'エピックを削除する' });
+  await expect(confirm.getByRole('radio', { name: /配下を親なしで残す/ })).toBeChecked();
+  await confirm.getByRole('button', { name: '削除する' }).click();
+  await expect(
+    confirm.getByText(
+      '完了したエピックは、配下のストーリーを親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先にエピックの完了を取り消してください。',
+    ),
+  ).toBeVisible();
+  await expect(confirm).toBeVisible();
 });

@@ -167,7 +167,16 @@
         }
       } else if (result.status === 409 && result.error?.code === 'epic_finished') {
         // クリア済みの<エピック>は、配下を親なしで残して削除できない（完了した<ストーリー>で、もう一度クリアできてしまうため）
-        submitError = t('treeDeleteClearedKeep', { epic: t('epic'), done: t('done'), story: t('story') });
+        // まとめて削除できない人（他の人の作った配下がある一般のメンバー）は、完了を取り消せる人に頼む
+        submitError = current.canDeleteChildren
+          ? t('treeDeleteClearedKeep', { epic: t('epic'), done: t('done'), story: t('story') })
+          : t('treeDeleteClearedKeepAsk', {
+              epic: t('epic'),
+              done: t('done'),
+              story: t('story'),
+              requester: t('requester'),
+              leader: t('leader'),
+            });
       } else if (result.status === 409 && result.error?.code === 'workspace_closed') {
         submitError = t('workspaceClosedReadOnly', { workspace: t('workspace') });
         onfinish('closed');
