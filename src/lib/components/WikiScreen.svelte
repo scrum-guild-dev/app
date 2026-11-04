@@ -12,7 +12,7 @@
 
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity';
-  import { beforeNavigate, goto, invalidate, invalidateAll } from '$app/navigation';
+  import { beforeNavigate, goto, invalidate, refreshAll } from '$app/navigation';
   import { page } from '$app/state';
   import { tick } from 'svelte';
   import { wikiClient } from '../wiki-client.ts';
@@ -302,8 +302,8 @@
       // 成功済みなら先に行き先へ移る。削除したURLを invalidate しない。
       if (recovery.destination !== null) {
         // eslint-disable-next-line svelte/no-navigation-without-resolve -- wikiClient の resolve 済みの行き先
-        await goto(recovery.destination, { invalidateAll: true, replaceState: true });
-      } else await invalidateAll();
+        await goto(recovery.destination, { refreshAll: true, replace: true });
+      } else await refreshAll();
       await tick();
       if (recovery.failed || recovery.pagesMissing) {
         recovery.failure = t(recovery.destination !== null ? 'wikiDeleteRefreshFailed' : 'wikiReadFailed');
