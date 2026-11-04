@@ -719,7 +719,7 @@ async function readRoot(db: OrganizationDb, workspaceId: string, root: Root) {
 
 // エピックがクリア済みで、削除していない配下のストーリーがあるか（削除していない、同じワークスペースのもの）。
 // 配下が無ければ、完了したストーリーが親なしで残ることは無いので、配下を残す削除でも通す
-async function isCleared(db: OrganizationDb, workspaceId: string, epicId: string): Promise<boolean> {
+async function hasClearedChildren(db: OrganizationDb, workspaceId: string, epicId: string): Promise<boolean> {
   const row = await db.first(
     db.statement((q) =>
       q
@@ -770,7 +770,7 @@ async function deleteRoot(
   }
   if (!mayDeleteOwned(found.created_by, actor, workspace)) throw new ApiError(403, 'forbidden');
   const forbidCleared = root.kind === 'epic' && children === 'keep';
-  if (forbidCleared && (await isCleared(db, workspaceId, root.id))) {
+  if (forbidCleared && (await hasClearedChildren(db, workspaceId, root.id))) {
     await throwIfClosed(db, workspaceId);
     throw new ApiError(409, 'epic_finished');
   }
@@ -796,7 +796,7 @@ async function deleteRoot(
   await throwIfClosed(db, workspaceId);
   if ((await readRoot(db, workspaceId, root)) === undefined) throw new ApiError(404, 'not_found');
   // 読んでから書くまでに、別の要求がエピックをクリアした
-  if (forbidCleared && (await isCleared(db, workspaceId, root.id))) throw new ApiError(409, 'epic_finished');
+  if (forbidCleared && (await hasClearedChildren(db, workspaceId, root.id))) throw new ApiError(409, 'epic_finished');
   if (ownerOnly !== null && (await hasOthersUnder(db, workspaceId, root, ownerOnly))) throw othersForbidden();
   // 前提はどれも満たしていたのに書けなかった（同じトランザクションの中では起きない）
   throw new ApiError(409, 'conflict');

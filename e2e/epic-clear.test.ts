@@ -111,6 +111,7 @@ test('未完了のストーリーが残っていると押せず、理由を横�
   await expect(clear).toHaveAttribute('aria-disabled', 'true');
   // aria-disabled の押せないボタン。押しても何も送らず、演出も出ない
   await clear.click({ force: true });
+  await page.waitForLoadState('networkidle');
   await expect(page.locator('.celebrate')).toHaveCount(0);
   expect(sent).toEqual([]);
 });
