@@ -1396,6 +1396,17 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     el.setAttribute("role", isPage ? "region" : "dialog");
     if (isPage) el.removeAttribute("aria-modal"); else el.setAttribute("aria-modal", "true");
   }
+  // タブの切り替えは、タブの選択と中身の表示だけを替える。引き出し全体は作り直さないので、コメント欄の書きかけもカーソルも残る
+  function setDrawerTab(tab) {
+    drawer.tab = tab;
+    const root = document.getElementById("drawer");
+    if (!root || !root.querySelector('[role="tab"]')) renderDrawer();
+    else {
+      root.querySelectorAll('[role="tab"]').forEach((b) => { const on = b.dataset.tab === tab; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
+      root.querySelectorAll('[role="tabpanel"]').forEach((panel) => { panel.hidden = panel.id !== `drawer-panel-${tab}`; });
+    }
+    document.querySelector(`#drawer [data-tab="${tab}"]`)?.focus();
+  }
   function renderDrawer() {
     const el = document.getElementById("drawer"), scrim = document.getElementById("scrim");
     if (!el) return;
@@ -2572,7 +2583,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       drawer.thanked.has(u) ? drawer.thanked.delete(u) : drawer.thanked.add(u);
       renderDrawer(); return;
     }
-    if ((el = hit("data-tab"))) { drawer.tab = el.dataset.tab; renderDrawer(); document.querySelector(`#drawer [data-tab="${drawer.tab}"]`)?.focus(); return; }
+    if ((el = hit("data-tab"))) { setDrawerTab(el.dataset.tab); return; }
     // コメントの「編集」「取り消し」「保存」「削除」と、新しいコメントの「送る」（見本の中だけで書き換える）
     if ((el = hit("data-comment-edit"))) {
       drawer.commentEditing = Number(el.dataset.commentEdit); delete drawer.drafts.commentEdit; renderDrawer();
@@ -2784,8 +2795,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const tabs = [...ev.target.closest('[role="tablist"]').querySelectorAll('[role="tab"]')];
       const at = tabs.indexOf(ev.target);
       const next = ev.key === "Home" ? 0 : ev.key === "End" ? tabs.length - 1 : (at + (ev.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-      ev.preventDefault(); drawer.tab = tabs[next].dataset.tab; renderDrawer();
-      document.querySelector(`#drawer [data-tab="${drawer.tab}"]`)?.focus(); return;
+      ev.preventDefault(); setDrawerTab(tabs[next].dataset.tab); return;
     }
     if (ev.key === "Enter" && !ev.isComposing && ev.target.matches && ev.target.matches("input[data-drawer-input]")) {
       ev.preventDefault(); saveDrawerEdit(ev.target.dataset.drawerInput); return;
