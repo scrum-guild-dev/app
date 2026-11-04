@@ -7,6 +7,8 @@
     AttachmentUploadError,
     moveAttachmentAnchor,
     moveMarkdownInsertion,
+    resolveInputEdit,
+    type TextEditRange,
     type MarkdownInsertion,
     uploadAttachment,
   } from '../attachment-upload.ts';
@@ -64,6 +66,7 @@
   let quota = $state(false);
   let notice = $state<string | null>(null);
   let previous = value;
+  let pendingInput: (TextEditRange & { before: string; inputType: string }) | undefined;
   const size = (file: File) => (file.size / 1_048_576).toFixed(2);
   const active = () => files.filter((file) => file.state === 'uploading' || file.state === 'queued');
 
@@ -71,10 +74,7 @@
     uploading = files.some((file) => file.state === 'uploading' || file.state === 'queued');
   });
   $effect(() => {
-    if (value !== previous) {
-      updatePositions(previous, value);
-      previous = value;
-    }
+    if (value !== previous) synchronizePositions();
   });
   onDestroy(() => {
     destroyed = true;
@@ -82,10 +82,14 @@
     uploading = false;
   });
 
-  function updatePositions(before: string, after: string): void {
+  function updatePositions(before: string, after: string, edit?: TextEditRange): void {
     for (const file of files) {
-      file.anchor = moveAttachmentAnchor(before, after, file.anchor);
-      if (file.insertion) file.insertion = moveMarkdownInsertion(before, after, file.insertion);
+      if (edit) {
+        const delta = after.length - before.length;
+        if (file.anchor >= edit.end) file.anchor += delta;
+        else if (file.anchor >= edit.start) file.anchor = edit.end + delta;
+      } else file.anchor = moveAttachmentAnchor(before, after, file.anchor);
+      if (file.insertion) file.insertion = moveMarkdownInsertion(before, after, file.insertion, edit);
     }
   }
 
@@ -104,10 +108,16 @@
     oninput?.();
   }
 
-  function changed(): void {
-    // Run synchronously, before an upload completion can insert using an old position.
-    updatePositions(previous, value);
+  function synchronizePositions(): void {
+    const edit = pendingInput?.before === previous ? resolveInputEdit(previous, value, pendingInput) : undefined;
+    pendingInput = undefined;
+    updatePositions(previous, value, edit);
     previous = value;
+  }
+
+  function changed(): void {
+    // The reactive effect may run before a delegated input handler; both consume the same actual edit.
+    synchronizePositions();
     oninput?.();
   }
 
@@ -254,12 +264,21 @@
     class="textarea"
     {id}
     bind:this={input}
-    bind:value
+    {value}
     {readonly}
     {placeholder}
     aria-invalid={invalid}
     aria-describedby={[describedby, quota ? quotaId : undefined].filter(Boolean).join(' ') || undefined}
     data-comment-input={dataCommentInput}
+    onbeforeinput={(event) => {
+      const element = event.currentTarget;
+      pendingInput = {
+        before: element.value,
+        start: element.selectionStart,
+        end: element.selectionEnd,
+        inputType: event.inputType,
+      };
+    }}
     oninput={(event) => {
       value = event.currentTarget.value;
       changed();

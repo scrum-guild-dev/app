@@ -352,11 +352,18 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
   await expect(form.locator('.file-row', { hasText: '外す手順.txt' })).toHaveCount(0);
   await expect(input).toHaveValue(original);
 
+  // 画像の直前へ同じ「!」を実際の編集操作で足しても、元のトークンの範囲を追える。
+  await input.focus();
+  await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(2, 2));
+  await page.keyboard.insertText('!');
+  const withPrefix = original.slice(0, 2) + '!' + original.slice(2);
+  await expect(input).toHaveValue(withPrefix);
+
   // 自動で差し込んだままの画像だけを外し、カーソルの前の削除量を反映する。
   await input.evaluate((element: HTMLTextAreaElement) =>
     element.setSelectionRange(element.value.length - 1, element.value.length - 1),
   );
-  const withoutImage = original.replace(/!\[外す画像\.png\]\([^)]+\)/, '');
+  const withoutImage = withPrefix.replace(/!\[外す画像\.png\]\([^)]+\)/, '');
   await form.getByRole('button', { name: '外す画像.png を添付から外す', exact: true }).click();
   await expect(input).toHaveValue(withoutImage);
   await expect
@@ -368,7 +375,13 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
 
   // 自分で編集した画像の Markdown は、添付の保留から外しても書き換えない。
   const edited = withoutImage.replace('編集する画像.png', '自分で直した説明');
-  await input.fill(edited);
+  await input.focus();
+  await input.evaluate((element: HTMLTextAreaElement) => {
+    const start = element.value.indexOf('編集する画像.png');
+    element.setSelectionRange(start, start + '編集する画像.png'.length);
+  });
+  await page.keyboard.insertText('自分で直した説明');
+  await expect(input).toHaveValue(edited);
   await form.getByRole('button', { name: '編集する画像.png を添付から外す', exact: true }).click();
   await expect(input).toHaveValue(edited);
   await expect(form.locator('.file-row')).toHaveCount(0);

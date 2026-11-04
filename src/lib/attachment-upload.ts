@@ -101,6 +101,42 @@ export function moveAttachmentAnchor(before: string, after: string, anchor: numb
 }
 
 export type MarkdownInsertion = { start: number; text: string };
+export type TextEditRange = { start: number; end: number };
+
+function matchesEditRange(before: string, after: string, edit: TextEditRange): boolean {
+  const insertedLength = after.length - before.length + edit.end - edit.start;
+  return (
+    Number.isInteger(edit.start) &&
+    Number.isInteger(edit.end) &&
+    edit.start >= 0 &&
+    edit.end >= edit.start &&
+    edit.end <= before.length &&
+    insertedLength >= 0 &&
+    before.slice(0, edit.start) === after.slice(0, edit.start) &&
+    before.slice(edit.end) === after.slice(edit.start + insertedLength)
+  );
+}
+
+// beforeinput carries the actual selection, avoiding ambiguous string diffs for repeated text.
+// Collapsed deletes describe the caret; the actual removed length includes whole graphemes/words.
+export function resolveInputEdit(
+  before: string,
+  after: string,
+  selection: TextEditRange & { inputType: string },
+): TextEditRange | undefined {
+  const { inputType } = selection;
+  if (!inputType.startsWith('insert') && !inputType.startsWith('delete')) return undefined;
+  let { start, end } = selection;
+  if (start === end && inputType.startsWith('delete')) {
+    const removed = before.length - after.length;
+    if (removed <= 0) return undefined;
+    if (inputType.endsWith('Backward')) start -= removed;
+    else if (inputType.endsWith('Forward')) end += removed;
+    else return undefined;
+  }
+  const edit = { start, end };
+  return matchesEditRange(before, after, edit) ? edit : undefined;
+}
 
 // A pending image can be removed automatically only while its original token is untouched.
 // Edits around the token move it; an edit inside it gives ownership of that text to the writer.
@@ -108,7 +144,9 @@ export function moveMarkdownInsertion(
   before: string,
   after: string,
   insertion: MarkdownInsertion,
+  edit?: TextEditRange,
 ): MarkdownInsertion | undefined {
+  if (edit && !matchesEditRange(before, after, edit)) return undefined;
   let changeStart = 0;
   while (changeStart < before.length && changeStart < after.length && before[changeStart] === after[changeStart])
     changeStart++;
@@ -119,7 +157,8 @@ export function moveMarkdownInsertion(
     before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
   )
     suffix++;
-  const beforeEnd = before.length - suffix;
+  const beforeEnd = edit?.end ?? before.length - suffix;
+  changeStart = edit?.start ?? changeStart;
   const tokenEnd = insertion.start + insertion.text.length;
   let start = insertion.start;
   if (beforeEnd <= insertion.start) start += after.length - before.length;
