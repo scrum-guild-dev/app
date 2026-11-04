@@ -9,7 +9,7 @@ import { implementedOperations } from '../src/server/operations/index.ts';
 import { API_TOKEN_MAX_ACTIVE } from '../src/shared/api-token.ts';
 import { tokenCreate, tokenNotice, tokenNoticeSeen } from '../src/shared/operations/session/index.ts';
 import { createAccount, createSessionWithToken } from './factories.ts';
-import { insertApiToken } from './operations/api-token.ts';
+import { insertApiToken, tokenRowsOf } from './operations/api-token.ts';
 import { post } from './operations/harness.ts';
 import { createLoginPerson, testEnv } from './operations/world.ts';
 
@@ -45,16 +45,19 @@ test('発行に別アカウントのセッションを渡しても、その確�
   const person = await createLoginPerson({ sessionOverrides: { created_at: ago(60_000) } });
   const foreign = await createLoginPerson({ sessionOverrides: { created_at: ago(60_000) } });
   const before = await session(foreign.token);
-  await issueApiTokenWith(commonDb(env), {
-    accountId: person.accountId,
-    name: '別アカウントのハッシュ',
-    scope: 'read',
-    now: new Date(),
-    sessionTokenHash: await hashSessionToken(foreign.token),
-  });
+  await expect(
+    issueApiTokenWith(commonDb(env), {
+      accountId: person.accountId,
+      name: '別アカウントのハッシュ',
+      scope: 'read',
+      now: new Date(),
+      sessionTokenHash: await hashSessionToken(foreign.token),
+    }),
+  ).rejects.toMatchObject({ status: 401, code: 'unauthenticated' });
+  expect(await tokenRowsOf(person.accountId)).toHaveLength(0);
   expect(await session(foreign.token)).toEqual(before);
   expect((await notice(foreign.token)).count).toBe(0);
-  expect((await notice(person.token)).count).toBe(1);
+  expect((await notice(person.token)).count).toBe(0);
 });
 
 test('新しい確認より古い発行要求が遅れて完了しても、確認日時を戻さない', async () => {

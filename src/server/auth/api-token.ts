@@ -56,7 +56,8 @@ export async function issueApiTokenWith(
   const tokenHash = await hashApiToken(raw);
   const expiresAt = new Date(input.now.getTime() + lifetimeDays * DAY_MS).toISOString();
   const createdAt = input.now.toISOString();
-  // 有効な行の数の確かめと INSERT を1文にする。読んでから書くと、同時の発行が揃って上限を超える
+  const sessionTokenHash = input.sessionTokenHash;
+  // 上限と発行元のセッションを INSERT と同じ文で確かめ、全失効との競合でトークンを残さない。
   const statements: Statement<'common'>[] = [
     db.statement((q) =>
       q
@@ -94,11 +95,22 @@ export async function issueApiTokenWith(
                 '<',
                 API_TOKEN_MAX_ACTIVE,
               ),
+            )
+            .where((eb) =>
+              sessionTokenHash === undefined
+                ? eb.val(true)
+                : eb.exists(
+                    eb
+                      .selectFrom('sessions')
+                      .select('token_hash')
+                      .where('token_hash', '=', sessionTokenHash)
+                      .where('account_id', '=', input.accountId)
+                      .where('expires_at', '>', createdAt),
+                  ),
             ),
         ),
     ),
   ];
-  const sessionTokenHash = input.sessionTokenHash;
   if (sessionTokenHash !== undefined) {
     // 上限で発行できなかったときは確認を進めない。発行と同じバッチで自分のセッションだけを更新する。
     statements.push(
@@ -118,7 +130,22 @@ export async function issueApiTokenWith(
     );
   }
   const [inserted] = await db.batch(statements);
-  if (inserted.changes === 0) throw new ApiError(409, 'conflict', { reason: API_TOKEN_LIMIT_REASON });
+  if (inserted.changes === 0) {
+    if (sessionTokenHash !== undefined) {
+      const session = await db.first(
+        db.statement((q) =>
+          q
+            .selectFrom('sessions')
+            .select('token_hash')
+            .where('token_hash', '=', sessionTokenHash)
+            .where('account_id', '=', input.accountId)
+            .where('expires_at', '>', createdAt),
+        ),
+      );
+      if (session === undefined) throw new ApiError(401, 'unauthenticated');
+    }
+    throw new ApiError(409, 'conflict', { reason: API_TOKEN_LIMIT_REASON });
+  }
   return { raw, tokenHash, expiresAt };
 }
 
