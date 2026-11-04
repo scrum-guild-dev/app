@@ -342,7 +342,7 @@
 - 表の制約: `CHECK ((login_subject IS NULL) = (login_email IS NOT NULL))`、`CHECK ((login_email IS NULL) = (claim_token_hash IS NULL) AND (login_email IS NULL) = (claim_expires_at IS NULL))`、`CHECK (login_email IS NULL OR (login_provider IN ('google', 'password') AND login_email = lower(trim(login_email))))`。
 - 一意: `(organization_id, login_provider, login_subject)`。`login_subject` が空の行どうしは、SQLite では NULL が重ならないので当たらない。待っている指名は、運用者が指名し直すと消すので、メールアドレスの一意は持たない。
 - 一意: `(organization_id, account_id) WHERE account_id IS NOT NULL`。アカウントと組織の組に1行。1つのアカウントに複数のログインの手段を結んだ後も、同じ人が1つの組織に2行持たないようにする。
-- 既存行の認証の線の補完では日時を推定・変換しない。`disabled_at` が24文字・ミリ秒3桁の UTC ISO 形式の CHECK に合わなければ NULL を残すため、そのような旧データの無効化時点は復元できない。線を24文字の固定形式だけにすることで、`max()` の文字列比較と時刻順を揃える。形式に合っても暦として読めない値は、入場時の日時比較が安全側に拒否する。
+- 既存行の認証の線の補完では日時を推定・変換しない。`disabled_at` が24文字・ミリ秒3桁の UTC ISO 形式の CHECK に合わなければ NULL を残すため、そのような旧データの無効化時点は復元できない。線を24文字の固定形式だけにすることで、`max()` の文字列比較と時刻順を揃える。形式に合っても暦として読めない値は、入場時の日時比較が安全側に拒否する。管理者の所属を外すだけでは、管理者として入れる資格が残るので線を進めない。管理者の指名の解除だけも失効の対象外で、再指名時に古い認証で入れる場合がある（既に別の線が残っていれば、その線は守る）。
 - 索引: `(login_provider, login_subject)`。ログインのときに入れる組織を引く。
 - 表示するログイン名とアバターは `account_logins` から引く。
 - 会員が組織を作るとき（`create-my-organization`）は、作った人が最初の管理者になる。`is_admin = 1`、`account_id` は呼んだアカウント、ログインの手段と ID と `name` は、そのアカウントの最も早いログイン（`account_logins` を `created_at`、`login_provider`、`login_subject` の順に並べた先頭）の値。`change_logs` の `actor_user_id` は作った人の `users` の ID。運用者の指名の解決も結び直しも要らない。
