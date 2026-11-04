@@ -18,7 +18,9 @@ export const errorCodes = [
   // Wiki の検索対象が5,000ページか32MiBを超える。409。本文の走査を始めずに断る
   'wiki_search_limit',
   // クリアか中止した（終わった）エピックの討伐隊・報酬・依頼主を変える操作（epic-party-join、epic-party-leave、epic-party-assign、
-  // epic-reward-update、epic-requester-update）の 409。書き込みの競合に 3 回続けて負けたときは conflict のまま。画面は「終わっているので変えられません」を出す
+  // epic-reward-update、epic-requester-update）と、中止したエピックのクリアと取り消し（epic-complete、epic-reopen）、クリア済みで配下のストーリーが
+  // あるエピックを配下を残して削除する操作（epic-delete の children: 'keep'）の 409。書き込みの競合に 3 回続けて負けたときは conflict のまま。
+  // 画面は「終わっているので変えられません」を出す（削除のダイアログは、まとめて削除するか先にクリアを取り消すよう案内する）
   'epic_finished',
   // ワークスペースの作成・再開（workspace-create、workspace-reopen）が、自分用の利用中の個数の上限で断られた。409。
   // details は { used, limit }（used は利用中の数）。画面は作成のダイアログか再開の一覧の上に、理由と枠を空ける方法を出す

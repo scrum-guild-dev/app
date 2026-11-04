@@ -91,7 +91,19 @@ test('動きを減らす設定では演出を出さず、トーストだけで�
   await expect(page.locator('.celebrate')).toHaveCount(0);
 });
 
-test('未完了のストーリーが残っていると押せず、理由を横に出す', async ({ page }) => {
+test('未完了のストーリーが残っていると押せず、理由を横に出し、クリアの操作を送らない', async ({ page }) => {
+  // 配下のストーリーを1件の未完了にする（seed の状態に頼らない）
+  await serveDetail(page, (output) => ({
+    ...output,
+    stories: output.stories.map((story, index) => ({
+      ...story,
+      completed_at: index === 0 ? null : story.completed_at,
+    })),
+  }));
+  const sent: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/epic-complete')) sent.push(request.url());
+  });
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   const panel = page.getByRole('region', { name: 'エピックの完了' });
   await expect(panel.getByText('未完了のストーリーが 1 件残っているあいだは、完了にできません。')).toBeVisible();
@@ -100,6 +112,7 @@ test('未完了のストーリーが残っていると押せず、理由を横�
   // aria-disabled の押せないボタン。押しても何も送らず、演出も出ない
   await clear.click({ force: true });
   await expect(page.locator('.celebrate')).toHaveCount(0);
+  expect(sent).toEqual([]);
 });
 
 test('配下のストーリーが無いエピックは押せず、理由を横に出す', async ({ page }) => {
