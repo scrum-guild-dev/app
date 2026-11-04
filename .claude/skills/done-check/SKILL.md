@@ -95,7 +95,7 @@ git diff <base>...HEAD
 
 ### 5. 動かして確かめる
 
-共通の点検基準の「動かして確かめる」に従う。ローカルの画面確認には terminal-browser を使い、e2e は CI に任せる。クラウドでは PR 前に `pnpm e2e:preflight [base-ref]` を通し、対象コードと記録を確認する。CI も省略しない。
+共通の点検基準の「動かして確かめる」に従う。ローカルの画面確認には terminal-browser を使い、e2e は CI に任せる。クラウドでは PR 前に `pnpm e2e:preflight [base-ref] --files … --reason …` を通し、対象コードと記録を確認する。CI も省略しない。
 
 ### 6. レビューエージェントに渡す
 

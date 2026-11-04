@@ -1,4 +1,4 @@
-// クラウドの PR 前検査。CI と同じ判定・実行条件で検査し、対象コードと結果を残す。
+// クラウドは対象を絞って早く確かめ、全件の回帰検査は CI が受け持つ。
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -51,8 +51,51 @@ export function inputFingerprint(cwd: string): string {
   return hash.digest('hex');
 }
 
-export function preflightPlan(changed: string[], addedOrModified: string[]): { mode: Mode; files: string[] }[] {
-  if (isDocsOnly(changed)) return [];
+export type SelectionOptions = { files?: string[]; all?: boolean; reason?: string };
+type Selection = {
+  scope: 'targeted' | 'all' | 'docs-only';
+  source: 'explicit' | 'changed' | 'docs-only';
+  files: string[];
+  reason: string;
+};
+
+function selectTests(changed: string[], addedOrModified: string[], options: SelectionOptions): Selection {
+  const { files, all = false, reason } = options;
+  if (all && files !== undefined) throw new Error('--all と --files は同時に指定できない');
+  if ((all || files !== undefined) && !reason?.trim()) throw new Error('明示対象には --reason が必要');
+  if (!all && files === undefined && reason !== undefined) throw new Error('--reason は --files / --all と指定する');
+  if (all) return { scope: 'all', source: 'explicit', files: [], reason: reason!.trim() };
+  if (files !== undefined) {
+    const selected = repeatFiles(files);
+    if (!files.length || selected.length !== new Set(files).size)
+      throw new Error('--files は e2e のテストを1つ以上指定する');
+    return { scope: 'targeted', source: 'explicit', files: selected, reason: reason!.trim() };
+  }
+  if (isDocsOnly(changed))
+    return { scope: 'docs-only', source: 'docs-only', files: [], reason: 'CI と同じ文書のみの判定により省略' };
+  const selected = repeatFiles(addedOrModified);
+  if (!selected.length)
+    throw new Error(
+      '変更 e2e が無い。関連テストを --files と --reason で指定する。対象を絞れない場合だけ --all --reason を選ぶ',
+    );
+  return {
+    scope: 'targeted',
+    source: 'changed',
+    files: selected,
+    reason:
+      '追加・変更した e2e テストを選定。--files は自動選定を置き換えるため、変更テストと関連する既存テストをすべて列挙する',
+  };
+}
+
+export function preflightPlan(
+  changed: string[],
+  addedOrModified: string[],
+  options: SelectionOptions = {},
+): { mode: Mode; files: string[] }[] {
+  const selection = selectTests(changed, addedOrModified, options);
+  if (selection.scope === 'docs-only') return [];
+  if (selection.scope === 'targeted')
+    return ['normal', 'dev', 'repeat'].map((mode) => ({ mode: mode as Mode, files: selection.files }));
   const plan: { mode: Mode; files: string[] }[] = [{ mode: 'normal', files: [] }];
   if (needsDevBuild(changed)) plan.push({ mode: 'dev', files: [] });
   const files = repeatFiles(addedOrModified);
@@ -72,7 +115,7 @@ function pnpmVersion(cwd: string): string {
   return result.stdout.trim();
 }
 
-function currentPlan(cwd: string, baseSha: string, head: string) {
+function currentPlan(cwd: string, baseSha: string, head: string, options: SelectionOptions) {
   const mergeBase = git(cwd, 'merge-base', baseSha, head).trim();
   // 作業中の修正と新規テストも対象に含める。リネームは削除と追加として扱う。
   const untracked = parseNulSeparated(git(cwd, 'ls-files', '-z', '--others', '--exclude-standard'));
@@ -84,15 +127,32 @@ function currentPlan(cwd: string, baseSha: string, head: string) {
     ...parseNulSeparated(git(cwd, 'diff', '--name-only', '--no-renames', '--diff-filter=AM', '-z', mergeBase)),
     ...untracked,
   ];
-  return { mergeBase, plan: preflightPlan(changed, added) };
+  const selection = selectTests(changed, added, options);
+  for (const file of selection.files) {
+    const stat = lstatSync(join(cwd, file), { throwIfNoEntry: false });
+    if (!stat?.isFile()) throw new Error(`対象テストが通常ファイルとして存在しない: ${file}`);
+  }
+  return { mergeBase, selection, plan: preflightPlan(changed, added, options) };
 }
 
-export function verifyPreflight(result: string, base = 'origin/main', cwd = process.cwd()): void {
+export function verifyPreflight(
+  result: string,
+  base = 'origin/main',
+  cwd = process.cwd(),
+  options: SelectionOptions = {},
+): void {
   const report = JSON.parse(readFileSync(resolve(cwd, result), 'utf8'));
   const baseSha = resolveBase(cwd, base);
   const head = git(cwd, 'rev-parse', 'HEAD').trim();
-  const { mergeBase, plan } = currentPlan(cwd, baseSha, head);
+  const { mergeBase, selection, plan } = currentPlan(cwd, baseSha, head, options);
   if (
+    report.formatVersion !== 2 ||
+    JSON.stringify(report.selection) !== JSON.stringify(selection) ||
+    report.status !== (selection.scope === 'docs-only' ? 'skipped' : 'passed') ||
+    report.platform !== process.platform ||
+    report.arch !== process.arch ||
+    !Number.isFinite(report.durationMs) ||
+    report.durationMs < 0 ||
     report.cwd !== realpathSync(cwd) ||
     report.success !== true ||
     !report.finished ||
@@ -104,8 +164,10 @@ export function verifyPreflight(result: string, base = 'origin/main', cwd = proc
     report.pnpm !== pnpmVersion(cwd) ||
     !Array.isArray(report.checks) ||
     !report.checks.every(
-      (step: { mode: string; status: string }) =>
-        step.status === 'passed' || (step.mode === 'repeat' && step.status === 'skipped'),
+      (step: { mode: string; status: string; durationMs: number }) =>
+        Number.isFinite(step.durationMs) &&
+        step.durationMs >= 0 &&
+        (step.status === 'passed' || (step.mode === 'repeat' && step.status === 'skipped')),
     ) ||
     JSON.stringify(
       report.checks.map((step: { mode: string; files: string[] }) => ({ mode: step.mode, files: step.files })),
@@ -115,15 +177,25 @@ export function verifyPreflight(result: string, base = 'origin/main', cwd = proc
   }
 }
 
-export function runPreflight(base = 'origin/main', options: { cwd?: string; run?: Run } = {}): string {
+export function runPreflight(
+  base = 'origin/main',
+  options: SelectionOptions & { cwd?: string; run?: Run } = {},
+): string {
   const cwd = options.cwd ?? process.cwd();
   const baseSha = resolveBase(cwd, base);
   const head = git(cwd, 'rev-parse', 'HEAD').trim();
-  const { mergeBase, plan } = currentPlan(cwd, baseSha, head);
+  const { mergeBase, selection, plan } = currentPlan(cwd, baseSha, head, options);
   const fingerprint = inputFingerprint(cwd);
   const dir = join(cwd, '.e2e-preflight', `${Date.now()}-${randomUUID()}`);
   mkdirSync(dir, { recursive: true });
+  const startedAt = Date.now();
   const report = {
+    formatVersion: 2,
+    selection,
+    platform: process.platform,
+    arch: process.arch,
+    status: 'not-run',
+    durationMs: 0,
     cwd: realpathSync(cwd),
     head,
     base: baseSha,
@@ -134,7 +206,7 @@ export function runPreflight(base = 'origin/main', options: { cwd?: string; run?
     started: new Date().toISOString(),
     finished: '',
     success: false,
-    checks: plan.map((step) => ({ ...step, status: 'pending', log: join(dir, `${step.mode}.log`) })),
+    checks: plan.map((step) => ({ ...step, status: 'not-run', durationMs: 0, log: join(dir, `${step.mode}.log`) })),
   };
   const save = () => writeFileSync(join(dir, 'result.json'), JSON.stringify(report, null, 2) + '\n');
   const run: Run =
@@ -142,11 +214,20 @@ export function runPreflight(base = 'origin/main', options: { cwd?: string; run?
     ((mode, files, version, log) => {
       const fd = openSync(log, 'w');
       try {
-        const result = spawnSync(process.execPath, ['scripts/e2e-run.ts', mode, ...files], {
-          cwd,
-          env: { ...process.env, APP_VERSION: version, E2E_SERVER_VERSION: version },
-          stdio: ['ignore', fd, fd],
-        });
+        const result = spawnSync(
+          process.execPath,
+          [
+            'scripts/e2e-run.ts',
+            mode,
+            ...files.map((file) => `^${RegExp.escape(resolve(cwd, file))}$`),
+            '--require-executed',
+          ],
+          {
+            cwd,
+            env: { ...process.env, APP_VERSION: version, E2E_SERVER_VERSION: version },
+            stdio: ['ignore', fd, fd],
+          },
+        );
         if (result.error) throw result.error;
         if (result.status !== 0)
           throw new Error(`${mode} が失敗 (${result.status ?? result.signal})。${log} を確認する`);
@@ -163,10 +244,13 @@ export function runPreflight(base = 'origin/main', options: { cwd?: string; run?
         closeSync(fd);
       }
     });
+  console.log(`[e2e:preflight] ${selection.scope}: ${JSON.stringify(selection.files)} — ${selection.reason}`);
+  console.log(`[e2e:preflight] 計画: ${JSON.stringify(plan)}（files: [] は明示した全件実行のみ）`);
   save();
   try {
     for (const step of report.checks) {
       console.log(`[e2e:preflight] ${step.mode}: ${step.log}`);
+      const stepStarted = Date.now();
       step.status = 'running';
       save();
       try {
@@ -178,6 +262,7 @@ export function runPreflight(base = 'origin/main', options: { cwd?: string; run?
         step.status = 'failed';
         throw error;
       } finally {
+        step.durationMs = Date.now() - stepStarted;
         for (const artifact of ['test-results', 'playwright-report']) {
           const source = join(cwd, artifact);
           if (step.status !== 'skipped' && existsSync(source))
@@ -189,23 +274,59 @@ export function runPreflight(base = 'origin/main', options: { cwd?: string; run?
     if (inputFingerprint(cwd) !== fingerprint || git(cwd, 'rev-parse', 'HEAD').trim() !== head) {
       throw new Error('検査中にコードが変わったため結果を再利用できない。e2e:preflight をやり直す');
     }
+    report.status = selection.scope === 'docs-only' ? 'skipped' : 'passed';
     report.success = true;
     return join(dir, 'result.json');
+  } catch (error) {
+    report.status = 'failed';
+    throw error;
   } finally {
+    report.durationMs = Date.now() - startedAt;
     report.finished = new Date().toISOString();
     save();
     console.log(`[e2e:preflight] 結果: ${join(dir, 'result.json')}`);
   }
 }
 
+const USAGE =
+  '使い方: pnpm e2e:preflight [base-ref] [--files <e2e/*.test.ts…> --reason <理由> | --all --reason <理由>] | --verify <result.json> [base-ref] [同じ対象指定]';
+
+export function parsePreflightArgs(args: string[]): { base: string; result?: string; options: SelectionOptions } {
+  let base: string | undefined;
+  let result: string | undefined;
+  const options: SelectionOptions = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === '--verify') {
+      if (result !== undefined || !args[i + 1] || args[i + 1]!.startsWith('-')) throw new Error(USAGE);
+      result = args[++i];
+    } else if (arg === '--all') {
+      if (options.all) throw new Error(USAGE);
+      options.all = true;
+    } else if (arg === '--reason') {
+      if (options.reason !== undefined || !args[i + 1] || args[i + 1]!.startsWith('-')) throw new Error(USAGE);
+      options.reason = args[++i];
+    } else if (arg === '--files') {
+      if (options.files !== undefined) throw new Error(USAGE);
+      options.files = [];
+      while (args[i + 1] && !args[i + 1]!.startsWith('-')) options.files.push(args[++i]!);
+      if (!options.files.length) throw new Error(USAGE);
+    } else {
+      if (arg.startsWith('-') || base !== undefined || !arg) throw new Error(USAGE);
+      base = arg;
+    }
+  }
+  // 引数の誤りは git や検査を起動する前に拒む。自動対象の有無だけはここで判断しない。
+  if (options.all || options.files !== undefined || options.reason !== undefined) selectTests([], [], options);
+  return { base: base ?? 'origin/main', result, options };
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const args = process.argv.slice(2);
-  if (args[0] === '--verify' && args.length >= 2 && args.length <= 3) {
-    verifyPreflight(args[1]!, args[2]);
-    console.log('[e2e:preflight] 成功記録と現在のコードが一致する');
-  } else if (args.length <= 1 && args[0] !== '--verify') {
-    runPreflight(args[0]);
+  const { base, result, options } = parsePreflightArgs(process.argv.slice(2));
+  if (result !== undefined) {
+    verifyPreflight(result, base, process.cwd(), options);
+    console.log('[e2e:preflight] 記録と現在のコード・対象が一致する（全件成功は scope: all のみ）');
   } else {
-    throw new Error('使い方: pnpm e2e:preflight [base-ref] | --verify <result.json> [base-ref]');
+    runPreflight(base, options);
   }
 }

@@ -179,3 +179,26 @@ describe('CI とクラウドで共有する e2e の実行', () => {
     assert.equal(result.stdout.trim().split('\n').at(-1), '[e2e-run:result] {"status":"skipped"}');
   });
 });
+
+test('事前検査だけが実行0件を失敗にする reporter を追加し、CI の reporter は変えない', async () => {
+  for (const mode of ['normal', 'dev', 'repeat'] as const) {
+    const { calls, execute } = harness();
+    await runE2eWith(mode, { files: ['e2e/a.test.ts'], requireExecuted: true }, execute, {});
+    const run = calls.at(-1)!;
+    assert.ok(run.args.includes('--reporter=list,html,./scripts/e2e-executed-reporter.ts'));
+    assert.equal(run.env.PLAYWRIGHT_HTML_OPEN, 'never');
+    assert.equal(run.env.PLAYWRIGHT_HTML_OUTPUT_DIR, 'playwright-report');
+    assert.equal(run.capture, false);
+  }
+  assert.deepEqual(parseE2eArgs(['normal', 'e2e/a.test.ts', '--require-executed']), {
+    mode: 'normal',
+    options: { files: ['e2e/a.test.ts'], requireExecuted: true },
+  });
+  assert.throws(() => parseE2eArgs(['normal', '--require-executed', '--require-executed']));
+  const { calls, execute } = harness();
+  await runE2eWith('normal', {}, execute, {});
+  assert.equal(
+    calls[0]!.args.some((arg) => arg.startsWith('--reporter=')),
+    false,
+  );
+});

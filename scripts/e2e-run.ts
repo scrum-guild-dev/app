@@ -5,7 +5,7 @@ import { repeatVerdict, REPEAT_TEST_LIMIT, type ListReport } from './ci.ts';
 export type E2eMode = 'normal' | 'dev' | 'repeat';
 export type E2eStatus = 'passed' | 'skipped';
 export const E2E_RESULT_PREFIX = '[e2e-run:result] ';
-export type E2eOptions = { files?: string[]; shard?: string };
+export type E2eOptions = { files?: string[]; shard?: string; requireExecuted?: boolean };
 export type Invocation = { args: string[]; env: NodeJS.ProcessEnv; capture: boolean };
 export type Execute = (invocation: Invocation) => Promise<string>;
 
@@ -68,6 +68,12 @@ export async function runE2eWith(
   // Playwright 自身に終了処理を任せ、webServer を止めてから非0で返す。
   flags.push('--global-timeout=1800000');
   if (shard !== undefined) flags.push(`--shard=${shard}`);
+  if (options.requireExecuted) {
+    flags.push('--reporter=list,html,./scripts/e2e-executed-reporter.ts');
+    // CLI の reporter 指定でも既存の HTML 成果物の場所と非表示を維持する。
+    env.PLAYWRIGHT_HTML_OPEN = 'never';
+    env.PLAYWRIGHT_HTML_OUTPUT_DIR = 'playwright-report';
+  }
   await execute({ args: [...prefix, ...flags, ...(files ?? [])], env, capture: false });
   return 'passed';
 }
@@ -98,12 +104,17 @@ export async function runE2e(mode: E2eMode, options: E2eOptions = {}): Promise<E
 export function parseE2eArgs(argv: string[]): { mode: E2eMode; options: E2eOptions } {
   const [mode, ...rest] = argv;
   if (mode !== 'normal' && mode !== 'dev' && mode !== 'repeat') {
-    throw new Error('使い方: node scripts/e2e-run.ts <normal|dev|repeat> [--shard=i/n] [ファイル…]');
+    throw new Error(
+      '使い方: node scripts/e2e-run.ts <normal|dev|repeat> [--shard=i/n] [--require-executed] [ファイル…]',
+    );
   }
   const shards = rest.filter((arg) => arg.startsWith('--shard='));
   if (shards.length > 1) throw new Error('--shard は1つだけ指定する');
-  const files = rest.filter((arg) => !arg.startsWith('--shard='));
+  const requireExecuted = rest.filter((arg) => arg === '--require-executed');
+  if (requireExecuted.length > 1) throw new Error('--require-executed は1つだけ指定する');
+  const files = rest.filter((arg) => !arg.startsWith('--shard=') && arg !== '--require-executed');
   const options: E2eOptions = {
+    ...(requireExecuted.length > 0 ? { requireExecuted: true } : {}),
     ...(files.length > 0 || mode === 'repeat' ? { files } : {}),
     ...(shards.length > 0 ? { shard: shards[0]!.slice('--shard='.length) } : {}),
   };

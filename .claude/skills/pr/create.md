@@ -48,7 +48,7 @@ done-check でコミットが増えたら、push してから Step 1 に進む�
 
 ### クラウドの PR 前検査
 
-クラウドでは、作成前の最終コードで `pnpm e2e:preflight <base-ref>` を通す（通常は `origin/main`、スタックは PR の base）。詳細は `docs/development.md` の「クラウドで PR 前に e2e を確かめる」。`pnpm e2e:preflight --verify <result.json> <base-ref>` を実行して成功記録と現在のコード・base・HEAD・実行環境を照合し、結果と未検証事項を本文に書く。検査後のコード変更は影響する検査をやり直し、必要な検査が失敗・未実施なら PR 作成を止めて理由を報告する。ローカルでは実行せず、PR の CI で確かめる。
+クラウドでは、作成前の最終コードで `pnpm e2e:preflight <base-ref> --files … --reason …` を通す（通常は `origin/main`、スタックは PR の base）。対象の通常・開発・関連する繰り返しを確認し、全件は CI に任せる。必要時だけ `--all --reason …` を使い、全件成功を通常の PR 前条件にしない。実行前に対象・モード・所要時間の見込みを共有する。詳細は `docs/development.md` の「クラウドで PR 前に e2e を確かめる」。`pnpm e2e:preflight --verify <result.json> <base-ref> <同じ選定オプション>` を実行して成功記録と現在のコード・base・HEAD・実行環境を照合し、結果と未検証事項を本文に書く。検査後のコード変更は影響する検査をやり直し、必要な検査が失敗・未実施なら PR 作成を止めて理由を報告する。ローカルでは実行せず、PR の CI で確かめる。
 
 ## Step 1: リポジトリの慣習を収集
 
