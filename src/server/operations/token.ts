@@ -18,6 +18,7 @@ export const tokenCreateOperation = implement(tokenCreate, async ({ db, accountI
   const issued = await issueApiTokenWith(db, {
     accountId,
     sessionTokenHash: session.tokenHash,
+    sessionCreatedAt: session.createdAt,
     name: input.name,
     scope: input.scope,
     now,

@@ -1377,3 +1377,42 @@ describe('セッションの API トークンの確認日時', () => {
     await expect(insertSeen(value)).rejects.toThrow(/CHECK/);
   });
 });
+
+// 旧コードが列を省略しても書ける。日時の暦としての妥当性は認証時にも検査する。
+describe('組織ごとの認証日時の nullable CHECK', () => {
+  test('ユーザーの cutoff は NULL と UTC 日時を許し、日時でない値を拒む', async () => {
+    const orgId = await organization();
+    const userId = await user(orgId);
+    for (const value of [AT, null]) {
+      await expect(
+        run('UPDATE users SET credentials_not_before = ? WHERE id = ?', value, userId),
+      ).resolves.toBeDefined();
+    }
+    for (const value of ['', 'not-a-date', '2026-10-20T00:00:00+09:00']) {
+      await expect(run('UPDATE users SET credentials_not_before = ? WHERE id = ?', value, userId)).rejects.toThrow();
+    }
+  });
+
+  test('トークンの発行元日時は NULL と UTC 日時を許し、日時でない値を拒む', async () => {
+    const accountId = id();
+    const hash = id().replaceAll('-', '').repeat(2);
+    await run('INSERT INTO accounts (id, created_at, updated_at) VALUES (?, ?, ?)', accountId, AT, AT);
+    await run(
+      "INSERT INTO api_tokens (token_hash, account_id, name, scope, created_at, expires_at) VALUES (?, ?, '認証', 'read', ?, ?)",
+      hash,
+      accountId,
+      AT,
+      CLAIM_EXPIRES_AT,
+    );
+    for (const value of [AT, null]) {
+      await expect(
+        run('UPDATE api_tokens SET authenticated_at = ? WHERE token_hash = ?', value, hash),
+      ).resolves.toBeDefined();
+    }
+    for (const value of ['', 'not-a-date', '2026-10-20T00:00:00+09:00']) {
+      await expect(
+        run('UPDATE api_tokens SET authenticated_at = ? WHERE token_hash = ?', value, hash),
+      ).rejects.toThrow();
+    }
+  });
+});

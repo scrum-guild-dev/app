@@ -2,6 +2,7 @@
 // リクエストのたびに行う。共通の表（organizations）と組織の中の表（users、memberships、invitations）は別の問い合わせで引き、
 // 1つの SQL で結合しない（docs/data-model.md の「データベースの分け方」）
 import type { OrganizationKind } from '../../shared/organization-kind.ts';
+import { ApiError } from '../errors.ts';
 import type { Theme } from '../../shared/theme.ts';
 import { commonDb, orgDb, type OrganizationDb } from './entries.ts';
 import { issueVerifiedOrganization } from './verify-organization.ts';
@@ -52,7 +53,7 @@ export function isSuspendedOrganization(entered: EnteredOrganization): entered i
 export async function enterOrganization(
   env: Env,
   slug: string,
-  account: { accountId: string; loadLogins: () => Promise<readonly LoginId[]> },
+  account: { accountId: string; authenticatedAt: string; loadLogins: () => Promise<readonly LoginId[]> },
 ): Promise<EnteredOrganization> {
   const common = commonDb(env);
   const organization = await common.first(
@@ -75,7 +76,7 @@ export async function enterOrganization(
     db.statement((q) =>
       q
         .selectFrom('users')
-        .select(['id', 'is_admin', 'disabled_at'])
+        .select(['id', 'is_admin', 'disabled_at', 'credentials_not_before'])
         .where('organization_id', '=', organizationId)
         .where('account_id', '=', account.accountId),
     ),
@@ -84,8 +85,16 @@ export async function enterOrganization(
   if (user !== undefined && user.disabled_at !== null) return undefined;
 
   // 入れる人と決まったところで、停止していれば入口を渡さずに停止を知らせる
-  const entry = (isAdmin: boolean, invitedOnly: boolean): OrganizationEntry | SuspendedOrganization =>
-    suspended
+  const entry = (isAdmin: boolean, invitedOnly: boolean): OrganizationEntry | SuspendedOrganization => {
+    if (user?.credentials_not_before != null) {
+      const authenticatedAt = Date.parse(account.authenticatedAt);
+      const notBefore = Date.parse(user.credentials_not_before);
+      // 同じミリ秒の認証も拒み、読めない日時を許可に変えない。
+      if (!Number.isFinite(authenticatedAt) || !Number.isFinite(notBefore) || authenticatedAt <= notBefore) {
+        throw new ApiError(401, 'organization_reauth_required');
+      }
+    }
+    return suspended
       ? { suspended: true, organizationId }
       : {
           db,
@@ -100,6 +109,7 @@ export async function enterOrganization(
             trial_ends_on: organization.trial_ends_on,
           },
         };
+  };
 
   if (user !== undefined && user.is_admin === 1) return entry(true, false);
 

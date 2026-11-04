@@ -1,3 +1,4 @@
+import { redirectOrganizationReauth } from './login-redirect.ts';
 import { isErrorBody } from '../shared/errors.ts';
 import { attachmentUpload } from '../shared/operations/attachment/index.ts';
 import { operationPath, type OutputOf } from '../shared/operations/define.ts';
@@ -58,7 +59,9 @@ export function uploadAttachment(
         return;
       }
       if (xhr.status < 200 || xhr.status >= 300) {
-        fail(isErrorBody(body) ? body.error.code : String(xhr.status));
+        const code = isErrorBody(body) ? body.error.code : String(xhr.status);
+        redirectOrganizationReauth(options.slug, xhr.status, code);
+        fail(code);
         return;
       }
       const parsed = attachmentUpload.output.safeParse(body);

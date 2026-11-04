@@ -42,6 +42,7 @@ export const commonTableColumns = {
     last_used_at: textOrNull,
     expires_at: text,
     revoked_at: textOrNull,
+    authenticated_at: textOrNull,
   },
   account_consents: { account_id: text, terms_version: text, privacy_version: text, consented_at: text },
   oauth_states: {
@@ -128,6 +129,7 @@ export const organizationTableColumns = {
     work_start_on: textOrNull,
     work_end_on: textOrNull,
     disabled_at: textOrNull,
+    credentials_not_before: textOrNull,
     last_seen_at: textOrNull,
     theme: textOrNull,
     created_at: text,

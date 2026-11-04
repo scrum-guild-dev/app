@@ -112,11 +112,13 @@ describe('issueApiToken', () => {
 
   test('発行した値は readApiToken で読める', async () => {
     const account = await createAccount();
-    const raw = await issueApiToken(env, { accountId: account.id, name: 'x', scope: 'read', now: new Date() });
+    const now = new Date();
+    const raw = await issueApiToken(env, { accountId: account.id, name: 'x', scope: 'read', now });
     expect(await readApiToken(env, raw, new Date())).toEqual({
       accountId: account.id,
       tokenHash: await hashApiToken(raw),
       scope: 'read',
+      authenticatedAt: now.toISOString(),
     });
   });
 });
@@ -125,7 +127,12 @@ describe('readApiToken', () => {
   test('有効なトークンは、アカウントと範囲とハッシュを返す', async () => {
     const account = await createAccount();
     const { raw, hash } = await insertApiToken(account.id, { scope: 'read', expiresAt: at(DAY_MS) });
-    expect(await readApiToken(env, raw, NOW)).toEqual({ accountId: account.id, tokenHash: hash, scope: 'read' });
+    expect(await readApiToken(env, raw, NOW)).toEqual({
+      accountId: account.id,
+      tokenHash: hash,
+      scope: 'read',
+      authenticatedAt: '2026-10-20T00:00:00.000Z',
+    });
   });
 
   test('無い、空、行の無い値は undefined', async () => {

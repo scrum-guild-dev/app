@@ -285,10 +285,12 @@ async function execute(
   let apiToken: ApiToken | undefined;
   let session: CurrentSession;
   let accountId: string;
+  let authenticatedAt: string;
   if (bearer !== undefined) {
     apiToken = await readApiToken(c.env, bearer, new Date());
     if (apiToken === undefined) throw new ApiError(401, 'unauthenticated');
     accountId = apiToken.accountId;
+    authenticatedAt = apiToken.authenticatedAt;
     session = tokenCall();
   } else {
     if (definition.response === 'binary') requireDownloadOrigin(c);
@@ -298,6 +300,7 @@ async function execute(
     const read = await readSession(c.env, token, new Date(), c.get('requestId'));
     if (read === undefined) throw new ApiError(401, 'unauthenticated');
     accountId = read.accountId;
+    authenticatedAt = read.createdAt;
     // 使うたびに期限を延ばす。DB の expires_at を書き直したときは Cookie の期限も同じだけ延ばす（付けるのは応答を作る直前）
     cookie.extend = read.refreshed && token !== undefined;
     session = {
@@ -353,7 +356,7 @@ async function execute(
     // 運用者かどうかは組織に入れるかを変えない。入れる組織が無い運用者は、組織が無いときと同じ 404 になる
     const slug = c.req.param('slug');
     if (slug === undefined) throw new ApiError(404, 'not_found');
-    const entry = await enterOrganization(c.env, slug, { accountId, loadLogins: account.logins });
+    const entry = await enterOrganization(c.env, slug, { accountId, authenticatedAt, loadLogins: account.logins });
     // 停止した組織は、停止していなければ入れた人にだけ伝える。入れない人は下の 404（組織があることを漏らさない）
     if (isSuspendedOrganization(entry)) {
       trace.organizationId = entry.organizationId;

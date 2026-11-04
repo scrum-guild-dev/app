@@ -4,6 +4,10 @@ import { safeReturnTo } from '../shared/return-to.ts';
 
 export const loginPath = '/login';
 
+export function organizationReauthUrl(current: { pathname: string; search: string }): string {
+  return `${loginUrl(current)}&error=organization_reauth_required`;
+}
+
 // return_to の検査は、ログインの後に戻す側（開始の API とログインの画面）と同じ関数に1つだけ持つ（src/shared/return-to.ts）。
 // 作る側でも外へ向けた値を作らず、受け付けない値は `/` に落とす。ログインの画面に付ける理由は無い
 export function loginUrl(current: { pathname: string; search: string }): string {
@@ -22,4 +26,21 @@ export function isTermsRequired(result: { ok: boolean; error?: { code: string } 
 
 export function isUnauthenticated(result: { ok: boolean; error?: { code: string } | null }): boolean {
   return !result.ok && result.error?.code === 'unauthenticated';
+}
+
+// JSON の操作と XHR の添付に共通。遅れた別組織の応答では、移動先を追い出さない。
+// Worker から参照される型もあるため、DOM の型を要求しない。
+export function redirectOrganizationReauth(slug: string | undefined, status: number, code: string | undefined): void {
+  const browser = (
+    globalThis as { window?: { location: { pathname: string; search: string; replace(url: string): void } } }
+  ).window;
+  if (
+    status === 401 &&
+    code === 'organization_reauth_required' &&
+    browser !== undefined &&
+    slug !== undefined &&
+    browser.location.pathname.split('/')[1] === slug
+  ) {
+    browser.location.replace(organizationReauthUrl(browser.location));
+  }
 }
