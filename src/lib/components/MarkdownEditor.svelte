@@ -213,7 +213,6 @@
     if (readonly) return;
     let start = input?.selectionStart ?? 0;
     let end = input?.selectionEnd ?? 0;
-    removalNotice = '';
     attachmentIds = attachmentIds.filter((id) => id !== file.attachmentId);
     const insertion = file.insertion;
     let removedMarkdown = false;
@@ -227,21 +226,36 @@
       applyEdit(at, tokenEnd, '');
       removedMarkdown = true;
     }
+    await finishRowAction(
+      file,
+      t(removedMarkdown ? 'attachmentRemovedImage' : 'attachmentRemovedKeepBody', { name: file.file.name }),
+      start,
+      end,
+    );
+  }
+
+  async function finishRowAction(file: Upload, message: string, start: number, end: number): Promise<void> {
+    // Clear and flush even when the same filename is acted on twice in succession.
+    removalNotice = '';
     files = files.filter((other) => other.key !== file.key);
     await tick();
     if (destroyed) return;
-    removalNotice = t(removedMarkdown ? 'attachmentRemovedImage' : 'attachmentRemovedKeepBody', {
-      name: file.file.name,
-    });
-    if (!readonly) {
-      input?.focus();
-      input?.setSelectionRange(start, end);
-    }
+    input?.focus();
+    input?.setSelectionRange(start, end);
+    removalNotice = message;
   }
 
-  function cancel(file: Upload): void {
+  async function cancel(file: Upload): Promise<void> {
+    const start = input?.selectionStart ?? 0;
+    const end = input?.selectionEnd ?? 0;
+    const error = file.state === 'error';
     if (file.state === 'uploading' || file.state === 'queued') file.controller.abort();
-    files = files.filter((other) => other.key !== file.key);
+    await finishRowAction(
+      file,
+      t(error ? 'attachmentErrorClosed' : 'attachmentUploadCancelled', { name: file.file.name }),
+      start,
+      end,
+    );
   }
 
   function paste(event: ClipboardEvent): void {
@@ -362,8 +376,8 @@
           <button
             type="button"
             class="btn is-sm is-quiet"
-            aria-label={file.error ? undefined : t('attachmentCancelLabel', { name: file.file.name })}
-            onclick={() => cancel(file)}>{t(file.error ? 'attachmentDismiss' : 'attachmentCancel')}</button
+            aria-label={t(file.error ? 'attachmentErrorCloseLabel' : 'attachmentCancelLabel', { name: file.file.name })}
+            onclick={() => void cancel(file)}>{t(file.error ? 'attachmentDismiss' : 'attachmentCancel')}</button
           >
         </div>
       {/if}

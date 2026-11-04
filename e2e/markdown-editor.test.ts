@@ -237,6 +237,15 @@ test('組織の上限では残りの追加を止め、管理者への依頼を�
       });
     }
   }
+  const closedName = await fileErrors.first().locator('.file-name').innerText();
+  const closedRow = form.locator('.file-row', { hasText: closedName });
+  await closedRow.getByRole('button').click();
+  await expect(closedRow).toHaveCount(0);
+  await expect(input).toBeFocused();
+  const closeNotice = form.getByRole('status').filter({ hasText: `${closedName} のエラー表示を閉じました。` });
+  await expect(closeNotice).toHaveAttribute('aria-live', 'polite');
+  await expect(closeNotice).toContainText('本文はそのまま残しています');
+  await expect(input).toHaveValue('');
 });
 
 test('アップロード中は送信を止め、ファイルをやめても本文を保つ', async ({ page, baseURL }) => {
@@ -272,6 +281,10 @@ test('アップロード中は送信を止め、ファイルをやめても本�
     await expect(form.getByRole('progressbar', { name: '途中.png' })).toBeVisible();
     await form.getByRole('button', { name: '途中.png のアップロードをやめる', exact: true }).click();
     release();
+    await expect(input).toBeFocused();
+    const cancelNotice = form.getByRole('status').filter({ hasText: '途中.png のアップロードをやめました。' });
+    await expect(cancelNotice).toHaveAttribute('aria-live', 'polite');
+    await expect(cancelNotice).toContainText('本文はそのまま残しています');
     await expect(form.getByRole('progressbar')).toHaveCount(0);
     await expect(form.getByRole('button', { name: '送る', exact: true })).toHaveAttribute('aria-disabled', 'false');
     await expect(input).toHaveValue('書いている途中の文');

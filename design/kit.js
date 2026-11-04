@@ -876,7 +876,7 @@
     }
     if (f.state === "error") {
       return `<div class="file-row is-error"${opts.quota ? "" : ' role="alert"'}>${icon("alert")}<div class="file-main"><span class="file-name">${esc(f.name)}</span><span class="file-meta">${esc(f.error)}</span></div>
-        <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-cancel-file="${f.id}">閉じる</button></div></div>`;
+        <div class="file-actions"><button class="btn is-sm is-quiet" type="button" data-cancel-file="${f.id}" aria-label="${esc(f.name)} のエラー表示を閉じる">閉じる</button></div></div>`;
     }
     if (opts.editor) {
       return `<div class="file-row">${icon("file")}<div class="file-main"><span class="file-name">${esc(f.name)}</span>
@@ -2707,7 +2707,17 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if ((el = hit("data-pick-file"))) { pickFiles(el.dataset.pickFile); return; }
     if ((el = hit("data-cancel-file"))) {
       const found = findFile(el.dataset.cancelFile);
-      if (found) { D.files[found.key] = D.files[found.key].filter((x) => x !== found.f); redrawFiles(found.key); }
+      if (found) {
+        D.files[found.key] = D.files[found.key].filter((x) => x !== found.f);
+        redrawFiles(found.key);
+        const editor = Array.from(document.querySelectorAll("textarea[data-markdown-input]")).find((input) => input.dataset.markdownInput === found.key);
+        if (editor) {
+          editor.focus();
+          const notice = Array.from(document.querySelectorAll("[data-editor-notice]")).find((item) => item.dataset.editorNotice === found.key);
+          const action = found.f.state === "error" ? "エラー表示を閉じました" : found.f.snapshot ? "進捗表示の見本を閉じました" : "アップロードをやめました";
+          if (notice) notice.textContent = `${found.f.name} の${action}。本文はそのまま残しています。`;
+        }
+      }
       return;
     }
     if ((el = hit("data-celebrate"))) {
