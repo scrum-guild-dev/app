@@ -1,3 +1,5 @@
+import { checkAttachments, attachmentChanges } from './attachment-save.ts';
+import { attachmentsReady, attachFilesStatement } from '../db/index.ts';
 import { now } from '../../shared/clock.ts';
 import {
   COMMENT_PAGE_SIZE,
@@ -181,6 +183,13 @@ export const commentCreateOperation = implement(commentCreate, async ({ db, acto
   const organizationId = db.organizationId;
   const workspaceId = workspace.workspaceId;
   const taskId = input.task_id;
+  const attachmentSave = { workspaceId, userId: actorUserId, ids: input.attachment_ids ?? [] };
+  if (attachmentSave.ids.length > 0) {
+    if ((await db.first(db.statement((q) => liveTask(q, workspaceId, taskId)))) === undefined)
+      throw new ApiError(404, 'not_found');
+    await throwIfClosed(db, workspaceId);
+    await checkAttachments(db, attachmentSave);
+  }
   const at = now();
   const createdAt = at.toISOString();
   const commentId = uuidv7(at);
@@ -203,16 +212,23 @@ export const commentCreateOperation = implement(commentCreate, async ({ db, acto
             .where((eb) =>
               eb.and([
                 eb.exists(liveTask(eb, workspaceId, taskId)),
+                attachmentsReady(eb, attachmentSave),
                 eb.exists(openWorkspace(eb, organizationId, workspaceId)),
               ]),
             ),
         ),
     ),
+    ...(attachmentSave.ids.length === 0
+      ? []
+      : [attachFilesStatement(db, attachmentSave, { comment_id: commentId }, createdAt)]),
   ]);
   // 何も入らなければ、閉じていれば workspace_closed、そうでなければタスクが無い（別の組織とワークスペースを含む）
   if ((results[0]?.changes ?? 0) === 0) {
     await throwIfClosed(db, workspaceId);
-    throw new ApiError(404, 'not_found');
+    if ((await db.first(db.statement((q) => liveTask(q, workspaceId, taskId)))) === undefined)
+      throw new ApiError(404, 'not_found');
+    await checkAttachments(db, attachmentSave);
+    throw new ApiError(409, 'conflict');
   }
   const created = await readComment(db, workspaceId, commentId);
   if (created === undefined) throw new ApiError(404, 'not_found');
@@ -224,6 +240,7 @@ export const commentUpdateOperation = implement(commentUpdate, async ({ db, acto
   const organizationId = db.organizationId;
   const workspaceId = workspace.workspaceId;
   const commentId = input.comment_id;
+  const attachmentSave = { workspaceId, userId: actorUserId, ids: input.attachment_ids ?? [] };
 
   // 存在（404）を、閉じたか（409）と権限（403）より先に決める
   const current = await readComment(db, workspaceId, commentId);
@@ -232,11 +249,13 @@ export const commentUpdateOperation = implement(commentUpdate, async ({ db, acto
   if (current.author_user_id !== actorUserId) throw new ApiError(403, 'forbidden');
   if (current.deleted_at !== null) throw new ApiError(409, 'conflict', { reason: 'deleted' });
   // 今と同じ本文なら何も書かない（編集済みにも、履歴にもしない）。書くものが無くても、閉じたワークスペースは断る
-  if (current.body_md === input.body_md) {
+  if (current.body_md === input.body_md && attachmentSave.ids.length === 0) {
     await throwIfClosed(db, workspaceId);
     return { comment: commentOf(current, actor, workspace) };
   }
 
+  await throwIfClosed(db, workspaceId);
+  await checkAttachments(db, attachmentSave);
   const at = now();
   const editedAt = at.toISOString();
   const results = await db.batch([
@@ -251,6 +270,7 @@ export const commentUpdateOperation = implement(commentUpdate, async ({ db, acto
             eb('workspace_id', '=', workspaceId),
             eb('author_user_id', '=', actorUserId),
             eb('deleted_at', 'is', null),
+            attachmentsReady(eb, attachmentSave),
             eb.exists(liveTask(q, workspaceId, current.task_id)),
             eb.exists(openWorkspace(q, organizationId, workspaceId)),
           ]),
@@ -271,14 +291,28 @@ export const commentUpdateOperation = implement(commentUpdate, async ({ db, acto
               eb.val('comment').as('entity_type'),
               eb.val(commentId).as('entity_id'),
               eb.val('update').as('action'),
-              eb.val(commentChanges(current)).as('changes_json'),
+              eb
+                .val(
+                  JSON.stringify({ ...JSON.parse(commentChanges(current)), ...attachmentChanges(attachmentSave.ids) }),
+                )
+                .as('changes_json'),
               eb.val(editedAt).as('created_at'),
             ])
             .where(previousStatementChanged),
         ),
     ),
+    ...(attachmentSave.ids.length === 0
+      ? []
+      : [attachFilesStatement(db, attachmentSave, { comment_id: commentId }, editedAt)]),
   ]);
-  if ((results[0]?.changes ?? 0) === 0) return throwWriteMiss(db, workspaceId, commentId);
+  if ((results[0]?.changes ?? 0) === 0) {
+    await throwIfClosed(db, workspaceId);
+    const again = await readComment(db, workspaceId, commentId);
+    if (again === undefined) throw new ApiError(404, 'not_found');
+    if (again.deleted_at !== null) throw new ApiError(409, 'conflict', { reason: 'deleted' });
+    await checkAttachments(db, attachmentSave);
+    return throwWriteMiss(db, workspaceId, commentId);
+  }
   const updated = await readComment(db, workspaceId, commentId);
   if (updated === undefined) throw new ApiError(404, 'not_found');
   return { comment: commentOf(updated, actor, workspace) };

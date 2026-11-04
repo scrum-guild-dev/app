@@ -1,3 +1,5 @@
+import { checkAttachments, attachmentChanges } from './attachment-save.ts';
+import { attachmentsReady, attachFilesStatement } from '../db/index.ts';
 // タスクの決まった欄の値（task_field_values）の書き込み（task-field-set）と、未記入の判定。
 // docs/data-model.md の task_field_values と「書き込みの単位」の「決まった欄の値」
 import { now } from '../../shared/clock.ts';
@@ -126,6 +128,7 @@ export const taskFieldSetOperation = implement(taskFieldSet, async ({ db, actor,
   const { task_id: taskId, field_id: fieldId } = input;
   const next = input.value_md;
   const read = input.read_md;
+  const attachmentSave = { workspaceId, userId: actorUserId, ids: input.attachment_ids ?? [] };
 
   const [taskResult, fieldResult] = await readTarget(db, workspaceId, taskId, fieldId);
   const field = fieldResult.rows[0];
@@ -152,11 +155,13 @@ export const taskFieldSetOperation = implement(taskFieldSet, async ({ db, actor,
   };
 
   // 読んだ値と同じ値を書くなら、何も書かない（履歴も残さない）。閉じたワークスペースは断る
-  if (next === read) {
+  if (next === read && attachmentSave.ids.length === 0) {
     await throwIfClosed(db, workspaceId);
     return respond();
   }
 
+  await throwIfClosed(db, workspaceId);
+  await checkAttachments(db, attachmentSave);
   const at = now();
   const updatedAt = at.toISOString();
   // 書ける条件。ワークスペースが開いていて、タスクと欄が今も削除されていない
@@ -183,6 +188,7 @@ export const taskFieldSetOperation = implement(taskFieldSet, async ({ db, actor,
             .where((eb) =>
               eb.and([
                 ...writable(q).map((guard) => eb.exists(guard)),
+                attachmentsReady(eb, attachmentSave),
                 eb.not(
                   eb.exists(
                     q
@@ -208,6 +214,7 @@ export const taskFieldSetOperation = implement(taskFieldSet, async ({ db, actor,
             eb('field_id', '=', fieldId),
             eb('value_md', '=', read!),
             ...writable(q).map((guard) => eb.exists(guard)),
+            attachmentsReady(eb, attachmentSave),
           ]),
         ),
     );
@@ -222,12 +229,40 @@ export const taskFieldSetOperation = implement(taskFieldSet, async ({ db, actor,
             eb('field_id', '=', fieldId),
             eb('value_md', '=', read!),
             ...writable(q).map((guard) => eb.exists(guard)),
+            attachmentsReady(eb, attachmentSave),
           ]),
         ),
     );
 
   const results = await db.batch([
-    read === null ? insertValue() : next === null ? deleteValue() : updateValue(),
+    next === null && read === null
+      ? db.statement((q) =>
+          q
+            .updateTable('tasks')
+            .set({ updated_at: updatedAt })
+            .where('id', '=', taskId)
+            .where('workspace_id', '=', workspaceId)
+            .where((eb) =>
+              eb.and([
+                ...writable(q).map((guard) => eb.exists(guard)),
+                attachmentsReady(eb, attachmentSave),
+                eb.not(
+                  eb.exists(
+                    q
+                      .selectFrom('task_field_values')
+                      .select('field_id')
+                      .where('task_id', '=', taskId)
+                      .where('field_id', '=', fieldId),
+                  ),
+                ),
+              ]),
+            ),
+        )
+      : read === null
+        ? insertValue()
+        : next === null
+          ? deleteValue()
+          : updateValue(),
     // 書けたときだけ履歴を書く。前後は欄の名前だけ（値の全文は入れない）
     db.statement((q) =>
       q
@@ -245,12 +280,17 @@ export const taskFieldSetOperation = implement(taskFieldSet, async ({ db, actor,
               eb.val(taskId).as('entity_id'),
               eb.val('update').as('action'),
               eb
-                .fn<string>('json_object', [
-                  eb.val('field'),
-                  eb.fn('json_array', [
-                    read === null ? eb.lit(null) : fieldRef(eb),
-                    next === null ? eb.lit(null) : fieldRef(eb),
-                  ]),
+                .fn<string>('json_patch', [
+                  next === read
+                    ? eb.val('{}')
+                    : eb.fn<string>('json_object', [
+                        eb.val('field'),
+                        eb.fn('json_array', [
+                          read === null ? eb.lit(null) : fieldRef(eb),
+                          next === null ? eb.lit(null) : fieldRef(eb),
+                        ]),
+                      ]),
+                  eb.val(JSON.stringify(attachmentChanges(attachmentSave.ids))),
                 ])
                 .as('changes_json'),
               eb.val(updatedAt).as('created_at'),
@@ -260,6 +300,9 @@ export const taskFieldSetOperation = implement(taskFieldSet, async ({ db, actor,
             .where(previousStatementChanged),
         ),
     ),
+    ...(attachmentSave.ids.length === 0
+      ? []
+      : [attachFilesStatement(db, attachmentSave, { task_id: taskId }, updatedAt)]),
   ] as const);
 
   if ((results[0]?.changes ?? 0) > 0) return respond();
@@ -279,7 +322,8 @@ export const taskFieldSetOperation = implement(taskFieldSet, async ({ db, actor,
         .where('task_field_values.field_id', '=', fieldId),
     ),
   );
-  if ((current?.value_md ?? null) === next) return respond();
+  await checkAttachments(db, attachmentSave);
+  if ((current?.value_md ?? null) === next && attachmentSave.ids.length === 0) return respond();
   // どちらでもなければ、別の要求が先に同じ欄を直した
   throw new ApiError(409, 'conflict', { reason: 'changed' });
 });

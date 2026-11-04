@@ -2,6 +2,7 @@
   import { tick, type Snippet } from 'svelte';
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
+  import MarkdownEditor from './MarkdownEditor.svelte';
 
   // kit.js の drawerTitleHtml / drawerLinkHtml / drawerBodyHtml の「押すと入力欄に替わる」動き。
   // view が読む形（値そのものが押せるボタン、または描いた本文と「編集」）で、押したときに begin を呼ぶと入力欄と「保存」「取り消し」に替わる。
@@ -16,6 +17,7 @@
     label,
     labelHidden = false,
     multiline = false,
+    markdown,
     inputType = 'text',
     placeholder,
     hint,
@@ -32,12 +34,13 @@
     label: string;
     labelHidden?: boolean;
     multiline?: boolean;
+    markdown?: { slug: string; workspaceId: string };
     inputType?: 'text' | 'url';
     placeholder?: string;
     hint?: string;
     // 画面の検査。エラーの文か、null
     problem: (raw: string) => string | null;
-    save: (raw: string) => Promise<string | null>;
+    save: (raw: string, attachmentIds: string[]) => Promise<string | null>;
     // 保存するときの整え方（前後の空白、空は同じ、など）。書きかけの判定は、整えた値どうしで比べる
     normalize?: (raw: string) => string;
     // 書きかけがあるかが変わるたびに呼ぶ
@@ -56,13 +59,16 @@
   let draft = $state('');
   let error = $state<string | null>(null);
   let saving = $state(false);
+  let attachmentIds = $state<string[]>([]);
+  let uploading = $state(false);
+  let editorInput = $state<HTMLTextAreaElement>();
   let trigger: HTMLElement | null = null;
   let input = $state<HTMLInputElement | HTMLTextAreaElement>();
 
   // 書きかけは、保存と同じ整え方（normalize）の後で、保存した値と違うもの。送っている間も数える
   // （失敗したときに入力が消えないよう、閉じる前に確かめる。通れば保存した値と同じになり、書きかけでなくなる）
   $effect(() => {
-    ondirty?.(editing && normalize(draft) !== normalize(value));
+    ondirty?.(editing && (normalize(draft) !== normalize(value) || attachmentIds.length > 0 || uploading));
   });
   // 部品が外れたら（欄が読み取り専用に替わったなど）、書きかけは無くなる
   $effect(() => () => ondirty?.(false));
@@ -71,13 +77,14 @@
     if (editing) return;
     trigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
     draft = value;
+    attachmentIds = [];
     error = null;
     onbegin?.(value);
     editing = true;
     await tick();
-    input?.focus();
+    (editorInput ?? input)?.focus();
     // 続きから書けるよう、カーソルを末尾に置く
-    input?.setSelectionRange(draft.length, draft.length);
+    (editorInput ?? input)?.setSelectionRange(draft.length, draft.length);
   }
 
   async function finish(): Promise<void> {
@@ -94,17 +101,17 @@
 
   async function submit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    if (saving) return;
+    if (saving || uploading) return;
     error = problem(draft);
     if (error !== null) {
-      input?.focus();
+      (editorInput ?? input)?.focus();
       return;
     }
     saving = true;
     try {
-      error = await save(draft);
+      error = await save(draft, attachmentIds);
       if (error === null) await finish();
-      else input?.focus();
+      else (editorInput ?? input)?.focus();
     } finally {
       saving = false;
     }
@@ -129,7 +136,23 @@
   <form class="edit-form" onsubmit={submit} novalidate>
     <div class="field" class:is-invalid={error !== null}>
       <label class="field-label" class:visually-hidden={labelHidden} for={inputId}>{label}</label>
-      {#if multiline}
+      {#if multiline && markdown !== undefined}
+        <MarkdownEditor
+          {...markdown}
+          id={inputId}
+          bind:input={editorInput}
+          bind:value={draft}
+          bind:attachmentIds
+          bind:uploading
+          oninput={() => (error = null)}
+          readonly={saving}
+          {placeholder}
+          invalid={error !== null}
+          describedby={[hint !== undefined ? hintId : null, error !== null ? errorId : null]
+            .filter((id) => id !== null)
+            .join(' ') || undefined}
+        />
+      {:else if multiline}
         <textarea
           class="textarea"
           id={inputId}
@@ -166,7 +189,7 @@
       {/if}
     </div>
     <div class="edit-actions">
-      <button class="btn is-primary is-sm" type="submit" aria-disabled={saving}>{t('editSave')}</button>
+      <button class="btn is-primary is-sm" type="submit" aria-disabled={saving || uploading}>{t('editSave')}</button>
       <button class="btn is-sm is-quiet" type="button" aria-disabled={saving} onclick={cancel}>{t('editCancel')}</button
       >
     </div>

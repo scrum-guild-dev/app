@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { attachmentIdsSchema } from '../../attachment.ts';
 import { idSchema } from '../../id.ts';
 import { longTextSchema } from '../../story.ts';
 import { conflictReasonOf } from '../conflict-reason.ts';
@@ -41,6 +42,7 @@ export const taskFieldSet = defineOperation({
   input: z.object({
     workspace_id: idSchema,
     task_id: idSchema,
+    attachment_ids: attachmentIdsSchema.optional(),
     field_id: idSchema,
     value_md: longTextSchema,
     read_md: longTextSchema,

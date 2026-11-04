@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { attachmentIdsSchema } from '../../attachment.ts';
 import { commentBodySchema } from '../../comment.ts';
 import { idSchema } from '../../id.ts';
 import { defineOperation } from '../define.ts';
@@ -67,7 +68,12 @@ export const commentCreate = defineOperation({
   workspace: true,
   // 10 万字の本文を何件でも足せ、全組織で共有する D1 を埋められるので、回数で抑える（完成の定義の変更と同じ値）
   rateLimit: { max: 30, windowSeconds: 600 },
-  input: z.object({ workspace_id: idSchema, task_id: idSchema, body_md: commentBodySchema }),
+  input: z.object({
+    workspace_id: idSchema,
+    task_id: idSchema,
+    attachment_ids: attachmentIdsSchema.optional(),
+    body_md: commentBodySchema,
+  }),
   output: z.object({ comment: commentSchema }),
 });
 
@@ -82,7 +88,12 @@ export const commentUpdate = defineOperation({
   workspace: true,
   // 作成と同じく、10 万字の本文と変更の履歴を書くので、回数で抑える
   rateLimit: { max: 30, windowSeconds: 600 },
-  input: z.object({ workspace_id: idSchema, comment_id: idSchema, body_md: commentBodySchema }),
+  input: z.object({
+    workspace_id: idSchema,
+    comment_id: idSchema,
+    attachment_ids: attachmentIdsSchema.optional(),
+    body_md: commentBodySchema,
+  }),
   output: z.object({ comment: commentSchema }),
 });
 

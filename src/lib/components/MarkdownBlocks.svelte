@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AttachmentImage from './AttachmentImage.svelte';
   import type { MarkdownBlock, MarkdownInline } from '../markdown.ts';
   import { MARKDOWN_PAGE_SIZE, pagesOf } from '../markdown-render.ts';
   import { isWikiPageLink } from '../wiki-link.ts';
@@ -32,6 +33,7 @@
     {:else if node.type === 'emphasis'}<em>{@render inlines(node.children)}</em>
     {:else if node.type === 'strong'}<strong>{@render inlines(node.children)}</strong>
     {:else if node.type === 'delete'}<del>{@render inlines(node.children)}</del>
+    {:else if node.type === 'image'}<AttachmentImage src={node.src} alt={node.alt} />
     {:else if node.type === 'link'}
       <!-- 外の絶対 URL（markdown.ts が http と https に絞る）で、画面の経路ではないので resolve() は通さない -->
       <!-- eslint-disable svelte/no-navigation-without-resolve -- Markdown の検証済みの絶対 URL を使う -->
