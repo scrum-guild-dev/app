@@ -322,6 +322,7 @@ export const membershipLeaveOperation = implement(membershipLeave, async ({ db, 
               }))
               .where('id', '=', userId)
               .where('organization_id', '=', organizationId)
+              .where('is_admin', '=', 0)
               .where((eb) => eb.exists(endedHere(q)))
               .where((eb) =>
                 eb.not(
