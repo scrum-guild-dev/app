@@ -889,15 +889,23 @@
       <div class="file-actions"><button class="icon-btn" type="button" data-toast="ダウンロードを始めました" aria-label="${esc(f.name)} をダウンロード" title="ダウンロード">${icon("download")}</button>
         <button class="icon-btn is-danger" type="button" data-delete-file="${f.id}" aria-label="${esc(f.name)} を消す" title="消す">${icon("trash")}</button></div></div>`;
   }
-  // 上げる場所。opts.button なら小さなボタンだけ、opts.full なら上限に達した状態
+  // 上げる場所。使えないときは操作を促さず、理由を読み上げと結ぶ。
+  let dropzoneSequence = 0;
   function dropzone(key, opts = {}) {
     if (opts.full ?? D.storage.used >= D.storage.quota) {
-      return `<div class="dropzone is-disabled">${icon("alert")}<span class="dropzone-text"><b>${t("organization")}の添付ファイルが上限（${D.storage.quota} GB）に達しているため、添付できません</b><span>${t("admin")}が不要なファイルを消すか、上限を上げると添付できます</span></span></div>`;
+      const reasonId = `dropzone-full-${++dropzoneSequence}`;
+      return `<div class="dropzone is-disabled" aria-disabled="true" aria-describedby="${reasonId}">${icon("alert")}<span class="dropzone-text"><b>${t("organization")}の添付ファイルが上限（${D.storage.quota} GB）に達しているため、添付できません</b><span id="${reasonId}">${t("admin")}が不要なファイルを消すか、上限を上げると添付できます</span></span></div>`;
+    }
+    if (opts.readonly || opts.quota) {
+      const reasonId = opts.describedby || `dropzone-disabled-${++dropzoneSequence}`;
+      return `<div class="dropzone is-disabled" aria-disabled="true" aria-describedby="${esc(reasonId)}">${icon("alert")}
+        <span class="dropzone-text"><b>${opts.quota ? "容量上限のため、ファイルを追加できません" : "この欄は読み取り専用です"}</b><span${opts.describedby ? "" : ` id="${esc(reasonId)}"`}>${opts.quota ? "組織の添付容量が上限に達しています。" : "ファイルの追加はできません。"}</span></span>
+        <button class="btn is-sm" type="button" disabled aria-describedby="${esc(reasonId)}">${icon("clip")}ファイルの追加はできません</button></div>`;
     }
     if (opts.button) return `<div><button class="btn is-sm is-quiet" type="button" data-pick-file="${key}">${icon("clip")}ファイルを添付</button></div>`;
-    return `<div class="dropzone ${opts.over ? "is-over" : ""} ${opts.readonly ? "is-disabled" : ""}"${opts.readonly ? "" : ` data-drop="${key}"`}>${icon("upload")}
+    return `<div class="dropzone ${opts.over ? "is-over" : ""}" data-drop="${key}">${icon("upload")}
       <span class="dropzone-text"><b>${opts.over ? "離すと添付します" : "ここにファイルをドラッグして添付"}</b><span>1 ファイル 50 MB まで。複数をまとめて選べます。画像は本文やコメントに貼り付けても添付できます</span></span>
-      <button class="btn is-sm" type="button"${opts.readonly ? " disabled" : ` data-pick-file="${key}"`}>${icon("clip")}ファイルを選ぶ</button></div>`;
+      <button class="btn is-sm" type="button" data-pick-file="${key}">${icon("clip")}ファイルを選ぶ</button></div>`;
   }
   // 添付ファイルの一覧と上げる場所。opts.noDrop なら一覧だけ。上げると data-files-for の中だけを描き直す
   function attachments(key, opts = {}) {
@@ -919,7 +927,7 @@
     return `<div class="field"><label class="field-label" for="${esc(inputId)}">${esc(opts.label || "本文")}</label>
       <div class="markdown-editor" data-markdown-editor="${esc(key)}">
         <textarea class="textarea" id="${esc(inputId)}" data-markdown-input="${esc(key)}" rows="5"${opts.readonly ? " readonly" : ""}${description ? ` aria-describedby="${esc(description)}"` : ""}>${esc(markdownDrafts.get(key) ?? opts.value ?? "")}</textarea>
-        ${dropzone(key, { full: false, readonly: opts.readonly || opts.quota })}
+        ${dropzone(key, { full: false, readonly: opts.readonly, quota: opts.quota, describedby: description })}
         ${opts.quota ? `<p class="field-error" id="${esc(quotaId)}" role="alert">${icon("alert")}組織の添付容量の上限に達しました。管理者が不要なファイルを消すか、運用者に上限の変更を依頼すると添付できます。</p>` : ""}
         ${opts.readonly ? `<p class="field-hint" id="${esc(readonlyId)}">ワークスペースが終了しているため、読むことだけできます。</p>` : ""}
         ${attachments(key, { noDrop: true, editor: true, readonly: opts.readonly, quota: opts.quota })}
