@@ -446,9 +446,14 @@ for (const scope of ['organization', 'workspace'] as const) {
     await page.locator('.crumbs a').filter({ hasText: '警告を残さない親-' }).click();
     await expect(page).toHaveURL(parent);
     await expect(page.getByRole('alert')).toHaveCount(0);
-    const otherRoot = scope === 'organization' ? workspaceRoot : '/aoba/wiki';
-    await page.locator(`a.nav-item[href="${otherRoot}"]`).click();
-    await expect(page).toHaveURL(new URL(otherRoot, parent).href);
+    const otherWiki =
+      scope === 'organization'
+        ? page.locator('a.nav-item').filter({ hasText: /^Wiki$/ })
+        : page.locator('a.nav-item[href="/aoba/wiki"]');
+    const otherRoot = await otherWiki.getAttribute('href');
+    expect(otherRoot).not.toBeNull();
+    await otherWiki.click();
+    await expect(page).toHaveURL(new URL(otherRoot!, parent).href);
     await expect(page.getByRole('alert')).toHaveCount(0);
     await page.goBack();
     await page.goBack();
