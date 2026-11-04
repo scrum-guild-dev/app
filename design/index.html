@@ -26,6 +26,8 @@
 .cat-art { margin: 0; display: grid; justify-items: center; gap: var(--space-2); color: var(--color-muted); font-size: var(--text-xs); }
 .cat-art figcaption { font-family: var(--font-mono); }
 .cat-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.cat-nav-frame { min-height: 0; }
+.cat-nav-frame .binding-inner { position: static; height: auto; }
 .cat-name { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
 .cat-rules { margin: 0; padding-left: 1.2em; font-size: var(--text-sm); display: grid; gap: 4px; max-width: 70ch; }
 .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); }
@@ -554,7 +556,7 @@ const SECTIONS = [
       ["長い日本語", "こもれび工房の空想都市と星空観測の道具をつくる共同研究開発チーム"],
       ["改行のない英数字80文字", "Komorebi01234567".repeat(5)],
     ].map(([label, name]) => `<div class="field"><span class="field-label">${label}</span>
-      <div class="app" style="min-height:0"><aside class="binding"><div class="binding-inner" style="position:static;height:auto">
+      <div class="app cat-nav-frame"><aside class="binding"><div class="binding-inner">
         <nav class="nav" aria-label="${label}のメニューの見本">
           <a class="nav-item" href="#nav-wrapping">${icon("inbox")}<span class="nav-item-label">${t("inbox")}</span></a>
           <a class="nav-item is-wrapping" href="#nav-wrapping" aria-current="page">${icon("file")}<span class="nav-item-label">${esc(t("orgWiki").replace("{organization}", name))}</span></a>
@@ -562,7 +564,7 @@ const SECTIONS = [
         </nav>
       </div></aside><div class="sheet"><div class="content"><p>架空の組織名を含む項目を現在のページとして表示。前後の短い項目と、アイコン・文字の配置を比べる。</p></div></div></div>
     </div>`).join("")}
-    <div class="doc-box"><pre><code>${esc(`<nav class="nav" aria-label="組織のメニュー">
+    <div class="doc-box"><pre><code>${esc(`<nav class="nav">
   <a class="nav-item is-wrapping" href="wiki.html?scope=organization" aria-current="page">
     <!-- icon("file") の SVG -->
     <span class="nav-item-label">こもれび工房の Wiki</span>
