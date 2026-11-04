@@ -548,6 +548,28 @@ const SECTIONS = [
       <div class="field"><span class="field-label">所属していない管理者（先頭は押せない現在地の行）</span><div style="max-width:240px">${SQ.workspaceMenuHtml({ open: true, id: "cat-ws-admin", live: false, current: { id: "sample-other", name: "架空の管理対象チーム" } })}</div></div></div>`,
     ["ボタンで開き、Tab でリンクを選び、Enter で移る。矢印キーだけでは移らない。", "Esc、外側を押す、Tab で外へ出る、リンクを押すと閉じる。中にフォーカスがあればボタンへ戻す。", "一覧の高さは 40vh まで。組織の切り替えと同じスタイルで、長い名前は折り返す。"],
     ".ws-menu .ws-menu-button .ws-menu-list / SQ.workspaceMenuHtml()")],
+  ["nav-wrapping", "長い名前を含むメニュー項目", () => block("nav-wrapping", "長い名前を含むメニュー項目", "組織名を含む Wiki など、利用者が付けた名前を全文読めるようにする項目には .nav-item.is-wrapping を使う。画面の幅を変えると、761px 以上では縦のメニュー、760px 以下では横にスクロールできる帯になる。",
+    `${[
+      ["短い名前", "こもれび工房"],
+      ["長い日本語", "こもれび工房の空想都市と星空観測の道具をつくる共同研究開発チーム"],
+      ["改行のない英数字80文字", "Komorebi01234567".repeat(5)],
+    ].map(([label, name]) => `<div class="field"><span class="field-label">${label}</span>
+      <div class="app" style="min-height:0"><aside class="binding"><div class="binding-inner" style="position:static;height:auto">
+        <nav class="nav" aria-label="${label}のメニューの見本">
+          <a class="nav-item" href="#nav-wrapping">${icon("inbox")}<span class="nav-item-label">${t("inbox")}</span></a>
+          <a class="nav-item is-wrapping" href="#nav-wrapping" aria-current="page">${icon("file")}<span class="nav-item-label">${esc(t("orgWiki").replace("{organization}", name))}</span></a>
+          <a class="nav-item" href="#nav-wrapping">${icon("board")}<span class="nav-item-label">${t("backlog")}</span></a>
+        </nav>
+      </div></aside><div class="sheet"><div class="content"><p>架空の組織名を含む項目を現在のページとして表示。前後の短い項目と、アイコン・文字の配置を比べる。</p></div></div></div>
+    </div>`).join("")}
+    <div class="doc-box"><pre><code>${esc(`<nav class="nav" aria-label="組織のメニュー">
+  <a class="nav-item is-wrapping" href="wiki.html?scope=organization" aria-current="page">
+    <!-- icon("file") の SVG -->
+    <span class="nav-item-label">こもれび工房の Wiki</span>
+  </a>
+</nav>`)}</code></pre></div>`,
+    ["is-wrapping はリンクの .nav-item に付け、アイコンの隣の文字を .nav-item-label で包む。現在のページだけ aria-current=\"page\" を付ける。", "広い幅では左の列の中で折り返す。760px 以下では文字の幅を 12rem までにし、空白のない英数字も途中で折る。帯は横へスクロールして隣の項目まで確認する。", "部品の見た目と折り返しは共有の components.css を使う。隣の短い項目には is-wrapping を付けず、高さや並びを比べる。"],
+    ".nav / .nav-item.is-wrapping / .nav-item-label / aria-current=\"page\"")],
   ["nav-collapse", "左のメニューの折りたたみ", () => block("nav-collapse", "左のメニューの折りたたみ", "761px 以上では、ブランド横のボタンで左のメニューを 64px のアイコン列へ畳む。もう一度押すと 240px に戻る。下の見本は、ホバーのできる端末（マウスやトラックパッド）で見る。指だけのタブレットでは畳まないので、広げた列で出る。",
     `<div class="app" data-nav-collapsed="true" style="min-height:260px"><aside class="binding"><div class="binding-inner"><div class="binding-head"><a class="brand" href="#nav-collapse">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></a><button class="nav-toggle" type="button" aria-expanded="false" aria-controls="cat-nav" aria-label="${t("menuExpand")}">${icon("panel")}<span class="nav-tip" aria-hidden="true">${t("menuExpand")}</span></button></div><div class="org-menu"><button class="org-menu-button" type="button" aria-label="あおば開発。組織を切り替える。届いた招待あり"><span class="org-menu-label">${t("organization")}</span><b>あおば開発</b><span class="org-menu-invite" aria-hidden="true"></span>${icon("swap")}${icon("chevron")}<span class="nav-tip" aria-hidden="true">あおば開発<small>届いた招待あり</small></span></button></div><nav class="nav" id="cat-nav"><div class="nav-group"><span class="nav-group-label">${t("workspace")}</span></div><a class="nav-item" href="#nav-collapse" aria-current="page">${icon("sun")}<span class="nav-item-label">${t("pageToday")}</span></a><a class="nav-item" href="#nav-collapse">${icon("board")}<span class="nav-item-label">${t("backlog")}</span></a></nav></div></aside><div class="sheet"><main class="content"><p>本文の幅が広がる見本</p></main></div></div>`,
     ["畳んだ列は 64px。ブランドはマークだけにし（名前は読み上げに残す）、開閉のボタンはマークの下に来る。組織は swap のアイコンと、届いた招待があるときだけ印を見せる。", "項目のラベルはマウスを載せるかキーボードでフォーカスしたときだけ列の横に浮かせる（:focus-within にしない。マウスで押した後に出続けるため）。", "開閉のボタンと畳んだ組織のボタンはアイコンだけなので、同じ札（.nav-tip、aria-hidden）で名前を横に見せる。読み上げは aria-label と aria-expanded が受け持つ。", "綴じは本文より上の層に置き、札と一覧がバックログの行などに隠れないようにする。", "今のページは、太字が名前と一緒に見えなくなるので、左の縦棒（縁で描き、強制カラーでも残る）でも示す。", "組織を移っている最中（SQ.orgMenuHtml の moving。見本は「組織の切り替え」）は、一覧を閉じていれば札に「移っています」を出したままにする。", "ホバーで出す札は (hover: hover) の端末だけ。ホバーのできない端末（指だけのタブレット）では畳まず、開閉のボタンも出さない。", "本番の状態は端末の localStorage に覚え、761px 未満では上の帯の形に戻す。"],
