@@ -846,6 +846,7 @@ test('広い幅では角のマスと上の帯の下の罫が同じ高さで通�
   await page.goto(today);
   await page.evaluate(() => localStorage.removeItem('sg-nav-collapsed'));
   await page.reload();
+  await expect(page.locator('.topbar')).toBeVisible();
 
   const bottoms = () =>
     page.evaluate(() => ({
@@ -903,6 +904,7 @@ test.describe('指で押す画面の 761px 以上', () => {
   test.use({ hasTouch: true, viewport: { width: 1024, height: 800 } });
   test('押せる大きさの要素が入っても、角のマスと上の帯の罫が同じ高さに通る', async ({ page }) => {
     await page.goto(today);
+    await expect(page.locator('.topbar')).toBeVisible();
     const bottoms = await page.evaluate(() => ({
       head: document.querySelector('.binding-head')!.getBoundingClientRect().bottom,
       bar: document.querySelector('.topbar')!.getBoundingClientRect().bottom,

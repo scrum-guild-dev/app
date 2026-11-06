@@ -197,7 +197,8 @@ h1, h2, h3 { text-wrap: balance; }
     /* 開閉のボタンは角のマスの罫の下に出るので、その分を空ける */
     padding-top: calc(44px + var(--space-4));
   }
-  .app[data-nav-collapsed="true"] .binding-head .nav-toggle { position: absolute; top: calc(100% + var(--space-2)); left: 50%; transform: translateX(-50%); background: var(--color-sunken); }
+  /* 札（fixed）の基準になるので、中央寄せに transform は使わない */
+  .app[data-nav-collapsed="true"] .binding-head .nav-toggle { position: absolute; top: calc(100% + var(--space-2)); left: calc(50% - 22px); background: var(--color-sunken); }
   .app[data-nav-collapsed="true"] .brand { justify-content: center; width: 44px; min-height: 44px; padding: 0; }
   .app[data-nav-collapsed="true"] .binding-head .brand-art { width: 34px; }
   .app[data-nav-collapsed="true"] .brand-mark { display: block; height: 26px; }
