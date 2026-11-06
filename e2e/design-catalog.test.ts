@@ -169,6 +169,7 @@ test('見本の引き出し: タブを切り替えても、作り直しても、
   // 引き出しの「次のタスク」で移り、書きかけを捨てると、移った先のコメント欄は空になる
   const title = drawer.locator('#drawer-title');
   const firstTitle = await title.textContent();
+  expect(firstTitle).toBeTruthy();
   await drawer.locator('[data-drawer-step="1"]').click();
   await page.getByRole('button', { name: '捨てる' }).click();
   await expect(title).not.toHaveText(firstTitle ?? '');
@@ -176,6 +177,19 @@ test('見本の引き出し: タブを切り替えても、作り直しても、
   // 「前のタスク」で戻っても、捨てた書きかけは戻らない
   await drawer.locator('[data-drawer-step="-1"]').click();
   await expect(title).toHaveText(firstTitle ?? '');
+  await expect(drawer.locator('#new-comment')).toHaveValue('');
+  await drawer.locator('#new-comment').fill('書きかけのコメント');
+
+  // 引き出しを開いたまま別のタスクのリンク（アシスタントの答えの参照と同じ data-task）を押すと、移る前に確かめる。
+  // 引き出しの後ろの行は幕で押せないので、行の data-task に click を送って同じ経路を通す
+  const otherTask = page.locator(`[data-task="${secondId}"]`).first();
+  await otherTask.dispatchEvent('click');
+  await page.getByRole('button', { name: '書き続ける' }).click();
+  await expect(title).toHaveText(firstTitle ?? '');
+  await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
+  await otherTask.dispatchEvent('click');
+  await page.getByRole('button', { name: '捨てる' }).click();
+  await expect(title).not.toHaveText(firstTitle ?? '');
   await expect(drawer.locator('#new-comment')).toHaveValue('');
   await drawer.locator('#new-comment').fill('書きかけのコメント');
 

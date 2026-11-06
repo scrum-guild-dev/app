@@ -1079,10 +1079,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const adjacent = drawerAdjacent();
     const id = adjacent && (delta < 0 ? adjacent.prev : adjacent.next);
     if (!id) return;
-    if (!force && drawerHasDraft()) { pendingDrawerMode = null; pendingDrawerStep = { delta, viaButton }; DIALOGS.discardDraft(); return; }
+    if (!force && drawerHasDraft()) { pendingDrawerMode = null; pendingDrawerOpen = null; pendingDrawerStep = { delta, viaButton }; DIALOGS.discardDraft(); return; }
     pendingDrawerStep = null;
-    drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = id; drawer.editing = new Set(); drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
-    clearDrawerInputs();
+    resetDrawerFor(id, id);
     renderDrawer();
     const again = viaButton && document.querySelector(`#drawer [data-drawer-step="${delta}"]:not([aria-disabled="true"])`);
     if (again) { again.focus(); return; }
@@ -1096,7 +1095,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function changeDrawerMode(mode, force = false) {
     // 描いている形と同じ形を押したときは、移らずに既定だけを保存する
     if (mode === renderedDrawerMode()) { saveDrawerMode(mode); renderDrawer(); return; }
-    if (!force && drawerHasDraft()) { pendingDrawerMode = mode; pendingDrawerStep = null; DIALOGS.discardDraft(); return; }
+    if (!force && drawerHasDraft()) { pendingDrawerMode = mode; pendingDrawerStep = null; pendingDrawerOpen = null; DIALOGS.discardDraft(); return; }
     const id = drawer.id;
     pendingDrawerMode = null;
     if (mode === "tab") {
@@ -1318,7 +1317,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     return `${top}<div class="callout is-danger" role="alert">${icon("alert")}<span>この${t("task")}を読み込めませんでした。もう一度試してください。</span></div>
       <div class="form-actions"><button class="btn" type="button">もう一度試す</button></div>`;
   }
-  function openDrawer(id, opener) {
+  // 引き出しを開いたまま、別のタスクのリンク（アシスタントの答えの参照など）から開くときも、書きかけがあれば移る前に確かめる
+  let pendingDrawerOpen = null;
+  function openDrawer(id, opener, force = false) {
+    if (!force && drawer.id && drawer.id !== id && drawerHasDraft()) { pendingDrawerMode = null; pendingDrawerStep = null; pendingDrawerOpen = { id, opener }; DIALOGS.discardDraft(); return; }
+    pendingDrawerOpen = null;
+    // 開いているのと同じタスクなら、開き直さない（書きかけを残す）
+    if (!force && drawer.id && drawer.id === id && !document.getElementById("drawer")?.hidden) { document.querySelector("[data-close-drawer]")?.focus(); return; }
     if (!location.pathname.endsWith("/task.html") && (drawer.mode === "page" || drawer.mode === "tab")) {
       const url = `task.html?task=${encodeURIComponent(id)}`;
       if (drawer.mode === "tab") window.open(url, "_blank", "noopener,noreferrer");
@@ -1326,13 +1331,14 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       return;
     }
 
-    drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = opener || null; drawer.editing = new Set(); drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
-    clearDrawerInputs();
+    resetDrawerFor(id, opener);
     renderDrawer();
     document.querySelector("[data-close-drawer]")?.focus();
   }
-  // 別のタスクへ移るときは、前のタスクの欄を消してから描く。renderDrawer は描き直す前に欄の値を写すので、残すと前の書きかけが移った先に戻る
-  function clearDrawerInputs() {
+  // 別のタスクを開く（前後へ移るときも）ために、引き出しの状態を初めに戻し、前のタスクの中身（欄を含む子要素すべて）を外す。
+  // renderDrawer は描き直す前に欄の値を写すので、中身を残すと前の書きかけが開いた先に戻る
+  function resetDrawerFor(id, opener) {
+    drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = opener || null; drawer.editing = new Set(); drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     document.getElementById("drawer")?.replaceChildren();
   }
   // 直している欄の今の入力。再描画しても書きかけを残すため、描き直す前に写す
@@ -1357,7 +1363,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // 書きかけがあるときは、捨てるかをダイアログで確かめる。force は捨てると決めた後
   function closeDrawer(force = false) {
     // 形を替える確認で「書き続ける」を選んだ後に、閉じる操作の確認へ前の形の指定を持ち越さない
-    if (!force && drawerHasDraft()) { pendingDrawerMode = null; pendingDrawerStep = null; DIALOGS.discardDraft(); return; }
+    if (!force && drawerHasDraft()) { pendingDrawerMode = null; pendingDrawerStep = null; pendingDrawerOpen = null; DIALOGS.discardDraft(); return; }
     if (location.pathname.endsWith("/task.html")) {
       const back = sessionStorage.getItem("sq-design-task-return"); sessionStorage.removeItem("sq-design-task-return");
       location.href = back || "backlog.html"; return;
@@ -2630,9 +2636,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if ((el = hit("data-drawer-mode"))) { changeDrawerMode(el.dataset.drawerMode); return; }
     if ((el = hit("data-drawer-step"))) { stepDrawer(Number(el.dataset.drawerStep), false, true); return; }
     if (hit("data-discard-draft")) {
-      const next = pendingDrawerMode, step = pendingDrawerStep;
+      const next = pendingDrawerMode, step = pendingDrawerStep, open = pendingDrawerOpen;
       closeDialog();
-      if (next) changeDrawerMode(next, true); else if (step) stepDrawer(step.delta, true, step.viaButton); else closeDrawer(true);
+      if (next) changeDrawerMode(next, true); else if (step) stepDrawer(step.delta, true, step.viaButton); else if (open) openDrawer(open.id, open.opener, true); else closeDrawer(true);
       return;
     }
     if (hit("data-delete-task")) {
