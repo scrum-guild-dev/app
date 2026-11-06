@@ -852,9 +852,13 @@ test('広い幅では角のマスと上の帯の下の罫が同じ高さで通�
     page.evaluate(() => ({
       head: document.querySelector('.binding-head')!.getBoundingClientRect().bottom,
       bar: document.querySelector('.topbar')!.getBoundingClientRect().bottom,
+      binding: document.querySelector('.binding')!.getBoundingClientRect().right,
+      barLeft: document.querySelector('.topbar')!.getBoundingClientRect().left,
     }));
   const wide = await bottoms();
   expect(wide.head).toBe(wide.bar);
+  // 上の帯は左のメニューの右の罫から始まる（縦の罫と交わる）
+  expect(Math.abs(wide.barLeft - wide.binding)).toBeLessThanOrEqual(1);
   // 2本の横の罫が実際に引かれている（片方でも消えると十字が消える）
   await expect(page.locator('.binding-head')).not.toHaveCSS('border-bottom-width', '0px');
   await expect(page.locator('.topbar')).not.toHaveCSS('border-bottom-width', '0px');
@@ -864,6 +868,7 @@ test('広い幅では角のマスと上の帯の下の罫が同じ高さで通�
   await expect(page.locator('.app')).toHaveAttribute('data-nav-collapsed', 'true');
   const collapsed = await bottoms();
   expect(collapsed.head).toBe(collapsed.bar);
+  expect(Math.abs(collapsed.barLeft - collapsed.binding)).toBeLessThanOrEqual(1);
   // 畳んでも、開閉のボタンは角のマスの下に押せる形で残る
   const toggle = await page.getByRole('button', { name: 'メニューを広げる' }).boundingBox();
   expect(toggle!.y).toBeGreaterThanOrEqual(collapsed.head);
