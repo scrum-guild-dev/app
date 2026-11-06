@@ -651,7 +651,7 @@
       case 'parent_completed':
         return kind === 'task'
           ? t('moveParentDone', { done: t('done'), story: t('story') })
-          : t('moveEpicDone', { done: t('done'), epic: t('epic') });
+          : t('moveEpicDone', { done: t('done'), epic: t('epic'), story: t('story') });
       case 'task_completed':
         return t('moveTaskDone', { task: t('task'), done: t('done') });
       case 'changed':

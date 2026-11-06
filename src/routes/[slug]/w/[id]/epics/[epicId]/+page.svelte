@@ -4,6 +4,7 @@
   import { navigating, page } from '$app/state';
   import { resolve } from '$app/paths';
   import Avatar from '../../../../../../lib/components/Avatar.svelte';
+  import ClearCelebration from '../../../../../../lib/components/ClearCelebration.svelte';
   import DefinitionChip from '../../../../../../lib/components/DefinitionChip.svelte';
   import DueChip from '../../../../../../lib/components/DueChip.svelte';
   import Emblem from '../../../../../../lib/components/Emblem.svelte';
@@ -22,9 +23,16 @@
   import { callOperation } from '../../../../../../lib/api.ts';
   import { focusPageHeading } from '../../../../../../lib/focus-heading.ts';
   import { isUnauthenticated, loginUrl } from '../../../../../../lib/login-redirect.ts';
+  import { prefersReducedMotion } from '../../../../../../lib/reduced-motion.ts';
   import { showToast } from '../../../../../../lib/toast.svelte.ts';
   import { t } from '../../../../../../lib/vocabulary.svelte.ts';
-  import { epicPartyJoin, epicPartyLeave } from '../../../../../../shared/operations/epic/index.ts';
+  import {
+    epicClearConflictReasonOf,
+    epicComplete,
+    epicPartyJoin,
+    epicPartyLeave,
+    epicReopen,
+  } from '../../../../../../shared/operations/epic/index.ts';
   import type { PageProps } from './$types';
 
   // エピックの画面（epic.html）。木のエピックの題から開く。概要（本文、リンク）、依頼主、クリア報酬の段階と額、期日、区分、
@@ -33,7 +41,9 @@
   // 討伐隊の面の下に、書き込めて終わっていないエピックで、討伐隊に入れる人（can_join）には「受注する」か「抜ける」を、
   // 依頼主とリーダー（can_manage）には「<討伐隊>に割り振る」（EpicPartyAssignDialog）と「<クリア報酬>を変える」（EpicRewardDialog）を、
   // リーダー（can_change_requester）には「<依頼主>を替える」（EpicRequesterDialog）を出す。どれも済んだら画面の値を読み直す。
-  // クリア、中止、添付ファイルは、後の Issue で足す。
+  // 依頼主とリーダー（can_manage）には、討伐隊の面の下に「<クリア>」と「<完了>を取り消す」の面も出す（クリアできない理由は押せない操作の横に出し、
+  // 配下のストーリーの完了から数える）。クリアしたら演出（ClearCelebration。動きを減らす設定ではトーストだけ）、取り消しには演出を出さない。
+  // 中止、添付ファイルは、後の Issue で足す。
   // 見出しの横の「直す」は、エピックのダイアログ（EpicDialog）を開く。書き込めるときだけ出し、終了したワークスペースでは出さない
   // （ダイアログの欄は、この画面がすべて読み取りで出している）。直したら画面の値を読み直し、削除したか消えていたらバックログへ戻る。
   // 無いエピック（別の組織、別のワークスペース、削除済み）は「見つかりません」、読めなかったときは読み込みの失敗を出す。
@@ -79,11 +89,27 @@
   let assignDialog = $state<ReturnType<typeof EpicPartyAssignDialog>>();
   let rewardDialog = $state<ReturnType<typeof EpicRewardDialog>>();
   let requesterDialog = $state<ReturnType<typeof EpicRequesterDialog>>();
+  let celebrating = $state(false);
+  let celebrateTitle = $state('');
+  let celebrateReward = $state('');
+  // クリアか取り消しを送っている間。押しても無視する
+  let clearBusy = $state(false);
   // 受注か抜けるを送っている間。押しても無視する
   let partyBusy = $state(false);
   // 受注は討伐隊に入れる人（can_join）だけ。抜けるは、討伐隊にいれば（joined）入れる人でなくなっていても出す
   const showJoin = $derived(canWrite && !finished && detail !== null && (detail.joined || detail.can_join));
   const showAssign = $derived(canWrite && !finished && detail !== null && detail.can_manage);
+  const showClear = $derived(canWrite && !finished && detail !== null && detail.can_manage);
+  const showReopen = $derived(
+    canWrite &&
+      detail !== null &&
+      detail.can_manage &&
+      detail.epic.completed_at !== null &&
+      detail.epic.canceled_at === null,
+  );
+  const openStoryCount = $derived(detail?.stories.filter((story) => story.completed_at === null).length ?? 0);
+  // クリアできない理由。配下が無い、未完了が残っている
+  const clearBlocked = $derived(detail !== null && (detail.stories.length === 0 || openStoryCount > 0));
   const showRequesterChange = $derived(canWrite && !finished && detail !== null && detail.can_change_requester);
 
   // ダイアログで直した。この画面の値だけを読み直す（枠は読み直さない）
@@ -134,6 +160,94 @@
     const button = document.querySelector<HTMLElement>('[data-party-join]');
     if (button) button.focus();
     else focusPageHeading();
+  }
+
+  // 演出を閉じたら、クリアの面の「取り消す」へ（押した主ボタンは読み直しで替わっている）。無ければ見出しへ
+  function focusClearControl(): void {
+    const button = document.querySelector<HTMLElement>('[data-epic-reopen], [data-epic-clear]');
+    if (button) button.focus();
+    else focusPageHeading();
+  }
+
+  // クリアと取り消し。断られた理由ごとに知らせ、どれも読み直す。クリアは成功したら演出（動きを減らす設定ではトーストだけ）
+  async function runClear(clearing: boolean, trigger: HTMLElement): Promise<void> {
+    if (clearBusy || workspace === null || detail === null) return;
+    const input = { workspace_id: workspace.id, epic_id: detail.epic.id };
+    const words = {
+      epic: t('epic'),
+      story: t('story'),
+      done: t('done'),
+      party: t('party'),
+      reward: t('reward'),
+      workspace: t('workspace'),
+      requester: t('requester'),
+      leader: t('leader'),
+    };
+    const title = detail.epic.title;
+    clearBusy = true;
+    try {
+      // 取り消しの結果は、クリアと同じ形（額と人数は 0）に写して扱う
+      const result = clearing
+        ? await callOperation(epicComplete, input, { slug })
+        : await callOperation(epicReopen, input, { slug }).then((reopened) =>
+            reopened.ok ? { ...reopened, data: { ...reopened.data, reward_xp: 0, recipient_count: 0 } } : reopened,
+          );
+      if (!result.ok && isUnauthenticated(result)) {
+        window.location.assign(loginUrl(page.url));
+        return;
+      }
+      if (result.ok) {
+        if (!clearing) showToast(t('epicReopened', words), 'check');
+        else {
+          const { recipient_count: count, reward_xp: xp } = result.data;
+          const rewardText =
+            count === 0
+              ? t('epicCelebrateRewardNone', words)
+              : t('epicCelebrateReward', { party: t('party'), count, xp, unit: t('xpUnit') });
+          if (prefersReducedMotion()) {
+            showToast(
+              count === 0
+                ? t('epicClearedToastEmpty', words)
+                : t('epicClearedToast', { ...words, count, xp, unit: t('xpUnit') }),
+              'check',
+            );
+          } else {
+            celebrateTitle = title;
+            celebrateReward = rewardText;
+            celebrating = true;
+          }
+        }
+      } else {
+        const reason = epicClearConflictReasonOf(result.error?.details);
+        if (result.status === 403) {
+          // 依頼主でもリーダーでもなくなった、またはワークスペースから外された。もう一度押しても直らないので、枠も読み直す
+          showToast(t('epicClearForbidden', words), 'alert');
+          await invalidate('app:workspace');
+        } else if (result.error?.code === 'workspace_closed') {
+          showToast(t('workspaceClosedReadOnly', words), 'alert');
+          await invalidate('app:workspace');
+        } else if (result.error?.code === 'epic_finished') showToast(t('epicClearFinished', words), 'alert');
+        else if (reason === 'open_stories') showToast(t('epicClearOpenStories', words), 'alert');
+        else if (reason === 'empty') showToast(t('epicClearEmpty', words), 'alert');
+        else if (reason === 'completed') showToast(t('epicClearAlready', words), 'alert');
+        else if (reason === 'not_completed') showToast(t('epicNotCleared', words), 'alert');
+        else if (reason === 'changed') showToast(t('epicClearChanged', words), 'alert');
+        else if (result.status === 404) showToast(t('epicClearGone', words), 'alert');
+        else showToast(t(clearing ? 'epicClearFailed' : 'epicReopenFailed', words), 'alert');
+      }
+      await saved();
+    } finally {
+      clearBusy = false;
+    }
+    await tick();
+    // 演出を開いたときは、演出が閉じるボタンへフォーカスを移す。それ以外は同じ操作の場所か見出しへ
+    if (celebrating) return;
+    const button = document.querySelector<HTMLElement>('[data-epic-clear], [data-epic-reopen]');
+    if (button) button.focus();
+    else {
+      if (trigger.isConnected) trigger.focus();
+      else focusPageHeading();
+    }
   }
 
   // ダイアログで削除した、または直そうとしたら無かった。バックログへ戻り、見出しへフォーカスを移す
@@ -354,8 +468,66 @@
           >
         {/if}
       </section>
+
+      {#if showClear || showReopen}
+        <section class="panel" aria-labelledby="epic-clear">
+          <div class="panel-title">
+            <h2 id="epic-clear">{t('epicClearPanel', { epic: t('epic'), done: t('done') })}</h2>
+          </div>
+          <p class="panel-note" id="epic-clear-note">
+            {#if showReopen}
+              {t('epicClearNoteCleared', { done: t('done'), reward: t('reward') })}
+            {:else if detail.stories.length === 0}
+              {t('epicClearNoteEmpty', { story: t('story'), epic: t('epic'), done: t('done') })}
+            {:else if openStoryCount > 0}
+              {t('epicClearNoteOpen', { story: t('story'), count: openStoryCount, done: t('done') })}
+            {:else}
+              {t('epicClearNoteReady', { story: t('story'), done: t('done'), party: t('party'), reward: t('reward') })}
+            {/if}
+          </p>
+          <div class="actions-col">
+            {#if showReopen}
+              <button
+                class="btn"
+                type="button"
+                data-epic-reopen
+                aria-disabled={clearBusy}
+                aria-describedby="epic-clear-note"
+                onclick={(event) => void runClear(false, event.currentTarget)}
+              >
+                {t('epicReopen', { done: t('done') })}
+              </button>
+            {:else}
+              <button
+                class="btn is-primary"
+                type="button"
+                data-epic-clear
+                aria-disabled={clearBusy || clearBlocked}
+                aria-describedby="epic-clear-note"
+                onclick={(event) => {
+                  if (!clearBlocked) void runClear(true, event.currentTarget);
+                }}
+              >
+                <Icon name="check" />{t('clear')}
+              </button>
+            {/if}
+          </div>
+          <span class="visually-hidden" role="status"
+            >{clearBusy
+              ? t(showReopen ? 'epicReopening' : 'epicClearing', { epic: t('epic'), done: t('done') })
+              : ''}</span
+          >
+        </section>
+      {/if}
     </aside>
   </div>
+
+  <ClearCelebration
+    bind:open={celebrating}
+    title={celebrateTitle}
+    reward={celebrateReward}
+    onclosed={focusClearControl}
+  />
 
   <EpicDialog
     bind:this={epicDialog}

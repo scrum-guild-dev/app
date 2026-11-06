@@ -1564,7 +1564,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 }
 
 /* ===== クリアの演出 ===== */
-.celebrate { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; background: rgb(10 15 20 / 0.5); padding: var(--space-4); }
+.celebrate { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; overflow-y: auto; background: rgb(10 15 20 / 0.5); padding: var(--space-4); }
 .celebrate-sheet { width: min(420px, 100%); display: grid; gap: var(--space-3); justify-items: center; text-align: center; background: var(--surface-panel); border: 1px solid var(--color-line); border-top: 5px solid var(--color-xp); box-shadow: var(--shadow-float); padding: var(--space-8) var(--space-6) var(--space-6); border-radius: var(--radius-1); }
 .celebrate-stamp {
   display: grid; place-items: center; width: 112px; height: 112px; border-radius: 50%;
@@ -1572,7 +1572,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
   font-family: var(--font-display); font-weight: var(--weight-display); font-size: 24px; letter-spacing: 0.1em;
   animation: hanko-press 420ms var(--ease-out) 1;
 }
-.celebrate-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-xl); }
+.celebrate-title { overflow-wrap: anywhere; max-width: 100%; font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-xl); }
 .celebrate-reward { font-family: var(--font-stat); font-weight: 700; font-size: var(--text-lg); color: var(--color-xp); }
 
 /* ===== 上に出る帯（版のずれ） ===== */

@@ -1,6 +1,7 @@
 // エピックの読み取り（ダイアログの欄と、画面の中身）、作成、変更、並べ替え、削除、討伐隊の受注、抜ける、割り振り、
-// クリア報酬の段階と依頼主の変更の操作の定義。クリアと中止は #65 で足す
+// クリア報酬の段階と依頼主の変更の操作の定義。クリアとその取り消しは epic-clear.ts。中止は #65 で足す
 import type { AnyOperationDefinition } from '../define.ts';
+import { epicComplete, epicReopen } from './epic-clear.ts';
 import { epicCreate } from './epic-create.ts';
 import { epicDelete } from './epic-delete.ts';
 import { epicDetail } from './epic-detail.ts';
@@ -11,6 +12,7 @@ import { epicRequesterUpdate, epicRewardUpdate } from './epic-reward.ts';
 import { epicUpdate } from './epic-update.ts';
 
 export {
+  epicComplete,
   epicCreate,
   epicDelete,
   epicDetail,
@@ -19,10 +21,12 @@ export {
   epicPartyAssign,
   epicPartyJoin,
   epicPartyLeave,
+  epicReopen,
   epicRequesterUpdate,
   epicRewardUpdate,
   epicUpdate,
 };
+export { epicClearConflictReasonOf, epicClearConflictReasons, type EpicClearConflictReason } from './epic-clear.ts';
 export { epicJoinedVias, type EpicJoinedVia } from './epic-detail.ts';
 export { epicDetailSchema, type EpicDetail } from './epic.ts';
 
@@ -38,4 +42,6 @@ export const epicOperations: readonly AnyOperationDefinition[] = [
   epicPartyAssign,
   epicRewardUpdate,
   epicRequesterUpdate,
+  epicComplete,
+  epicReopen,
 ];

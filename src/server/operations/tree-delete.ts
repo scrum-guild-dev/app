@@ -42,13 +42,16 @@ export type DeleteContext = {
   at: Date;
   deletedAt: string;
   ownerOnly: string | null;
+  // 配下を親なしで残す（keep）削除で、根のエピックがクリア済みなら断る。クリア済みのエピックの完了したストーリーが親なしになると、
+  // 別のエピックの下へ移して、同じストーリーでもう一度クリアできてしまうため（クリア報酬は削除で取り消せない）
+  forbidCleared?: boolean;
 };
 
 type Actor = { userId: string | null; isAdmin: boolean };
 type Workspace = { workspaceId: string; actorRole: 'leader' | 'member' | null };
 
 // 消す根が今も削除されていない。根の表は別名 root で引く（子の表と同じ表を結ぶときに名前がぶつからないように）
-function liveRoot(from: From, workspaceId: string, root: Root) {
+function liveRoot(from: From, workspaceId: string, root: Root, forbidCleared = false) {
   return root.kind === 'epic'
     ? from
         .selectFrom('epics as root')
@@ -56,6 +59,24 @@ function liveRoot(from: From, workspaceId: string, root: Root) {
         .where('root.id', '=', root.id)
         .where('root.workspace_id', '=', workspaceId)
         .where('root.deleted_at', 'is', null)
+        // クリア済みで、削除していない配下のストーリーがあるエピックは、配下を残して削除しない
+        .$if(forbidCleared, (qb) =>
+          qb.where((eb) =>
+            eb.or([
+              eb('root.completed_at', 'is', null),
+              eb.not(
+                eb.exists(
+                  eb
+                    .selectFrom('stories as ks')
+                    .select('ks.id')
+                    .whereRef('ks.epic_id', '=', 'root.id')
+                    .where('ks.workspace_id', '=', workspaceId)
+                    .where('ks.deleted_at', 'is', null),
+                ),
+              ),
+            ]),
+          ),
+        )
     : from
         .selectFrom('stories as root')
         .select('root.id')
@@ -106,14 +127,14 @@ function othersUnderRoot(from: From, workspaceId: string, root: Root, userId: st
 // どの文も持つ前提。閉じていない組織のワークスペースで、消す根が削除されていない。ownerOnly があれば、その人以外の作った配下が無い。
 // 1行を返す副問い合わせで、文には EXISTS で入れる
 function guardRow(from: From, context: DeleteContext, root: Root) {
-  const { organizationId, workspaceId, ownerOnly } = context;
+  const { organizationId, workspaceId, ownerOnly, forbidCleared = false } = context;
   return from
     .selectFrom('workspaces as gw')
     .select('gw.id')
     .where('gw.id', '=', workspaceId)
     .where('gw.organization_id', '=', organizationId)
     .where('gw.closed_at', 'is', null)
-    .where((eb) => eb.exists(liveRoot(from, workspaceId, root)))
+    .where((eb) => eb.exists(liveRoot(from, workspaceId, root, forbidCleared)))
     .$if(ownerOnly !== null, (qb) =>
       qb.where((eb) => eb.not(eb.exists(othersUnderRoot(from, workspaceId, root, ownerOnly!)))),
     );
@@ -696,6 +717,32 @@ async function readRoot(db: OrganizationDb, workspaceId: string, root: Root) {
       );
 }
 
+// エピックがクリア済みで、削除していない配下のストーリーがあるか（削除していない、同じワークスペースのもの）。
+// 配下が無ければ、完了したストーリーが親なしで残ることは無いので、配下を残す削除でも通す
+async function hasClearedChildren(db: OrganizationDb, workspaceId: string, epicId: string): Promise<boolean> {
+  const row = await db.first(
+    db.statement((q) =>
+      q
+        .selectFrom('epics')
+        .select('epics.completed_at')
+        .where('epics.id', '=', epicId)
+        .where('epics.workspace_id', '=', workspaceId)
+        .where('epics.deleted_at', 'is', null)
+        .where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('stories as ks')
+              .select('ks.id')
+              .whereRef('ks.epic_id', '=', 'epics.id')
+              .where('ks.workspace_id', '=', workspaceId)
+              .where('ks.deleted_at', 'is', null),
+          ),
+        ),
+    ),
+  );
+  return row?.completed_at != null;
+}
+
 // 他の人の作った、削除していない配下があるか
 async function hasOthersUnder(db: OrganizationDb, workspaceId: string, root: Root, userId: string): Promise<boolean> {
   const row = await db.first(db.statement((q) => othersUnderRoot(q, workspaceId, root, userId)));
@@ -722,6 +769,11 @@ async function deleteRoot(
     throw new ApiError(404, 'not_found');
   }
   if (!mayDeleteOwned(found.created_by, actor, workspace)) throw new ApiError(403, 'forbidden');
+  const forbidCleared = root.kind === 'epic' && children === 'keep';
+  if (forbidCleared && (await hasClearedChildren(db, workspaceId, root.id))) {
+    await throwIfClosed(db, workspaceId);
+    throw new ApiError(409, 'epic_finished');
+  }
   const ownerOnly = children === 'delete' && !isLeaderOrAdmin(actor, workspace) ? actorUserId : null;
   if (ownerOnly !== null && (await hasOthersUnder(db, workspaceId, root, ownerOnly))) {
     await throwIfClosed(db, workspaceId);
@@ -736,12 +788,15 @@ async function deleteRoot(
     at,
     deletedAt: at.toISOString(),
     ownerOnly,
+    forbidCleared,
   };
   const { statements, rootIndex } = deleteStatements(db, context, root, children);
   const results = await db.batch(statements);
   if ((results[rootIndex]?.changes ?? 0) > 0) return;
   await throwIfClosed(db, workspaceId);
   if ((await readRoot(db, workspaceId, root)) === undefined) throw new ApiError(404, 'not_found');
+  // 読んでから書くまでに、別の要求がエピックをクリアした
+  if (forbidCleared && (await hasClearedChildren(db, workspaceId, root.id))) throw new ApiError(409, 'epic_finished');
   if (ownerOnly !== null && (await hasOthersUnder(db, workspaceId, root, ownerOnly))) throw othersForbidden();
   // 前提はどれも満たしていたのに書けなかった（同じトランザクションの中では起きない）
   throw new ApiError(409, 'conflict');

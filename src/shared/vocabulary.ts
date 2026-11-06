@@ -593,8 +593,8 @@ export const dictionary = defineDictionary({
   moveParentNone: '親なし',
   moveParentHint: '移す先の末尾に置きます。',
   moveParentSubmit: '移す',
-  // ストーリーの親（エピック）を移すときの、完了か中止したエピックの下へは移せない知らせ
-  moveEpicDone: '{done}か中止した{epic}の下へは移せません。一覧を読み直します',
+  // ストーリーの親（エピック）を移すときの、完了か中止した{epic}が移す元か移す先のとき（向きは問わない）の知らせ
+  moveEpicDone: '{done}か中止した{epic}との間では、{story}を移せません。一覧を読み直します',
 
   // エピックの行（木の最上段）。{title} はエピックの題
   epicCreate: '{epic}を作る',
@@ -656,6 +656,33 @@ export const dictionary = defineDictionary({
   // 受注と抜けるが 404。エピックが消えたか、呼んだ人がもう所属していない
   epicPartyGone: '{epic}が見つからないか、{workspace}に所属していないため、{party}を変えられません',
   epicPartyFailed: '{party}を更新できませんでした。もう一度試してください',
+  // エピックの完了（クリア）と取り消し。操作は依頼主とリーダーだけに出す。完了にできない理由は、押せない操作の横に出す
+  epicClearPanel: '{epic}の{done}',
+  epicClearNoteOpen: '未完了の{story}が {count} 件残っているあいだは、{done}にできません。',
+  epicClearNoteEmpty: '{story}が1件も無い{epic}は、{done}にできません。{story}を足して、すべて{done}にすると押せます。',
+  epicClearNoteReady: '配下の{story}はすべて{done}になっています。{done}にすると、{party}全員に{reward}が入ります。',
+  epicClearNoteCleared: '{done}を取り消すと、入った{reward}もすべて取り消されます。',
+  epicReopen: '{done}を取り消す',
+  epicClearing: '{epic}を{done}にしています',
+  epicReopening: '{epic}の{done}を取り消しています',
+  epicClearedToast: '{epic}を{done}にしました。{party}の {count} 人に {xp} {unit}',
+  epicClearedToastEmpty: '{epic}を{done}にしました',
+  epicReopened: '{epic}の{done}を取り消しました。入った{reward}も取り消しました',
+  // 演出。判子の文字と、閉じる前に読ませる額
+  epicCelebrateStamp: 'クリア',
+  epicCelebrateReward: '{party}の {count} 人に {xp} {unit}',
+  epicCelebrateRewardNone: '{party}はいませんでした',
+  // 断られたとき。画面は読み直す
+  epicClearOpenStories: '未完了の{story}が残っているため、{done}にできません。最新の内容を表示しています',
+  epicClearEmpty: '{story}が1件も無いため、{done}にできません。最新の内容を表示しています',
+  epicClearAlready: 'この{epic}は、すでに{done}です。最新の内容を表示しています',
+  epicNotCleared: 'この{epic}は{done}していません。最新の内容を表示しています',
+  epicClearForbidden: '{done}にできるのは、{requester}と{leader}だけです',
+  epicClearGone: '{epic}が見つからないか、{workspace}に所属していないため、{done}にも取り消しにもできません',
+  epicClearFinished: 'この{epic}は中止しているので、{done}にも取り消しにもできません',
+  epicClearChanged: 'ほかの画面で変わったため、できませんでした。最新の内容を表示しています',
+  epicClearFailed: '{done}にできませんでした。もう一度試してください',
+  epicReopenFailed: '{done}を取り消せませんでした。もう一度試してください',
   // 割り振りのダイアログ。候補は member-list の今所属している人のうち、討伐隊にいない人
   epicAssignField: '割り振る人',
   epicAssignHint: '{workspace}に今所属していて、まだ{party}にいない人から選びます。',
@@ -1668,6 +1695,10 @@ export const dictionary = defineDictionary({
   storyDeleteKeepHint:
     '{task} {tasks} 件は親なしの{task}として末尾へ移ります。{category}は{story}の{category}を写します。',
   storyDeleteAllHint: '{task} {tasks} 件を削除します。取り込んだ{task}は削除せず、{archive}へ移します。',
+  treeDeleteClearedKeep:
+    '{done}した{epic}は、配下の{story}を親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先に{epic}の{done}を取り消してください。',
+  treeDeleteClearedKeepAsk:
+    '{done}した{epic}は、配下の{story}を親なしで残して削除できません。{requester}か{leader}に、{epic}の{done}を取り消してもらってください。',
   treeDeleteAllLeaderOnly: '配下に他の人が作ったものがあるため、まとめて削除できるのは{leader}だけです。',
   epicDeleteNoChildren: '配下の{story}はありません。',
   storyDeleteNoChildren: '配下の{task}はありません。',
