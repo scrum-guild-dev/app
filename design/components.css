@@ -143,8 +143,8 @@ h1, h2, h3 { text-wrap: balance; }
   .nav-toggle { width: 44px; height: 44px; }
   .brand, .nav-item:not(.is-later) { min-height: 44px; }
   a.breadcrumb-item { display: block; line-height: 44px; min-width: 44px; }
-  /* 組織とワークスペースのリンクは、押せる幅 44px より縮めない。今の画面の名前が先に縮む */
-  .breadcrumb li:not(:last-child) { flex-shrink: 0; }
+  /* 組織とワークスペースのリンクは、押せる幅 44px より縮めない（長い名前は省略して、44px を下限に縮む） */
+  .breadcrumb li:not(:last-child) { min-width: calc(44px + 1.25rem); }
 }
 
 @media (min-width: 761px) {
