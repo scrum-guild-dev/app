@@ -91,7 +91,9 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
   }
 }
 
-test('見本の引き出し: タブを切り替えても、作り直しても、書きかけのコメントを残す', async ({ page }) => {
+test('見本の引き出し: タブを切り替えても、作り直しても、書きかけのコメントを残し、別のタスクへ移ると捨てる', async ({
+  page,
+}) => {
   // スプリントの見本を共有の見本ファイルのまま返す（アプリの配信対象外）。
   const files: Record<string, string> = {
     'sprint.html': 'text/html',
@@ -163,6 +165,74 @@ test('見本の引き出し: タブを切り替えても、作り直しても、
   await page.setViewportSize({ width: 600, height: 900 });
   await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
   expect(await isKept()).toBe(false);
+
+  // 引き出しの「次のタスク」で移り、書きかけを捨てると、移った先のコメント欄は空になる
+  const title = drawer.locator('#drawer-title');
+  const firstTitle = await title.textContent();
+  expect(firstTitle).toBeTruthy();
+  await drawer.locator('[data-drawer-step="1"]').click();
+  await page.getByRole('button', { name: '捨てる' }).click();
+  await expect(title).not.toHaveText(firstTitle ?? '');
+  await expect(drawer.locator('#new-comment')).toHaveValue('');
+  // 「前のタスク」で戻っても、捨てた書きかけは戻らない
+  await drawer.locator('[data-drawer-step="-1"]').click();
+  await expect(title).toHaveText(firstTitle ?? '');
+  await expect(drawer.locator('#new-comment')).toHaveValue('');
+  await drawer.locator('#new-comment').fill('書きかけのコメント');
+
+  // 書きかけがあるまま、開いているのと同じタスクのリンクを押すと、確かめずに書きかけを残し、コメントのタブへ戻す
+  const dialog = page.locator('#dialog');
+  await history.click();
+  await page.locator(`[data-task="${firstId}"]`).first().dispatchEvent('click');
+  await expect(dialog).toBeHidden();
+  await expect(comments).toHaveAttribute('aria-selected', 'true');
+  await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
+
+  // 引き出しを開いたまま別のタスクのリンク（アシスタントの答えの参照と同じ data-task）を押すと、移る前に確かめる。
+  // 引き出しの後ろの行は幕で押せないので、行の data-task に click を送って同じ経路を通す
+  const otherTask = page.locator(`[data-task="${secondId}"]`).first();
+  const secondTitle = (await otherTask.innerText()).trim();
+  expect(secondTitle).toBeTruthy();
+  expect(secondTitle).not.toBe(firstTitle);
+  await otherTask.dispatchEvent('click');
+  await page.getByRole('button', { name: '書き続ける' }).click();
+  await expect(title).toHaveText(firstTitle ?? '');
+  await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
+  // 「書き続ける」の後に閉じて捨てると、前に押したタスクへは移らずに閉じる
+  await drawer.locator('.drawer-close').click();
+  await page.getByRole('button', { name: '捨てる' }).click();
+  await expect(drawer).toBeHidden();
+  await tasks.first().click();
+  await drawer.locator('#new-comment').fill('書きかけのコメント');
+  await otherTask.dispatchEvent('click');
+  await page.getByRole('button', { name: '捨てる' }).click();
+  await expect(title).toHaveText(secondTitle);
+  await expect(drawer.locator('#new-comment')).toHaveValue('');
+
+  // パレット（Ctrl+K）の答えの参照から別のタスクを開くときは、確認がパレットの上に出る。
+  // 「書き続ける」ならパレットを残し、「捨てる」ならパレットを閉じて移る
+  await drawer.locator('#new-comment').fill('書きかけのコメント');
+  await page.keyboard.press('Control+k');
+  const palette = page.locator('#assist-palette');
+  await expect(palette).toBeVisible();
+  const ask = palette.locator('input, textarea').first();
+  await ask.fill('遅れているタスクは');
+  await ask.press('Enter');
+  const ref = palette.locator(`.assist-refs a[data-task]:not([data-task="${secondId}"])`).first();
+  await expect(ref).toBeVisible();
+  const refTitle = (await ref.innerText()).trim();
+  await ref.click();
+  await page.getByRole('button', { name: '書き続ける' }).click();
+  await expect(palette).toBeVisible();
+  await expect(ref).toBeFocused();
+  await expect(title).toHaveText(secondTitle);
+  await ref.click();
+  await page.getByRole('button', { name: '捨てる' }).click();
+  await expect(palette).toBeHidden();
+  await expect(title).toHaveText(refTitle);
+  await expect(drawer.locator('#new-comment')).toHaveValue('');
+  await expect(drawer.locator('.drawer-close')).toBeFocused();
+  await drawer.locator('#new-comment').fill('書きかけのコメント');
 
   // 閉じて別のタスクを開くと、コメント欄は空になる
   await drawer.locator('.drawer-close').click();
