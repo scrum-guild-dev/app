@@ -334,7 +334,7 @@ h1, h2, h3 { text-wrap: balance; }
 /* ===== 画面の見出しと集計 ===== */
 .page-head { display: grid; gap: var(--space-3); padding-bottom: var(--space-5); border-bottom: var(--rule-double); }
 .page-eyebrow { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-muted); letter-spacing: 0.04em; min-width: 0; overflow-wrap: anywhere; }
-.page-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-page-title); line-height: var(--leading-tight); letter-spacing: 0.04em; min-width: 0; overflow-wrap: anywhere; }
+.page-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-2xl); line-height: var(--leading-tight); letter-spacing: 0.04em; min-width: 0; overflow-wrap: anywhere; }
 .tally { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); margin: 0; }
 .tally > div { display: flex; align-items: baseline; gap: var(--space-2); }
 .tally dt { font-size: var(--text-sm); color: var(--color-muted); display: inline-flex; align-items: center; gap: 4px; }
@@ -450,7 +450,7 @@ h1, h2, h3 { text-wrap: balance; }
 .chip {
   display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
   font-size: var(--text-xs); line-height: 1.75; padding: 0 7px; border-radius: var(--radius-1);
-  border: 1px solid var(--chip-edge); color: var(--color-muted); background: var(--color-surface);
+  border: 1px solid var(--color-line); color: var(--color-muted); background: var(--color-surface);
 }
 .chip.is-danger { color: var(--color-danger); background: var(--color-danger-soft); border-color: var(--chip-state-edge); }
 .chip.is-warn { color: var(--color-warn); background: var(--color-warn-soft); border-color: var(--chip-state-edge); }
@@ -653,7 +653,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
 .gauge-end.is-next { color: var(--color-xp); }
 @keyframes gauge-grow { from { width: 0; } }
 @keyframes gauge-tip { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
-.gauge { position: relative; height: 12px; background: var(--color-gauge); border-radius: var(--radius-1); overflow: hidden; display: flex; }
+.gauge { position: relative; height: 12px; background: var(--color-gauge); border-radius: var(--radius-show); overflow: hidden; display: flex; }
 .gauge::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--color-surface) calc(10% - 2px) 10%);
@@ -704,12 +704,12 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
 .load-val { margin-left: auto; font-family: var(--font-stat); font-weight: 600; font-variant-numeric: tabular-nums; }
 .load-val small { color: var(--color-muted); font-weight: 500; }
 .load-foot { display: flex; justify-content: space-between; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
-.cap { position: relative; height: 14px; background: var(--color-gauge); border-radius: var(--radius-1); }
+.cap { position: relative; height: 14px; background: var(--color-gauge); border-radius: var(--radius-show); }
 .cap::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(90deg, transparent 0 calc(5% - 2px), var(--color-surface) calc(5% - 2px) 5%);
 }
-.cap-fill { position: absolute; inset: 0 auto 0 0; border-radius: var(--radius-1); background: var(--color-accent); }
+.cap-fill { position: absolute; inset: 0 auto 0 0; border-radius: var(--radius-show); background: var(--color-accent); }
 .cap-band { position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--color-fg); border-right: 2px solid var(--color-fg); z-index: 1; }
 .cap.is-over .cap-fill { background: var(--color-danger); }
 .cap.is-free .cap-fill { background: var(--color-ok); }
@@ -1032,10 +1032,11 @@ label.pick-row:hover { background: var(--color-accent-soft); }
 }
 
 /* ===== 広い幅でマウスで操作する画面の詰め =====
- * 761px 以上で、マウスなどの細かく指せる道具で操作する画面（pointer: fine）では、左のメニュー、行、表、カードの上下の余白を詰め、
- * 一画面に多くの記録を出す。狭い幅と指で押す画面（760px 以下か pointer: coarse）は、押せる範囲 44px の決まりのまま詰めない。
+ * 761px 以上で、マウスなどの細かく指せる道具だけで操作する画面（pointer: fine で、指で押す入力も持たない）では、左のメニュー、行、表、
+ * カードの上下の余白を詰め、一画面に多くの記録を出す。狭い幅と指で押す画面（760px 以下か pointer: coarse）と、タッチの画面を持つ PC
+ * （any-pointer: coarse）は、押せる範囲 44px のための余白を残して詰めない。
  * どのテーマでも同じ。上の各部品の規則より後ろに置く（同じ詳細度なので、後ろが勝つ） */
-@media (min-width: 761px) and (pointer: fine) {
+@media (min-width: 761px) and (pointer: fine) and (not (any-pointer: coarse)) {
   .binding-inner { padding-block: var(--space-4); gap: var(--space-4); }
   .nav-group { padding-top: var(--space-3); }
   .nav-item { padding-block: 4px; }
@@ -1044,7 +1045,7 @@ label.pick-row:hover { background: var(--color-accent-soft); }
   .entry { padding-block: var(--space-2); min-height: 48px; }
   .tree-row { padding-block: var(--space-2); }
   .table th, .table td { padding-block: var(--space-2); }
-  .board-col { padding: var(--space-2); }
+  .board-col { padding-block: var(--space-2); }
   .card { padding: var(--space-2) var(--space-3); }
 }
 
@@ -1508,6 +1509,8 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .state-badge.is-ok { color: var(--color-ok); background: var(--color-ok-soft); }
 .state-badge.is-error { color: var(--color-warn); background: var(--color-warn-soft); }
 .state-badge.is-stopped { color: var(--color-danger); background: var(--color-danger-soft); }
+/* 地の色を持つ状態の印は、チップの状態の印（.chip.is-danger など）と同じく、テーマが枠を決める（シンプルは枠を引かない） */
+.state-badge:is(.is-ok, .is-error, .is-stopped) { border-color: var(--chip-state-edge); }
 .state-badge.is-muted { color: var(--color-muted); }
 .facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-2) var(--space-5); }
 .facts > div { display: grid; gap: 2px; min-width: 0; }
@@ -1582,7 +1585,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 
 /* ===== クリアの演出 ===== */
 .celebrate { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; overflow-y: auto; background: rgb(10 15 20 / 0.5); padding: var(--space-4); }
-.celebrate-sheet { width: min(420px, 100%); display: grid; gap: var(--space-3); justify-items: center; text-align: center; background: var(--surface-panel); border: 1px solid var(--color-line); border-top: 5px solid var(--color-xp); box-shadow: var(--shadow-float); padding: var(--space-8) var(--space-6) var(--space-6); border-radius: var(--radius-1); }
+.celebrate-sheet { width: min(420px, 100%); display: grid; gap: var(--space-3); justify-items: center; text-align: center; background: var(--surface-panel); border: 1px solid var(--color-line); border-top: 5px solid var(--color-xp); box-shadow: var(--shadow-float); padding: var(--space-8) var(--space-6) var(--space-6); border-radius: var(--radius-show); }
 .celebrate-stamp {
   display: grid; place-items: center; width: 112px; height: 112px; border-radius: 50%;
   border: 3px solid var(--color-done); color: var(--color-done); background: var(--color-ok-soft);

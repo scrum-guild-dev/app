@@ -238,10 +238,12 @@ const SECTIONS = [
     `<div class="two"><div class="field">${[1, 2, 3, 4, 5, 6, 8, 10].map((n) => `<div class="space-row"><span class="cat-name" style="width:80px">--space-${n}</span><i style="width:var(--space-${n})"></i></div>`).join("")}</div>
      <div class="field">
        <div class="cat-row"><span class="cat-name" style="width:110px">--radius-1</span><span style="width:60px;height:36px;border:1px solid var(--color-line);border-radius:var(--radius-1);background:var(--color-surface)"></span></div>
+       <div class="cat-row"><span class="cat-name" style="width:110px">--radius-show</span><span style="width:120px;height:12px;border-radius:var(--radius-show);background:var(--color-gauge)"></span></div>
        <div class="cat-row"><span class="cat-name" style="width:110px">--rule-double</span><span style="width:120px;height:0;border-top:var(--rule-double)"></span></div>
+       <div class="cat-row"><span class="cat-name" style="width:110px">--edge-top</span><span style="width:120px;height:36px;background:var(--color-surface);border:1px solid var(--color-line);border-top:var(--edge-top) solid var(--color-accent);border-radius:var(--radius-1)"></span></div>
        <div class="cat-row"><span class="cat-name" style="width:110px">--shadow-sheet</span><span style="width:120px;height:44px;background:var(--color-surface);border:1px solid var(--color-line);box-shadow:var(--shadow-sheet)"></span></div>
      </div></div>`,
-    ["影は「貼り紙」（--shadow-sheet）、ゲームの面の光（--shadow-panel、現代風だけ）、上に浮く物（--shadow-float、引き出しなど）の3つだけ。", "区切りの線（--rule-double）は、画面の見出しの下、メニューの境、台帳と木の左端、列の見出しの下に使う。中世風では二重罫になる。"])],
+    ["影は「貼り紙」（--shadow-sheet）、ゲームの面の光（--shadow-panel、現代風だけ）、上に浮く物（--shadow-float、引き出しなど）の3つだけ。", "区切りの線（--rule-double）は、画面の見出しの下、メニューの境、台帳と木の左端、列の見出しの下に使う。中世風では二重罫になる。", "角は、記録の部品が --radius-1（シンプルは 4px）、見せ場の経験値と積載量のゲージとクリアの演出が --radius-show（シンプルは 6px）。上の色の線（--edge-top）は、貼り紙、計画のレーン、ダイアログ、枠の外の紙に使い、シンプルは 2px、中世風と現代風は 5px。", "761px 以上でマウスなどだけで操作する画面は、左のメニュー、行、表、スプリントの列とカードの上下の余白を詰める（どのテーマでも同じ）。狭い幅と指で押す画面は、押せる範囲 44px のための余白を残す。"])],
   ["logo", "ロゴ", () => block("logo", "ロゴ", "提供されたオレンジとチャコールの横組みロゴ。全テーマで白い下地に載せ、畳んだメニューだけマーク単体にする。",
     `<div class="two">
       <div class="field"><span class="field-label">左のメニューの上（最大168px）</span><span class="brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></span></div>

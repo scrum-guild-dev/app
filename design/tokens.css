@@ -61,7 +61,7 @@
   --color-bg: #f7f7f8;
   --color-surface: #ffffff;
   --color-sunken: #f2f2f3;      /* メニューなど一段下がった面 */
-  --color-line: #dcdce0;        /* 枠の線 */
+  --color-line: #d6d6da;        /* 枠の線 */
   --color-rule: #ebebee;        /* 行を分ける罫 */
 
   /* ---- 色: 文字 ---- */
@@ -99,15 +99,14 @@
   --font-mono: var(--family-mono);        /* キー、日付、ポイント */
   --font-stat: var(--family-gothic);      /* レベル、経験値、積載量の数字 */
   --weight-display: 700;
-  --text-page-title: 1.375rem;            /* 22 画面の見出し。シンプルは詰めた画面に合わせて小さくする */
 
   /* ---- 形 ---- */
   --radius-1: 4px;
   --radius-2: 4px;
+  --radius-show: 6px;                           /* 見せ場（経験値と積載量のゲージ、クリアの演出）の角。記録の角を詰めても形を変えない */
   --rule-double: 1px solid var(--color-line);   /* 台帳の左や見出しの下の区切り */
   --edge-top: 2px;                              /* 貼り紙、計画のレーン、ダイアログ、枠の外の紙の上の色の線 */
-  --chip-edge: var(--color-rule);               /* 印（チップ）の枠。状態の印（期日切れなど）は --chip-state-edge */
-  --chip-state-edge: transparent;               /* 状態の印は地の色で示し、枠を引かない */
+  --chip-state-edge: transparent;               /* 地の色を持つ状態の印（期日切れなど）は、地の色で示し枠を引かない */
   --pts-edge: var(--color-line);                /* ポイントの枠 */
   --shadow-sheet: 0 1px 1px rgb(0 0 0 / 0.04);  /* 貼り紙 */
   --shadow-panel: none;                            /* 面の外側の光や影 */
@@ -122,7 +121,7 @@
     --color-bg: #121214;
     --color-surface: #1a1a1d;
     --color-sunken: #0e0e10;
-    --color-line: #313136;
+    --color-line: #37373d;
     --color-rule: #242428;
     --color-fg: #ececef;
     --color-muted: #a2a2ab;
@@ -139,7 +138,7 @@
     --color-warn-soft: #3a2a17;
     --color-ok: #6fcf8a;
     --color-ok-soft: #1b3324;
-    --color-gauge: #2a2a2f;
+    --color-gauge: #2e2e33;
     --color-tier-small: #e0916a;
     --color-tier-medium: #aab3bd;
     --color-tier-large: #f2dc6a;
@@ -152,7 +151,7 @@
   --color-bg: #121214;
   --color-surface: #1a1a1d;
   --color-sunken: #0e0e10;
-  --color-line: #313136;
+  --color-line: #37373d;
   --color-rule: #242428;
   --color-fg: #ececef;
   --color-muted: #a2a2ab;
@@ -169,7 +168,7 @@
   --color-warn-soft: #3a2a17;
   --color-ok: #6fcf8a;
   --color-ok-soft: #1b3324;
-  --color-gauge: #2a2a2f;
+  --color-gauge: #2e2e33;
   --color-tier-small: #e0916a;
   --color-tier-medium: #aab3bd;
   --color-tier-large: #f2dc6a;
@@ -209,13 +208,12 @@
   --font-display: var(--family-mincho);
   --font-stat: var(--family-tech);
   --weight-display: 900;
-  --text-page-title: var(--text-2xl);
 
   --radius-1: 2px;              /* 帳簿の角。ほぼ角張らせる */
   --radius-2: 4px;
+  --radius-show: var(--radius-1);
   --rule-double: 3px double var(--color-line);
   --edge-top: 5px;
-  --chip-edge: var(--color-line);
   --chip-state-edge: currentColor;
   --pts-edge: var(--color-accent);
   --shadow-sheet: 0 1px 0 var(--color-line), 3px 4px 0 -1px var(--color-rule);  /* 貼り出した紙 */
@@ -253,13 +251,12 @@
   --font-display: var(--family-tech-gothic);
   --font-stat: var(--family-tech);
   --weight-display: 700;
-  --text-page-title: var(--text-2xl);
 
   --radius-1: 2px;
   --radius-2: 3px;
+  --radius-show: var(--radius-1);
   --rule-double: 1px solid var(--color-line);
   --edge-top: 5px;              /* 貼り紙、ダイアログ、枠の外の紙は、末尾のテーマの飾りが 1px にする */
-  --chip-edge: var(--color-line);
   --chip-state-edge: currentColor;
   --pts-edge: var(--color-accent);
   --shadow-sheet: 0 0 0 1px rgb(76 200 255 / 0.25), 0 0 18px -6px rgb(76 200 255 / 0.55);
