@@ -336,6 +336,17 @@ describe('task-update', () => {
       expect((await rowOf(target, task.id))!.title).toBe('後の保存');
     });
 
+    test('正規化の前に保存された値でも、同じ値を添えれば断らない', async () => {
+      const target = await createTarget();
+      const task = await seeded(target, { body_md: 'a\r\nb  ', link_url: 'https://Example.com' });
+      const res = await update(target, task.id, {
+        body_md: 'a\nb\nc',
+        link_url: 'https://example.org/',
+        expected: { body_md: 'a\r\nb  ', link_url: 'https://Example.com' },
+      });
+      expect(res.status).toBe(200);
+    });
+
     test('別の組織のタスクは、前の値を添えても 404', async () => {
       const target = await createTarget();
       const foreign = await createTarget();
@@ -389,6 +400,53 @@ describe('task-update', () => {
       }
       const logs = (await logsOf(target, task.id)).map((log) => JSON.parse(log.changes_json));
       expect(logs).toEqual([{ body_md: ['元の本文', '二回目'] }, { body_md: ['二回目', '三回目'] }]);
+    });
+
+    test('元の値へ戻す変更は、まとめずに新しい行にする', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      expect((await update(target, task.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, task.id, { body_md: '元の本文' }, target.member, at(1))).status).toBe(200);
+      const logs = (await logsOf(target, task.id)).map((log) => JSON.parse(log.changes_json));
+      expect(logs).toEqual([{ body_md: ['元の本文', '一回目'] }, { body_md: ['一回目', '元の本文'] }]);
+    });
+
+    test('時計が最初に書いた時刻より戻っていても、まとめない', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      expect((await update(target, task.id, { body_md: '一回目' }, target.member, at(10))).status).toBe(200);
+      expect((await update(target, task.id, { body_md: '二回目' }, target.member, at(0))).status).toBe(200);
+      expect(await logsOf(target, task.id)).toHaveLength(2);
+    });
+
+    test('履歴の「後」が今の値と合わない行（履歴を書かない経路が変えた）には、まとめない', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      expect((await update(target, task.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      const db = orgDb(env, target.organization.verified);
+      await db.batch([db.statement((q) => q.updateTable('tasks').set({ body_md: 'X' }).where('id', '=', task.id))]);
+      expect((await update(target, task.id, { body_md: '二回目' }, target.member, at(1))).status).toBe(200);
+      expect(await logsOf(target, task.id)).toHaveLength(2);
+    });
+
+    test('最新の行の changes_json が想定外の形でも、500 にならず新しい行を足す', async () => {
+      for (const broken of ['null', '[]', '{"body_md":["a"]}', '{"body_md":"a"}', 'not json']) {
+        const target = await createTarget();
+        const task = await seeded(target);
+        expect((await update(target, task.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+        const db = orgDb(env, target.organization.verified);
+        // change_logs の changes_json は json_valid の CHECK があるので、壊れた JSON は引用符で包んだ文字列にして入れる
+        await db.batch([
+          db.statement((q) =>
+            q
+              .updateTable('change_logs')
+              .set({ changes_json: broken === 'not json' ? '"not json"' : broken })
+              .where('entity_id', '=', task.id),
+          ),
+        ]);
+        expect((await update(target, task.id, { body_md: '二回目' }, target.member, at(1))).status, broken).toBe(200);
+        expect(await logsOf(target, task.id), broken).toHaveLength(2);
+      }
     });
 
     test('間に別の履歴が挟まっていれば、まとめない', async () => {

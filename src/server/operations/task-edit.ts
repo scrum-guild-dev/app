@@ -2,6 +2,7 @@ import { checkAttachments, attachmentChanges } from './attachment-save.ts';
 import { attachmentsReady, attachFilesStatement } from '../db/index.ts';
 import { readThanks } from './thanks.ts';
 import { now, todayIn } from '../../shared/clock.ts';
+import { canonicalLinkUrl, linkUrlProblem, normalizeLinkUrl, normalizeLongText } from '../../shared/story.ts';
 import { taskAssign, taskDelete, taskDetail, taskUpdate, type TaskDetail } from '../../shared/operations/task/index.ts';
 import { previousStatementChanged, type OrganizationDb, type VerifiedWorkspace } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
@@ -308,18 +309,36 @@ function assertEditable(current: TaskRow, values: UpdatedFields): void {
 const HISTORY_MERGE_WINDOW_MS = 5 * 60 * 1000;
 const MERGEABLE_FIELDS = ['title', 'points', 'due_on', 'link_url', 'body_md'] as const;
 
+// expected は入力の検証で正規化されて届く。正規化の決まりより前に保存された値（取り込み、seed、古い行）とも比べられるよう、今の値も同じに正規化して比べる
+function normalizedForCompare(field: (typeof MERGEABLE_FIELDS)[number], value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  if (field === 'title') return value.trim();
+  if (field === 'body_md') return normalizeLongText(value);
+  if (field === 'link_url') {
+    const link = normalizeLinkUrl(value);
+    return link === null || linkUrlProblem(link) !== null ? link : canonicalLinkUrl(link);
+  }
+  return value;
+}
+
 // 書き始める前の値（expected）が、サーバーの今の値と違う欄。書く欄だけを見る（送った値が今の値と同じなら、書かないので断らない）
 function staleFields(current: TaskRow, values: UpdatedFields, expected: UpdatedFields | undefined) {
   const stale: Record<string, unknown> = {};
   if (expected === undefined) return stale;
   for (const field of MERGEABLE_FIELDS) {
     if (values[field] === undefined || expected[field] === undefined) continue;
-    if (expected[field] !== current[field]) stale[field] = current[field];
+    if (expected[field] !== normalizedForCompare(field, current[field])) stale[field] = current[field];
   }
   return stale;
 }
 
-type MergeTarget = { id: string; changesJson: string; field: (typeof MERGEABLE_FIELDS)[number]; before: unknown };
+type MergeTarget = {
+  id: string;
+  createdAt: string;
+  changesJson: string;
+  field: (typeof MERGEABLE_FIELDS)[number];
+  before: unknown;
+};
 
 // 履歴を足す代わりに書き換える行。同じ人が、同じタスクで、同じ1つの欄だけを直した直前の行が、間の中にあるときだけ。
 // 直前の行は、そのタスクの最新の履歴の行（間に別の履歴が挟まっていればまとめない）。添付と、2つ以上の欄の変更はまとめない
@@ -353,7 +372,9 @@ async function readMergeTarget(
   // 間の起点は、行を最初に書いた時刻（ID の UUIDv7 の先頭48ビット）。まとめるたびに created_at を進めても間は延びない
   // （延びると、悪い値を入れて元へ戻した痕跡を、続けて直して消せてしまう）
   const firstWrittenAt = Number.parseInt(latest.id.replaceAll('-', '').slice(0, 12), 16);
-  if (!Number.isFinite(firstWrittenAt) || at.getTime() - firstWrittenAt > HISTORY_MERGE_WINDOW_MS) return undefined;
+  // 時計が戻っている（最初に書いた時刻より前）ときもまとめない（まとめると created_at が過去へ戻り、履歴の並びが実際の順と食い違う）
+  const elapsed = at.getTime() - firstWrittenAt;
+  if (!Number.isFinite(elapsed) || elapsed < 0 || elapsed > HISTORY_MERGE_WINDOW_MS) return undefined;
   let logged: unknown;
   try {
     logged = JSON.parse(latest.changes_json);
@@ -366,7 +387,9 @@ async function readMergeTarget(
   if (entries.length !== 1 || entries[0]?.[0] !== field || !Array.isArray(pair) || pair.length !== 2) return undefined;
   // 今の値と、履歴の「後」が合っているときだけ（合わなければ、間に別の経路が書いている）
   if (JSON.stringify(pair[1]) !== JSON.stringify(changes[field]?.[0])) return undefined;
-  return { id: latest.id, changesJson: latest.changes_json, field, before: pair[0] };
+  // 元の値へ戻す変更は、まとめると「前」と「後」が同じ行が残るので、まとめずに別の行にする
+  if (JSON.stringify(pair[0]) === JSON.stringify(changes[field]?.[1])) return undefined;
+  return { id: latest.id, createdAt: latest.created_at, changesJson: latest.changes_json, field, before: pair[0] };
 }
 
 export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, workspace, input }) => {
@@ -438,6 +461,26 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
                         .where('change_logs.id', '=', mergeTarget.id)
                         .where('change_logs.organization_id', '=', organizationId)
                         .where('change_logs.changes_json', '=', mergeTarget.changesJson),
+                    ),
+                    // その行が、まだこのタスクの最新の履歴の行（読んだ後に別の行が挟まっていない）
+                    eb.not(
+                      eb.exists(
+                        q
+                          .selectFrom('change_logs')
+                          .select('change_logs.id')
+                          .where('change_logs.organization_id', '=', organizationId)
+                          .where('change_logs.entity_type', '=', 'task')
+                          .where('change_logs.entity_id', '=', taskId)
+                          .where((newer) =>
+                            newer.or([
+                              newer('change_logs.created_at', '>', mergeTarget.createdAt),
+                              newer.and([
+                                newer('change_logs.created_at', '=', mergeTarget.createdAt),
+                                newer('change_logs.id', '>', mergeTarget.id),
+                              ]),
+                            ]),
+                          ),
+                      ),
                     ),
                   ]),
               // 書く欄が、読んだときの値のまま
