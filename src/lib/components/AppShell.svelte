@@ -82,11 +82,9 @@
       : []),
     ...(screenName ? [{ label: screenName, current: true }] : []),
   ]);
-  // 画面の名前が決まらない画面（エピックやタスクの詳細など）では、最後の項目を今の画面として示し、リンクにしない
+  // 画面の名前が決まらない画面（エピックやタスクの詳細など）では、最後の項目（ワークスペース）を今の画面として示す。リンクは残し、戻れるようにする
   const shownCrumbs = $derived(
-    screenName
-      ? crumbs
-      : crumbs.map((crumb, i) => (i === crumbs.length - 1 ? { label: crumb.label, current: true } : crumb)),
+    screenName ? crumbs : crumbs.map((crumb, i) => (i === crumbs.length - 1 ? { ...crumb, current: true } : crumb)),
   );
 </script>
 

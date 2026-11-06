@@ -187,7 +187,7 @@ test('計画の画面の先のスプリントとスプリントに入れるダ�
   await expect(drawer).toBeHidden();
 
   // 計画の画面でスプリントを作り、2件とも入れる
-  await page.getByRole('link', { name: '計画' }).click();
+  await page.getByRole('link', { name: '計画', exact: true }).click();
   await page.getByRole('button', { name: 'スプリントを作る' }).click();
   const createDialog = page.getByRole('dialog', { name: 'スプリントを作る' });
   await createDialog.getByLabel('開始日').fill('2027-02-01');

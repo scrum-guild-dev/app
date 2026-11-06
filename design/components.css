@@ -37,7 +37,6 @@ h1, h2, h3 { text-wrap: balance; }
 /* ===== 枠: 角のマス、上の帯、綴じ（メニュー）、帳面 =====
    左上の角のマス（ロゴ）と全幅の上の帯が同じ高さ（--header-height）で並び、帯の下の罫と綴じの右の罫が角で交わって十字になる。 */
 .app {
-  --header-height: 60px;
   --binding-width-expanded: 240px;
   --binding-width-collapsed: 64px;
   display: grid; grid-template-columns: var(--binding-width-expanded) minmax(0, 1fr); min-height: 100vh;
@@ -143,7 +142,9 @@ h1, h2, h3 { text-wrap: balance; }
   :is(.org-menu-list, .ws-menu-list) a, :is(.org-menu-list, .ws-menu-list) button, .account-menu-list a, .account-menu-list button, .account-menu-button { min-height: 44px; }
   .nav-toggle { width: 44px; height: 44px; }
   .brand, .nav-item:not(.is-later) { min-height: 44px; }
-  a.breadcrumb-item { display: block; line-height: 44px; }
+  a.breadcrumb-item { display: block; line-height: 44px; min-width: 44px; }
+  /* 組織とワークスペースのリンクは、押せる幅 44px より縮めない。今の画面の名前が先に縮む */
+  .breadcrumb li:not(:last-child) { flex-shrink: 0; }
 }
 
 @media (min-width: 761px) {
@@ -316,6 +317,12 @@ h1, h2, h3 { text-wrap: balance; }
   padding-right: max(var(--space-8), env(safe-area-inset-right, 0px));
 }
 /* パンくず。組織 › ワークスペース › 画面。名前は1行に収めて省略し、全文は title に残す */
+/* 帯の高さ。角のマスと上の帯で同じ値を使う */
+:root { --header-height: 60px; }
+/* 貼り付く上の帯（761px 以上）の下にフォーカスが隠れないようにする */
+@media (min-width: 761px) {
+  html { scroll-padding-top: var(--header-height); }
+}
 #breadcrumb-slot { display: contents; }
 .breadcrumb { flex: 1 1 0; min-width: 8rem; margin-right: auto; }
 .breadcrumb ol { display: flex; align-items: center; gap: var(--space-1); list-style: none; margin: 0; padding: 0; font-size: var(--text-sm); }
@@ -364,7 +371,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* 本文と脇（記録など）の2列。狭いと1列 */
 .layout-aside { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-8); align-items: start; }
 .layout-main { display: grid; gap: var(--space-8); min-width: 0; }
-.layout-side { display: grid; gap: var(--space-5); position: sticky; top: var(--space-4); }
+.layout-side { display: grid; gap: var(--space-5); position: sticky; top: calc(var(--header-height) + var(--space-4)); }
 /* 画面より高くなりうる脇（エピックの画面の討伐隊は人数に上限が無い）は貼り付けず、本文と一緒にスクロールさせる。
    中でスクロールさせると、面の影とフォーカスの輪が切れ、押せる要素の無い脇は読み上げとキーボードで動かせない */
 .layout-side.is-static { position: static; }
