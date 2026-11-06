@@ -1082,7 +1082,7 @@ label.pick-row:hover { background: var(--color-accent-soft); }
  * （any-pointer: coarse）は、押せる範囲 44px のための余白を残して詰めない。
  * どのテーマでも同じ。上の各部品の規則より後ろに置く（同じ詳細度なので、後ろが勝つ） */
 @media (min-width: 761px) and (pointer: fine) and (not (any-pointer: coarse)) {
-  .binding-inner { padding-block: var(--space-4); gap: var(--space-4); }
+  .binding-body { padding-block: var(--space-4); gap: var(--space-4); }
   .nav-group { padding-top: var(--space-3); }
   .nav-item { padding-block: 4px; }
   .content { gap: var(--space-6); }
