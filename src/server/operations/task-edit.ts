@@ -350,7 +350,10 @@ async function readMergeTarget(
     ),
   );
   if (latest === undefined || latest.action !== 'update' || latest.actor_user_id !== actorUserId) return undefined;
-  if (at.getTime() - Date.parse(latest.created_at) > HISTORY_MERGE_WINDOW_MS) return undefined;
+  // 間の起点は、行を最初に書いた時刻（ID の UUIDv7 の先頭48ビット）。まとめるたびに created_at を進めても間は延びない
+  // （延びると、悪い値を入れて元へ戻した痕跡を、続けて直して消せてしまう）
+  const firstWrittenAt = Number.parseInt(latest.id.replaceAll('-', '').slice(0, 12), 16);
+  if (!Number.isFinite(firstWrittenAt) || at.getTime() - firstWrittenAt > HISTORY_MERGE_WINDOW_MS) return undefined;
   let logged: unknown;
   try {
     logged = JSON.parse(latest.changes_json);

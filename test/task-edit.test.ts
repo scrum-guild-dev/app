@@ -377,6 +377,20 @@ describe('task-update', () => {
       expect(JSON.parse(logs[0]!.changes_json)).toEqual({ body_md: ['元の本文', '一回目'] });
     });
 
+    test('間は最初に書いた時刻から数える。まとめるたびに延びない', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      for (const [minutes, value] of [
+        [0, '一回目'],
+        [4, '二回目'],
+        [8, '三回目'],
+      ] as const) {
+        expect((await update(target, task.id, { body_md: value }, target.member, at(minutes))).status).toBe(200);
+      }
+      const logs = (await logsOf(target, task.id)).map((log) => JSON.parse(log.changes_json));
+      expect(logs).toEqual([{ body_md: ['元の本文', '二回目'] }, { body_md: ['二回目', '三回目'] }]);
+    });
+
     test('間に別の履歴が挟まっていれば、まとめない', async () => {
       const target = await createTarget();
       const task = await seeded(target);
