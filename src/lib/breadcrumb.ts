@@ -2,7 +2,7 @@
 // 組織の画面（/<slug>/...）では null で、パンくずにワークスペースを出さない。見本は design/kit.js の breadcrumbHtml
 export function workspaceIdOf(path: string): string | null {
   const match = /^\/[^/]+\/w\/([^/]+)/.exec(path);
-  return match ? decodeURIComponent(match[1]) : null;
+  return match ? match[1] : null;
 }
 
 // メニューに無い組織の画面（アカウントのメニューから開く画面）の名前。画面の名前は辞書の語で返すため、キーで返す

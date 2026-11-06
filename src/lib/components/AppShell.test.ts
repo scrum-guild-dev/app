@@ -58,3 +58,17 @@ test('ワークスペースの画面のパンくずは組織、ワークスペ�
   expect(nav).toContain('href="/aoba/w/w1"');
   expect(nav).toMatch(/<span[^>]*aria-current="page"[^>]*>スプリント<\/span>/);
 });
+
+test('画面の名前が決まらない画面では、最後の項目を今の画面にしてリンクにしない', () => {
+  const body = shell('/aoba/w/w1/tasks/t1', { id: 'w1', name: 'ふくろう班', role: 'member' });
+  const nav = body.match(/<nav class="breadcrumb"[\s\S]*?<\/nav>/)?.[0] ?? '';
+  expect(nav).toMatch(/<span[^>]*aria-current="page"[^>]*>ふくろう班<\/span>/);
+  expect(nav).not.toContain('href="/aoba/w/w1"');
+});
+
+test('Wiki の下の階層でも Wiki を今の画面にし、メニューに無い画面はアカウントの画面の名前を引く', () => {
+  expect(shell('/aoba/w/w1/wiki/page-1', { id: 'w1', name: 'ふくろう班', role: 'member' })).toMatch(
+    /<span[^>]*aria-current="page"[^>]*>Wiki<\/span>/,
+  );
+  expect(shell('/aoba/me')).toMatch(/<span[^>]*aria-current="page"[^>]*>マイプロフィール<\/span>/);
+});

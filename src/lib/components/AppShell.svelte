@@ -82,6 +82,12 @@
       : []),
     ...(screenName ? [{ label: screenName, current: true }] : []),
   ]);
+  // 画面の名前が決まらない画面（エピックやタスクの詳細など）では、最後の項目を今の画面として示し、リンクにしない
+  const shownCrumbs = $derived(
+    screenName
+      ? crumbs
+      : crumbs.map((crumb, i) => (i === crumbs.length - 1 ? { label: crumb.label, current: true } : crumb)),
+  );
 </script>
 
 <div class="app" data-nav-collapsed={navState.collapsed ? 'true' : undefined}>
@@ -112,7 +118,7 @@
   </aside>
   <div class="sheet">
     <div class="topbar">
-      <Breadcrumb {crumbs} />
+      <Breadcrumb crumbs={shownCrumbs} />
       {#if assistant}{@render assistant()}{/if}
       {#if account}{@render account()}{/if}
     </div>
