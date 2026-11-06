@@ -27,3 +27,34 @@ test('本文の main は初期状態では tabindex を持たない', () => {
   expect(main).toContain('id="content"');
   expect(main).not.toContain('tabindex');
 });
+
+const shell = (current: string, workspace?: { id: string; name: string; role: 'leader' | 'member' }) =>
+  render(AppShell, {
+    props: {
+      current,
+      slug: 'aoba',
+      hasWorkspace: true,
+      isAdmin: false,
+      workspace,
+      children: createRawSnippet(() => ({ render: () => '<p>架空の本文</p>' })),
+    },
+  }).body;
+
+test('組織の画面のパンくずは組織と画面だけで、ワークスペースを出さない', () => {
+  const body = shell('/aoba', { id: 'w1', name: 'ふくろう班', role: 'member' });
+  const nav = body.match(/<nav class="breadcrumb"[\s\S]*?<\/nav>/)?.[0] ?? '';
+  expect(nav).toContain('aria-label="パンくず"');
+  expect(nav).toContain('架空の組織');
+  expect(nav).toContain('今日やること');
+  expect(nav).not.toContain('ふくろう班');
+  expect(nav.match(/aria-current="page"/g)).toHaveLength(1);
+});
+
+test('ワークスペースの画面のパンくずは組織、ワークスペース、画面の順で、今の画面だけが aria-current', () => {
+  const body = shell('/aoba/w/w1/sprint', { id: 'w1', name: 'ふくろう班', role: 'member' });
+  const nav = body.match(/<nav class="breadcrumb"[\s\S]*?<\/nav>/)?.[0] ?? '';
+  expect(nav.indexOf('架空の組織')).toBeLessThan(nav.indexOf('ふくろう班'));
+  expect(nav.indexOf('ふくろう班')).toBeLessThan(nav.indexOf('スプリント'));
+  expect(nav).toContain('href="/aoba/w/w1"');
+  expect(nav).toMatch(/<span[^>]*aria-current="page"[^>]*>スプリント<\/span>/);
+});

@@ -215,7 +215,7 @@
 
     workspaceSwitchLabel: "{workspace} {name}。切り替える", workspaceSwitchListLabel: "所属する{workspace}",
     workspace: "ワークスペース", inbox: "受信箱", backlog: "バックログ", sprint: "スプリント", plan: "計画", epic: "エピック", story: "ストーリー",
-    menuCollapse: "メニューを畳む", menuExpand: "メニューを広げる", organizationMoving: "移っています",
+    menuCollapse: "メニューを畳む", menuExpand: "メニューを広げる", breadcrumb: "パンくず", organizationMoving: "移っています",
     personalOrganizationName: "自分用", createPersonalOrganizationAction: "自分用を作る",
     task: "タスク", archive: "アーカイブ", connection: "接続", sprintGoal: "スプリントゴール", detail: "詳細", ac: "受け入れ基準", due: "期日",
     points: "ポイント", assignee: "担当", category: "区分", capacity: "作業量と基準", over: "超過", done: "完了", column: "列",
@@ -2380,6 +2380,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!page) return;
     document.getElementById("org-menu-slot").innerHTML = page.operator ? "" : orgMenuHtml();
     document.getElementById("account-menu-slot").innerHTML = accountMenuHtml();
+    document.getElementById("breadcrumb-slot").innerHTML = breadcrumbHtml();
     document.getElementById("app-nav").innerHTML = navHtml(page.current, page.operator ? OPERATOR_PAGES : PAGES);
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
     document.getElementById("content").innerHTML = page.render();
@@ -2401,6 +2402,33 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const tip = toggle.querySelector(".nav-tip");
     if (tip) tip.textContent = label;
   }
+  // 上の帯のパンくず「組織 › ワークスペース › 画面」。本番の Breadcrumb.svelte と同じ並びと作り。
+  // 組織とワークスペースは最初の画面へのリンク、今の画面は aria-current="page"（リンクにしない）。ワークスペースは、
+  // ワークスペースの中の画面だけに出す。crumbs は [{ label, href?, current? }]。省くと今の画面から組み立てる
+  function breadcrumbHtml(crumbs = currentCrumbs()) {
+    const items = crumbs.map((c, i) => {
+      const sep = i > 0 ? `<span class="breadcrumb-sep" aria-hidden="true">›</span>` : "";
+      const item = c.current ? `<span class="breadcrumb-item" aria-current="page" title="${esc(c.label)}">${esc(c.label)}</span>`
+        : c.href ? `<a class="breadcrumb-item" href="${c.href}" title="${esc(c.label)}">${esc(c.label)}</a>`
+        : `<span class="breadcrumb-item" title="${esc(c.label)}">${esc(c.label)}</span>`;
+      return `<li>${sep}${item}</li>`;
+    }).join("");
+    return `<nav class="breadcrumb" aria-label="${t("breadcrumb")}"><ol>${items}</ol></nav>`;
+  }
+  function currentCrumbs() {
+    if (!page) return [];
+    if (page.operator) return [{ label: "運用", current: true }];
+    const orgs = D.organizations;
+    const org = orgs.find((k) => k.slug === D.organization) || orgs[0];
+    const crumbs = [{ label: orgName(org), href: firstHref("today.html") }];
+    const index = PAGES.findIndex((p) => typeof p !== "string" && p[0] === page.current);
+    if (index > PAGES.indexOf("workspace")) {
+      crumbs.push({ label: D.workspaces[D.workspace].name, href: `${firstHref("backlog.html")}${first ? "&" : "?"}workspace=${encodeURIComponent(D.workspace)}` });
+    }
+    if (index >= 0) crumbs.push({ label: PAGES[index][2]().replace(/&amp;/g, "&"), current: true });
+    else if (["me", "admin"].includes(page.current)) crumbs.push({ label: t(page.current === "me" ? "pageMe" : "pageOrgAdmin"), current: true });
+    return crumbs;
+  }
   // 画面の見本を組み立てる。render は中身の HTML を返す関数。
   // opts.operator なら運用者の画面の枠にする（組織のメニュー、通知、レベルを出さない）
   function mount(current, render, opts = {}) {
@@ -2417,12 +2445,15 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
           <a class="brand" href="index.html" title="デザインシステムのカタログへ">${brandMark}<span class="visually-hidden">Scrum Guild</span></a>
           <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="${!navCollapsed}" aria-controls="app-nav" aria-label="${t(navCollapsed ? "menuExpand" : "menuCollapse")}">${icon("panel")}<span class="nav-tip" aria-hidden="true">${t(navCollapsed ? "menuExpand" : "menuCollapse")}</span></button>
         </div>
-        <div id="org-menu-slot"></div>
-        <nav class="nav" id="app-nav"></nav>
-        <p class="binding-foot">デザインの見本。データはすべて架空の例です</p>
+        <div class="binding-body">
+          <div id="org-menu-slot"></div>
+          <nav class="nav" id="app-nav"></nav>
+          <p class="binding-foot">デザインの見本。データはすべて架空の例です</p>
+        </div>
       </div></aside>
       <div class="sheet">
         <div class="topbar">
+          <span id="breadcrumb-slot"></span>
           ${page.operator ? "" : `<button class="pill assist-launch" type="button" data-assist-open aria-keyshortcuts="Control+K Meta+K">${icon("spark")}<span data-assist-label></span><kbd class="kbd">${ASSIST_KEY}</kbd></button>`}
           <button class="pill" type="button" data-switch="theme">${icon("moon")}<span data-theme-label></span></button>
           ${page.operator ? "" : `<button class="pill" type="button" data-switch="first">${icon("redo")}<span>見本: ${firstLabel(first)}</span></button>`}
@@ -3025,7 +3056,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
     avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
     card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
-    openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml,
+    openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
     enableAssistOnCatalog: () => { assistOnCatalog = true; },

@@ -256,6 +256,7 @@ export const dictionary = defineDictionary({
   menu: 'メニュー',
   menuCollapse: 'メニューを畳む',
   menuExpand: 'メニューを広げる',
+  breadcrumb: 'パンくず',
   close: '閉じる',
   countUnit: '件',
   unassigned: '担当なし',
