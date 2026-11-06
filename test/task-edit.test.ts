@@ -294,6 +294,99 @@ describe('task-update', () => {
     expect(await logsOf(target, task.id)).toEqual([]);
   });
 
+  describe('書き始める前の値（expected）', () => {
+    test('書く欄の値がサーバーの今の値と違えば、何も書かず 409 の conflict で今の値を返す', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      expect((await update(target, task.id, { body_md: '先に直した本文' }, target.leader)).status).toBe(200);
+      const res = await update(
+        target,
+        task.id,
+        { title: '新しいタイトル', body_md: '自分の本文', expected: { title: '元のタイトル', body_md: '元の本文' } },
+        target.member,
+      );
+      expect(res.status).toBe(409);
+      const body = (await res.json()) as { error: { code: string; details: unknown } };
+      expect(body.error.code).toBe('conflict');
+      expect(body.error.details).toEqual({ reason: 'stale', current: { body_md: '先に直した本文' } });
+      // タイトルも含めて何も書かない
+      expect(await rowOf(target, task.id)).toMatchObject({ title: '元のタイトル', body_md: '先に直した本文' });
+      expect(await logsOf(target, task.id)).toHaveLength(1);
+    });
+
+    test('今の値と一致する欄、書かない欄、送った値が今の値と同じ欄は断らない', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      expect((await update(target, task.id, { due_on: '2026-12-01' }, target.leader)).status).toBe(200);
+      const res = await update(target, task.id, {
+        title: '新しいタイトル',
+        // 期日は書かない欄、ポイントは送った値が今の値と同じ（書かない）なので、前の値が違っても断らない
+        points: 2,
+        expected: { title: '元のタイトル', points: 3, due_on: '2026-10-28' },
+      });
+      expect(res.status).toBe(200);
+      expect(await rowOf(target, task.id)).toMatchObject({ title: '新しいタイトル', due_on: '2026-12-01' });
+    });
+
+    test('添えない保存は、今のまま後の保存が勝つ', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      expect((await update(target, task.id, { title: '先に直した' }, target.leader)).status).toBe(200);
+      expect((await update(target, task.id, { title: '後の保存' })).status).toBe(200);
+      expect((await rowOf(target, task.id))!.title).toBe('後の保存');
+    });
+
+    test('別の組織のタスクは、前の値を添えても 404', async () => {
+      const target = await createTarget();
+      const foreign = await createTarget();
+      const foreignTask = await createTask(foreign.organization, foreign.workspace.id, foreign.admin.userId!);
+      const res = await update(target, foreignTask.id, { title: '書き換える', expected: { title: foreignTask.title } });
+      expect(res.status).toBe(404);
+      expect(await errorCodeOf(res)).toBe('not_found');
+    });
+  });
+
+  describe('続けて直した分の履歴のまとめ', () => {
+    const at = (minutes: number) => frozenEnv(new Date(Date.parse(FROZEN_ISO) + minutes * 60_000).toISOString());
+
+    test('同じ人が数分以内に同じ欄を続けて直すと、行は1つのままで「前」は最初の値、「後」は最後の値になる', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      expect((await update(target, task.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, task.id, { body_md: '二回目' }, target.member, at(2))).status).toBe(200);
+      expect((await update(target, task.id, { body_md: '三回目' }, target.member, at(5))).status).toBe(200);
+      const logs = await logsOf(target, task.id);
+      expect(logs).toHaveLength(1);
+      expect(JSON.parse(logs[0]!.changes_json)).toEqual({ body_md: ['元の本文', '三回目'] });
+      expect(logs[0]!.created_at).toBe(new Date(Date.parse(FROZEN_ISO) + 5 * 60_000).toISOString());
+      expect((await rowOf(target, task.id))!.body_md).toBe('三回目');
+    });
+
+    test.each([
+      ['別の人', { body_md: '別の人が直した' }, 'leader', 1],
+      ['間が空いた', { body_md: '間が空いた' }, 'member', 6],
+      ['別の欄', { title: '別の欄' }, 'member', 1],
+      ['2つの欄', { body_md: '2つ', title: '2つの欄' }, 'member', 1],
+    ] as const)('%s なら、新しい行を足す', async (_name, body, who, minutes) => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      expect((await update(target, task.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, task.id, body, target[who], at(minutes))).status).toBe(200);
+      const logs = await logsOf(target, task.id);
+      expect(logs).toHaveLength(2);
+      expect(JSON.parse(logs[0]!.changes_json)).toEqual({ body_md: ['元の本文', '一回目'] });
+    });
+
+    test('間に別の履歴が挟まっていれば、まとめない', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      expect((await update(target, task.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, task.id, { title: '間の変更' }, target.leader, at(1))).status).toBe(200);
+      expect((await update(target, task.id, { body_md: '二回目' }, target.member, at(2))).status).toBe(200);
+      expect(await logsOf(target, task.id)).toHaveLength(3);
+    });
+  });
+
   describe('完了したタスクのポイント', () => {
     test('直す要求は 409 の conflict で、何も書かない。経験値の元の値と履歴は動かない', async () => {
       const target = await createTarget();
@@ -548,8 +641,9 @@ describe('履歴の二重書き（止めた時計で、同じ時刻に競った�
         expect((await update(target, task.id, { title: `別の値 ${n}` }, target.leader)).status).toBe(200);
       }),
     ).rejects.toMatchObject({ status: 409, code: 'conflict' });
-    const titles = (await logsOf(target, task.id)).map((log) => JSON.parse(log.changes_json).title[1]);
-    expect(titles).toEqual(['別の値 1', '別の値 3', '別の値 5']);
+    // 競った人（リーダー）は同じ人が同じ欄を続けて直したので、履歴は1行にまとまる（「前」は最初の値、「後」は最後の値）。負けた自分の値は履歴に無い
+    const logs = (await logsOf(target, task.id)).map((log) => JSON.parse(log.changes_json));
+    expect(logs).toEqual([{ title: ['元', '別の値 5'] }]);
   });
 
   test.each([

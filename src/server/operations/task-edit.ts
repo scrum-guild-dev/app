@@ -304,6 +304,68 @@ function assertEditable(current: TaskRow, values: UpdatedFields): void {
   if (values.category_id !== undefined && current.story_id !== null) throw categoryConflict('has_parent');
 }
 
+// 続けて直した分を1行にまとめる間。直前の履歴の行がこれより前なら、新しい行を足す
+const HISTORY_MERGE_WINDOW_MS = 5 * 60 * 1000;
+const MERGEABLE_FIELDS = ['title', 'points', 'due_on', 'link_url', 'body_md'] as const;
+
+// 書き始める前の値（expected）が、サーバーの今の値と違う欄。書く欄だけを見る（送った値が今の値と同じなら、書かないので断らない）
+function staleFields(current: TaskRow, values: UpdatedFields, expected: UpdatedFields | undefined) {
+  const stale: Record<string, unknown> = {};
+  if (expected === undefined) return stale;
+  for (const field of MERGEABLE_FIELDS) {
+    if (values[field] === undefined || expected[field] === undefined) continue;
+    if (expected[field] !== current[field]) stale[field] = current[field];
+  }
+  return stale;
+}
+
+type MergeTarget = { id: string; changesJson: string; field: (typeof MERGEABLE_FIELDS)[number]; before: unknown };
+
+// 履歴を足す代わりに書き換える行。同じ人が、同じタスクで、同じ1つの欄だけを直した直前の行が、間の中にあるときだけ。
+// 直前の行は、そのタスクの最新の履歴の行（間に別の履歴が挟まっていればまとめない）。添付と、2つ以上の欄の変更はまとめない
+async function readMergeTarget(
+  db: OrganizationDb,
+  workspaceId: string,
+  taskId: string,
+  actorUserId: string | null,
+  changes: Record<string, [unknown, unknown]>,
+  hasAttachments: boolean,
+  at: Date,
+): Promise<MergeTarget | undefined> {
+  const keys = Object.keys(changes);
+  const field = MERGEABLE_FIELDS.find((name) => name === keys[0]);
+  if (actorUserId === null || hasAttachments || keys.length !== 1 || field === undefined) return undefined;
+  const latest = await db.first(
+    db.statement((q) =>
+      q
+        .selectFrom('change_logs')
+        .select(['id', 'actor_user_id', 'action', 'changes_json', 'created_at'])
+        .where('organization_id', '=', db.organizationId)
+        .where('workspace_id', '=', workspaceId)
+        .where('entity_type', '=', 'task')
+        .where('entity_id', '=', taskId)
+        .orderBy('created_at', 'desc')
+        .orderBy('id', 'desc')
+        .limit(1),
+    ),
+  );
+  if (latest === undefined || latest.action !== 'update' || latest.actor_user_id !== actorUserId) return undefined;
+  if (at.getTime() - Date.parse(latest.created_at) > HISTORY_MERGE_WINDOW_MS) return undefined;
+  let logged: unknown;
+  try {
+    logged = JSON.parse(latest.changes_json);
+  } catch {
+    return undefined;
+  }
+  if (typeof logged !== 'object' || logged === null || Array.isArray(logged)) return undefined;
+  const entries = Object.entries(logged);
+  const pair = entries[0]?.[1];
+  if (entries.length !== 1 || entries[0]?.[0] !== field || !Array.isArray(pair) || pair.length !== 2) return undefined;
+  // 今の値と、履歴の「後」が合っているときだけ（合わなければ、間に別の経路が書いている）
+  if (JSON.stringify(pair[1]) !== JSON.stringify(changes[field]?.[0])) return undefined;
+  return { id: latest.id, changesJson: latest.changes_json, field, before: pair[0] };
+}
+
 export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, workspace, input }) => {
   const actorUserId = actorUserIdOf(actor);
   const organizationId = db.organizationId;
@@ -327,6 +389,12 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
       return { task: await detailOf(db, current, actor, workspace) };
     }
     assertEditable(current, draft.values);
+    // 書き始める前の値が今と違う欄があれば、何も書かずに今の値を返す
+    const stale = staleFields(current, draft.values, input.expected);
+    if (Object.keys(stale).length > 0) {
+      await throwIfClosed(db, workspaceId);
+      throw new ApiError(409, 'conflict', { reason: 'stale', current: stale });
+    }
     // 振る区分とリポジトリは、同じワークスペースの削除していないものだけ（無ければ 404）。書く文にも同じ条件を入れる
     const next = await readNextRefs(db, workspaceId, current, input);
     const { values, changes } = diffOf(current, input, next);
@@ -335,6 +403,15 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
 
     const at = now();
     const updatedAt = at.toISOString();
+    const mergeTarget = await readMergeTarget(
+      db,
+      workspaceId,
+      taskId,
+      actorUserId,
+      changes,
+      attachmentSave.ids.length > 0,
+      at,
+    );
     const results = await db.batch([
       db.statement((q) =>
         q
@@ -347,6 +424,19 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
               eb('deleted_at', 'is', null),
               attachmentsReady(eb, attachmentSave),
               eb.exists(openWorkspace(q, organizationId, workspaceId)),
+              // まとめる行が、読んだときのまま（変わっていたら何も書かず、読み直してやり直す）
+              ...(mergeTarget === undefined
+                ? []
+                : [
+                    eb.exists(
+                      q
+                        .selectFrom('change_logs')
+                        .select('change_logs.id')
+                        .where('change_logs.id', '=', mergeTarget.id)
+                        .where('change_logs.organization_id', '=', organizationId)
+                        .where('change_logs.changes_json', '=', mergeTarget.changesJson),
+                    ),
+                  ]),
               // 書く欄が、読んだときの値のまま
               ...(values.title === undefined ? [] : [eb('title', 'is', current.title)]),
               ...(values.points === undefined
@@ -371,26 +461,42 @@ export const taskUpdateOperation = implement(taskUpdate, async ({ db, actor, wor
           ),
       ),
       // 直前の更新が行を変えたときだけ履歴を書く（負けた要求は、止めた時計で同じ値を書いていても、履歴を書かない）
-      db.statement((q) =>
-        q
-          .insertInto('change_logs')
-          .columns(changeLogColumns)
-          .expression(
+      // まとめる行があれば（同じ人が数分以内に同じ欄だけを続けて直した）、行を足さずにその行の「後」の値と時刻を書き換える（「前」は最初のまま）。
+      // まとめる行が読んだときのままであることは、上の主文の条件に入れてあるので、通った後のこの文は必ず当たる
+      mergeTarget === undefined
+        ? db.statement((q) =>
             q
-              .selectNoFrom((eb) => [
-                eb.val(uuidv7(at)).as('id'),
-                eb.val(organizationId).as('organization_id'),
-                eb.val(workspaceId).as('workspace_id'),
-                eb.val(actorUserId).as('actor_user_id'),
-                eb.val('task').as('entity_type'),
-                eb.val(taskId).as('entity_id'),
-                eb.val('update').as('action'),
-                eb.val(JSON.stringify({ ...changes, ...attachmentChanges(attachmentSave.ids) })).as('changes_json'),
-                eb.val(updatedAt).as('created_at'),
-              ])
+              .insertInto('change_logs')
+              .columns(changeLogColumns)
+              .expression(
+                q
+                  .selectNoFrom((eb) => [
+                    eb.val(uuidv7(at)).as('id'),
+                    eb.val(organizationId).as('organization_id'),
+                    eb.val(workspaceId).as('workspace_id'),
+                    eb.val(actorUserId).as('actor_user_id'),
+                    eb.val('task').as('entity_type'),
+                    eb.val(taskId).as('entity_id'),
+                    eb.val('update').as('action'),
+                    eb.val(JSON.stringify({ ...changes, ...attachmentChanges(attachmentSave.ids) })).as('changes_json'),
+                    eb.val(updatedAt).as('created_at'),
+                  ])
+                  .where(previousStatementChanged),
+              ),
+          )
+        : db.statement((q) =>
+            q
+              .updateTable('change_logs')
+              .set({
+                changes_json: JSON.stringify({
+                  [mergeTarget.field]: [mergeTarget.before, changes[mergeTarget.field]?.[1]],
+                }),
+                created_at: updatedAt,
+              })
+              .where('id', '=', mergeTarget.id)
+              .where('organization_id', '=', organizationId)
               .where(previousStatementChanged),
           ),
-      ),
       ...(attachmentSave.ids.length === 0
         ? []
         : [attachFilesStatement(db, attachmentSave, { task_id: taskId }, updatedAt)]),
