@@ -53,24 +53,26 @@
   --family-tech-gothic: "Chakra Petch", "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;  /* 英数字は Chakra Petch、かなと漢字はゴシック */
 }
 
-/* ===== シンプル（ライト）。data-theme がないときもこれ ===== */
+/* ===== シンプル（ライト）。data-theme がないときもこれ =====
+ * 業務の道具。無彩色に近い地に 1px の線で区切り、角は小さく、影はほとんど付けない。色は操作の青1色に絞る。
+ */
 :root {
   /* ---- 色: 地と線 ---- */
-  --color-bg: #f5f6f8;
+  --color-bg: #f7f7f8;
   --color-surface: #ffffff;
-  --color-sunken: #eceef2;      /* メニューなど一段下がった面 */
-  --color-line: #d3d8df;        /* 枠の線 */
-  --color-rule: #e6e9ee;        /* 行を分ける罫 */
+  --color-sunken: #f2f2f3;      /* メニューなど一段下がった面 */
+  --color-line: #dcdce0;        /* 枠の線 */
+  --color-rule: #ebebee;        /* 行を分ける罫 */
 
   /* ---- 色: 文字 ---- */
-  --color-fg: #1f2328;
-  --color-muted: #57606a;
-  --color-faint: #8b949e;
+  --color-fg: #1e1f22;
+  --color-muted: #5c5f66;
+  --color-faint: #8d9097;
 
   /* ---- 色: 役割 ---- */
-  --color-accent: #1f5bd8;      /* 操作と選択 */
+  --color-accent: #0b57d0;      /* 操作と選択 */
   --color-on-accent: #ffffff;
-  --color-accent-soft: #e6edfc;
+  --color-accent-soft: #e8effc;
   --color-stamp: #cf222e;       /* 依頼主の印と通知の数 */
   --color-done: var(--color-ok);  /* 完了の印とクリア */
   --color-xp: #8a5a00;          /* 経験値とレベルだけに使う */
@@ -85,7 +87,7 @@
   --color-ok-soft: #e2f2e6;
 
   /* ---- 色: ゲージとクリア報酬の段階 ---- */
-  --color-gauge: #e1e5ea;
+  --color-gauge: #e4e4e8;
   --color-gauge-tick: var(--color-bg);
   --color-tier-small: #843312;  /* 銅。段階の印は地を持たないので、地になりうる色（bg、surface、sunken、rule、accent-soft）すべてに 4.5:1 を取る。赤緑の色覚でも金と分かれるよう、金より暗くする */
   --color-tier-medium: #5b646d; /* 銀。操作の色の青と分けるため青みを抑える */
@@ -97,32 +99,37 @@
   --font-mono: var(--family-mono);        /* キー、日付、ポイント */
   --font-stat: var(--family-gothic);      /* レベル、経験値、積載量の数字 */
   --weight-display: 700;
+  --text-page-title: 1.375rem;            /* 22 画面の見出し。シンプルは詰めた画面に合わせて小さくする */
 
   /* ---- 形 ---- */
-  --radius-1: 6px;
-  --radius-2: 8px;
+  --radius-1: 4px;
+  --radius-2: 4px;
   --rule-double: 1px solid var(--color-line);   /* 台帳の左や見出しの下の区切り */
-  --shadow-sheet: 0 1px 2px rgb(20 30 45 / 0.08);  /* 貼り紙 */
+  --edge-top: 2px;                              /* 貼り紙、計画のレーン、ダイアログ、枠の外の紙の上の色の線 */
+  --chip-edge: var(--color-rule);               /* 印（チップ）の枠。状態の印（期日切れなど）は --chip-state-edge */
+  --chip-state-edge: transparent;               /* 状態の印は地の色で示し、枠を引かない */
+  --pts-edge: var(--color-line);                /* ポイントの枠 */
+  --shadow-sheet: 0 1px 1px rgb(0 0 0 / 0.04);  /* 貼り紙 */
   --shadow-panel: none;                            /* 面の外側の光や影 */
   --surface-panel: var(--color-surface);           /* 面の地 */
-  --shadow-float: 0 12px 32px -12px rgb(20 30 45 / 0.3);
+  --shadow-float: 0 8px 24px -8px rgb(0 0 0 / 0.2);
   color-scheme: light;
 }
 
 /* ===== シンプル（ダーク）。自動で OS がダークのときもこれ ===== */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]), :root[data-theme="simple"] {
-    --color-bg: #15181c;
-    --color-surface: #1c2026;
-    --color-sunken: #111317;
-    --color-line: #353c45;
-    --color-rule: #262b32;
-    --color-fg: #e6e9ed;
-    --color-muted: #9da5ae;
-    --color-faint: #6e7781;
-    --color-accent: #7ea6ff;
+    --color-bg: #121214;
+    --color-surface: #1a1a1d;
+    --color-sunken: #0e0e10;
+    --color-line: #313136;
+    --color-rule: #242428;
+    --color-fg: #ececef;
+    --color-muted: #a2a2ab;
+    --color-faint: #74747d;
+    --color-accent: #7aa7ff;
     --color-on-accent: #0b1220;
-    --color-accent-soft: #1f2b45;
+    --color-accent-soft: #18233a;
     --color-stamp: #ff7b72;
     --color-xp: #e3b341;
     --color-xp-soft: #3a2e12;
@@ -132,7 +139,7 @@
     --color-warn-soft: #3a2a17;
     --color-ok: #6fcf8a;
     --color-ok-soft: #1b3324;
-    --color-gauge: #2b3139;
+    --color-gauge: #2a2a2f;
     --color-tier-small: #e0916a;
     --color-tier-medium: #aab3bd;
     --color-tier-large: #f2dc6a;
@@ -142,17 +149,17 @@
   }
 }
 :root[data-theme="simple_dark"] {
-  --color-bg: #15181c;
-  --color-surface: #1c2026;
-  --color-sunken: #111317;
-  --color-line: #353c45;
-  --color-rule: #262b32;
-  --color-fg: #e6e9ed;
-  --color-muted: #9da5ae;
-  --color-faint: #6e7781;
-  --color-accent: #7ea6ff;
+  --color-bg: #121214;
+  --color-surface: #1a1a1d;
+  --color-sunken: #0e0e10;
+  --color-line: #313136;
+  --color-rule: #242428;
+  --color-fg: #ececef;
+  --color-muted: #a2a2ab;
+  --color-faint: #74747d;
+  --color-accent: #7aa7ff;
   --color-on-accent: #0b1220;
-  --color-accent-soft: #1f2b45;
+  --color-accent-soft: #18233a;
   --color-stamp: #ff7b72;
   --color-xp: #e3b341;
   --color-xp-soft: #3a2e12;
@@ -162,7 +169,7 @@
   --color-warn-soft: #3a2a17;
   --color-ok: #6fcf8a;
   --color-ok-soft: #1b3324;
-  --color-gauge: #2b3139;
+  --color-gauge: #2a2a2f;
   --color-tier-small: #e0916a;
   --color-tier-medium: #aab3bd;
   --color-tier-large: #f2dc6a;
@@ -202,10 +209,15 @@
   --font-display: var(--family-mincho);
   --font-stat: var(--family-tech);
   --weight-display: 900;
+  --text-page-title: var(--text-2xl);
 
   --radius-1: 2px;              /* 帳簿の角。ほぼ角張らせる */
   --radius-2: 4px;
   --rule-double: 3px double var(--color-line);
+  --edge-top: 5px;
+  --chip-edge: var(--color-line);
+  --chip-state-edge: currentColor;
+  --pts-edge: var(--color-accent);
   --shadow-sheet: 0 1px 0 var(--color-line), 3px 4px 0 -1px var(--color-rule);  /* 貼り出した紙 */
   --shadow-float: 0 10px 30px -10px rgb(20 30 45 / 0.35);
   color-scheme: light;
@@ -241,10 +253,15 @@
   --font-display: var(--family-tech-gothic);
   --font-stat: var(--family-tech);
   --weight-display: 700;
+  --text-page-title: var(--text-2xl);
 
   --radius-1: 2px;
   --radius-2: 3px;
   --rule-double: 1px solid var(--color-line);
+  --edge-top: 5px;              /* 貼り紙、ダイアログ、枠の外の紙は、末尾のテーマの飾りが 1px にする */
+  --chip-edge: var(--color-line);
+  --chip-state-edge: currentColor;
+  --pts-edge: var(--color-accent);
   --shadow-sheet: 0 0 0 1px rgb(76 200 255 / 0.25), 0 0 18px -6px rgb(76 200 255 / 0.55);
   --shadow-panel: 0 0 0 1px rgb(76 200 255 / 0.18), 0 0 22px -10px rgb(76 200 255 / 0.6);
   --surface-panel: linear-gradient(180deg, rgb(76 200 255 / 0.07), transparent 60%), var(--color-surface);
