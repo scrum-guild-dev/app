@@ -912,3 +912,21 @@ test.describe('指で押す画面の 761px 以上', () => {
     expect(bottoms.head).toBe(bottoms.bar);
   });
 });
+
+test('761px の幅で表示名が長くても、上の帯が横にはみ出さず罫の高さが保たれる', async ({ page }) => {
+  await page.setViewportSize({ width: 761, height: 800 });
+  await page.goto(today);
+  await expect(page.locator('.topbar')).toBeVisible();
+  await page.locator('.account-menu-button .me').evaluate((element) => {
+    element.insertBefore(
+      document.createTextNode('Komorebi0123456789012345678901234567890123456789'),
+      element.firstChild,
+    );
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const bottoms = await page.evaluate(() => ({
+    head: document.querySelector('.binding-head')!.getBoundingClientRect().bottom,
+    bar: document.querySelector('.topbar')!.getBoundingClientRect().bottom,
+  }));
+  expect(bottoms.head).toBe(bottoms.bar);
+});

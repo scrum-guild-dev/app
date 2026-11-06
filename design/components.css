@@ -327,7 +327,11 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* 761px 以上では帯を1段に固定し、十字の罫がずれないようにする。幅が足りないときはパンくずが縮む */
 @media (min-width: 761px) {
   .topbar { flex-wrap: nowrap; }
-  .topbar > :not(.breadcrumb, #breadcrumb-slot) { flex: none; }
+  .topbar > :not(.breadcrumb, #breadcrumb-slot, .account-menu) { flex: none; }
+  /* 長い表示名は、折り返さず右を切って受ける（帯の高さと十字の罫を保つ） */
+  .topbar > .account-menu { flex: 0 1 auto; min-width: 0; }
+  .account-menu-button { max-width: 100%; }
+  .account-menu-button .me { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
 }
 .me { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); padding-left: var(--space-2); min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .content {
