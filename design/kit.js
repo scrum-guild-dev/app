@@ -2409,7 +2409,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const items = crumbs.map((c, i) => {
       const sep = i > 0 ? `<span class="breadcrumb-sep" aria-hidden="true">›</span>` : "";
       const item = c.current ? `<span class="breadcrumb-item" aria-current="page" title="${esc(c.label)}">${esc(c.label)}</span>`
-        : c.href ? `<a class="breadcrumb-item" href="${c.href}" title="${esc(c.label)}">${esc(c.label)}</a>`
+        : c.href ? `<a class="breadcrumb-item" href="${esc(c.href)}" title="${esc(c.label)}">${esc(c.label)}</a>`
         : `<span class="breadcrumb-item" title="${esc(c.label)}">${esc(c.label)}</span>`;
       return `<li>${sep}${item}</li>`;
     }).join("");

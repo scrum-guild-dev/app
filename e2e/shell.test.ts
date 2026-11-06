@@ -851,19 +851,18 @@ test('広い幅では角のマスと上の帯の下の罫が同じ高さで通�
     page.evaluate(() => ({
       head: document.querySelector('.binding-head')!.getBoundingClientRect().bottom,
       bar: document.querySelector('.topbar')!.getBoundingClientRect().bottom,
-      binding: document.querySelector('.binding')!.getBoundingClientRect().right,
-      barLeft: document.querySelector('.topbar')!.getBoundingClientRect().left,
     }));
   const wide = await bottoms();
   expect(wide.head).toBe(wide.bar);
-  // 上の帯は左のメニューの右の罫から始まるので、2本の罫は角で交わる
-  expect(wide.barLeft).toBe(wide.binding);
+  // 2本の横の罫が実際に引かれている（片方でも消えると十字が消える）
+  await expect(page.locator('.binding-head')).not.toHaveCSS('border-bottom-width', '0px');
+  await expect(page.locator('.topbar')).not.toHaveCSS('border-bottom-width', '0px');
+  await expect(page.locator('.binding')).not.toHaveCSS('border-right-width', '0px');
 
   await page.getByRole('button', { name: 'メニューを畳む' }).click();
   await expect(page.locator('.app')).toHaveAttribute('data-nav-collapsed', 'true');
   const collapsed = await bottoms();
   expect(collapsed.head).toBe(collapsed.bar);
-  expect(collapsed.barLeft).toBe(collapsed.binding);
   // 畳んでも、開閉のボタンは角のマスの下に押せる形で残る
   const toggle = await page.getByRole('button', { name: 'メニューを広げる' }).boundingBox();
   expect(toggle!.y).toBeGreaterThanOrEqual(collapsed.head);
@@ -898,4 +897,16 @@ test('760px 以下でもパンくずが横にはみ出さず、リンクは押�
   for (const link of await crumbs.getByRole('link').all()) {
     expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   }
+});
+
+test.describe('指で押す画面の 761px 以上', () => {
+  test.use({ hasTouch: true, viewport: { width: 1024, height: 800 } });
+  test('押せる大きさの要素が入っても、角のマスと上の帯の罫が同じ高さに通る', async ({ page }) => {
+    await page.goto(today);
+    const bottoms = await page.evaluate(() => ({
+      head: document.querySelector('.binding-head')!.getBoundingClientRect().bottom,
+      bar: document.querySelector('.topbar')!.getBoundingClientRect().bottom,
+    }));
+    expect(bottoms.head).toBe(bottoms.bar);
+  });
 });

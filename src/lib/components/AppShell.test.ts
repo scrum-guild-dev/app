@@ -72,3 +72,9 @@ test('Wiki の下の階層でも Wiki を今の画面にし、メニューに無
   );
   expect(shell('/aoba/me')).toMatch(/<span[^>]*aria-current="page"[^>]*>マイプロフィール<\/span>/);
 });
+
+test('URL のワークスペースとメニューの対象が食い違うときは、対象の名前をパンくずに出さない', () => {
+  const body = shell('/aoba/w/w2/sprint', { id: 'w1', name: 'ふくろう班', role: 'member' });
+  const nav = body.match(/<nav class="breadcrumb"[\s\S]*?<\/nav>/)?.[0] ?? '';
+  expect(nav).not.toContain('ふくろう班');
+});

@@ -37,7 +37,7 @@ h1, h2, h3 { text-wrap: balance; }
 /* ===== 枠: 角のマス、上の帯、綴じ（メニュー）、帳面 =====
    左上の角のマス（ロゴ）と全幅の上の帯が同じ高さ（--header-height）で並び、帯の下の罫と綴じの右の罫が角で交わって十字になる。 */
 .app {
-  --header-height: 56px;
+  --header-height: 60px;
   --binding-width-expanded: 240px;
   --binding-width-collapsed: 64px;
   display: grid; grid-template-columns: var(--binding-width-expanded) minmax(0, 1fr); min-height: 100vh;
@@ -143,7 +143,7 @@ h1, h2, h3 { text-wrap: balance; }
   :is(.org-menu-list, .ws-menu-list) a, :is(.org-menu-list, .ws-menu-list) button, .account-menu-list a, .account-menu-list button, .account-menu-button { min-height: 44px; }
   .nav-toggle { width: 44px; height: 44px; }
   .brand, .nav-item:not(.is-later) { min-height: 44px; }
-  a.breadcrumb-item { display: inline-flex; align-items: center; min-height: 44px; }
+  a.breadcrumb-item { display: block; line-height: 44px; }
 }
 
 @media (min-width: 761px) {
@@ -309,7 +309,8 @@ h1, h2, h3 { text-wrap: balance; }
 .topbar {
   display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap;
   box-sizing: border-box; min-height: var(--header-height); border-bottom: var(--rule-double);
-  padding-block: 6px;
+  padding-block: 5px;
+  position: sticky; top: 0; z-index: 4; background: var(--color-bg);
   padding-left: max(var(--space-8), env(safe-area-inset-left, 0px));
   padding-right: max(var(--space-8), env(safe-area-inset-right, 0px));
 }
@@ -322,6 +323,11 @@ h1, h2, h3 { text-wrap: balance; }
 .breadcrumb-item { min-width: 0; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); text-decoration: none; }
 a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .breadcrumb-item[aria-current="page"] { max-width: 100%; color: var(--color-fg); font-weight: 700; }
+/* 761px 以上では帯を1段に固定し、十字の罫がずれないようにする。幅が足りないときはパンくずが縮む */
+@media (min-width: 761px) {
+  .topbar { flex-wrap: nowrap; }
+  .topbar > :not(.breadcrumb, #breadcrumb-slot) { flex: none; }
+}
 .me { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); padding-left: var(--space-2); min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .content {
   padding-block: var(--space-2) var(--space-10);
@@ -779,7 +785,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
     padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
   }
-  .topbar { justify-content: flex-start; position: relative; }
+  .topbar { justify-content: flex-start; position: relative; z-index: auto; }
   .breadcrumb { min-width: 6rem; }
   /* アカウントのメニューの一覧は、ボタンではなく帯を基準に、左右の余白の内側へ広げる（ボタンが左に寄っても画面の外へ出ない） */
   .account-menu { position: static; }
