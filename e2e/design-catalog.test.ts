@@ -55,33 +55,42 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
         await pickTheme(theme);
         for (const [index, nav] of (await section.locator('.nav').all()).entries()) {
           await nav.scrollIntoViewIfNeeded();
-          await expect(nav).toHaveCSS('display', width <= 760 ? 'flex' : 'grid');
-          await expect(nav.locator('svg use')).toHaveCount(3);
-          await expect(nav.locator('[aria-current="page"]')).toHaveClass(/is-wrapping/);
-          const label = nav.locator('.is-wrapping .nav-item-label');
-          await expect(label).toHaveCSS('overflow-wrap', 'anywhere');
-          const size = await label.evaluate((el) => ({
-            width: el.getBoundingClientRect().width,
-            scroll: el.scrollWidth,
-            height: el.getBoundingClientRect().height,
-            lineHeight: parseFloat(getComputedStyle(el).lineHeight),
-            clientHeight: el.clientHeight,
-            scrollHeight: el.scrollHeight,
-            left: el.getBoundingClientRect().left,
-            right: el.getBoundingClientRect().right,
-            itemLeft: el.parentElement!.getBoundingClientRect().left,
-            itemRight: el.parentElement!.getBoundingClientRect().right,
-          }));
-          expect(size.scroll).toBeLessThanOrEqual(size.width + 1);
-          expect(size.left).toBeGreaterThanOrEqual(size.itemLeft);
-          expect(size.right).toBeLessThanOrEqual(size.itemRight + 1);
-          if (width <= 760) expect(size.width).toBeLessThanOrEqual(192.1);
-          if (width > 760 && index > 0) expect(size.height).toBeGreaterThanOrEqual(size.lineHeight * 2 - 1);
-          expect(size.scrollHeight).toBeLessThanOrEqual(size.clientHeight + 1);
-          if (width <= 390) {
-            const scroll = await nav.evaluate((el) => ({ width: el.clientWidth, content: el.scrollWidth }));
-            expect(scroll.content).toBeGreaterThan(scroll.width);
-          }
+          // テーマを当てた後のスタイルと寸法は同期で決まるので、メニュー1つ分を1回の evaluate でまとめて読む
+          // （項目ごとに待ちつきの確かめを並べると、大きなカタログの上で1回ずつ要素を引き直し、テーマごとに数秒かかっていた）
+          const read = await nav.evaluate((el) => {
+            const label = el.querySelector<HTMLElement>('.is-wrapping .nav-item-label')!;
+            const rect = label.getBoundingClientRect();
+            const item = label.parentElement!.getBoundingClientRect();
+            return {
+              display: getComputedStyle(el).display,
+              icons: el.querySelectorAll('svg use').length,
+              currentIsWrapping: el.querySelector('[aria-current="page"]')?.classList.contains('is-wrapping') ?? false,
+              overflowWrap: getComputedStyle(label).overflowWrap,
+              width: rect.width,
+              scroll: label.scrollWidth,
+              height: rect.height,
+              lineHeight: parseFloat(getComputedStyle(label).lineHeight),
+              clientHeight: label.clientHeight,
+              scrollHeight: label.scrollHeight,
+              left: rect.left,
+              right: rect.right,
+              itemLeft: item.left,
+              itemRight: item.right,
+              navWidth: el.clientWidth,
+              navContent: el.scrollWidth,
+            };
+          });
+          expect(read.display).toBe(width <= 760 ? 'flex' : 'grid');
+          expect(read.icons).toBe(3);
+          expect(read.currentIsWrapping).toBe(true);
+          expect(read.overflowWrap).toBe('anywhere');
+          expect(read.scroll).toBeLessThanOrEqual(read.width + 1);
+          expect(read.left).toBeGreaterThanOrEqual(read.itemLeft);
+          expect(read.right).toBeLessThanOrEqual(read.itemRight + 1);
+          if (width <= 760) expect(read.width).toBeLessThanOrEqual(192.1);
+          if (width > 760 && index > 0) expect(read.height).toBeGreaterThanOrEqual(read.lineHeight * 2 - 1);
+          expect(read.scrollHeight).toBeLessThanOrEqual(read.clientHeight + 1);
+          if (width <= 390) expect(read.navContent).toBeGreaterThan(read.navWidth);
           // 帯を最後まで送ると、隣の短い項目にも届く。次のテーマのために先頭へ戻す
           await nav.evaluate((el) => {
             el.scrollLeft = el.scrollWidth;
