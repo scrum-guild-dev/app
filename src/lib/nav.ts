@@ -85,6 +85,12 @@ export function visibleNav(
     .filter((section) => section.items.length > 0 || (hasWorkspaceMenu && section.slot !== undefined));
 }
 
+// 今の画面を指す項目か。NavMenu の aria-current とパンくずが同じ判定を使う。
+// Wiki は下の階層（ページ）でも、その項目を今の画面とする
+export function isNavItemCurrent(label: DictionaryKey, href: string, current: string): boolean {
+  return current === href || ((label === 'wiki' || label === 'orgWiki') && current.startsWith(href + '/'));
+}
+
 export const navSections: NavSection[] = [
   {
     items: [

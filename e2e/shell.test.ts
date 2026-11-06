@@ -839,3 +839,99 @@ test('4000px の幅でも、今日やることの画面に、アクセシビリ�
   await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
   await expectNoA11yViolationsInThemes(page, 'today', exclusionsFor('today', isAxeCheck));
 });
+
+// 枠の十字とパンくず（docs/design.md の「画面の枠の十字」）
+test('広い幅では角のマスと上の帯の下の罫が同じ高さで通り、畳んでも崩れない', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(today);
+  await page.evaluate(() => localStorage.removeItem('sg-nav-collapsed'));
+  await page.reload();
+  await expect(page.locator('.topbar')).toBeVisible();
+
+  const bottoms = () =>
+    page.evaluate(() => ({
+      head: document.querySelector('.binding-head')!.getBoundingClientRect().bottom,
+      bar: document.querySelector('.topbar')!.getBoundingClientRect().bottom,
+      binding: document.querySelector('.binding')!.getBoundingClientRect().right,
+      barLeft: document.querySelector('.topbar')!.getBoundingClientRect().left,
+    }));
+  const wide = await bottoms();
+  expect(wide.head).toBe(wide.bar);
+  // 上の帯は左のメニューの右の罫から始まる（縦の罫と交わる）
+  expect(Math.abs(wide.barLeft - wide.binding)).toBeLessThanOrEqual(1);
+  // 2本の横の罫が実際に引かれている（片方でも消えると十字が消える）
+  await expect(page.locator('.binding-head')).not.toHaveCSS('border-bottom-width', '0px');
+  await expect(page.locator('.topbar')).not.toHaveCSS('border-bottom-width', '0px');
+  await expect(page.locator('.binding')).not.toHaveCSS('border-right-width', '0px');
+
+  await page.getByRole('button', { name: 'メニューを畳む' }).click();
+  await expect(page.locator('.app')).toHaveAttribute('data-nav-collapsed', 'true');
+  const collapsed = await bottoms();
+  expect(collapsed.head).toBe(collapsed.bar);
+  expect(Math.abs(collapsed.barLeft - collapsed.binding)).toBeLessThanOrEqual(1);
+  // 畳んでも、開閉のボタンは角のマスの下に押せる形で残る
+  const toggle = await page.getByRole('button', { name: 'メニューを広げる' }).boundingBox();
+  expect(toggle!.y).toBeGreaterThanOrEqual(collapsed.head);
+});
+
+test('組織の画面のパンくずは組織と画面で、ワークスペースを出さない', async ({ page }) => {
+  await page.goto(today);
+  const crumbs = page.getByRole('navigation', { name: 'パンくず' });
+  await expect(crumbs.getByRole('link', { name: 'あおば開発' })).toHaveAttribute('href', '/aoba');
+  await expect(crumbs.locator('[aria-current="page"]')).toHaveText('今日やること');
+  await expect(crumbs.getByRole('link')).toHaveCount(1);
+});
+
+test('ワークスペースの画面のパンくずから、組織とワークスペースの最初の画面へ移れる', async ({ page }) => {
+  await page.goto(`/aoba/w/${AOBA_WORKSPACE_ID}/sprint`);
+  const crumbs = page.getByRole('navigation', { name: 'パンくず' });
+  await expect(crumbs.locator('[aria-current="page"]')).toHaveText('スプリント');
+  await expect(crumbs.getByRole('link')).toHaveCount(2);
+  await expect(crumbs.getByRole('link').nth(1)).toHaveAttribute('href', `/aoba/w/${AOBA_WORKSPACE_ID}`);
+  await crumbs.getByRole('link').nth(1).click();
+  await expect(page).toHaveURL(`/aoba/w/${AOBA_WORKSPACE_ID}`);
+  await crumbs.getByRole('link', { name: 'あおば開発' }).click();
+  await expect(page).toHaveURL('/aoba');
+});
+
+test('760px 以下でもパンくずが横にはみ出さず、リンクは押せる大きさ', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto(`/aoba/w/${AOBA_WORKSPACE_ID}/sprint`);
+  const crumbs = page.getByRole('navigation', { name: 'パンくず' });
+  await expect(crumbs).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  for (const link of await crumbs.getByRole('link').all()) {
+    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test.describe('指で押す画面の 761px 以上', () => {
+  test.use({ hasTouch: true, viewport: { width: 1024, height: 800 } });
+  test('押せる大きさの要素が入っても、角のマスと上の帯の罫が同じ高さに通る', async ({ page }) => {
+    await page.goto(today);
+    await expect(page.locator('.topbar')).toBeVisible();
+    const bottoms = await page.evaluate(() => ({
+      head: document.querySelector('.binding-head')!.getBoundingClientRect().bottom,
+      bar: document.querySelector('.topbar')!.getBoundingClientRect().bottom,
+    }));
+    expect(bottoms.head).toBe(bottoms.bar);
+  });
+});
+
+test('761px の幅で表示名が長くても、上の帯が横にはみ出さず罫の高さが保たれる', async ({ page }) => {
+  await page.setViewportSize({ width: 761, height: 800 });
+  await page.goto(today);
+  await expect(page.locator('.topbar')).toBeVisible();
+  await page.locator('.account-menu-button .me').evaluate((element) => {
+    element.insertBefore(
+      document.createTextNode('Komorebi0123456789012345678901234567890123456789'),
+      element.firstChild,
+    );
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const bottoms = await page.evaluate(() => ({
+    head: document.querySelector('.binding-head')!.getBoundingClientRect().bottom,
+    bar: document.querySelector('.topbar')!.getBoundingClientRect().bottom,
+  }));
+  expect(bottoms.head).toBe(bottoms.bar);
+});

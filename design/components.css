@@ -34,7 +34,8 @@ h1, h2, h3 { text-wrap: balance; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
-/* ===== 枠: 綴じ（メニュー）と帳面 ===== */
+/* ===== 枠: 角のマス、上の帯、綴じ（メニュー）、帳面 =====
+   左上の角のマス（ロゴ）と全幅の上の帯が同じ高さ（--header-height）で並び、帯の下の罫と綴じの右の罫が角で交わって十字になる。 */
 .app {
   --binding-width-expanded: 240px;
   --binding-width-collapsed: 64px;
@@ -42,11 +43,15 @@ h1, h2, h3 { text-wrap: balance; }
 }
 .binding { background: var(--color-sunken); border-right: var(--rule-double); }
 .binding-inner {
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin;
+}
+/* 綴じの中身（組織の切り替え、メニュー、足跡）。角のマスの下に続く */
+.binding-body {
+  flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-5);
   padding-block: var(--space-5);
   padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
   padding-right: var(--space-4);
-  display: flex; flex-direction: column; gap: var(--space-5);
-  position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin;
 }
 .binding-foot { margin-top: auto; font-size: var(--text-xs); color: var(--color-faint); padding-inline: var(--space-2); }
 
@@ -55,8 +60,15 @@ h1, h2, h3 { text-wrap: balance; }
 .brand-art { display: block; flex: none; width: 168px; max-width: 100%; padding: 4px; background: #fff; border-radius: var(--radius-1); }
 .brand-name { display: block; width: 100%; height: auto; }
 .brand-mark { display: none; width: 100%; height: auto; object-fit: contain; }
-/* ブランドと開閉のボタンの行。畳んだ列では縦に積み、ボタンはマークの下に来る */
-.binding-head { display: flex; align-items: center; gap: var(--space-1); }
+/* 角のマス。ブランドと開閉のボタンの行で、高さは上の帯と同じ。下の罫が上の帯の罫へ続く。
+   メニューを送っても角が残るよう、列の上に貼り付ける。畳んだ列では、ボタンを罫の下へ出す */
+.binding-head {
+  position: sticky; top: 0; z-index: 1; flex: none; box-sizing: border-box; height: var(--header-height);
+  display: flex; align-items: center; gap: var(--space-1);
+  padding-left: max(var(--space-4), env(safe-area-inset-left, 0px)); padding-right: var(--space-4);
+  background: var(--color-sunken); border-bottom: var(--rule-double);
+}
+.binding-head .brand-art { width: 132px; }
 .binding-head .brand { flex: 1 1 auto; min-width: 0; }
 .nav-toggle {
   position: relative; display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0;
@@ -130,6 +142,9 @@ h1, h2, h3 { text-wrap: balance; }
   :is(.org-menu-list, .ws-menu-list) a, :is(.org-menu-list, .ws-menu-list) button, .account-menu-list a, .account-menu-list button, .account-menu-button { min-height: 44px; }
   .nav-toggle { width: 44px; height: 44px; }
   .brand, .nav-item:not(.is-later) { min-height: 44px; }
+  a.breadcrumb-item { display: block; line-height: 44px; min-width: 44px; }
+  /* 組織とワークスペースのリンクは、押せる幅 44px より縮めない（長い名前は省略して、44px を下限に縮む） */
+  .breadcrumb li:not(:last-child) { min-width: calc(44px + 1.25rem); }
 }
 
 @media (min-width: 761px) {
@@ -175,12 +190,18 @@ h1, h2, h3 { text-wrap: balance; }
 
   .app[data-nav-collapsed="true"] { grid-template-columns: var(--binding-width-collapsed) minmax(0, 1fr); }
   /* 列の罫（中世風は 3px）を引いても、内側に 44px の項目が収まる余白にする */
-  .app[data-nav-collapsed="true"] .binding-inner {
-    padding-left: max(var(--space-2), env(safe-area-inset-left, 0px)); padding-right: var(--space-2); align-items: center;
+  .app[data-nav-collapsed="true"] .binding-head {
+    justify-content: center; padding-inline: 0;
   }
-  .app[data-nav-collapsed="true"] .binding-head { flex-direction: column; }
+  .app[data-nav-collapsed="true"] .binding-body {
+    padding-left: max(var(--space-2), env(safe-area-inset-left, 0px)); padding-right: var(--space-2); align-items: center;
+    /* 開閉のボタンは角のマスの罫の下に出るので、その分を空ける */
+    padding-top: calc(44px + var(--space-4));
+  }
+  /* 札（fixed）の基準になるので、中央寄せに transform は使わない */
+  .app[data-nav-collapsed="true"] .binding-head .nav-toggle { position: absolute; top: calc(100% + var(--space-2)); left: calc(50% - 22px); background: var(--color-sunken); }
   .app[data-nav-collapsed="true"] .brand { justify-content: center; width: 44px; min-height: 44px; padding: 0; }
-  .app[data-nav-collapsed="true"] .brand-art { width: 34px; }
+  .app[data-nav-collapsed="true"] .binding-head .brand-art { width: 34px; }
   .app[data-nav-collapsed="true"] .brand-mark { display: block; height: 26px; }
   /* 横組み画像を隠してマークだけにする。読み上げ名は別の visually-hidden に残る */
   .app[data-nav-collapsed="true"] .brand-name {
@@ -289,9 +310,35 @@ h1, h2, h3 { text-wrap: balance; }
 .sheet { min-width: 0; display: flex; flex-direction: column; }
 .topbar {
   display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap;
-  padding-block: var(--space-3);
+  box-sizing: border-box; min-height: var(--header-height); border-bottom: var(--rule-double);
+  padding-block: 5px;
+  position: sticky; top: 0; z-index: 4; background: var(--color-bg);
   padding-left: max(var(--space-8), env(safe-area-inset-left, 0px));
   padding-right: max(var(--space-8), env(safe-area-inset-right, 0px));
+}
+/* パンくず。組織 › ワークスペース › 画面。名前は1行に収めて省略し、全文は title に残す */
+/* 帯の高さ。角のマスと上の帯で同じ値を使う */
+:root { --header-height: 60px; }
+/* 貼り付く上の帯（761px 以上）の下にフォーカスが隠れないようにする */
+@media (min-width: 761px) {
+  html { scroll-padding-top: var(--header-height); }
+}
+#breadcrumb-slot { display: contents; }
+.breadcrumb { flex: 1 1 0; min-width: 8rem; margin-right: auto; }
+.breadcrumb ol { display: flex; align-items: center; gap: var(--space-1); list-style: none; margin: 0; padding: 0; font-size: var(--text-sm); }
+.breadcrumb li { display: flex; align-items: center; gap: var(--space-1); min-width: 0; flex: 0 1 auto; }
+.breadcrumb-sep { color: var(--color-faint); }
+.breadcrumb-item { min-width: 0; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); text-decoration: none; }
+a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
+.breadcrumb-item[aria-current="page"] { max-width: 100%; color: var(--color-fg); font-weight: 700; }
+/* 761px 以上では帯を1段に固定し、十字の罫がずれないようにする。幅が足りないときはパンくずが縮む */
+@media (min-width: 761px) {
+  .topbar { flex-wrap: nowrap; }
+  .topbar > :not(.breadcrumb, #breadcrumb-slot, .account-menu) { flex: none; }
+  /* 長い表示名は、折り返さず右を切って受ける（帯の高さと十字の罫を保つ） */
+  .topbar > .account-menu { flex: 0 1 auto; min-width: 0; }
+  .account-menu-button { max-width: 100%; }
+  .account-menu-button .me { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
 }
 .me { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); padding-left: var(--space-2); min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .content {
@@ -324,7 +371,7 @@ h1, h2, h3 { text-wrap: balance; }
 /* 本文と脇（記録など）の2列。狭いと1列 */
 .layout-aside { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-8); align-items: start; }
 .layout-main { display: grid; gap: var(--space-8); min-width: 0; }
-.layout-side { display: grid; gap: var(--space-5); position: sticky; top: var(--space-4); }
+.layout-side { display: grid; gap: var(--space-5); position: sticky; top: calc(var(--header-height) + var(--space-4)); }
 /* 画面より高くなりうる脇（エピックの画面の討伐隊は人数に上限が無い）は貼り付けず、本文と一緒にスクロールさせる。
    中でスクロールさせると、面の影とフォーカスの輪が切れ、押せる要素の無い脇は読み上げとキーボードで動かせない */
 .layout-side.is-static { position: static; }
@@ -728,6 +775,10 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   /* 本文が min-height に届かないとき、余りを本文の行にだけ回す（既定ではメニューの行も伸びて下に空きが出る） */
   .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .binding { border-right: 0; border-bottom: var(--rule-double); }
+  /* 狭い幅では角のマスの形をやめ、ロゴ、組織の切り替え、メニューを1つの帯に並べる（中身の箱は消す） */
+  .binding-body { display: contents; }
+  .binding-head { position: static; height: auto; padding: 0; background: none; border-bottom: 0; }
+  .binding-head .brand-art { width: 168px; }
   .binding-inner {
     position: static; height: auto; overflow: visible;
     flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--space-3);
@@ -746,7 +797,8 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
     padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
   }
-  .topbar { justify-content: flex-start; position: relative; }
+  .topbar { justify-content: flex-start; position: relative; z-index: auto; }
+  .breadcrumb { min-width: 6rem; }
   /* アカウントのメニューの一覧は、ボタンではなく帯を基準に、左右の余白の内側へ広げる（ボタンが左に寄っても画面の外へ出ない） */
   .account-menu { position: static; }
   .account-menu-list {
@@ -1037,7 +1089,7 @@ label.pick-row:hover { background: var(--color-accent-soft); }
  * （any-pointer: coarse）は、押せる範囲 44px のための余白を残して詰めない。
  * どのテーマでも同じ。上の各部品の規則より後ろに置く（同じ詳細度なので、後ろが勝つ） */
 @media (min-width: 761px) and (pointer: fine) and (not (any-pointer: coarse)) {
-  .binding-inner { padding-block: var(--space-4); gap: var(--space-4); }
+  .binding-body { padding-block: var(--space-4); gap: var(--space-4); }
   .nav-group { padding-top: var(--space-3); }
   .nav-item { padding-block: 4px; }
   .content { gap: var(--space-6); }
@@ -1684,7 +1736,6 @@ button.file-name:hover { text-decoration-color: currentColor; }
   font-family: var(--font-mono); font-size: 10px; line-height: 1; padding: 3px 5px; white-space: nowrap;
   border: 1px solid var(--color-line); border-bottom-width: 2px; border-radius: var(--radius-1); color: var(--color-muted); background: var(--color-bg);
 }
-.topbar .assist-launch { margin-right: auto; }
 .assist-launch .ico { color: var(--color-accent); }
 .callout.is-danger { color: var(--color-danger); background: var(--color-danger-soft); }
 
