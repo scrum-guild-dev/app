@@ -1082,6 +1082,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!force && drawerHasDraft()) { pendingDrawerMode = null; pendingDrawerStep = { delta, viaButton }; DIALOGS.discardDraft(); return; }
     pendingDrawerStep = null;
     drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = id; drawer.editing = new Set(); drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
+    clearDrawerInputs();
     renderDrawer();
     const again = viaButton && document.querySelector(`#drawer [data-drawer-step="${delta}"]:not([aria-disabled="true"])`);
     if (again) { again.focus(); return; }
@@ -1326,8 +1327,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
 
     drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = opener || null; drawer.editing = new Set(); drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
+    clearDrawerInputs();
     renderDrawer();
     document.querySelector("[data-close-drawer]")?.focus();
+  }
+  // 別のタスクへ移るときは、前のタスクの欄を消してから描く。renderDrawer は描き直す前に欄の値を写すので、残すと前の書きかけが移った先に戻る
+  function clearDrawerInputs() {
+    document.getElementById("drawer")?.replaceChildren();
   }
   // 直している欄の今の入力。再描画しても書きかけを残すため、描き直す前に写す
   function captureDrafts() {

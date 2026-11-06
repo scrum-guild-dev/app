@@ -91,7 +91,9 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
   }
 }
 
-test('見本の引き出し: タブを切り替えても、作り直しても、書きかけのコメントを残す', async ({ page }) => {
+test('見本の引き出し: タブを切り替えても、作り直しても、書きかけのコメントを残し、別のタスクへ移ると捨てる', async ({
+  page,
+}) => {
   // スプリントの見本を共有の見本ファイルのまま返す（アプリの配信対象外）。
   const files: Record<string, string> = {
     'sprint.html': 'text/html',
@@ -163,6 +165,19 @@ test('見本の引き出し: タブを切り替えても、作り直しても、
   await page.setViewportSize({ width: 600, height: 900 });
   await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
   expect(await isKept()).toBe(false);
+
+  // 引き出しの「次のタスク」で移り、書きかけを捨てると、移った先のコメント欄は空になる
+  const title = drawer.locator('#drawer-title');
+  const firstTitle = await title.textContent();
+  await drawer.locator('[data-drawer-step="1"]').click();
+  await page.getByRole('button', { name: '捨てる' }).click();
+  await expect(title).not.toHaveText(firstTitle ?? '');
+  await expect(drawer.locator('#new-comment')).toHaveValue('');
+  // 「前のタスク」で戻っても、捨てた書きかけは戻らない
+  await drawer.locator('[data-drawer-step="-1"]').click();
+  await expect(title).toHaveText(firstTitle ?? '');
+  await expect(drawer.locator('#new-comment')).toHaveValue('');
+  await drawer.locator('#new-comment').fill('書きかけのコメント');
 
   // 閉じて別のタスクを開くと、コメント欄は空になる
   await drawer.locator('.drawer-close').click();
