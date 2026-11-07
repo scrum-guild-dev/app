@@ -12,6 +12,7 @@ import { sprintBoard, sprintClose, sprintList, taskColumnMove } from '../src/sha
 import { taskComplete, taskReopen } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
 import {
+  addTaskRow,
   chooseRowAction,
   createWorkspace,
   dragTo,
@@ -29,15 +30,6 @@ test.use({ timezoneId: 'Asia/Tokyo' });
 
 const AOBA_TEAM = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 const GOAL = '先方の運用担当が、付与の履歴を自分で追えるようにする';
-
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.locator('.entry', { hasText: title })).toBeVisible();
-}
 
 async function createSprint(page: Page, startOn: string, name: string): Promise<void> {
   await page.getByRole('button', { name: 'スプリントを作る' }).click();
@@ -60,14 +52,14 @@ test('リーダーはゴールを書いてスプリントを始め、2つ目は�
   baseURL,
   browser,
 }) => {
-  // 起票から動かすまでを1本で確かめる長い流れ。ほかのファイルと並べて走ると既定の 30 秒を超えうる
+  // タスクを作ってから動かすまでを1本で確かめる長い流れ。ほかのファイルと並べて走ると既定の 30 秒を超えうる
   test.setTimeout(90_000);
   await signIn(context, baseURL, 'admin');
   const collect = await watchViolations(page);
   await createWorkspace(page, '出発の見張り番');
 
-  // タスクを3件起票する
-  for (const title of ['A札', 'B札', 'C札']) await addTask(page, title);
+  // タスクを3件作る
+  for (const title of ['A札', 'B札', 'C札']) await addTaskRow(page, title);
 
   // スプリントを2つ作り、先のスプリントに3件入れる
   await page.getByRole('link', { name: '計画' }).click();
@@ -264,7 +256,7 @@ test('リーダーはゴールを書いてスプリントを始め、2つ目は�
 test('動かすのが断られたら理由を知らせて読み直し、カードは元の列に戻る', async ({ page, context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
   await createWorkspace(page, '断られる見張り番');
-  await addTask(page, 'D札');
+  await addTaskRow(page, 'D札');
   await page.getByRole('link', { name: '計画' }).click();
   await createSprint(page, '2099-04-05', '第1回');
   await page.getByRole('button', { name: 'バックログから入れる: スプリント 第1回' }).click();
@@ -355,11 +347,7 @@ test('スクラムの言葉でも、スプリントを始めて、列とカー�
   await page.getByRole('button', { name: '保存する' }).click();
   await expect(page.getByRole('status').filter({ hasText: '完成の定義を保存しました' })).toBeVisible();
   await page.getByRole('link', { name: 'バックログ', exact: true }).click();
-  await page.getByRole('button', { name: '起票' }).click();
-  const create = page.getByRole('dialog', { name: '起票' });
-  await create.getByLabel('タイトル').fill('E札');
-  await create.getByRole('button', { name: '起票' }).click();
-  await expect(create).toBeHidden();
+  await addTaskRow(page, 'E札');
   await page.getByRole('link', { name: '計画' }).click();
   await page.getByRole('button', { name: 'スプリントを作る' }).click();
   const sprintDialog = page.getByRole('dialog', { name: 'スプリントを作る' });
@@ -566,11 +554,11 @@ test('リーダーはスプリントを終え、終わらなかったタスク�
   context,
   baseURL,
 }) => {
-  // 起票から2回終えるまでを1本で確かめる長い流れ
+  // タスクを作ってから2回終えるまでを1本で確かめる長い流れ
   test.setTimeout(120_000);
   await signIn(context, baseURL, 'admin');
   await createWorkspace(page, '帰還の見張り番');
-  for (const title of ['A札', 'B札', 'C札']) await addTask(page, title);
+  for (const title of ['A札', 'B札', 'C札']) await addTaskRow(page, title);
 
   await page.getByRole('link', { name: '計画' }).click();
   await expect(page.getByRole('heading', { level: 1, name: '計画' })).toBeVisible();
@@ -781,12 +769,12 @@ test.describe('カードのドラッグ', () => {
     context,
     baseURL,
   }) => {
-    // 起票から動かすまでを1本で確かめる長い流れ
+    // タスクを作ってから動かすまでを1本で確かめる長い流れ
     test.setTimeout(120_000);
     await signIn(context, baseURL, 'admin');
     const collect = await watchViolations(page);
     await createWorkspace(page, '落とす見張り番');
-    for (const title of ['A札', 'B札', 'C札']) await addTask(page, title);
+    for (const title of ['A札', 'B札', 'C札']) await addTaskRow(page, title);
     await page.getByRole('link', { name: '計画' }).click();
     await expect(page.getByRole('heading', { level: 1, name: '計画' })).toBeVisible();
     await createSprint(page, '2099-06-07', '第1回');

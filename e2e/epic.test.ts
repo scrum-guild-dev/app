@@ -6,6 +6,7 @@ import { expect, test } from './fixtures.ts';
 import {
   addEpicRow,
   addStoryRow,
+  addTaskRow,
   chooseRowAction,
   rowMenuToggle,
   createWorkspace,
@@ -107,18 +108,11 @@ test('作ったワークスペース: エピックを作り、ストーリーを
 
   // 配下が無いあいだは完了にできる状態。タスクを足すと、残りの件数が出て押せなくなる
   const story = rowGroup(page, '残高が見える');
-  await page.getByRole('button', { name: '起票', exact: true }).click();
-  const taskDialog = page.getByRole('dialog', { name: '起票' });
-  await taskDialog.getByLabel('親のストーリー').selectOption({ label: '残高が見える' });
-  // 親の候補は、親のエピックの題でまとめる
-  await expect(taskDialog.getByLabel('親のストーリー').locator('optgroup')).toHaveAttribute(
-    'label',
-    'ポイント制度を公開する',
-  );
-  await taskDialog.getByLabel('タイトル').fill('残高の API を作る');
-  await taskDialog.getByRole('radio', { name: '3', exact: true }).check();
-  await taskDialog.getByRole('button', { name: '起票' }).click();
-  await expect(taskDialog).toBeHidden();
+  await addTaskRow(page, '残高の API を作る', '残高が見える');
+  const task = story.locator('.entry', { hasText: '残高の API を作る' });
+  await task.getByRole('button', { name: 'ポイント: 未設定' }).click();
+  await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
+  await expect(task.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
   const completeStory = rowMenuItem(story, '残高が見える', '完了にする');
   await expect(completeStory).toHaveAttribute('aria-disabled', 'true');
   await expect(story.locator('.tree-note')).toHaveText('残り 1 件のタスク');
@@ -148,10 +142,8 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   await expect(story.getByRole('img', { name: '残高が見える: 完了' })).toBeVisible();
   const reopen = story.getByRole('button', { name: '完了を取り消す: 残高が見える' });
   await expect(reopen).toBeFocused();
-  // 完了したストーリーは、タスクの親の候補に出ない
-  await page.getByRole('button', { name: '起票' }).click();
-  await expect(taskDialog.getByLabel('親のストーリー').locator('option')).toHaveText(['なし']);
-  await taskDialog.getByRole('button', { name: 'やめる' }).click();
+  // 完了したストーリーには、タスクの空の行が出ない
+  await expect(story.getByRole('textbox', { name: /タスクを足す/ })).toHaveCount(0);
 
   // 取り消すと「完了にする」に戻る
   await reopen.click();

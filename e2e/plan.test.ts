@@ -4,7 +4,7 @@
 import { planSummary, sprintTaskAdd } from '../src/shared/operations/sprint/index.ts';
 import { backlogTree } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
-import { addStoryRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addStoryRow, addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { failOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
@@ -116,18 +116,9 @@ test('スクラムの言葉: ストーリーごとと1件ずつ入れ、外し�
   await createWorkspace(page, '出し入れのチーム');
 
   // バックログに、親のないタスク1件と、ストーリーの下のタスク2件を作る
-  await page.getByRole('button', { name: '起票' }).click();
-  const rootDialog = page.getByRole('dialog', { name: '起票' });
-  await rootDialog.getByLabel('タイトル').fill('ヘルプを書く');
-  await rootDialog.getByRole('button', { name: '起票' }).click();
-  await expect(rootDialog).toBeHidden();
+  await addTaskRow(page, 'ヘルプを書く');
   await addStoryRow(page, 'ログインを作り直す');
-  for (const title of ['フォームを置く', '送信を確かめる']) {
-    const draft = page.getByRole('textbox', { name: 'タスクを足す: ログインを作り直す' });
-    await draft.fill(title);
-    await draft.press('Enter');
-    await expect(page.locator('.entry-title', { hasText: title })).toBeVisible();
-  }
+  for (const title of ['フォームを置く', '送信を確かめる']) await addTaskRow(page, title, 'ログインを作り直す');
   await expect(page.locator('.entry', { hasText: '送信を確かめる' })).toBeVisible();
 
   // 計画の画面でスプリントを作る
@@ -240,13 +231,7 @@ test('入れるダイアログ: 読めなければ枠と「もう一度試す」
 }) => {
   await signIn(context, baseURL, 'admin');
   await createWorkspace(page, '入れ直しのスプリント隊');
-  for (const title of ['地図を描く', '水を汲む']) {
-    await page.getByRole('button', { name: '起票' }).click();
-    const dialog = page.getByRole('dialog', { name: '起票' });
-    await dialog.getByLabel('タイトル').fill(title);
-    await dialog.getByRole('button', { name: '起票' }).click();
-    await expect(dialog).toBeHidden();
-  }
+  for (const title of ['地図を描く', '水を汲む']) await addTaskRow(page, title);
   await page.getByRole('link', { name: '計画' }).click();
   await page.getByRole('button', { name: 'スプリントを作る' }).click();
   const createDialog = page.getByRole('dialog', { name: 'スプリントを作る' });

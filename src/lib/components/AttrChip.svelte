@@ -25,6 +25,8 @@
     failedNote,
     busy = false,
     lead,
+    panel,
+    tone,
   }: {
     attr: string;
     text: string;
@@ -39,6 +41,10 @@
     failedNote?: string;
     busy?: boolean;
     lead?: Snippet;
+    // 渡すと、メニューの代わりに窓（role="dialog"。モーダルにしない）を開き、中にこの内容（期日の日付の欄など）を置く。close で窓を閉じてチップへ戻る
+    panel?: Snippet<[() => void]>;
+    // 期日の切れ、今日、今週の色（DueChip と同じ .is-danger、.is-warn）
+    tone?: 'danger' | 'warn';
   } = $props();
 
   const ids = $props.id();
@@ -47,7 +53,7 @@
   let open = $state(false);
   let root = $state<HTMLElement>();
   let button = $state<HTMLButtonElement>();
-  let list = $state<HTMLUListElement>();
+  let list = $state<HTMLElement>();
 
   function items(): HTMLElement[] {
     return list ? [...list.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([aria-disabled="true"])')] : [];
@@ -76,6 +82,10 @@
     onopen?.();
     await tick();
     place();
+    if (panel !== undefined) {
+      list?.querySelector<HTMLElement>('input, button')?.focus();
+      return;
+    }
     const all = items();
     (all.find((item) => item.getAttribute('aria-checked') === 'true') ?? all[0])?.focus();
   }
@@ -117,6 +127,8 @@
       hide(true);
       return;
     }
+    // 窓は中の欄とボタンの間を Tab で移れる。外へ出たときは onFocusOut が閉じる
+    if (panel !== undefined && event.key === 'Tab') return;
     if (event.key === 'Tab') {
       // 出た先へ移るので戻さない。メニューの中からは、チップへ戻して、そこから Tab を進める
       const inside = list?.contains(event.target as Node) ?? false;
@@ -138,6 +150,13 @@
             ? 0
             : (at + (event.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length;
     all[next]?.focus();
+  }
+
+  function onFocusOut(event: FocusEvent): void {
+    if (panel === undefined || !open) return;
+    const next = event.relatedTarget;
+    if (next === null || (next instanceof Node && root?.contains(next))) return;
+    hide(false);
   }
 
   function onWindowClick(event: MouseEvent): void {
@@ -187,15 +206,17 @@
 
 <!-- キーは中のボタンから届く。包む要素そのものはフォーカスを受けない -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<span class="row-menu" bind:this={root} onkeydown={onKeydown}>
+<span class="row-menu" bind:this={root} onkeydown={onKeydown} onfocusout={onFocusOut}>
   <!-- アバター（lead）はボタンの外に置く。頭文字が文字として数えられ、見える名前が aria-label を含まなくなるため -->
   {@render lead?.()}
   <button
     class="chip chip-btn"
     class:is-unset={unset}
+    class:is-danger={tone === 'danger'}
+    class:is-warn={tone === 'warn'}
     type="button"
     bind:this={button}
-    aria-haspopup={locked === undefined ? 'menu' : undefined}
+    aria-haspopup={locked === undefined ? (panel === undefined ? 'menu' : 'dialog') : undefined}
     aria-expanded={locked === undefined ? open : undefined}
     aria-disabled={locked !== undefined ? 'true' : undefined}
     aria-describedby={locked !== undefined ? reasonId : undefined}
@@ -208,7 +229,16 @@
   {#if locked !== undefined}
     <span class="visually-hidden" id={reasonId}>{locked}</span>
   {/if}
-  {#if open}
+  {#if open && panel !== undefined}
+    <div
+      class="account-menu-list row-menu-list attr-panel"
+      role="dialog"
+      aria-label={t('attrMenuLabel', { attr })}
+      bind:this={list}
+    >
+      {@render panel(() => hide(true))}
+    </div>
+  {:else if open}
     <ul
       class="account-menu-list row-menu-list"
       role="menu"
