@@ -72,15 +72,11 @@ test.beforeEach(async ({ context, baseURL }) => {
 
 test('本文で複数選択すると画像はカーソルへ入り、画像以外も保存して配信できる', async ({ page, baseURL }) => {
   const drawer = await openTask(page, baseURL);
-  await drawer
-    .getByText('本文', { exact: true })
-    .locator('..')
-    .getByRole('button', { name: '編集', exact: true })
-    .click();
+  await drawer.getByRole('button', { name: '本文を書く', exact: true }).click();
   const input = drawer.getByRole('textbox', { name: '本文', exact: true });
   await input.fill('前半後半');
   await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(2, 2));
-  const form = input.locator('xpath=ancestor::form');
+  const form = input.locator('xpath=ancestor::*[@role="group"][1]');
   const uploadedText = page.waitForResponse(async (response) => {
     if (!response.url().endsWith('/attachment-upload') || response.status() !== 200) return false;
     const row: unknown = await response.json();
@@ -93,8 +89,7 @@ test('本文で複数選択すると画像はカーソルへ入り、画像以�
   const textResponse = await uploadedText;
   const textRow = (await textResponse.json()) as { id: string };
   await expect(input).toHaveValue(/^前半!\[画面\.png\]\(\/api\/aoba\/attachments\/[^)]+\)後半$/);
-  await expect(form.getByRole('button', { name: '保存', exact: true })).toHaveAttribute('aria-disabled', 'false');
-  await form.getByRole('button', { name: '保存', exact: true }).click();
+  await input.blur();
   await expect(input).toBeHidden();
   const image = drawer.locator('.doc-box img[alt="画面.png"]');
   await expect(image).toBeVisible();
@@ -116,9 +111,7 @@ test('受け入れ基準は複数の貼り付け、コメントは複数のド�
   );
   await addFiles(field, 'paste', ['基準1.png', '基準2.png']);
   await expect(field).toHaveValue(/!\[基準1\.png\].*!\[基準2\.png\]/s);
-  const fieldForm = field.locator('xpath=ancestor::form');
-  await expect(fieldForm.getByRole('button', { name: '保存', exact: true })).toHaveAttribute('aria-disabled', 'false');
-  await fieldForm.getByRole('button', { name: '保存', exact: true }).click();
+  await field.blur();
   await expect(drawer.locator('.doc-box img[alt^="基準"]')).toHaveCount(2);
 
   const commentInput = drawer.getByRole('textbox', { name: 'コメントを書く', exact: true });
@@ -142,31 +135,27 @@ test('受け入れ基準は複数の貼り付け、コメントは複数のド�
 
 test('保存時に未添付のファイルが消えていても、本文と引き出しを残して再追加できる', async ({ page, baseURL }) => {
   const drawer = await openTask(page, baseURL);
-  await drawer
-    .getByText('本文', { exact: true })
-    .locator('..')
-    .getByRole('button', { name: '編集', exact: true })
-    .click();
+  await drawer.getByRole('button', { name: '本文を書く', exact: true }).click();
   const input = drawer.getByRole('textbox', { name: '本文', exact: true });
   await input.fill('残しておく本文');
-  const form = input.locator('xpath=ancestor::form');
+  const form = input.locator('xpath=ancestor::*[@role="group"][1]');
   await form.locator('input[type="file"]').setInputFiles({ name: '再追加.png', mimeType: 'image/png', buffer: PNG });
   await expect(input).toHaveValue(/!\[再追加\.png\]/);
   const draft = await input.inputValue();
   const unroute = await routeOperation(page, taskUpdate, { slug: 'aoba' }, async (call) => {
     await call.fail(404, 'not_found', { details: { attachment_ids: call.input.attachment_ids } });
   });
-  await expect(form.getByRole('button', { name: '保存', exact: true })).toHaveAttribute('aria-disabled', 'false');
-  await form.getByRole('button', { name: '保存', exact: true }).click();
+  await input.blur();
   await expect(form.getByRole('alert')).toContainText('もう一度追加');
   await expect(drawer).toBeVisible();
   await expect(input).toHaveValue(draft);
-  await expect(input).toBeFocused();
   await unroute();
   await form.locator('input[type="file"]').setInputFiles({ name: '再追加.png', mimeType: 'image/png', buffer: PNG });
   await expect(input).not.toHaveValue(draft);
-  await expect(form.getByRole('button', { name: '保存', exact: true })).toHaveAttribute('aria-disabled', 'false');
-  await form.getByRole('button', { name: '保存', exact: true }).click();
+  // 手を止めると自動で送り直され、保存できる。欄を離れると、描いた本文に戻る
+  await expect(drawer.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
+  await input.focus();
+  await input.blur();
   await expect(input).toBeHidden();
   await expect(drawer.locator('.doc-box').filter({ hasText: '残しておく本文' })).toBeVisible();
 });
@@ -344,13 +333,9 @@ test('50 MBを超えるファイルは送らず、ファイルごとの容量と
 
 test('保存前の添付を外すと次の保存から外れ、画像の前後と編集済みの本文は残る', async ({ page, baseURL }) => {
   const drawer = await openTask(page, baseURL, 'member');
-  await drawer
-    .getByText('本文', { exact: true })
-    .locator('..')
-    .getByRole('button', { name: '編集', exact: true })
-    .click();
+  await drawer.getByRole('button', { name: '本文を書く', exact: true }).click();
   const input = drawer.getByRole('textbox', { name: '本文', exact: true });
-  const form = input.locator('xpath=ancestor::form');
+  const form = input.locator('xpath=ancestor::*[@role="group"][1]');
   await input.fill('前半後半');
   await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(2, 2));
   await form.locator('input[type="file"]').setInputFiles([
@@ -358,7 +343,6 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
     { name: '外す画像.png', mimeType: 'image/png', buffer: PNG },
     { name: '編集する画像.png', mimeType: 'image/png', buffer: PNG },
   ]);
-  await expect(form.getByRole('button', { name: '保存', exact: true })).toHaveAttribute('aria-disabled', 'false');
   await expect(input).toHaveValue(/^前半!\[外す画像\.png\].*!\[編集する画像\.png\].*後半$/s);
   const original = await input.inputValue();
   await form.getByRole('button', { name: '外す手順.txt を添付から外す', exact: true }).click();
@@ -430,7 +414,6 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
   await form
     .locator('input[type="file"]')
     .setInputFiles({ name: '保存する手順.txt', mimeType: 'text/plain', buffer: Buffer.from('保存する手順') });
-  await expect(form.getByRole('button', { name: '保存', exact: true })).toHaveAttribute('aria-disabled', 'false');
   await expect(form.locator('.file-row', { hasText: '保存する手順.txt' })).toBeVisible();
   const readded = attachmentUpload.output.parse(await (await readdedResponse).json());
   let sentIds: readonly string[] | undefined;
@@ -438,7 +421,7 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
     sentIds = call.input.attachment_ids;
     await call.passThrough();
   });
-  await form.getByRole('button', { name: '保存', exact: true }).click();
+  await input.blur();
   await expect(input).toBeHidden();
   expect(sentIds).toEqual([readded.id]);
 });

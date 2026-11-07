@@ -149,6 +149,21 @@ describe('CI とクラウドで共有する e2e の実行', () => {
     }
   });
 
+  test('ロケールが3つとも空のときだけ UTF-8 にそろえ、値があれば変えない', () => {
+    for (const empty of [{}, { LANG: '', LC_ALL: '', LC_CTYPE: '' }]) {
+      const env = e2eEnvironment('normal', empty);
+      assert.equal(env.LANG, 'C.UTF-8');
+      assert.equal(env.LC_ALL, 'C.UTF-8');
+    }
+    for (const locale of [{ LANG: 'en_US.UTF-8' }, { LC_ALL: 'ja_JP.UTF-8' }, { LC_CTYPE: 'en_US.UTF-8' }]) {
+      const env = e2eEnvironment('normal', locale);
+      assert.deepEqual(
+        { LANG: env.LANG, LC_ALL: env.LC_ALL, LC_CTYPE: env.LC_CTYPE },
+        { LANG: locale.LANG, LC_ALL: locale.LC_ALL, LC_CTYPE: locale.LC_CTYPE },
+      );
+    }
+  });
+
   test('CI の3種類が共通ランナーを使い、repeat は導入前の上限確認も残す', () => {
     const workflow = load(readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')) as {
       jobs: Record<string, { steps: { run?: string; if?: string; uses?: string }[] }>;

@@ -46,7 +46,7 @@
   import Drawer from './Drawer.svelte';
   import DueChip from './DueChip.svelte';
   import Icon from './Icon.svelte';
-  import InlineEdit from './InlineEdit.svelte';
+  import AutoSaveEdit from './AutoSaveEdit.svelte';
   import { attachmentSaveFailure } from '../attachment-save.ts';
   import Markdown from './Markdown.svelte';
   import RepositoryPicker from './RepositoryPicker.svelte';
@@ -60,7 +60,7 @@
   // ワークスペースの決まった欄は、属性の下、本文の前に欄ごとに並べる（TaskFieldValues。値は Markdown で、書かれていなければ
   // 完了していないタスクだけ「未記入」の印を添える。task-detail の fields を読み、保存は task-field-set で、読んだ値のままなら書き、
   // 同時に直されていれば断って読み直す）。
-  // 欄ごとに、その場で直す。ポイントと期日は選んだら保存し、タイトル、リンク、本文は InlineEdit で確定する（本文は Markdown の部品で描く）。
+  // 欄ごとに、その場で直す。ポイントと期日は選んだら保存し、タイトル、リンク、本文は AutoSaveEdit で確定する（本文は Markdown の部品で描く）。
   // 送る欄は、今の値と違うものだけ。保存したら、その欄だけを応答で入れ替え、画面が木を読み直す（onchanged）。
   // ポイントの保存は1本ずつ送る。送っている間に選び直したら、最後の選択だけを溜め、送り終えた後に送る（矢印キーで動かしても要求が飛び交わず、
   // 応答の順が前後しない）。期日は、年が4桁そろった値だけを、少し待ってから（カレンダーで選んだとき）か、欄を離れる／Enter で保存する。
@@ -576,10 +576,18 @@
   // 欄を書く。成功なら null、失敗ならエラーの文。404 は閉じる側へ回す（文は返さず、taskGone を立てる）。
   // 引き出しが閉じた後に返った応答（欄を離れた直後に × を押した、ポイントを選んだ直後に閉じた）も、黙って捨てない:
   // 通ったら木を読み直してトーストで知らせ、失敗はトーストで知らせる（画面の状態は触らない）
-  async function saveFields(fields: Fields, attachmentIds: string[] = []): Promise<string | null> {
+  // expected は自動保存の欄（タイトル、リンク、本文）が、書き始めた時点の値を添える。先にほかの人が同じ欄を直していたら、サーバーが断る。
+  // 自動保存の欄は、保存の状態を欄の横に出すので、画面が残っている間はトーストを出さない
+  async function saveFields(fields: Fields, attachmentIds: string[] = [], expected?: Expected): Promise<string | null> {
     const result = await callOperation(
       taskUpdate,
-      { workspace_id: workspaceId, task_id: taskId, ...fields, attachment_ids: attachmentIds },
+      {
+        workspace_id: workspaceId,
+        task_id: taskId,
+        ...fields,
+        attachment_ids: attachmentIds,
+        ...(expected === undefined ? {} : { expected }),
+      },
       { slug },
     );
     if (result.ok) {
@@ -594,7 +602,13 @@
         task = merged;
         void loadHistory();
       }
-      showToast(t('taskSaved'), 'check');
+      // 続けて書くときの読んだ値は、今保存した値にする
+      if (expected !== undefined) {
+        if ('title' in fields) bases.title = fields.title;
+        if ('link_url' in fields) bases.link_url = fields.link_url ?? '';
+        if ('body_md' in fields) bases.body_md = fields.body_md ?? '';
+      }
+      if (expected === undefined || !alive) showToast(t('taskSaved'), 'check');
       onchanged();
       return null;
     }
@@ -627,19 +641,32 @@
       onstale();
       message = t('workspaceClosedReadOnly', { workspace: t('workspace') });
     } else if (result.status === 409) {
-      message = await conflictMessage(fields);
+      message = await conflictMessage(fields, result.error?.details);
     } else {
       message = result.status === 400 ? t('taskBadRequest') : t('taskSaveFailed');
     }
-    if (!alive) showToast(message, 'alert');
+    // 自動保存の欄（expected を添える）は、閉じた後の失敗を AutoSaveEdit がトーストで知らせる
+    if (!alive && expected === undefined) showToast(message, 'alert');
     return message;
   }
 
   // 409 の文。断った理由は、読み直した今の値で決める（完了していればポイントが理由、取り込んだタスクならタイトルとリンクが理由、
   // どちらでもなければ、同じ欄を同時に直された）。読み直した値は、引き出しが開いていれば表示にも入れる
-  async function conflictMessage(fields: Fields): Promise<string> {
+  async function conflictMessage(fields: Fields, details?: unknown): Promise<string> {
     const latest = await refresh();
     const current = latest ?? task;
+    // 書き始めてからほかの人が先に同じ欄を直していた。書いた分は欄に残し、今の値を並べて知らせる。次の保存は、今の値を読んだものとして送る
+    const stale = staleCurrentOf(details);
+    // 引き出しが閉じた後は、書いた分を残す欄が無い。残してあるとは言わない
+    if (stale !== null && !alive) return t('taskSaveRaced');
+    if (stale !== null) {
+      const key = (['title', 'link_url', 'body_md'] as const).find((name) => name in stale);
+      if (key !== undefined) {
+        const now = stale[key];
+        bases[key] = typeof now === 'string' ? now : '';
+        return t('taskFieldStale', { current: excerpt(typeof now === 'string' ? now : '') });
+      }
+    }
     if ('points' in fields && current?.completed_at != null) {
       return t('taskSaveConflict', { task: t('task'), done: t('done'), points: t('points') });
     }
@@ -857,7 +884,14 @@
     return message;
   }
 
-  // ---- タイトル、リンク、本文（InlineEdit） ----
+  // ---- タイトル、リンク、本文（AutoSaveEdit） ----
+  // 描いた本文を押したら書く欄に替える。本文の中のリンクと、文字を選ぶ操作は、そのまま通す
+  function beginFromSurface(event: MouseEvent, begin: (event: Event) => void): void {
+    if (event.target instanceof Element && event.target.closest('a, button, summary, input')) return;
+    if (!(window.getSelection()?.isCollapsed ?? true)) return;
+    begin(event);
+  }
+
   function titleProblem(raw: string): string | null {
     const problem = taskTitleProblem(raw.trim());
     if (problem === 'required') return t('taskTitleRequired');
@@ -866,9 +900,43 @@
     return null;
   }
 
+  // 書き始めた時点の値（保存の expected）。直している間に読み直しで別の人の値が入っても、黙って上書きしない。
+  // 断られて読み直した後は、今の値に置き換える（読み直した内容を知らせた上で、続けて書くと上書きする）
+  // 空は空の文字（expected は入力の形）。書き始めていなければ undefined で、そのときは保存の時点の値を使う
+  const bases: { title?: string; link_url?: string; body_md?: string } = {};
+  type Expected = { title?: string; link_url?: string; body_md?: string };
+
+  // 409 の stale の details から、今の値の組を取り出す
+  function staleCurrentOf(details: unknown): Record<string, unknown> | null {
+    if (typeof details !== 'object' || details === null) return null;
+    const record = details as { reason?: unknown; current?: unknown };
+    if (record.reason !== 'stale' || typeof record.current !== 'object' || record.current === null) return null;
+    return record.current as Record<string, unknown>;
+  }
+
+  // 知らせに添える今の値は、長いと欄を押し出すので短くする
+  function excerpt(text: string): string {
+    const flat = text.replace(/\s+/g, ' ').trim();
+    return flat.length > 80 ? `${flat.slice(0, 80)}…` : flat === '' ? t('bodyEmpty') : flat;
+  }
+
   function saveTitle(raw: string): Promise<string | null> {
     const next = raw.trim();
-    return task === null || next === task.title ? Promise.resolve(null) : saveFields({ title: next });
+    return task === null || next === task.title
+      ? Promise.resolve(null)
+      : saveFields({ title: next }, [], { title: bases.title ?? task.title });
+  }
+
+  function beginTitle(started: string): void {
+    bases.title = started;
+  }
+
+  function beginLink(started: string): void {
+    bases.link_url = started;
+  }
+
+  function beginBody(started: string): void {
+    bases.body_md = started;
   }
 
   function linkProblemMessage(raw: string): string | null {
@@ -890,7 +958,7 @@
     const value = normalizeLinkUrl(raw);
     return task === null || linkForm(raw) === (task.link_url ?? '')
       ? Promise.resolve(null)
-      : saveFields({ link_url: value });
+      : saveFields({ link_url: value }, [], { link_url: bases.link_url ?? task.link_url ?? '' });
   }
 
   function bodyProblem(raw: string): string | null {
@@ -905,7 +973,7 @@
     const next = normalizeLongText(raw);
     return task === null || (next === task.body_md && attachmentIds.length === 0)
       ? Promise.resolve(null)
-      : saveFields({ body_md: next }, attachmentIds);
+      : saveFields({ body_md: next }, attachmentIds, { body_md: bases.body_md ?? task.body_md ?? '' });
   }
 
   // ---- ポイント（選んだら保存する。1本ずつ送る） ----
@@ -1410,7 +1478,7 @@
     {/if}
 
     {#if titleEditable}
-      <InlineEdit
+      <AutoSaveEdit
         value={task.title}
         label={t('fieldTitle')}
         labelHidden
@@ -1419,9 +1487,10 @@
         save={saveTitle}
         normalize={(raw) => raw.trim()}
         ondirty={(value) => (dirty.title = value)}
+        onbegin={beginTitle}
       >
         {#snippet view(begin)}{@render titleView(begin)}{/snippet}
-      </InlineEdit>
+      </AutoSaveEdit>
     {:else}
       {@render titleView(null)}
     {/if}
@@ -1681,7 +1750,7 @@
           <dt>{t('fieldLink')}</dt>
           <dd>
             {#if canWrite}
-              <InlineEdit
+              <AutoSaveEdit
                 value={task.link_url ?? ''}
                 label={t('fieldLink')}
                 labelHidden
@@ -1691,6 +1760,7 @@
                 save={saveLink}
                 normalize={linkForm}
                 ondirty={(value) => (dirty.link = value)}
+                onbegin={beginLink}
               >
                 {#snippet view(begin)}
                   <button class="edit-trigger" class:is-empty={task?.link_url === null} type="button" onclick={begin}>
@@ -1713,7 +1783,7 @@
                     >
                   {/if}
                 {/snippet}
-              </InlineEdit>
+              </AutoSaveEdit>
             {:else if task.link_url !== null}
               <span class="source-key"><Icon name="link" /> {task.link_url}</span>
               <a
@@ -1748,7 +1818,7 @@
 
     <div class="field">
       {#if canWrite}
-        <InlineEdit
+        <AutoSaveEdit
           value={task.body_md ?? ''}
           label={t('fieldBody')}
           multiline
@@ -1758,15 +1828,19 @@
           save={saveBody}
           normalize={(raw) => normalizeLongText(raw) ?? ''}
           ondirty={(value) => (dirty.body = value)}
+          onbegin={beginBody}
         >
           {#snippet view(begin)}
-            <div class="field-head">
-              <span class="field-label">{t('fieldBody')}</span>
-              <button class="btn is-sm" type="button" onclick={begin}><Icon name="pen" />{t('editBody')}</button>
+            <span class="field-label">{t('fieldBody')}</span>
+            <!-- 描いた本文そのものを押せば書ける。面いっぱいに透明なボタンを敷き、キーボードと読み上げの入口にする（本文の中のリンクは上に重なり、押せるまま） -->
+            <div class="edit-surface" onclick={(event) => beginFromSurface(event, begin)} role="presentation">
+              <button class="edit-surface-button" type="button" onclick={begin}
+                >{t('bodyEditLabel', { field: t('fieldBody') })}</button
+              >
+              <div class="edit-surface-body">{@render bodyView()}</div>
             </div>
-            {@render bodyView()}
           {/snippet}
-        </InlineEdit>
+        </AutoSaveEdit>
       {:else}
         <span class="field-label">{t('fieldBody')}</span>
         {@render bodyView()}

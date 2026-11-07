@@ -75,7 +75,7 @@ test('設定で欄を足す → 起票した行と見出しに未記入 → 引�
   // 1つ目を Markdown で書く。もう1つが未記入のうちは、行の印も見出しの数も変わらない
   await drawer.getByRole('button', { name: '影響範囲を書く' }).click();
   await drawer.getByRole('textbox', { name: '影響範囲', exact: true }).fill('- 通知の画面\n- 管理画面');
-  await drawer.getByRole('button', { name: '保存' }).click();
+  await drawer.getByRole('textbox', { name: '影響範囲', exact: true }).blur();
   await expect(fieldBlocks.nth(0).locator('li')).toHaveText(['通知の画面', '管理画面']);
   await expect(drawer.locator('[data-field-id] .chip.is-todo')).toHaveText(['未記入']);
   await expect(row.locator('.chip.is-todo')).toHaveText('詳細 未記入');
@@ -83,7 +83,7 @@ test('設定で欄を足す → 起票した行と見出しに未記入 → 引�
   // 2つ目も書くと、行の印が消え、見出しの数が減る
   await drawer.getByRole('button', { name: '受け入れ基準を書く' }).click();
   await drawer.getByRole('textbox', { name: '受け入れ基準', exact: true }).fill('通知が届いたことを確かめた');
-  await drawer.getByRole('button', { name: '保存' }).click();
+  await drawer.getByRole('textbox', { name: '受け入れ基準', exact: true }).blur();
   await expect(drawer.locator('[data-field-id] .chip.is-todo')).toHaveCount(0);
   await expect(row.locator('.chip.is-todo')).toHaveCount(0);
   await expect(unfilledTally(page)).toHaveText(/詳細 未記入\s*1/);
@@ -98,7 +98,7 @@ test('設定で欄を足す → 起票した行と見出しに未記入 → 引�
   // 空にして保存すると、未記入に戻る
   await drawer.getByRole('button', { name: '受け入れ基準を書き直す' }).click();
   await drawer.getByRole('textbox', { name: '受け入れ基準', exact: true }).fill('');
-  await drawer.getByRole('button', { name: '保存' }).click();
+  await drawer.getByRole('textbox', { name: '受け入れ基準', exact: true }).blur();
   await expect(drawer.locator('[data-field-id] .chip.is-todo')).toHaveText(['未記入']);
   await expect(row.locator('.chip.is-todo')).toHaveText('詳細 未記入');
   await expect(history).toContainText('「受け入れ基準」を空にした');
@@ -158,14 +158,14 @@ test('同時に直されて断られると、書きかけを残したまま読�
   await box.fill('自分の下書き');
   // サーバーが「先に別の人が直した」と答える
   const unroute = await failOperation(page, taskFieldSet, AOBA, 409, 'conflict', { details: { reason: 'changed' } });
-  await drawer.getByRole('button', { name: '保存' }).click();
+  await box.blur();
   await expect(drawer.getByRole('alert').filter({ hasText: 'ほかの人が先にこの欄を直しました' })).toBeVisible();
   // 書きかけは残る
   await expect(box).toHaveValue('自分の下書き');
   await unroute();
 
   // 読み直した値（未記入）を読んだ値として、そのまま書き直せる
-  await drawer.getByRole('button', { name: '保存' }).click();
+  await drawer.getByRole('button', { name: 'もう一度保存する' }).click();
   await expect(drawer.locator('[data-field-id] .chip.is-todo')).toHaveCount(0);
   await expect(drawer.locator('[data-field-id]')).toContainText('自分の下書き');
 });
@@ -181,7 +181,7 @@ test('計画の画面の先のスプリントとスプリントに入れるダ�
   const drawer = page.getByRole('dialog', { name: '書き終えたタスク' });
   await drawer.getByRole('button', { name: '受け入れ基準を書く' }).click();
   await drawer.getByRole('textbox', { name: '受け入れ基準', exact: true }).fill('確かめた');
-  await drawer.getByRole('button', { name: '保存' }).click();
+  await drawer.getByRole('textbox', { name: '受け入れ基準', exact: true }).blur();
   await expect(drawer.locator('[data-field-id] .chip.is-todo')).toHaveCount(0);
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(drawer).toBeHidden();

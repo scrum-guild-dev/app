@@ -1,94 +1,125 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures.ts';
 
+const THEMES = ['simple_light', 'simple_dark', 'medieval', 'modern'] as const;
+
+// 幅ごとに1件にし、テーマはページを開いたまま切り替えて確かめる（カタログを読み直すのは幅ごとに1回。テーマごとに分けると
+// 24 回読み直して e2e で2番目に重いファイルになっていた）。どのテーマで落ちたかは test.step の名前で分かる
 for (const width of [1280, 1024, 761, 760, 390, 320]) {
-  for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
-    test(`長い名前のメニューの見本: ${width}px / ${theme}`, async ({ page }) => {
-      // カタログはアプリの配信対象外なので、共有の見本ファイルをそのまま返す。
-      const files: Record<string, string> = {
-        'index.html': 'text/html',
-        'tokens.css': 'text/css',
-        'components.css': 'text/css',
-        'icons.js': 'text/javascript',
-        'art.js': 'text/javascript',
-        'sample-data.js': 'text/javascript',
-        'kit.js': 'text/javascript',
-      };
-      await page.route('**/__design-catalog/**', async (route) => {
-        const name = new URL(route.request().url()).pathname.split('/').pop()!;
-        const contentType = files[name];
-        if (!contentType) return route.fulfill({ status: 404, body: '' });
-        await route.fulfill({
-          contentType,
-          body: readFileSync(new URL(`../design/${name}`, import.meta.url)),
-        });
+  test(`長い名前のメニューの見本: ${width}px / 4つのテーマ`, async ({ page }) => {
+    // カタログはアプリの配信対象外なので、共有の見本ファイルをそのまま返す。
+    const files: Record<string, string> = {
+      'index.html': 'text/html',
+      'tokens.css': 'text/css',
+      'components.css': 'text/css',
+      'icons.js': 'text/javascript',
+      'art.js': 'text/javascript',
+      'sample-data.js': 'text/javascript',
+      'kit.js': 'text/javascript',
+    };
+    await page.route('**/__design-catalog/**', async (route) => {
+      const name = new URL(route.request().url()).pathname.split('/').pop()!;
+      const contentType = files[name];
+      if (!contentType) return route.fulfill({ status: 404, body: '' });
+      await route.fulfill({
+        contentType,
+        body: readFileSync(new URL(`../design/${name}`, import.meta.url)),
       });
-      // CI のネットワークやフォント取得の成否で寸法が変わらないようにする。
-      for (const host of ['fonts.googleapis.com', 'fonts.gstatic.com']) {
-        await page.route(`https://${host}/**`, (route) => route.fulfill({ body: '' }));
-      }
-      const errors: string[] = [];
-      page.on('pageerror', (error) => errors.push(error.message));
-      await page.setViewportSize({ width: 390, height: 1000 });
-      await page.goto('/__design-catalog/index.html');
-      await page.locator('#toc a[href="#nav-wrapping"]').click();
-      await expect(page).toHaveURL(/#nav-wrapping$/);
-      const section = page.locator('#nav-wrapping');
-      const labels = section.locator('.is-wrapping .nav-item-label');
-      await expect(labels).toHaveCount(3);
-      await expect(labels.nth(0)).toHaveText('こもれび工房の Wiki');
-      await expect(labels.nth(1)).toContainText('共同研究開発チーム');
-      const longName = (await labels.nth(2).innerText()).replace('の Wiki', '');
-      expect(longName).toMatch(/^[a-zA-Z0-9]{80}$/);
-      await page.setViewportSize({ width, height: 1000 });
+    });
+    // CI のネットワークやフォント取得の成否で寸法が変わらないようにする。
+    for (const host of ['fonts.googleapis.com', 'fonts.gstatic.com']) {
+      await page.route(`https://${host}/**`, (route) => route.fulfill({ body: '' }));
+    }
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await page.goto('/__design-catalog/index.html');
+    await page.locator('#toc a[href="#nav-wrapping"]').click();
+    await expect(page).toHaveURL(/#nav-wrapping$/);
+    const section = page.locator('#nav-wrapping');
+    const labels = section.locator('.is-wrapping .nav-item-label');
+    await expect(labels).toHaveCount(3);
+    await expect(labels.nth(0)).toHaveText('こもれび工房の Wiki');
+    await expect(labels.nth(1)).toContainText('共同研究開発チーム');
+    const longName = (await labels.nth(2).innerText()).replace('の Wiki', '');
+    expect(longName).toMatch(/^[a-zA-Z0-9]{80}$/);
+    await page.setViewportSize({ width, height: 1000 });
+    const pickTheme = async (theme: (typeof THEMES)[number]) => {
       await page.locator(`[data-pick-theme][value="${theme}"]`).check();
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-      for (const [index, nav] of (await section.locator('.nav').all()).entries()) {
-        await nav.scrollIntoViewIfNeeded();
-        await expect(nav).toHaveCSS('display', width <= 760 ? 'flex' : 'grid');
-        await expect(nav.locator('svg use')).toHaveCount(3);
-        await expect(nav.locator('[aria-current="page"]')).toHaveClass(/is-wrapping/);
-        const label = nav.locator('.is-wrapping .nav-item-label');
-        await expect(label).toHaveCSS('overflow-wrap', 'anywhere');
-        const size = await label.evaluate((el) => ({
-          width: el.getBoundingClientRect().width,
-          scroll: el.scrollWidth,
-          height: el.getBoundingClientRect().height,
-          lineHeight: parseFloat(getComputedStyle(el).lineHeight),
-          clientHeight: el.clientHeight,
-          scrollHeight: el.scrollHeight,
-          left: el.getBoundingClientRect().left,
-          right: el.getBoundingClientRect().right,
-          itemLeft: el.parentElement!.getBoundingClientRect().left,
-          itemRight: el.parentElement!.getBoundingClientRect().right,
-        }));
-        expect(size.scroll).toBeLessThanOrEqual(size.width + 1);
-        expect(size.left).toBeGreaterThanOrEqual(size.itemLeft);
-        expect(size.right).toBeLessThanOrEqual(size.itemRight + 1);
-        if (width <= 760) expect(size.width).toBeLessThanOrEqual(192.1);
-        if (width > 760 && index > 0) expect(size.height).toBeGreaterThanOrEqual(size.lineHeight * 2 - 1);
-        expect(size.scrollHeight).toBeLessThanOrEqual(size.clientHeight + 1);
-        if (width <= 390) {
-          const scroll = await nav.evaluate((el) => ({ width: el.clientWidth, content: el.scrollWidth }));
-          expect(scroll.content).toBeGreaterThan(scroll.width);
+    };
+    // テーマごとの、見本の節があるときのページの幅
+    const pageWidths = new Map<string, number>();
+    for (const theme of THEMES) {
+      await test.step(theme, async () => {
+        await pickTheme(theme);
+        for (const [index, nav] of (await section.locator('.nav').all()).entries()) {
+          await nav.scrollIntoViewIfNeeded();
+          // テーマを当てた後のスタイルと寸法は同期で決まるので、メニュー1つ分を1回の evaluate でまとめて読む
+          // （項目ごとに待ちつきの確かめを並べると、大きなカタログの上で1回ずつ要素を引き直し、テーマごとに数秒かかっていた）
+          const read = await nav.evaluate((el) => {
+            const label = el.querySelector<HTMLElement>('.is-wrapping .nav-item-label')!;
+            const rect = label.getBoundingClientRect();
+            const item = label.parentElement!.getBoundingClientRect();
+            return {
+              display: getComputedStyle(el).display,
+              icons: el.querySelectorAll('svg use').length,
+              // 元の locator の確かめと同じく、当たる要素がちょうど1つであることも見る（querySelector は最初の1つしか読まない）
+              currents: el.querySelectorAll('[aria-current="page"]').length,
+              labels: el.querySelectorAll('.is-wrapping .nav-item-label').length,
+              currentIsWrapping: el.querySelector('[aria-current="page"]')?.classList.contains('is-wrapping') ?? false,
+              overflowWrap: getComputedStyle(label).overflowWrap,
+              width: rect.width,
+              scroll: label.scrollWidth,
+              height: rect.height,
+              lineHeight: parseFloat(getComputedStyle(label).lineHeight),
+              clientHeight: label.clientHeight,
+              scrollHeight: label.scrollHeight,
+              left: rect.left,
+              right: rect.right,
+              itemLeft: item.left,
+              itemRight: item.right,
+              navWidth: el.clientWidth,
+              navContent: el.scrollWidth,
+            };
+          });
+          expect(read.display).toBe(width <= 760 ? 'flex' : 'grid');
+          expect(read.icons).toBe(3);
+          expect(read.currents).toBe(1);
+          expect(read.labels).toBe(1);
+          expect(read.currentIsWrapping).toBe(true);
+          expect(read.overflowWrap).toBe('anywhere');
+          expect(read.scroll).toBeLessThanOrEqual(read.width + 1);
+          expect(read.left).toBeGreaterThanOrEqual(read.itemLeft);
+          expect(read.right).toBeLessThanOrEqual(read.itemRight + 1);
+          if (width <= 760) expect(read.width).toBeLessThanOrEqual(192.1);
+          if (width > 760 && index > 0) expect(read.height).toBeGreaterThanOrEqual(read.lineHeight * 2 - 1);
+          expect(read.scrollHeight).toBeLessThanOrEqual(read.clientHeight + 1);
+          if (width <= 390) expect(read.navContent).toBeGreaterThan(read.navWidth);
+          // 帯を最後まで送ると、隣の短い項目にも届く。次のテーマのために先頭へ戻す
+          await nav.evaluate((el) => {
+            el.scrollLeft = el.scrollWidth;
+          });
+          await expect(nav.locator('.nav-item').last()).toBeInViewport();
+          await nav.evaluate((el) => {
+            el.scrollLeft = 0;
+          });
         }
-        // 帯を最後まで送ると、隣の短い項目にも届く。
-        await nav.evaluate((el) => {
-          el.scrollLeft = el.scrollWidth;
-        });
-        await expect(nav.locator('.nav-item').last()).toBeInViewport();
-      }
-      const bounds = await section.boundingBox();
-      expect(bounds!.x).toBeGreaterThanOrEqual(0);
-      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
-      // 他の既存の見本は 320/390px で横にはみ出す。今回の見本が幅を増やさないことを確かめる。
-      const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-      await section.evaluate((el) => el.remove());
+        const bounds = await section.boundingBox();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+        pageWidths.set(theme, await page.evaluate(() => document.documentElement.scrollWidth));
+      });
+    }
+    // 他の既存の見本は 320/390px で横にはみ出す。今回の見本が幅を増やさないことを、節を消した後の幅とテーマごとに比べて確かめる。
+    await section.evaluate((el) => el.remove());
+    for (const theme of THEMES) {
+      await pickTheme(theme);
       const existingWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-      expect(pageWidth).toBeLessThanOrEqual(Math.max(width, existingWidth));
-      expect(errors).toEqual([]);
-    });
-  }
+      expect(pageWidths.get(theme), theme).toBeLessThanOrEqual(Math.max(width, existingWidth));
+    }
+    expect(errors).toEqual([]);
+  });
 }
 
 test('見本の引き出し: タブを切り替えても、作り直しても、書きかけのコメントを残し、別のタスクへ移ると捨てる', async ({
@@ -251,37 +282,40 @@ const controlEdge: Record<string, string> = {
   medieval: 'rgb(127, 136, 144)',
   modern: 'rgb(70, 115, 159)',
 };
-for (const theme of Object.keys(controlEdge)) {
-  test(`操作部品の枠の色: ${theme}`, async ({ page }) => {
-    const files: Record<string, string> = {
-      'index.html': 'text/html',
-      'tokens.css': 'text/css',
-      'components.css': 'text/css',
-      'icons.js': 'text/javascript',
-      'art.js': 'text/javascript',
-      'sample-data.js': 'text/javascript',
-      'kit.js': 'text/javascript',
-    };
-    await page.route('**/__design-catalog/**', async (route) => {
-      const name = new URL(route.request().url()).pathname.split('/').pop()!;
-      const contentType = files[name];
-      if (!contentType) return route.fulfill({ status: 404, body: '' });
-      await route.fulfill({ contentType, body: readFileSync(new URL(`../design/${name}`, import.meta.url)) });
-    });
-    for (const host of ['fonts.googleapis.com', 'fonts.gstatic.com']) {
-      await page.route(`https://${host}/**`, (route) => route.fulfill({ body: '' }));
-    }
-    await page.goto('/__design-catalog/index.html');
-    await page.locator(`[data-pick-theme][value="${theme}"]`).check();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    for (const selector of [
-      '.input',
-      '.select',
-      '.search',
-      '.btn:not(.is-primary):not(.is-quiet):not(.is-danger):not(.is-google)',
-    ]) {
-      const control = page.locator(`#main ${selector}, main ${selector}, ${selector}`).first();
-      await expect(control).toHaveCSS('border-top-color', controlEdge[theme]);
-    }
+// カタログを開くのは1回にし、テーマはページを開いたまま切り替える（テーマごとに開き直さない）。どのテーマで落ちたかは test.step の名前で分かる
+test('操作部品の枠の色: 4つのテーマ', async ({ page }) => {
+  const files: Record<string, string> = {
+    'index.html': 'text/html',
+    'tokens.css': 'text/css',
+    'components.css': 'text/css',
+    'icons.js': 'text/javascript',
+    'art.js': 'text/javascript',
+    'sample-data.js': 'text/javascript',
+    'kit.js': 'text/javascript',
+  };
+  await page.route('**/__design-catalog/**', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').pop()!;
+    const contentType = files[name];
+    if (!contentType) return route.fulfill({ status: 404, body: '' });
+    await route.fulfill({ contentType, body: readFileSync(new URL(`../design/${name}`, import.meta.url)) });
   });
-}
+  for (const host of ['fonts.googleapis.com', 'fonts.gstatic.com']) {
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ body: '' }));
+  }
+  await page.goto('/__design-catalog/index.html');
+  for (const [theme, edge] of Object.entries(controlEdge)) {
+    await test.step(theme, async () => {
+      await page.locator(`[data-pick-theme][value="${theme}"]`).check();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      for (const selector of [
+        '.input',
+        '.select',
+        '.search',
+        '.btn:not(.is-primary):not(.is-quiet):not(.is-danger):not(.is-google)',
+      ]) {
+        const control = page.locator(`#main ${selector}, main ${selector}, ${selector}`).first();
+        await expect(control).toHaveCSS('border-top-color', edge);
+      }
+    });
+  }
+});
