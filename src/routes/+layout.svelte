@@ -16,6 +16,7 @@
   import IconSprite from '../lib/components/IconSprite.svelte';
   import LoadingSheet from '../lib/components/LoadingSheet.svelte';
   import ToastRegion from '../lib/components/ToastRegion.svelte';
+  import { shortcuts } from '../lib/shortcuts.svelte.ts';
   import { t } from '../lib/vocabulary.svelte.ts';
 
   let { children }: { children: Snippet } = $props();
@@ -37,9 +38,10 @@
   });
 </script>
 
-<!-- bfcache から戻った画面（ログアウトの前の組織の画面など）は、メモリに残った前の人のデータと busy のまま止まった状態ごと戻る。
+<!-- キーボードのショートカットは、ここで keydown を1つだけ受けて shortcuts.svelte.ts が振り分ける。
+     bfcache から戻った画面（ログアウトの前の組織の画面など）は、メモリに残った前の人のデータと busy のまま止まった状態ごと戻る。
      読み直して、今のセッションで作り直す -->
-<svelte:window onpageshow={(event) => event.persisted && location.reload()} />
+<svelte:window onpageshow={(event) => event.persisted && location.reload()} onkeydown={shortcuts.handle} />
 
 <!-- 全画面に共通のものだけを置く。左のメニューと上の帯の枠は /[slug] のレイアウト（ログインと組織の選択には枠を出さない） -->
 <IconSprite />
