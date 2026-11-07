@@ -419,6 +419,33 @@ describe('task-update', () => {
       expect(await logsOf(target, task.id)).toHaveLength(2);
     });
 
+    test('まとめた後に時計が戻っても（最新の行の created_at より前）、まとめない', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      expect((await update(target, task.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, task.id, { body_md: '二回目' }, target.member, at(4))).status).toBe(200);
+      expect((await update(target, task.id, { body_md: '三回目' }, target.member, at(2))).status).toBe(200);
+      const logs = (await logsOf(target, task.id)).map((log) => JSON.parse(log.changes_json));
+      expect(logs).toHaveLength(2);
+      // 時計が戻った行は created_at が早いので並びは前後する。2行になり、どちらも前後がつながっていればよい
+      expect(logs).toEqual(
+        expect.arrayContaining([{ body_md: ['元の本文', '二回目'] }, { body_md: ['二回目', '三回目'] }]),
+      );
+    });
+
+    test('行き来する入力（A→B→A→B）は、毎回新しい行になる', async () => {
+      const target = await createTarget();
+      const task = await seeded(target);
+      for (const [minutes, value] of [
+        [0, 'B'],
+        [1, '元の本文'],
+        [2, 'B'],
+      ] as const) {
+        expect((await update(target, task.id, { body_md: value }, target.member, at(minutes))).status).toBe(200);
+      }
+      expect(await logsOf(target, task.id)).toHaveLength(3);
+    });
+
     test('履歴の「後」が今の値と合わない行（履歴を書かない経路が変えた）には、まとめない', async () => {
       const target = await createTarget();
       const task = await seeded(target);

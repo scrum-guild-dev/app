@@ -371,10 +371,15 @@ async function readMergeTarget(
   if (latest === undefined || latest.action !== 'update' || latest.actor_user_id !== actorUserId) return undefined;
   // 間の起点は、行を最初に書いた時刻（ID の UUIDv7 の先頭48ビット）。まとめるたびに created_at を進めても間は延びない
   // （延びると、悪い値を入れて元へ戻した痕跡を、続けて直して消せてしまう）
-  const firstWrittenAt = Number.parseInt(latest.id.replaceAll('-', '').slice(0, 12), 16);
+  // ID が UUIDv7 でない行（seed、取り込み、古い行）は、先頭48ビットが時刻でないのでまとめない
+  const idHex = latest.id.replaceAll('-', '');
+  if (idHex.length !== 32 || idHex[12] !== '7') return undefined;
+  const firstWrittenAt = Number.parseInt(idHex.slice(0, 12), 16);
   // 時計が戻っている（最初に書いた時刻より前）ときもまとめない（まとめると created_at が過去へ戻り、履歴の並びが実際の順と食い違う）
   const elapsed = at.getTime() - firstWrittenAt;
   if (!Number.isFinite(elapsed) || elapsed < 0 || elapsed > HISTORY_MERGE_WINDOW_MS) return undefined;
+  // まとめるたびに created_at は進むので、最新の行の created_at より時計が戻っているときもまとめない（created_at が過去へ戻らないように）
+  if (at.getTime() < Date.parse(latest.created_at)) return undefined;
   let logged: unknown;
   try {
     logged = JSON.parse(latest.changes_json);

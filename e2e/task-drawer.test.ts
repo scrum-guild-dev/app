@@ -470,9 +470,13 @@ test('変更の履歴: 読めなければ「もう一度試す」で読み直し
     const first = output.entries[0]!;
     await call.fulfill({ ...output, entries: [first], next: { created_at: first.created_at, id: first.id } });
   });
-  await drawer.getByRole('radio', { name: '8', exact: true }).check();
+  // 続けて同じ欄を直すと履歴が1行にまとまるので、行を分けるために別の欄（タイトル）を直す
+  await drawer.getByRole('button', { name: /履歴を読み直す/ }).click();
+  const titleInput = drawer.getByRole('textbox', { name: 'タイトル' });
+  await titleInput.fill('履歴を読み直した');
+  await titleInput.press('Enter');
   await expect(items).toHaveCount(1);
-  await expect(items.nth(0).locator('.history-changes li span')).toHaveText(['ポイント', '5 → 8']);
+  await expect(items.nth(0).locator('.history-changes li span').last()).toHaveText('履歴を読み直す → 履歴を読み直した');
   await history.getByRole('button', { name: 'さらに読む' }).click();
   await expect(items).toHaveCount(3);
   await expect(items.nth(1).locator('.history-changes li span')).toHaveText(['ポイント', '未見積もり → 5']);
