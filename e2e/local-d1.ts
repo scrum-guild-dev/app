@@ -204,6 +204,25 @@ export async function resetPasswordAccountConsents(): Promise<void> {
   ]);
 }
 
+// あおば開発の受託開発チーム（seed/data.sql）
+const AOBA_ORGANIZATION_ID = '019a0000-0000-7000-8000-000000000201';
+export const AOBA_CLIENT_WORKSPACE_ID = '019a0000-0000-7000-8000-000000000401';
+// 受託開発チームにテストが作ったタスクの題の頭。seed のタスクの題はこれで始まらない
+export const E2E_SEED_TASK_PREFIX = 'e2e の親なしタスク';
+
+// 受託開発チームに、題が E2E_SEED_TASK_PREFIX で始まるタスク（テストが作った行）と、その変更の履歴を消し、seed の状態へ戻す。
+// 親なしのタスクは木の末尾に並ぶので、残ると繰り返しとほかのテストの木に出る。作っただけのタスクが書くのは tasks と
+// change_logs だけ（src/server/operations/task.ts の taskCreateOperation）。変更の履歴は消す対象を tasks から引くので、先に消す
+export async function removeE2eSeedTasks(): Promise<void> {
+  // 頭の一致は instr で見る。LIKE は ASCII の大文字小文字を区別せず、% と _ を特別に扱う
+  const inWorkspace = `workspace_id = '${AOBA_CLIENT_WORKSPACE_ID}' AND instr(title, '${E2E_SEED_TASK_PREFIX}') = 1`;
+  await executeLocalD1([
+    `DELETE FROM change_logs WHERE organization_id = '${AOBA_ORGANIZATION_ID}' ` +
+      `AND entity_type = 'task' AND entity_id IN (SELECT id FROM tasks WHERE ${inWorkspace});`,
+    `DELETE FROM tasks WHERE ${inWorkspace};`,
+  ]);
+}
+
 // seed のセッションのアカウントが「組織を作る」で作った組織を、その users と change_logs ごと消す。お試し中の組織は1アカウントに1つまでで、
 // slug も一意なので、作った組織が残ると繰り返し（--repeat-each）の2回目から作れない。作った直後の組織が持つのは users と change_logs だけ
 // （ほかの表の行は無い）。外部キーの向きに合わせ、変更の履歴、users、組織の順に消す。どの文も作ったアカウントで絞った組織だけを対象にする

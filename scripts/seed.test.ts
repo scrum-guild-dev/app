@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { generateKeyBetween } from 'fractional-indexing';
 import { PRIVACY_VERSION, TERMS_VERSION } from '../src/lib/legal/versions.ts';
 import { SEED_PASSWORD_LOGINS } from '../seed/passwords.ts';
 import { SEED_OPERATOR_LOGIN_ID, SEED_SESSIONS } from '../seed/sessions.ts';
@@ -107,6 +108,22 @@ describe('seed の同意', () => {
   });
 });
 
+// sqlite_master の CREATE TABLE の文から、位置の列（position と *_position）の名前を拾う
+function positionColumnNames(sql: string): string[] {
+  return [...sql.matchAll(/(?:^|[,(])\s*"?(position|\w+_position)"?\s/gm)].map(([, column]) => column!);
+}
+
+describe('positionColumnNames', () => {
+  test('CREATE TABLE の列と、ALTER TABLE で足した列（前の列と同じ行の「, 」の後に入る）を拾い、名前の一部だけ合う列は拾わない', () => {
+    // SQLite は ALTER TABLE ... ADD COLUMN の列を、保存した文の閉じ括弧の前に「, <列の定義>」で差し込む
+    const sql =
+      'CREATE TABLE t (\n  id TEXT,\n  position TEXT NOT NULL,\n  positioned_at TEXT\n, sprint_position TEXT, "extra_position" TEXT)';
+    assert.deepEqual(positionColumnNames(sql), ['position', 'sprint_position', 'extra_position']);
+    // 1行に書いた文の、最初の列
+    assert.deepEqual(positionColumnNames('CREATE TABLE u (position TEXT, id TEXT)'), ['position']);
+  });
+});
+
 describe('seedTables', () => {
   test('マイグレーションの記録と SQLite と D1 の表は消さない', () => {
     assert.deepEqual(seedTables(['_cf_METADATA', 'accounts', 'd1_migrations', 'sqlite_sequence', 'users']), [
@@ -196,6 +213,94 @@ describe('pnpm db:seed', () => {
       );
       assert.equal(check.status, 0, check.stderr);
       assert.deepEqual((JSON.parse(check.stdout) as { results: unknown[] }[])[0].results, [], '親の無い行が無い');
+
+      // 位置の値は、アプリが末尾に足すときに generateKeyBetween へそのまま渡す。受け付けない値が1つでもあると、
+      // その並びに足す操作が 500 になる（#881）。
+      // 位置の列（position と *_position）はスキーマから拾い、マイグレーションで足した列も検査に入れる。D1 は pragma_table_info を
+      // SQLITE_AUTH で断るので、sqlite_master の CREATE TABLE の文（ALTER TABLE で足した列も入る）から列名を読む
+      const schema = spawnSync(
+        wrangler,
+        [
+          'd1',
+          'execute',
+          'DB',
+          '--local',
+          '--persist-to',
+          persistTo,
+          '--json',
+          '--command',
+          "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND sql LIKE '%position%'",
+        ],
+        { cwd: root, env, encoding: 'utf8' },
+      );
+      assert.equal(schema.status, 0, schema.stderr || schema.stdout);
+      const positionColumns = (
+        JSON.parse(schema.stdout) as { results: { name: string; sql: string }[] }[]
+      )[0].results.flatMap(({ name, sql }) => positionColumnNames(sql).map((column) => [name, column] as const));
+      // 拾い方が壊れて列が減ったら気づけるよう、今ある列は必ず入っていることを確かめる
+      for (const known of [
+        'tasks.position',
+        'tasks.column_position',
+        'board_columns.position',
+        'wiki_pages.position',
+      ]) {
+        assert.ok(
+          positionColumns.some(([table, column]) => `${table}.${column}` === known),
+          `${known} を位置の列として拾えていない`,
+        );
+      }
+      // D1 は UNION を数本までしか受け付けないので、列ごとの JSON を1行に並べる
+      const positionQuery = `SELECT ${positionColumns
+        .map(
+          ([table, column]) =>
+            `(SELECT json_group_array(json_object('id', id, 'value', ${column})) FROM ${table} WHERE ${column} IS NOT NULL) AS "${table}.${column}"`,
+        )
+        .join(', ')}`;
+      const positions = spawnSync(
+        wrangler,
+        ['d1', 'execute', 'DB', '--local', '--persist-to', persistTo, '--json', '--command', positionQuery],
+        { cwd: root, env, encoding: 'utf8' },
+      );
+      assert.equal(positions.status, 0, positions.stderr || positions.stdout);
+      const [positionRow] = (JSON.parse(positions.stdout) as { results: Record<string, string>[] }[])[0].results;
+      const positionRows = Object.entries(positionRow!).flatMap(([col, json]) =>
+        (JSON.parse(json) as { id: string; value: string }[]).map((row) => ({ col, ...row })),
+      );
+      assert.ok(positionRows.length > 0, '位置の値を引けている');
+      const invalid = positionRows.filter(({ value }) => {
+        try {
+          generateKeyBetween(value, null);
+          return false;
+        } catch {
+          return true;
+        }
+      });
+      assert.deepEqual(invalid, [], 'fractional-indexing が受け付けない位置の値が無い');
+
+      // 受託開発チームの親なしのタスクは、未完了の4件の後に完了の6件が、作った順に並ぶ（#881 で位置を直す前と同じ順）
+      const rootTasks = spawnSync(
+        wrangler,
+        [
+          'd1',
+          'execute',
+          'DB',
+          '--local',
+          '--persist-to',
+          persistTo,
+          '--json',
+          '--command',
+          "SELECT substr(id, -3) AS id, position FROM tasks WHERE workspace_id = '019a0000-0000-7000-8000-000000000401' " +
+            'AND story_id IS NULL AND deleted_at IS NULL ORDER BY position, id',
+        ],
+        { cwd: root, env, encoding: 'utf8' },
+      );
+      assert.equal(rootTasks.status, 0, rootTasks.stderr || rootTasks.stdout);
+      const rootRows = (JSON.parse(rootTasks.stdout) as { results: { id: string; position: string }[] }[])[0].results;
+      assert.deepEqual(
+        rootRows.map((row) => row.id),
+        ['801', '802', '803', '804', '851', '852', '853', '854', '855', '856'],
+      );
+      assert.equal(new Set(rootRows.map((row) => row.position)).size, rootRows.length, '位置が重ならない');
     } finally {
       rmSync(persistTo, { recursive: true, force: true });
     }

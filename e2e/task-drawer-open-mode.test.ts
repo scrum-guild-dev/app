@@ -251,7 +251,8 @@ test('既定がページ全体のとき、一覧のスクロールの位置を�
   await page.addInitScript(() => localStorage.setItem('task-open-mode', 'page'));
   await page.setViewportSize({ width: 1280, height: 480 });
   await page.goto('/aoba/w/019a0000-0000-7000-8000-000000000401');
-  const link = page.locator('a.entry-title').last();
+  // 木の下のほうにある seed の親なしのタスク。.last() にすると、並べて走る e2e/tree-add-row.test.ts が足して消す行を拾う
+  const link = page.getByRole('link', { name: '問い合わせテンプレートを整える', exact: true });
   await expect(link).toBeVisible();
   await waitForSettled(page);
   await settledScrollY(page);
