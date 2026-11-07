@@ -108,6 +108,22 @@ describe('seed の同意', () => {
   });
 });
 
+// sqlite_master の CREATE TABLE の文から、位置の列（position と *_position）の名前を拾う
+function positionColumnNames(sql: string): string[] {
+  return [...sql.matchAll(/(?:^|[,(])\s*"?(position|\w+_position)"?\s/gm)].map(([, column]) => column!);
+}
+
+describe('positionColumnNames', () => {
+  test('CREATE TABLE の列と、ALTER TABLE で足した列（前の列と同じ行の「, 」の後に入る）を拾い、名前の一部だけ合う列は拾わない', () => {
+    // SQLite は ALTER TABLE ... ADD COLUMN の列を、保存した文の閉じ括弧の前に「, <列の定義>」で差し込む
+    const sql =
+      'CREATE TABLE t (\n  id TEXT,\n  position TEXT NOT NULL,\n  positioned_at TEXT\n, sprint_position TEXT, "extra_position" TEXT)';
+    assert.deepEqual(positionColumnNames(sql), ['position', 'sprint_position', 'extra_position']);
+    // 1行に書いた文の、最初の列
+    assert.deepEqual(positionColumnNames('CREATE TABLE u (position TEXT, id TEXT)'), ['position']);
+  });
+});
+
 describe('seedTables', () => {
   test('マイグレーションの記録と SQLite と D1 の表は消さない', () => {
     assert.deepEqual(seedTables(['_cf_METADATA', 'accounts', 'd1_migrations', 'sqlite_sequence', 'users']), [
@@ -220,9 +236,7 @@ describe('pnpm db:seed', () => {
       assert.equal(schema.status, 0, schema.stderr || schema.stdout);
       const positionColumns = (
         JSON.parse(schema.stdout) as { results: { name: string; sql: string }[] }[]
-      )[0].results.flatMap(({ name, sql }) =>
-        [...sql.matchAll(/^\s*"?(position|\w+_position)"?\s/gm)].map(([, column]) => [name, column!] as const),
-      );
+      )[0].results.flatMap(({ name, sql }) => positionColumnNames(sql).map((column) => [name, column] as const));
       // 拾い方が壊れて列が減ったら気づけるよう、今ある列は必ず入っていることを確かめる
       for (const known of [
         'tasks.position',
