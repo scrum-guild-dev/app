@@ -3,21 +3,13 @@
 // seed のセッション（seed/sessions.ts）の Cookie で開く。行を足すので、自分で作ったワークスペースで行う
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
-
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-}
 
 async function openSettings(page: Page): Promise<void> {
   await page.getByRole('link', { name: '設定', exact: true }).click();
@@ -31,8 +23,8 @@ test('完成の定義を書く → バックログと引き出しに出る → �
 }) => {
   const collect = await watchViolations(page);
   await createWorkspace(page, '掟のワークスペース');
-  await addTask(page, '見積もりを送る');
-  await addTask(page, '議事録をまとめる');
+  await addTaskRow(page, '見積もりを送る');
+  await addTaskRow(page, '議事録をまとめる');
 
   // 空のうちは、バックログにも引き出しにも出さない。完了の操作だけを出す
   await expect(page.locator('.dod')).toHaveCount(0);

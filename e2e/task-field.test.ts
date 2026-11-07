@@ -1,10 +1,10 @@
-// 一本道: 設定で決まった欄を足す → 起票した行と見出しに「詳細 未記入」が出る → 引き出しで欄を Markdown で書くと印が消える →
+// 一本道: 設定で決まった欄を足す → 作った行と見出しに「詳細 未記入」が出る → 引き出しで欄を Markdown で書くと印が消える →
 // 空にすると未記入に戻る → 欄を削除すると未記入の判定から外れる。同時に直されて断られたら、読み直しを促す。計画の画面とスプリントに入れるダイアログに件数が出る。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。行を足すテストは、自分で作ったワークスペースで行う
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { taskFieldSet } from '../src/shared/operations/task/task-field-set.ts';
-import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { taskDetail } from '../src/shared/operations/task/task-detail.ts';
 import { failOperation, rewriteOperation } from './operations.ts';
 
@@ -20,20 +20,12 @@ async function openSettings(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: '設定' })).toBeVisible();
 }
 
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-}
-
 // 見出しの集計の「詳細 未記入」の数
 function unfilledTally(page: Page) {
   return page.locator('.page-head .tally > div', { hasText: '詳細 未記入' });
 }
 
-test('設定で欄を足す → 起票した行と見出しに未記入 → 引き出しで書くと印が消える → 空にすると戻る → 欄を削除すると判定から外れる', async ({
+test('設定で欄を足す → 作った行と見出しに未記入 → 引き出しで書くと印が消える → 空にすると戻る → 欄を削除すると判定から外れる', async ({
   page,
 }) => {
   const collect = await watchViolations(page);
@@ -55,10 +47,10 @@ test('設定で欄を足す → 起票した行と見出しに未記入 → 引�
   await page.getByRole('button', { name: '決まった欄を足す' }).click();
   await expect(page.getByText('同じ名前の決まった欄があります')).toBeVisible();
 
-  // バックログ: 起票した行と見出しに未記入が出る
+  // バックログ: 作った行と見出しに未記入が出る
   await page.locator('.nav-item', { hasText: 'バックログ' }).click();
-  await addTask(page, '失効の通知を直す');
-  await addTask(page, '履歴の画面を作る');
+  await addTaskRow(page, '失効の通知を直す');
+  await addTaskRow(page, '履歴の画面を作る');
   const row = page.locator('.entry', { hasText: '失効の通知を直す' });
   await expect(row.locator('.chip.is-todo')).toHaveText('詳細 未記入');
   await expect(unfilledTally(page)).toHaveText(/詳細 未記入\s*2/);
@@ -127,7 +119,7 @@ test('バックログでない（受信箱とアーカイブの）タスクの�
   page,
 }) => {
   await createWorkspace(page, '印の範囲ワークスペース');
-  await addTask(page, '範囲を確かめる');
+  await addTaskRow(page, '範囲を確かめる');
   const open = async () => {
     await page.locator('.entry', { hasText: '範囲を確かめる' }).getByRole('link', { name: '範囲を確かめる' }).click();
     return page.getByRole('dialog', { name: '範囲を確かめる' });
@@ -149,7 +141,7 @@ test('バックログでない（受信箱とアーカイブの）タスクの�
 
 test('同時に直されて断られると、書きかけを残したまま読み直しを促し、読み直した値で書き直せる', async ({ page }) => {
   await createWorkspace(page, '同時に直すワークスペース');
-  await addTask(page, '比べる対象');
+  await addTaskRow(page, '比べる対象');
   await page.locator('.entry', { hasText: '比べる対象' }).getByRole('link', { name: '比べる対象' }).click();
   const drawer = page.getByRole('dialog', { name: '比べる対象' });
 
@@ -174,8 +166,8 @@ test('計画の画面の先のスプリントとスプリントに入れるダ�
   page,
 }) => {
   await createWorkspace(page, '計画の未記入ワークスペース');
-  await addTask(page, '書き終えたタスク');
-  await addTask(page, '書いていないタスク');
+  await addTaskRow(page, '書き終えたタスク');
+  await addTaskRow(page, '書いていないタスク');
   const first = page.locator('.entry', { hasText: '書き終えたタスク' });
   await first.getByRole('link', { name: '書き終えたタスク' }).click();
   const drawer = page.getByRole('dialog', { name: '書き終えたタスク' });

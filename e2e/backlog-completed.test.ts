@@ -3,11 +3,13 @@ import { expect, test } from './fixtures.ts';
 import { backlogCompletedTasks } from '../src/shared/operations/task/backlog-completed-tasks.ts';
 import {
   addStoryRow,
+  addTaskRow,
   createWorkspace,
   expectModalFocus,
   createLayoutCheck,
   signIn,
   waitForResponses,
+  waitForSettled,
   watchViolations,
 } from './helpers.ts';
 import { routeOperation } from './operations.ts';
@@ -21,26 +23,22 @@ test('親なしと配下の完了をキーボードで開閉し、詳細を開�
   const collect = await watchViolations(page);
   const suffix = `${test.info().repeatEachIndex}-${test.info().retry}`;
   await createWorkspace(page, `完了の一覧-${suffix}`);
-  const story = 'ストーリー';
-  const create = '起票';
   const done = '完了';
-  const assignee = '担当';
   await addStoryRow(page, `目標-${suffix}`);
-  const dialog = page.getByRole('dialog');
   for (const child of [false, true]) {
     const title = `${child ? '配下' : '親なし'}の完了-${suffix}`;
-    await page.getByRole('button', { name: create, exact: true }).click();
-    await dialog.getByLabel('タイトル').fill(title);
-    await expect(
-      dialog.getByRole('combobox', { name: assignee, exact: true }).getByRole('option', { name: 'ミナト' }),
-    ).toBeAttached();
-    await dialog.getByRole('combobox', { name: assignee, exact: true }).selectOption({ label: 'ミナト' });
-    await dialog.getByRole('radio', { name: '3', exact: true }).check();
-    if (child) await dialog.getByLabel(`親の${story}`).selectOption({ label: `目標-${suffix}` });
-    const created = waitForResponses(page, '/task-create');
-    await dialog.getByRole('button', { name: create, exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await created;
+    await addTaskRow(page, title, child ? `目標-${suffix}` : undefined);
+    // ポイントと担当は、作った後に行のチップで選ぶ
+    const row = page.locator('.entry', { hasText: title });
+    const pointed = waitForResponses(page, '/task-update');
+    await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
+    await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
+    await pointed;
+    const assigned = waitForResponses(page, '/task-assign');
+    await row.getByRole('button', { name: '担当: 未設定' }).click();
+    await page.getByRole('menu', { name: '担当を選ぶ' }).getByRole('menuitemradio', { name: 'ミナト' }).click();
+    await assigned;
+    await waitForSettled(page);
     const completed = waitForResponses(page, '/task-complete');
     await page.getByRole('button', { name: `${done}にする: ${title}`, exact: true }).click();
     await completed;
@@ -119,16 +117,9 @@ test('親なしと配下の完了をキーボードで開閉し、詳細を開�
   ]);
 });
 
-// ワークスペースで、タスクを起票して完了にする。parent があれば、その題のストーリーの配下に作る
+// ワークスペースで、タスクを作って完了にする。parent があれば、その題のストーリーの配下に作る
 async function createCompletedTask(page: Page, title: string, parent?: string): Promise<void> {
-  await page.getByRole('button', { name: '起票', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('タイトル').fill(title);
-  if (parent !== undefined) await dialog.getByLabel('親のストーリー').selectOption({ label: parent });
-  const created = waitForResponses(page, '/task-create');
-  await dialog.getByRole('button', { name: '起票', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await created;
+  await addTaskRow(page, title, parent);
   const completed = waitForResponses(page, '/task-complete');
   await page.getByRole('button', { name: `完了にする: ${title}`, exact: true }).click();
   await completed;

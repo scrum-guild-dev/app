@@ -1,10 +1,10 @@
 // 木の空の行: エピックとストーリーを、題を打って Enter だけで作る（#846）。
-// 一本道: 最初のストーリーでバックログに木を出す → 木の末尾の「エピックを足す」でエピック → そのエピックの末尾の「ストーリーを足す」で配下のストーリー
+// 一本道: 最初のタスクを木の末尾の空の行で作る → 木の末尾の「エピックを足す」でエピック → そのエピックの末尾の「ストーリーを足す」で配下のストーリー
 // → 木の末尾の「ストーリーを足す」で親のないストーリー。読み直しても同じ位置にある。CSP の違反も確かめる
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { taskCreate } from '../src/shared/operations/task/task-create.ts';
-import { addStoryRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addStoryRow, addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { AOBA_CLIENT_WORKSPACE_ID, E2E_SEED_TASK_PREFIX, removeE2eSeedTasks } from './local-d1.ts';
 import { failOperation } from './operations.ts';
 
@@ -27,12 +27,8 @@ test('エピックとストーリーを、木の空の行に題を打って Ente
   const collect = await watchViolations(page);
   await createWorkspace(page, '空の行のワークスペース');
 
-  // 何も無いバックログには木が出ない（空の行は木の末尾にある）。最初の1件は見出しの右の「起票」でタスクを作ると木が出る
-  await page.getByRole('button', { name: '起票', exact: true }).click();
-  const firstDialog = page.getByRole('dialog', { name: '起票', exact: true });
-  await firstDialog.getByLabel('タイトル').fill('最初のタスク');
-  await firstDialog.getByRole('button', { name: '起票', exact: true }).click();
-  await expect(firstDialog).toBeHidden();
+  // 何も無いバックログにも、空の状態の下に木の末尾の空の行が出る。最初の1件は、その空の行でタスクを作る
+  await addTaskRow(page, '最初のタスク');
 
   // 木の末尾の「エピックを足す」。空のまま Enter を押しても何も作らない
   const epicInput = treeTail(page).getByRole('textbox', { name: 'エピックを足す' });

@@ -1,9 +1,8 @@
 // 一本道: 管理者がワークスペースを作る → タスクを作る → 完了にする → その行に完了の印 → 読み直すと折りたたみの件数が 1。
 // 詳細の引き出しで完了にしたタスクは、完了の帯の「戻す」で戻せる。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。CSP の違反も確かめる
-import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
@@ -20,19 +19,16 @@ test('作ったワークスペース: タスクを作って完了にすると、
   // タスクが無いうちは、最初の一歩を示す
   await expect(page.getByText('まだタスクがありません')).toBeVisible();
 
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill('  見積もりを送る  ');
-  await dialog.getByRole('radio', { name: '3', exact: true }).check();
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-  // ダイアログの中の閉じた領域には、トーストが見えない形で出るので、role で見える領域だけを引く
+  await addTaskRow(page, '見積もりを送る');
   await expect(page.getByRole('status').filter({ hasText: 'バックログの末尾に足しました' })).toBeVisible();
 
-  // 読み直さずに、一覧の末尾に出る。ポイントも出る。タイトルは `?task=<ID>` へのリンク
+  // 読み直さずに、一覧の末尾に出る。タイトルは `?task=<ID>` へのリンク
   const row = page.locator('.entry', { hasText: '見積もりを送る' });
   await expect(row).toHaveCount(1);
   await expect(row.getByRole('link', { name: '見積もりを送る' })).toHaveAttribute('href', /\?task=[0-9a-f-]{36}$/);
+  // ポイントは作った後に行のチップで選ぶ
+  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
+  await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
   await expect(row.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
   await expect(page.locator('.tree-folded')).toHaveCount(0);
 
@@ -63,15 +59,7 @@ test('スクラムの言葉: 同じ流れで、言葉がスクラムの言葉に
   await createWorkspace(page, '一本道チーム');
   await expect(page.getByText('まだタスクがありません')).toBeVisible();
 
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await expect(dialog.getByText(/1 以上のポイントが振られたままタスクが完了すると付きます/)).toBeVisible();
-  // 空のタイトルは送らずに知らせる
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog.getByText('タイトルを入れてください')).toBeVisible();
-  await dialog.getByLabel('タイトル').fill('請求書を出す');
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
+  await addTaskRow(page, '請求書を出す');
 
   const row = page.locator('.entry', { hasText: '請求書を出す' });
   await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
@@ -85,18 +73,9 @@ test('スクラムの言葉: 同じ流れで、言葉がスクラムの言葉に
   expect(await collect()).toEqual([]);
 });
 
-// 起票のダイアログから、タイトルだけでタスクを1件作る
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-}
-
 test('完了の操作を送っている間は、押せない印と読み上げを出し、応答が来たら完了の印に替わる', async ({ page }) => {
   await createWorkspace(page, '送信中ワークスペース');
-  await addTask(page, '遅い応答を待つ');
+  await addTaskRow(page, '遅い応答を待つ');
   const row = page.locator('.entry', { hasText: '遅い応答を待つ' });
 
   let release!: () => void;
@@ -122,7 +101,7 @@ test('完了の操作を送っている間は、押せない印と読み上げ�
 test('詳細の引き出しで完了にしたタスクは、完了の帯の「戻す」で戻せ、変更の履歴に残る', async ({ page }) => {
   const collect = await watchViolations(page);
   await createWorkspace(page, '戻すワークスペース');
-  await addTask(page, '議事録をまとめる');
+  await addTaskRow(page, '議事録をまとめる');
   await page.locator('.entry', { hasText: '議事録をまとめる' }).getByRole('link', { name: '議事録をまとめる' }).click();
   const drawer = page.getByRole('dialog', { name: '議事録をまとめる' });
   const bar = drawer.locator('.done-bar');
@@ -151,7 +130,7 @@ test('詳細の引き出しで完了にしたタスクは、完了の帯の「�
 
 test('完了の操作が 404 か workspace_closed を受けたら、一覧を読み直す', async ({ page }) => {
   await createWorkspace(page, '読み直しワークスペース');
-  await addTask(page, '読み直しを促す');
+  await addTaskRow(page, '読み直しを促す');
   const row = page.locator('.entry', { hasText: '読み直しを促す' });
 
   let listRequests = 0;
@@ -172,27 +151,4 @@ test('完了の操作が 404 か workspace_closed を受けたら、一覧を読
     await expect(row).toHaveCount(1);
     await expect(row.getByRole('button', { name: /完了にする/ })).toBeVisible();
   }
-});
-
-test('選んだ担当が所属を外れていたら、理由を出し、候補を読み直して担当なしに戻し、担当の選択欄にフォーカスを移す', async ({
-  page,
-}) => {
-  await createWorkspace(page, '担当の外れたワークスペース');
-  // 送ったときだけ 404 にする（親は選ばないので、外れたのは担当）
-  await page.route('**/api/aoba/task-create', async (route) => {
-    await route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'not_found' } } });
-  });
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill('外れた人に頼む');
-  const assignee = dialog.getByRole('combobox', { name: '担当' });
-  await expect(assignee.getByRole('option', { name: 'ミナト' })).toBeAttached();
-  await assignee.selectOption({ label: 'ミナト' });
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(
-    dialog.getByText('選んだ人は、もうこのワークスペースに所属していません。担当を選び直してください'),
-  ).toBeVisible();
-  await expect(assignee).toHaveValue('');
-  await expect(assignee).toBeFocused();
-  await expect(dialog).toBeVisible();
 });

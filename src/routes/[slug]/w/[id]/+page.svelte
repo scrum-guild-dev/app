@@ -15,7 +15,6 @@
   import MoveParentDialog from '../../../../lib/components/MoveParentDialog.svelte';
   import PageHead from '../../../../lib/components/PageHead.svelte';
   import TeamExperience from '../../../../lib/components/TeamExperience.svelte';
-  import TaskCreateDialog from '../../../../lib/components/TaskCreateDialog.svelte';
   import TaskEntry from '../../../../lib/components/TaskEntry.svelte';
   import DraftRow from '../../../../lib/components/DraftRow.svelte';
   import TreeEpic from '../../../../lib/components/TreeEpic.svelte';
@@ -317,9 +316,13 @@
       };
     });
   });
-  const openEpics = $derived(
-    choiceEpics.filter((epic) => !epic.finished).map((epic) => ({ id: epic.id, title: epic.title })),
-  );
+  // 空の行で作ったエピックは、読み直すまで choices に無いので、画面に足した分も親の候補に入れる
+  const openEpics = $derived([
+    ...choiceEpics.filter((epic) => !epic.finished).map((epic) => ({ id: epic.id, title: epic.title })),
+    ...addedEpics
+      .filter((entry) => !choiceEpics.some((epic) => epic.id === entry.epic.id))
+      .map((entry) => ({ id: entry.epic.id, title: entry.epic.title })),
+  ]);
 
   const taskLists = $derived(
     grouped(
@@ -438,7 +441,6 @@
     if (storyActions.includes('reopen')) return t('storyReopening', { done: t('done') });
     return '';
   });
-  let taskDialog = $state<ReturnType<typeof TaskCreateDialog>>();
   // 完了にした行の完了の印へフォーカスを移すために持つ。読むのは操作の後の処理の中だけ。
   // bind:this で行ごとに書き込むので $state にする（ただの入れ物だと開発時に binding_property_non_reactive が出る）
   const entries = $state<Record<string, ReturnType<typeof TaskEntry> | null | undefined>>({});
@@ -1156,6 +1158,7 @@
           workspaceId: workspace.id,
           onSaved: () => invalidateAll(),
           onStale: () => void invalidateAll(),
+          definitions: data.definitions,
         }
       : undefined}
   />
@@ -1223,15 +1226,7 @@
     focusable
     tallies={[{ tone: 'warn', icon: 'pen', label: t('unfilledChip', { detail: t('detail') }), count: unfilledCount }]}
     meta={data.teamTotal === null ? undefined : teamExperience}
-  >
-    {#snippet actions()}
-      {#if canWrite}
-        <button class="btn is-primary" type="button" onclick={(event) => taskDialog?.show(event.currentTarget)}>
-          <Icon name="plus" />{t('create')}
-        </button>
-      {/if}
-    {/snippet}
-  </PageHead>
+  ></PageHead>
 
   <!-- 完成の定義（components.css の .dod）。木の上に1つだけ畳んで置き、行ごとには繰り返さない。空なら出さない。
        本文は開くまで描かない（長い定義の変換と描画を、開かない人に払わせない） -->
@@ -1249,26 +1244,33 @@
   <span class="visually-hidden" role="status">{filterResult}</span>
 
   <!-- 何も無いときの最初の一歩は、見本どおり絞り込みの帯も出さない。絞っているときは、当たるものが無くても帯を出す -->
-  {#if !filtering && epics.length === 0 && tree.stories.length === 0 && rootRows.length === 0 && rootDone === 0}
+  <!-- 最初の1件を作ると空の状態だけが外れ、木と空の行は同じ位置に残す（空の行を作り直すとフォーカスを失うため） -->
+  {@const firstStep =
+    !filtering && epics.length === 0 && tree.stories.length === 0 && rootRows.length === 0 && rootDone === 0}
+  {#if firstStep}
     <EmptyState
       icon="board"
       art="notice"
       title={t('backlogEmptyTitle', { task: t('task') })}
       text={canWrite
-        ? t('backlogEmptyText', { task: t('task'), create: t('create') })
+        ? t('backlogEmptyText', { task: t('task') })
         : t('backlogEmptyClosedText', { task: t('task'), workspace: t('workspace') })}
     />
-  {:else}
+  {/if}
+  <!-- 起票のダイアログが無いので、書ける人には最初の一歩の空の行を出す -->
+  {#if !firstStep || canWrite}
     <section class="section" aria-label={t('backlogTasksLabel', { backlog: t('backlog'), task: t('task') })}>
-      <BacklogFilterBar
-        {filter}
-        choices={tree.choices}
-        categories={data.definitions?.categories ?? []}
-        repositories={data.definitions?.repositories ?? []}
-        definitionsFailed={data.definitions === null}
-        onchange={(next) => void applyFilter(next)}
-      />
-      {#if filtering && epics.length === 0 && tree.stories.length === 0 && rootRows.length === 0}
+      {#if !firstStep}
+        <BacklogFilterBar
+          {filter}
+          choices={tree.choices}
+          categories={data.definitions?.categories ?? []}
+          repositories={data.definitions?.repositories ?? []}
+          definitionsFailed={data.definitions === null}
+          onchange={(next) => void applyFilter(next)}
+        />
+      {/if}
+      {#if !firstStep && filtering && epics.length === 0 && tree.stories.length === 0 && rootRows.length === 0}
         <!-- 絞り込みに当たるものが無い。木の代わりに、無いことと、絞り込みを外す操作を出す -->
         <EmptyState icon="search" title={t('backlogNoMatchTitle')} text={t('backlogNoMatchText')}>
           {#snippet actions()}
@@ -1278,7 +1280,7 @@
           {/snippet}
         </EmptyState>
       {:else}
-        {#if canWrite}
+        {#if canWrite && !firstStep}
           <!-- 絞っている間は並べ替えを出さないので、外すと並べ替えられることを案内する -->
           <p class="action-note">
             {#if filtering}
@@ -1345,7 +1347,7 @@
               icon="board"
               title={t('backlogNoOpenTitle', { task: t('task') })}
               text={canWrite
-                ? t('backlogNoOpenText', { task: t('task'), create: t('create') })
+                ? t('backlogNoOpenText', { task: t('task') })
                 : t('backlogEmptyClosedText', { task: t('task'), workspace: t('workspace') })}
             />
           {/if}
@@ -1393,17 +1395,6 @@
   {/snippet}
 
   {#if canWrite}
-    <TaskCreateDialog
-      bind:this={taskDialog}
-      slug={page.params.slug ?? ''}
-      workspaceId={workspace.id}
-      stories={openStories}
-      categories={data.definitions?.categories ?? []}
-      repositories={data.definitions?.repositories ?? []}
-      definitionsFailed={data.definitions === null}
-      oncreated={(task, storyId) => void created(task, storyId)}
-      announceCreated={!filtering}
-    />
     <MoveParentDialog bind:this={moveDialog} parents={openStories} onmove={moveParent} />
     <MoveParentDialog bind:this={storyMoveDialog} parents={openEpics} onmove={moveStoryParent} />
   {/if}
