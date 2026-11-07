@@ -689,23 +689,25 @@ describe('dependencyGraph', () => {
     );
   });
 
-  test('層の中は、前の層の行の平均の順に並べる（番号の順でも最大の順でもない）', () => {
-    // 層 0 は 10、11、12（前提が無く番号の順）。層 1 の平均は 21 が 0、22 が 1、20 が 1.5。
-    // 番号の順なら 20、21、22、最大の順なら 21、20、22 になる
+  test('層の中は、前の層の行の平均の順に並べる（番号、最小、最大、合計、先頭の前提の順でもない）', () => {
+    // 層 0 は 10〜13（前提が無く番号の順で行 0〜3）。層 1 は 20 が前提 [13, 10]、21 が [11]、22 が [12]。
+    // 平均は 21 が 1、20 が 1.5、22 が 2 で、21、20、22 になる。
+    // 番号の順は 20、21、22。最小の順は 20、21、22。最大、合計、先頭の前提の順は 21、22、20
     const g = dependencyGraph(
       [
         card(10, { sprint: 2 }),
         card(11, { sprint: 2 }),
         card(12, { sprint: 2 }),
-        card(20, { sprint: 2, deps: [11, 12] }),
-        card(21, { sprint: 2, deps: [10] }),
-        card(22, { sprint: 2, deps: [10, 12] }),
+        card(13, { sprint: 2 }),
+        card(20, { sprint: 2, deps: [13, 10] }),
+        card(21, { sprint: 2, deps: [11] }),
+        card(22, { sprint: 2, deps: [12] }),
       ],
       2,
     );
     const rowOf = (n: number) => g.nodes.find((x) => x.number === n)?.row;
-    assert.deepEqual([10, 11, 12].map(rowOf), [0, 1, 2]);
-    assert.deepEqual([21, 22, 20].map(rowOf), [0, 1, 2]);
+    assert.deepEqual([10, 11, 12, 13].map(rowOf), [0, 1, 2, 3]);
+    assert.deepEqual([21, 20, 22].map(rowOf), [0, 1, 2]);
   });
 
   test('待たせている節を先に要るものとし、待たせている辺で届く済み以外の数を止めている数にする', () => {
