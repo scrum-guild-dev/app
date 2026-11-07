@@ -415,6 +415,29 @@
     }
   }
 
+  // 期日の窓の保存。年月日が 1 桁ずつ変わるたびに change が出るので、引き出しと同じく、値が暦としてそろい（年は 4 桁）、
+  // 600ms 変わらないか、Enter か欄を離れたときに保存して窓を閉じる。打ちかけでは保存せず、窓も閉じない
+  const DUE_DEBOUNCE_MS = 600;
+  let dueTimer: ReturnType<typeof setTimeout> | undefined;
+  function dueComplete(input: HTMLInputElement): string | null {
+    const value = input.value;
+    if (input.validity.badInput || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    return Number(value.slice(0, 4)) < 1000 ? null : value;
+  }
+  function commitDue(input: HTMLInputElement, close: () => void): void {
+    clearTimeout(dueTimer);
+    if (!input.isConnected) return;
+    const value = dueComplete(input);
+    if (value === null || value === dueShown) return;
+    close();
+    chooseField('due_on', value);
+  }
+  function scheduleDue(input: HTMLInputElement, close: () => void): void {
+    clearTimeout(dueTimer);
+    dueTimer = setTimeout(() => commitDue(input, close), DUE_DEBOUNCE_MS);
+  }
+  $effect(() => () => clearTimeout(dueTimer));
+
   const dueShown = $derived(fieldShown('due_on'));
   const repositoryShownId = $derived(fieldShown('repository_id'));
   const categoryShownId = $derived(fieldShown('category_id'));
@@ -606,20 +629,21 @@
               type="date"
               aria-label={t('due')}
               value={dueShown ?? ''}
-              onchange={(event) => {
-                const value = event.currentTarget.value;
-                // 打ちかけ（年が4桁そろわない、読めない日付）では保存せず、窓も閉じない（引き出しの dueIsComplete と同じ）
-                if (event.currentTarget.validity.badInput || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-                if (Number(value.slice(0, 4)) < 1000) return;
-                close();
-                chooseField('due_on', value);
+              onchange={(event) => scheduleDue(event.currentTarget, close)}
+              onkeydown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  commitDue(event.currentTarget, close);
+                }
               }}
+              onblur={(event) => commitDue(event.currentTarget, close)}
             />
             {#if dueShown !== null}
               <button
                 class="btn is-sm is-quiet"
                 type="button"
                 onclick={() => {
+                  clearTimeout(dueTimer);
                   close();
                   chooseField('due_on', null);
                 }}>{t('dueClear')}</button

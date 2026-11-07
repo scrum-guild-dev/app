@@ -205,3 +205,23 @@ test('期日のチップの窓で日付を入れると行に出て、「クリ�
   await cleared;
   await expect(row.getByRole('button', { name: '期日: 未設定' })).toBeVisible();
 });
+
+test('期日の窓は、続けて日付が変わる間は保存せず、変わらなくなった値を1回だけ保存する', async ({ page }) => {
+  await createWorkspace(page, '期日の連続入力のワークスペース');
+  await addTaskRow(page, '月を打ち直す件');
+  const row = page.locator('.entry', { hasText: '月を打ち直す件' });
+  const updates: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/task-update')) updates.push(request.postData() ?? '');
+  });
+
+  await row.getByRole('button', { name: '期日: 未設定' }).click();
+  const input = page.getByRole('dialog', { name: '期日を選ぶ' }).getByLabel('期日');
+  // 月を「1」→「12」と打つと change が2回出る。1回目の値(1月)は保存しない
+  await input.fill('2030-01-20');
+  await input.fill('2030-12-20');
+  await expect(row.getByRole('button', { name: '期日: 12/20' })).toBeVisible();
+  await waitForSettled(page);
+  expect(updates).toHaveLength(1);
+  expect(updates[0]).toContain('2030-12-20');
+});
