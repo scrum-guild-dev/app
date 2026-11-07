@@ -123,9 +123,13 @@
 
   // 幅が変わったら閉じる。フォーカスがメニューの中にあれば「⋯」へ戻す（隠れた項目にフォーカスを残さない）。
   // スマホのアドレスバーの出入りは高さだけが変わるので、閉じない
-  let lastWidth = innerWidth;
+  let lastWidth = 0;
   function onResize(): void {
-    if (innerWidth === lastWidth) return;
+    if (innerWidth === lastWidth) {
+      // 高さだけが変わるときは、閉じずに置き直す（下端の近くで画面の外へはみ出さないように）
+      place();
+      return;
+    }
     lastWidth = innerWidth;
     close(list?.contains(document.activeElement) === true);
   }

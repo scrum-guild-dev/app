@@ -111,10 +111,9 @@
   let menu = $state<ReturnType<typeof RowMenu>>();
   export function focusCompletion(): void {
     // bind:this は、要素が消えると null に戻る（戻る前に呼ばれても、つながっている要素だけを選ぶ）
-    const menuButton = menu;
     const target = [reopenButton, mark].find((el) => el?.isConnected === true);
     if (target) target.focus();
-    else menuButton?.focus();
+    else menu?.focus();
   }
   // 親を移すと行は別の親の下に作り直されるので、画面が新しい行の「⋯」へフォーカスを戻すのに使う
   export function focusMoveParent(): void {
