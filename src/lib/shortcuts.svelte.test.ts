@@ -247,6 +247,82 @@ describe('useShortcut（部品の置かれている間だけ登録する）', ()
     expect(shortcuts.items.map((item) => item.id)).not.toContain('dup-a');
   });
 
+  test('続けて押すキー: 1つ目で待ち、1秒以内の2つ目で働く。1つ目と2つ目は preventDefault する', () => {
+    const registry = new ShortcutRegistry();
+    const shortcut = make({ keys: 'g b' });
+    registry.register(shortcut);
+    const first = keyEvent({ key: 'g' });
+    expect(registry.handle(first)).toBe(true);
+    expect(first.preventDefault).toHaveBeenCalled();
+    expect(shortcut.run).not.toHaveBeenCalled();
+    expect(registry.handle(keyEvent({ key: 'b' }))).toBe(true);
+    expect(shortcut.run).toHaveBeenCalledTimes(1);
+    // 待ちは使い切る。単独の b は働かない
+    expect(registry.handle(keyEvent({ key: 'b' }))).toBe(false);
+  });
+
+  test('続けて押すキー: 約1秒たつと待ちが切れる。Shift だけの押下では切れない', () => {
+    vi.useFakeTimers();
+    try {
+      const registry = new ShortcutRegistry();
+      const shortcut = make({ keys: 'g b' });
+      registry.register(shortcut);
+      registry.handle(keyEvent({ key: 'g' }));
+      vi.advanceTimersByTime(900);
+      registry.handle(keyEvent({ key: 'Shift', shiftKey: true }));
+      expect(registry.handle(keyEvent({ key: 'b' }))).toBe(true);
+      registry.handle(keyEvent({ key: 'g' }));
+      vi.advanceTimersByTime(1100);
+      expect(registry.handle(keyEvent({ key: 'b' }))).toBe(false);
+      expect(shortcut.run).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('続けて押すキー: 待ち中に別のキーを押すと待ちが切れる', () => {
+    const registry = new ShortcutRegistry();
+    const shortcut = make({ keys: 'g b' });
+    registry.register(shortcut);
+    registry.handle(keyEvent({ key: 'g' }));
+    registry.handle(keyEvent({ key: 'x' }));
+    expect(registry.handle(keyEvent({ key: 'b' }))).toBe(false);
+    expect(shortcut.run).not.toHaveBeenCalled();
+  });
+
+  test('続けて押すキー: 文字を打つ場所、ダイアログ、変換中では待ちに入らず、文字は通る', () => {
+    const registry = new ShortcutRegistry();
+    registry.register(make({ keys: 'g b' }));
+    const typing = keyEvent({ key: 'g', target: { tagName: 'INPUT', type: 'text' } as unknown as EventTarget });
+    expect(registry.handle(typing)).toBe(false);
+    expect(typing.preventDefault).not.toHaveBeenCalled();
+    expect(registry.handle(keyEvent({ key: 'b' }))).toBe(false);
+    modalState.openCount = 1;
+    expect(registry.handle(keyEvent({ key: 'g' }))).toBe(false);
+    modalState.openCount = 0;
+    expect(registry.handle(keyEvent({ key: 'g', isComposing: true, keyCode: 229 }))).toBe(false);
+  });
+
+  test('続けて押すキー: 続きが enabled でない間は 1つ目を奪わない', () => {
+    const registry = new ShortcutRegistry();
+    registry.register(make({ keys: 'g b', enabled: () => false }));
+    const first = keyEvent({ key: 'g' });
+    expect(registry.handle(first)).toBe(false);
+    expect(first.preventDefault).not.toHaveBeenCalled();
+  });
+
+  test('続けて押すキーの1つ目と同じ単キーの登録は重なりになる（どちらの順でも）', () => {
+    vi.stubEnv('DEV', true);
+    const registry = new ShortcutRegistry();
+    registry.register(make({ id: 'chord', keys: 'g b' }));
+    expect(() => registry.register(make({ id: 'single', keys: 'g' }))).toThrow(/重なっています/);
+    const other = new ShortcutRegistry();
+    other.register(make({ id: 'single', keys: 'g' }));
+    expect(() => other.register(make({ id: 'chord', keys: 'g b' }))).toThrow(/重なっています/);
+    // 1つ目が同じで2つ目が違うのは重ならない
+    expect(() => registry.register(make({ id: 'chord2', keys: 'g s' }))).not.toThrow();
+  });
+
   test('部品が置かれると登録し、外れると解除する', async () => {
     const { shortcuts } = await import('./shortcuts.svelte.ts');
     const shortcut = make({ id: 'use-shortcut-test', keys: 'u' });

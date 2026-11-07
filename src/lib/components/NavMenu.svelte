@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { NAV_MENU_ID } from '../nav-collapse.svelte.ts';
-  import { isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
+  import { GO_KEYS, isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { organizationLabel } from '../organization-label.ts';
   import type { NavigationWorkspace } from '../workspace-navigation.svelte.ts';
@@ -59,6 +59,7 @@
           class="nav-item"
           class:is-wrapping={item.label === 'orgWiki'}
           {href}
+          aria-describedby={GO_KEYS[item.label] === undefined ? undefined : `nav-go-${item.label}`}
           aria-current={isNavItemCurrent(item.label, href, current) ? 'page' : undefined}
         >
           <Icon name={item.icon} /><span class="nav-item-label"
@@ -69,6 +70,15 @@
               : t(item.label)}</span
           >
         </a>
+        {#if GO_KEYS[item.label] !== undefined}
+          <!-- 続けて押すキーは aria-keyshortcuts に書けないので、リンクの説明として伝える（目には見せない） -->
+          <span class="visually-hidden" id="nav-go-{item.label}"
+            >{t('shortcutGoHint', {
+              first: GO_KEYS[item.label]!.split(' ')[0],
+              next: GO_KEYS[item.label]!.split(' ')[1],
+            })}</span
+          >
+        {/if}
       {/if}
     {/each}
   {/each}
