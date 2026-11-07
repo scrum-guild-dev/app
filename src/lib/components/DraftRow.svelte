@@ -3,8 +3,8 @@
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
 
-  // バックログの木の空の行（見本は design/kit.js の treeAdd）。題を打って Enter で作る。エピックの末尾、木の末尾に置く。
-  // 何を作る行かは、見えるラベル（label）で示す。読み上げの名前（name）は、親の題を添えて同じ名前の行を区別する。
+  // バックログの木の空の行（デザインシステムの .draft-row。見本は design/kit.js の draftRow）。題を打って Enter で作る。エピックの末尾、木の末尾に置く。
+  // 何を作る行かは、欄の案内文（label に「（題を打って Enter）」を添えたもの）で示す。読み上げの名前（name）は、親の題を添えて同じ名前の行を区別する。
   // create は作る処理で、エラーの文（画面に出す）か、成功の null を返す。成功したら入力を空に戻し、フォーカスを残して続けて打てる。
   // 日本語の変換中の Enter は確定なので作らず、変換中の Esc は変換の取り消しなので素通しする（Safari は確定の Enter の前に compositionend を出すので、keyCode 229 も見る）。
   // 変換中でない Esc は書きかけを捨てる（フォーカスは欄に残す。preventDefault するので、引き出しは閉じない）。
@@ -13,21 +13,16 @@
   let {
     label,
     name = label,
-    placeholder,
     problem,
     create,
-    level = 'story',
   }: {
     // 行に見える文（「<ストーリー>を足す」など）
     label: string;
     // 読み上げの名前。省けば label
     name?: string;
-    placeholder: string;
     // 画面の検査。エラーの文か、null
     problem: (title: string) => string | null;
     create: (title: string) => Promise<string | null>;
-    // 字下げの段。epic は木の最上段、story はエピックの配下
-    level?: 'epic' | 'story';
   } = $props();
 
   const ids = $props.id();
@@ -80,27 +75,28 @@
   }
 </script>
 
-<div class="tree-add is-{level}">
-  <span class="tree-add-mark" aria-hidden="true"><Icon name="plus" /></span>
-  <label class="tree-add-label" for={inputId}>{label}</label>
-  <input
-    id={inputId}
-    aria-label={name}
-    bind:this={input}
-    bind:value
-    class="tree-add-input"
-    type="text"
-    autocomplete="off"
-    {placeholder}
-    readonly={sending}
-    aria-invalid={error !== null}
-    aria-describedby={error === null ? undefined : errorId}
-    oninput={() => (error = null)}
-    enterkeyhint="done"
-    onkeydown={keydown}
-  />
+<div class="draft-wrap">
+  <div class="draft-row" data-draft-row>
+    <Icon name="plus" />
+    <label class="visually-hidden" for={inputId}>{name}</label>
+    <input
+      id={inputId}
+      bind:this={input}
+      bind:value
+      class="input"
+      type="text"
+      autocomplete="off"
+      enterkeyhint="done"
+      placeholder={t('draftPlaceholder', { label })}
+      readonly={sending}
+      aria-invalid={error !== null}
+      aria-describedby={error === null ? undefined : errorId}
+      oninput={() => (error = null)}
+      onkeydown={keydown}
+    />
+  </div>
   <span class="visually-hidden" role="status">{sending ? t('treeAddSending') : ''}</span>
   {#if error !== null}
-    <p class="tree-add-error" id={errorId} role="alert">{error}</p>
+    <p class="field-error draft-error" id={errorId} role="alert">{error}</p>
   {/if}
 </div>

@@ -400,15 +400,44 @@
       : `<button class="done-btn" type="button" data-done="${x.id}" aria-label="${t("complete")}" title="${t("complete")}">${icon("check")}</button>`;
   }
 
-  // 並べ替えの「上へ」「下へ」と「親を移す」（本番の TaskEntry、TreeStory と同じ組み方）。
-  // order: { first, last, parent, across }。端の向きは aria-disabled（フォーカスを失わない）。parent が真なら「親を移す」も出す。
-  // across: { first, last } を渡すと、スプリントの画面のカードのように、隣の列へ移す「前の列へ」「次の列へ」を両端に足す
-  function orderActions(title, order) {
-    const btn = (name, label, disabled) =>
-      `<button class="icon-btn" type="button" data-order="${name}" aria-label="${label}: ${esc(title)}" title="${label}"${disabled === undefined ? "" : ` aria-disabled="${disabled}"`}>${icon(name)}</button>`;
-    const left = order.across ? btn("left", `前の${t("column")}へ`, Boolean(order.across.first)) : "";
-    const right = order.across ? btn("right", `次の${t("column")}へ`, Boolean(order.across.last)) : "";
-    return `<span class="order-actions">${left}${btn("up", "上へ", Boolean(order.first))}${btn("down", "下へ", Boolean(order.last))}${right}${order.parent ? btn("swap", "親を移す") : ""}</span>`;
+  // 行の「⋯」のメニュー（.row-menu）。完了の丸のほかの操作（今日やる、並べ替え、親を移す、削除）をまとめる。
+  // 広い幅ではホバーと行の中のフォーカスで「⋯」が出て、760px 以下と pointer: coarse では常に出して 44px 四方にする。
+  // items: [{ attr, label, icon, danger, disabled }]。attr は既存の操作の属性（data-order="up" など）をそのまま渡す
+  function rowMenu(title, items, owner = "") {
+    const buttons = items.map((it) => `<li role="none"><button class="menu-item${it.danger ? " is-danger" : ""}" type="button" role="menuitem" ${it.attr}${it.disabled === undefined ? "" : ` aria-disabled="${it.disabled}"`}>${icon(it.icon)}<span>${it.label}</span></button></li>`).join("");
+    return `<span class="row-menu"><button class="icon-btn row-menu-btn" type="button" data-row-menu${owner ? ` data-menu-for="${owner}"` : ""} aria-haspopup="menu" aria-expanded="false" aria-label="操作: ${esc(title)}" title="操作">${icon("more")}</button>` +
+      `<ul class="account-menu-list row-menu-list" role="menu" aria-label="操作: ${esc(title)}" hidden>${buttons}</ul></span>`;
+  }
+  // 並べ替えの操作を、メニューの項目の形にする
+  function orderItems(order) {
+    const item = (name, label, disabled) => ({ attr: `data-order="${name}"`, label, icon: name, disabled: disabled === undefined ? undefined : Boolean(disabled) });
+    return [
+      ...(order.across ? [item("left", `前の${t("column")}へ`, order.across.first)] : []),
+      item("up", "上へ", order.first), item("down", "下へ", order.last),
+      ...(order.across ? [item("right", `次の${t("column")}へ`, order.across.last)] : []),
+      ...(order.parent ? [item("swap", "親を移す")] : []),
+    ];
+  }
+  // 空の行（.draft-row）。題だけを打って Enter で足す。kind は root（親なし）、story（ストーリーの下）、col（スプリントの列）
+  function draftRow(kind, key, label) {
+    const id = `draft-${kind}-${key}`;
+    return `<div class="draft-row" data-draft-row>${icon("plus")}<label class="visually-hidden" for="${id}">${esc(label)}</label>` +
+      `<input class="input" id="${id}" data-draft="${kind}:${key}" placeholder="${esc(label)}（題を打って Enter）" autocomplete="off" enterkeyhint="done"></div>`;
+  }
+  // 属性のチップ。タスクの属性（pts か who）を、行のチップを押して後から決める。値がなければ薄い破線の形（未設定）。
+  // 押すと値の一覧（行の「⋯」と同じメニュー）が開き、選ぶと見本の中で保存する
+  function attrChip(x, name) {
+    const isPts = name === "pts";
+    const label = isPts ? t("points") : t("assignee");
+    const set = isPts ? x.pts != null : Boolean(x.who);
+    const shown = isPts ? (set ? `${x.pts} pt` : label) : (set ? user(x.who).name : label);
+    const options = isPts
+      ? [["", "未見積もり"], ...[0, 1, 2, 3, 5, 8, 13].map((v) => [String(v), `${v} pt`])]
+      : [["", `${label}なし`], ...Object.entries(D.users).filter(([, u]) => !u.left).map(([id, u]) => [id, u.name])];
+    const current = isPts ? (x.pts == null ? "" : String(x.pts)) : (x.who || "");
+    const items = options.map(([value, text]) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${value === current}" data-chip-set="${x.id}:${name}:${value}">${value === current ? icon("check") : ""}<span>${esc(text)}</span></button></li>`).join("");
+    return `<span class="row-menu"><button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-row-menu data-chip-for="${x.id}:${name}" aria-haspopup="menu" aria-expanded="false" aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(shown)}"><span class="chip-text">${esc(shown)}</span></button>` +
+      `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" hidden>${items}</ul></span>`;
   }
 
   // 行の先頭のつまみ（飾りで、aria-hidden）。order を渡した行（書き込めるとき）だけに付く。
@@ -422,12 +451,14 @@
   }
 
   // 台帳の1行。opts: showWs, showParent（既定 true）, showAssignee, showSprint（入っているスプリントの印。バックログの木）,
-  // order（並べ替えの操作。orderActions の order）,
+  // order（並べ替えの操作。{ first, last, parent, across }。「⋯」のメニューに入る）,
   // mark（ドラッグの状態。dropAttr）
   function entry(x, opts = {}) {
     const showParent = opts.showParent !== false;
     const parent = x.story ? D.stories[x.story].title : null;
-    const lead = opts.lead !== undefined ? opts.lead
+    // 並べ替えのある行（バックログの木）は、完了の丸と「⋯」だけを出す。今日やる、並べ替え、削除は「⋯」に入れ、ポイントと担当はチップで後から決める
+    const compact = Boolean(opts.order) && !x.doneAt;
+    const lead = opts.lead !== undefined ? opts.lead : compact ? `<span aria-hidden="true"></span>`
       : `<button class="sun" type="button" data-sun="${x.id}" aria-pressed="${x.todayOn === D.today}" aria-label="今日やる: ${esc(x.title)}" title="今日やる" aria-disabled="false">${icon("sun")}</button>`;
     const title = opts.noLink ? `<span class="entry-title">${titleOf(x)}</span>` : `<a class="entry-title" href="#" data-task="${x.id}">${titleOf(x)}</a>`;
     const mark = opts.mark || {};
@@ -439,11 +470,15 @@
           ${opts.showWs ? `<span class="tag">${esc(D.workspaces[x.ws].name)}</span>` : ""}
           ${opts.showSprint ? sprintTag(x) : ""}${repoTag(x)}${x.story ? "" : categoryTag(x.cat)}${sourceKey(x)}
           ${showParent && parent ? `<span>${icon("flag")} ${esc(parent)}</span>` : ""}
-          ${x.doneAt ? `<span>${t("done")} ${esc(x.doneAt)}</span>` : colName(x) ? `<span class="status-dot">${esc(colName(x))}</span>` : ""}
+          ${compact && x.todayOn === D.today ? `<span class="entry-today">${icon("sun")}今日やる</span>` : ""}${x.doneAt ? `<span>${t("done")} ${esc(x.doneAt)}</span>` : colName(x) ? `<span class="status-dot">${esc(colName(x))}</span>` : ""}
           ${taskFlags(x)}${opts.meta ? opts.meta(x) : ""}
         </span>
       </div>
-      <div class="entry-end">${taskDue(x)}${opts.hidePts ? "" : pts(x.pts)}${opts.showAssignee ? avatarOf(x.who) : ""}${opts.order && !x.doneAt ? orderActions(x.title, opts.order) : ""}${opts.actions ? opts.actions(x) : doneControl(x)}</div>
+      <div class="entry-end">${taskDue(x)}${opts.hidePts ? "" : compact ? attrChip(x, "pts") : pts(x.pts)}${opts.showAssignee ? (compact ? attrChip(x, "who") : avatarOf(x.who)) : ""}${compact ? rowMenu(x.title, [
+        { attr: `data-sun="${x.id}"`, label: x.todayOn === D.today ? "今日やるを外す" : "今日やる", icon: "sun" },
+        ...orderItems(opts.order),
+        { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除`, icon: "trash", danger: true },
+      ], x.id) : ""}${opts.actions ? opts.actions(x) : doneControl(x)}</div>
     </div>`;
   }
   // opts.empty があれば、空のときに台帳の代わりに出す（emptyState で作る）
@@ -594,8 +629,11 @@
       ${parent ? `<span class="card-parent">${icon("flag")} ${esc(parent)}</span>` : ""}
       <a class="card-title" id="card-${k}${x.id}-title" href="#" data-task="${x.id}" draggable="false">${titleOf(x)}</a>
       <div class="card-meta">${repoTag(x)}${sourceKey(x)}${taskFlags(x)}${taskDue(x)}</div>
-      <div class="card-foot">${pts(x.pts)}${avatarOf(x.who)}<span class="card-end">${doneControl(x)}</span></div>
-      ${order ? `<div class="card-moves">${orderActions(x.title, order)}</div>` : ""}
+      <div class="card-foot">${order ? attrChip(x, "pts") : pts(x.pts)}${order ? attrChip(x, "who") : avatarOf(x.who)}<span class="card-end">${order ? rowMenu(x.title, [
+        { attr: `data-sun="${x.id}"`, label: x.todayOn === D.today ? "今日やるを外す" : "今日やる", icon: "sun" },
+        ...orderItems(order),
+        { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除`, icon: "trash", danger: true },
+      ], x.id) : ""}${doneControl(x)}</span></div>
     </article>`;
   }
   // opts.key: カードの id の接頭辞、opts.cardMarks: (x, i, c) => card のドラッグの状態、opts.columnMarks: (c) => 列の囲み（{ drop: "into" }）、opts.grab: (x) => つかめるか（既定は完了していないカードだけ。完了の列のカードは、本番では戻せるもの（reopenable）だけがつかめる）
@@ -611,6 +649,7 @@
         <div class="board-col-head">${c.done ? icon("check") : ""}<span class="board-col-name">${c.done ? t("done") : esc(c.name)}</span><span class="board-col-n">${items.length}</span><span class="board-col-pts">${sumPts(items)} pt</span></div>
         ${c.done && D.definitionOfDone.length ? `<details class="dod"><summary>${t("dod")}</summary>${dodDoc()}</details>` : ""}
         ${items.map((x, i) => card(x, c.done ? undefined : orderOf(i), { mark: opts.cardMarks && opts.cardMarks(x, i, c), grab: opts.grab ? opts.grab(x) : !x.doneAt, key: opts.key })).join("") || `<p class="board-empty">なし</p>`}
+        ${opts.draft && !c.done ? draftRow("col", c.id, `${t("task")}を足す: ${c.name}`) : ""}
       </section>`;
     }).join("")}</div></div>`;
   }
@@ -692,13 +731,13 @@
           <span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span>
           ${st.doneAt ? "" : `<button class="btn is-sm" type="button" data-dialog="createTask" aria-label="${t("task")}を足す: ${esc(st.title)}">${icon("plus")}${t("task")}</button>`}
           ${storyDoneControl(key, st, open.length, Boolean(opts.blocked))}
-          ${opts.order ? orderActions(st.title, opts.order) : ""}
+          ${opts.order ? rowMenu(st.title, [...orderItems(opts.order), { attr: `data-dialog="deleteStory" data-tree-delete-id="${sid}"`, label: `この${t("story")}を削除`, icon: "trash", danger: true }]) : ""}
         </span>
       </div>
       <div class="tree-children" id="tree-${key}">${open.map((x, i) => entry(x, { showParent: false, showAssignee: true, showSprint: true,
         mark: opts.entryMarks ? opts.entryMarks(x, i) : undefined,
         order: opts.order ? { first: i === 0, last: i === open.length - 1, parent: true } : undefined })).join("")}
-        ${done ? completedTasks(key, list.filter(x => x.doneAt), { title: st.title, tail }) : ""}${!list.length ? `<p class="tree-folded"${dropAttr(tail)}>${t("task")}はまだありません</p>` : ""}</div>
+        ${done ? completedTasks(key, list.filter(x => x.doneAt), { title: st.title, tail }) : ""}${!list.length ? `<p class="tree-folded"${dropAttr(tail)}>${t("task")}はまだありません</p>` : ""}${opts.draft && !st.doneAt ? draftRow("story", sid, `${t("task")}を足す: ${st.title}`) : ""}</div>
     </div>`;
   }
   // 木の行の開閉。行（div）の中の caret のボタンだけが開閉を受け持ち、題や「＋タスク」のボタンとはぶつからない
@@ -731,7 +770,7 @@
         ${opts.order ? gripCell(false) : ""}${treeCaret(`tree-${key}`, e.title)}
         <span class="kind is-epic" title="${t("epic")}">${icon("flag")}</span>
         <span class="tree-title"><a class="tree-link" href="epic.html">${esc(e.title)}</a> ${categoryTag(e.cat)} ${state} ${dueChip(e.due, { done: finished })}</span>
-        <span class="tree-end"><span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span>${epicOrder ? orderActions(e.title, { first: epicOrder.first, last: epicOrder.last }) : ""}</span>
+        <span class="tree-end"><span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span>${epicOrder ? rowMenu(e.title, [...orderItems({ first: epicOrder.first, last: epicOrder.last }), { attr: `data-dialog="deleteEpic" data-tree-delete-id="${eid}"`, label: `この${t("epic")}を削除`, icon: "trash", danger: true }]) : ""}</span>
       </div>
       <div class="tree-children" id="tree-${key}">${stories.map((s, i) => treeStory(s, false, {
         key: `${key}-${s}`,
@@ -739,23 +778,7 @@
         blocked: finished,
         ...(opts.storyOpts ? opts.storyOpts(s, i) : {}),
         ...(opts.order ? { order: { first: i === 0, last: i === stories.length - 1, parent: true } } : {}) })).join("")}
-        ${stories.length ? "" : `<p class="tree-folded"${dropAttr(opts.tailMark || {})}>${t("story")}はまだありません</p>`}
-        ${opts.add && !finished ? treeAdd("story", { under: e.title, id: `tree-add-${key}`, ...(opts.addError ? { error: opts.addError } : {}) }) : ""}</div>
-    </div>`;
-  }
-
-  // 木の空の行。題を打って Enter で作る。level は epic（木の最上段の字下げ）か story（エピックの配下）。
-  // 何を作る行かは見えるラベルで示す。opts.error があれば、行の下にエラーの文を出す（入力は aria-invalid）
-  function treeAdd(kind, opts = {}) {
-    const level = opts.level || "story";
-    const label = `${t(kind)}を足す`;
-    const name = opts.under ? `${opts.under}に${label}` : label;
-    const err = opts.error ? `<p class="tree-add-error" id="${opts.id || "tree-add"}-error" role="alert">${esc(opts.error)}</p>` : "";
-    return `<div class="tree-add is-${level}">
-      <span class="tree-add-mark" aria-hidden="true">${icon("plus")}</span>
-      <label class="tree-add-label" for="${opts.id || "tree-add"}">${label}</label>
-      <input class="tree-add-input" id="${opts.id || "tree-add"}" type="text" autocomplete="off" enterkeyhint="done" aria-label="${esc(name)}" placeholder="題を打って Enter"${opts.error ? ` aria-invalid="true" aria-describedby="${opts.id || "tree-add"}-error"` : ""}>
-      ${err}
+        ${stories.length ? "" : `<p class="tree-folded"${dropAttr(opts.tailMark || {})}>${t("story")}はまだありません</p>`}${opts.draft && !finished ? draftRow("new-story", eid, `${t("story")}を足す: ${e.title}`) : ""}</div>
     </div>`;
   }
 
@@ -1039,10 +1062,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
 
   // ---- タスクの詳細（横、真ん中、ページ全体、新しいタブ） ----
   // mode は端末の localStorage に覚え、次に開くタスクも同じ形で出す（task.html はページ全体の見本）
-  // editing は直している途中の欄（title、link、body）。欄ごとに別々に開け、保存か取り消しで閉じる
+  // drafts は書いている途中の欄の値（title、link、body、fields）。手を止めるか欄を離れると保存し、保存した値と同じになる
   // view は見本の状態の切り替え（読み込み中、読めない、閉じたワークスペースの読み取り専用）。errors は欄の下に出す理由
-  // commentEditing は直している途中のコメントの番号、commentDeleting は消すかを確かめているコメントの番号
-  const drawer = { id: null, tab: "comments", thanked: new Set(), opener: null, mode: readDrawerMode(), editing: new Set(), view: null, errors: {}, drafts: {}, commentEditing: null, commentDeleting: null,
+  // commentEditing は直している途中のコメントの番号
+  const drawer = { id: null, tab: "comments", thanked: new Set(), opener: null, mode: readDrawerMode(), view: null, errors: {}, drafts: {}, commentEditing: null,
     // 見本の状態の切り替え（カタログの drawerDemo が使う）。commentsView はコメントの読み込み（loading、failed、reloadFailed）
     // adjacent は前後のタスク（{ prev, next }。順を渡さない画面は null）。undefined なら画面の行から求める（drawerAdjacent）
     commentsView: null, commentViewer: null, commentBlocked: null, adjacent: undefined };
@@ -1131,21 +1154,21 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 画面の幅が 620px を越えたら、真ん中のボタンを出し入れする
   matchMedia("(max-width: 620px)").addEventListener("change", () => renderDrawer());
-  // 欄ごとに直す。値そのものが押せるボタン（edit-trigger）で、押すと入力欄と「保存」「取り消し」に替わる。
-  // Enter で保存、Esc で取り消し（本文は Enter が改行なので、保存は「保存」だけ）。ポイントと期日は選んだら保存する
-  function editActions(name) {
-    return `<div class="edit-actions"><button class="btn is-primary is-sm" type="button" data-drawer-save="${name}">保存</button><button class="btn is-sm is-quiet" type="button" data-drawer-cancel="${name}">取り消し</button></div>`;
+  // 欄ごとに、押せば書ける。タイトル、リンク、本文、決まった欄は、いつも入力欄で、「編集」「保存」のボタンは無い。
+  // 手を止めて 1.5 秒たつか、欄を離れるか、1 行の欄で Enter を押すと自動で保存し、欄の横に保存の状態（.save-state）を出す。
+  // Esc は保存していない書きかけを保存した値に戻す。ポイントと期日は選んだら保存する
+  const SAVE_TEXT = { saved: "保存しました", failed: "保存できませんでした" };
+  function saveStateHtml(name) {
+    return `<span class="save-state" data-save-state="${name}" role="status"></span>`;
   }
   function drawerTitleHtml(x) {
     if (drawerReadOnly()) return `<h2 class="drawer-title"><span id="drawer-title">${titleOf(x)}</span></h2>`;
-    if (drawer.editing.has("title")) {
-      return `<h2 class="visually-hidden"><span id="drawer-title">${titleOf(x)}</span></h2>
-        <div class="edit-form"><label class="field" for="drawer-edit-title"><span class="field-label visually-hidden">タイトル</span>
-          <input class="input" id="drawer-edit-title" data-drawer-input="title" value="${esc(x.title)}" autocomplete="off"></label>${editActions("title")}</div>`;
-    }
-    // 取り込み元のタイトルは、ここでは変えられない（押せないことを添える）
+    // 取り込み元のタイトルは、ここでは変えられない（書けないことを添える）
     if (x.src) return `<h2 class="drawer-title"><span id="drawer-title">${titleOf(x)}</span></h2><span class="props-note">取り込んだ${t("task")}のタイトルは、ここでは直せません</span>`;
-    return `<h2 class="drawer-title"><button class="edit-trigger" type="button" data-drawer-edit="title"><span id="drawer-title">${titleOf(x)}</span>${icon("pen")}<span class="visually-hidden">（押して${t("task")}のタイトルを直す）</span></button></h2>`;
+    return `<h2 class="visually-hidden"><span id="drawer-title">${titleOf(x)}</span></h2>
+      <div class="field"><div class="drawer-title"><label class="visually-hidden" for="drawer-edit-title">タイトル</label>
+        <input class="input is-inline" id="drawer-edit-title" data-drawer-input="title" value="${esc(drawer.drafts.title ?? x.title)}" autocomplete="off"></div>
+        <span class="field-error" role="alert" data-drawer-error="title"${drawer.errors.title ? "" : " hidden"}>${drawer.errors.title ? `${icon("alert")}${drawer.errors.title}` : ""}</span>${saveStateHtml("title")}</div>`;
   }
   // 完了したタスクのポイントと、閉じたワークスペースは読み取り専用。薄めず（is-readonly）、鍵と理由の文で示す
   function drawerPointsHtml(x) {
@@ -1174,27 +1197,30 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       ${drawer.errors.due ? `<span class="field-error" role="alert">${icon("alert")}${drawer.errors.due}</span>` : ""}`;
   }
   function drawerLinkHtml(x) {
-    const open = x.link ? `<a class="btn is-sm" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer" aria-label="リンクを新しいタブで開く">開く</a>` : "";
+    const open = x.link ? `<a class="btn is-sm" data-drawer-open href="${esc(x.link)}" target="_blank" rel="noopener noreferrer" aria-label="リンクを新しいタブで開く">開く</a>` : "";
     if (drawerReadOnly()) return x.link ? `<span class="source-key">${icon("link")} ${esc(x.link)}</span>${open}` : "—";
-    if (drawer.editing.has("link")) {
-      // 直している間は「開く」を出さない
-      return `<div class="edit-form"><div class="field${drawer.errors.link ? " is-invalid" : ""}"><label class="field-label visually-hidden" for="drawer-edit-link">リンク</label>
-        <input class="input" id="drawer-edit-link" type="url" data-drawer-input="link" placeholder="https://" value="${esc(drawer.drafts.link ?? x.link ?? "")}" autocomplete="off">
-        ${drawer.errors.link ? `<span class="field-error" role="alert">${icon("alert")}${drawer.errors.link}</span>` : ""}</div>${editActions("link")}</div>`;
-    }
-    const shown = x.link ? `<span class="source-key">${icon("link")} ${esc(x.link)}</span>` : `<span>リンクを足す</span>`;
-    return `<button class="edit-trigger${x.link ? "" : " is-empty"}" type="button" data-drawer-edit="link">${shown}${icon("pen")}<span class="visually-hidden">（押してリンクを直す）</span></button>${open}`;
+    // 断られた理由は欄の下に出し、入力は残す。「開く」は保存した値にだけ付く
+    const err = drawer.errors.link;
+    return `<div class="field${err ? " is-invalid" : ""}"><label class="field-label visually-hidden" for="drawer-edit-link">リンク</label>
+      <input class="input is-inline" id="drawer-edit-link" type="url" data-drawer-input="link" placeholder="リンクを足す（https://）" value="${esc(drawer.drafts.link ?? x.link ?? "")}" autocomplete="off"${err ? ` aria-describedby="drawer-edit-link-error"` : ""}>
+      <span class="field-error" id="drawer-edit-link-error" role="alert" data-drawer-error="link"${err ? "" : " hidden"}>${err ? `${icon("alert")}${err}` : ""}</span>${saveStateHtml("link")}</div>${open}`;
   }
   function drawerBodyHtml(x) {
     if (drawerReadOnly()) return `<div class="field"><span class="field-label">本文</span><div class="doc-box${x.body ? "" : " is-empty"}">${x.body ? mdBody(x.body) : "まだ書かれていません。"}</div></div>`;
     if (x.src) return `<div class="field"><span class="field-label">本文</span><div class="doc-box"><p class="props-note">取り込み元の本文は <span class="mono">${esc(x.src.key)}</span> で開いて読みます。ここには Scrum Guild のメモを書けます。</p></div></div>`;
-    if (drawer.editing.has("body")) {
-      return `<div class="field"><label class="field-label" for="drawer-edit-body">本文</label>
-        <div class="edit-form"><textarea class="textarea" id="drawer-edit-body" data-drawer-input="body" aria-describedby="drawer-edit-body-hint">${esc(drawer.drafts.body ?? (x.body || []).join("\n"))}</textarea>
-          <span class="field-hint" id="drawer-edit-body-hint">Markdown で書けます。見出しは <code>#</code> が小見出しの大きさから始まります。</span>${editActions("body")}</div></div>`;
+    return `<div class="field"><div class="field-head"><label class="field-label" for="drawer-edit-body">本文</label>${saveStateHtml("body")}</div>
+      <div class="slash-wrap"><textarea class="textarea is-inline" id="drawer-edit-body" data-drawer-input="body" data-slash aria-describedby="drawer-edit-body-hint" placeholder="まだ書かれていません。押して書きます">${esc(drawer.drafts.body ?? (x.body || []).join("\n"))}</textarea></div>
+      <span class="field-hint" id="drawer-edit-body-hint">Markdown で書けます。見出しは <code>#</code> が小見出しの大きさから始まります。行の先頭で <code>/</code> を打つと、見出しや箇条書きを入れる小窓が開きます。</span></div>`;
+  }
+  // 決まった欄（詳細・受け入れ条件）。本文と同じく、いつも書ける欄
+  function drawerFieldsHtml(x) {
+    const saved = fieldsText(x);
+    const label = `${icon("pen")} ${t("detail")}・${t("ac")} ${x.unfilled ? `<span class="chip is-todo">未記入</span>` : ""}`;
+    if (drawerReadOnly()) {
+      return `<div class="field"><span class="field-label">${label}</span><div class="doc-box${saved ? "" : " is-empty"}">${saved ? mdBody(saved.split("\n")) : `まだ書かれていません。${t("task")}を完了にした時点ですべて埋まっていると、最後に書いた人に経験値が付きます。`}</div></div>`;
     }
-    return `<div class="field"><div class="field-head"><span class="field-label">本文</span><button class="btn is-sm" type="button" data-drawer-edit="body">${icon("pen")}編集</button></div>
-      <div class="doc-box${x.body ? "" : " is-empty"}">${x.body ? mdBody(x.body) : "まだ書かれていません。"}</div></div>`;
+    return `<div class="field"><div class="field-head"><label class="field-label" for="drawer-edit-fields">${label}</label>${saveStateHtml("fields")}</div>
+      <div class="slash-wrap"><textarea class="textarea is-inline" id="drawer-edit-fields" data-drawer-input="fields" data-slash placeholder="まだ書かれていません。${t("task")}を完了にした時点ですべて埋まっていると、最後に書いた人に経験値が付きます。">${esc(drawer.drafts.fields ?? saved)}</textarea></div></div>`;
   }
   // コメントの1件。見出し（名前、日時、編集済み）の右に、許された操作だけを出す（自分のコメントは「編集」と「削除」、
   // リーダーは人のコメントの「削除」）。「編集」は本文がその場で書く欄に替わり、「削除」は確かめてから消す。
@@ -1239,9 +1265,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const commentsView = drawer.commentsView;
     const history = D.history[x.id] || [];
     const others = Object.keys(D.users).filter((u) => u !== D.me && !user(u).left);
-    const fieldBody = x.unfilled
-      ? `<div class="doc-box is-empty">まだ書かれていません。${t("task")}を完了にした時点ですべて埋まっていると、最後に書いた人に経験値が付きます。</div>`
-      : `<div class="doc-box"><ul>${(parent ? parent.ac.slice(0, 2) : ["結果を確かめる手順が書かれている"]).map((a) => `<li>${esc(a)}</li>`).join("")}</ul></div>`;
     // 変更の履歴の列の名前（本番は src/lib/task-history.ts の表）。作成は作ったときの値を、変更は前と後を、欄ごとの行（.history-changes）で出す
     const HIST = { title: "タイトル", points: t("points"), due: t("due"), assignee: t("assignee") };
     if (drawer.view === "loading" || drawer.view === "failed") return drawerStateHtml();
@@ -1271,10 +1294,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${x.src ? "" : `<div><dt>リンク</dt><dd>${drawerLinkHtml(x)}</dd></div>`}
         <div><dt>今日やる</dt><dd><button class="sun" type="button" data-sun="${x.id}" aria-pressed="${x.todayOn === D.today}" aria-label="今日やる: ${esc(x.title)}" aria-disabled="false">${icon("sun")}</button>${x.todayOn === D.today ? "今日やる" : ""}</dd></div>
       </dl>
-      <div class="field">
-        <span class="field-label">${icon("pen")} ${t("detail")}・${t("ac")} ${x.unfilled ? `<span class="chip is-todo">未記入</span>` : ""}</span>
-        ${fieldBody}
-      </div>
+      ${drawerFieldsHtml(x)}
       ${drawerBodyHtml(x)}
       <div class="field">
         <span class="field-label">${icon("clip")} 添付ファイル ${filesOf(x.id).filter((f) => !f.state).length || ""}</span>
@@ -1305,7 +1325,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
             : `${commentsView === "reloadFailed" ? `<div class="form-actions"><span class="field-error" role="alert">${icon("alert")}最新のコメントを読み込めませんでした。</span><button class="btn is-sm is-quiet" type="button">もう一度試す</button></div>` : ""}
           ${older ? `<div class="form-actions"><button class="btn is-sm" type="button" data-toast="前のコメントを足しました">前のコメントを読む</button></div>` : ""}
           ${comments.map((c, i) => commentHtml(x, c, i)).join("") || `<p class="props-note">まだコメントはありません。</p>`}
-          ${drawerReadOnly() ? "" : `<div class="field${drawer.errors.comment ? " is-invalid" : ""}"><label class="field-label" for="new-comment">コメントを書く</label><textarea class="textarea" id="new-comment" data-comment-new placeholder="Markdown で書けます" aria-describedby="new-comment-hint">${esc(drawer.drafts.comment ?? "")}</textarea>
+          ${drawerReadOnly() ? "" : `<div class="field${drawer.errors.comment ? " is-invalid" : ""}"><label class="field-label" for="new-comment">コメントを書く</label><textarea class="textarea" id="new-comment" data-comment-new data-slash placeholder="Markdown で書けます" aria-describedby="new-comment-hint">${esc(drawer.drafts.comment ?? "")}</textarea>
             <span class="field-hint" id="new-comment-hint">Markdown で書けます。見出しは <code>#</code> が小見出しの大きさから始まります。</span>
             ${drawer.errors.comment ? `<span class="field-error" role="alert">${icon("alert")}${drawer.errors.comment}</span>` : ""}</div>
           ${attachments(`comment-new:${x.id}`, { noDrop: true })}
@@ -1321,7 +1341,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       ${drawerReadOnly() ? "" : `<div class="form-actions">${x.src
         ? `<button class="btn is-sm is-quiet" type="button" data-toast="${t("archive")}へ移しました">${icon("archive")}${t("archive")}へ移す</button><span class="field-hint">取り込んだ${t("task")}は削除せず、${t("archive")}へ移して外します。</span>`
         // 作った人とリーダーには削除のボタンだけを出す。一般のメンバーには、ボタンの代わりに「削除できるのは作った人と${t("leader")}です。」だけを添える
-        : `<button class="btn is-sm is-quiet is-danger" type="button" data-dialog="deleteTask">${icon("trash")}この${t("task")}を削除する</button>`}</div>`}`;
+        : `<button class="btn is-sm is-quiet is-danger" type="button" data-task-delete="${x.id}">${icon("trash")}この${t("task")}を削除する</button><span class="field-hint">${location.pathname.endsWith("/task.html") ? "確認なしですぐ消えます。" : "すぐ消えます。消した直後は、知らせの「取り消す」で戻せます。"}</span>`}</div>`}`;
   }
   // 引き出しの見本の状態。読み込み中と、読めなかったとき（もう一度試す）は、見出しと文だけ
   function drawerStateHtml() {
@@ -1358,7 +1378,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // 別のタスクを開く（前後へ移るときも）ために、引き出しの状態を初めに戻し、前のタスクの中身（欄を含む子要素すべて）を外す。
   // renderDrawer は描き直す前に欄の値を写すので、中身を残すと前の書きかけが開いた先に戻る
   function resetDrawerFor(id, opener) {
-    drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = opener || null; drawer.editing = new Set(); drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
+    drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = opener || null; drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     document.getElementById("drawer")?.replaceChildren();
   }
   // 直している欄の今の入力。再描画しても書きかけを残すため、描き直す前に写す
@@ -1373,12 +1393,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const x = task(drawer.id);
     if (!x) return false;
     captureDrafts();
-    const saved = { title: x.title, link: x.link || "", body: (x.body || []).join("\n") };
+    const saved = { title: x.title, link: x.link || "", body: (x.body || []).join("\n"), fields: fieldsText(x) };
     // コメントは、新しいコメントの欄に文字があるときと、直している途中で直す前の本文と違うとき
     const editingComment = drawer.commentEditing !== null ? (D.comments[x.id] || [])[drawer.commentEditing] : null;
     if ((drawer.drafts.comment ?? "").trim() !== "") return true;
     if (editingComment && (drawer.drafts.commentEdit ?? editingComment.body).trim() !== editingComment.body.trim()) return true;
-    return [...drawer.editing].some((name) => (drawer.drafts[name] ?? saved[name]).trim() !== saved[name].trim());
+    return Object.keys(saved).some((name) => (drawer.drafts[name] ?? saved[name]).trim() !== saved[name].trim());
   }
   // 書きかけがあるときは、捨てるかをダイアログで確かめる。force は捨てると決めた後
   function closeDrawer(force = false) {
@@ -1388,30 +1408,114 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const back = sessionStorage.getItem("sq-design-task-return"); sessionStorage.removeItem("sq-design-task-return");
       location.href = back || "backlog.html"; return;
     }
-    drawer.id = null; drawer.editing = new Set(); drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
+    drawer.id = null; drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     renderDrawer();
     const back = drawer.opener && document.querySelector(`[data-task="${drawer.opener}"]`);
     if (back) back.focus();
   }
-  const focusDrawerInput = (name) => document.querySelector(`#drawer [data-drawer-input="${name}"]`)?.focus();
-  const focusDrawerTrigger = (name) => document.querySelector(`#drawer [data-drawer-edit="${name}"]`)?.focus();
-  function cancelDrawerEdit(name) { drawer.editing.delete(name); delete drawer.drafts[name]; delete drawer.errors[name]; renderDrawer(); focusDrawerTrigger(name); }
-  function saveDrawerEdit(name) {
+  // ---- 自動保存。タイトル、リンク、本文、決まった欄 ----
+  const fieldsText = (x) => (x.unfilled ? "" : (x.fields ?? (x.story ? D.stories[x.story].ac.slice(0, 2) : ["結果を確かめる手順が書かれている"]).map((a) => `- ${a}`).join("\n")));
+  const savedFieldValue = (x, name) => name === "title" ? x.title : name === "link" ? x.link || "" : name === "body" ? (x.body || []).join("\n") : fieldsText(x);
+  const saveTimers = {};
+  const SAVE_WAIT = 1500;
+  function showSaveState(name, state) {
+    const el = document.querySelector(`#drawer [data-save-state="${name}"]`);
+    if (!el) return;
+    el.className = `save-state${state ? ` is-${state}` : ""}`;
+    el.innerHTML = state ? `${icon(state === "saved" ? "check" : "alert")}${SAVE_TEXT[state]}` : "";
+  }
+  function showDrawerError(name, message) {
+    const el = document.querySelector(`#drawer [data-drawer-error="${name}"]`);
+    if (message) drawer.errors[name] = message; else delete drawer.errors[name];
+    if (!el) return;
+    el.hidden = !message;
+    el.innerHTML = message ? `${icon("alert")}${message}` : "";
+    const input = document.querySelector(`#drawer [data-drawer-input="${name}"]`);
+    if (input) {
+      // 既にあるヒントへの結び付けは残し、誤りの id だけを足し引きする
+      el.id = el.id || `drawer-edit-${name}-error`;
+      const ids = (input.getAttribute("aria-describedby") || "").split(/\s+/).filter((v) => v && v !== el.id);
+      if (message) { ids.push(el.id); input.setAttribute("aria-invalid", "true"); } else input.removeAttribute("aria-invalid");
+      if (ids.length) input.setAttribute("aria-describedby", ids.join(" ")); else input.removeAttribute("aria-describedby");
+    }
+    el.closest(".field")?.classList.toggle("is-invalid", Boolean(message));
+  }
+  // 画面の本体だけを描き直す（引き出しと、書いている欄のフォーカスは残す）
+  function redrawContent() {
+    if (!page) return;
+    const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
+    document.getElementById("content").innerHTML = page.render();
+    drafts.forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
+  }
+  // 保存した欄に応じて、引き出しの見出し、リンクの「開く」、「未記入」の印だけを差し替える（書いている欄は作り直さない）
+  function refreshDrawerView(x, name) {
+    const root = document.getElementById("drawer");
+    if (!root) return;
+    if (name === "title") root.querySelectorAll("#drawer-title").forEach((el) => (el.textContent = x.title));
+    if (name === "link") {
+      const field = root.querySelector('[data-drawer-input="link"]')?.closest(".field");
+      field?.parentElement.querySelectorAll("a[data-drawer-open]").forEach((a) => a.remove());
+      if (x.link && field) field.insertAdjacentHTML("afterend", `<a class="btn is-sm" data-drawer-open href="${esc(x.link)}" target="_blank" rel="noopener noreferrer" aria-label="リンクを新しいタブで開く">開く</a>`);
+    }
+    if (name === "fields") {
+      const label = root.querySelector('label[for="drawer-edit-fields"]');
+      label?.querySelectorAll(".chip.is-todo").forEach((c) => c.remove());
+      if (x.unfilled && label) label.insertAdjacentHTML("beforeend", ` <span class="chip is-todo">未記入</span>`);
+    }
+  }
+  function commitDrawerField(name) {
+    clearTimeout(saveTimers[name]);
     const x = task(drawer.id), input = document.querySelector(`#drawer [data-drawer-input="${name}"]`);
     if (!x || !input) return;
     const value = input.value.trim();
-    if (name === "title") { if (!value) return; x.title = value; }
-    else if (name === "link") {
+    if (value === savedFieldValue(x, name).trim() && !drawer.errors[name]) return;
+    if (name === "title") {
+      if (!value) { showDrawerError("title", "タイトルは空にできません"); showSaveState(name, "failed"); return; }
+      x.title = value;
+    } else if (name === "link") {
       // リンクは http と https の URL だけ（本番の判定と同じ）。断ったら、欄の下に理由を出して、入力を残す
-      if (value && !/^https?:\/\/\S+$/i.test(value)) {
-        drawer.drafts.link = input.value; drawer.errors.link = "http か https で始まる URL を入れてください";
-        renderDrawer(); focusDrawerInput("link"); return;
-      }
+      if (value && !/^https?:\/\/\S+$/i.test(value)) { showDrawerError("link", "http か https で始まる URL を入れてください"); showSaveState(name, "failed"); return; }
       x.link = value || null;
-    } else x.body = value ? value.split("\n") : null;
-    drawer.editing.delete(name); delete drawer.drafts[name]; delete drawer.errors[name];
-    redrawAll(); toast(`${icon("check")}保存しました`); focusDrawerTrigger(name);
+    } else if (name === "body") x.body = value ? value.split("\n") : null;
+    else { x.fields = value; x.unfilled = !value; }
+    showDrawerError(name, "");
+    delete drawer.drafts[name];
+    showSaveState(name, "saved");
+    refreshDrawerView(x, name);
+    redrawContent();
   }
+  // 書きかけを保存した値に戻す（Esc）。戻したら true
+  function revertDrawerField(input) {
+    const x = task(drawer.id), name = input.dataset.drawerInput;
+    if (!x) return false;
+    const saved = savedFieldValue(x, name);
+    if (input.value.trim() === saved.trim() && !drawer.errors[name]) return false;
+    clearTimeout(saveTimers[name]);
+    input.value = saved; delete drawer.drafts[name];
+    showDrawerError(name, ""); showSaveState(name, "");
+    return true;
+  }
+  document.addEventListener("input", (ev) => {
+    const input = ev.target.closest && ev.target.closest("#drawer [data-drawer-input]");
+    if (!input || !drawer.id) return;
+    const name = input.dataset.drawerInput;
+    showSaveState(name, "");
+    clearTimeout(saveTimers[name]);
+    if (ev.isComposing) return;
+    saveTimers[name] = setTimeout(() => commitDrawerField(name), SAVE_WAIT);
+  });
+  // 変換が終わったら、待ちを張り直す（変換前のかなのまま保存しない）
+  document.addEventListener("compositionend", (ev) => {
+    const input = ev.target.closest && ev.target.closest("#drawer [data-drawer-input]");
+    if (!input || !drawer.id) return;
+    const name = input.dataset.drawerInput;
+    clearTimeout(saveTimers[name]);
+    saveTimers[name] = setTimeout(() => commitDrawerField(name), SAVE_WAIT);
+  });
+  document.addEventListener("focusout", (ev) => {
+    const input = ev.target.closest && ev.target.closest("#drawer [data-drawer-input]");
+    if (input && drawer.id) commitDrawerField(input.dataset.drawerInput);
+  });
   // ポイントと期日は、選んだら保存する（保存のボタンは無い）
   document.addEventListener("change", (ev) => {
     const el = ev.target.closest && ev.target.closest("[data-drawer-pts], [data-drawer-due]");
@@ -1475,8 +1579,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 短い知らせ。数秒で消える。操作の付いたものは、押す間があるよう長く出す（lifetime）
   // html は先頭のアイコンと文。本番（ToastRegion.svelte）と同じく、文は <span> で包む。
-  // action（ボタンの文字）を渡すと文の後ろに操作のボタンを付け、10 秒出す。ポインターかフォーカスがある間は数えるのを止め、外れてから数え直す
-  function toast(html, action) {
+  // action（ボタンの文字）を渡すと文の後ろに操作のボタンを付け、10 秒出す。onAction はそのボタンを押したときの動き（元に戻すなど）。ポインターかフォーカスがある間は数えるのを止め、外れてから数え直す
+  function toast(html, action, onAction) {
     const el = document.getElementById("toasts");
     if (!el) return;
     const [, mark = "", text = ""] = /^(<svg[\s\S]*?<\/svg>)?([\s\S]*)$/.exec(html) || [];
@@ -1487,11 +1591,223 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const lifetime = action ? 10000 : 4000;
     let timer = setTimeout(() => item.remove(), lifetime);
     if (!action) return;
+    // 操作のボタンは、押したら onAction を行ってから、知らせを消す（消すのは data-toast-dismiss の受け口）
+    if (onAction) item.querySelector(".toast-action").addEventListener("click", onAction, { once: true });
     const pause = () => clearTimeout(timer);
     const resume = () => { clearTimeout(timer); timer = setTimeout(() => item.remove(), lifetime); };
     item.addEventListener("mouseenter", pause); item.addEventListener("focusin", pause);
     item.addEventListener("mouseleave", resume); item.addEventListener("focusout", resume);
   }
+  // ---- 行の「⋯」とチップの一覧 ----
+  // 開いているメニューを閉じる。keep は今押した開閉のボタン（同じ押下で下で切り替える）。target が項目なら、元のボタンにフォーカスを戻す
+  function closeRowMenus(keep, target) {
+    document.querySelectorAll(".row-menu-list:not([hidden])").forEach((list) => {
+      const toggle = list.parentElement.querySelector("[data-row-menu]");
+      if (toggle === keep) return;
+      list.hidden = true; toggle.setAttribute("aria-expanded", "false");
+      if (target && list.contains(target)) toggle.focus();
+    });
+  }
+  const visibleItems = (list) => [...list.querySelectorAll('[role^="menuitem"]')].filter((b) => !b.closest("li").hidden);
+  // 一覧は position: fixed で、押したボタンの右端に合わせて下に開く。画面の下に収まらなければ上に開き、左右は画面の中に収める
+  // （盤面の overflow に切られず、狭い幅でも潰れない）。幅の変化では閉じ、スクロールでは置き直す
+  function placeRowMenu(toggle, list) {
+    list.style.maxHeight = `${innerHeight - 16}px`; list.style.overflowY = "auto";
+    const r = toggle.getBoundingClientRect(), w = list.offsetWidth, h = list.offsetHeight, gap = 4;
+    const left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8));
+    const top = r.bottom + gap + h <= innerHeight ? r.bottom + gap : Math.max(8, r.top - gap - h);
+    list.style.left = `${left}px`; list.style.top = `${top}px`;
+  }
+  function toggleRowMenu(toggle) {
+    const list = toggle.parentElement.querySelector(".row-menu-list");
+    const open = list.hidden;
+    list.hidden = !open; toggle.setAttribute("aria-expanded", String(open));
+    if (open) { placeRowMenu(toggle, list); visibleItems(list)[0]?.focus(); }
+  }
+  const closeAllRowMenus = () => closeRowMenus(null, null);
+  addEventListener("resize", closeAllRowMenus);
+  // スクロールでは閉じず、開いているメニューを押したボタンに合わせて置き直す
+  addEventListener("scroll", (ev) => {
+    if (ev.target.closest?.(".row-menu-list")) return;
+    document.querySelectorAll(".row-menu-list:not([hidden])").forEach((list) => placeRowMenu(list.parentElement.querySelector("[data-row-menu]"), list));
+  }, true);
+  // メニューの中のキー。上下で項目を移り、Esc で閉じて元のボタンへ戻る。Tab は閉じてから普通に移る
+  function rowMenuKey(ev) {
+    const list = ev.target.closest && ev.target.closest(".row-menu-list");
+    const toggle = ev.target.closest && ev.target.closest("[data-row-menu][aria-expanded='true']");
+    if (!list && !toggle) {
+      const closed = ev.key === "ArrowDown" && ev.target.matches && ev.target.matches("[data-row-menu][aria-expanded='false']");
+      if (closed) { ev.preventDefault(); toggleRowMenu(ev.target); return true; }
+      return false;
+    }
+    const menu = (list || toggle.parentElement.querySelector(".row-menu-list"));
+    const button = menu.parentElement.querySelector("[data-row-menu]");
+    if (ev.key === "Escape") { ev.stopPropagation(); menu.hidden = true; button.setAttribute("aria-expanded", "false"); button.focus(); return true; }
+    if (ev.key === "Tab") { menu.hidden = true; button.setAttribute("aria-expanded", "false"); if (list) button.focus(); return false; }
+    if (!list || !["ArrowDown", "ArrowUp", "Home", "End"].includes(ev.key)) return false;
+    const items = visibleItems(list);
+    const at = items.indexOf(ev.target);
+    const next = ev.key === "Home" ? 0 : ev.key === "End" ? items.length - 1 : (at + (ev.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    ev.preventDefault(); items[next].focus(); return true;
+  }
+
+  // ---- 消す操作。タスクはすぐ消して、知らせの「取り消す」で戻す ----
+  // 取り消しは、各タスクが最初に持っていた位置（_pos）で戻す。どの順に消してもどの順に取り消しても、元の並びになる
+  function deleteTaskWithUndo(id) {
+    const at = D.tasks.findIndex((y) => y.id === id);
+    if (at < 0) return;
+    let next = Math.max(-1, ...D.tasks.map((y) => (y._pos == null ? -1 : y._pos))) + 1;
+    D.tasks.forEach((y) => { if (y._pos == null) y._pos = next++; });
+    // 消した行の、画面に出ている「⋯」の並びの中での位置を覚える（消えた行の代わりに、同じ位置の行へフォーカスを置く）
+    const menuSel = ".entry .row-menu-btn, .card .row-menu-btn";
+    const shown = [...document.querySelectorAll(menuSel)].findIndex((b) => b.dataset.menuFor === id);
+    const [x] = D.tasks.splice(at, 1);
+    if (drawer.id === id) closeDrawer(true);
+    redrawAll();
+    // 行が消えるとフォーカスは body に落ちるので、同じ位置（末尾なら最後）の行の「⋯」へ戻す
+    const menus = document.querySelectorAll(menuSel);
+    if (shown >= 0 && menus.length) menus[Math.min(shown, menus.length - 1)].focus();
+    toast(`${icon("check")}${t("task")}を削除しました`, "取り消す", () => {
+      const pos = D.tasks.findIndex((y) => y._pos > x._pos);
+      D.tasks.splice(pos < 0 ? D.tasks.length : pos, 0, x);
+      redrawAll();
+    });
+  }
+
+  // ---- 空の行 ----
+  let draftSeq = 0;
+  // 題を打って Enter で足す。見本の中だけで持ち、足したら同じ欄に戻って続けて打てる
+  function createFromDraft(input) {
+    const title = input.value.trim();
+    if (!title) return;
+    const [kind, key] = input.dataset.draft.split(":");
+    // エピックとストーリーの空の行。見本は木を組み替えず、足したことだけ知らせて、同じ欄に戻る
+    if (kind === "new-epic" || kind === "new-story") {
+      input.value = "";
+      input.focus();
+      toast(`${icon("check")}${t(kind === "new-epic" ? "epic" : "story")}を足しました: ${esc(title)}`);
+      return;
+    }
+    const x = { id: `n${++draftSeq}`, ws: "wa", title, story: kind === "story" ? key : null, sprint: kind === "col" ? "sp14" : null, col: kind === "col" ? key : null, who: null, pts: null, creator: D.me, unfilled: true };
+    D.tasks.push(x);
+    redrawAll();
+    document.getElementById(input.id)?.focus();
+    toast(`${icon("check")}${t("task")}を足しました: ${esc(title)}`);
+  }
+  // 空の行のキー。変換中の Enter（isComposing か keyCode 229）では作らない。Esc は書きかけを消して離れる
+  function draftKey(ev) {
+    const input = ev.target.matches && ev.target.matches("input[data-draft]") ? ev.target : null;
+    if (!input) return false;
+    if (ev.key === "Enter") { if (ev.isComposing || ev.keyCode === 229) return true; ev.preventDefault(); createFromDraft(input); return true; }
+    if (ev.key === "Escape") { if (ev.isComposing || ev.keyCode === 229) return true; ev.stopPropagation(); input.value = ""; return true; }
+    return false;
+  }
+
+  // ---- 「/」の小窓と入力の補助（本文の欄） ----
+  const SLASH_ITEMS = [
+    ["見出し", "# ", "h1"], ["小見出し", "## ", "h2"], ["箇条書き", "- ", "list"], ["番号付きの一覧", "1. ", "ol"],
+    ["チェックリスト", "- [ ] ", "todo"], ["引用", "> ", "quote"], ["コードブロック", "```\n\n```", "code"], ["区切り線", "---\n", "rule"],
+  ];
+  const slash = { ta: null, items: [], at: 0, from: 0, query: "" };
+  function slashQuery(ta) {
+    if (ta.selectionStart !== ta.selectionEnd) return null;
+    const pos = ta.selectionStart, lineStart = ta.value.lastIndexOf("\n", pos - 1) + 1;
+    const m = /^\/(\S*)$/.exec(ta.value.slice(lineStart, pos));
+    return m ? { query: m[1], from: lineStart } : null;
+  }
+  function slashMenuEl(ta) {
+    let menu = ta.parentElement.querySelector(".slash-menu");
+    if (!menu) {
+      ta.parentElement.classList.add("slash-wrap");
+      menu = document.createElement("ul");
+      menu.className = "slash-menu"; menu.id = `slash-${ta.id || "menu"}`; menu.setAttribute("role", "listbox"); menu.setAttribute("aria-label", "Markdown を入れる"); menu.hidden = true;
+      ta.parentElement.append(menu);
+      // 候補の数と選んでいる項目は、常に置く読み上げの領域で伝える（textarea には combobox の role を付けない）
+      const status = document.createElement("div");
+      status.className = "visually-hidden"; status.setAttribute("role", "status"); status.dataset.slashStatus = "";
+      ta.parentElement.append(status);
+    }
+    return menu;
+  }
+  function closeSlash() {
+    if (!slash.ta) return false;
+    const menu = slash.ta.parentElement.querySelector(".slash-menu"), was = menu && !menu.hidden;
+    if (menu) menu.hidden = true;
+    slash.at = 0;
+    const status = slash.ta.parentElement.querySelector("[data-slash-status]");
+    if (status) status.textContent = "";
+    slash.ta = null;
+    return Boolean(was);
+  }
+  function renderSlash() {
+    const ta = slash.ta, menu = slashMenuEl(ta);
+    menu.innerHTML = slash.items.map(([label, , key], i) => `<li class="slash-item" role="option" id="${menu.id}-${key}" aria-selected="${i === slash.at}" data-slash-pick="${i}"><span>${label}</span><small>${esc(SLASH_ITEMS.find((s) => s[2] === key)[1].trim() || "")}</small></li>`).join("");
+    menu.hidden = false;
+    const status = ta.parentElement.querySelector("[data-slash-status]");
+    if (status) status.textContent = `候補 ${slash.items.length} 件。選んでいる項目: ${slash.items[slash.at][0]}。上下の矢印で選び、Enter で入れます`;
+  }
+  function updateSlash(ta) {
+    const q = slashQuery(ta);
+    const items = q ? SLASH_ITEMS.filter(([label, , key]) => label.includes(q.query) || key.startsWith(q.query.toLowerCase())) : [];
+    if (!q || !items.length) { closeSlash(); return; }
+    if (slash.ta && slash.ta !== ta) closeSlash();
+    // 開き直しと、絞り込みの文字が変わったときは、先頭を選ぶ
+    if (!slash.ta || slash.query !== q.query) slash.at = 0;
+    slash.ta = ta; slash.items = items; slash.from = q.from; slash.query = q.query; slash.at = Math.min(slash.at, items.length - 1);
+    renderSlash();
+  }
+  function pickSlash(i) {
+    const ta = slash.ta, item = slash.items[i];
+    if (!ta || !item) return;
+    // キャレットを動かした後は、今の行から取り直す。「/」の行でなくなっていれば入れずに閉じる
+    const q = slashQuery(ta);
+    if (!q) { closeSlash(); return; }
+    slash.from = q.from;
+    ta.setRangeText(item[1], slash.from, ta.selectionStart, "end");
+    // コードブロックは、囲みの間にカーソルを置く
+    if (item[2] === "code") ta.setSelectionRange(slash.from + 4, slash.from + 4);
+    closeSlash(); ta.focus();
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  // 「/」の小窓のキー。上下で選び、Enter か Tab で入れ、Esc で閉じる（変換中は何もしない）
+  function slashKey(ev) {
+    if (!slash.ta || ev.target !== slash.ta || ev.isComposing || ev.keyCode === 229) return false;
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); slash.at = (slash.at + (ev.key === "ArrowDown" ? 1 : -1) + slash.items.length) % slash.items.length; renderSlash(); return true; }
+    if (ev.key === "Enter") {
+      // キャレットを「/」の行から離していたら、小窓を閉じて普通の Enter（改行）に任せる
+      if (!slashQuery(slash.ta)) { closeSlash(); return false; }
+      ev.preventDefault(); pickSlash(slash.at); return true;
+    }
+    if (ev.key === "Escape") { ev.stopPropagation(); closeSlash(); return true; }
+    return false;
+  }
+  // 入力の補助: 一覧の行で Enter を押すと、次の行にも同じ印を付ける。印だけの行で押すと、印を消して一覧を抜ける
+  function continueList(ta) {
+    const pos = ta.selectionStart;
+    if (pos !== ta.selectionEnd) return false;
+    // キャレットの後ろに文字があるときは、普通の改行に任せる
+    if (ta.value[pos] !== undefined && ta.value[pos] !== "\n") return false;
+    const lineStart = ta.value.lastIndexOf("\n", pos - 1) + 1;
+    const m = /^(\s*)(- \[[ x]\] |[-*] |\d+\. |> )(.*)$/.exec(ta.value.slice(lineStart, pos));
+    if (!m) return false;
+    if (m[3] === "") ta.setRangeText("", lineStart, pos, "end");
+    else {
+      const mark = /^\d+\. $/.test(m[2]) ? `${parseInt(m[2], 10) + 1}. ` : /^- \[[ x]\] $/.test(m[2]) ? "- [ ] " : m[2];
+      ta.setRangeText(`\n${m[1]}${mark}`, pos, pos, "end");
+    }
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  }
+  document.addEventListener("input", (ev) => { if (ev.target.matches && ev.target.matches("textarea[data-slash]") && !ev.isComposing) updateSlash(ev.target); });
+  document.addEventListener("click", (ev) => {
+    const pick = ev.target.closest && ev.target.closest("[data-slash-pick]");
+    if (pick) { ev.preventDefault(); pickSlash(Number(pick.dataset.slashPick)); return; }
+    if (slash.ta && !ev.target.closest(".slash-wrap")) closeSlash();
+  });
+  document.addEventListener("focusout", (ev) => { if (slash.ta && ev.target === slash.ta && !(ev.relatedTarget && ev.relatedTarget.closest && ev.relatedTarget.closest(".slash-menu"))) closeSlash(); });
+  // 小窓の項目を押す間に欄がフォーカスを失わないよう、押した瞬間の移りを止める
+  document.addEventListener("mousedown", (ev) => { if (ev.target.closest && ev.target.closest(".slash-menu")) ev.preventDefault(); });
+
   // レイドのクリアの演出。判子が押されて、報酬を知らせる。動きを減らす設定では動かさない
   function celebrate(title, reward) {
     const el = document.getElementById("celebrate");
@@ -1797,23 +2113,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         `<button class="btn is-primary" type="button" data-close-dialog>書き続ける</button><button class="btn is-danger" type="button" data-discard-draft>捨てる</button>`);
       document.querySelector(".dialog-sheet").classList.add("is-danger");
     },
-    // コメントを消すかを確かめる。消したものは「削除されました」と残る。引き出しの外（カタログ）から開いたときは、消さない
-    // 確かめの文に、書いた人と日時を添える（長い名前は .dialog-body が折り返す）
-    deleteComment: () => {
-      const c = drawer.id ? (D.comments[drawer.id] || [])[drawer.commentDeleting] : (D.comments.t1 || [])[1];
-      openDialog("コメントを削除する",
-        `<p>${esc(user(c ? c.who : D.me).name)}が ${c ? c.at : ""} に書いたコメントを削除します。本文は戻せません。一覧には「削除されました」と残ります。</p>`,
-        `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" ${drawer.id ? "data-delete-comment" : `data-close-dialog data-toast="削除しました"`}>削除する</button>`);
-      document.querySelector(".dialog-sheet").classList.add("is-danger");
-    },
-    // 引き出しの外（カタログ）から開いたときは、見本のタスクを指し、削除は実行しない。長いタイトルは折り返す
-    deleteTask: () => {
-      openDialog(`${t("task")}を削除する`,
-        `<p>「${esc(task(drawer.id || "t1").title)}」を削除します。削除したものは画面から消え、この版では戻せません。</p>
-         <p class="field-hint">完了の記録と経験値は残ります。</p>`,
-        `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" ${drawer.id ? "data-delete-task" : `data-close-dialog data-toast="削除しました"`}>削除する</button>`);
-      document.querySelector(".dialog-sheet").classList.add("is-danger");
-    },
     // タスクの親を移す（本番の MoveParentDialog）。移す先は親なしと、完了していないストーリー（今の親を除く）。移す先の末尾に置く
     moveTask: () => {
       const x = tasksWhere((task) => task.story === "s4" && !task.doneAt)[0];
@@ -1834,8 +2133,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     },
     // エピックとストーリーの削除（本番の TreeDeleteDialog）。それぞれのダイアログの下の「この<エピック>を削除する」から開く。
     // 配下の件数と、配下の扱い（既定は残す）を選ばせる。配下が無ければ選ばせず、その旨だけを出す。長いタイトルは折り返す
-    deleteEpic: () => treeDeleteDialog("epic", "e1"),
-    deleteStory: () => treeDeleteDialog("story", "s4"),
+    deleteEpic: (el) => treeDeleteDialog("epic", el?.dataset?.treeDeleteId || "e1"),
+    deleteStory: (el) => treeDeleteDialog("story", el?.dataset?.treeDeleteId || "s4"),
     deleteStoryEmpty: () => treeDeleteDialog("story", "s4", { empty: true }),
     deleteStoryLeaderOnly: () => treeDeleteDialog("story", "s4", { leaderOnly: true }),
     cancelEpic: () => openDialog(`${t("epic")}を中止する`,
@@ -2463,7 +2762,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     document.getElementById("breadcrumb-slot").innerHTML = breadcrumbHtml();
     document.getElementById("app-nav").innerHTML = navHtml(page.current, page.operator ? OPERATOR_PAGES : PAGES);
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
+    const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
     document.getElementById("content").innerHTML = page.render();
+    drafts.forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
     applyNavCollapsed();
     applyTheme();
     renderDrawer();
@@ -2669,6 +2970,16 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   document.addEventListener("click", (ev) => {
     const hit = (attr) => ev.target.closest(`[${attr}]`);
     let el;
+    // 行の「⋯」とチップの一覧。開閉は属性だけで、外を押すか項目を選ぶと閉じる（項目を選んだときは元のボタンにフォーカスを戻す）
+    const rowToggle = hit("data-row-menu");
+    closeRowMenus(rowToggle, ev.target);
+    if (rowToggle) { toggleRowMenu(rowToggle); return; }
+    if ((el = hit("data-chip-set"))) {
+      const [id, name, value] = el.dataset.chipSet.split(":");
+      const x = task(id);
+      if (x) { if (name === "pts") x.pts = value === "" ? null : Number(value); else x.who = value || null; }
+      redrawAll(); document.querySelector(`[data-chip-for="${id}:${name}"]`)?.focus(); toast(`${icon("check")}保存しました`); return;
+    }
     // 組織の切り替えを開閉する。外を押したら閉じる（押したものの動きは続ける）
     if (hit("data-org-menu")) {
       if (workspaceMenuOpen) setWorkspaceMenu(false);
@@ -2689,7 +3000,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if ((el = hit("data-sun"))) {
       const x = task(el.dataset.sun);
       x.todayOn = x.todayOn === D.today ? null : D.today;
-      redrawAll(); return;
+      redrawAll(); document.querySelector(`[data-menu-for="${x.id}"]`)?.focus(); return;
     }
     if ((el = hit("data-done"))) {
       const x = task(el.dataset.done);
@@ -2730,12 +3041,18 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       drawer.commentEditing = null; drawer.commentBlocked = null; delete drawer.drafts.commentEdit; renderDrawer();
       document.querySelector(`#drawer [data-comment-edit="${i}"]`)?.focus(); return;
     }
-    if ((el = hit("data-comment-delete"))) { drawer.commentDeleting = Number(el.dataset.commentDelete); DIALOGS.deleteComment(); return; }
-    if (hit("data-delete-comment")) {
-      const c = (D.comments[drawer.id] || [])[drawer.commentDeleting];
-      closeDialog();
-      if (c) { c.deleted = true; c.deletedBy = D.me; delete c.body; }
-      drawer.commentDeleting = null; renderDrawer(); toast(`${icon("check")}コメントを削除しました`); return;
+    // コメントはすぐ消し、知らせの「取り消す」で戻せる（確認のダイアログは出さない）
+    if ((el = hit("data-comment-delete"))) {
+      const id = drawer.id, c = (D.comments[id] || [])[Number(el.dataset.commentDelete)];
+      if (!c) return;
+      const before = { ...c };
+      c.deleted = true; c.deletedBy = D.me; delete c.body; renderDrawer();
+      toast(`${icon("check")}コメントを削除しました`, "取り消す", () => {
+        for (const k of Object.keys(c)) delete c[k];
+        Object.assign(c, before);
+        if (drawer.id === id) renderDrawer();
+      });
+      return;
     }
     if (hit("data-comment-send")) {
       const input = document.querySelector("#drawer [data-comment-new]");
@@ -2747,9 +3064,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       [...document.querySelectorAll("#drawer #drawer-panel-comments .comment")].at(-1)?.scrollIntoView({ block: "nearest" }); return;
     }
     if (hit("data-close-drawer")) { closeDrawer(); return; }
-    if ((el = hit("data-drawer-edit"))) { drawer.editing.add(el.dataset.drawerEdit); renderDrawer(); focusDrawerInput(el.dataset.drawerEdit); return; }
-    if ((el = hit("data-drawer-cancel"))) { cancelDrawerEdit(el.dataset.drawerCancel); return; }
-    if ((el = hit("data-drawer-save"))) { saveDrawerEdit(el.dataset.drawerSave); return; }
     if (hit("data-drawer-due-clear")) { task(drawer.id).due = null; redrawAll(); toast(`${icon("check")}保存しました`); return; }
     if ((el = hit("data-drawer-mode"))) { changeDrawerMode(el.dataset.drawerMode); return; }
     if ((el = hit("data-drawer-step"))) { stepDrawer(Number(el.dataset.drawerStep), false, true); return; }
@@ -2762,12 +3076,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       else closeDrawer(true);
       return;
     }
-    if (hit("data-delete-task")) {
-      const x = task(drawer.id);
-      closeDialog(); closeDrawer(true);
-      D.tasks = D.tasks.filter((y) => y !== x);
-      redrawAll(); toast(`${icon("check")}${t("task")}を削除しました`); return;
-    }
+    // タスクはすぐ消し、知らせの「取り消す」で戻せる。配下のあるストーリーとエピックだけが確認のダイアログを持つ
+    if ((el = hit("data-task-delete"))) { deleteTaskWithUndo(el.dataset.taskDelete); return; }
     if ((el = hit("data-invite-link"))) { inviteLink(el.dataset.inviteLink, el.dataset.inviteDone, false, el.dataset.inviteKind === "workspace"); return; }
     // 組織の作成: GitHub は解決した人を見せ、確かめてから作れる。作った後は組織の URL を出す
     // 管理者の指名し直しも同じ（確かめた人の表示と指名するボタンを、data-verify-panel と data-verify-submit で渡す）
@@ -2927,6 +3237,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       navSearch.input().focus(); navSearch.input().select(); navSearch.render(); return;
     }
     if (ev.target.id === "nav-search-input" && navSearch.key(ev)) return;
+    // 行の「⋯」のメニュー、「/」の小窓、空の行は、それぞれのキーを先に受け持つ
+    if (rowMenuKey(ev) || slashKey(ev) || draftKey(ev)) return;
+    if (ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229 && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !ev.altKey
+      && ev.target.matches && ev.target.matches("textarea[data-slash]") && continueList(ev.target)) { ev.preventDefault(); return; }
     // タブは左右の矢印キーと Home、End で移り、移った先を選ぶ
     if (ev.target.matches && ev.target.matches('#drawer [role="tab"]') && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(ev.key)) {
       const tabs = [...ev.target.closest('[role="tablist"]').querySelectorAll('[role="tab"]')];
@@ -2934,8 +3248,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const next = ev.key === "Home" ? 0 : ev.key === "End" ? tabs.length - 1 : (at + (ev.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
       ev.preventDefault(); setDrawerTab(tabs[next].dataset.tab); return;
     }
-    if (ev.key === "Enter" && !ev.isComposing && ev.target.matches && ev.target.matches("input[data-drawer-input]")) {
-      ev.preventDefault(); saveDrawerEdit(ev.target.dataset.drawerInput); return;
+    if (ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229 && ev.target.matches && ev.target.matches("input[data-drawer-input]")) {
+      ev.preventDefault(); commitDrawerField(ev.target.dataset.drawerInput); return;
     }
     // [ が前、] が次。文字を打つ場所の中、日本語の変換中、修飾キー付き、押しっぱなしの繰り返しでは移らない（ページ全体では drawerAdjacent が null）
     if ((ev.key === "[" || ev.key === "]") && drawer.id && !overlay && !ev.isComposing && ev.keyCode !== 229 && !ev.repeat
@@ -2952,9 +3266,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (closeDialog()) return;
     if (assist.open === "palette") { closeAssist(); return; }
     if (drawer.id) {
-      // タイトルとリンクの入力欄では、Esc は欄の取り消し。本文は Esc でも閉じる（書きかけは確かめる）
-      const name = ev.target.dataset && ev.target.dataset.drawerInput;
-      if (name && name !== "body") { cancelDrawerEdit(name); return; }
+      // 保存していない書きかけのある欄の Esc は、保存した値に戻す。戻すものが無ければ、引き出しを閉じる（書きかけは確かめる）
+      if (ev.target.dataset && ev.target.dataset.drawerInput && revertDrawerField(ev.target)) return;
       // ページ全体は、引き出しの外（左のメニューなど）にフォーカスがあるときの Esc で閉じない
       if (renderedDrawerMode() === "page" && ev.target !== document.body && !ev.target.closest("#drawer")) return;
       closeDrawer(); return;
@@ -3139,8 +3452,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
-    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
-    card, board, treeStory, treeEpic, treeAdd, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
+    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
+    card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,

@@ -16,7 +16,7 @@
   import TeamExperience from '../../../../lib/components/TeamExperience.svelte';
   import TaskCreateDialog from '../../../../lib/components/TaskCreateDialog.svelte';
   import TaskEntry from '../../../../lib/components/TaskEntry.svelte';
-  import TreeAddRow from '../../../../lib/components/TreeAddRow.svelte';
+  import DraftRow from '../../../../lib/components/DraftRow.svelte';
   import TreeEpic from '../../../../lib/components/TreeEpic.svelte';
   import TreeStory from '../../../../lib/components/TreeStory.svelte';
   import { callOperation, type ApiResult } from '../../../../lib/api.ts';
@@ -1272,11 +1272,9 @@
           {/each}
           {#snippet addRow()}
             {#if canWrite}
-              <TreeAddRow
-                level="story"
+              <DraftRow
                 label={t('treeAddStory', { story: t('story') })}
                 name={t('treeAddStoryUnder', { title: epic.title, story: t('story') })}
-                placeholder={t('treeAddPlaceholder')}
                 problem={(title) => rowTitleProblem('story', title)}
                 create={(title) => addStoryRow(epic.id, title)}
               />
@@ -1324,17 +1322,13 @@
       {/if}
       <!-- 木の末尾の空の行。エピックは最上段に、親のないストーリーは親なしで作る（エピックの下は、各エピックの末尾の行） -->
       {#if canWrite}
-        <TreeAddRow
-          level="epic"
+        <DraftRow
           label={t('treeAddEpic', { epic: t('epic') })}
-          placeholder={t('treeAddPlaceholder')}
           problem={(title) => rowTitleProblem('epic', title)}
           create={addEpicRow}
         />
-        <TreeAddRow
-          level="epic"
+        <DraftRow
           label={t('treeAddStory', { story: t('story') })}
-          placeholder={t('treeAddPlaceholder')}
           problem={(title) => rowTitleProblem('story', title)}
           create={(title) => addStoryRow(null, title)}
         />

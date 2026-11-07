@@ -625,7 +625,7 @@ export const dictionary = defineDictionary({
   treeAddEpic: '{epic}を足す',
   treeAddStory: '{story}を足す',
   treeAddStoryUnder: '{title}に{story}を足す',
-  treeAddPlaceholder: '題を打って Enter',
+  draftPlaceholder: '{label}（題を打って Enter）',
   treeAddSending: '作っています',
   // 親の{epic}が完了か中止になっていた（読み直して、空の行を消す）
   treeAddParentDone: 'この{epic}は{done}か中止したので、{story}を足せません。一覧を読み直します',

@@ -11,7 +11,7 @@ test.beforeEach(async ({ context, baseURL }) => {
 
 // 木の末尾の空の行（エピックの配下の行は .tree-children の中にあるので、木の直下だけを指す）
 function treeTail(page: Page) {
-  return page.locator('.tree > .tree-add');
+  return page.locator('.tree > .draft-wrap');
 }
 
 function epicGroup(page: Page, title: string) {
@@ -49,8 +49,8 @@ test('エピックとストーリーを、木の空の行に題を打って Ente
   // 作れたら入力は空に戻り、続けて打てる
   await expect(epicInput).toHaveValue('');
   await expect(epicInput).toBeFocused();
-  // 行には何を作るかが見えるラベルで出ている
-  await expect(treeTail(page).first()).toContainText('エピックを足す');
+  // 欄の案内文に、何を作る行かが出ている
+  await expect(epicInput).toHaveAttribute('placeholder', 'エピックを足す（題を打って Enter）');
 
   // そのエピックの末尾の「ストーリーを足す」。配下の末尾に入る
   const underEpic = epic.getByRole('textbox', { name: '会員ポイント制度を公開するにストーリーを足す' });

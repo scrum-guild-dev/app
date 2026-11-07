@@ -49,8 +49,8 @@ SQ.mount("sprint", () => {
     ], actions)}
     ${s.extended ? `<p class="action-note">延長 ${s.extended} 日</p>` : ""}
     ${sprintNotice("sp14", { showWs: false })}
-    ${board("sp14")}
-    <p class="action-note" id="board-key-hint">カードは別の${t("column")}へドラッグして移せます。キーボードでは、カードを選んで Alt と ← → で隣の${t("column")}、Alt と ↑ ↓ で${t("column")}の中を動かせます。カードの下のボタンでも同じです。</p>
+    ${board("sp14", { draft: true })}
+    <p class="action-note" id="board-key-hint">カードは別の${t("column")}へドラッグして移せます。キーボードでは、カードを選んで Alt と ← → で隣の${t("column")}、Alt と ↑ ↓ で${t("column")}の中を動かせます。カードの「⋯」のメニューでも同じです。列の末尾の空の行に題を打って Enter を押すと、${t("task")}が足されます。</p>
     <section class="section" aria-labelledby="cap">
       <div class="section-head"><h2 class="section-title" id="cap">この${t("sprint")}の${t("capacity")}</h2><span class="section-hint">1 ${t("points")} = ${D.hoursPerPoint} 時間・許容幅 ±12.5%</span></div>
       <div class="panel"><div class="grid-2">${capacityRows()}</div></div>
