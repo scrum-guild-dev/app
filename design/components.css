@@ -103,7 +103,7 @@ h1, h2, h3 { text-wrap: balance; }
 :is(.org-menu-button, .ws-menu-button) {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--space-2);
   width: 100%; padding: var(--space-2); text-align: left; font: inherit; color: inherit; cursor: pointer;
-  border-radius: var(--radius-1); border: 1px solid var(--color-line); background: var(--color-surface);
+  border-radius: var(--radius-1); border: 1px solid var(--color-control-edge); background: var(--color-surface);
 }
 :is(.org-menu-button, .ws-menu-button):hover { border-color: var(--color-muted); }
 :is(.org-menu-label, .ws-menu-label) { grid-column: 1; font-size: var(--text-xs); color: var(--color-muted); }
@@ -434,7 +434,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* ===== ボタン ===== */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  border: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-fg);
+  border: 1px solid var(--color-control-edge); background: var(--color-surface); color: var(--color-fg);
   border-radius: var(--radius-1); padding: 6px 14px; font-size: var(--text-sm); font-weight: 700; text-decoration: none;
   transition: border-color var(--duration-fast), background var(--duration-fast);
 }
@@ -474,7 +474,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* 上の帯の小さな切り替え */
 .pill {
   display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--color-line); background: var(--color-surface); border-radius: var(--radius-1);
+  border: 1px solid var(--color-control-edge); background: var(--color-surface); border-radius: var(--radius-1);
   padding: 4px 10px; font-size: var(--text-sm); position: relative;
 }
 .pill:hover:not([aria-disabled="true"]) { border-color: var(--color-muted); }
@@ -498,7 +498,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* 1つの欄に複数の誤りがあるとき（貼り付けた行ごとの理由など）。.field-error の見出しの下に並べる */
 .field-error-list { margin: 0; padding-left: 1.6em; display: grid; gap: 2px; font-size: var(--text-xs); color: var(--color-danger); overflow-wrap: anywhere; }
 .input, .select, .textarea {
-  width: 100%; border: 1px solid var(--color-line); background: var(--color-surface); border-radius: var(--radius-1);
+  width: 100%; border: 1px solid var(--color-control-edge); background: var(--color-surface); border-radius: var(--radius-1);
   padding: 7px 10px; font-size: var(--text-md);
 }
 .input:focus, .select:focus, .textarea:focus { outline: 2px solid var(--color-accent); outline-offset: -1px; border-color: var(--color-accent); }
@@ -507,7 +507,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .select[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .textarea { min-height: 96px; resize: vertical; line-height: var(--leading-body); }
 .field.is-invalid .input, .field.is-invalid .textarea { border-color: var(--color-danger); }
-.search { display: flex; align-items: center; gap: 6px; border: 1px solid var(--color-line); background: var(--color-surface); border-radius: var(--radius-1); padding: 0 10px; color: var(--color-muted); }
+.search { display: flex; align-items: center; gap: 6px; border: 1px solid var(--color-control-edge); background: var(--color-surface); border-radius: var(--radius-1); padding: 0 10px; color: var(--color-muted); }
 .search input { border: 0; background: none; outline: none; padding: 7px 0; width: 100%; color: var(--color-fg); }
 .search:focus-within { outline: 2px solid var(--color-accent); outline-offset: -1px; }
 

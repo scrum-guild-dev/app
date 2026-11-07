@@ -131,6 +131,51 @@ describe('クリア報酬の段階の色のコントラスト', () => {
   });
 });
 
+describe('操作部品の枠の色のコントラスト', () => {
+  const edgeMinimum = 3; // WCAG 2.2 の 1.4.11（UI の部品と背景）
+  const all = { ...blocks, 'シンプル（自動）のダークの側': autoDarkBlock };
+
+  for (const [theme, block] of Object.entries(all)) {
+    test(`${theme}: --color-control-edge と地（bg、surface）が ${edgeMinimum}:1 以上`, () => {
+      const edge = readColor(block, theme, 'control-edge');
+      const failures = (['bg', 'surface'] as const)
+        .map((ground) => [ground, contrast(edge, readColor(block, theme, ground))] as const)
+        .filter(([, ratio]) => ratio < edgeMinimum)
+        .map(
+          ([ground, ratio]) =>
+            `${theme} の --color-control-edge（${edge}）と --color-${ground} は ${ratio.toFixed(2)}:1`,
+        );
+      assert.deepEqual(failures, [], `${edgeMinimum}:1 を割る組がある`);
+    });
+  }
+
+  test('シンプル（自動）のダークの側は、simple_dark と同じ値', () => {
+    assert.equal(
+      readValue(autoDarkBlock, 'シンプル（自動）のダークの側', 'control-edge').toLowerCase(),
+      readValue(blocks['シンプル（ダーク）'], 'シンプル（ダーク）', 'control-edge').toLowerCase(),
+    );
+  });
+
+  test('操作部品の基本の規則は、枠に --color-control-edge を使う', () => {
+    const selectors = [
+      '.btn',
+      '.pill',
+      '.search',
+      ':is(.org-menu-button, .ws-menu-button)',
+      '.input, .select, .textarea',
+    ];
+    for (const selector of selectors) {
+      const rule = [...components.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(([, s]) => s.trim() === selector);
+      assert.ok(rule, `design/components.css に ${selector} の規則が見つからない`);
+      assert.match(
+        rule[2],
+        /border:\s*1px solid var\(--color-control-edge\)/,
+        `${selector} の枠が --color-control-edge でない`,
+      );
+    }
+  });
+});
+
 describe('.tier の色の対応', () => {
   // 波括弧を入れ子にしない規則だけを、セレクタと宣言の組にする
   const rules = [...components.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
