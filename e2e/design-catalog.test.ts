@@ -319,3 +319,42 @@ test('操作部品の枠の色: 4つのテーマ', async ({ page }) => {
     });
   }
 });
+
+test('見本のカタログ: 「ストーリーを直す（引き出し）」の入口は、本物の引き出しを開き、カタログの節を壊さない', async ({
+  page,
+}) => {
+  const files: Record<string, string> = {
+    'index.html': 'text/html',
+    'tokens.css': 'text/css',
+    'components.css': 'text/css',
+    'icons.js': 'text/javascript',
+    'art.js': 'text/javascript',
+    'sample-data.js': 'text/javascript',
+    'kit.js': 'text/javascript',
+  };
+  await page.route('**/__design-catalog/**', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').pop()!;
+    const contentType = files[name];
+    if (!contentType) return route.fulfill({ status: 404, body: '' });
+    await route.fulfill({ contentType, body: readFileSync(new URL(`../design/${name}`, import.meta.url)) });
+  });
+  for (const host of ['fonts.googleapis.com', 'fonts.gstatic.com']) {
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ body: '' }));
+  }
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/__design-catalog/index.html');
+  const section = page.locator('#task-drawer');
+  const before = await section.locator('.cat-drawer').count();
+  expect(before).toBeGreaterThan(0);
+  await page.locator('a[data-story-can-delete="false"]').click();
+  const drawer = page.locator('aside#drawer');
+  await expect(drawer).toBeVisible();
+  // 削除できない人の形: 「⋯」に削除は無く、理由が本文の下に出る
+  await expect(drawer.getByText('削除できるのは作った人とリーダーです。')).toBeVisible();
+  await drawer.locator('.row-menu-btn').click();
+  await expect(drawer.locator('.row-menu-list .menu-item')).toHaveText(['親を移す']);
+  await page.keyboard.press('Escape');
+  await expect(section.locator('.cat-drawer')).toHaveCount(before);
+  expect(errors).toEqual([]);
+});
