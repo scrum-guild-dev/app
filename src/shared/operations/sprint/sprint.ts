@@ -54,6 +54,8 @@ export const sprintBoardTaskSchema = z.object({
   story: z.object({ id: z.string(), title: z.string() }).nullable(),
   due_on: z.string().nullable(),
   repository: z.object({ id: z.string(), name: z.string() }).nullable(),
+  // 削除できるか（task-detail の can_delete と同じ判定。作った人とリーダー（管理者を含む）で、取り込んだタスクは偽）
+  can_delete: z.boolean(),
 });
 
 export type SprintBoardTask = z.output<typeof sprintBoardTaskSchema>;

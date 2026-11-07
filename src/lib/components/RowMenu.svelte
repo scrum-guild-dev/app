@@ -11,8 +11,9 @@
     disabled?: boolean;
     // 削除など、戻せない操作。文字を危険の色（.is-danger）にする
     danger?: boolean;
-    // 押した項目。trigger は「⋯」のボタン（ダイアログを閉じたときのフォーカスの戻り先）
-    onselect: (trigger: HTMLButtonElement) => void;
+    // 押した項目。trigger は「⋯」のボタン（ダイアログを閉じたときのフォーカスの戻り先）。
+    // keyboard は、キーボードで選んだか（click の detail が 0。ポインターの click は 1 以上）
+    onselect: (trigger: HTMLButtonElement, keyboard: boolean) => void;
   }
 </script>
 
@@ -74,11 +75,11 @@
     });
   }
 
-  function select(item: RowMenuItem): void {
+  function select(item: RowMenuItem, keyboard: boolean): void {
     if (item.disabled === true || button === undefined) return;
     const trigger = button;
     close(true);
-    item.onselect(trigger);
+    item.onselect(trigger, keyboard);
   }
 
   function onKeydown(event: KeyboardEvent): void {
@@ -180,7 +181,8 @@
           role="menuitem"
           aria-disabled={item.disabled === true}
           aria-describedby={item.describedby}
-          onclick={() => select(item)}><Icon name={item.icon} /><span>{item.label}</span></button
+          onclick={(event) => select(item, event.detail === 0)}
+          ><Icon name={item.icon} /><span>{item.label}</span></button
         >
       </li>
     {/each}

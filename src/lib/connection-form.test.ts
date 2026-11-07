@@ -25,6 +25,15 @@ describe('validateConnectionCreate', () => {
       field: 'name',
       key: 'connectionNameTooLong',
     });
+    // 見えない文字だけ・向きを変える制御文字は「50字まで」でなく、それぞれの理由にする
+    expect(validateConnectionCreate({ name: '\u200b', credential: 'x' })).toEqual({
+      field: 'name',
+      key: 'connectionNameRequired',
+    });
+    expect(validateConnectionCreate({ name: 'a\u202eb', credential: 'x' })).toEqual({
+      field: 'name',
+      key: 'connectionNameInvalid',
+    });
     expect(validateConnectionCreate({ name: 'a', credential: ' ' })).toEqual({
       field: 'credential',
       key: 'connectionCredentialRequired',
@@ -43,6 +52,23 @@ describe('connectionCreateFailure', () => {
     ).toEqual({ field: 'credential', key: 'connectionCredentialRejected' });
   });
 
+  it('上限を超えた認証情報（too_big）は、認証情報の欄に出す', () => {
+    expect(connectionCreateFailure(failed(400, 'invalid_input', [{ path: 'credential', code: 'too_big' }]))).toEqual({
+      field: 'credential',
+      key: 'connectionCredentialShape',
+    });
+  });
+
+  it('名前の 400 は、上限の超過と空で文言を分け、欄のやり直しはトークンの欄へ戻す', () => {
+    expect(connectionCreateFailure(failed(400, 'invalid_input', [{ path: 'name', code: 'too_big' }])).key).toBe(
+      'connectionNameTooLong',
+    );
+    expect(connectionCreateFailure(failed(400, 'invalid_input', [{ path: 'name', code: 'too_small' }])).key).toBe(
+      'connectionNameRequired',
+    );
+    expect(connectionCreateFailure(failed(503, 'unavailable')).refocus).toBe('credential');
+  });
+
   it('読めない 400 と、そのほかの失敗は枠の理由にする', () => {
     expect(connectionCreateFailure(failed(400, 'invalid_input', [{ path: 'x' }]))).toEqual({
       field: 'form',
@@ -52,9 +78,10 @@ describe('connectionCreateFailure', () => {
     expect(connectionCreateFailure(failed(409, 'conflict', { reason: 'connection_limit' })).key).toBe(
       'connectionLimit',
     );
-    expect(connectionCreateFailure(failed(429, 'rate_limited')).key).toBe('connectionRateLimited');
-    expect(connectionCreateFailure(failed(503, 'unavailable')).key).toBe('connectionUnreachable');
-    expect(connectionCreateFailure(failed(0, null)).key).toBe('connectionUnreachable');
+    // 認証情報は欄から消してあるので、やり直しの文言は入れ直しを添える
+    expect(connectionCreateFailure(failed(429, 'rate_limited')).key).toBe('connectionCreateRateLimited');
+    expect(connectionCreateFailure(failed(503, 'unavailable')).key).toBe('connectionCreateUnreachable');
+    expect(connectionCreateFailure(failed(0, null)).key).toBe('connectionCreateUnreachable');
     expect(connectionCreateFailure(failed(500, 'internal')).key).toBe('connectionCreateFailed');
   });
 });

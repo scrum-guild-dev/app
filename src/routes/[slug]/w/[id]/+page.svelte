@@ -30,12 +30,19 @@
     sameFilter,
     type BacklogFilter,
   } from '../../../../lib/backlog-filter.ts';
-  import { carriesOver, completionSettled, keepAddedRow } from '../../../../lib/added-rows.ts';
+  import {
+    carriesOver,
+    completionSettled,
+    keepAddedRow,
+    orphanedFromTree,
+    parentStoryIds,
+  } from '../../../../lib/added-rows.ts';
   import { MoveQueue } from '../../../../lib/move-queue.ts';
   import { completionFailureMessage } from '../../../../lib/story-completion.ts';
   import { moveFailureMessage } from '../../../../lib/move-failure.ts';
   import { trackStoryOrder, trackTaskOrder } from '../../../../lib/task-order.ts';
   import { completedMessage } from '../../../../lib/sprint-label.ts';
+  import { focusRestored, focusSkipped, removeFromList } from '../../../../lib/task-removal.ts';
   import { showToast } from '../../../../lib/toast.svelte.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import { epicCreate, epicMove } from '../../../../shared/operations/epic/index.ts';
@@ -196,33 +203,49 @@
     const unsettled = done.filter((id) => !completionSettled(completedAt[id] ?? Infinity, loadedAtForDone));
     // 木に無い行を残すかは、足した時刻と読み直しを始めた時刻で決める（src/lib/added-rows.ts）
     const loadedAt = untrack(() => data.loadedAt);
-    added = carry
-      ? untrack(() => added).filter(
-          (entry) =>
-            unsettled.includes(entry.task.id) ||
-            keepAddedRow(entry, {
-              inLoadedTree: inTree(loaded, entry.task.id),
-              completed: done.includes(entry.task.id),
-              treeLoaded: loaded !== null,
-              loadedAt,
-            }),
-        )
-      : [];
     const keepRow = (at: number, inLoaded: boolean) =>
       carry &&
       keepAddedRow({ at }, { inLoadedTree: inLoaded, completed: false, treeLoaded: loaded !== null, loadedAt });
+    const loadedStoryIds = [...(loaded?.epics.flatMap((epic) => epic.stories) ?? []), ...(loaded?.stories ?? [])].map(
+      (story) => story.id,
+    );
+    // 画面で足したストーリーのうち、この回で残すもの。孤立の判定にも、捨てるものを含めない
+    const keptStories = untrack(() => addedStories).filter((entry) =>
+      keepRow(entry.at, loadedStoryIds.includes(entry.story.id)),
+    );
+    // 絞り込み中は、当たるタスクが唯一だった親が、その完了で木から外れる。遅れて届いた木で、写した行（fromTree）の親が木に無ければ、
+    // 行はどの親の下にも描かれず件数だけに数えられるので、印と一緒に捨てる（親ごと外れる競合の無い読み直しと同じ結果）
+    const storyIdsLoaded = parentStoryIds(
+      loadedStoryIds,
+      keptStories.map((entry) => entry.story.id),
+    );
+    const orphaned = (entry: { task: BacklogTask; storyId: string | null; fromTree?: true }) =>
+      orphanedFromTree(entry, {
+        treeLoaded: loaded !== null,
+        storyIds: storyIdsLoaded,
+        taskInTree: inTree(loaded, entry.task.id),
+      });
+    const orphanIds = untrack(() => added)
+      .filter(orphaned)
+      .map((entry) => entry.task.id);
+    added = carry
+      ? untrack(() => added).filter(
+          (entry) =>
+            !orphaned(entry) &&
+            (unsettled.includes(entry.task.id) ||
+              keepAddedRow(entry, {
+                inLoadedTree: inTree(loaded, entry.task.id),
+                completed: done.includes(entry.task.id),
+                treeLoaded: loaded !== null,
+                loadedAt,
+              })),
+        )
+      : [];
     addedEpics = untrack(() => addedEpics).filter((entry) =>
       keepRow(entry.at, loaded?.epics.some((epic) => epic.id === entry.epic.id) ?? false),
     );
-    addedStories = untrack(() => addedStories).filter((entry) =>
-      keepRow(
-        entry.at,
-        [...(loaded?.epics.flatMap((epic) => epic.stories) ?? []), ...(loaded?.stories ?? [])].some(
-          (story) => story.id === entry.story.id,
-        ),
-      ),
-    );
-    const keptDone = carry ? unsettled : [];
+    addedStories = keptStories;
+    const keptDone = carry ? unsettled.filter((id) => !orphanIds.includes(id)) : [];
     completedIds = keptDone;
     completedAt = Object.fromEntries(keptDone.map((id) => [id, completedAt[id]]));
     movedParents = {};
@@ -475,6 +498,28 @@
     treeRows[storyId]?.expand();
     const epicId = storyPlaces[storyId]?.parentId;
     if (epicId != null) epicRows[epicId]?.expand();
+  }
+
+  // 行の「⋯」の「この<タスク>を削除する」。確認は挟まず、消したら「取り消す」付きのトーストを出して木を読み直す。
+  // フォーカスの移し方は引き出しの削除と同じ（task-removal.ts）。キーボードで選んだときだけ「取り消す」へ移し、
+  // 取り消した後は戻した行の題のリンクへ、Esc で閉じたときは消した行の次の行（無ければ前の行、無ければ見出し）へ移す
+  async function removeTask(task: BacklogTask, keyboard: boolean): Promise<void> {
+    if (workspace === null || !canWrite) return;
+    const reload = (): Promise<void> => invalidate('app:backlog-tree');
+    await removeFromList({
+      slug: page.params.slug ?? '',
+      workspaceId: workspace.id,
+      taskId: task.id,
+      title: task.title,
+      keyboard,
+      reload,
+      onstale: () => void invalidateAll(),
+      onrestored: async (restoredId, focus) => {
+        await reload();
+        await focusRestored(restoredId, focus);
+      },
+      onskipped: focusSkipped,
+    });
   }
 
   async function complete(task: BacklogTask): Promise<void> {
@@ -1180,6 +1225,7 @@
     canMoveDown={place !== undefined && place.index < place.count - 1}
     onMove={canWrite && !filtering ? reorderTask : undefined}
     onMoveParent={canWrite && (place?.parentId != null || openStories.length > 0) ? openMoveDialog : undefined}
+    onDelete={canWrite ? removeTask : undefined}
     showCategory={place?.parentId == null}
     dnd={rowDnd}
     taskQuery={taskQueryBase}

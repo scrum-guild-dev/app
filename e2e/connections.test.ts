@@ -77,22 +77,51 @@ test('接続が無いワークスペースでは、登録へ誘う空の表示�
 });
 
 test('形の違うトークンは理由が出て、登録されない', async ({ page }) => {
-  let registered = 0;
-  // 形の検査は取り込み元に問い合わせる前に断るので、本物の API をそのまま使う
+  // 形の検査の判定はサーバー側のテスト（test/connection.test.ts）が持つ。ここは400の理由が欄の下に出て、欄が空になること。
+  // 本物の登録の操作は回数の上限（10分に10回）があるので、繰り返しの実行で消費しないよう差し替える
+  const calls: string[] = [];
   await routeOperation(page, connectionCreate, { slug: 'aoba' }, async (call) => {
-    registered += 1;
-    await call.passThrough();
+    calls.push(call.input.credential);
+    await call.fail(400, 'invalid_input', {
+      details: [{ path: 'credential', code: 'credential_shape', message: 'x' }],
+    });
   });
   await page.goto(`${WORKSPACE}/connections`);
   await page.getByLabel('表示名').fill('形の違う接続');
   await page.getByLabel('fine-grained personal access token').fill('not-a-token');
   await page.getByRole('button', { name: '登録する' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'トークンの形が違います' })).toBeVisible();
-  // 認証情報の欄は送った直後に空になる
-  await expect(page.getByLabel('fine-grained personal access token')).toHaveValue('');
-  expect(registered).toBe(1);
+  expect(calls).toEqual(['not-a-token']);
+  // 認証情報の欄は送った直後に空になり、入れ直す欄にフォーカスが戻る
+  const credential = page.getByLabel('fine-grained personal access token');
+  await expect(credential).toHaveValue('');
+  await expect(credential).toBeFocused();
   await expect(page.getByRole('list', { name: '接続の一覧' }).getByRole('listitem')).toHaveCount(1);
   await expect(page.getByRole('button', { name: '範囲を保存する' })).toHaveCount(0);
+});
+
+test('見えない文字だけの表示名は、送らずに理由が出る', async ({ page }) => {
+  let called = 0;
+  await routeOperation(page, connectionCreate, { slug: 'aoba' }, async (call) => {
+    called += 1;
+    await call.fail(500, 'internal');
+  });
+  await page.goto(`${WORKSPACE}/connections`);
+  await page.getByLabel('表示名').fill('\u200b');
+  await page.getByLabel('fine-grained personal access token').fill('github_pat_' + 'A'.repeat(30));
+  await page.getByRole('button', { name: '登録する' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: '表示名を入れてください' })).toBeVisible();
+  expect(called).toBe(0);
+});
+
+test('GitHub に届かないときは、トークンを入れ直す案内が出る', async ({ page }) => {
+  await failOperation(page, connectionCreate, { slug: 'aoba' }, 503, 'unavailable');
+  await page.goto(`${WORKSPACE}/connections`);
+  await page.getByLabel('表示名').fill('届かない接続');
+  await page.getByLabel('fine-grained personal access token').fill('github_pat_' + 'A'.repeat(30));
+  await page.getByRole('button', { name: '登録する' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'トークンを入れ直して' })).toBeVisible();
+  await expect(page.getByLabel('fine-grained personal access token')).toHaveValue('');
 });
 
 test('取り込み元が受け付けないトークンは、理由が出て、範囲の選択へ進まない', async ({ page }) => {
@@ -114,23 +143,26 @@ test('登録すると同じ画面で範囲の候補が出て、選んで保存�
   let listed = [created({ id: 'seed', name: 'ミナトの GitHub' })];
   await routeOperation(page, connectionList, { slug: 'aoba' }, (call) => call.fulfill({ connections: listed }));
   await routeOperation(page, connectionCreate, { slug: 'aoba' }, async (call) => {
-    expect(call.input).toMatchObject({ provider: 'github', name: 'テスト用の GitHub' });
+    expect(call.input).toMatchObject({
+      provider: 'github',
+      name: 'テスト用の GitHub',
+      credential: 'github_pat_' + 'A'.repeat(30),
+    });
     listed = [...listed, connection];
     await call.fulfill({ connection });
   });
-  await mockOperation(
-    page,
-    connectionScopeCandidates,
-    { slug: 'aoba' },
-    {
+  await routeOperation(page, connectionScopeCandidates, { slug: 'aoba' }, async (call) => {
+    expect(call.input.connection_id).toBe(NEW_ID);
+    await call.fulfill({
       candidates: [
         { id: '2001', name: 'aoba/point-api' },
         { id: '2002', name: 'aoba/admin-web' },
       ],
-    },
-  );
+    });
+  });
   let saved: string[] = [];
   await routeOperation(page, connectionScopesSave, { slug: 'aoba' }, async (call) => {
+    expect(call.input.connection_id).toBe(NEW_ID);
     saved = call.input.source_ids;
     const scopes = [{ id: '2002', name: 'aoba/admin-web' }];
     listed = listed.map((item) => (item.id === NEW_ID ? { ...item, scopes } : item));
@@ -155,7 +187,90 @@ test('登録すると同じ画面で範囲の候補が出て、選んで保存�
     .getByRole('listitem')
     .filter({ hasText: 'テスト用の GitHub' });
   await expect(row.locator('.tag')).toHaveText('aoba/admin-web');
-  await expect(row).toContainText('••••abcd');
+  await expect(row.locator('dd.mono').last()).toHaveText('••••末尾abcd');
+});
+
+const SEED_CONNECTION_ID = '019a0000-0000-7000-8000-000000000f01';
+
+test('登録した本人は、範囲がまだ無い接続の行から範囲を開ける。候補を読めなければ読み直せる', async ({ page }) => {
+  let attempts = 0;
+  await routeOperation(page, connectionScopeCandidates, { slug: 'aoba' }, async (call) => {
+    attempts += 1;
+    expect(call.input.connection_id).toBe(SEED_CONNECTION_ID);
+    if (attempts === 1) await call.fail(503, 'unavailable');
+    else await call.fulfill({ candidates: [{ id: '2001', name: 'aoba/point-api' }] });
+  });
+  await page.goto(`${WORKSPACE}/connections`);
+  await page.getByRole('button', { name: '範囲を選ぶ' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'GitHub に届きませんでした' })).toBeVisible();
+  await page.getByRole('button', { name: '候補を読み直す' }).click();
+  await expect(page.getByRole('group', { name: '取り込むリポジトリ' }).getByLabel('aoba/point-api')).toBeVisible();
+  expect(attempts).toBe(2);
+  // あとで選ぶで閉じると、保存せずに段が閉じる
+  await page.getByRole('button', { name: 'あとで選ぶ' }).click();
+  await expect(page.getByRole('button', { name: '範囲を保存する' })).toHaveCount(0);
+});
+
+test('候補を読んでいる間に別の接続を開いても、遅れて届いた候補を別の接続の下に出さない', async ({ page }) => {
+  const first = created({ id: 'conn-a', name: '一つ目' });
+  const second = created({ id: 'conn-b', name: '二つ目' });
+  await mockOperation(page, connectionList, { slug: 'aoba' }, { connections: [first, second] });
+  let releaseFirst: () => void = () => {};
+  const firstGate = new Promise<void>((resolve) => (releaseFirst = resolve));
+  await routeOperation(page, connectionScopeCandidates, { slug: 'aoba' }, async (call) => {
+    if (call.input.connection_id === 'conn-a') {
+      await firstGate;
+      await call.fulfill({ candidates: [{ id: '1', name: 'one/from-a' }] });
+    } else await call.fulfill({ candidates: [{ id: '2', name: 'two/from-b' }] });
+  });
+  await page.goto(`${WORKSPACE}/connections`);
+  await page.locator('[data-connection-id="conn-a"]').getByRole('button', { name: '範囲を選ぶ' }).click();
+  await page.locator('[data-connection-id="conn-b"]').getByRole('button', { name: '範囲を選ぶ' }).click();
+  const group = page.getByRole('group', { name: '取り込むリポジトリ' });
+  await expect(group.getByLabel('two/from-b')).toBeVisible();
+  // 一つ目の応答がブラウザに届き、画面の処理が済んでから確かめる（届く前に判定すると、捨てる処理が無くても通る）
+  const firstResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('connection-scope-candidates') &&
+      response.request().postDataJSON().connection_id === 'conn-a',
+  );
+  releaseFirst();
+  await firstResponse;
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(page.getByText('範囲を選ぶ接続: 二つ目')).toBeVisible();
+  await expect(group.getByLabel('one/from-a')).toHaveCount(0);
+  await expect(group.getByLabel('two/from-b')).toBeVisible();
+});
+
+test('止まっている接続は、止まった事実だけを出し、再開の操作を案内しない', async ({ page }) => {
+  await mockOperation(
+    page,
+    connectionList,
+    { slug: 'aoba' },
+    {
+      connections: [
+        created({ id: 'stopped-auth', name: '認証が切れた接続', status: 'stopped', stopped_reason: 'auth_failed' }),
+        created({ id: 'stopped-other', name: '別の理由の接続', status: 'stopped', stopped_reason: 'member_left' }),
+      ],
+    },
+  );
+  await page.goto(`${WORKSPACE}/connections`);
+  const auth = page.locator('[data-connection-id="stopped-auth"]');
+  await expect(auth.locator('.state-badge')).toHaveText('停止');
+  await expect(auth.locator('.callout.is-danger')).toHaveText('認証に失敗したので止めました。');
+  const other = page.locator('[data-connection-id="stopped-other"]');
+  await expect(other.locator('.callout.is-danger')).toHaveText('止まっています。');
+  await expect(page.getByText('再開')).toHaveCount(0);
+});
+
+test('他の人の接続には、範囲を選ぶボタンが出ない', async ({ context, baseURL, page }) => {
+  await signIn(context, baseURL, 'member');
+  await page.goto(`${WORKSPACE}/connections`);
+  await expect(page.getByRole('heading', { level: 1, name: '接続' })).toBeVisible();
+  await expect(page.getByRole('list', { name: '接続の一覧' }).getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: '範囲を選ぶ' })).toHaveCount(0);
+  // 登録の欄は、メンバーなら誰にでも出る
+  await expect(page.getByRole('button', { name: '登録する' })).toBeVisible();
 });
 
 test('今すぐ同期は本人の接続にだけ出て、押すと届いた件数がトーストに出る。5分以内の再押しは断りが出る', async ({

@@ -236,7 +236,7 @@ test('リーダーはゴールを書いてスプリントを始め、2つ目は�
   await expect(
     page.getByRole('region', { name: '完了', exact: true }).getByRole('img', { name: 'C札: 完了' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: /: C札$/ })).toHaveText(['戻す']);
+  await expect(page.getByRole('button', { name: /を戻す: C札$/ })).toHaveText(['戻す']);
   await expect(page.getByRole('article', { name: 'C札' })).toHaveCount(0);
   // 完了と戻しは、詳細の引き出しの変更の履歴に残る
   await titlesIn(page, '完了').filter({ hasText: 'C札' }).click();

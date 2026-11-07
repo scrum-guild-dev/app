@@ -32,6 +32,7 @@
     onmove,
     oncomplete,
     onreopen,
+    ondelete,
   }: {
     task: SprintBoardTask;
     href: string;
@@ -51,13 +52,30 @@
     onmove: (task: SprintBoardTask, direction: MoveDirection) => void;
     oncomplete: (task: SprintBoardTask) => void;
     onreopen?: (task: SprintBoardTask) => void;
+    // 渡すと（書き込めるとき）、task.can_delete が真のカードの「⋯」の末尾に危険色の「この<タスク>を削除する」を出す
+    ondelete?: (task: SprintBoardTask, keyboard: boolean) => void;
   } = $props();
 
   const done = $derived(task.completed_at !== null);
   const movable = $derived(edges !== null);
   const column = $derived(t('column'));
+  // 末尾の危険色の項目。確認は挟まない（消したらトーストの「取り消す」で戻せる）。動かせるカード（完了していない）だけに出す
+  // （見本の kit.js の card と同じ。完了したカードは、消して取り消しても完了のポイントがそのスプリントに戻らないため）
+  const deleteItems = $derived<RowMenuItem[]>(
+    ondelete !== undefined && task.can_delete && movable
+      ? [
+          {
+            key: 'delete',
+            label: t('taskDelete', { task: t('task') }),
+            icon: 'trash',
+            danger: true,
+            onselect: (_trigger, keyboard) => ondelete(task, keyboard),
+          },
+        ]
+      : [],
+  );
   // 「⋯」のメニューの項目（kit.js の orderItems の順）。最後の完了でない列の「次の列へ」は完了にするので、名前もそう言う
-  const menuItems = $derived<RowMenuItem[]>(
+  const moveItems = $derived<RowMenuItem[]>(
     edges === null
       ? []
       : [
@@ -88,6 +106,7 @@
           },
         ],
   );
+  const menuItems = $derived<RowMenuItem[]>([...moveItems, ...deleteItems]);
   // つかめるのは、動かせるカードと、戻せる完了のカード
   const grabbable = $derived(done ? canReopen : movable);
   const KEY_DIRECTIONS: Record<string, MoveDirection> = {

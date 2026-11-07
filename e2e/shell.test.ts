@@ -193,11 +193,12 @@ test.describe('高さの低い指で押す画面の左のメニュー', () => {
     await signIn(context, baseURL, 'admin');
   });
 
-  // overflows: 横組みロゴと Wiki を含む列は 1024×600 で溢れ、1024×768 では余白まで収まる。
+  // overflows: 横組みロゴと Wiki と接続を含む列は 1024×768 以下で溢れ、1024×800 では余白まで収まる。
   for (const viewport of [
     { width: 844, height: 390, overflows: true },
     { width: 1024, height: 600, overflows: true },
-    { width: 1024, height: 768, overflows: false },
+    { width: 1024, height: 768, overflows: true },
+    { width: 1024, height: 800, overflows: false },
   ]) {
     test(`${viewport.width}×${viewport.height} の広げた列で、最後の項目とブランドの両方に届く`, async ({ page }) => {
       await page.setViewportSize(viewport);

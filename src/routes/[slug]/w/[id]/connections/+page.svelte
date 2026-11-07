@@ -10,7 +10,6 @@
   import PageHead from '../../../../../lib/components/PageHead.svelte';
   import Section from '../../../../../lib/components/Section.svelte';
   import {
-    CONNECTION_NAME_LIMIT,
     connectionCreateFailure,
     connectionScopeFailure,
     connectionSyncFailure,
@@ -92,34 +91,47 @@
     await invalidate('app:connections');
   }
 
+  // 範囲の候補を読んだ回数。応答が着いたとき、読み始めた回と同じでなければ（別の接続を開いた、閉じた）捨てる
+  let candidatesRun = 0;
+
   async function openScope(target: Connection | { id: string; name: string }): Promise<void> {
+    // 範囲を保存している間は、別の接続を開かない（保存の完了が新しく開いた段を閉じるため）
+    if (saving) return;
     choosing = { id: target.id, name: target.name };
     chosen = 'scopes' in target ? target.scopes.map((scope) => scope.id) : [];
-    await loadCandidates();
+    // 前の接続の候補と失敗を、読み込みの前に消す
+    candidates = null;
+    scopeFailure = null;
+    // 段のタイトルへ先にフォーカスを移す（押したボタンが消えるので、読み込みを待つとフォーカスが body に落ちる）
     await tick();
     document.getElementById('connection-scope')?.focus();
+    await loadCandidates();
   }
 
   async function loadCandidates(): Promise<void> {
-    if (choosing === null || workspace === null || loadingCandidates) return;
+    if (choosing === null || workspace === null) return;
+    candidatesRun += 1;
+    const run = candidatesRun;
+    const connectionId = choosing.id;
     loadingCandidates = true;
     scopeFailure = null;
     candidates = null;
-    try {
-      const result = await callOperation(
-        connectionScopeCandidates,
-        { workspace_id: workspace.id, connection_id: choosing.id },
-        { slug },
-      );
-      if (!result.ok && unauthenticated(result)) return;
-      if (result.ok) {
-        candidates = result.data.candidates;
-        // 候補に無くなった選びは捨てる
-        const live = new Set(candidates.map((candidate) => candidate.id));
-        chosen = chosen.filter((id) => live.has(id));
-      } else scopeFailure = connectionScopeFailure(result);
-    } finally {
-      loadingCandidates = false;
+    const result = await callOperation(
+      connectionScopeCandidates,
+      { workspace_id: workspace.id, connection_id: connectionId },
+      { slug },
+    );
+    if (run !== candidatesRun) return;
+    loadingCandidates = false;
+    if (!result.ok && unauthenticated(result)) return;
+    if (result.ok) {
+      candidates = result.data.candidates;
+      // 候補に無くなった選びは捨てる
+      const live = new Set(candidates.map((candidate) => candidate.id));
+      chosen = chosen.filter((id) => live.has(id));
+    } else {
+      scopeFailure = connectionScopeFailure(result);
+      if (result.status === 403 || result.status === 404) await reload();
     }
   }
 
@@ -129,10 +141,12 @@
 
   async function register(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    if (creating || workspace === null || !canWrite) return;
+    // 範囲を保存している間は登録しない（登録の後の範囲の段が、保存の間は開かないため）
+    if (creating || saving || workspace === null || !canWrite) return;
     const invalid = validateConnectionCreate({ name, credential });
     if (invalid !== null) {
       failure = invalid;
+      await focusFailure();
       return;
     }
     failure = null;
@@ -155,32 +169,55 @@
         await openScope(created);
       } else {
         failure = connectionCreateFailure(result);
-        if (result.error?.code === 'workspace_closed') await invalidate('app:workspace');
+        if (result.error?.code === 'workspace_closed') {
+          showToast(t('connectionWorkspaceClosed', { workspace: t('workspace') }), 'alert');
+          await invalidate('app:workspace');
+        } else await focusFailure();
       }
     } finally {
       creating = false;
     }
   }
 
+  // 失敗した欄へフォーカスを移す。認証情報の欄は送った直後に空になっているので、入れ直す場所に戻す
+  async function focusFailure(): Promise<void> {
+    await tick();
+    const id =
+      failure?.field === 'name'
+        ? 'connection-name'
+        : failure?.field === 'credential' || failure?.refocus === 'credential'
+          ? 'connection-credential'
+          : failure?.refocus === 'name'
+            ? 'connection-name'
+            : null;
+    if (id !== null) document.getElementById(id)?.focus();
+  }
+
   async function saveScope(): Promise<void> {
     if (choosing === null || workspace === null || saving || overLimit || candidates === null) return;
     saving = true;
     scopeFailure = null;
+    const connectionId = choosing.id;
     try {
       const result = await callOperation(
         connectionScopesSave,
-        { workspace_id: workspace.id, connection_id: choosing.id, source_ids: chosen },
+        { workspace_id: workspace.id, connection_id: connectionId, source_ids: chosen },
         { slug },
       );
       if (!result.ok && unauthenticated(result)) return;
       if (result.ok) {
         showToast(t('connectionScopeSaved', { name: result.data.connection.name }), 'check');
-        closeScope();
+        closeScope(true);
         await reload();
+        // 押したボタンが消えるので、フォーカスを段のタイトルへ戻す
+        await tick();
+        document.getElementById('connection-scope')?.focus();
       } else {
         scopeFailure = connectionScopeFailure(result);
-        if (result.error?.code === 'workspace_closed') await invalidate('app:workspace');
-        else if (result.status === 403 || result.status === 404) await reload();
+        if (result.error?.code === 'workspace_closed') {
+          showToast(t('connectionWorkspaceClosed', { workspace: t('workspace') }), 'alert');
+          await invalidate('app:workspace');
+        } else if (result.status === 403 || result.status === 404) await reload();
       }
     } finally {
       saving = false;
@@ -214,7 +251,11 @@
     }
   }
 
-  function closeScope(): void {
+  // 保存の間は閉じない（完了の応答が、閉じた後に開いた別の接続の段を書き換えないように）。保存が成功したときだけ、保存の中から閉じる
+  function closeScope(afterSave = false): void {
+    if (saving && !afterSave) return;
+    candidatesRun += 1;
+    loadingCandidates = false;
     choosing = null;
     candidates = null;
     chosen = [];
@@ -243,6 +284,11 @@
   <PageHead title={t('connection')} eyebrow={workspace.name} {tallies} />
 
   <p class="action-note">{t('connectionNote', { connection: t('connection'), workspace: t('workspace') })}</p>
+  {#if !canWrite && connections.length > 0}
+    <p class="action-note">
+      {t('connectionReadonlyNote', { connection: t('connection'), workspace: t('workspace') })}
+    </p>
+  {/if}
 
   {#if connections.length === 0}
     <EmptyState
@@ -264,7 +310,7 @@
             <span class="state-badge {state.cls}">{t(state.key)}</span>
             {#if canWrite && mine && connection.scopes.length === 0 && choosing?.id !== connection.id}
               <span class="conn-actions">
-                <button class="btn is-sm" type="button" onclick={() => openScope(connection)}
+                <button class="btn is-sm" type="button" aria-disabled={saving} onclick={() => openScope(connection)}
                   >{t('connectionChooseScope')}</button
                 >
               </span>
@@ -286,11 +332,13 @@
           {#if connection.last_error_message}
             <div class="callout is-warn">
               <Icon name="alert" /><span
-                >{t('connectionErrorCallout', {
-                  message: connection.last_error_message,
-                  at: connection.last_error_at === null ? '' : formatLocalDateTime(connection.last_error_at),
-                  count: connection.consecutive_failures,
-                })}</span
+                >{connection.last_error_at === null || connection.consecutive_failures === 0
+                  ? t('connectionErrorCalloutPlain', { message: connection.last_error_message })
+                  : t('connectionErrorCallout', {
+                      message: connection.last_error_message,
+                      at: formatLocalDateTime(connection.last_error_at),
+                      count: connection.consecutive_failures,
+                    })}</span
               >
             </div>
           {/if}
@@ -299,7 +347,7 @@
               <Icon name="alert" /><span
                 >{connection.stopped_reason === 'auth_failed'
                   ? t('connectionStoppedAuthFailed')
-                  : t('connectionStoppedOther', { connection: t('connection') })}</span
+                  : t('connectionStoppedOther')}</span
               >
             </div>
           {/if}
@@ -335,7 +383,15 @@
             </div>
             <div>
               <dt>{t('connectionFactCredential')}</dt>
-              <dd class="mono">{connection.credential_last4 === null ? '—' : `••••${connection.credential_last4}`}</dd>
+              <dd class="mono">
+                {#if connection.credential_last4 === null}
+                  —
+                {:else}
+                  <span aria-hidden="true">••••</span><span class="visually-hidden"
+                    >{t('connectionCredentialLast4')}</span
+                  >{connection.credential_last4}
+                {/if}
+              </dd>
             </div>
           </dl>
         </section>
@@ -363,42 +419,49 @@
                 </div>
               </div>
               <div class="form-row">
-                <label class="field" for="connection-name">
-                  <span class="field-label">{t('connectionNameLabel')}</span>
+                <div class="field">
+                  <label class="field-label" for="connection-name">{t('connectionNameLabel')}</label>
                   <input
                     class="input"
                     id="connection-name"
                     bind:value={name}
-                    maxlength={CONNECTION_NAME_LIMIT * 2}
                     autocomplete="off"
                     placeholder={t('connectionNamePlaceholder')}
                     aria-invalid={nameFailure !== null}
                     aria-describedby={nameFailure !== null ? 'connection-name-error' : undefined}
                   />
                   {#if nameFailure !== null}
-                    <span class="field-error" id="connection-name-error" role="alert">{t(nameFailure)}</span>
+                    <span class="field-error" id="connection-name-error" role="alert"
+                      ><Icon name="alert" />{t(nameFailure)}</span
+                    >
                   {/if}
-                </label>
-                <label class="field" for="connection-credential">
-                  <span class="field-label">{t('connectionCredentialLabel')}</span>
+                </div>
+                <div class="field">
+                  <label class="field-label" for="connection-credential">{t('connectionCredentialLabel')}</label>
+                  <!-- 伏せ字のために type="password" を使う。ブラウザのパスワード管理に保存されないことは保証できない（autocomplete="off" は無視されうる）ので、主な拡張の無視の印だけを付ける。docs/design.md の「接続の画面」 -->
                   <input
                     class="input"
                     id="connection-credential"
                     type="password"
                     bind:value={credential}
                     autocomplete="off"
+                    data-1p-ignore
+                    data-lpignore="true"
+                    data-bwignore
+                    data-form-type="other"
                     spellcheck="false"
                     placeholder={t('connectionCredentialPlaceholder')}
                     aria-invalid={credentialFailure !== null}
                     aria-describedby={credentialFailure !== null
-                      ? 'connection-credential-error'
+                      ? 'connection-credential-error connection-credential-hint'
                       : 'connection-credential-hint'}
                   />
                   {#if credentialFailure !== null}
-                    <span class="field-error" id="connection-credential-error" role="alert">{t(credentialFailure)}</span
+                    <span class="field-error" id="connection-credential-error" role="alert"
+                      ><Icon name="alert" />{t(credentialFailure)}</span
                     >
                   {/if}
-                </label>
+                </div>
               </div>
               <span class="field-hint" id="connection-credential-hint">{t('connectionCredentialHint')}</span>
               <div class="callout is-warn">
@@ -427,7 +490,9 @@
               {#if choosing === null}
                 <span class="field-hint">{t('connectionStepScopeLocked')}</span>
               {:else}
-                <p class="field-hint">{choosing.name}</p>
+                <p class="field-hint">
+                  {t('connectionScopeTarget', { connection: t('connection'), name: choosing.name })}
+                </p>
                 {#if loadingCandidates}
                   <span class="field-hint" role="status">{t('connectionScopeLoading')}</span>
                 {:else if candidates !== null}
@@ -469,7 +534,9 @@
                   {:else if !loadingCandidates}
                     <button class="btn" type="button" onclick={loadCandidates}>{t('connectionScopeRetry')}</button>
                   {/if}
-                  <button class="btn is-quiet" type="button" onclick={closeScope}>{t('connectionScopeCancel')}</button>
+                  <button class="btn is-quiet" type="button" aria-disabled={saving} onclick={() => closeScope()}
+                    >{t('connectionScopeCancel')}</button
+                  >
                 </div>
               {/if}
             </div>

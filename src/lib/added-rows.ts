@@ -30,3 +30,24 @@ export function completionSettled(at: number, loadedAt: number): boolean {
 export function carriesOver(previous: BacklogFilter | undefined, next: BacklogFilter, sameWorkspace: boolean): boolean {
   return sameWorkspace && previous !== undefined && sameFilter(previous, next);
 }
+
+// 孤立の判定の親になるストーリーの ID。読み直した木のストーリーと、この回で残す画面で足したストーリー（読み直した木に入るまで描かれる親）
+export function parentStoryIds(loaded: readonly string[], keptAdded: readonly string[]): Set<string> {
+  return new Set([...loaded, ...keptAdded]);
+}
+
+// 完了にして写した行（fromTree）の親が、読み直した木に無いか。絞り込み中は、当たるタスクが唯一だった親がその完了で木から外れる。
+// 遅れて届いた木でそうなると、行はどの親の下にも描かれないのに件数には数えられるので、行と印を捨てる（親ごと外れる競合の無い読み直しと同じ結果）
+// storyId が null（親なし）の行、木を読めていない（treeLoaded が偽）とき、行そのものが木に有る（taskInTree。別の人が親を移したなど）ときは、孤立と言えない
+export function orphanedFromTree(
+  row: { storyId: string | null; fromTree?: true },
+  loaded: { treeLoaded: boolean; storyIds: ReadonlySet<string>; taskInTree: boolean },
+): boolean {
+  return (
+    loaded.treeLoaded &&
+    !loaded.taskInTree &&
+    row.fromTree === true &&
+    row.storyId !== null &&
+    !loaded.storyIds.has(row.storyId)
+  );
+}
