@@ -628,13 +628,13 @@
       <SprintOverdueNotice {sprint} canClose={canLead} onclose={openClose} />
     {/if}
     {#if sprint.goal !== null}<SprintGoalNotice goal={sprint.goal} />{/if}
-    <!-- 列が並ぶと狭い幅で横に溢れる。カードも空の行も無いと中に止まる先が無く、キーボードで横へ送れないので、その間だけ領域に止まる（書き込めるときは各列の空の行に止まれる） -->
+    <!-- 列が並ぶと狭い幅で横に溢れる。カードが無いと中に止まる先が無く、キーボードで横へ送れないので、その間だけ領域に止まる -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       class="board-wrap"
       role="region"
       aria-label={t('sprintBoardRegion', { sprint: t('sprint'), column: t('column') })}
-      tabindex={allTasks.length === 0 && !canWrite ? 0 : undefined}
+      tabindex={allTasks.length === 0 ? 0 : undefined}
       {@attach canWrite ? (node) => dnd.wrap(node) : undefined}
     >
       <!-- 引き出しの前後のボタンの順は、ボードに今見えているカード（左の列から右へ、列の中は上から下） -->
