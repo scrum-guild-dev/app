@@ -4,6 +4,8 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import {
+  addEpicRow,
+  addStoryRow,
   chooseRowAction,
   createWorkspace,
   dragTo,
@@ -11,6 +13,7 @@ import {
   rowMenuToggle,
   signIn,
   waitForResponses,
+  waitForSettled,
   watchViolations,
 } from './helpers.ts';
 
@@ -28,16 +31,33 @@ async function addTask(page: Page, title: string): Promise<void> {
   await expect(dialog).toBeHidden();
 }
 
-// 作った後は、木の読み直しが返るまで待つ。読み直しで木が替わると、画面は画面だけで足したタスクと並べ替えを捨てる（+page.svelte）。
-// 返る前に次のタスクを足すか並べ替えると、それが遅れて届いた読み直しで消えうる
+// ストーリーの引き出しで題を直す。保存した後に、画面は木を読み直す。
+// 読み直しで木が替わると、画面は画面だけで足したタスクと並べ替えを捨てるので、このテストでは「木の読み直しを起こす」操作として使う
+async function renameStory(page: Page, from: string, to: string): Promise<void> {
+  await page.getByRole('link', { name: from, exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: from, exact: true });
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole('heading', { level: 2 }).getByRole('button').click();
+  const input = drawer.getByRole('textbox', { name: 'タイトル' });
+  await input.fill(to);
+  const saved = waitForResponses(page, '/story-update');
+  await input.press('Enter');
+  await saved;
+  await expect(page.getByRole('dialog', { name: to, exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+}
+
+// 木の空の行でストーリーを作り、題を直して木を読み直す（読み直しが返るまで待つ）。
+// 読み直しで木が替わると、画面は画面だけで足したタスクと並べ替えを捨てる（+page.svelte）。返る前に次のタスクを足すか並べ替えると、
+// それが遅れて届いた読み直しで消えうる
 async function addStory(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const dialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await dialog.getByLabel('タイトル').fill(title);
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
+  await addStoryRow(page, `${title}（下書き）`);
+  // 題を保存した後の読み直しと、引き出しを閉じたときの読み直し（URL から story を外す移動）の2回
+  const reloaded = waitForResponses(page, '/backlog-tree', 2);
+  await renameStory(page, `${title}（下書き）`, title);
   await reloaded;
+  await waitForSettled(page);
 }
 
 // 親のないタスクの題（並びの順）
@@ -238,15 +258,9 @@ test('端の行で Alt と ↑ ↓ を押すと、動かせないことを読み
   await expect(rootTitles(page)).toHaveText(['見積もりを送る', '請求書を出す']);
 });
 
-// 作った後は、木の読み直しが返るまで待つ（上の addStory と同じ）
+// 木の空の行でエピックを作る（作った行は読み直さずに木へ入る）
 async function addEpic(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: 'エピックを作る' }).click();
-  const dialog = page.getByRole('dialog', { name: 'エピックを作る' });
-  await dialog.getByLabel('タイトル').fill(title);
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
-  await reloaded;
+  await addEpicRow(page, title);
 }
 
 function epicRow(page: Page, title: string) {
@@ -715,50 +729,6 @@ test('一覧が広いまま指で押す画面（タブレットの横置き）�
     expect((await main.boundingBox())!.width).toBeGreaterThanOrEqual(190);
   }
   await context.close();
-});
-
-test('ストーリーを作った後の読み直しの応答が、続けて作ったタスクより遅れて届いても、作ったタスクは画面に残る', async ({
-  page,
-}) => {
-  await createWorkspace(page, '遅れた読み直しワークスペース');
-  await addStory(page, 'ポイント制度を公開する');
-
-  // 次の読み直しは、サーバーから受け取っておいて、タスクを作った後まで画面へ返さない。
-  // 返る木は、タスクを作る前に読んだものなので、作ったタスクを含まない
-  let release: () => void = () => {};
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let held = false;
-  await page.route('**/api/aoba/backlog-tree', async (route) => {
-    if (held) return route.fallback();
-    held = true;
-    const response = await route.fetch();
-    await gate;
-    await route.fulfill({ response });
-  });
-
-  // 返る前に画面へ出す印を使わずに、ダイアログを閉じるところまで進める
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await storyDialog.getByLabel('タイトル').fill('決済の障害を減らす');
-  await storyDialog.getByRole('button', { name: '作る' }).click();
-  await expect(storyDialog).toBeHidden();
-  await expect.poll(() => held).toBe(true);
-
-  const draft = page.getByRole('textbox', { name: 'タスクを足す: ポイント制度を公開する' });
-  await draft.fill('付与のバッチを書く');
-  await draft.press('Enter');
-  await expect(page.locator('.entry-title', { hasText: '付与のバッチを書く' })).toBeVisible();
-  const group = storyGroup(page, 'ポイント制度を公開する');
-  await expect(group.locator('.entry-title')).toHaveText(['付与のバッチを書く']);
-
-  // 遅れた読み直しを届ける
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  release();
-  await reloaded;
-  await expect(storyRow(page, '決済の障害を減らす')).toBeVisible();
-  await expect(group.locator('.entry-title')).toHaveText(['付与のバッチを書く']);
 });
 
 test('作って完了にしたタスクは、その後の読み直しで未完了の行として戻らない', async ({ page }) => {

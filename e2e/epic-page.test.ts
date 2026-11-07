@@ -15,7 +15,7 @@ import {
 import { memberList } from '../src/shared/operations/workspace/index.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn, waitForResponses, watchViolations } from './helpers.ts';
+import { addEpicRow, createWorkspace, openEpicPage, signIn, waitForResponses, watchViolations } from './helpers.ts';
 import { failOperation, mockOperation, rewriteOperation } from './operations.ts';
 
 const AOBA = { slug: 'aoba' };
@@ -35,7 +35,7 @@ test('seed の受託開発チーム: 木のエピックの題から画面が開�
 }) => {
   const collect = await watchViolations(page);
   await page.goto(WORKSPACE);
-  await page.getByRole('link', { name: EPIC_TITLE, exact: true }).click();
+  await openEpicPage(page, EPIC_TITLE);
 
   await expect(page).toHaveURL(`${WORKSPACE}/epics/${EPIC_ID}`);
   await expect(page.getByRole('heading', { level: 1, name: EPIC_TITLE })).toBeVisible();
@@ -92,7 +92,7 @@ test('seed の受託開発チーム: 木のエピックの題から画面が開�
   await expect(party.getByRole('button', { name: '作成者を替える' })).toBeVisible();
   await expect(party.getByRole('button', { name: 'エピックを完了にする' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'エピックを完了にする' })).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.getByRole('button', { name: 'エピックを直す' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'エピックを直す' })).toBeVisible();
 
   // バックログへ戻る
   await page.getByRole('link', { name: 'バックログへ戻る' }).click();
@@ -105,16 +105,8 @@ test('スクラムの言葉: 参加者が空で配下も無いエピックは、
   page,
 }) => {
   await createWorkspace(page, 'エピック画面のワークスペース');
-  await page.getByRole('button', { name: 'エピックを作る' }).click();
-  const dialog = page.getByRole('dialog', { name: 'エピックを作る' });
-  await dialog.getByLabel('タイトル').fill('決済の障害を減らす');
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
-  await reloaded;
-  await page.getByRole('link', { name: '決済の障害を減らす', exact: true }).click();
-
-  await expect(page.getByRole('heading', { level: 1, name: '決済の障害を減らす' })).toBeVisible();
+  await addEpicRow(page, '決済の障害を減らす');
+  await openEpicPage(page, '決済の障害を減らす');
   await expect(page.locator('.page-eyebrow')).toHaveText('エピック');
   const request = page.getByRole('region', { name: '概要' });
   await expect(request.locator('dt')).toHaveText(['作成者', 'クリア報酬', '期日', '区分']);
@@ -137,15 +129,8 @@ test('作ったワークスペース: 参加するで参加者に加わり、参
 }) => {
   const collect = await watchViolations(page);
   await createWorkspace(page, '参加者のワークスペース');
-  await page.getByRole('button', { name: 'エピックを作る' }).click();
-  const create = page.getByRole('dialog', { name: 'エピックを作る' });
-  await create.getByLabel('タイトル').fill('会員ランクを公開する');
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await create.getByRole('button', { name: '作る' }).click();
-  await expect(create).toBeHidden();
-  await reloaded;
-  await page.getByRole('link', { name: '会員ランクを公開する', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1, name: '会員ランクを公開する' })).toBeVisible();
+  await addEpicRow(page, '会員ランクを公開する');
+  await openEpicPage(page, '会員ランクを公開する');
 
   const party = page.getByRole('region', { name: '参加者' });
   const toast = page.locator('.toasts:visible .toast');
@@ -278,15 +263,8 @@ test('作ったワークスペース: クリア報酬の段階を額つきのラ
 }) => {
   const collect = await watchViolations(page);
   await createWorkspace(page, '報酬のワークスペース');
-  await page.getByRole('button', { name: 'エピックを作る' }).click();
-  const create = page.getByRole('dialog', { name: 'エピックを作る' });
-  await create.getByLabel('タイトル').fill('会員ランクを公開する');
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await create.getByRole('button', { name: '作る' }).click();
-  await expect(create).toBeHidden();
-  await reloaded;
-  await page.getByRole('link', { name: '会員ランクを公開する', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1, name: '会員ランクを公開する' })).toBeVisible();
+  await addEpicRow(page, '会員ランクを公開する');
+  await openEpicPage(page, '会員ランクを公開する');
 
   const request = page.getByRole('region', { name: '概要' });
   const party = page.getByRole('region', { name: '参加者' });
@@ -523,9 +501,9 @@ test('進行中のエピックは報酬が入る注記、完了は過去形、�
 test('直した後の読み直しが失敗したら、前の値を残して知らせだけを出す', async ({ page }) => {
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   await expect(page.getByRole('heading', { level: 1, name: EPIC_TITLE })).toBeVisible();
-  await page.getByRole('button', { name: 'エピックを直す' }).click();
-  const dialog = page.getByRole('dialog', { name: 'エピック' });
-  await expect(dialog.getByLabel('タイトル')).toHaveValue(EPIC_TITLE);
+  await page.getByRole('link', { name: 'エピックを直す' }).click();
+  const drawer = page.getByRole('dialog', { name: EPIC_TITLE, exact: true });
+  await expect(drawer.getByRole('button', { name: '本文を書く' })).toBeVisible();
   // 保存は通さず（seed を書き換えない）、読み直しだけが失敗する形にする
   await mockOperation(page, epicUpdate, AOBA, {
     epic: {
@@ -538,9 +516,14 @@ test('直した後の読み直しが失敗したら、前の値を残して知�
     },
   });
   await failOperation(page, epicDetail, AOBA, 500, 'internal');
-  await dialog.getByLabel('本文').fill('読み直しに失敗する本文');
-  await dialog.getByRole('button', { name: '保存する' }).click();
-  await expect(dialog).toBeHidden();
+  const saved = waitForResponses(page, '/epic-update');
+  await drawer.getByRole('button', { name: '本文を書く' }).click();
+  const body = drawer.getByRole('textbox', { name: '本文' });
+  await body.fill('読み直しに失敗する本文');
+  await body.blur();
+  await saved;
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
   await expect(page.getByRole('alert').filter({ hasText: '最新の内容を読み込めませんでした' })).toBeVisible();
   // 画面は読み込みの失敗に替わらず、前の値のまま
   await expect(page.getByRole('heading', { level: 1, name: EPIC_TITLE })).toBeVisible();
@@ -556,7 +539,7 @@ test('終了したワークスペースでも読めて、直す口と参加者�
   await expect(page.getByRole('heading', { level: 1, name: EPIC_TITLE })).toBeVisible();
   await expect(page.getByRole('region', { name: '参加者' }).locator('.party-list > li')).toHaveCount(2);
   await expect(page.getByRole('region', { name: '配下のストーリー' }).locator('.story-block')).toHaveCount(1);
-  await expect(page.getByRole('button', { name: 'エピックを直す' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'エピックを直す' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: '参加者' }).getByRole('button')).toHaveCount(0);
 });
 

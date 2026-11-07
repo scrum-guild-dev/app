@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { backlogCompletedTasks } from '../src/shared/operations/task/backlog-completed-tasks.ts';
 import {
+  addStoryRow,
   createWorkspace,
   expectModalFocus,
   createLayoutCheck,
@@ -24,13 +25,8 @@ test('親なしと配下の完了をキーボードで開閉し、詳細を開�
   const create = '起票';
   const done = '完了';
   const assignee = '担当';
-  await page.getByRole('button', { name: `${story}を作る` }).click();
+  await addStoryRow(page, `目標-${suffix}`);
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('タイトル').fill(`目標-${suffix}`);
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await reloaded;
   for (const child of [false, true]) {
     const title = `${child ? '配下' : '親なし'}の完了-${suffix}`;
     await page.getByRole('button', { name: create, exact: true }).click();
@@ -145,13 +141,7 @@ test('絞り込み中は、完了だけを持つストーリーに「まだあ�
   const suffix = `${test.info().repeatEachIndex}-${test.info().retry}`;
   await createWorkspace(page, `完了と絞り込み-${suffix}`);
   const story = `完了だけの目標-${suffix}`;
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('タイトル').fill(story);
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await reloaded;
+  await addStoryRow(page, story);
   await createCompletedTask(page, `終えた依頼-${suffix}`, story);
   await page.reload();
   const toggle = page.getByRole('button', { name: `完了 1 件を折りたたんでいます（${story}）`, exact: true });

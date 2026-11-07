@@ -4,7 +4,7 @@
 import { planSummary, sprintTaskAdd } from '../src/shared/operations/sprint/index.ts';
 import { backlogTree } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addStoryRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { failOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
@@ -121,11 +121,7 @@ test('スクラムの言葉: ストーリーごとと1件ずつ入れ、外し�
   await rootDialog.getByLabel('タイトル').fill('ヘルプを書く');
   await rootDialog.getByRole('button', { name: '起票' }).click();
   await expect(rootDialog).toBeHidden();
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await storyDialog.getByLabel('タイトル').fill('ログインを作り直す');
-  await storyDialog.getByRole('button', { name: '作る' }).click();
-  await expect(storyDialog).toBeHidden();
+  await addStoryRow(page, 'ログインを作り直す');
   for (const title of ['フォームを置く', '送信を確かめる']) {
     const draft = page.getByRole('textbox', { name: 'タスクを足す: ログインを作り直す' });
     await draft.fill(title);
