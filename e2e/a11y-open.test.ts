@@ -1,4 +1,4 @@
-// 開いた状態（タスクの引き出し、Dialog のダイアログ、ConfirmDialog、運用の画面の管理者の指名し直し）を axe で確かめる（#334）。4つのテーマ × スクラムの言葉。
+// 開いた状態（タスクの引き出し、ストーリーの引き出し、Dialog のダイアログ、ConfirmDialog、運用の画面の管理者の指名し直し）を axe で確かめる（#334）。4つのテーマ × スクラムの言葉。
 // 主な画面は e2e/a11y-screens.test.ts、除外は e2e/ui-exclusions.ts。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。受託開発チームも社内ツールもスクラムの言葉。
 // 開くだけで、作る、外すは押さない。seed の行もテーマの設定も書き換えない（ほかのファイルと並べて走るため）
@@ -7,6 +7,9 @@ import { expectNoA11yViolationsInThemes, signIn, waitForSettled } from './helper
 
 const WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 const TASK_ID = '019a0000-0000-7000-8000-000000000801';
+// seed の親のないストーリー。受け入れ基準、本文、期日、リンクがすべてあり、配下に未完了のタスクがある
+const STORY_ID = '019a0000-0000-7000-8000-000000000901';
+const STORY_TITLE = 'ポイントの付与と失効を管理画面で確かめられる';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
@@ -19,6 +22,27 @@ test('タスクの引き出しを開いた状態に axe の違反が無い', asy
   await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();
   await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
   await expectNoA11yViolationsInThemes(page, 'task-drawer');
+});
+
+// ストーリーの引き出し。⋯のメニューを閉じた状態と、開いた状態（role="menu" の一覧）の両方を測る
+test('ストーリーの引き出しを開いた状態に axe の違反が無い', async ({ page }) => {
+  await page.goto(`${WORKSPACE}?story=${STORY_ID}`);
+  const drawer = page.getByRole('dialog', { name: STORY_TITLE });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();
+  await expect(drawer.getByRole('button', { name: '完了にする' })).toBeVisible();
+  await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
+  await expectNoA11yViolationsInThemes(page, 'story-drawer');
+});
+
+test('ストーリーの引き出しの「⋯」のメニューを開いた状態に axe の違反が無い', async ({ page }) => {
+  await page.goto(`${WORKSPACE}?story=${STORY_ID}`);
+  const drawer = page.getByRole('dialog', { name: STORY_TITLE });
+  await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();
+  await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
+  await drawer.getByRole('button', { name: `操作: ${STORY_TITLE}` }).click();
+  await expect(drawer.getByRole('menuitem', { name: '親を移す' })).toBeFocused();
+  await expectNoA11yViolationsInThemes(page, 'story-drawer');
 });
 
 test('タスクを作るダイアログ（Dialog）を開いた状態に axe の違反が無い', async ({ page }) => {

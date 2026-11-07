@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { tick } from 'svelte';
   import { invalidateAll } from '$app/navigation';
-  import { storyCreate, storyGet, storyUpdate, type StoryDetail } from '../../shared/operations/story/index.ts';
+  import { storyCreate } from '../../shared/operations/story/index.ts';
   import {
     LINK_URL_MAX_LENGTH,
     STORY_TEXT_MAX_LENGTH,
@@ -14,45 +13,34 @@
     storyTitleProblem,
     type StoryTitleProblem,
   } from '../../shared/story.ts';
-  import { categoryConflictReasonOf, type DefinitionRef } from '../../shared/operations/definition/definition.ts';
+  import type { DefinitionRef } from '../../shared/operations/definition/definition.ts';
   import { callOperation } from '../api.ts';
-  import { withCurrent } from '../definition-options.ts';
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Dialog from './Dialog.svelte';
   import Icon from './Icon.svelte';
-  import TreeDeleteDialog from './TreeDeleteDialog.svelte';
 
-  // ストーリーのダイアログ。作るときも直すときも同じ欄（タイトル、受け入れ基準、本文、期日、リンク）で、タイトル以外は空でよい。
-  // 直すときは、開いたら story-get で1件を読む（受け入れ基準と本文は長いので、木には載せない）。読んでいる間は読み込み中を出し、
-  // 読めなければ（404 以外）もう一度試すを出す。404 は、トーストで知らせて閉じ、画面が木を読み直す（ongone）。
-  // 開いたときの値と比べて、変えた欄だけを送る（別の人が別の欄を直していれば両方が残り、同じ欄は後の保存が勝つ）。
-  // 変えた欄が無ければ、何も送らずに閉じる。閉じたワークスペース（canWrite が偽）では読み取り専用で開き、保存のボタンを出さない
-  // （欄は readonly。日付の入力は readonly を受けないので、読み取り専用の text に日付を出す）。
+  // ストーリーを作るダイアログ（見出しの「<ストーリー>を作る」から開く）。欄はタイトル、受け入れ基準、本文、期日、リンクと区分で、
+  // タイトル以外は空でよい。ストーリーを直すのは、木の題から開く引き出し（StoryDrawer）。
   // 送っている間の扱いと、古い応答を捨てる generation は TaskCreateDialog と同じ。
-  // 作れたら、保存できたら閉じて、画面が木を読み直す（onsaved）。本文と受け入れ基準は、この版では文字のまま持つ
-  // 区分（categories から選ぶ）は親のないストーリーだけが持つ。エピックの下のストーリーは、エピックの区分を「親から引き継ぎ」で読み取り専用に出す
-  // 直すときは、欄の下に「この<ストーリー>を削除する」を置く（EpicDialog と同じ。story-get の can_delete が偽の人には出さない）
+  // 作れたら閉じて、画面が木を読み直す（onsaved）。本文と受け入れ基準は、この版では文字のまま持つ。
+  // 区分（categories から選ぶ）は、親のないストーリーが持つ（作るストーリーは親を持たない）。
+  // 閉じたワークスペースでは、開く口を出さない。開いている間に閉じられたときは、理由を出し、閉じたときに画面を読み直す
   let {
     slug,
     workspaceId,
-    canWrite,
     categories,
     categoriesFailed,
     onsaved,
-    ongone,
     announceCreated = true,
   }: {
     slug: string;
     workspaceId: string;
-    canWrite: boolean;
     categories: readonly DefinitionRef[];
-    // 区分の一覧を読めなかった（選択肢は区分なしと今の区分だけ）
+    // 区分の一覧を読めなかった（選択肢は区分なしだけ）
     categoriesFailed: boolean;
-    // 作ったときは作ったストーリーの ID、直したときは null（画面が、作ったものが絞り込みに当たるかを確かめる）
-    onsaved: (createdId: string | null) => void;
-    // 直す対象が消えていた（404）か、削除した。画面が木を読み直し、見出しへフォーカスを移す
-    ongone: () => void;
+    // 作ったストーリーの ID（画面が、作ったものが絞り込みに当たるかを確かめる）
+    onsaved: (createdId: string) => void;
     // 偽なら作った知らせ（トースト）を出さない。絞り込み中の画面が、作ったものが当たるかを確かめてから自分で知らせる
     announceCreated?: boolean;
   } = $props();
@@ -75,32 +63,13 @@
   let submitButton = $state<HTMLButtonElement>();
   let dueInput = $state<HTMLInputElement>();
 
-  // 直すときの対象の ID。作るときは null
-  let storyId = $state<string | null>(null);
-  // 直すときは、読み込み中、読めた、読めなかった。作るときは読めた扱い
-  let loadState = $state<'loading' | 'ready' | 'failed'>('ready');
-  // 開いたときに読んだ値（直すときだけ）
-  let editing = $state<StoryDetail | null>(null);
-  // 呼んだ人が削除できるか（作った人かリーダー）と、配下の件数。story-get が返す
-  let canDelete = $state(false);
-  let childTasks = $state(0);
-  let canDeleteChildren = $state(false);
-  let deleteDialog = $state<ReturnType<typeof TreeDeleteDialog>>();
   let title = $state('');
   let acceptance = $state('');
   let body = $state('');
   let dueOn = $state('');
   let link = $state('');
-  // 選んだ区分の ID。空は区分なし。エピックの下のストーリーでは使わない
+  // 選んだ区分の ID。空は区分なし
   let category = $state('');
-  // 自身に振った区分（引き継いだものは除く）
-  const ownCategory = $derived(editing?.category != null && !editing.category.inherited ? editing.category : null);
-  const hasParent = $derived(editing?.epic_id != null);
-  // 区分の選択肢。今の区分が一覧に無い（一覧を読めなかった）ときも、選んだまま描けるよう足す
-  const categoryOptions = $derived(withCurrent(categories, ownCategory));
-  const categoryName = $derived(
-    categoryOptions.find((option) => option.id === category)?.name ?? t('categoryNone', { category: t('category') }),
-  );
   let errors = $state<Partial<Record<FieldName, string>>>({});
   let submitError = $state<string | null>(null);
   let submitting = $state(false);
@@ -126,63 +95,20 @@
     };
   });
 
-  function fill(story: StoryDetail | null): void {
-    editing = story;
-    title = story?.title ?? '';
-    acceptance = story?.acceptance_criteria_md ?? '';
-    body = story?.body_md ?? '';
-    dueOn = story?.due_on ?? '';
-    link = story?.link_url ?? '';
-    category = story?.category != null && !story.category.inherited ? story.category.id : '';
-  }
-
-  // 直すときの1件を読む。応答が来た時点で開き直されていたら（generation が進んでいたら）捨てる
-  async function load(id: string, mine: number): Promise<void> {
-    loadState = 'loading';
-    submitError = null;
-    const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: id }, { slug });
-    if (mine !== generation) return;
-    if (result.ok) {
-      fill(result.data.story);
-      canDelete = result.data.can_delete;
-      childTasks = result.data.children.tasks;
-      canDeleteChildren = result.data.can_delete_children;
-      loadState = 'ready';
-      // 欄は読めてから出るので、開いたときのフォーカス（閉じるボタン）から、タイトルへ移す
-      await tick();
-      if (mine === generation) document.getElementById(fieldIds.title)?.focus();
-      return;
-    }
-    if (result.status === 401) {
-      await invalidateAll();
-      return;
-    }
-    if (result.status === 404) {
-      open = false;
-      showToast(t('storyGone', { story: t('story') }), 'alert');
-      ongone();
-      return;
-    }
-    loadState = 'failed';
-  }
-
-  export function show(trigger?: HTMLElement | null, targetId: string | null = null): void {
+  export function show(trigger?: HTMLElement | null): void {
     generation++;
     reloadOnClose = false;
-    storyId = targetId;
-    fill(null);
-    canDelete = false;
-    childTasks = 0;
-    canDeleteChildren = false;
+    title = '';
+    acceptance = '';
+    body = '';
+    dueOn = '';
+    link = '';
+    category = '';
     errors = {};
     submitError = null;
     submitting = false;
-    loadState = targetId === null ? 'ready' : 'loading';
     dialog?.show(trigger);
-    if (targetId !== null) void load(targetId, generation);
   }
-
-  const readOnly = $derived(!canWrite);
 
   const titleMessages = $derived<Record<StoryTitleProblem, string>>({
     required: t('storyTitleRequired'),
@@ -222,10 +148,16 @@
     return found;
   }
 
-  // 開いたときの値と比べて、変えた欄だけ。空の欄は null にそろえて比べる
-  function changedFields() {
-    const original = editing;
-    const next = {
+  async function submit(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    if (submitting) return;
+    errors = validate();
+    const firstInvalid = (Object.keys(fieldIds) as FieldName[]).find((name) => errors[name] !== undefined);
+    if (firstInvalid !== undefined) {
+      document.getElementById(fieldIds[firstInvalid])?.focus();
+      return;
+    }
+    const fields = {
       title: title.trim(),
       acceptance_criteria_md: normalizeLongText(acceptance),
       body_md: normalizeLongText(body),
@@ -233,40 +165,6 @@
       link_url: normalizeLinkUrl(link),
       category_id: category === '' ? null : category,
     };
-    if (original === null) return next;
-    const changed: Partial<typeof next> = {};
-    if (next.title !== original.title) changed.title = next.title;
-    if (next.acceptance_criteria_md !== original.acceptance_criteria_md)
-      changed.acceptance_criteria_md = next.acceptance_criteria_md;
-    if (next.body_md !== original.body_md) changed.body_md = next.body_md;
-    if (next.due_on !== original.due_on) changed.due_on = next.due_on;
-    if (next.link_url !== original.link_url) changed.link_url = next.link_url;
-    // 区分は親のないストーリーだけが持つ（エピックの下のストーリーには送らない）
-    if (!hasParent && next.category_id !== (ownCategory?.id ?? null)) changed.category_id = next.category_id;
-    return changed;
-  }
-
-  // 404 の理由を分ける。作るとき（id が null）は、ストーリーはまだ無いので、区分が理由
-  async function storyExists(id: string | null): Promise<boolean> {
-    if (id === null) return true;
-    const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: id }, { slug });
-    return result.ok;
-  }
-
-  async function submit(event: SubmitEvent): Promise<void> {
-    event.preventDefault();
-    if (submitting || readOnly || loadState !== 'ready') return;
-    errors = validate();
-    const firstInvalid = (Object.keys(fieldIds) as FieldName[]).find((name) => errors[name] !== undefined);
-    if (firstInvalid !== undefined) {
-      document.getElementById(fieldIds[firstInvalid])?.focus();
-      return;
-    }
-    const fields = changedFields();
-    if (editing !== null && Object.keys(fields).length === 0) {
-      open = false;
-      return;
-    }
 
     const mine = generation;
     submitting = true;
@@ -274,14 +172,7 @@
     // 欄が disabled になるので、Enter で送ったときもフォーカスを失わないよう、送るボタンへ移す
     submitButton?.focus();
     try {
-      const result =
-        editing === null
-          ? await callOperation(
-              storyCreate,
-              { workspace_id: workspaceId, ...(fields as Required<typeof fields>) },
-              { slug },
-            )
-          : await callOperation(storyUpdate, { workspace_id: workspaceId, story_id: editing.id, ...fields }, { slug });
+      const result = await callOperation(storyCreate, { workspace_id: workspaceId, ...fields }, { slug });
       if (mine !== generation) return;
       if (!result.ok) {
         if (result.status === 401) {
@@ -291,72 +182,28 @@
         if (result.status === 409 && result.error?.code === 'workspace_closed') {
           submitError = t('workspaceClosedReadOnly', { workspace: t('workspace') });
           reloadOnClose = true;
-        } else if (result.status === 409 && categoryConflictReasonOf(result.error?.details) === 'has_parent') {
-          // 開いた後にエピックの下へ移された。区分は引き継ぐので、読み直してもらう
-          submitError = t('categoryHasParent', { task: t('story'), category: t('category') });
-          reloadOnClose = true;
-        } else if (result.status === 404 && fields.category_id != null && (await storyExists(editing?.id ?? null))) {
-          // ストーリーはあるので、選んだ区分が削除されていた。一覧を読み直して、選び直してもらう
-          if (mine !== generation) return;
+        } else if (result.status === 404 && fields.category_id !== null) {
+          // 選んだ区分が削除されていた。一覧を読み直して、選び直してもらう
           submitError = t('definitionRefGone', { kind: t('category') });
           category = '';
           void invalidateAll();
-        } else if (result.status === 404 && editing !== null) {
-          // ストーリーが消えている。閉じて、木を読み直す
-          if (mine !== generation) return;
-          open = false;
-          showToast(t('storyGone', { story: t('story') }), 'alert');
-          ongone();
         } else if (result.status === 400) {
           // 画面の検査を通った後に断られた。どの欄かは分からないので、タイトルを責めずに全体の文で知らせる
           submitError = t('storyBadRequest');
         } else {
-          submitError = editing === null ? t('storyCreateFailed') : t('storySaveFailed');
+          submitError = t('storyCreateFailed');
         }
         return;
       }
-      const created = editing === null;
       open = false;
-      if (!created || announceCreated) {
-        showToast(t(created ? 'storyCreated' : 'storySaved', { story: t('story') }), 'check');
-      }
-      onsaved(created ? result.data.story.id : null);
+      if (announceCreated) showToast(t('storyCreated', { story: t('story') }), 'check');
+      onsaved(result.data.story.id);
     } finally {
       if (mine === generation) submitting = false;
     }
   }
 
-  // 削除の確認を開く。件数とまとめて削除できるかは、確認が開いたときに story-get で読み直す（EpicDialog と同じ）
-  function askDelete(event: MouseEvent): void {
-    if (editing === null || submitting) return;
-    const trigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-    deleteDialog?.show(
-      { kind: 'story', id: editing.id, title: editing.title, stories: 0, tasks: childTasks, canDeleteChildren },
-      trigger,
-    );
-  }
-
-  function deleteFinished(outcome: 'deleted' | 'gone' | 'closed'): void {
-    if (outcome === 'closed') {
-      reloadOnClose = true;
-      return;
-    }
-    open = false;
-    if (outcome === 'deleted') showToast(t('storyDeleted', { story: t('story') }), 'check');
-    else showToast(t('storyGone', { story: t('story') }), 'alert');
-    ongone();
-  }
-
-  const status = $derived(
-    loadState === 'loading'
-      ? t('storyLoading')
-      : submitting
-        ? storyId === null
-          ? t('storyCreating')
-          : t('storySaving')
-        : '',
-  );
-  const dialogTitle = $derived(storyId === null ? t('storyCreate', { story: t('story') }) : t('story'));
+  const status = $derived(submitting ? t('storyCreating') : '');
   // 「開く」で開けるのは、いま入っているリンクが使える URL のときだけ
   const openHref = $derived.by(() => {
     const value = normalizeLinkUrl(link);
@@ -370,163 +217,113 @@
   {/if}
 {/snippet}
 
-<Dialog bind:this={dialog} bind:open dismissible={!submitting} title={dialogTitle}>
-  <form id={formId} class="form" onsubmit={submit} novalidate aria-busy={loadState === 'loading'}>
-    {#if loadState === 'loading'}
-      <!-- 読み上げは下の role="status" が伝えるので、見える文字だけにする -->
-      <p class="field-hint" aria-hidden="true">{t('storyLoading')}</p>
-    {:else if loadState === 'failed'}
-      <div class="callout is-danger" role="alert">
-        <Icon name="alert" /><span>{t('storyLoadFailed', { story: t('story') })}</span>
+<Dialog bind:this={dialog} bind:open dismissible={!submitting} title={t('storyCreate', { story: t('story') })}>
+  <form id={formId} class="form" onsubmit={submit} novalidate>
+    <!-- 送っている間は、欄も変えられない。送るボタンはフォーカスを残すため、欄のまとまりの外で aria-disabled にしている -->
+    <fieldset class="form-fields" disabled={submitting}>
+      <div class="field" class:is-invalid={errors.title !== undefined}>
+        <label class="field-label" for={fieldIds.title}>{t('fieldTitle')}</label>
+        <input
+          class="input"
+          id={fieldIds.title}
+          bind:value={title}
+          oninput={() => (errors.title = undefined)}
+          placeholder={t('storyTitlePlaceholder')}
+          autocomplete="off"
+          aria-invalid={errors.title !== undefined}
+          aria-describedby={errors.title !== undefined ? `${fieldIds.title}-error` : undefined}
+        />
+        {@render error('title')}
       </div>
-      <div class="form-actions">
-        <button class="btn" type="button" onclick={() => storyId !== null && void load(storyId, generation)}
-          >{t('retry')}</button
-        >
-      </div>
-    {:else if loadState === 'ready'}
-      <!-- 送っている間は、欄も変えられない。送るボタンはフォーカスを残すため、欄のまとまりの外で aria-disabled にしている -->
-      <fieldset class="form-fields" disabled={submitting}>
-        {#if readOnly}
-          <div class="callout is-info">
-            <Icon name="shield" /><span>{t('storyReadOnly', { workspace: t('workspace'), story: t('story') })}</span>
-          </div>
-        {/if}
 
-        <div class="field" class:is-invalid={errors.title !== undefined}>
-          <label class="field-label" for={fieldIds.title}>{t('fieldTitle')}</label>
+      <div class="field" class:is-invalid={errors.acceptance !== undefined}>
+        <label class="field-label" for={fieldIds.acceptance}>{t('ac')}</label>
+        <textarea
+          class="textarea"
+          id={fieldIds.acceptance}
+          bind:value={acceptance}
+          oninput={() => (errors.acceptance = undefined)}
+          aria-invalid={errors.acceptance !== undefined}
+          aria-describedby={errors.acceptance !== undefined ? `${fieldIds.acceptance}-error` : undefined}></textarea>
+        {@render error('acceptance')}
+      </div>
+
+      <div class="field" class:is-invalid={errors.body !== undefined}>
+        <label class="field-label" for={fieldIds.body}>{t('fieldBody')}</label>
+        <textarea
+          class="textarea"
+          id={fieldIds.body}
+          bind:value={body}
+          oninput={() => (errors.body = undefined)}
+          aria-invalid={errors.body !== undefined}
+          aria-describedby={errors.body !== undefined ? `${fieldIds.body}-error` : undefined}></textarea>
+        {@render error('body')}
+      </div>
+
+      <div class="field">
+        <label class="field-label" for={categoryId}>{t('category')}</label>
+        <select
+          class="select"
+          id={categoryId}
+          bind:value={category}
+          aria-describedby={categoriesFailed ? `${categoryId}-note` : undefined}
+        >
+          <option value="">{t('categoryNone', { category: t('category') })}</option>
+          {#each categories as option (option.id)}
+            <option value={option.id}>{option.name}</option>
+          {/each}
+        </select>
+        {#if categoriesFailed}
+          <span class="field-hint" id="{categoryId}-note"
+            >{t('definitionsLoadFailed', { category: t('category') })}</span
+          >
+        {/if}
+      </div>
+
+      <div class="form-row is-start">
+        <div class="field" class:is-invalid={errors.due !== undefined}>
+          <label class="field-label" for={fieldIds.due}>{t('due')}</label>
           <input
             class="input"
-            id={fieldIds.title}
-            bind:value={title}
-            oninput={() => (errors.title = undefined)}
-            placeholder={t('storyTitlePlaceholder')}
-            autocomplete="off"
-            readonly={readOnly}
-            aria-invalid={errors.title !== undefined}
-            aria-describedby={errors.title !== undefined ? `${fieldIds.title}-error` : undefined}
+            id={fieldIds.due}
+            type="date"
+            bind:this={dueInput}
+            bind:value={dueOn}
+            oninput={() => (errors.due = undefined)}
+            aria-invalid={errors.due !== undefined}
+            aria-describedby={errors.due !== undefined ? `${fieldIds.due}-error` : undefined}
           />
-          {@render error('title')}
+          {@render error('due')}
         </div>
-
-        <div class="field" class:is-invalid={errors.acceptance !== undefined}>
-          <label class="field-label" for={fieldIds.acceptance}>{t('ac')}</label>
-          <textarea
-            class="textarea"
-            id={fieldIds.acceptance}
-            bind:value={acceptance}
-            oninput={() => (errors.acceptance = undefined)}
-            readonly={readOnly}
-            aria-invalid={errors.acceptance !== undefined}
-            aria-describedby={errors.acceptance !== undefined ? `${fieldIds.acceptance}-error` : undefined}></textarea>
-          {@render error('acceptance')}
-        </div>
-
-        <div class="field" class:is-invalid={errors.body !== undefined}>
-          <label class="field-label" for={fieldIds.body}>{t('fieldBody')}</label>
-          <textarea
-            class="textarea"
-            id={fieldIds.body}
-            bind:value={body}
-            oninput={() => (errors.body = undefined)}
-            readonly={readOnly}
-            aria-invalid={errors.body !== undefined}
-            aria-describedby={errors.body !== undefined ? `${fieldIds.body}-error` : undefined}></textarea>
-          {@render error('body')}
-        </div>
-
-        <div class="field">
-          {#if hasParent}
-            <span class="field-label">{t('category')}</span>
-            <span
-              >{editing?.category?.name ?? t('categoryNone', { category: t('category') })}
-              <span class="props-note">{t('categoryInherited')}</span></span
-            >
-          {:else if readOnly}
-            <span class="field-label">{t('category')}</span>
-            <span>{categoryName}</span>
-          {:else}
-            <label class="field-label" for={categoryId}>{t('category')}</label>
-            <select
-              class="select"
-              id={categoryId}
-              bind:value={category}
-              aria-describedby={categoriesFailed ? `${categoryId}-note` : undefined}
-            >
-              <option value="">{t('categoryNone', { category: t('category') })}</option>
-              {#each categoryOptions as option (option.id)}
-                <option value={option.id}>{option.name}</option>
-              {/each}
-            </select>
-            {#if categoriesFailed}
-              <span class="field-hint" id="{categoryId}-note"
-                >{t('definitionsLoadFailed', { category: t('category') })}</span
+        <div class="field" class:is-invalid={errors.link !== undefined}>
+          <label class="field-label" for={fieldIds.link}>{t('fieldLink')}</label>
+          <div class="input-row">
+            <input
+              class="input"
+              id={fieldIds.link}
+              type="url"
+              bind:value={link}
+              oninput={() => (errors.link = undefined)}
+              placeholder={t('linkPlaceholder')}
+              autocomplete="off"
+              aria-invalid={errors.link !== undefined}
+              aria-describedby={errors.link !== undefined ? `${fieldIds.link}-error` : undefined}
+            />
+            {#if openHref !== null}
+              <!-- 外のサイトは新しいタブで開く。読み上げにも、新しいタブで開くことを含める -->
+              <a
+                class="btn"
+                href={openHref}
+                target="_blank"
+                rel="external noopener noreferrer"
+                aria-label={t('storyLinkOpenLabel')}>{t('storyLinkOpen')}</a
               >
             {/if}
-          {/if}
-        </div>
-
-        <div class="form-row is-start">
-          <div class="field" class:is-invalid={errors.due !== undefined}>
-            <label class="field-label" for={fieldIds.due}>{t('due')}</label>
-            {#if readOnly}
-              <input class="input" id={fieldIds.due} type="text" value={dueOn} readonly />
-            {:else}
-              <input
-                class="input"
-                id={fieldIds.due}
-                type="date"
-                bind:this={dueInput}
-                bind:value={dueOn}
-                oninput={() => (errors.due = undefined)}
-                aria-invalid={errors.due !== undefined}
-                aria-describedby={errors.due !== undefined ? `${fieldIds.due}-error` : undefined}
-              />
-            {/if}
-            {@render error('due')}
           </div>
-          <div class="field" class:is-invalid={errors.link !== undefined}>
-            <label class="field-label" for={fieldIds.link}>{t('fieldLink')}</label>
-            <div class="input-row">
-              <input
-                class="input"
-                id={fieldIds.link}
-                type="url"
-                bind:value={link}
-                oninput={() => (errors.link = undefined)}
-                placeholder={t('linkPlaceholder')}
-                autocomplete="off"
-                readonly={readOnly}
-                aria-invalid={errors.link !== undefined}
-                aria-describedby={errors.link !== undefined ? `${fieldIds.link}-error` : undefined}
-              />
-              {#if openHref !== null}
-                <!-- 外のサイトは新しいタブで開く。読み上げにも、新しいタブで開くことを含める -->
-                <a
-                  class="btn"
-                  href={openHref}
-                  target="_blank"
-                  rel="external noopener noreferrer"
-                  aria-label={t('storyLinkOpenLabel')}>{t('storyLinkOpen')}</a
-                >
-              {/if}
-            </div>
-            {@render error('link')}
-          </div>
+          {@render error('link')}
         </div>
-      </fieldset>
-      {#if editing !== null && !readOnly}
-        <div class="form-actions">
-          {#if canDelete}
-            <button class="btn is-sm is-quiet is-danger" type="button" aria-disabled={submitting} onclick={askDelete}>
-              <Icon name="trash" />{t('storyDelete', { story: t('story') })}
-            </button>
-          {:else}
-            <span class="field-hint">{t('taskDeleteWho', { leader: t('leader') })}</span>
-          {/if}
-        </div>
-      {/if}
-    {/if}
+      </div>
+    </fieldset>
 
     {#if submitError !== null}
       <div class="callout is-danger" role="alert"><Icon name="alert" /><span>{submitError}</span></div>
@@ -535,21 +332,9 @@
   <!-- 状態の読み上げの領域。form の外に常に置き、中の文字だけを替える -->
   <span class="visually-hidden" role="status">{status}</span>
   {#snippet footer(close)}
-    {#if readOnly}
-      <button class="btn is-primary" type="button" onclick={close}>{t('close')}</button>
-    {:else}
-      <button class="btn is-quiet" type="button" aria-disabled={submitting} onclick={close}>{t('cancel')}</button>
-      <button
-        class="btn is-primary"
-        type="submit"
-        form={formId}
-        aria-disabled={submitting || loadState !== 'ready'}
-        bind:this={submitButton}
-      >
-        {submitting ? status : storyId === null ? t('storyCreateSubmit') : t('storySave')}
-      </button>
-    {/if}
+    <button class="btn is-quiet" type="button" aria-disabled={submitting} onclick={close}>{t('cancel')}</button>
+    <button class="btn is-primary" type="submit" form={formId} aria-disabled={submitting} bind:this={submitButton}>
+      {submitting ? status : t('storyCreateSubmit')}
+    </button>
   {/snippet}
 </Dialog>
-
-<TreeDeleteDialog bind:this={deleteDialog} {slug} {workspaceId} onfinish={deleteFinished} />

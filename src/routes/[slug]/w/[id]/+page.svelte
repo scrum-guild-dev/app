@@ -2,6 +2,7 @@
   import { tick, untrack } from 'svelte';
   import { SvelteURLSearchParams } from 'svelte/reactivity';
   import { goto, invalidate, invalidateAll } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import { navigating, page } from '$app/state';
   import BacklogFilterBar from '../../../../lib/components/BacklogFilterBar.svelte';
   import CompletedTasks from '../../../../lib/components/CompletedTasks.svelte';
@@ -32,7 +33,9 @@
   } from '../../../../lib/backlog-filter.ts';
   import { keepAddedRow } from '../../../../lib/added-rows.ts';
   import { MoveQueue } from '../../../../lib/move-queue.ts';
-  import { trackTaskOrder } from '../../../../lib/task-order.ts';
+  import { completionFailureMessage } from '../../../../lib/story-completion.ts';
+  import { moveFailureMessage } from '../../../../lib/move-failure.ts';
+  import { trackStoryOrder, trackTaskOrder } from '../../../../lib/task-order.ts';
   import { completedMessage } from '../../../../lib/sprint-label.ts';
   import { showToast } from '../../../../lib/toast.svelte.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
@@ -41,10 +44,8 @@
   import { taskTitleProblem, TASK_TITLE_MAX_LENGTH } from '../../../../shared/task.ts';
   import { storyTitleProblem } from '../../../../shared/story.ts';
   import { storyComplete, storyCreate, storyMove, storyReopen } from '../../../../shared/operations/story/index.ts';
-  import { storyCompletionConflictReasonOf } from '../../../../shared/operations/story/story-complete.ts';
   import type { BacklogEpic, BacklogStory, BacklogTask } from '../../../../shared/operations/task/backlog-tree.ts';
   import { taskComplete, taskCreate, taskMove } from '../../../../shared/operations/task/index.ts';
-  import { moveConflictReasonOf } from '../../../../shared/operations/task/task-move.ts';
   import type { PageProps } from './$types';
 
   // ワークスペースの画面（backlog.html の木と起票）。最上段は見本どおり「エピック → 親のないストーリー → 親のないタスク」の3段で、
@@ -64,14 +65,15 @@
   // 送り終える前に木が読み直されたら、送り終えた後にもう一度読み直す（捨てた移動があれば知らせる）。
   // 見出しは見本どおり画面の名前（掲示板／バックログ）で、小見出しがワークスペースの名前。見出しの右に、エピックを作るボタン、
   // ストーリーを作るボタンと起票のボタン。見出しの集計の下に、チーム全体の経験値（読めたときだけ）。
-  // 閉じていれば、作る操作と完了の操作は出さない（ストーリーのダイアログは読み取り専用で開く。閉じていることはワークスペースの枠の帯が伝える）。
+  // 閉じていれば、作る操作と完了の操作は出さない（ストーリーの引き出しは読み取り専用で開く。閉じていることはワークスペースの枠の帯が伝える）。
+  // ストーリーの題はリンクで、押すと `?story=<ID>` の引き出し（StoryDrawer。+layout.svelte が置く）を開く。開いた行の順は trackStoryOrder が引き出しの前後の移動へ渡す。
   // エピックの行の題はエピックの画面へのリンクで、エピックを直すダイアログはその画面の見出しの横から開く（ここのダイアログは作るだけ）。
   // 完了にしたタスクの行は、読み直すまで完了の印を付けてその場に残し、その行のポイントを親の「完了」に即時に足す。折りたたみの件数は読み直した値なので、その行は読み直すまで入らない。
   // ストーリーの「完了にする」は、配下の未完了のタスク（画面で完了にした行は数えない）が残るあいだは押せない。完了と取り消しは、通ったら木を読み直す。
   // 起票したタスクは、読み直さずに親の配下（親なしなら一覧の末尾）に足し、親の「全体」のポイントにも足す。親の行が畳まれていれば開く。
   // 足した行は、読み直した木に入るか、作った後に始まった読み直しの木に無い（別の人の削除など）と外す。
   // ただし絞っているときは、末尾に足さずに木を読み直す（上の帯の段落）。
-  // ダイアログでエピックとストーリーを作った、直したときは、木を読み直す（空の行で作ったときは、読み直さずに木へ足す）。
+  // ダイアログでエピックとストーリーを作ったときは、木を読み直す（空の行で作ったときは、読み直さずに木へ足す）。
   // 完了の操作を送っている最中の行（pendingIds、storyPending）は、読み直しでは捨てず、応答が来たら外す。
   // 見出しの下に、ワークスペースの完成の定義（枠の値。空なら出さない）を畳んで1つだけ置く
   let { data }: PageProps = $props();
@@ -89,12 +91,19 @@
     return !sameFilter(filterFromParams(target.url.searchParams), filter);
   });
   // 行のリンクの問い合わせ（今の絞り込みを残して task を足す）。行ごとに作らず、ここで1回だけ組み、行は task の値だけを足す
-  const taskQueryBase = $derived.by(() => {
+  // タスクの引き出しとストーリーの引き出しは同時に開かないので、開くリンクは、もう一方の問い合わせを外す
+  function queryBase(key: 'task' | 'story'): string {
     const query = new SvelteURLSearchParams(page.url.search);
     query.delete('task');
+    query.delete('story');
     const rest = query.toString();
-    return rest === '' ? '?task=' : `?${rest}&task=`;
-  });
+    return rest === '' ? `?${key}=` : `?${rest}&${key}=`;
+  }
+  const taskQueryBase = $derived(queryBase('task'));
+  // ストーリーの題のリンク（今の絞り込みを残して story を足す）。引き出しの前に、行の ID だけを足せば済むよう、経路まで含める
+  const storyHrefBase = $derived(
+    `${resolve('/[slug]/w/[id]', { slug: page.params.slug ?? '', id: page.params.id ?? '' })}${queryBase('story')}`,
+  );
   // 親のない完了の件数。絞っているときは返らない（null）ので 0 として扱い、折りたたみの1行を出さない
   const rootDone = $derived(tree?.completed_count ?? 0);
   // 絞り込みの結果の読み上げ（出したタスクの行の数か、当たるものが無いこと）。絞っていなければ空
@@ -473,38 +482,6 @@
     }
   }
 
-  // 断られたストーリーの完了と取り消しの理由。409 の conflict は、サーバーが details.reason に載せた理由で分ける。
-  // reload が偽の失敗（通信、5xx）は、読み直さずに知らせる
-  function completionFailureMessage(
-    result: { status: number; error: { code: string; details?: unknown } | null },
-    action: 'complete' | 'reopen',
-  ): { message: string; reload: boolean } {
-    const failed = action === 'complete' ? t('storyCompleteFailed', { done: t('done') }) : t('storyReopenFailed');
-    if (result.status === 404) return { message: t('storyGone', { story: t('story') }), reload: true };
-    if (result.status !== 409) return { message: failed, reload: false };
-    if (result.error?.code === 'workspace_closed') {
-      return { message: t('workspaceClosedReadOnly', { workspace: t('workspace') }), reload: true };
-    }
-    const words = { story: t('story'), task: t('task'), epic: t('epic'), done: t('done') };
-    switch (storyCompletionConflictReasonOf(result.error?.details)) {
-      case 'open_tasks':
-        return { message: t('storyOpenTasks', words), reload: true };
-      case 'completed':
-        return { message: t('storyAlreadyDone', words), reload: true };
-      case 'not_completed':
-        return { message: t('storyNotDone', words), reload: true };
-      case 'parent_completed':
-        return {
-          message: action === 'complete' ? t('storyCompleteParentDone', words) : t('storyReopenParentDone', words),
-          reload: true,
-        };
-      case 'changed':
-        return { message: t('storyCompletionChanged'), reload: true };
-      default:
-        return { message: failed, reload: true };
-    }
-  }
-
   // ストーリーを完了にする、取り消す。通ったら木を読み直し、作り直した行の操作（取り消すか完了にする）へフォーカスを移す
   async function setStoryCompletion(story: BacklogStory, action: 'complete' | 'reopen'): Promise<void> {
     if (workspace === null || Object.hasOwn(storyPending, story.id)) return;
@@ -602,7 +579,7 @@
     if (storyId !== null) expandStory(storyId);
   }
 
-  // エピックかストーリーを作った、直した。木を読み直し、絞っているときに作ったものを知らせる
+  // エピックかストーリーを作った。木を読み直し、絞っているときに作ったものを知らせる
   async function saved(kind: 'story' | 'epic', createdId: string | null): Promise<void> {
     const wasFiltering = filtering;
     await invalidateAll();
@@ -856,29 +833,6 @@
       await invalidateAll();
     } finally {
       discardMoves();
-    }
-  }
-
-  // 失敗した移動の理由。409 の conflict は、サーバーが details.reason に載せた理由で分ける。
-  // 親が完了していたときの文は、動かした行がタスク（親はストーリー）かストーリー（親はエピック）かで変える
-  function moveFailureMessage(
-    result: { status: number; error: { code: string; details?: unknown } | null },
-    kind: 'task' | 'story' | 'epic',
-  ): string {
-    if (result.status === 404) return t('moveGone');
-    if (result.status !== 409) return t('moveFailed');
-    if (result.error?.code === 'workspace_closed') return t('workspaceClosedReadOnly', { workspace: t('workspace') });
-    switch (moveConflictReasonOf(result.error?.details)) {
-      case 'parent_completed':
-        return kind === 'task'
-          ? t('moveParentDone', { done: t('done'), story: t('story') })
-          : t('moveEpicDone', { done: t('done'), epic: t('epic'), story: t('story') });
-      case 'task_completed':
-        return t('moveTaskDone', { task: t('task'), done: t('done') });
-      case 'changed':
-        return t('moveConflict');
-      default:
-        return t('moveFailed');
     }
   }
 
@@ -1216,7 +1170,7 @@
     parentFinished={epic !== undefined && (epic.completed_at !== null || epic.canceled_at !== null)}
     onComplete={canWrite ? (target) => void setStoryCompletion(target, 'complete') : undefined}
     onReopen={canWrite ? (target) => void setStoryCompletion(target, 'reopen') : undefined}
-    onEdit={(target, trigger) => storyDialog?.show(trigger, target.id)}
+    href={`${storyHrefBase}${encodeURIComponent(story.id)}`}
     row={taskRow}
     canMoveUp={place !== undefined && place.index > 0}
     canMoveDown={place !== undefined && place.index < place.count - 1}
@@ -1339,7 +1293,7 @@
 
   {#snippet treeView()}
     <!-- 引き出しの前後のボタンの順は、木に今見えているタスクの行（畳んだ枝の中と、絞り込みで外れた行を除く） -->
-    <div class="tree" aria-busy={reloading} {@attach trackTaskOrder}>
+    <div class="tree" aria-busy={reloading} {@attach trackTaskOrder} {@attach trackStoryOrder}>
       {#each epics as epic, epicIndex (epic.id)}
         {@const points = epicPoints(epic)}
         <TreeEpic
@@ -1428,7 +1382,7 @@
     </div>
   {/snippet}
 
-  <!-- エピックとストーリーのダイアログは、閉じたワークスペースでも読み取り専用で開く -->
+  <!-- エピックとストーリーのダイアログは作るだけ（開く口は書き込めるときだけ）。ストーリーを直すのは、題から開く引き出し（`?story=`。+layout.svelte） -->
   <EpicDialog
     bind:this={epicDialog}
     slug={page.params.slug ?? ''}
@@ -1444,12 +1398,10 @@
     bind:this={storyDialog}
     slug={page.params.slug ?? ''}
     workspaceId={workspace.id}
-    {canWrite}
     categories={data.definitions?.categories ?? []}
     categoriesFailed={data.definitions === null}
     onsaved={(createdId) => void saved('story', createdId)}
     announceCreated={!filtering}
-    ongone={() => void rowGone()}
   />
   {#if canWrite}
     <TaskCreateDialog

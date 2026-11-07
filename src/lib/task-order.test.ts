@@ -1,6 +1,22 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { adjacentTaskIds, provideTaskOrder, releaseTaskOrder, taskOrder } from './drawer.svelte.ts';
-import { stepFocusTarget, stepOfKey, trackTaskOrder, visibleTaskIds, type StepKeyEvent } from './task-order.ts';
+import {
+  adjacentTaskIds,
+  provideStoryOrder,
+  provideTaskOrder,
+  releaseStoryOrder,
+  releaseTaskOrder,
+  storyOrder,
+  taskOrder,
+} from './drawer.svelte.ts';
+import {
+  stepFocusTarget,
+  stepOfKey,
+  trackStoryOrder,
+  trackTaskOrder,
+  visibleStoryIds,
+  visibleTaskIds,
+  type StepKeyEvent,
+} from './task-order.ts';
 
 type FakeRow = { id: string | null; hidden?: boolean };
 
@@ -323,5 +339,83 @@ describe('持ち主つきの順', () => {
     expect([...taskOrder.ids]).toEqual(['b']);
     releaseTaskOrder(second);
     expect([...taskOrder.ids]).toEqual([]);
+  });
+});
+
+// data-story-id を持つ要素の代わり
+function fakeStoryRoot(rows: readonly FakeRow[]) {
+  const elements = rows.map((row) => ({
+    getAttribute: (name: string) => (name === 'data-story-id' ? row.id : null),
+    closest: (selector: string) => (selector === '[hidden]' && row.hidden === true ? {} : null),
+  }));
+  return { querySelectorAll: () => elements };
+}
+
+function clearStoryOrder(): void {
+  const owner = Symbol('clear');
+  provideStoryOrder(owner, []);
+  releaseStoryOrder(owner);
+}
+
+describe('visibleStoryIds', () => {
+  test('描かれた順に、見えているストーリーの行の ID を返し、畳んだ枝の行と重なりは数えない', () => {
+    const root = fakeStoryRoot([{ id: 's1' }, { id: 's2', hidden: true }, { id: 's3' }, { id: 's1' }, { id: null }]);
+    expect(visibleStoryIds(root as unknown as ParentNode)).toEqual(['s1', 's3']);
+  });
+});
+
+describe('trackStoryOrder', () => {
+  const callbacks: (() => void)[] = [];
+  let frames: (() => void)[] = [];
+
+  class FakeObserver {
+    disconnect = vi.fn();
+    constructor(callback: () => void) {
+      callbacks.push(callback);
+    }
+    observe() {}
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    callbacks.length = 0;
+    frames = [];
+    clearStoryOrder();
+    clearOrder();
+  });
+
+  function stubBrowser(): void {
+    vi.stubGlobal('MutationObserver', FakeObserver);
+    vi.stubGlobal('requestAnimationFrame', (callback: () => void) => frames.push(callback));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+  }
+
+  test('付いた時点のストーリーの順を、タスクの順とは別に置き、外れたら空へ戻す', () => {
+    stubBrowser();
+    provideTaskOrder(Symbol('tasks'), ['t1']);
+    const cleanup = trackStoryOrder(fakeStoryRoot([{ id: 's1' }, { id: 's2' }]) as unknown as HTMLElement);
+    expect([...storyOrder.ids]).toEqual(['s1', 's2']);
+    expect([...taskOrder.ids]).toEqual(['t1']);
+    cleanup();
+    expect([...storyOrder.ids]).toEqual([]);
+    expect([...taskOrder.ids]).toEqual(['t1']);
+  });
+
+  test('行の出入りと畳む／開くを見て、次のフレームで置き直す', () => {
+    stubBrowser();
+    const rows = { current: fakeStoryRoot([{ id: 's1' }, { id: 's2' }]) };
+    const root = { querySelectorAll: () => rows.current.querySelectorAll() };
+    trackStoryOrder(root as unknown as HTMLElement);
+    expect([...storyOrder.ids]).toEqual(['s1', 's2']);
+    rows.current = fakeStoryRoot([{ id: 's1' }, { id: 's2', hidden: true }, { id: 's3' }]);
+    callbacks[0]?.();
+    frames.splice(0).forEach((frame) => frame());
+    expect([...storyOrder.ids]).toEqual(['s1', 's3']);
+  });
+});
+
+describe('adjacentTaskIds（ストーリーの順でも使う）', () => {
+  test('ストーリーの順の中の前後を返す', () => {
+    expect(adjacentTaskIds(['s1', 's2', 's3'], 's2')).toEqual({ prev: 's1', next: 's3' });
   });
 });
