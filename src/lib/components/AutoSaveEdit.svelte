@@ -82,11 +82,12 @@
   let pressedInside = false;
 
   const saving = $derived(saveState === 'saving');
-  const changed = $derived(normalize(draft) !== normalize(value) || attachmentIds.length > 0);
+  // 破棄された後（onDestroy、送り終えた後）にも読むので、$derived にしない
+  const hasChanges = () => normalize(draft) !== normalize(value) || attachmentIds.length > 0;
 
   $effect(() => {
     // 送れる文は閉じても送るので数えない。送れない文（検査に落ちる、失敗した）と、上げている途中の添付ファイルは、確かめる
-    ondirty?.(editing && (((error !== null || problem(draft) !== null) && changed) || uploading));
+    ondirty?.(editing && (((error !== null || problem(draft) !== null) && hasChanges()) || uploading));
   });
   // 部品が外れたら（欄が読み取り専用に替わったなど）、書きかけは無くなる
   $effect(() => () => ondirty?.(false));
@@ -102,7 +103,7 @@
   onDestroy(() => {
     destroyed = true;
     clearTimer();
-    if (editing && !sending && error === null && !uploading && changed && problem(draft) === null) {
+    if (editing && !sending && error === null && !uploading && hasChanges() && problem(draft) === null) {
       sendAfterClose(draft, attachmentIds);
     }
   });
@@ -146,7 +147,7 @@
   // 送る。送っている間に書いた分は、送り終えてから最後の値だけ送る。失敗したら書きかけを残す
   async function flush(): Promise<void> {
     clearTimer();
-    if (sending || destroyed || !editing || uploading || !changed) return;
+    if (sending || destroyed || !editing || uploading || !hasChanges()) return;
     const found = problem(draft);
     if (found !== null) {
       error = found;
@@ -218,7 +219,7 @@
     if (!editing) return;
     if (error === null) await flush();
     if (destroyed || !editing) return;
-    if (error === null && !uploading && !changed && !sending) await finish(false);
+    if (error === null && !uploading && !hasChanges() && !sending) await finish(false);
   }
 
   // 保存した値に戻す
@@ -239,7 +240,7 @@
     }
     if (event.key === 'Escape') {
       // まだ保存していない書きかけは、保存した値に戻す。引き出しは閉じない
-      if (changed || error !== null) {
+      if (hasChanges() || error !== null) {
         event.preventDefault();
         event.stopPropagation();
         revert();
@@ -255,7 +256,7 @@
     if (event.key === 'Enter' && !multiline) {
       event.preventDefault();
       if (error === null) await flush();
-      if (error === null && !changed) await finish(true);
+      if (error === null && !hasChanges()) await finish(true);
     }
   }
 
