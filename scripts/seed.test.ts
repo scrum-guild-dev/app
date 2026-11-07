@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { generateKeyBetween } from 'fractional-indexing';
 import { PRIVACY_VERSION, TERMS_VERSION } from '../src/lib/legal/versions.ts';
 import { SEED_PASSWORD_LOGINS } from '../seed/passwords.ts';
 import { SEED_OPERATOR_LOGIN_ID, SEED_SESSIONS } from '../seed/sessions.ts';
@@ -196,6 +197,46 @@ describe('pnpm db:seed', () => {
       );
       assert.equal(check.status, 0, check.stderr);
       assert.deepEqual((JSON.parse(check.stdout) as { results: unknown[] }[])[0].results, [], '親の無い行が無い');
+
+      // 位置の値は、アプリが末尾に足すときに generateKeyBetween へそのまま渡す。受け付けない値が1つでもあると、
+      // その並びに足す操作が 500 になる（#881）。D1 は UNION を数本までしか受け付けないので、列ごとの JSON を1行に並べる
+      const positionColumns = [
+        ['board_columns', 'position'],
+        ['detail_fields', 'position'],
+        ['categories', 'position'],
+        ['repositories', 'position'],
+        ['epics', 'position'],
+        ['stories', 'position'],
+        ['tasks', 'position'],
+        ['tasks', 'column_position'],
+        ['wiki_pages', 'position'],
+      ] as const;
+      const positionQuery = `SELECT ${positionColumns
+        .map(
+          ([table, column]) =>
+            `(SELECT json_group_array(json_object('id', id, 'value', ${column})) FROM ${table} WHERE ${column} IS NOT NULL) AS "${table}.${column}"`,
+        )
+        .join(', ')}`;
+      const positions = spawnSync(
+        wrangler,
+        ['d1', 'execute', 'DB', '--local', '--persist-to', persistTo, '--json', '--command', positionQuery],
+        { cwd: root, env, encoding: 'utf8' },
+      );
+      assert.equal(positions.status, 0, positions.stderr || positions.stdout);
+      const [positionRow] = (JSON.parse(positions.stdout) as { results: Record<string, string>[] }[])[0].results;
+      const positionRows = Object.entries(positionRow!).flatMap(([col, json]) =>
+        (JSON.parse(json) as { id: string; value: string }[]).map((row) => ({ col, ...row })),
+      );
+      assert.ok(positionRows.length > 0, '位置の値を引けている');
+      const invalid = positionRows.filter(({ value }) => {
+        try {
+          generateKeyBetween(value, null);
+          return false;
+        } catch {
+          return true;
+        }
+      });
+      assert.deepEqual(invalid, [], 'fractional-indexing が受け付けない位置の値が無い');
     } finally {
       rmSync(persistTo, { recursive: true, force: true });
     }
