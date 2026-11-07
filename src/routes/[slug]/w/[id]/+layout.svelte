@@ -152,13 +152,19 @@
   // 外れる前に見えていた前と次を覚えておく（開いたストーリーごと）。最初から外れていたストーリーは、順が無いので前後のボタンを出さない
   let rememberedAdjacent = $state<{ id: string; value: { prev: string | null; next: string | null } } | null>(null);
   $effect(() => {
-    if (storyId !== null && storyListedAdjacent !== null)
-      rememberedAdjacent = { id: storyId, value: storyListedAdjacent };
+    if (storyId === null) rememberedAdjacent = null;
+    else if (storyListedAdjacent !== null) rememberedAdjacent = { id: storyId, value: storyListedAdjacent };
   });
-  const storyAdjacent = $derived(
-    storyListedAdjacent ??
-      (rememberedAdjacent !== null && rememberedAdjacent.id === storyId ? rememberedAdjacent.value : null),
-  );
+  // 覚えた前後は、今の順に残っているものだけを使う（絞り込みを替えて木から消えた先へは移さない）
+  const storyAdjacent = $derived.by(() => {
+    if (storyListedAdjacent !== null) return storyListedAdjacent;
+    if (rememberedAdjacent === null || rememberedAdjacent.id !== storyId) return null;
+    const { prev, next } = rememberedAdjacent.value;
+    return {
+      prev: prev !== null && storyOrder.ids.includes(prev) ? prev : null,
+      next: next !== null && storyOrder.ids.includes(next) ? next : null,
+    };
+  });
   // 期日の印の今日と週の始まり、親に選べるエピック。バックログの画面が読んだ木から取る（完了の状態は引き出しが story-get から読む）
   const storyTree = $derived(storyTreeOf(page.data));
   const storyClock = $derived(storyTree === null ? null : { today: storyTree.today, weekStart: storyTree.week_start });
@@ -328,6 +334,7 @@
         {canWrite}
         clock={storyClock}
         parents={storyParents}
+        reloadKey={storyTree}
         onclose={() => void withoutStory()}
         onchanged={() => invalidate('app:backlog-tree')}
         onstale={() => void invalidate('app:workspace')}

@@ -87,6 +87,7 @@
     canWrite,
     clock,
     parents,
+    reloadKey,
     onclose,
     onchanged,
     onstale,
@@ -107,6 +108,8 @@
     clock: { today: string; weekStart: number } | null;
     // 親に選べるエピック（完了も中止もしていないもの）。無ければ（木が無い）親を移すを出さない
     parents: readonly { id: string; title: string }[] | null;
+    // 木が読み直されると替わる値（画面が木から渡す）。替わったら完了の状態を読み直す（木の行でタスクを完了にした、足したなどに追従する）
+    reloadKey?: unknown;
     // 閉じる。画面の枠が `?story=` を外し、フォーカスを行へ戻す
     onclose: () => void;
     // 欄を保存した、完了にした、親を移した。画面が木だけを読み直す。読み直しが終わるまで待てる値を返してよい
@@ -193,6 +196,7 @@
   // ストーリーが消えていた。保存の続きを送らない
   let storyGone = false;
   let loadVersion = 0;
+  let readVersion = 0;
 
   // 部品が外れた後の応答で、状態を触らない
   let alive = true;
@@ -325,6 +329,7 @@
     const wantedStepFocus = stepFocus;
     stepFocus = null;
     const mine = ++loadVersion;
+    readVersion += 1;
     loadState = 'loading';
     const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: openedId }, { slug });
     if (!alive || mine !== loadVersion) return;
@@ -366,6 +371,15 @@
 
   void load();
 
+  // 木が読み直されたら、完了の状態を読み直す。最初の値では読まない（load が読む）
+  let seenReloadKey = untrack(() => reloadKey);
+  $effect(() => {
+    const key = reloadKey;
+    if (key === seenReloadKey) return;
+    seenReloadKey = key;
+    if (untrack(() => loadState) === 'ready') void refreshFacts();
+  });
+
   // ストーリーが消えていた（別の人が削除した）。閉じて、木を読み直す
   function gone(): void {
     leaving = true;
@@ -375,17 +389,20 @@
   }
 
   // 今の値を読み直す。読めなければ今の表示のまま（null）
+  // 読み直しは、あとから出した読み取りの応答だけを使う（readVersion。古い応答が新しい完了の状態を戻さない）
   async function refresh(): Promise<StoryDetail | null> {
+    const mine = ++readVersion;
     const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: openedId }, { slug });
     if (!result.ok) return null;
-    if (alive) applyRead(result.data);
+    if (alive && mine === readVersion) applyRead(result.data);
     return result.data.story;
   }
 
   // 完了の状態だけを読み直す（書きかけの欄や、保存で合わせた欄は替えない）。保存、完了、取り消しの後に帯を更新する。読めなければ今の表示のまま
   async function refreshFacts(): Promise<void> {
+    const mine = ++readVersion;
     const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: openedId }, { slug });
-    if (!result.ok || !alive) return;
+    if (!result.ok || !alive || mine !== readVersion) return;
     facts = {
       completedAt: result.data.completed_at,
       openTasks: result.data.open_task_count,
@@ -523,7 +540,6 @@
       }
       if (!inline || !alive) showToast(t('taskSaved'), 'check');
       void onchanged();
-      void refreshFacts();
       return null;
     }
     // 選んだ区分が削除されていた（ストーリーはある）。一覧を読み直して、選び直してもらう
@@ -821,7 +837,14 @@
             : t('storyReopened', { story: t('story'), done: t('done') }),
           'check',
         );
-        // 木と、引き出しの完了の状態を読み直す。閉じた後に返った応答も、木は読み直す
+        // 通った結果を先に帯へ入れ、木と完了の状態を読み直す（読み直しが失敗しても、通った結果が帯に残る）。閉じた後に返った応答も、木は読み直す
+        if (alive && facts !== null) {
+          facts = {
+            ...facts,
+            completedAt:
+              action === 'complete' ? ((result.data as { completed_at?: string }).completed_at ?? null) : null,
+          };
+        }
         await Promise.all([onchanged(), refreshFacts()]);
       } else if (result.status === 401) {
         onstale();
