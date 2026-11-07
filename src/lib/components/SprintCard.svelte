@@ -82,8 +82,8 @@
               ? t('moveColumnComplete', { done: t('done'), column, complete: t('complete') })
               : t('moveColumnNext', { column }),
             icon: 'right',
-            // 完了にする項目は、完了か戻しを送っている間は完了の丸と同じく押せない
-            disabled: edges.next || (edges.completes && pending),
+            // 完了か戻しを送っている間も選べる。画面が捨てて理由を読み上げる（Alt と → と同じ。refusedWhileBusy）
+            disabled: edges.next,
             onselect: () => onmove(task, 'right'),
           },
         ],

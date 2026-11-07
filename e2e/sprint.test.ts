@@ -519,7 +519,7 @@ test('カードの動かし方の案内は「⋯」のメニューを指す', as
   await signIn(context, baseURL, 'member');
   await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
   await page.goto(`${AOBA_TEAM}/sprint`);
-  await expect(page.locator('#sprint-board-key-hint')).toContainText('カードの右下の「⋯」のメニューでも同じです。');
+  await expect(page.locator('#sprint-board-key-hint')).toContainText('カードの「⋯」のメニューでも同じです。');
   await expect(page.locator('#sprint-board-key-hint')).not.toContainText('カードの下のボタン');
 });
 
