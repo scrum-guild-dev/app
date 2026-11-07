@@ -49,7 +49,7 @@
 
 ### Workers Builds の接続
 
-Workers & Pages の「Create application」→「Continue with GitHub」で、リポジトリ `scrum-guild-dev/app` を選び、Project name を `scrum-guild`（`wrangler.jsonc` の `name` と同じ）にして作る。Worker が既にあるときは、その Worker の Settings の Builds でつなぐ。GitHub の Cloudflare のアプリには、このリポジトリだけを許可する。
+Workers & Pages の「Create application」→「Continue with GitHub」で、リポジトリ `scrum-guild-dev/app` を選び、Project name を `scrum-guild`（`wrangler.jsonc` の `name` と同じ）にして作る。Worker が既にあるときは、その Worker の Settings の Builds でつなぐ。GitHub の Cloudflare のアプリには、このリポジトリと紹介サイトのリポジトリ `scrum-guild-dev/website` だけを許可する。紹介サイトの Worker `scrum-guild-website` の Builds の設定は、`scrum-guild-dev/website` の README の「デプロイ」に書く。
 
 2026-11-03 に個人所有の `ucan-lab/scrum-guild` から Organization の `scrum-guild-dev/app` へ移管した。移管後は、GitHub の新しい Organization で Cloudflare のアプリの許可と、既存の本番・見本の両 Worker の Builds の接続先を確認する。Worker、D1、R2、公開 URL は移管で作り直さない。GitHub のリポジトリの移管だけで Builds の再接続が済んだとは扱わない。Cloudflare 側の GitHub 接続フローから新しい Organization を認可する。GitHub の App のページから直接インストールしただけでは、Cloudflare の接続先として登録されない場合がある。
 
@@ -89,6 +89,7 @@ Workers Builds が使えるのは、Builds が自分で作ったトークンだ�
 | Account（ucan-lab のアカウントだけ） | Workers Scripts: Edit、D1: Edit、Account Settings: Read |
 | User | User Details: Read、Memberships: Read |
 
+- 紹介サイトの Worker `scrum-guild-website` は、このトークンを使わず、専用の `scrum-guild-website build token` を使う。権限は Workers Scripts: Edit、Account Settings: Read、User Details: Read、Memberships: Read の4つで、D1 の権限を持たない。2026-11-07 に Retry build でデプロイが通ることを確かめた。Workers Scripts: Edit はアカウントの全 Worker に効くので、紹介サイトの依存が乗っ取られると、本番の Worker のコードは差し替えられる
 - 作られたときは、Workers AI、Queues、Containers、Secrets Store、R2、KV、AI Gateway などの編集と、全アカウントの全ゾーンの Email Routing Rules、Workers Routes、SSL and Certificates の編集まで、30 の権限を持っていた
 - マイグレーション（`d1 time-travel info`、`d1 migrations apply`）は D1: Edit で動く見込みで、最初のマイグレーションのデプロイで確かめる
 - 機能を足して権限が要るようになったら（Queues など）、そのときに足す。R2 の添付ファイルは権限を足さずにデプロイする見込みで、扱いは上の「R2」
