@@ -132,8 +132,9 @@ test('順は開いた画面の見えている行。絞り込みで外れた行�
   await createWorkspace(page, '飛ばすワークスペース');
   await createStory(page, '畳む親');
   for (const title of ['枝の一', '枝の二']) {
-    await page.getByRole('button', { name: /を足す: 畳む親$/ }).click();
+    await page.getByRole('button', { name: '起票', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '起票' });
+    await dialog.getByLabel('親のストーリー').selectOption({ label: '畳む親' });
     await dialog.getByLabel('タイトル').fill(title);
     await dialog.getByRole('button', { name: '起票' }).click();
     await expect(dialog).toBeHidden();

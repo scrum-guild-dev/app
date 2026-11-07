@@ -181,8 +181,9 @@ test.describe('リーダー（あおば開発のミナト）', () => {
     await expect(story.locator('.tree-row .chip')).toHaveText('区分：保守');
 
     // 一覧が1つだけなら、リポジトリはそれを選んだ状態で開く。親を選ぶと区分の欄は引き継ぎの表示になる
-    await story.getByRole('button', { name: /タスクを足す/ }).click();
+    await page.getByRole('button', { name: '起票', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '起票' });
+    await dialog.getByLabel('親のストーリー').selectOption({ label: 'ポイントを使える' });
     await expect(
       dialog.getByRole('radiogroup', { name: 'リポジトリ' }).getByRole('radio', { name: 'point-api' }),
     ).toBeChecked();

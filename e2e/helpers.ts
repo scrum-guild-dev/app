@@ -808,3 +808,21 @@ export function waitForResponses(page: Page, path: string, count = 1): Promise<R
   void pending.catch(() => {});
   return pending;
 }
+
+// 行の「⋯」（RowMenu）。バックログの行（タスク、ストーリー、エピック）の、完了の丸のほかの操作は、このメニューから選ぶ。
+// メニューは閉じている間 hidden なので、閉じたまま属性を確かめるときは includeHidden で引く（rowMenuItem）
+export function rowMenuToggle(scope: Page | Locator, title: string): Locator {
+  return scope.getByRole('button', { name: `操作: ${title}`, exact: true });
+}
+
+export function rowMenuItem(scope: Page | Locator, title: string, label: string): Locator {
+  return scope
+    .getByRole('menu', { name: `操作: ${title}`, exact: true, includeHidden: true })
+    .getByRole('menuitem', { name: label, exact: true, includeHidden: true });
+}
+
+// 「⋯」を開いて項目を選ぶ。項目を選ぶとメニューは閉じ、フォーカスは「⋯」へ戻る
+export async function chooseRowAction(scope: Page | Locator, title: string, label: string): Promise<void> {
+  await rowMenuToggle(scope, title).click();
+  await rowMenuItem(scope, title, label).click();
+}

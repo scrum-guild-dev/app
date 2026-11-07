@@ -521,8 +521,6 @@ export const dictionary = defineDictionary({
 
   // バックログの木（ストーリーの行、期日の印）
   storyCreate: '{story}を作る',
-  // 木の行の「＋タスク」の読み上げの名前。同じ名前のボタンが並ぶので、どのストーリーかを添える
-  storyAddTaskLabel: '{task}を足す: {title}',
   treeRatio: '{done} {value} / {all} pt',
   treeRatioTitle: '{done} / 全体',
   storyFolded: '{done} {count} 件を折りたたんでいます',
@@ -574,6 +572,9 @@ export const dictionary = defineDictionary({
   // 親なしの段が空のとき、行をつかんでいる間だけ出す落とし先
   dropSlotTask: '親なしの{task}へ移す',
   dropSlotStory: '親なしの{story}へ移す',
+  // 行の「⋯」のボタンとメニューの名前。同じボタンが並ぶので、どの行かを添える
+  rowMenuLabel: '操作: {title}',
+  rowMenuTitle: '操作',
   moveUp: '上へ',
   moveDown: '下へ',
   // 同じ名前のボタンが並ぶので、どの行かを添える
@@ -768,14 +769,11 @@ export const dictionary = defineDictionary({
   moveAnnouncedUnderEpic: '「{title}」を{epic}「{epicTitle}」の{story}「{parent}」の末尾へ移しました',
 
   // ストーリーの完了と取り消し。{title} はストーリーの題。同じ名前のボタンが並ぶので、読み上げの名前に題を添える
-  storyCompleteLabel: '{complete}: {title}',
   // 配下に未完了のタスクが残っているあいだ、完了の操作の横に出す
   storyRemaining: '残り {count} 件の{task}',
-  // 押せない理由の全文。見えない文字で置き、完了の操作の aria-describedby から指す
-  storyRemainingNote: '未完了の{task}が残っているあいだは{done}にできません',
   // 親のエピックが完了か中止しているとき、「取り消す」の横に出す
   storyReopenBlocked: '{done}か中止した{epic}の下の{story}は取り消せません',
-  // 親のエピックが完了か中止しているとき、「完了にする」の横に出す（完了にすると取り消せなくなるため、断る）
+  // 親のエピックが完了か中止しているとき、「完了にする」（メニューの項目）の横に出す（完了にすると取り消せなくなるため、断る）
   storyCompleteBlocked: '{done}か中止した{epic}の下の{story}は{done}にできません',
   storyReopen: '取り消す',
   storyReopenLabel: '{done}を取り消す: {title}',
