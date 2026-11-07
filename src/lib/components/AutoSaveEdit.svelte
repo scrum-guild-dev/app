@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick, type Snippet } from 'svelte';
   import { t } from '../vocabulary.svelte.ts';
+  import { showToast } from '../toast.svelte.ts';
   import Icon from './Icon.svelte';
   import MarkdownEditor from './MarkdownEditor.svelte';
 
@@ -77,12 +78,15 @@
   // 送っている最中か（送っている間に書いた分は、送り終えてから最後の値だけ送る）
   let sending = false;
   let destroyed = false;
+  // 部品の中を押している最中か（押した先がフォーカスを受けないとき、focusout の relatedTarget が空になる）
+  let pressedInside = false;
 
   const saving = $derived(saveState === 'saving');
   const changed = $derived(normalize(draft) !== normalize(value) || attachmentIds.length > 0);
 
   $effect(() => {
-    ondirty?.(editing && ((error !== null && changed) || uploading));
+    // 送れる文は閉じても送るので数えない。送れない文（検査に落ちる、失敗した）と、上げている途中の添付ファイルは、確かめる
+    ondirty?.(editing && (((error !== null || problem(draft) !== null) && changed) || uploading));
   });
   // 部品が外れたら（欄が読み取り専用に替わったなど）、書きかけは無くなる
   $effect(() => () => ondirty?.(false));
@@ -94,13 +98,23 @@
 
   // 部品が外れた（引き出しを閉じた、前後のタスクへ移った）ときに、まだ送っていない文があれば待たずに送る。
   // 結果は save の側が（画面が残っていなければトーストで）知らせる
+  // 送っている最中に外れたときは、送り終えた後の flush が、書き足された分を最後に送る
   onDestroy(() => {
     destroyed = true;
     clearTimer();
     if (editing && !sending && error === null && !uploading && changed && problem(draft) === null) {
-      void save(draft, attachmentIds);
+      sendAfterClose(draft, attachmentIds);
     }
   });
+
+  // 外れた後の送信。入力欄はもう無いので、失敗は書いた分が残っていると言わず、トーストで知らせる
+  function sendAfterClose(raw: string, ids: string[]): void {
+    void save(raw, ids)
+      .then((result) => {
+        if (result !== null) showToast(result, 'alert');
+      })
+      .catch(() => showToast(t('taskSaveFailed'), 'alert'));
+  }
 
   async function begin(event: Event): Promise<void> {
     if (editing) return;
@@ -122,7 +136,8 @@
     clearTimer();
     editing = false;
     error = null;
-    saveState = 'idle';
+    // 保存できた印は、読む形に戻った後も残す（次に書き始めたときに消す）
+    if (saveState !== 'saved') saveState = 'idle';
     if (!focus) return;
     await tick();
     trigger?.focus();
@@ -146,14 +161,26 @@
       for (;;) {
         sent = draft;
         result = await save(sent, attachmentIds);
-        if (result !== null || destroyed || normalize(draft) === normalize(sent)) break;
+        if (result !== null) break;
+        // 保存できた添付ファイルは、続けて送るときに送り直さない
+        attachmentIds = [];
+        if (destroyed || normalize(draft) === normalize(sent)) break;
         // 送っている間に書き足された。足された文が検査を通るときだけ、続けて送る
         if (problem(draft) !== null) break;
       }
+    } catch {
+      sent = draft;
+      result = t('taskSaveFailed');
     } finally {
       sending = false;
     }
-    if (destroyed) return;
+    if (destroyed) {
+      // 送っている間に外れた。書き足された分があり、検査を通るなら、最後に送る
+      if (result === null && normalize(draft) !== normalize(sent) && problem(draft) === null) {
+        sendAfterClose(draft, []);
+      }
+      return;
+    }
     if (result !== null) {
       error = result;
       saveState = 'failed';
@@ -182,6 +209,12 @@
   async function onfocusout(event: FocusEvent): Promise<void> {
     const next = event.relatedTarget;
     if (next instanceof Node && (event.currentTarget as HTMLElement).contains(next)) return;
+    // 中を押してフォーカスが行き先なしになった（ラベル、ヒント、ドロップ領域。Safari のボタン）か、別の窓へ移った
+    // （ファイルを選ぶ OS のダイアログを含む）ときは、離れたと数えない
+    if (next === null && (pressedInside || !document.hasFocus())) {
+      pressedInside = false;
+      return;
+    }
     if (!editing) return;
     if (error === null) await flush();
     if (destroyed || !editing) return;
@@ -242,12 +275,25 @@
           ? t('taskSaveFailed')
           : '',
   );
+  // 読み上げの領域に出すのは、保存しています／保存しました。失敗は理由を role="alert" が読むので、二重にしない
+  const liveText = $derived(saveState === 'failed' ? '' : statusText);
 </script>
 
 <div class="edit-view" hidden={editing}>{@render view(begin)}</div>
 {#if editing}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <div class="edit-form" role="group" aria-label={label} {onfocusout} onkeydown={multiline ? onkeydown : undefined}>
+  <div
+    class="edit-form"
+    role="group"
+    aria-label={label}
+    {onfocusout}
+    onpointerdown={() => {
+      // フォーカスの移りは押した直後の同じ流れで起きるので、そのときだけ数える
+      pressedInside = true;
+      setTimeout(() => (pressedInside = false), 0);
+    }}
+    onkeydown={multiline ? onkeydown : undefined}
+  >
     <div class="field" class:is-invalid={error !== null}>
       <div class="field-head">
         <label class="field-label" class:visually-hidden={labelHidden} for={inputId}>{label}</label>
@@ -308,6 +354,10 @@
         >
       {/if}
     </div>
-    <span class="visually-hidden" role="status">{statusText}</span>
   </div>
+{/if}
+<!-- 保存の状態の読み上げ。読む形に戻った後も、保存できたことを残す -->
+<span class="visually-hidden" role="status">{liveText}</span>
+{#if !editing && saveState === 'saved'}
+  <span class="save-state is-saved" aria-hidden="true"><Icon name="check" />{statusText}</span>
 {/if}

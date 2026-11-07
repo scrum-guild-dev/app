@@ -2301,7 +2301,7 @@ export const dictionary = defineDictionary({
   fieldValueWriteLabel: '{field}を書く',
   fieldValueRewriteLabel: '{field}を書き直す',
   fieldValueChanged:
-    'ほかの人が先にこの欄を直しました。最新の内容を読み直しました。「取り消し」で最新の内容を見られます。もう一度保存すると、書いた内容で上書きします。',
+    'ほかの人が先にこの欄を直しました。最新の内容を読み直しました。書いた内容は欄に残してあります。続けて書くと、書いた内容で上書きします。',
   fieldValueRefreshFailed:
     'ほかの人が先にこの欄を直しましたが、最新の内容を読み直せませんでした。しばらくしてから、もう一度試してください。',
   fieldValueGone: 'この欄は削除されています。画面を読み直します',

@@ -645,7 +645,8 @@
     } else {
       message = result.status === 400 ? t('taskBadRequest') : t('taskSaveFailed');
     }
-    if (!alive) showToast(message, 'alert');
+    // 自動保存の欄（expected を添える）は、閉じた後の失敗を AutoSaveEdit がトーストで知らせる
+    if (!alive && expected === undefined) showToast(message, 'alert');
     return message;
   }
 
@@ -656,6 +657,8 @@
     const current = latest ?? task;
     // 書き始めてからほかの人が先に同じ欄を直していた。書いた分は欄に残し、今の値を並べて知らせる。次の保存は、今の値を読んだものとして送る
     const stale = staleCurrentOf(details);
+    // 引き出しが閉じた後は、書いた分を残す欄が無い。残してあるとは言わない
+    if (stale !== null && !alive) return t('taskSaveRaced');
     if (stale !== null) {
       const key = (['title', 'link_url', 'body_md'] as const).find((name) => name in stale);
       if (key !== undefined) {
