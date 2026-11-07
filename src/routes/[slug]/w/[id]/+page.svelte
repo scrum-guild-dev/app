@@ -513,6 +513,8 @@
       title: task.title,
       keyboard,
       reload,
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路から task などの問い合わせを外しただけ
+      closeDrawer: (path) => goto(path, { replace: true, reset: false }),
       onstale: () => void invalidateAll(),
       onrestored: async (restoredId, focus) => {
         await reload();

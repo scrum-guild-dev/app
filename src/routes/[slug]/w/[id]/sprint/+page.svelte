@@ -2,7 +2,7 @@
   import { tick } from 'svelte';
   import { useShortcut } from '../../../../../lib/shortcuts.svelte.ts';
   import { ariaKeyshortcuts, NEW_TASK_KEY } from '../../../../../lib/shortcut-keys.ts';
-  import { invalidate, invalidateAll } from '$app/navigation';
+  import { goto, invalidate, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { callOperation, type ApiResult } from '../../../../../lib/api.ts';
@@ -448,6 +448,11 @@
     if (workspace === null || !canWrite) return;
     const workspaceId = workspace.id;
     const reload = async (): Promise<void> => {
+      // 送っている動かしが終わってから読み直す（先に読み直すと、動かしたカードが一時的に元の列に見える）。空の操作を列の末尾に積んで待つ
+      await moves.send(
+        async () => ({ ok: true, data: null }) as const,
+        async () => {},
+      );
       try {
         await invalidate('app:sprint-board');
       } finally {
@@ -462,6 +467,8 @@
       keyboard,
       fromSprint: true,
       reload,
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路から task などの問い合わせを外しただけ
+      closeDrawer: (path) => goto(path, { replace: true, reset: false }),
       onstale: () => void invalidate('app:workspace'),
       // 取り消したタスクはスプリントには戻らずバックログにある。ボードに題のリンクが無いので見出しへ移す
       // （押したボタンにフォーカスがあったときだけ）。トーストは画面をまたいで残るので、バックログの画面に移った後でも効くよう、

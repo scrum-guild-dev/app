@@ -1722,6 +1722,8 @@ export const dictionary = defineDictionary({
   taskDeleted: '{task}「{title}」を削除しました',
   taskDeleteFailed: '削除できませんでした。もう一度試してください。',
   taskDeleteForbidden: '作った人と{leader}だけが削除できます',
+  // 削除や取り消しは通ったが、一覧の読み直しが失敗した
+  taskListReloadFailed: '画面を読み直せませんでした。ページを開き直してください。',
   // 削除の取り消し（task-restore）。削除のトーストの「取り消す」から呼ぶ
   taskRestoreAction: '取り消す',
   taskRestoreActionLabel: '{action}: {title}',

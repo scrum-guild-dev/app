@@ -1710,6 +1710,8 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .row-menu-list .menu-item { display: flex; align-items: center; gap: var(--space-2); }
 .row-menu-list .menu-item .ico { flex: none; color: var(--color-muted); }
 .row-menu-list .menu-item.is-danger { color: var(--color-danger); }
+/* 末尾の危険色の項目（削除）は、ほかの項目と罫線で区切る。先頭にあるときは引かない */
+.row-menu-list li:not(:first-child):has(> .menu-item.is-danger) { margin-top: var(--space-1); padding-top: var(--space-1); border-top: 1px solid var(--color-rule); }
 @media (max-width: 760px), (pointer: coarse) {
   .row-menu-btn { opacity: 1; width: 44px; height: 44px; }
   .chip-btn::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }

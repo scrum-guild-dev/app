@@ -26,6 +26,17 @@ export type RestoreTarget = {
   fromSprint?: boolean;
 };
 
+// 読み直しや、読み直しを含む後始末が失敗しても、捨てた Promise の未処理の reject にしない。失敗は文で知らせる。成功なら true
+export async function settled(run: () => Promise<void>): Promise<boolean> {
+  try {
+    await run();
+    return true;
+  } catch {
+    showToast(t('taskListReloadFailed'), 'alert');
+    return false;
+  }
+}
+
 // 戻したことを知らせる文。外した参照があればそれを添え、ボードから消したときはバックログにあることを添える
 function restoredMessage(target: RestoreTarget, cleared: readonly string[] = []): string {
   if (cleared.length > 0) {
@@ -53,6 +64,11 @@ export function restoreActionOf(target: RestoreTarget): ToastAction {
   };
 }
 
+async function afterRestored(target: RestoreTarget, focused: boolean): Promise<void> {
+  if (target.onrestored === undefined) target.onchanged();
+  else await settled(() => target.onrestored?.(target.taskId, focused) ?? Promise.resolve());
+}
+
 // 通信の失敗と 5xx は一時的なので、「取り消す」付きのトーストで出し直す（403、404、409 は押し直しても変わらないので出し直さない）。
 // 押したボタンにフォーカスがあったときは、出し直したトーストの「取り消す」へ置き直す
 export async function restoreRemoved(target: RestoreTarget, focused = false): Promise<void> {
@@ -64,8 +80,7 @@ export async function restoreRemoved(target: RestoreTarget, focused = false): Pr
   if (result.ok) {
     const cleared = result.data.cleared.map((field) => t(field));
     showToast(restoredMessage(target, cleared), 'check');
-    if (target.onrestored === undefined) target.onchanged();
-    else await target.onrestored(target.taskId, focused);
+    await afterRestored(target, focused);
   } else if (result.status === 401) {
     target.onstale();
   } else if (result.status === 403) {
@@ -84,8 +99,7 @@ export async function restoreRemoved(target: RestoreTarget, focused = false): Pr
     if (reason === 'not_deleted') {
       // 前の要求は書けたが応答だけが落ちて出し直した、または別の画面が先に戻した。戻っているので、成功と同じに扱う
       showToast(restoredMessage(target), 'check');
-      if (target.onrestored === undefined) target.onchanged();
-      else await target.onrestored(target.taskId, focused);
+      await afterRestored(target, focused);
       return;
     }
     showToast(
@@ -129,6 +143,14 @@ export function adjacentRowsOf(taskId: string): AdjacentTasks | null {
   return { prev: ids[index - 1] ?? null, next: ids[index + 1] ?? null };
 }
 
+// 引き出しがこのタスクを開いているとき、消した後に引き出しを閉じる先の URL（`task` を外す。`story` と `epic_id` も外す）。開いていなければ null
+export function urlWithoutOpenTask(href: string, taskId: string): string | null {
+  const url = new URL(href);
+  if (url.searchParams.get('task') !== taskId) return null;
+  for (const key of ['task', 'story', 'epic_id']) url.searchParams.delete(key);
+  return url.pathname + url.search;
+}
+
 export type RemoveFromListArgs = {
   slug: string;
   workspaceId: string;
@@ -136,6 +158,8 @@ export type RemoveFromListArgs = {
   title: string;
   // キーボードで選んだか（click の detail が 0）。真のときだけ、消した直後に「取り消す」へフォーカスを移す
   keyboard: boolean;
+  // 消したタスクを引き出しが開いていたら、閉じる（引き出しは開いたとき一度だけ読むので、消えたタスクが出続けるため）
+  closeDrawer?: (path: string) => Promise<void>;
   // 一覧（木、ボード）を読み直す。読み直しが済むまで待つ
   reload: () => Promise<void>;
   onstale: () => void;
@@ -176,20 +200,23 @@ async function removeOnce(args: RemoveFromListArgs): Promise<void> {
       taskId: args.taskId,
       title: args.title,
       near,
-      onchanged: () => void args.reload(),
+      onchanged: () => void settled(args.reload),
       onstale: args.onstale,
       onrestored: args.onrestored,
       onskipped: args.onskipped,
       fromSprint: args.fromSprint === true,
     });
+    const drawerPath = urlWithoutOpenTask(location.href, args.taskId);
+    if (drawerPath !== null) await settled(() => args.closeDrawer?.(drawerPath) ?? Promise.resolve());
     // キーボードで消したときは、木の読み直しを待つ間に10秒が尽きないよう、数えを止める（フォーカスが外れると数え直す）
     if (args.keyboard) pauseToast(toastId);
-    try {
+    const reloaded = await settled(async () => {
       await args.reload();
       await tick();
-    } catch (error) {
+    });
+    if (!reloaded) {
       if (args.keyboard) resumeToast(toastId);
-      throw error;
+      return;
     }
     if (!args.keyboard) return;
     // 待つ間に別の所へフォーカスを移した人からは奪わない（数えは戻す）
@@ -204,20 +231,20 @@ async function removeOnce(args: RemoveFromListArgs): Promise<void> {
     args.onstale();
   } else if (result.status === 404) {
     showToast(t('taskGone', { task: t('task') }), 'alert');
-    await args.reload();
+    if (!(await settled(args.reload))) return;
     // 行が消えて、キーボードで押した「⋯」のフォーカスが失われる。待つ間に別の所へ移した人からは奪わない
     await tick();
     if (args.keyboard && focusIsFree()) focusPageHeading();
   } else if (result.status === 403) {
     showToast(t('taskDeleteForbidden', { leader: t('leader') }), 'alert');
-    await args.reload();
+    await settled(args.reload);
   } else if (result.status === 409 && result.error?.code === 'workspace_closed') {
     showToast(t('workspaceClosedReadOnly', { workspace: t('workspace') }), 'alert');
     args.onstale();
   } else if (result.status === 409) {
     // 取り込んだタスクは削除できない
     showToast(t('taskImportedNoDelete', { task: t('task'), archive: t('archive') }), 'alert');
-    await args.reload();
+    await settled(args.reload);
   } else {
     showToast(t('taskDeleteFailed'), 'alert');
   }
