@@ -11,6 +11,7 @@
     type TaskOpenMode,
   } from '../../../../../../lib/drawer.svelte.ts';
   import { focusPageHeading } from '../../../../../../lib/focus-heading.ts';
+  import { focusToastAction } from '../../../../../../lib/toast.svelte.ts';
   import { t } from '../../../../../../lib/vocabulary.svelte.ts';
   import type { PageData } from './$types';
 
@@ -58,7 +59,7 @@
     await after();
   }
 
-  async function close(removed = false): Promise<void> {
+  async function close(removed = false, toastId: number | null = null): Promise<void> {
     const id = page.params.taskId ?? '';
     await leave(async () => {
       if (removed) await invalidate('app:backlog-tree');
@@ -66,6 +67,8 @@
       const row = !removed && document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`);
       if (row) row.focus();
       else focusPageHeading();
+      // キーボードで削除したときは、見出しへ移した後に「取り消す」へフォーカスを移す
+      if (toastId !== null) await focusToastAction(toastId);
     });
   }
 
@@ -109,7 +112,7 @@
       onclose={() => void close()}
       onchanged={() => void invalidate('app:backlog-tree')}
       onstale={() => void invalidate('app:workspace')}
-      onremoved={() => void close(true)}
+      onremoved={(toastId) => void close(true, toastId)}
     />
   {/key}
 {/if}

@@ -11,6 +11,10 @@ import { defineOperation } from '../define.ts';
 export const taskRestoreConflictReasons = ['not_deleted', 'parent_completed', 'changed'] as const;
 export type TaskRestoreConflictReason = (typeof taskRestoreConflictReasons)[number];
 
+// 戻すときに外した参照（親、担当、区分、リポジトリ）。画面が、元のとおりには戻らなかったことを知らせるのに使う
+export const taskRestoreClearedFields = ['story', 'assignee', 'category', 'repository'] as const;
+export type TaskRestoreClearedField = (typeof taskRestoreClearedFields)[number];
+
 export function taskRestoreConflictReasonOf(details: unknown): TaskRestoreConflictReason | undefined {
   return conflictReasonOf(details, taskRestoreConflictReasons);
 }
@@ -29,5 +33,5 @@ export const taskRestore = defineOperation({
   permission: 'member',
   workspace: true,
   input: z.object({ workspace_id: idSchema, task_id: idSchema }),
-  output: z.object({ task_id: z.string() }),
+  output: z.object({ task_id: z.string(), cleared: z.array(z.enum(taskRestoreClearedFields)) }),
 });

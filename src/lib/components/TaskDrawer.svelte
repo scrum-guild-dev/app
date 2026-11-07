@@ -41,7 +41,7 @@
   import { formatDateTime } from '../format-datetime.ts';
   import { completedMessage, sprintLabel, sprintPeriod } from '../sprint-label.ts';
   import { historyEntryView } from '../task-history.ts';
-  import { showToast } from '../toast.svelte.ts';
+  import { focusToastAction, showToast, type ToastAction } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Avatar from './Avatar.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
@@ -107,6 +107,8 @@
     onchanged,
     onstale,
     onremoved,
+    onrestored,
+    onskipped,
   }: {
     mode?: TaskOpenMode;
     // 確認を通った後に呼ぶ。既定の保存は呼び出し側が行う。移れなかったとき（新しいタブを開けなかった）は false を返す
@@ -128,8 +130,15 @@
     onchanged: () => void;
     // ワークスペースの状態が変わっていた（閉じた）。画面が枠ごと読み直す
     onstale: () => void;
-    // タスクが消えた（削除した、見つからない）。画面が閉じて、木を読み直す
-    onremoved: () => void;
+    // タスクが消えた（削除した、見つからない）。画面が閉じて、木を読み直す。キーボードで削除したときだけ、消した知らせのトーストの
+    // ID を渡す（画面が、木を読み直してフォーカスを見出しへ移した後に、そのトーストの「取り消す」へフォーカスを移すため。
+    // 消えて閉じたときと、マウスで削除したときは null）
+    onremoved: (toastId: number | null) => void;
+    // 「取り消す」で戻した。画面が木を読み直す。focus が真なら（押したボタンにフォーカスがあったとき）、戻したタスクの題のリンクへ
+    // （無ければ見出しへ）フォーカスを移す。渡さなければ onchanged で読み直すだけ（ページ全体など）
+    onrestored?: (taskId: string, focus: boolean) => Promise<void>;
+    // フォーカスがあるトーストを Esc で閉じた。画面が、消した行の近い所へフォーカスを移す。near は削除を送る前の前後の行（渡さなければ null）
+    onskipped?: (near: { prev: string | null; next: string | null } | null) => void;
   } = $props();
 
   const ids = $props.id();
@@ -492,7 +501,7 @@
     leaving = true;
     taskGone = true;
     showToast(t('taskGone', { task: t('task') }), 'alert');
-    onremoved();
+    onremoved(null);
   }
 
   // 閉じる操作。書きかけがあれば、捨てるかを確かめる
@@ -1353,30 +1362,51 @@
   // 消したことを知らせるトースト。「取り消す」を押すと task-restore を送り、木を読み直す。
   // 引き出しが閉じた後でも押せるよう、props と ID は消した時点の値を取っておく（this の状態は読まない）
   // 削除を送る前に取った値を渡す（props は応答を待つ間に、前後のタスクへ移る、閉じるで変わり、閉じた後は親の今の値を返す）
-  function announceRemoved(target: RestoreTarget): void {
-    showToast(t('taskDeleted', { task: t('task') }), 'check', {
+  function announceRemoved(target: RestoreTarget): number {
+    return showToast(t('taskDeleted', { task: t('task'), title: target.title }), 'check', restoreActionOf(target));
+  }
+
+  // 並んだトーストを読み上げの名前で区別できるよう、ボタンの名前にタイトルを添える。Esc で閉じたときは近い行へフォーカスを移す
+  function restoreActionOf(target: RestoreTarget): ToastAction {
+    return {
       label: t('taskRestoreAction'),
-      run: () => void restoreRemoved(target),
-    });
+      ariaLabel: t('taskRestoreActionLabel', { action: t('taskRestoreAction'), title: target.title }),
+      run: (focused) => void restoreRemoved(target, focused),
+      ...(target.onskipped === undefined ? {} : { onescape: () => target.onskipped?.(target.near) }),
+    };
   }
 
   type RestoreTarget = {
     slug: string;
     workspaceId: string;
     taskId: string;
+    title: string;
+    // 削除を送る前の前後の行（Esc で閉じたときのフォーカスの行き先）
+    near: { prev: string | null; next: string | null } | null;
     onchanged: () => void;
     onstale: () => void;
+    onrestored: ((taskId: string, focus: boolean) => Promise<void>) | undefined;
+    onskipped: ((near: { prev: string | null; next: string | null } | null) => void) | undefined;
   };
 
-  async function restoreRemoved(target: RestoreTarget): Promise<void> {
+  // 通信の失敗と 5xx は一時的なので、「取り消す」付きのトーストで出し直す（403、404、409 は押し直しても変わらないので出し直さない）。
+  // 押したボタンにフォーカスがあったときは、出し直したトーストの「取り消す」へ置き直す
+  async function restoreRemoved(target: RestoreTarget, focused = false): Promise<void> {
     const result = await callOperation(
       taskRestore,
       { workspace_id: target.workspaceId, task_id: target.taskId },
       { slug: target.slug },
     );
     if (result.ok) {
-      showToast(t('taskRestored', { task: t('task') }), 'check');
-      target.onchanged();
+      const cleared = result.data.cleared.map((field) => t(field));
+      showToast(
+        cleared.length > 0
+          ? t('taskRestoredCleared', { task: t('task'), fields: cleared.join('、') })
+          : t('taskRestored', { task: t('task') }),
+        'check',
+      );
+      if (target.onrestored === undefined) target.onchanged();
+      else await target.onrestored(target.taskId, focused);
     } else if (result.status === 401) {
       target.onstale();
     } else if (result.status === 403) {
@@ -1396,18 +1426,32 @@
         'alert',
       );
       target.onchanged();
+    } else if (result.status === 0 || result.status >= 500) {
+      const id = showToast(t('taskRestoreRetry'), 'alert', restoreActionOf(target));
+      if (focused) void focusToastAction(id);
     } else {
       showToast(t('taskRestoreFailed'), 'alert');
     }
   }
 
   // 確認のダイアログは挟まない。消したらトーストの「取り消す」で戻せる
-  async function remove(): Promise<void> {
+  // keyboard は、キーボードで押したか（click の detail が 0）。真のときだけ、消した直後に「取り消す」へフォーカスを移す
+  async function remove(keyboard: boolean): Promise<void> {
     if (task === null || deleting || asking) return;
     deleting = true;
     deleteError = null;
     // 送っている間に前後のタスクへ移っても、取り消しは消したタスクに送る（props は await の後に変わりうる）
-    const removed: RestoreTarget = { slug, workspaceId, taskId, onchanged, onstale };
+    const removed: RestoreTarget = {
+      slug,
+      workspaceId,
+      taskId,
+      title: task.title,
+      near: adjacent ?? null,
+      onchanged,
+      onstale,
+      onrestored,
+      onskipped,
+    };
     try {
       const result = await callOperation(taskDelete, { workspace_id: workspaceId, task_id: taskId }, { slug });
       if (!alive) {
@@ -1425,8 +1469,8 @@
       if (result.ok) {
         // 消えたので、書きかけがあっても確かめずに閉じる
         leaving = true;
-        announceRemoved(removed);
-        onremoved();
+        const toastId = announceRemoved(removed);
+        onremoved(keyboard ? toastId : null);
       } else if (result.status === 401) {
         onstale();
       } else if (result.status === 404) {
@@ -2081,7 +2125,7 @@
             class="btn is-sm is-quiet is-danger"
             type="button"
             aria-disabled={deleting}
-            onclick={() => void remove()}
+            onclick={(event) => void remove(event.detail === 0)}
           >
             <Icon name="trash" />{t('taskDelete', { task: t('task') })}
           </button>

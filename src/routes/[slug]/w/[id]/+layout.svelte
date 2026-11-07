@@ -19,10 +19,12 @@
     openTaskTab,
     setTaskOpenMode,
     taskPageHref,
+    type AdjacentTasks,
     type TaskOpenMode,
   } from '../../../../lib/drawer.svelte.ts';
   import { focusPageHeading } from '../../../../lib/focus-heading.ts';
   import { formatLocalDate } from '../../../../lib/format.ts';
+  import { focusToastAction } from '../../../../lib/toast.svelte.ts';
   import { parentChoicesOf, storyFactsOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import type { LayoutData } from './$types';
@@ -132,11 +134,37 @@
   });
 
   // タスクが消えた（削除した、見つからない）。閉じて、木を読み直し、フォーカスを見出しへ移す（戻る先の行が無いため）
-  async function removed(): Promise<void> {
+  // toastId は、キーボードで削除したときの「取り消す」のトースト。見出しへ移した後に、そのボタンへフォーカスを移す
+  // （10秒で消えるのをキーボードだけの人が取り逃さないため。フォーカスがある間はトーストが消えない）
+  async function removed(toastId: number | null): Promise<void> {
     focusAfterReload = true;
     await withoutTask();
     await invalidate('app:backlog-tree');
     await tick();
+    focusPageHeading();
+    if (toastId !== null) await focusToastAction(toastId);
+  }
+
+  // 「取り消す」で戻した。木を読み直し、押したボタンにフォーカスがあったときは、戻したタスクの題のリンクへ（無ければ見出しへ）移す
+  async function restored(restoredId: string, focus: boolean): Promise<void> {
+    await invalidate('app:backlog-tree');
+    await tick();
+    if (focus) focusFirstRow([restoredId]);
+  }
+
+  // フォーカスがある「取り消す」のトーストを Esc で閉じた。消した行の次の行、無ければ前の行、無ければ見出しへ移す
+  function skipped(near: AdjacentTasks | null): void {
+    void tick().then(() => focusFirstRow([near?.next ?? null, near?.prev ?? null]));
+  }
+
+  // 並べた ID の行（data-task-id を持つ題のリンクか、完了した行の題のボタン）のうち、フォーカスを受けられた最初の行へ。無ければ見出しへ
+  function focusFirstRow(ids: readonly (string | null)[]): void {
+    for (const id of ids) {
+      if (id === null) continue;
+      const row = document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`);
+      row?.focus();
+      if (row !== null && document.activeElement === row) return;
+    }
     focusPageHeading();
   }
 
@@ -236,7 +264,9 @@
         onclose={() => void withoutTask()}
         onchanged={() => void invalidate('app:backlog-tree')}
         onstale={() => void invalidate('app:workspace')}
-        onremoved={() => void removed()}
+        onremoved={(toastId) => void removed(toastId)}
+        onrestored={restored}
+        onskipped={skipped}
       />
     {/key}
   {/if}
