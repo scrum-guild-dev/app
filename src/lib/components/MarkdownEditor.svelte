@@ -300,11 +300,14 @@
     slashAt = Math.min(slashAt, items.length - 1);
   }
 
-  function pickSlash(index: number): void {
+  function pickSlash(key: SlashItem['key'] | undefined): void {
     if (!input || readonly) return closeSlash();
-    // 表示中の候補ではなく、今の本文とカーソルから取り直す（貼り付けやアップロードで本文が動いた後の古い候補で入れない）
+    // 表示中の候補ではなく、今の本文とカーソルから取り直し、押した項目は key で探す（本文が動いた後の古い候補で別の項目を入れない）
     const query = slashQuery(input.value, input.selectionStart, input.selectionEnd);
-    const item = query === null ? undefined : filterSlashItems(query.query, (entry) => t(entry.label))[index];
+    const item =
+      query === null
+        ? undefined
+        : filterSlashItems(query.query, (entry) => t(entry.label)).find((entry) => entry.key === key);
     if (query === null || !item) return closeSlash();
     const edit = slashEdit(query, input.selectionStart, item, input.value.charAt(input.selectionStart));
     applyEdit(edit.start, edit.end, edit.text);
@@ -331,7 +334,7 @@
       // カーソルが「/」の行を離れていたら、小窓を閉じて普通の改行に任せる
       if (input && slashQuery(input.value, input.selectionStart, input.selectionEnd) === null) return closeSlash();
       event.preventDefault();
-      pickSlash(slashAt);
+      pickSlash(slashItems[slashAt]?.key);
     } else if (event.key === 'Escape') {
       // 「/」は文字として残す。引き出しは閉じない
       event.preventDefault();
@@ -441,7 +444,7 @@
           id={optionId(item)}
           aria-selected={index === slashAt}
           onmousedown={(event) => event.preventDefault()}
-          onclick={() => pickSlash(index)}
+          onclick={() => pickSlash(item.key)}
         >
           <span>{t(item.label)}</span><small aria-hidden="true">{item.mark}</small>
         </li>
