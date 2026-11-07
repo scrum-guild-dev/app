@@ -1,7 +1,7 @@
 // ストーリーの引き出し（StoryDrawer）が、画面の枠から受け取る値の組み立て。
 // 引き出しはワークスペースの枠（+layout.svelte）が置くので、バックログの画面が読んだ木（page.data.tree）から、
-// 親に選べるエピックを取り出す。木が無いときは null で、引き出しは親を移すを出さない。
-// 完了の状態は木から取らず、引き出しが story-get から読む。
+// 親に選べるエピックを取り出す。木が無い（別の画面で開いた）ときは null で、引き出しは親を移すを出さない。
+// 完了の状態は木でなく story-get から読む。
 
 type TreeStoryLike = { id: string; completed_at: string | null; open_task_count: number };
 type TreeEpicLike = {
@@ -44,6 +44,19 @@ export type StoryFacts = {
   // 親のエピックが完了か中止している（完了も取り消しも必ず断られる）
   parentFinished: boolean;
 };
+
+// story-get の出力から、完了の帯が使う値を取り出す
+export function storyFactsFrom(data: {
+  completed_at: string | null;
+  open_task_count: number;
+  parent_finished: boolean;
+}): StoryFacts {
+  return {
+    completedAt: data.completed_at ?? null,
+    openTasks: data.open_task_count,
+    parentFinished: data.parent_finished,
+  };
+}
 
 // ストーリーの親に選べるエピック（完了も中止もしていないもの）。木が無いときは null（親を移すを出さない）
 export function parentChoicesOf(tree: StoryTreeLike | null | undefined): { id: string; title: string }[] | null {

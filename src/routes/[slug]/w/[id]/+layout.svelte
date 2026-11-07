@@ -45,8 +45,8 @@
   // ストーリーの引き出し（StoryDrawer）は、URL の `?story=<ID>` が付いている間、同じ形で置く。タスクの引き出しと同時には開かない
   // （行のリンクが、もう一方の問い合わせを外す。両方が付いた URL は、タスクの方だけを開く）。開き方は横か真ん中だけ（ページ全体は無い）。
   // 閉じるときは `story` だけを外し、開いた行の題（data-story-id）へフォーカスを戻す。前後のストーリーへは、バックログが置いた木のストーリーの順（storyOrder）で移る。
-  // 期日の印の今日、親に選べるエピックは、バックログが読んだ木（page.data.tree）から渡す。木が無い画面では、引き出しは親を移すを出さない。
-  // 完了の状態は引き出しが story-get から読むので、木に載っていなくても完了の帯が出る
+  // 期日の印の今日と親に選べるエピックは、バックログが読んだ木（page.data.tree）から渡す。木が無い画面では、引き出しは親を移すを出さない。
+  // 完了の状態は、引き出しが story-get から読む（絞り込みで木から外れたストーリーでも、木の無い画面でも出る）
   let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
   const workspace = $derived(data.workspace);
@@ -147,25 +147,19 @@
   }
 
   // ---- ストーリーの引き出し ----
-  const storyListedAdjacent = $derived(storyId === null ? null : adjacentTaskIds(storyOrder.ids, storyId));
-  // 開いたストーリーが絞り込みから外れた（検索語に当たらない題へ直した）直後も、前後のボタンを残す。
-  // 外れる前に見えていた前と次を覚えておく（開いたストーリーごと）。最初から外れていたストーリーは、順が無いので前後のボタンを出さない
-  let rememberedAdjacent = $state<{ id: string; value: { prev: string | null; next: string | null } } | null>(null);
+  // 絞り込みで木から外れても（検索中に題を直した直後など）前後のボタンが消えないよう、順に載っていた間の前後を覚えておく。
+  // 別のストーリーを開き直したとき（URL から直接開いた、順に無い）は覚えがないので、ボタンを出さない
+  // 覚えた前後は $effect で更新する（$derived の中で書かない。閉じると読み手がいなくなり、$derived は再評価されないため）
+  let remembered = $state.raw<{ id: string; adjacent: { prev: string | null; next: string | null } } | null>(null);
+  const foundAdjacent = $derived(storyId === null ? null : adjacentTaskIds(storyOrder.ids, storyId));
   $effect(() => {
-    if (storyId === null) rememberedAdjacent = null;
-    else if (storyListedAdjacent !== null) rememberedAdjacent = { id: storyId, value: storyListedAdjacent };
+    if (storyId === null) remembered = null;
+    else if (foundAdjacent !== null) remembered = { id: storyId, adjacent: foundAdjacent };
   });
-  // 覚えた前後は、今の順に残っているものだけを使う（絞り込みを替えて木から消えた先へは移さない）
-  const storyAdjacent = $derived.by(() => {
-    if (storyListedAdjacent !== null) return storyListedAdjacent;
-    if (rememberedAdjacent === null || rememberedAdjacent.id !== storyId) return null;
-    const { prev, next } = rememberedAdjacent.value;
-    return {
-      prev: prev !== null && storyOrder.ids.includes(prev) ? prev : null,
-      next: next !== null && storyOrder.ids.includes(next) ? next : null,
-    };
-  });
-  // 期日の印の今日と週の始まり、親に選べるエピック。バックログの画面が読んだ木から取る（完了の状態は引き出しが story-get から読む）
+  const storyAdjacent = $derived(
+    foundAdjacent ?? (storyId !== null && remembered?.id === storyId ? remembered.adjacent : null),
+  );
+  // 期日の印の今日と週の始まり、親に選べるエピック。バックログの画面が読んだ木から取る
   const storyTree = $derived(storyTreeOf(page.data));
   const storyClock = $derived(storyTree === null ? null : { today: storyTree.today, weekStart: storyTree.week_start });
   const storyParents = $derived(parentChoicesOf(storyTree));
@@ -334,7 +328,6 @@
         {canWrite}
         clock={storyClock}
         parents={storyParents}
-        reloadKey={storyTree}
         onclose={() => void withoutStory()}
         onchanged={() => invalidate('app:backlog-tree')}
         onstale={() => void invalidate('app:workspace')}

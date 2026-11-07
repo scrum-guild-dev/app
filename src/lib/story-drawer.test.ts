@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest';
-import { epicFinishedOf, parentChoicesOf, staleCurrentOf, storyTreeOf, type StoryTree } from './story-drawer.ts';
+import {
+  epicFinishedOf,
+  parentChoicesOf,
+  staleCurrentOf,
+  storyFactsFrom,
+  storyTreeOf,
+  type StoryTree,
+} from './story-drawer.ts';
 
 function story(id: string, overrides: Partial<{ completed_at: string | null; open_task_count: number }> = {}) {
   return { id, completed_at: null, open_task_count: 0, ...overrides };
@@ -27,6 +34,19 @@ const tree: StoryTree = {
     ],
   },
 };
+
+describe('storyFactsFrom', () => {
+  test('story-get の出力を、完了の帯の値にする', () => {
+    expect(
+      storyFactsFrom({ completed_at: '2026-11-03T00:00:00.000Z', open_task_count: 0, parent_finished: false }),
+    ).toEqual({ completedAt: '2026-11-03T00:00:00.000Z', openTasks: 0, parentFinished: false });
+    expect(storyFactsFrom({ completed_at: null, open_task_count: 2, parent_finished: true })).toEqual({
+      completedAt: null,
+      openTasks: 2,
+      parentFinished: true,
+    });
+  });
+});
 
 describe('parentChoicesOf', () => {
   test('完了も中止もしていないエピックだけを返す', () => {

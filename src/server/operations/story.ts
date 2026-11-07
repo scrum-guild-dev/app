@@ -110,11 +110,11 @@ function detailOf(row: StoryRow): StoryDetail {
   };
 }
 
-// 削除のボタンと確認のために、呼んだ人が削除できるか（作った人かリーダー。管理者を含む）、まとめて削除できるかと、配下の件数も返す。
-// 完了の帯のために、完了の状態（完了した日時、未完了のタスクの件数、親のエピックの完了か中止）も返す
+// 削除のボタンと確認のために、呼んだ人が削除できるか（作った人かリーダー。管理者を含む）、まとめて削除できるかと、配下の件数も返す
 export const storyGetOperation = implement(storyGet, async ({ db, actor, workspace, input }) => {
   const story = await readStory(db, workspace.workspaceId, input.story_id);
   if (story === undefined) throw new ApiError(404, 'not_found');
+  // 完了の状態。配下の未完了のタスクは、完了にできるかの判定（story-complete）と同じく、削除していないバックログのタスクを数える
   const open = await db.first(
     db.statement((q) =>
       openTasksUnder(q, workspace.workspaceId, story.id)
@@ -124,12 +124,12 @@ export const storyGetOperation = implement(storyGet, async ({ db, actor, workspa
   );
   return {
     story: detailOf(story),
+    ...(await storyDeletion(db, actor, workspace, story)),
     completed_at: story.completed_at,
     open_task_count: Number(open?.count ?? 0),
-    // 削除したエピックは親として数えない（story-complete と同じ）
+    // 削除したエピックは親として数えない（story-complete の判定と同じ）
     parent_finished:
       story.epic_deleted_at === null && (story.epic_completed_at !== null || story.epic_canceled_at !== null),
-    ...(await storyDeletion(db, actor, workspace, story)),
   };
 });
 

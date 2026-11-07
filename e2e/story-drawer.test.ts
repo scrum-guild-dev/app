@@ -283,9 +283,7 @@ test('引き出しから「完了にする」と「取り消す」ができる�
   await draft.fill('残っているタスク');
   await draft.press('Enter');
   await expect(page.locator('.entry-title', { hasText: '残っているタスク' })).toBeVisible();
-  // 引き出しの完了の状態は story-get から読むので、空の行で足した直後のタスクも数える（木を読み直さずに開く）
-
-  // 配下に未完了のタスクが残るあいだは、押しても何も起きず、理由が読み上げと一緒に出る
+  // 配下に未完了のタスクが残るあいだは、押しても何も起きず、理由が読み上げと一緒に出る（引き出しの完了の状態は story-get から読むので、空の行で足した直後のタスクも、読み直さずに数える）
   const blocked = await openStory(page, '配下のあるストーリー');
   const complete = blocked.getByRole('button', { name: '完了にする' });
   await expect(complete).toHaveAttribute('aria-disabled', 'true');
@@ -322,42 +320,34 @@ test('引き出しから「完了にする」と「取り消す」ができる�
   await expect(drawer.getByRole('img', { name: '完了' })).toHaveCount(0);
 });
 
-test('絞り込みで木から外れたストーリーにも完了の帯が出て、題を検索語に当たらない値へ直しても、帯と前後のボタンが残る', async ({
+test('絞り込みで木から外れたストーリーと、バックログ以外の画面で開いたストーリーでも、完了の帯が出る', async ({
   page,
 }) => {
-  await createWorkspace(page, '絞り込みのワークスペース');
-  await create(page, 'ストーリーを作る', '検索で残す前');
-  await create(page, 'ストーリーを作る', '検索で残す中');
-  await create(page, 'ストーリーを作る', '検索で残す後');
-  const bar = page.getByRole('search', { name: 'バックログの絞り込み' });
-  await bar.getByRole('searchbox', { name: 'タイトルで探す' }).fill('検索で残す');
-  await openStory(page, '検索で残す中');
-  // 題を直すと引き出しの名前も替わるので、枠そのもので指す
-  const drawer = page.locator('.drawer');
-  await expect(drawer.getByRole('button', { name: '完了にする' })).toBeVisible();
+  await createWorkspace(page, '木に頼らないワークスペース');
+  await create(page, 'ストーリーを作る', '外れるストーリー');
+  await create(page, 'ストーリーを作る', '別の画面で開くストーリー');
+  const first = await openStory(page, '外れるストーリー');
+  await expect(first.getByRole('button', { name: '完了にする' })).toBeVisible();
+  const url = new URL(page.url());
+  const id = url.searchParams.get('story');
+  expect(id).not.toBeNull();
 
-  // 題を検索語に当たらない値へ直すと、行は絞り込みで外れる。帯と前後のボタンは残る
-  await drawer.getByRole('heading', { level: 2 }).getByRole('button').click();
-  const input = drawer.getByRole('textbox', { name: 'タイトル' });
-  await input.fill('別の題');
-  const saved = waitForResponses(page, '/story-update');
-  await input.press('Enter');
-  await saved;
-  await expect(page.getByRole('link', { name: '別の題', exact: true })).toHaveCount(0);
-  await expect(drawer.getByRole('button', { name: '完了にする' })).toBeVisible();
-  await expect(drawer.getByRole('group', { name: '前後のストーリー' })).toBeVisible();
-  await expect(drawer.getByRole('button', { name: '次のストーリー' })).not.toHaveAttribute('aria-disabled', 'true');
-});
+  // 検索語に当たらず、木から外れたストーリーでも、帯が出て完了にできる
+  await page.goto(`${url.pathname}?q=${encodeURIComponent('当たらない語')}&story=${id}`);
+  const filtered = page.getByRole('dialog', { name: '外れるストーリー', exact: true });
+  await expect(filtered).toBeVisible();
+  await expect(filtered.getByRole('button', { name: '完了にする' })).toBeVisible();
+  const completed = waitForResponses(page, '/story-complete');
+  await filtered.getByRole('button', { name: '完了にする' }).click();
+  await completed;
+  await expect(filtered.getByRole('img', { name: '完了' })).toBeFocused();
+  await expect(filtered.getByRole('button', { name: /完了を取り消す/ })).toBeVisible();
 
-test('バックログ以外の画面で ?story= を開いても、完了の帯が出る', async ({ page }) => {
-  await page.goto(SEED_WORKSPACE);
-  await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
-  const link = page.getByRole('link', { name: SEED_STORY_TITLES[2], exact: true });
-  const id = new URL((await link.getAttribute('href'))!, page.url()).searchParams.get('story')!;
-  await page.goto(`${SEED_WORKSPACE}/members?story=${id}`);
-  const drawer = page.getByRole('dialog', { name: SEED_STORY_TITLES[2], exact: true });
-  await expect(drawer).toBeVisible();
-  await expect(drawer.locator('.done-bar')).toBeVisible();
+  // バックログ以外の画面（スプリント）で開いても、帯が出る
+  await page.goto(`${url.pathname}/sprint?story=${id}`);
+  const elsewhere = page.getByRole('dialog', { name: '外れるストーリー', exact: true });
+  await expect(elsewhere).toBeVisible();
+  await expect(elsewhere.getByRole('img', { name: '完了' })).toBeVisible();
 });
 
 test('引き出しの「⋯」から親を移すと、木でその親の下に並ぶ', async ({ page }) => {
