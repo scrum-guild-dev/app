@@ -9,6 +9,7 @@ export const uiScreens = [
   'epic',
   'task-drawer',
   'task-dialog',
+  'backlog-attr-menu',
   'plan',
   'sprint',
   'sprint-start',
