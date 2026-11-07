@@ -7,7 +7,8 @@ import type { DictionaryKey } from '../shared/vocabulary.ts';
 type FailedResult = Extract<ApiResult<unknown>, { ok: false }>;
 
 export type ConnectionField = 'name' | 'credential' | 'form';
-export type ConnectionFailure = { field: ConnectionField; key: DictionaryKey };
+// refocus は、失敗の後にフォーカスを戻す欄。認証情報は送った直後に欄から消してあるので、やり直せる失敗は入れ直す欄に戻す
+export type ConnectionFailure = { field: ConnectionField; key: DictionaryKey; refocus?: 'name' | 'credential' };
 
 // 送る前の確かめ。サーバーも同じ確かめをする（ここは入力の誤りをすぐ知らせるため）。形の検査は取り込み元の型が行うので、
 // ここでは認証情報が空かどうかだけを見る
@@ -44,15 +45,19 @@ export function connectionCreateFailure(result: FailedResult): ConnectionFailure
     // 長すぎるなど、入力の上限で断られた認証情報も、形が違うものとして欄に出す
     if (code !== undefined) return { field: 'credential', key: 'connectionCredentialShape' };
     const nameCode = codeOf(result, 'name');
+    if (nameCode === 'too_big') return { field: 'name', key: 'connectionNameTooLong' };
+    if (nameCode === 'too_small') return { field: 'name', key: 'connectionNameRequired' };
     if (nameCode !== undefined) return { field: 'name', key: 'connectionNameInvalid' };
     return { field: 'form', key: 'connectionCreateInvalid' };
   }
   if (result.error?.code === 'workspace_closed') return { field: 'form', key: 'connectionWorkspaceClosed' };
   if (result.status === 409) return { field: 'form', key: 'connectionLimit' };
   // 認証情報は送った直後に欄から消してあるので、やり直すときは入れ直す
-  if (result.status === 429) return { field: 'form', key: 'connectionCreateRateLimited' };
-  if (result.status === 0 || result.status === 503) return { field: 'form', key: 'connectionCreateUnreachable' };
-  return { field: 'form', key: 'connectionCreateFailed' };
+  if (result.status === 429) return { field: 'form', key: 'connectionCreateRateLimited', refocus: 'credential' };
+  if (result.status === 0 || result.status === 503) {
+    return { field: 'form', key: 'connectionCreateUnreachable', refocus: 'credential' };
+  }
+  return { field: 'form', key: 'connectionCreateFailed', refocus: 'credential' };
 }
 
 // 範囲の候補（connection-scope-candidates）と保存（connection-scopes-save）の失敗。

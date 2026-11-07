@@ -94,6 +94,9 @@
     if (saving) return;
     choosing = { id: target.id, name: target.name };
     chosen = 'scopes' in target ? target.scopes.map((scope) => scope.id) : [];
+    // 前の接続の候補と失敗を、読み込みの前に消す
+    candidates = null;
+    scopeFailure = null;
     // 段のタイトルへ先にフォーカスを移す（押したボタンが消えるので、読み込みを待つとフォーカスが body に落ちる）
     await tick();
     document.getElementById('connection-scope')?.focus();
@@ -133,7 +136,8 @@
 
   async function register(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    if (creating || workspace === null || !canWrite) return;
+    // 範囲を保存している間は登録しない（登録の後の範囲の段が、保存の間は開かないため）
+    if (creating || saving || workspace === null || !canWrite) return;
     const invalid = validateConnectionCreate({ name, credential });
     if (invalid !== null) {
       failure = invalid;
@@ -176,10 +180,10 @@
     const id =
       failure?.field === 'name'
         ? 'connection-name'
-        : failure?.field === 'form' && failure.key.startsWith('connectionCreate')
+        : failure?.field === 'credential' || failure?.refocus === 'credential'
           ? 'connection-credential'
-          : failure?.field === 'credential'
-            ? 'connection-credential'
+          : failure?.refocus === 'name'
+            ? 'connection-name'
             : null;
     if (id !== null) document.getElementById(id)?.focus();
   }

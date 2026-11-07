@@ -53,6 +53,16 @@ describe('connectionCreateFailure', () => {
     });
   });
 
+  it('名前の 400 は、上限の超過と空で文言を分け、欄のやり直しはトークンの欄へ戻す', () => {
+    expect(connectionCreateFailure(failed(400, 'invalid_input', [{ path: 'name', code: 'too_big' }])).key).toBe(
+      'connectionNameTooLong',
+    );
+    expect(connectionCreateFailure(failed(400, 'invalid_input', [{ path: 'name', code: 'too_small' }])).key).toBe(
+      'connectionNameRequired',
+    );
+    expect(connectionCreateFailure(failed(503, 'unavailable')).refocus).toBe('credential');
+  });
+
   it('読めない 400 と、そのほかの失敗は枠の理由にする', () => {
     expect(connectionCreateFailure(failed(400, 'invalid_input', [{ path: 'x' }]))).toEqual({
       field: 'form',
