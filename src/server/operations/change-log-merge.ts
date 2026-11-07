@@ -151,6 +151,8 @@ export function mergeTargetConditions<DB, TB extends keyof DB>(
   target: MergeTarget<string> | undefined,
 ) {
   if (target === undefined) return [];
+  // 呼び出し元の UPDATE は表（tasks、stories、epics）ごとに型が違うので、副問い合わせに使う change_logs の型へ揃える
+  // （task-field.ts の unfilledExists と同じ。3つの呼び出し元とも組織の表の UPDATE の中）
   const eb = builder as unknown as ExpressionBuilder<OrganizationTables, never>;
   return [
     // まとめる行が、読んだときのまま
