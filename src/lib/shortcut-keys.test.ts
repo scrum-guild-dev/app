@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import {
   ariaKeyshortcuts,
+  hintText,
+  isMacPlatform,
   isComposingKey,
   isTypingTarget,
   matchesKeys,
@@ -128,5 +130,21 @@ describe('isTypingTarget', () => {
     expect(isTypingTarget({})).toBe(false);
     expect(isTypingTarget(null)).toBe(false);
     expect(isTypingTarget(undefined)).toBe(false);
+  });
+});
+
+describe('hintText と isMacPlatform', () => {
+  test('Mod は Mac が ⌘K、ほかは Ctrl K。単キーはそのまま', () => {
+    expect(hintText('Mod+K', true)).toBe('⌘K');
+    expect(hintText('Mod+k', false)).toBe('Ctrl K');
+    expect(hintText('[', true)).toBe('[');
+    expect(hintText('g b', false)).toBe('g b');
+  });
+
+  test('Mac、iPhone、iPad を Mac 系と見る', () => {
+    expect(isMacPlatform('MacIntel')).toBe(true);
+    expect(isMacPlatform('iPhone')).toBe(true);
+    expect(isMacPlatform('Win32')).toBe(false);
+    expect(isMacPlatform('')).toBe(false);
   });
 });

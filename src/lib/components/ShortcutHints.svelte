@@ -1,0 +1,33 @@
+<script lang="ts">
+  import { untrack } from 'svelte';
+  import { ShortcutHints } from '../shortcut-hints.svelte.ts';
+  import { modalState } from '../toast.svelte.ts';
+
+  // ⌘（Windows と Linux は Ctrl）を約 0.3 秒押し続けた間だけ、ショートカットのあるものの角にキーを出す（見本は design/kit.js の keyHints）。
+  // root のレイアウトに1つだけ置く。画面の上に重ねる層で、押せるものの大きさも並びも動かさず、操作を受けない。
+  // 見た目だけなので aria-hidden（読み上げは aria-keyshortcuts）。動かし方と対象の決め方は shortcut-hints.svelte.ts
+  const state = new ShortcutHints();
+
+  // 出ている間にモーダルのダイアログが開いたら消す（ヒントはダイアログより前に重なるため）
+  $effect(() => {
+    // dismiss が hints を読むので、依存に入れない（ヒントが出るたびに走り直さない）
+    if (modalState.openCount > 0) untrack(() => state.dismiss());
+  });
+</script>
+
+<svelte:window
+  onkeydown={state.keydown}
+  onkeyup={state.keyup}
+  onblur={state.cancel}
+  onresize={state.dismiss}
+  onpointerdowncapture={state.dismiss}
+/>
+<svelte:document onscrollcapture={state.dismiss} onvisibilitychange={state.cancel} />
+
+{#if state.hints.length > 0}
+  <div class="key-hints" aria-hidden="true">
+    {#each state.hints as hint (hint.id)}
+      <kbd class="kbd key-hint" style:left="{hint.right}px" style:top="{hint.top}px">{hint.text}</kbd>
+    {/each}
+  </div>
+{/if}

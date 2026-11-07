@@ -1829,6 +1829,24 @@ button.file-name:hover { text-decoration-color: currentColor; }
   font-family: var(--font-mono); font-size: 10px; line-height: 1; padding: 3px 5px; white-space: nowrap;
   border: 1px solid var(--color-line); border-bottom-width: 2px; border-radius: var(--radius-1); color: var(--color-muted); background: var(--color-bg);
 }
+/* ===== ショートカットのヒント =====
+ * ⌘（Windows と Linux は Ctrl）を約 0.3 秒押し続けた間だけ、ショートカットのあるものの右上の角に出す .kbd.key-hint。
+ * 画面の上に重ねる層（.key-hints）に置き（角をまたいで少し外へ出す。影も光りも付けない）、押せる要素の見た目も並びも動かさない。層は見た目だけ（aria-hidden）で、操作を受けない。
+ * 指の端末（hover: none）では出さない。動きを減らす設定では、下の全体の規則で動きが止まり、そのまま出る。 */
+.key-hints { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
+.key-hint {
+  position: fixed; transform: translate(-100%, -80%); transform-origin: right bottom;
+  font-size: var(--text-xs); padding: var(--space-1) var(--space-2); color: var(--color-bg); background: var(--color-fg); border-color: var(--color-fg);
+  animation: key-hint-in var(--duration-stamp) var(--ease-pop) both;
+}
+@keyframes key-hint-in {
+  from { opacity: 0; transform: translate(-100%, -80%) scale(0.4, 0.2); }
+  to { opacity: 1; transform: translate(-100%, -80%) scale(1); }
+}
+/* カタログで形だけ見せる（押し続けなくても出す）。.key-hint-host（押せるものを包む枠）の右上の角に重ねる。ヒントが上へ出る分は、枠の上の余白で取る */
+.key-hint-host { position: relative; display: inline-flex; margin-top: var(--space-4); }
+.key-hint.is-static { position: absolute; left: auto; right: calc(var(--space-2) * -1); top: 0; transform: translate(0, -80%); animation: none; }
+@media (hover: none) { .key-hints { display: none; } }
 .assist-launch .ico { color: var(--color-accent); }
 .callout.is-danger { color: var(--color-danger); background: var(--color-danger-soft); }
 
