@@ -27,7 +27,7 @@ SQ.mount("inbox", () => {
   const actions = (x) => `<button class="btn is-primary is-sm" type="button" data-move="${x.id}">${t("backlog")}へ</button>
     <button class="btn is-quiet is-sm" type="button" data-arch="${x.id}">${t("archive")}</button>`;
   const opts = {
-    lead: `<input type="checkbox" class="row-check" aria-label="選ぶ">`, noLink: true, hidePts: true, showAssignee: true, showParent: false,
+    lead: `<label class="row-check"><input type="checkbox" aria-label="選ぶ"></label>`, noLink: true, hidePts: true, showAssignee: true, showParent: false,
     meta: (x) => `<span>届いた ${esc(x.arrivedAt)}</span><span>${esc(connName(x.conn))}</span>${x.repo ? "" : SQ.repoPicker(`repo-${x.id}`, null, { for: x.id })}`,
     actions,
   };

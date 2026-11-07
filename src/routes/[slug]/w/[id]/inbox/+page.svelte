@@ -185,13 +185,15 @@
         {#each tasks as task (task.id)}
           <div class="entry" role="listitem" data-row-id={task.id}>
             {#if canWrite}
-              <input
-                type="checkbox"
-                aria-label={t('inboxSelectRow', { title: task.title })}
-                aria-disabled={working}
-                checked={chosen.includes(task.id)}
-                onchange={(event) => !working && toggle(task.id, event.currentTarget.checked)}
-              />
+              <label class="row-check">
+                <input
+                  type="checkbox"
+                  aria-label={t('inboxSelectRow', { title: task.title })}
+                  aria-disabled={working}
+                  checked={chosen.includes(task.id)}
+                  onchange={(event) => !working && toggle(task.id, event.currentTarget.checked)}
+                />
+              </label>
             {:else}
               <span aria-hidden="true"></span>
             {/if}

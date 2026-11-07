@@ -60,6 +60,7 @@ export const uiExclusions: readonly UiExclusion[] = [
       'backlog',
       'backlog-attr-menu',
       'epic',
+      'inbox',
       'plan',
       'sprint',
       'members',

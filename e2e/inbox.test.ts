@@ -58,7 +58,7 @@ test('受信箱から、1件とまとめて選んだタスクをバックログ�
   await page.getByRole('button', { name: `「${titles[0]}」をバックログへ入れる` }).click();
   await first;
   await expect(list.getByRole('listitem')).toHaveCount(2);
-  await expect(page.getByText(`「${titles[0]}」をバックログへ入れました`)).toBeVisible();
+  await expect(page.getByText(`「${titles[0]}」をバックログへ入れました`).first()).toBeVisible();
 
   // 選んだものをまとめて
   await page.getByRole('checkbox', { name: `「${titles[1]}」を選ぶ` }).check();
