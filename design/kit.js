@@ -1074,7 +1074,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     // kind は開いているものの種類（task、story）。ストーリーの引き出し（本番の StoryDrawer）は id にストーリーの id を持ち、
     // 開き方は横と真ん中だけ。canDelete は削除できる人か（偽なら「⋯」に削除を出さず、理由を本文の下に出す）、
     // parentFinished は親のエピックが完了か中止している（ストーリーの完了と取り消しを押せなくする）見本の状態
-    kind: "task", canDelete: true, parentFinished: false, remaining: null, factsMissing: false };
+    kind: "task", canDelete: true, parentFinished: false, remaining: null };
   const drawerReadOnly = () => drawer.view === "readonly";
   const isStoryDrawer = () => drawer.kind === "story";
   const drawerNoun = () => (isStoryDrawer() ? t("story") : t("task"));
@@ -1167,10 +1167,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       return;
     }
     if (location.pathname.endsWith("/task.html")) { location.href = `backlog.html?task=${encodeURIComponent(id)}`; return; }
-    const kind = drawer.kind, shown = { canDelete: drawer.canDelete, factsMissing: drawer.factsMissing };
+    const kind = drawer.kind, shown = { canDelete: drawer.canDelete };
     closeDrawer(true); openDrawer(id, drawer.opener, false, null, kind);
-    // 見本の状態（削除できない人、木に載っていない）は、開き方を替えても持ち越す
-    if (drawer.id === id) { Object.assign(drawer, shown); renderDrawer(); }
+    // 見本の状態（削除できない人）は、開き方を替えても持ち越す
+    if (drawer.id === id) { Object.assign(drawer, shown); renderDrawer(); document.querySelector("#drawer [data-close-drawer]")?.focus(); }
   }
   // 画面の幅が 620px を越えたら、真ん中のボタンを出し入れする
   matchMedia("(max-width: 620px)").addEventListener("change", () => renderDrawer());
@@ -1394,8 +1394,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       return `<div class="done-bar"><span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}" tabindex="-1">${icon("check")}<b>完</b></span><span>${t("done")} ${esc(st.doneAt)}</span>${note}${undo}</span></div>`;
     }
     if (ro) return "";
-    // 木に載っていない（絞り込みの外）ストーリーは、完了の操作を出せない。理由を帯の位置に伝える（本番の storyFactsMissing）
-    if (drawer.factsMissing) return `<div class="done-bar"><span class="props-note">この画面の一覧に載っていないため、${t("done")}の操作は出ません</span></div>`;
     const note = blocked ? `<span class="props-note" id="${ids.blocked}">${t("done")}か中止した${t("epic")}の下の${t("story")}は${t("done")}にできません</span>`
       : remaining ? `<span class="props-note" id="${ids.remaining}">残り ${remaining} 件の${t("task")}</span><span class="visually-hidden" id="${ids.reason}">未完了の${t("task")}が残っているあいだは${t("done")}にできません</span>` : "";
     const off = blocked || remaining > 0;
@@ -1463,9 +1461,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 別のタスクを開く（前後へ移るときも）ために、引き出しの状態を初めに戻し、前のタスクの中身（欄を含む子要素すべて）を外す。
   // renderDrawer は描き直す前に欄の値を写すので、中身を残すと前の書きかけが開いた先に戻る
-  // keep は前後へ移るとき。見本の状態（削除できない人、木に載っていない）を、移った先にも持ち越す
+  // keep は前後へ移るとき。見本の状態（削除できない人）を、移った先にも持ち越す
   function resetDrawerFor(id, opener, kind = "task", keep = false) {
-    if (!keep) { drawer.canDelete = true; drawer.factsMissing = false; }
+    if (!keep) drawer.canDelete = true;
     drawer.kind = kind; drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = opener || null; drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     document.getElementById("drawer")?.replaceChildren();
   }
@@ -3160,7 +3158,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button !== 0) return;
       ev.preventDefault();
       openDrawer(el.dataset.story, el.dataset.story, false, null, "story");
-      if (drawer.kind === "story" && drawer.id === el.dataset.story) { drawer.canDelete = el.dataset.storyCanDelete !== "false"; renderDrawer(); }
+      if (drawer.kind === "story" && drawer.id === el.dataset.story) { drawer.canDelete = el.dataset.storyCanDelete !== "false"; renderDrawer(); document.querySelector("#drawer [data-close-drawer]")?.focus(); }
       return;
     }
     if ((el = hit("data-drawer-mode"))) { changeDrawerMode(el.dataset.drawerMode); return; }

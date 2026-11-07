@@ -148,11 +148,10 @@ function colorBlock() {
 // opts.commentBlocked は直している途中に消されたコメントの番号
 // opts.adjacent は前後のタスク（{ prev, next }。端は null）。順を渡さない画面は null。既定は両側にある。ページ全体の見本には前後のボタンを出さない
 // opts.kind: "story" はストーリーの形（id はストーリーの id）。opts.canDelete が偽なら削除できない人、opts.parentFinished は親のエピックが完了か中止している形、
-// opts.doneAt は完了したストーリー、opts.remaining は配下の未完了のタスクの数（0 で完了にできる形）、opts.factsMissing は木に載っていないストーリー
+// opts.doneAt は完了したストーリー、opts.remaining は配下の未完了のタスクの数（0 で完了にできる形）
 function drawerDemo(tag = "a", id = "t1", editing = [], opts = {}) {
   const st = SQ.drawerState;
-  const keep = [st.id, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked, st.adjacent, st.kind, st.canDelete, st.parentFinished, st.remaining, st.factsMissing];
-  st.factsMissing = Boolean(opts.factsMissing);
+  const keep = [st.id, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked, st.adjacent, st.kind, st.canDelete, st.parentFinished, st.remaining];
   const story = opts.kind === "story" ? D.stories[id] : null, storyDoneAt = story && story.doneAt;
   if (story && "doneAt" in opts) story.doneAt = opts.doneAt;
   st.remaining = opts.remaining ?? null;
@@ -176,7 +175,7 @@ function drawerDemo(tag = "a", id = "t1", editing = [], opts = {}) {
     .replace(/data-close-drawer|data-drawer-mode/g, "disabled")
     .replace(/ data-drawer-step="-?1"/g, "")
     .replace(/ data-drawer-(?:pts|due-clear|due)(?![\w-])(?:="[^"]*")?| data-comment-(?:edit|save|cancel|delete|send)(?:="[^"]*")?| data-tab="[^"]*"| data-task-delete="[^"]*"| data-story-(?:done|reopen)/g, "");
-  [st.id, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked, st.adjacent, st.kind, st.canDelete, st.parentFinished, st.remaining, st.factsMissing] = keep;
+  [st.id, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked, st.adjacent, st.kind, st.canDelete, st.parentFinished, st.remaining] = keep;
   if (story) story.doneAt = storyDoneAt;
   return `<div class="drawer cat-drawer${shape ? ` is-${shape}` : ""}">${html}</div>`;
 }
@@ -730,7 +729,6 @@ const SECTIONS = [
      <div class="field"><span class="field-label">${t("done")}したストーリー（完了の印と日付、「取り消す」。帯の種類の印の横にも「${t("done")}」）</span>${drawerDemo("st3", "s2", [], { kind: "story", doneAt: "10/20 10:12", remaining: 0 })}</div>
      <div class="field"><span class="field-label">親の${t("epic")}が${t("done")}か中止している（「${t("complete")}」も「取り消す」も押せず、理由を添える）</span>${drawerDemo("st4", "s2", [], { kind: "story", parentFinished: true, remaining: 0 })}${drawerDemo("st5", "s1", [], { kind: "story", parentFinished: true, doneAt: "10/20 10:12", remaining: 0 })}</div>
      <div class="field"><span class="field-label">削除できない人（作った人でも${t("leader")}でもない。「⋯」に削除を出さず、本文の下に理由を出す）</span>${drawerDemo("st6", "s4", [], { kind: "story", canDelete: false })}</div>
-     <div class="field"><span class="field-label">木に載っていない（絞り込みの外。完了の操作の代わりに、出さない理由を帯の位置に出す）</span>${drawerDemo("st12", "s3", [], { kind: "story", factsMissing: true })}</div>
      <div class="field"><span class="field-label">真ん中の形（620px 以下では真ん中のボタンを出さず、横で開く）</span>${drawerDemo("st7", "s3", [], { kind: "story", shape: "center" })}</div>
      <div class="field"><span class="field-label">リンクを書いて、断られた（欄の下に理由。入力は残る）</span>${drawerDemo("st8", "s1", [], { kind: "story", errors: { link: "http か https で始まる URL を入れてください" }, drafts: { link: "ftp://example.com" } })}</div>
      <div class="field"><span class="field-label">終了した${t("workspace")}（読み取り専用。「⋯」と直す口と完了の操作を出さない）</span>${drawerDemo("st9", "s4", [], { kind: "story", view: "readonly" })}</div>
