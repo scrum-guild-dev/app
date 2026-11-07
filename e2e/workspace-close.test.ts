@@ -10,7 +10,7 @@ test.use({ timezoneId: 'Asia/Tokyo' });
 
 const BANNER = /\d{4}-\d{2}-\d{2} に終了しました。読み取り専用です。/;
 
-// 終了した帯。ストーリーのダイアログも終了したワークスペースの案内に .callout を持ち、開く前から DOM にあるので、帯の文で絞る
+// 終了した帯。ストーリーとタスクの引き出しも終了したワークスペースの案内に .callout を持つので、帯の文で絞る
 function bannerOf(page: Page) {
   return page.locator('.callout', { hasText: 'に終了しました。読み取り専用です。' });
 }

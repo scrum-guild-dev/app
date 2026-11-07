@@ -19,7 +19,8 @@
   // Esc は、ほかのモーダルのダイアログ（確認など）が開いている間と、中の入力欄が Esc を受けた（preventDefault した）ときは閉じない。
   // 日本語の変換中の Esc は変換の取り消しなので閉じない。ページ全体は引き出しの外（左のメニューなど）にフォーカスがあるときの Esc で閉じない。
   // 開いたらフォーカスを閉じるボタンへ置く。見出しなどへ移すのは中身（呼び出し側）が決める
-  // 620px 以下は引き出しがもともと全幅になり、真ん中の見た目が横と変わらないので、切り替えに真ん中を出さず、真ん中は横として描く
+  // 620px 以下は引き出しがもともと全幅になり、真ん中の見た目が横と変わらないので、切り替えに真ん中を出さず、真ん中は横として描く。
+  // 出せる形が1つだけになる（modes が横と真ん中だけのストーリーの引き出し）ときは、切り替えの組ごと出さない
   // 前後のボタン（.drawer-steps。前のタスクと次のタスク）は、横と真ん中で、呼び出し側が adjacent を渡したときだけ出す（ページ全体では出さない）。
   // 開き方と違い、狭い幅でも出す。端の向きは aria-disabled にして（フォーカスは残す）押しても何もしない。
   // キーボードは `[`（前）と `]`（次）。押したら onstep を呼ぶだけで、書きかけの確認と移動は呼び出し側が決める。
@@ -34,6 +35,8 @@
     onstep,
     initialFocus = null,
     onrequestclose,
+    noun,
+    modes,
     top,
     children,
   }: {
@@ -50,6 +53,10 @@
     // 前後のボタンで移ってきたときの、押した向き。最初のフォーカスをその向きのボタンへ置く（端で押せなければ閉じるボタン）
     initialFocus?: -1 | 1 | null;
     onrequestclose: () => void;
+    // 前後のボタンが指す行の呼び名（辞書の言葉）。渡さなければ「タスク」。ストーリーの引き出しは「ストーリー」を渡す
+    noun?: string;
+    // 開き方の切り替えに出す形。渡さなければ4つとも出す。ストーリーの引き出しは、ページ全体も新しいタブも無いので、横と真ん中だけを渡す
+    modes?: readonly TaskOpenMode[];
     // 上の帯の左（出どころの印など）
     top?: Snippet;
     children: Snippet;
@@ -66,7 +73,12 @@
     { value: 'tab', label: 'drawerTab' },
   ] as const satisfies readonly { value: TaskOpenMode; label: DictionaryKey }[];
 
+  const word = $derived(noun ?? t('task'));
+  const shownChoices = $derived(modes === undefined ? modeChoices : modeChoices.filter((c) => modes.includes(c.value)));
+
   const narrow = new MediaQuery('max-width: 620px');
+  // 狭い幅では真ん中を出さない。選べる形が1つだけになったら、切り替えの組ごと出さない（選べない組が、共有の既定を書き換える入口にならないように）
+  const visibleChoices = $derived(shownChoices.filter((choice) => choice.value !== 'center' || !narrow.current));
   const shownMode = $derived(effectiveTaskOpenMode(mode, narrow.current));
   const modal = $derived(shownMode === 'side' || shownMode === 'center');
   const stepping = $derived(modal && adjacent !== undefined && onstep !== undefined);
@@ -136,14 +148,14 @@
     {#if top}{@render top()}{/if}
     <span class="drawer-tools">
       {#if stepping && adjacent}
-        <span class="drawer-steps" role="group" aria-label={t('drawerSteps', { task: t('task') })}>
+        <span class="drawer-steps" role="group" aria-label={t('drawerSteps', { task: word })}>
           <button
             class="pill"
             type="button"
             data-drawer-step="-1"
-            aria-label={t('drawerPrev', { task: t('task') })}
+            aria-label={t('drawerPrev', { task: word })}
             aria-keyshortcuts="["
-            title={adjacent.hasPrev ? t('drawerPrevTitle', { task: t('task') }) : t('drawerAtFirst')}
+            title={adjacent.hasPrev ? t('drawerPrevTitle', { task: word }) : t('drawerAtFirst')}
             aria-disabled={!adjacent.hasPrev}
             onclick={() => step(-1, 'button')}
           >
@@ -153,9 +165,9 @@
             class="pill"
             type="button"
             data-drawer-step="1"
-            aria-label={t('drawerNext', { task: t('task') })}
+            aria-label={t('drawerNext', { task: word })}
             aria-keyshortcuts="]"
-            title={adjacent.hasNext ? t('drawerNextTitle', { task: t('task') }) : t('drawerAtLast')}
+            title={adjacent.hasNext ? t('drawerNextTitle', { task: word }) : t('drawerAtLast')}
             aria-disabled={!adjacent.hasNext}
             onclick={() => step(1, 'button')}
           >
@@ -163,18 +175,18 @@
           </button>
         </span>
       {/if}
-      <span class="drawer-mode" role="group" aria-label={t('drawerOpenMode')}>
-        {#each modeChoices as choice (choice.value)}
-          {#if choice.value !== 'center' || !narrow.current}
+      {#if visibleChoices.length > 1}
+        <span class="drawer-mode" role="group" aria-label={t('drawerOpenMode')}>
+          {#each visibleChoices as choice (choice.value)}
             <button
               class="pill"
               type="button"
               aria-pressed={shownMode === choice.value}
               onclick={() => onmode(choice.value, shownMode)}>{t(choice.label)}</button
             >
-          {/if}
-        {/each}
-      </span>
+          {/each}
+        </span>
+      {/if}
       <button
         class="pill drawer-close"
         type="button"

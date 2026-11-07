@@ -58,7 +58,7 @@ test('エピックとストーリーを、木の空の行に題を打って Ente
   const underEpic = epic.getByRole('textbox', { name: 'ストーリーを足す: 会員ポイント制度を公開する' });
   await underEpic.fill('残高を見せる');
   await underEpic.press('Enter');
-  await expect(epic.getByRole('button', { name: '残高を見せる', exact: true })).toBeVisible();
+  await expect(epic.getByRole('link', { name: '残高を見せる', exact: true })).toBeVisible();
   await underEpic.fill('失効日を見せる');
   await underEpic.press('Enter');
   const titles = epic.locator('.tree-row.is-story .tree-title');
@@ -68,8 +68,8 @@ test('エピックとストーリーを、木の空の行に題を打って Ente
   const rootInput = treeTail(page).getByRole('textbox', { name: 'ストーリーを足す' });
   await rootInput.fill('親のないストーリー');
   await rootInput.press('Enter');
-  await expect(page.getByRole('button', { name: '親のないストーリー', exact: true })).toBeVisible();
-  await expect(epic.getByRole('button', { name: '親のないストーリー', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '親のないストーリー', exact: true })).toBeVisible();
+  await expect(epic.getByRole('link', { name: '親のないストーリー', exact: true })).toHaveCount(0);
 
   // 読み直しても、配下の順と親は同じ
   await page.reload();
@@ -79,9 +79,9 @@ test('エピックとストーリーを、木の空の行に題を打って Ente
     '失効日を見せる',
   ]);
   await expect(
-    epicGroup(page, '会員ポイント制度を公開する').getByRole('button', { name: '親のないストーリー', exact: true }),
+    epicGroup(page, '会員ポイント制度を公開する').getByRole('link', { name: '親のないストーリー', exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '親のないストーリー', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '親のないストーリー', exact: true })).toBeVisible();
   expect(await collect()).toEqual([]);
 });
 
@@ -98,7 +98,7 @@ test('タスクを、ストーリーの配下の末尾と木の末尾の空の�
   await expect(dialog).toBeHidden();
 
   // ストーリーの配下の末尾の「タスクを足す」。空のまま Enter を押しても何も作らない
-  const story = page.locator('.tree-group', { has: page.getByRole('button', { name: '親のストーリー', exact: true }) });
+  const story = page.locator('.tree-group', { has: page.getByRole('link', { name: '親のストーリー', exact: true }) });
   const underStory = story.getByRole('textbox', { name: 'タスクを足す: 親のストーリー' });
   await underStory.press('Enter');
   await expect(story.locator('.entry')).toHaveCount(0);
