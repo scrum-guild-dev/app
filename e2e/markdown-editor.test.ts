@@ -7,7 +7,7 @@ import { routeOperation } from './operations.ts';
 import { workspaceCreate } from '../src/shared/operations/workspace/workspace-create.ts';
 import { taskCreate } from '../src/shared/operations/task/task-create.ts';
 import { expect, test } from './fixtures.ts';
-import { signIn } from './helpers.ts';
+import { expectNoA11yViolationsInThemes, signIn } from './helpers.ts';
 
 // 実際にブラウザで読み込める 1px PNG。サーバーで種類を確かめ、保存後の配信まで通す。
 const PNG = Buffer.from(
@@ -474,4 +474,52 @@ test('文字と画像を一緒に貼り付けると選択範囲を文字で置�
   await expect(comment).toContainText('次の行');
   await expect(comment).toContainText('後半');
   await expect(comment.locator('img[alt="一緒に貼る.png"]')).toBeVisible();
+});
+
+test('「/」の小窓から書式を入れ、文中の「/」と Esc では文字のまま残り、開いた状態に axe の違反が無い', async ({
+  page,
+  baseURL,
+}) => {
+  const drawer = await openTask(page, baseURL, 'member');
+  const input = drawer.getByRole('textbox', { name: 'コメントを書く', exact: true });
+  const menu = drawer.getByRole('listbox', { name: 'Markdown を入れる' });
+
+  await input.click();
+  await page.keyboard.type('/');
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('option')).toHaveText([
+    /見出し/,
+    /チェックリスト/,
+    /箇条書き/,
+    /番号付きの一覧/,
+    /引用/,
+    /コード/,
+  ]);
+  await expect(input).toHaveAttribute('aria-activedescendant', /.+/);
+  await expectNoA11yViolationsInThemes(page, 'task-drawer');
+
+  // 矢印で選んで Enter。「/」は記号に置き換わり、小窓は閉じる
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('option', { selected: true })).toHaveText(/チェックリスト/);
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('- [ ] ');
+  await expect(menu).toBeHidden();
+  await expect(input).not.toHaveAttribute('aria-activedescendant');
+
+  // 続けて打った文字で絞る。Esc で閉じても「/」は残り、引き出しは閉じない
+  await input.fill('');
+  await page.keyboard.type('/見');
+  await expect(menu.getByRole('option')).toHaveText([/見出し/]);
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(input).toHaveValue('/見');
+  await expect(drawer).toBeVisible();
+
+  // 文中の「/」では出ない
+  await input.fill('');
+  await page.keyboard.type('a/');
+  await expect(menu).toBeHidden();
+  await page.keyboard.type('\nhttps://example.com');
+  await expect(menu).toBeHidden();
+  await expect(input).toHaveValue('a/\nhttps://example.com');
 });
