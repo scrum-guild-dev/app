@@ -105,7 +105,7 @@ test('続けて消すと、「取り消す」の読み上げの名前でどの�
   // 見える文字は「取り消す」のまま、名前だけが違う
   await expect(page.locator('.toast-action', { hasText: '取り消す' })).toHaveCount(2);
   // 長いタイトルのトーストは、幅に収まって折り返す（横にはみ出さない）
-  const toast = page.locator('.toast', { hasText: '長いタイトルのタスク' });
+  const toast = page.locator('.toasts:visible .toast', { hasText: '長いタイトルのタスク' });
   const box = await toast.boundingBox();
   const viewport = page.viewportSize();
   expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
@@ -136,7 +136,9 @@ test('取り消しが通信の失敗で落ちたら「取り消す」付きで�
 
   // 通信の失敗（1回目）も 5xx（2回目）も、同じ「取り消す」付きのトーストで出し直す
   await page.getByRole('button', { name: '取り消す: 出し直すタスク' }).click();
-  const retry = page.locator('.toast', { hasText: '取り消せませんでした。通信を確かめて、もう一度試してください' });
+  const retry = page.locator('.toasts:visible .toast', {
+    hasText: '取り消せませんでした。通信を確かめて、もう一度試してください',
+  });
   await expect(retry).toBeVisible();
   await retry.getByRole('button', { name: '取り消す: 出し直すタスク' }).click();
   await expect(retry).toBeVisible();
@@ -156,7 +158,9 @@ test('取り消しが 403 や 409 で断られたら、理由を知らせるだ�
     .getByRole('button', { name: 'このタスクを削除する' })
     .click();
   await page.getByRole('button', { name: '取り消す: 断られるタスク' }).click();
-  await expect(page.locator('.toast', { hasText: '削除した人と、作った人とリーダーだけが取り消せます' })).toBeVisible();
+  await expect(
+    page.locator('.toasts:visible .toast', { hasText: '削除した人と、作った人とリーダーだけが取り消せます' }),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: /取り消す/ })).toHaveCount(0);
 });
 
@@ -192,7 +196,7 @@ test('削除の応答を待つ間に引き出しを閉じても、トースト�
   await page.getByRole('link', { name: '待つ間に閉じるタスク', exact: true }).click();
   const drawer = page.getByRole('dialog', { name: '待つ間に閉じるタスク' });
   await drawer.getByRole('button', { name: 'このタスクを削除する' }).click();
-  await drawer.getByRole('button', { name: '閉じる' }).click();
+  await drawer.getByRole('button', { name: '閉じる', exact: true }).click();
   await expect(drawer).toBeHidden();
 
   release();
@@ -221,10 +225,12 @@ test('取り消しの応答だけが落ちて出し直しても、戻ってい�
     .getByRole('button', { name: 'このタスクを削除する' })
     .click();
   await page.getByRole('button', { name: '取り消す: 応答が落ちるタスク' }).click();
-  const retry = page.locator('.toast', { hasText: '取り消せませんでした。通信を確かめて、もう一度試してください' });
+  const retry = page.locator('.toasts:visible .toast', {
+    hasText: '取り消せませんでした。通信を確かめて、もう一度試してください',
+  });
   await retry.getByRole('button', { name: '取り消す: 応答が落ちるタスク' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'タスクを戻しました' })).toBeVisible();
-  await expect(page.locator('.toast', { hasText: 'ほかの画面で変わったため' })).toHaveCount(0);
+  await expect(page.locator('.toasts:visible .toast', { hasText: 'ほかの画面で変わったため' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '応答が落ちるタスク', exact: true })).toBeVisible();
 });
 
