@@ -105,9 +105,11 @@ async function verifyCredential(credential: string, fetcher: typeof fetch): Prom
 async function listScopeCandidates(credential: string, fetcher: typeof fetch): Promise<ScopeCandidate[]> {
   const pat = requireShape(credential);
   const found = new Map<string, ScopeCandidate>();
-  for (let page = 1; page <= MAX_PAGES; page++) {
+  // 101頁目は、100頁目まで満杯だったときに続きが無いことを確かめるためだけに取る
+  for (let page = 1; page <= MAX_PAGES + 1; page++) {
     const body = await getJson(`${REPOS_URL}?per_page=${PAGE_SIZE}&page=${page}`, pat, fetcher);
     if (!Array.isArray(body)) throw fail('unavailable');
+    if (page > MAX_PAGES && body.length > 0) throw fail('unavailable');
     for (const item of body as unknown[]) {
       if (!isRecord(item)) throw fail('unavailable');
       const id = idOf(item.id);
