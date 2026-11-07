@@ -10,6 +10,8 @@
   import BrandMark from './BrandMark.svelte';
   import Breadcrumb from './Breadcrumb.svelte';
   import NavMenu from './NavMenu.svelte';
+  import NavSearch from './NavSearch.svelte';
+  import type { DictionaryKey } from '../../shared/vocabulary.ts';
   import Icon from './Icon.svelte';
   import type { NavigationWorkspace } from '../workspace-navigation.svelte.ts';
 
@@ -53,7 +55,8 @@
   const crumbWorkspace = $derived(
     openWorkspaceId !== null && isWorkspaceId(workspace?.id) && workspace.id === openWorkspaceId ? workspace : null,
   );
-  const screenName = $derived.by(() => {
+  // 画面の名前と行き先。パンくずの今の画面と、上の帯の検索の候補が同じ一覧を使う
+  const navScreens = $derived.by(() => {
     const sections = visibleNav(undefined, {
       hasWorkspace,
       isAdmin,
@@ -61,6 +64,7 @@
       hasWorkspaceMenu: crumbWorkspace !== null,
       workspaceId: crumbWorkspace?.id ?? null,
     });
+    const screens: { key: DictionaryKey; label: string; href: string }[] = [];
     for (const section of sections) {
       for (const item of section.items) {
         const href = isWorkspaceRoute(item.href)
@@ -68,10 +72,21 @@
             ? resolve(item.href, { slug, id: crumbWorkspace.id })
             : null
           : resolve(item.href, { slug });
-        if (href === null || !isNavItemCurrent(item.label, href, current)) continue;
-        return item.label === 'orgWiki' ? t('orgWiki', { organization: organizationName }) : t(item.label);
+        if (href === null) continue;
+        screens.push({
+          key: item.label,
+          label: item.label === 'orgWiki' ? t('orgWiki', { organization: organizationName }) : t(item.label),
+          href,
+        });
       }
     }
+    return screens;
+  });
+  // 検索から送るバックログ。ワークスペースの画面を開いているときだけ
+  const backlogHref = $derived(crumbWorkspace ? resolve('/[slug]/w/[id]', { slug, id: crumbWorkspace.id }) : null);
+  const screenName = $derived.by(() => {
+    const found = navScreens.find((screen) => isNavItemCurrent(screen.key, screen.href, current));
+    if (found) return found.label;
     const key = accountScreenKey(current, slug);
     return key ? t(key) : null;
   });
@@ -117,6 +132,7 @@
   <div class="sheet">
     <div class="topbar">
       <Breadcrumb crumbs={shownCrumbs} />
+      <NavSearch screens={navScreens} {backlogHref} />
       {#if assistant}{@render assistant()}{/if}
       {#if account}{@render account()}{/if}
     </div>

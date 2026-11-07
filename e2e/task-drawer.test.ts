@@ -465,15 +465,26 @@ test('変更の履歴: 読めなければ「もう一度試す」で読み直し
     const first = output.entries[0]!;
     await call.fulfill({ ...output, entries: [first], next: { created_at: first.created_at, id: first.id } });
   });
-  await drawer.getByRole('radio', { name: '8', exact: true }).check();
-  await expect(items).toHaveCount(1);
-  await expect(items.nth(0).locator('.history-changes li span')).toHaveText(['ポイント', '5 → 8']);
-  await history.getByRole('button', { name: 'さらに読む' }).click();
-  await expect(items).toHaveCount(3);
-  await expect(items.nth(1).locator('.history-changes li span')).toHaveText(['ポイント', '未見積もり → 5']);
-  await expect(items.nth(2)).toContainText('作成した');
-  await expect(history.getByRole('button', { name: 'さらに読む' })).toHaveCount(0);
-  await expect(history).toBeFocused();
+  // 続けて同じ欄を直すと履歴が1行にまとまるので、行を分けるために別の欄（タイトル）を直す
+  await drawer.getByRole('button', { name: /履歴を読み直す/ }).click();
+  const titleInput = drawer.getByRole('textbox', { name: 'タイトル' });
+  await titleInput.fill('履歴を読み直した');
+  await titleInput.press('Enter');
+  // タイトルを直すとダイアログの名前も変わるので、以降は新しい名前で引き直す
+  const renamedHistory = page
+    .getByRole('dialog', { name: '履歴を読み直した' })
+    .getByRole('tabpanel', { name: '変更の履歴' });
+  const renamedItems = renamedHistory.locator('.history > li');
+  await expect(renamedItems).toHaveCount(1);
+  await expect(renamedItems.nth(0).locator('.history-changes li span').last()).toHaveText(
+    '履歴を読み直す → 履歴を読み直した',
+  );
+  await renamedHistory.getByRole('button', { name: 'さらに読む' }).click();
+  await expect(renamedItems).toHaveCount(3);
+  await expect(renamedItems.nth(1).locator('.history-changes li span')).toHaveText(['ポイント', '未見積もり → 5']);
+  await expect(renamedItems.nth(2)).toContainText('作成した');
+  await expect(renamedHistory.getByRole('button', { name: 'さらに読む' })).toHaveCount(0);
+  await expect(renamedHistory).toBeFocused();
   expect(befores).toHaveLength(1);
 });
 

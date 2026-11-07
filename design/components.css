@@ -103,7 +103,7 @@ h1, h2, h3 { text-wrap: balance; }
 :is(.org-menu-button, .ws-menu-button) {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--space-2);
   width: 100%; padding: var(--space-2); text-align: left; font: inherit; color: inherit; cursor: pointer;
-  border-radius: var(--radius-1); border: 1px solid var(--color-line); background: var(--color-surface);
+  border-radius: var(--radius-1); border: 1px solid var(--color-control-edge); background: var(--color-surface);
 }
 :is(.org-menu-button, .ws-menu-button):hover { border-color: var(--color-muted); }
 :is(.org-menu-label, .ws-menu-label) { grid-column: 1; font-size: var(--text-xs); color: var(--color-muted); }
@@ -331,10 +331,39 @@ h1, h2, h3 { text-wrap: balance; }
 .breadcrumb-item { min-width: 0; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); text-decoration: none; }
 a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .breadcrumb-item[aria-current="page"] { max-width: 100%; color: var(--color-fg); font-weight: 700; }
+/* 上の帯の検索。パンくずの右。画面の名前を絞り、今のワークスペースがあれば末尾にバックログの検索の行を足す。Ctrl+K（⌘K）で欄へ移る。
+   候補の小窓は帯の下へ重ね、狭い幅では欄を帯の1行に広げて小窓を画面の幅に収める */
+.nav-search {
+  position: relative; display: flex; align-items: center; gap: var(--space-2); flex: 0 1 18rem; min-width: 9rem;
+  border: 1px solid var(--color-line); background: var(--color-surface); border-radius: var(--radius-1); padding-inline: var(--space-2);
+}
+.nav-search:focus-within { outline: 2px solid var(--color-accent); outline-offset: -1px; border-color: var(--color-accent); }
+.nav-search > .ico { flex: none; color: var(--color-muted); }
+.nav-search-input {
+  flex: 1 1 auto; min-width: 0; min-height: 36px; border: 0; background: transparent; color: inherit;
+  font-size: var(--text-sm); padding: 0;
+}
+.nav-search-input:focus { outline: none; }
+.nav-search-list {
+  position: absolute; z-index: 10; top: calc(100% + var(--space-1)); left: 0; right: 0; min-width: min(18rem, 90vw);
+  margin: 0; padding: var(--space-1); list-style: none; max-height: 60vh; overflow-y: auto;
+  background: var(--surface-panel); border: 1px solid var(--color-line); border-radius: var(--radius-1); box-shadow: var(--shadow-float);
+}
+.nav-search-list[hidden] { display: none; }
+.nav-search-list li { padding: var(--space-2) var(--space-3); border-radius: var(--radius-1); font-size: var(--text-sm); overflow-wrap: anywhere; cursor: pointer; }
+.nav-search-list li[aria-selected="true"] { background: var(--color-accent-soft); color: var(--color-accent); font-weight: 700; }
+.nav-search-list .is-backlog { border-top: 1px solid var(--color-line); }
+.nav-search-list .nav-search-empty { color: var(--color-muted); cursor: default; }
+@media (max-width: 760px) {
+  .nav-search { flex: 1 1 100%; order: 3; }
+  .nav-search-input { min-height: 44px; font-size: var(--text-md); }
+  .nav-search-list li { min-height: 44px; display: flex; align-items: center; }
+  .nav-search-key { display: none; }
+}
 /* 761px 以上では帯を1段に固定し、十字の罫がずれないようにする。幅が足りないときはパンくずが縮む */
 @media (min-width: 761px) {
   .topbar { flex-wrap: nowrap; }
-  .topbar > :not(.breadcrumb, #breadcrumb-slot, .account-menu) { flex: none; }
+  .topbar > :not(.breadcrumb, #breadcrumb-slot, .account-menu, .nav-search) { flex: none; }
   /* 長い表示名は、折り返さず右を切って受ける（帯の高さと十字の罫を保つ） */
   .topbar > .account-menu { flex: 0 1 auto; min-width: 0; }
   .account-menu-button { max-width: 100%; }
@@ -405,7 +434,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* ===== ボタン ===== */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  border: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-fg);
+  border: 1px solid var(--color-control-edge); background: var(--color-surface); color: var(--color-fg);
   border-radius: var(--radius-1); padding: 6px 14px; font-size: var(--text-sm); font-weight: 700; text-decoration: none;
   transition: border-color var(--duration-fast), background var(--duration-fast);
 }
@@ -445,7 +474,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* 上の帯の小さな切り替え */
 .pill {
   display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--color-line); background: var(--color-surface); border-radius: var(--radius-1);
+  border: 1px solid var(--color-control-edge); background: var(--color-surface); border-radius: var(--radius-1);
   padding: 4px 10px; font-size: var(--text-sm); position: relative;
 }
 .pill:hover:not([aria-disabled="true"]) { border-color: var(--color-muted); }
@@ -469,7 +498,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* 1つの欄に複数の誤りがあるとき（貼り付けた行ごとの理由など）。.field-error の見出しの下に並べる */
 .field-error-list { margin: 0; padding-left: 1.6em; display: grid; gap: 2px; font-size: var(--text-xs); color: var(--color-danger); overflow-wrap: anywhere; }
 .input, .select, .textarea {
-  width: 100%; border: 1px solid var(--color-line); background: var(--color-surface); border-radius: var(--radius-1);
+  width: 100%; border: 1px solid var(--color-control-edge); background: var(--color-surface); border-radius: var(--radius-1);
   padding: 7px 10px; font-size: var(--text-md);
 }
 .input:focus, .select:focus, .textarea:focus { outline: 2px solid var(--color-accent); outline-offset: -1px; border-color: var(--color-accent); }
@@ -478,7 +507,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .select[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .textarea { min-height: 96px; resize: vertical; line-height: var(--leading-body); }
 .field.is-invalid .input, .field.is-invalid .textarea { border-color: var(--color-danger); }
-.search { display: flex; align-items: center; gap: 6px; border: 1px solid var(--color-line); background: var(--color-surface); border-radius: var(--radius-1); padding: 0 10px; color: var(--color-muted); }
+.search { display: flex; align-items: center; gap: 6px; border: 1px solid var(--color-control-edge); background: var(--color-surface); border-radius: var(--radius-1); padding: 0 10px; color: var(--color-muted); }
 .search input { border: 0; background: none; outline: none; padding: 7px 0; width: 100%; color: var(--color-fg); }
 .search:focus-within { outline: 2px solid var(--color-accent); outline-offset: -1px; }
 
@@ -1728,7 +1757,7 @@ button.file-name:hover { text-decoration-color: currentColor; }
 .meter-small .meter-bar { height: 6px; }
 
 /* ===== AI のアシスタント（パレットと横の欄） =====
- * パレットは上の帯のボタンか Ctrl+K で開く、画面の上に重ねる入力。続けて話すときは横の欄へ移す。
+ * パレットは上の帯のボタンで開く、画面の上に重ねる入力。続けて話すときは横の欄へ移す。
  * 横の欄は、本文を寄せても潰れない広い画面（1500px 以上）では本文を左へ寄せ、それより狭いと右に重ねる。
  * タスクの詳細の引き出しは横の欄の上に出る。操作の色は押せる所だけに使い、アシスタントの印は形と文字で示す。現代風でも光らせない。
  */

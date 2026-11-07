@@ -91,7 +91,7 @@ const GAME_ICONS = [
 ];
 
 const COLORS = [
-  ["地と線", [["地", "--color-bg", "画面の地"], ["面", "--color-surface", "台帳、面、入力欄"], ["一段下", "--color-sunken", "メニュー、列、タグ"], ["枠", "--color-line", "枠の線"], ["罫", "--color-rule", "行を分ける線"]]],
+  ["地と線", [["地", "--color-bg", "画面の地"], ["面", "--color-surface", "台帳、面、入力欄"], ["一段下", "--color-sunken", "メニュー、列、タグ"], ["枠", "--color-line", "記録の区切り線（カード、表、メニューの境）"], ["操作部品の枠", "--color-control-edge", "入力欄、選択欄、検索、ボタンの枠（地と 3:1 以上）"],["罫", "--color-rule", "行を分ける線"]]],
   ["文字", [["文字", "--color-fg", "本文"], ["弱", "--color-muted", "補足、ラベル"], ["淡", "--color-faint", "押す前の操作、未入力"]]],
   ["役割", [["操作", "--color-accent", "操作、選択、進み"], ["操作の淡", "--color-accent-soft", "選択の地"], ["完了", "--color-done", "完了の印、クリア"], ["印", "--color-stamp", "依頼主の印、通知の数"], ["経験値", "--color-xp", "経験値とレベル、レイドだけ"], ["経験値の淡", "--color-xp-soft", "今日やるの地"]]],
   ["状態", [["危", "--color-danger", "期限切れ、重量オーバー"], ["注", "--color-warn", "今週が期限、未記入"], ["良", "--color-ok", "取り込み元で完了、余力あり"]]],
@@ -188,7 +188,7 @@ function assistDemo() {
     refs: [["t8", `<span class="chip is-danger">${icon("alert")}${t("due")}切れ 10/17</span>`], ["t3", `<span class="chip is-warn">${icon("clock")}5 pt で未着手</span>`]] });
   return `
     <div class="field"><span class="field-label">開く所とパレット</span>
-      <div class="cat-row"><button class="pill assist-launch" type="button" data-assist-open>${icon("spark")}<span>${t("assistant")}に頼む</span><kbd class="kbd">${SQ.ASSIST_KEY}</kbd></button><span class="field-hint">押すと本物のパレットが開く。例の頼みごとを押して試せる</span></div>
+      <div class="cat-row"><button class="pill assist-launch" type="button" data-assist-open>${icon("spark")}<span>${t("assistant")}に頼む</span></button><span class="field-hint">押すと本物のパレットが開く。例の頼みごとを押して試せる</span></div>
       <div class="assist-sheet">
         <div class="assist-ask">${icon("spark")}<input class="assist-input" placeholder="${t("assistant")}に頼む" aria-label="見本の入力" tabindex="-1"><span class="icon-btn" aria-hidden="true">${icon("send")}</span></div>
         <div class="assist-context"><span class="assist-ctx">${icon("board")}<span>${SQ.sprintLabel("sp14")}を見ています</span><button type="button" aria-label="開いている画面を前提から外す" tabindex="-1">${icon("x")}</button></span></div>
@@ -740,7 +740,7 @@ const SECTIONS = [
      <div class="field"><span class="field-label">1秒で終わらなかったとき（書かれたまま出し、注記を添える。変換を待つ間は注記の無い同じ見た目）</span>${SQ.markdownSample("plain")}</div>`,
     [".doc-box の中の要素として描く。画面に固有の CSS は持たない。", "見出しは始まりの段を画面が渡す（既定は # が h3、## が h4、h6 で止める）。大きさは Markdown の段のクラス（.doc-h1 から .doc-h6）で決める。h3 以下は本文と同じ大きさで、罫と字間で見分ける。", "リンクは新しいタブで開き、開いた先から元の画面を操作させない（rel=\"noopener noreferrer\"）。新しいタブで開くことは、リンクの補足（aria-describedby が指す隠した文）で伝える。相対リンク、mailto:、javascript:、data: と、2048字を超える URL、ユーザー情報の付いた URL はリンクにせず文字で出す。", "画像は読み込まない。http と https の画像は代わりの文字（無ければ URL）のリンクにし、それ以外は代わりの文字だけにする。リンクの中の画像は、リンクを入れ子にせず文字だけにする。", "チェックリストの箱は押せない（disabled）。押しても保存されない。箱は項目の中身と aria-labelledby で結ぶ。順序付きのリストでは番号を残す。", "密なリスト（項目の間に空行が無い）は段落を &lt;p&gt; で包まない。", "入れ子は32段まで描き、超えた分と生の HTML は、書かれたままの文字（.doc-literal。改行を保つ）で出す。", "変換は Worker で行う。終わるまでは前の本文を残し（無ければ書かれたままの文字。aria-busy）、1秒で終わらなかった本文と、変換の失敗は、Markdown の記号のまま改行も保って出し（.is-plain）、枠の上に「整形せずに表示しています」を添える（.props-note）。"],
     ".doc-box h1-h6 .doc-h1 .doc-h6 / ul ol li.is-task / blockquote pre code hr del a .doc-literal / .doc-table table th td .is-center .is-right / .doc-box.is-plain .props-note")],
-  ["assistant", "AI のアシスタント", () => block("assistant", "AI のアシスタント", "画面から AI に、言葉で質問したり操作を頼んだりする。上の帯のボタンか Ctrl+K でパレットを開いて頼み、続けて話したいときだけ「横の欄で続ける」で右の欄へ移す。画面の見本でも、上の帯から開いて試せる。",
+  ["assistant", "AI のアシスタント", () => block("assistant", "AI のアシスタント", "画面から AI に、言葉で質問したり操作を頼んだりする。上の帯のボタンでパレットを開いて頼み、続けて話したいときだけ「横の欄で続ける」で右の欄へ移す。画面の見本でも、上の帯から開いて試せる。",
     assistDemo(),
     ["開いている画面（タスクの詳細を開いていればそのタスク）を前提として渡し、入力の下の札で示す。札の × で外せる。", "読むだけの頼みごとは、そのまま答える。答えに出た" + t("task") + "は押すと詳細が開く。", "変える頼みごとは、行ごとに「項目・今・変えた後」を出し、人が「実行する」を押してから1回で変える。外した行は変えない。5 件を超えると、先頭の 5 件だけ出して残りを畳み、残りを開くまで実行できない。", "できないことは、できない理由と、誰に頼めばできるかを書く。失敗したときは、何も変えていないことを書く。", "送る先と、会話を保存しないことを、いつも下に出す。", "横の欄は、1500px 以上の画面では本文を左へ寄せ、それより狭いと右に重ねる。タスクの詳細の引き出しは横の欄の上に出す。", "操作の色は押せる所だけに使う。アシスタントの名前、考え中の印、確認の枠は文字と形で示す。現代風でも光らせない。"],
     ".assist-launch .kbd / .assist-palette .assist-sheet .assist-ask .assist-input .assist-context .assist-ctx .assist-body .assist-foot / .assist-suggest .assist-example / .assist-msg .is-user .is-ai .assist-who .assist-steps .assist-spin .assist-text .assist-caret .assist-refs / .assist-confirm .assist-changes .assist-change .assist-change-diff .assist-confirm-foot .assist-after .is-done / .assist-panel .assist-panel-head .assist-thread / .callout.is-danger")],
