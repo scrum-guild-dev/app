@@ -35,8 +35,9 @@ async function create(page: Page, label: string, title: string): Promise<void> {
 }
 
 async function addTask(page: Page, storyTitle: string, title: string, createLabel: string): Promise<void> {
-  await page.getByRole('button', { name: new RegExp(`を足す: ${storyTitle}$`) }).click();
+  await page.getByRole('button', { name: createLabel, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: createLabel });
+  await dialog.getByLabel('親のストーリー').selectOption({ label: storyTitle });
   await dialog.getByLabel('タイトル').fill(title);
   await dialog.getByRole('button', { name: createLabel }).click();
   await expect(dialog).toBeHidden();
