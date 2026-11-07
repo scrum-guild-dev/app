@@ -776,8 +776,8 @@ export const dictionary = defineDictionary({
   storyReopenBlocked: '{done}か中止した{epic}の下の{story}は取り消せません',
   // 親のエピックが完了か中止しているとき、「完了にする」（メニューの項目）の横に出す（完了にすると取り消せなくなるため、断る）
   storyCompleteBlocked: '{done}か中止した{epic}の下の{story}は{done}にできません',
-  // 木に載っていないストーリー（絞り込みの外、一覧の無い画面で開いた）の引き出しで、完了の帯の代わりに出す
-  storyFactsMissing: 'この画面の一覧に載っていないため、{done}の操作は出ません',
+  // 無効の「完了にする」を押して読み直した結果、残りが無くなっていたときの読み上げ
+  storyRecheckedOpen: '残りの{task}は 0 件になりました。{done}にできます',
   storyReopen: '取り消す',
   storyReopenLabel: '{done}を取り消す: {title}',
   storyCompleting: '{done}にしています',
@@ -1720,13 +1720,16 @@ export const dictionary = defineDictionary({
   taskDeleteConfirm: '削除する',
   taskDeleteCancel: 'やめる',
   taskDeleting: '削除しています',
-  taskDeleted: '{task}を削除しました',
+  taskDeleted: '{task}「{title}」を削除しました',
   taskDeleteFailed: '削除できませんでした。もう一度試してください。',
   taskDeleteForbidden: '作った人と{leader}だけが削除できます',
   // 削除の取り消し（task-restore）。削除のトーストの「取り消す」から呼ぶ
   taskRestoreAction: '取り消す',
+  taskRestoreActionLabel: '{action}: {title}',
   taskRestored: '{task}を戻しました',
   taskRestoreFailed: '取り消せませんでした',
+  taskRestoreRetry: '取り消せませんでした。通信を確かめて、もう一度試してください',
+  taskRestoredCleared: '{task}を戻しました。{fields}は、削除の間に変わったため外しました',
   taskRestoreForbidden: '削除した人と、作った人と{leader}だけが取り消せます',
   taskRestoreGone: '取り消せませんでした。ほかの画面で変わったため、一覧を読み直します',
   taskRestoreParentCompleted: '親の{story}が{done}しているため、戻せませんでした',

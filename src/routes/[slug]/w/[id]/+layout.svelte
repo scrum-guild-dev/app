@@ -20,11 +20,13 @@
     openTaskTab,
     setTaskOpenMode,
     taskPageHref,
+    type AdjacentTasks,
     type TaskOpenMode,
   } from '../../../../lib/drawer.svelte.ts';
-  import { focusPageHeading } from '../../../../lib/focus-heading.ts';
+  import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../lib/focus-heading.ts';
   import { formatLocalDate } from '../../../../lib/format.ts';
-  import { epicFinishedOf, parentChoicesOf, storyFactsOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
+  import { focusToastAction, resumeToast } from '../../../../lib/toast.svelte.ts';
+  import { epicFinishedOf, parentChoicesOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import type { LayoutData } from './$types';
 
@@ -45,8 +47,8 @@
   // ストーリーの引き出し（StoryDrawer）は、URL の `?story=<ID>` が付いている間、同じ形で置く。タスクの引き出しと同時には開かない
   // （行のリンクが、もう一方の問い合わせを外す。両方が付いた URL は、タスクの方だけを開く）。開き方は横か真ん中だけ（ページ全体は無い）。
   // 閉じるときは `story` だけを外し、開いた行の題（data-story-id）へフォーカスを戻す。前後のストーリーへは、バックログが置いた木のストーリーの順（storyOrder）で移る。
-  // 完了の状態、期日の印の今日、親に選べるエピックは、バックログが読んだ木（page.data.tree）から渡す。木が無い画面や、絞り込みで木から外れたストーリーでは、
-  // 引き出しは完了の操作と親を移すを出さない
+  // 期日の印の今日と親に選べるエピックは、バックログが読んだ木（page.data.tree）から渡す。木が無い画面では、引き出しは親を移すを出さない。
+  // 完了の状態は、引き出しが story-get から読む（絞り込みで木から外れたストーリーでも、木の無い画面でも出る）
   let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
   const workspace = $derived(data.workspace);
@@ -138,19 +140,56 @@
   });
 
   // タスクが消えた（削除した、見つからない）。閉じて、木を読み直し、フォーカスを見出しへ移す（戻る先の行が無いため）
-  async function removed(): Promise<void> {
+  // toastId は、キーボードで削除したときの「取り消す」のトースト。見出しへ移した後に、そのボタンへフォーカスを移す
+  // （10秒で消えるのをキーボードだけの人が取り逃さないため。フォーカスがある間はトーストが消えない）
+  async function removed(toastId: number | null): Promise<void> {
     focusAfterReload = true;
-    await withoutTask();
+    try {
+      await withoutTask();
+      await invalidate('app:backlog-tree');
+      await tick();
+    } catch (error) {
+      // 読み直しが落ちても、止めておいた数えを戻す（戻さないとトーストが消えなくなる）
+      if (toastId !== null) resumeToast(toastId);
+      throw error;
+    }
+    // キーボードで消した後、待つ間に別の所へフォーカスを移した人からは奪わない（数えは戻す）
+    if (toastId !== null && !focusIsFree()) {
+      resumeToast(toastId);
+      return;
+    }
+    focusPageHeading();
+    if (toastId !== null) await focusToastAction(toastId);
+  }
+
+  // 「取り消す」で戻した。木を読み直し、押したボタンにフォーカスがあり、待つ間に利用者が別へ移っていなければ、
+  // 戻したタスクの題のリンクへ（無ければ見出しへ）移す
+  async function restored(restoredId: string, focus: boolean): Promise<void> {
     await invalidate('app:backlog-tree');
     await tick();
-    focusPageHeading();
+    if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
+  }
+
+  // フォーカスがある「取り消す」のトーストを Esc で閉じた。消した行の次の行、無ければ前の行、無ければ見出しへ移す
+  function skipped(near: AdjacentTasks | null): void {
+    void tick().then(() => focusFirstTaskRow([near?.next ?? null, near?.prev ?? null]));
   }
 
   // ---- ストーリーの引き出し ----
-  const storyAdjacent = $derived(storyId === null ? null : adjacentTaskIds(storyOrder.ids, storyId));
-  // 木のストーリーの行。完了の状態、期日の印の今日と週の始まり、親に選べるエピック。バックログの画面が読んだ木から取る
+  // 絞り込みで木から外れても（検索中に題を直した直後など）前後のボタンが消えないよう、順に載っていた間の前後を覚えておく。
+  // 別のストーリーを開き直したとき（URL から直接開いた、順に無い）は覚えがないので、ボタンを出さない
+  // 覚えた前後は $effect で更新する（$derived の中で書かない。閉じると読み手がいなくなり、$derived は再評価されないため）
+  let remembered = $state.raw<{ id: string; adjacent: { prev: string | null; next: string | null } } | null>(null);
+  const foundAdjacent = $derived(storyId === null ? null : adjacentTaskIds(storyOrder.ids, storyId));
+  $effect(() => {
+    if (storyId === null) remembered = null;
+    else if (foundAdjacent !== null) remembered = { id: storyId, adjacent: foundAdjacent };
+  });
+  const storyAdjacent = $derived(
+    foundAdjacent ?? (storyId !== null && remembered?.id === storyId ? remembered.adjacent : null),
+  );
+  // 期日の印の今日と週の始まり、親に選べるエピック。バックログの画面が読んだ木から取る
   const storyTree = $derived(storyTreeOf(page.data));
-  const storyFacts = $derived(storyId === null ? null : storyFactsOf(storyTree, storyId));
   const storyClock = $derived(storyTree === null ? null : { today: storyTree.today, weekStart: storyTree.week_start });
   const storyParents = $derived(parentChoicesOf(storyTree));
 
@@ -301,7 +340,9 @@
         onclose={() => void withoutTask()}
         onchanged={() => void invalidate('app:backlog-tree')}
         onstale={() => void invalidate('app:workspace')}
-        onremoved={() => void removed()}
+        onremoved={(toastId) => void removed(toastId)}
+        onrestored={restored}
+        onskipped={skipped}
       />
     {/key}
   {/if}
@@ -316,7 +357,6 @@
         workspaceId={workspace.id}
         {storyId}
         {canWrite}
-        facts={storyFacts}
         clock={storyClock}
         parents={storyParents}
         onclose={() => void withoutStory()}

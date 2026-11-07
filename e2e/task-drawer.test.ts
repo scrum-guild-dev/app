@@ -152,7 +152,9 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
   await drawer.getByRole('button', { name: 'このタスクを削除する' }).click();
   await expect(page.getByRole('dialog', { name: 'タスクを削除する' })).toHaveCount(0);
   await expect(drawer).toBeHidden();
-  const deletedToast = page.locator('.toasts:visible .toast', { hasText: 'タスクを削除しました' });
+  const deletedToast = page.locator('.toasts:visible .toast', {
+    hasText: '「見積もりを送って確かめる」を削除しました',
+  });
   await expect(deletedToast).toBeVisible();
   await expect(page.locator('.entry', { hasText: '見積もりを送って確かめる' })).toHaveCount(0);
   await expect(page).not.toHaveURL(/\?task=/);

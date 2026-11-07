@@ -10,7 +10,8 @@
     setTaskOpenMode,
     type TaskOpenMode,
   } from '../../../../../../lib/drawer.svelte.ts';
-  import { focusPageHeading } from '../../../../../../lib/focus-heading.ts';
+  import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../../../lib/focus-heading.ts';
+  import { focusToastAction, resumeToast } from '../../../../../../lib/toast.svelte.ts';
   import { t } from '../../../../../../lib/vocabulary.svelte.ts';
   import type { PageData } from './$types';
 
@@ -58,15 +59,40 @@
     await after();
   }
 
-  async function close(removed = false): Promise<void> {
+  async function close(removed = false, toastId: number | null = null): Promise<void> {
     const id = page.params.taskId ?? '';
     await leave(async () => {
-      if (removed) await invalidate('app:backlog-tree');
-      await tick();
+      try {
+        if (removed) await invalidate('app:backlog-tree');
+        await tick();
+      } catch (error) {
+        // 読み直しが落ちても、止めておいた数えを戻す（戻さないとトーストが消えなくなる）
+        if (toastId !== null) resumeToast(toastId);
+        throw error;
+      }
       const row = !removed && document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`);
       if (row) row.focus();
-      else focusPageHeading();
+      else if (toastId === null || focusIsFree()) focusPageHeading();
+      // キーボードで削除したときは、見出しへ移した後に「取り消す」へフォーカスを移す。待つ間に別の所へ移った人からは奪わず、数えを戻す
+      if (toastId !== null) {
+        if (document.activeElement === document.body || document.activeElement?.matches('h1')) {
+          await focusToastAction(toastId);
+        } else resumeToast(toastId);
+      }
     });
+  }
+
+  // 「取り消す」で戻した（引き出しと同じ）。木を読み直し、押したボタンにフォーカスがあり、待つ間に利用者が別へ移っていなければ、
+  // 戻したタスクの題のリンクへ（無ければ見出しへ）移す
+  async function restored(restoredId: string, focus: boolean): Promise<void> {
+    await invalidate('app:backlog-tree');
+    await tick();
+    if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
+  }
+
+  // フォーカスがある「取り消す」のトーストを Esc で閉じた。消した行の次の行、無ければ前の行、無ければ見出しへ移す
+  function skipped(near: { prev: string | null; next: string | null } | null): void {
+    void tick().then(() => focusFirstTaskRow([near?.next ?? null, near?.prev ?? null]));
   }
 
   // 帯で形を替える（書きかけの確認は TaskDrawer が済ませている）。移れなかったとき（新しいタブを開けなかった）は false を返し、
@@ -109,7 +135,9 @@
       onclose={() => void close()}
       onchanged={() => void invalidate('app:backlog-tree')}
       onstale={() => void invalidate('app:workspace')}
-      onremoved={() => void close(true)}
+      onremoved={(toastId) => void close(true, toastId)}
+      onrestored={restored}
+      onskipped={skipped}
     />
   {/key}
 {/if}
