@@ -722,17 +722,18 @@
     const tail = opts.tailMark || {};
     // 前後の線は配下を含めた塊（.tree-group）に、囲みは行に付ける
     const into = mark.drop === "into";
-    // 題の button.tree-link は旧い流れ。本番はリンク（a.tree-link。?story=<ID>）で引き出しを開く。見本は追従待ち
+    // 題はリンク（a.tree-link。?story=<ID>）で、押すとタスクと同じ引き出しをストーリーの形で開く（本番の TreeStory と StoryDrawer）。
+    // 行の「⋯」は並べ替えと親を移すだけで、削除は引き出しの帯の「⋯」にある
     return `<div class="tree-group${mark.state === "is-dragging" ? " is-dragging" : ""}"${into ? "" : dropAttr(mark)}>
       <div class="tree-row is-story ${solo ? "is-root" : ""}${opts.order ? " has-grip" : ""}${mark.state === "is-dropped" ? " is-dropped" : ""}"${into ? dropAttr(mark) : ""}>
         ${opts.order ? gripCell(false) : ""}${treeCaret(`tree-${key}`, st.title)}
         <span class="kind is-story" title="${t("story")}">${icon("check")}</span>
-        <span class="tree-title"><button class="tree-link" type="button" data-dialog="editStory">${esc(st.title)}</button>${solo && st.cat ? ` ${categoryTag(st.cat)}` : ""} ${dueChip(st.due)}</span>
+        <span class="tree-title"><a class="tree-link" href="?story=${encodeURIComponent(sid)}" data-story="${sid}">${esc(st.title)}</a>${solo && st.cat ? ` ${categoryTag(st.cat)}` : ""} ${dueChip(st.due)}</span>
         <span class="tree-end">
           <span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span>
           ${st.doneAt ? "" : `<button class="btn is-sm" type="button" data-dialog="createTask" aria-label="${t("task")}を足す: ${esc(st.title)}">${icon("plus")}${t("task")}</button>`}
           ${storyDoneControl(key, st, open.length, Boolean(opts.blocked))}
-          ${opts.order ? rowMenu(st.title, [...orderItems(opts.order), { attr: `data-dialog="deleteStory" data-tree-delete-id="${sid}"`, label: `この${t("story")}を削除`, icon: "trash", danger: true }]) : ""}
+          ${opts.order ? rowMenu(st.title, orderItems(opts.order)) : ""}
         </span>
       </div>
       <div class="tree-children" id="tree-${key}">${open.map((x, i) => entry(x, { showParent: false, showAssignee: true, showSprint: true,
@@ -1069,19 +1070,30 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   const drawer = { id: null, tab: "comments", thanked: new Set(), opener: null, mode: readDrawerMode(), view: null, errors: {}, drafts: {}, commentEditing: null,
     // 見本の状態の切り替え（カタログの drawerDemo が使う）。commentsView はコメントの読み込み（loading、failed、reloadFailed）
     // adjacent は前後のタスク（{ prev, next }。順を渡さない画面は null）。undefined なら画面の行から求める（drawerAdjacent）
-    commentsView: null, commentViewer: null, commentBlocked: null, adjacent: undefined };
+    commentsView: null, commentViewer: null, commentBlocked: null, adjacent: undefined,
+    // kind は開いているものの種類（task、story）。ストーリーの引き出し（本番の StoryDrawer）は id にストーリーの id を持ち、
+    // 開き方は横と真ん中だけ。canDelete は削除できる人か（偽なら「⋯」に削除を出さず、理由を本文の下に出す）、
+    // parentFinished は親のエピックが完了か中止している（ストーリーの完了と取り消しを押せなくする）見本の状態
+    kind: "task", canDelete: true, parentFinished: false, remaining: null };
   const drawerReadOnly = () => drawer.view === "readonly";
+  const isStoryDrawer = () => drawer.kind === "story";
+  const drawerNoun = () => (isStoryDrawer() ? t("story") : t("task"));
   function readDrawerMode() {
     try { const mode = localStorage.getItem("sq-design-task-open-mode"); return ["side", "center", "page", "tab"].includes(mode) ? mode : "side"; }
     catch { return "side"; }
   }
-  function shownDrawerMode() { return drawer.mode === "center" && matchMedia("(max-width: 620px)").matches ? "side" : drawer.mode; }
+  // ストーリーの引き出しは横と真ん中だけ（ページ全体と新しいタブは、タスクの画面があるタスクの形）
+  function shownDrawerMode() {
+    if (isStoryDrawer() && (drawer.mode === "page" || drawer.mode === "tab")) return "side";
+    return drawer.mode === "center" && matchMedia("(max-width: 620px)").matches ? "side" : drawer.mode;
+  }
   // 今描いている形。ページ全体の見本（task.html）はページ全体、それ以外は横か真ん中（狭い幅の真ん中は横）
-  function renderedDrawerMode() { return location.pathname.endsWith("/task.html") ? "page" : shownDrawerMode() === "center" ? "center" : "side"; }
+  function renderedDrawerMode() { return location.pathname.endsWith("/task.html") && !isStoryDrawer() ? "page" : shownDrawerMode() === "center" ? "center" : "side"; }
   // 開き方は押した時点で実行するボタンの組。select にすると、矢印キーを押すだけで確認なしに遷移してしまう
   function drawerModeButtons() {
     const narrow = matchMedia("(max-width: 620px)").matches, now = renderedDrawerMode();
-    const buttons = [["side", "横"], ["center", "真ん中"], ["page", "ページ全体"], ["tab", "新しいタブ"]].filter(([v]) => v !== "center" || !narrow)
+    const buttons = [["side", "横"], ["center", "真ん中"], ["page", "ページ全体"], ["tab", "新しいタブ"]]
+      .filter(([v]) => (v !== "center" || !narrow) && (!isStoryDrawer() || v === "side" || v === "center"))
       .map(([v, label]) => `<button class="pill" type="button" data-drawer-mode="${v}" aria-pressed="${now === v}">${label}</button>`).join("");
     return `<span class="drawer-mode" role="group" aria-label="開き方">${buttons}</span>`;
   }
@@ -1091,8 +1103,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function drawerAdjacent() {
     if (drawer.adjacent !== undefined) return drawer.adjacent;
     if (renderedDrawerMode() === "page") return null;
-    const ids = [...new Set([...document.querySelectorAll("[data-task]")]
-      .filter((el) => !el.closest("#drawer, #assist-panel, #assist-palette, [hidden]")).map((el) => el.dataset.task))];
+    // ストーリーの引き出しは、画面に見えているストーリーの題のリンク（data-story）の並びで前後を決める
+    const attr = isStoryDrawer() ? "data-story" : "data-task";
+    const ids = [...new Set([...document.querySelectorAll(`[${attr}]`)]
+      .filter((el) => !el.closest("#drawer, #assist-panel, #assist-palette, [hidden]")).map((el) => el.getAttribute(attr)))];
     const at = ids.indexOf(drawer.id);
     return at < 0 ? null : { prev: ids[at - 1] ?? null, next: ids[at + 1] ?? null };
   }
@@ -1110,7 +1124,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!adjacent) return "";
     // 読み上げの名前は変えず、title にだけキーを添える。キーは aria-keyshortcuts でも伝える。端で押せないときの title は理由（先頭です／最後です）
     const button = (delta, label, key, glyph, has, edge) => `<button class="pill" type="button" data-drawer-step="${delta}" aria-label="${label}" aria-keyshortcuts="${key}" title="${has ? `${label}（${key}）` : edge}" aria-disabled="${!has}">${icon(glyph)}</button>`;
-    return `<span class="drawer-steps" role="group" aria-label="前後の${t("task")}">${button(-1, `前の${t("task")}`, "[", "up", adjacent.prev, "先頭です")}${button(1, `次の${t("task")}`, "]", "down", adjacent.next, "最後です")}</span>`;
+    const noun = drawerNoun();
+    return `<span class="drawer-steps" role="group" aria-label="前後の${noun}">${button(-1, `前の${noun}`, "[", "up", adjacent.prev, "先頭です")}${button(1, `次の${noun}`, "]", "down", adjacent.next, "最後です")}</span>`;
   }
   // 前後へ移る。書きかけがあれば、閉じるときと同じ確認を挟む（force は捨てると決めた後）。閉じたときの戻り先は、最後に表示したタスクの行。
   // ボタン（viaButton）で移ったときは、押したのと同じ向きのボタンへフォーカスを戻す（端で押せないなら見出し）。キー（[ ]）のときは見出し
@@ -1122,7 +1137,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const id = adjacent && (delta < 0 ? adjacent.prev : adjacent.next);
     if (!id) return;
     if (!force && drawerHasDraft()) { askDiscardDraft({ kind: "step", delta, viaButton }); return; }
-    resetDrawerFor(id, id);
+    resetDrawerFor(id, id, drawer.kind);
     renderDrawer();
     const again = viaButton && document.querySelector(`#drawer [data-drawer-step="${delta}"]:not([aria-disabled="true"])`);
     if (again) { again.focus(); return; }
@@ -1151,7 +1166,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       return;
     }
     if (location.pathname.endsWith("/task.html")) { location.href = `backlog.html?task=${encodeURIComponent(id)}`; return; }
-    closeDrawer(true); openDrawer(id, drawer.opener);
+    const kind = drawer.kind;
+    closeDrawer(true); openDrawer(id, drawer.opener, false, null, kind);
   }
   // 画面の幅が 620px を越えたら、真ん中のボタンを出し入れする
   matchMedia("(max-width: 620px)").addEventListener("change", () => renderDrawer());
@@ -1255,6 +1271,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 2つのタブの中身は描いたまま隠す（本番は書きかけのコメントを、タブを切り替えても保つ）。左右の矢印キーでタブを移る
   function drawerHtml() {
+    if (isStoryDrawer()) return storyDrawerHtml();
     const x = task(drawer.id);
     const parent = x.story ? D.stories[x.story] : null;
     const epic = parent && parent.epic ? D.epics[parent.epic] : null;
@@ -1344,42 +1361,104 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         // 作った人とリーダーには削除のボタンだけを出す。一般のメンバーには、ボタンの代わりに「削除できるのは作った人と${t("leader")}です。」だけを添える
         : `<button class="btn is-sm is-quiet is-danger" type="button" data-task-delete="${x.id}">${icon("trash")}この${t("task")}を削除する</button><span class="field-hint">${location.pathname.endsWith("/task.html") ? "確認なしですぐ消えます。" : "すぐ消えます。消した直後は、知らせの「取り消す」で戻せます。"}</span>`}</div>`}`;
   }
+  // ストーリーの引き出し（本番の StoryDrawer。枠はタスクと同じ Drawer）。バックログの木のストーリーの題（a.tree-link。?story=<ID>）から開く。
+  // 帯は種類の印「ストーリー」（完了なら「完了」の印）、「⋯」（親を移す、削除。削除できない人には削除を出さず、理由を本文の下に出す）、前後、開き方（横と真ん中）、閉じる。
+  // 題、リンク、受け入れ基準、本文はいつも書ける欄で自動保存（タスクと同じ）。期日と区分は選んだら保存する。完了の帯は、配下の未完了のタスクが残るあいだと、
+  // 親のエピックが完了か中止しているあいだ、完了にする・取り消すを aria-disabled にして理由を添える。コメントと履歴と感謝は無い
+  const storyAcText = (st) => st.acMd ?? (st.ac || []).map((a) => `- ${a}`).join("\n");
+  function storyMenuHtml(st) {
+    const items = [{ attr: `data-order="swap"`, label: "親を移す", icon: "swap" },
+      ...(drawer.canDelete ? [{ attr: `data-dialog="deleteStory" data-tree-delete-id="${drawer.id}"`, label: `この${t("story")}を削除する`, icon: "trash", danger: true }] : [])];
+    return drawerReadOnly() || !items.length ? "" : rowMenu(st.title, items);
+  }
+  function storyDueHtml(st) {
+    if (drawerReadOnly()) return `<span>${st.due || "—"}</span>${dueChip(st.due, { done: Boolean(st.doneAt) })}`;
+    return `<input class="input" type="date" data-drawer-due aria-label="${t("due")}" value="${st.due || ""}">
+      ${st.due ? `<button class="link-btn" type="button" data-drawer-due-clear>クリア</button>` : ""}${dueChip(st.due, { done: Boolean(st.doneAt) })}`;
+  }
+  function storyAcHtml(st) {
+    const saved = storyAcText(st), label = t("ac");
+    if (drawerReadOnly()) return `<div class="field"><span class="field-label">${label}</span><div class="doc-box${saved ? "" : " is-empty"}">${saved ? mdBody(saved.split("\n")) : "まだ書かれていません。"}</div></div>`;
+    return `<div class="field"><div class="field-head"><label class="field-label" for="drawer-edit-ac">${label}</label>${saveStateHtml("ac")}</div>
+      <div class="slash-wrap"><textarea class="textarea is-inline" id="drawer-edit-ac" data-drawer-input="ac" data-slash placeholder="まだ書かれていません。押して書きます">${esc(drawer.drafts.ac ?? saved)}</textarea></div></div>`;
+  }
+  function storyDoneBarHtml(st, remaining) {
+    const ro = drawerReadOnly(), blocked = drawer.parentFinished, ids = { blocked: "drawer-story-blocked", remaining: "drawer-story-remaining", reason: "drawer-story-reason" };
+    if (st.doneAt) {
+      const note = blocked && !ro ? `<span class="props-note" id="${ids.blocked}">${t("done")}か中止した${t("epic")}の下の${t("story")}は取り消せません</span>` : "";
+      const undo = ro ? "" : `<button class="link-btn" type="button" data-story-reopen aria-label="${t("done")}を取り消す: ${esc(st.title)}"${blocked ? ` aria-disabled="true" aria-describedby="${ids.blocked}"` : ` aria-disabled="false"`}>取り消す</button>`;
+      return `<div class="done-bar"><span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}" tabindex="-1">${icon("check")}<b>完</b></span><span>${t("done")} ${esc(st.doneAt)}</span>${note}${undo}</span></div>`;
+    }
+    if (ro) return "";
+    const note = blocked ? `<span class="props-note" id="${ids.blocked}">${t("done")}か中止した${t("epic")}の下の${t("story")}は${t("done")}にできません</span>`
+      : remaining ? `<span class="props-note" id="${ids.remaining}">残り ${remaining} 件の${t("task")}</span><span class="visually-hidden" id="${ids.reason}">未完了の${t("task")}が残っているあいだは${t("done")}にできません</span>` : "";
+    const off = blocked || remaining > 0;
+    return `<div class="done-bar">${note}<button class="btn is-primary" type="button" data-story-done aria-disabled="${off}"${off ? ` aria-describedby="${blocked ? ids.blocked : `${ids.remaining} ${ids.reason}`}"` : ""}>${icon("check")}${t("complete")}</button></div>`;
+  }
+  function storyDrawerHtml() {
+    const st = D.stories[drawer.id];
+    const ro = drawerReadOnly();
+    const remaining = drawer.remaining ?? tasksWhere((x) => x.story === drawer.id && !x.doneAt).length;
+    const epic = st.epic ? D.epics[st.epic] : null;
+    if (drawer.view === "loading" || drawer.view === "failed") return drawerStateHtml();
+    return `
+      <div class="drawer-top">
+        <span class="chip">${icon("check")}${t("story")}</span>${st.doneAt ? `<span class="chip is-ok">${icon("check")}${t("done")}</span>` : ""}
+        ${storyMenuHtml(st)}
+        <span class="drawer-tools">
+          ${drawerStepButtons()}${drawerModeButtons()}
+          <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
+        </span>
+      </div>
+      ${ro ? `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の${t("story")}は、読み取りだけできます</span></div>` : ""}
+      ${drawerTitleHtml(st)}
+      <dl class="props">
+        <div><dt>${t("due")}</dt><dd>${storyDueHtml(st)}</dd></div>
+        <div><dt>${epic || ro ? t("category") : `<label for="drawer-cat">${t("category")}</label>`}</dt><dd>${epic
+          ? `${epic.cat ? esc(D.categories[epic.cat].name) : `${t("category")}なし`}<span class="props-note">親から引き継ぎ</span>`
+          : categorySelect("drawer-cat", st.cat || null, ro)}</dd></div>
+        <div><dt>リンク</dt><dd>${drawerLinkHtml(st)}</dd></div>
+      </dl>
+      ${storyAcHtml(st)}
+      ${drawerBodyHtml(st)}
+      ${storyDoneBarHtml(st, remaining)}
+      ${!ro && !drawer.canDelete ? `<div class="form-actions"><span class="field-hint">削除できるのは作った人と${t("leader")}です。</span></div>` : ""}`;
+  }
   // 引き出しの見本の状態。読み込み中と、読めなかったとき（もう一度試す）は、見出しと文だけ
   function drawerStateHtml() {
-    const x = task(drawer.id);
     const top = `<div class="drawer-top"><span class="drawer-tools">${drawerStepButtons()}${drawerModeButtons()}<button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></span></div>
-      <h2 class="drawer-title"><span id="drawer-title">${t("task")}</span></h2>`;
+      <h2 class="drawer-title"><span id="drawer-title">${drawerNoun()}</span></h2>`;
     if (drawer.view === "loading") return `${top}<p class="field-hint">読み込んでいます</p>`;
-    return `${top}<div class="callout is-danger" role="alert">${icon("alert")}<span>この${t("task")}を読み込めませんでした。もう一度試してください。</span></div>
+    return `${top}<div class="callout is-danger" role="alert">${icon("alert")}<span>この${drawerNoun()}を読み込めませんでした。もう一度試してください。</span></div>
       <div class="form-actions"><button class="btn" type="button">もう一度試す</button></div>`;
   }
   // 引き出しを開いたまま、別のタスクのリンク（アシスタントの答えの参照など）から開くときも、書きかけがあれば移る前に確かめる。
   // before は開くと決まったときに先に行うこと（パレットを閉じる）。「書き続ける」なら行わない
   // 書きかけがあるまま同じタスクのリンクを押したときは、開き直さずに書きかけを残し、コメントのタブと閉じるボタンへ戻す
-  function openDrawer(id, opener, force = false, before = null) {
+  function openDrawer(id, opener, force = false, before = null, kind = "task") {
     if (!force && drawer.id && drawerHasDraft()) {
-      if (drawer.id !== id) { askDiscardDraft({ kind: "open", id, opener, before }); return; }
+      if (drawer.id !== id || drawer.kind !== kind) { askDiscardDraft({ kind: "open", id, opener, before, drawerKind: kind }); return; }
       before?.();
-      if (drawer.tab !== "comments") setDrawerTab("comments");
+      if (!isStoryDrawer() && drawer.tab !== "comments") setDrawerTab("comments");
       document.querySelector("#drawer [data-close-drawer]")?.focus();
       return;
     }
     before?.();
-    if (!location.pathname.endsWith("/task.html") && (drawer.mode === "page" || drawer.mode === "tab")) {
+    if (kind === "task" && !location.pathname.endsWith("/task.html") && (drawer.mode === "page" || drawer.mode === "tab")) {
       const url = `task.html?task=${encodeURIComponent(id)}`;
       if (drawer.mode === "tab") window.open(url, "_blank", "noopener,noreferrer");
       else { sessionStorage.setItem("sq-design-task-return", location.href); location.href = url; }
       return;
     }
 
-    resetDrawerFor(id, opener);
+    resetDrawerFor(id, opener, kind);
     renderDrawer();
     document.querySelector("#drawer [data-close-drawer]")?.focus();
   }
   // 別のタスクを開く（前後へ移るときも）ために、引き出しの状態を初めに戻し、前のタスクの中身（欄を含む子要素すべて）を外す。
   // renderDrawer は描き直す前に欄の値を写すので、中身を残すと前の書きかけが開いた先に戻る
-  function resetDrawerFor(id, opener) {
-    drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = opener || null; drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
+  function resetDrawerFor(id, opener, kind = "task") {
+    drawer.kind = kind; drawer.canDelete = true; drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = opener || null; drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     document.getElementById("drawer")?.replaceChildren();
   }
   // 直している欄の今の入力。再描画しても書きかけを残すため、描き直す前に写す
@@ -1390,11 +1469,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (edit) drawer.drafts.commentEdit = edit.value;
   }
   // 書きかけ: 直している途中で、入力が保存した値と違う欄（保存と同じく前後の空白は除いて比べる）
+  const drawerItem = () => (isStoryDrawer() ? D.stories[drawer.id] : task(drawer.id));
   function drawerHasDraft() {
-    const x = task(drawer.id);
+    const x = drawerItem();
     if (!x) return false;
     captureDrafts();
-    const saved = { title: x.title, link: x.link || "", body: (x.body || []).join("\n"), fields: fieldsText(x) };
+    const saved = { title: x.title, link: x.link || "", body: (x.body || []).join("\n"), ...(isStoryDrawer() ? { ac: storyAcText(x) } : { fields: fieldsText(x) }) };
     // コメントは、新しいコメントの欄に文字があるときと、直している途中で直す前の本文と違うとき
     const editingComment = drawer.commentEditing !== null ? (D.comments[x.id] || [])[drawer.commentEditing] : null;
     if ((drawer.drafts.comment ?? "").trim() !== "") return true;
@@ -1411,12 +1491,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
     drawer.id = null; drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     renderDrawer();
-    const back = drawer.opener && document.querySelector(`[data-task="${drawer.opener}"]`);
+    const back = drawer.opener && document.querySelector(`[${isStoryDrawer() ? "data-story" : "data-task"}="${drawer.opener}"]`);
     if (back) back.focus();
   }
   // ---- 自動保存。タイトル、リンク、本文、決まった欄 ----
   const fieldsText = (x) => (x.unfilled ? "" : (x.fields ?? (x.story ? D.stories[x.story].ac.slice(0, 2) : ["結果を確かめる手順が書かれている"]).map((a) => `- ${a}`).join("\n")));
-  const savedFieldValue = (x, name) => name === "title" ? x.title : name === "link" ? x.link || "" : name === "body" ? (x.body || []).join("\n") : fieldsText(x);
+  const savedFieldValue = (x, name) => name === "title" ? x.title : name === "link" ? x.link || "" : name === "body" ? (x.body || []).join("\n") : name === "ac" ? storyAcText(x) : fieldsText(x);
   const saveTimers = {};
   const SAVE_WAIT = 1500;
   function showSaveState(name, state) {
@@ -1466,7 +1546,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   function commitDrawerField(name) {
     clearTimeout(saveTimers[name]);
-    const x = task(drawer.id), input = document.querySelector(`#drawer [data-drawer-input="${name}"]`);
+    const x = drawerItem(), input = document.querySelector(`#drawer [data-drawer-input="${name}"]`);
     if (!x || !input) return;
     const value = input.value.trim();
     if (value === savedFieldValue(x, name).trim() && !drawer.errors[name]) return;
@@ -1478,6 +1558,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       if (value && !/^https?:\/\/\S+$/i.test(value)) { showDrawerError("link", "http か https で始まる URL を入れてください"); showSaveState(name, "failed"); return; }
       x.link = value || null;
     } else if (name === "body") x.body = value ? value.split("\n") : null;
+    else if (name === "ac") { x.acMd = value; x.ac = value.split("\n").map((l) => l.replace(/^\s*[-*]\s+/, "").trim()).filter(Boolean); }
     else { x.fields = value; x.unfilled = !value; }
     showDrawerError(name, "");
     delete drawer.drafts[name];
@@ -1487,7 +1568,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 書きかけを保存した値に戻す（Esc）。戻したら true
   function revertDrawerField(input) {
-    const x = task(drawer.id), name = input.dataset.drawerInput;
+    const x = drawerItem(), name = input.dataset.drawerInput;
     if (!x) return false;
     const saved = savedFieldValue(x, name);
     if (input.value.trim() === saved.trim() && !drawer.errors[name]) return false;
@@ -1521,7 +1602,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   document.addEventListener("change", (ev) => {
     const el = ev.target.closest && ev.target.closest("[data-drawer-pts], [data-drawer-due]");
     if (!el || !drawer.id) return;
-    const x = task(drawer.id);
+    const x = drawerItem();
     if (el.matches("[data-drawer-pts]")) x.pts = el.value === "" ? null : Number(el.value);
     else x.due = el.value || null;
     redrawAll(); toast(`${icon("check")}保存しました`);
@@ -1867,31 +1948,19 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("sprint")}を${s ? "保存しました" : "作りました"}">${s ? "保存する" : "作る"}</button>`);
   }
 
-  // ストーリーの作成と変更のダイアログ。閉じたワークスペース（readOnly）では、欄を readonly にして保存のボタンを出さない
-  // （日付の入力は readonly を受けないので、読み取り専用の text にして日付を出す）。リンクに値があれば、欄の横に「開く」を置く。
-  // 直すときは、欄の下に「この<ストーリー>を削除する」を置く（canDelete が偽の人には、ボタンの代わりに削除できる人を出す）
-  function storyDialog(title, st, readOnly = false, canDelete = true) {
-    const link = st && st.link ? st.link : "";
-    const ro = readOnly ? " readonly" : "";
+  // ストーリーを作るダイアログ（本番の StoryDialog）。直すのは引き出し（storyDrawerHtml）なので、ここは作るだけ。
+  // 受け入れ基準と本文は空のまま作れる。日付の入力と区分の選択、リンクは後から引き出しで足せる
+  function storyDialog(title) {
     openDialog(title,
-      `${readOnly ? `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の${t("story")}は、読み取りだけできます。</span></div>` : ""}
-       <label class="field" for="d-st"><span class="field-label">タイトル</span><input class="input" id="d-st" placeholder="どこまで進めば区切りか" value="${st ? esc(st.title) : ""}"${ro}></label>
-       <label class="field" for="d-sa"><span class="field-label">${t("ac")}</span><textarea class="textarea" id="d-sa"${ro}>${st ? esc((st.ac || []).join("\n")) : ""}</textarea></label>
-       <label class="field" for="d-sb"><span class="field-label">本文</span><textarea class="textarea" id="d-sb"${ro}></textarea></label>
-       ${st && st.epic
-         ? `<div class="field"><span class="field-label">${t("category")}</span><span>${D.epics[st.epic].cat ? esc(D.categories[D.epics[st.epic].cat].name) : `${t("category")}なし`} <span class="props-note">親から引き継ぎ</span></span></div>`
-         : `<div class="field">${readOnly ? `<span class="field-label">${t("category")}</span>` : `<label class="field-label" for="d-sc">${t("category")}</label>`}${categorySelect("d-sc", st ? st.cat : null, readOnly)}</div>`}
+      `<label class="field" for="d-st"><span class="field-label">タイトル</span><input class="input" id="d-st" placeholder="どこまで進めば区切りか"></label>
+       <label class="field" for="d-sa"><span class="field-label">${t("ac")}</span><textarea class="textarea" id="d-sa"></textarea></label>
+       <label class="field" for="d-sb"><span class="field-label">本文</span><textarea class="textarea" id="d-sb"></textarea></label>
+       <div class="field"><label class="field-label" for="d-sc">${t("category")}</label>${categorySelect("d-sc", null, false)}</div>
        <div class="form-row is-start">
-         <label class="field" for="d-sd"><span class="field-label">${t("due")}</span>${readOnly
-           ? `<input class="input" id="d-sd" type="text" readonly value="${st && st.due ? st.due : ""}">`
-           : `<input class="input" id="d-sd" type="date" value="${st && st.due ? st.due : ""}">`}</label>
-         <div class="field"><label class="field-label" for="d-sl">リンク</label>
-           <span class="input-row"><input class="input" id="d-sl" type="url" placeholder="https://" value="${esc(link)}"${ro}>${link ? `<a class="btn" href="${esc(link)}" target="_blank" rel="noopener noreferrer" aria-label="リンクを新しいタブで開く">開く</a>` : ""}</span></div>
-       </div>
-       ${st && !readOnly ? treeDeleteActions("story", canDelete) : ""}`,
-      readOnly
-        ? `<button class="btn is-primary" type="button" data-close-dialog>閉じる</button>`
-        : `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${st ? "保存しました" : `${t("story")}を作りました`}">${st ? "保存する" : "作る"}</button>`);
+         <label class="field" for="d-sd"><span class="field-label">${t("due")}</span><input class="input" id="d-sd" type="date"></label>
+         <div class="field"><label class="field-label" for="d-sl">リンク</label><input class="input" id="d-sl" type="url" placeholder="https://"></div>
+       </div>`,
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("story")}を作りました">作る</button>`);
   }
   // 親の選択欄のストーリーの候補（本番の src/lib/parent-options.ts）。木の順（エピックの下、親のないもの）に並べ、
   // エピックの下の候補があるときだけ、親のエピックごとの optgroup にまとめ、親のないストーリーは「親なしの<ストーリー>」にまとめる
@@ -1902,7 +1971,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!groups.some((g) => g.eid !== null)) return options(sids);
     return groups.map((g) => `<optgroup label="${g.eid === null ? `親なしの${t("story")}` : esc(D.epics[g.eid].title)}">${options(g.sids)}</optgroup>`).join("");
   }
-  // エピックとストーリーのダイアログの下の削除の行。削除できない人（作った人でもリーダーでもない）には、ボタンの代わりに削除できる人を出す
+  // エピックのダイアログの下の削除の行。削除できない人（作った人でもリーダーでもない）には、ボタンの代わりに削除できる人を出す
+  // （ストーリーは引き出しの「⋯」から削除し、削除できない人には本文の下に同じ理由を出す）
   function treeDeleteActions(kind, canDelete) {
     return `<div class="form-actions">${canDelete
       ? `<button class="btn is-sm is-quiet is-danger" type="button" data-dialog="${kind === "epic" ? "deleteEpic" : "deleteStory"}">${icon("trash")}この${t(kind)}を削除する</button>`
@@ -1910,8 +1980,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // エピックとストーリーの削除の確認（本番の TreeDeleteDialog）。kind は "epic" か "story"。
   // opts.empty は配下の無い形（選択肢を出さない）、opts.leaderOnly は「まとめて削除する」を選べない形（リーダーでない人で、他の人の作った配下がある）。
-  // 見本は1枠のダイアログなので、元のエピックとストーリーのダイアログを置き換えて開く。本番は元のダイアログの上に重ねて開き、
-  // 開いたときに get を読み直して件数と可否を差し替える
+  // 見本は1枠のダイアログなので、元のエピックのダイアログを置き換えて開く。ストーリーは引き出しの「⋯」から、引き出しの上に開く。
+  // 本番は元のダイアログの上に重ねて開き、開いたときに get を読み直して件数と可否を差し替える
   function treeDeleteDialog(kind, id, opts = {}) {
     const item = kind === "epic" ? D.epics[id] : D.stories[id];
     const stories = opts.empty ? 0 : kind === "epic" ? Object.keys(D.stories).filter((sid) => D.stories[sid].epic === id).length : 0;
@@ -1934,7 +2004,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
            </div>${opts.leaderOnly ? `<span class="field-hint" id="d-del-leader">配下に他の人が作ったものがあるため、まとめて削除できるのは${t("leader")}だけです。</span>` : ""}</div>`
          : `<p class="field-hint">配下の${t(kind === "epic" ? "story" : "task")}はありません。</p>`}
        <p class="field-hint">完了の記録と経験値は残ります。</p>`,
-      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="${t(kind)}を削除しました">削除する</button>`);
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog${kind === "story" ? " data-close-story-drawer" : ""} data-toast="${t(kind)}を削除しました">削除する</button>`);
     document.querySelector(".dialog-sheet").classList.add("is-danger");
   }
   // エピックの作成と変更のダイアログ（本番の EpicDialog）。欄はストーリーのダイアログから受け入れ基準を除いたもの。
@@ -2081,16 +2151,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
          <p class="props-note">${esc(D.sprints.sp14.goal)}</p>
          <div class="segmented" role="radiogroup"><label><input type="radio" name="d-goal" checked><span>達成した</span></label><label><input type="radio" name="d-goal"><span>達成していない</span></label></div></div>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${sprintLabel("sp14")} を終えました">終える</button>`),
-    // ストーリーの作成と変更は同じ欄。バックログの木の行から開く。タイトル以外は空でよい。
-    // 本番は、作るだけがダイアログで、直す（editStory、viewStory、editStoryNotOwner）は題のリンクで開く引き出し（自動保存。削除は引き出しの「⋯」）。見本は追従待ち
-    createStory: () => storyDialog(`${t("story")}を作る`, null),
-    editStory: () => storyDialog(t("story"), D.stories.s4),
-    viewStory: () => storyDialog(t("story"), { ...D.stories.s4, link: "https://example.com/notes/42" }, true),
+    // ストーリーを作るのはダイアログ。バックログの見出しの「<ストーリー>を作る」から開く。タイトル以外は空でよい。
+    // 直すのは題のリンクで開く引き出し（storyDrawerHtml。自動保存。削除は引き出しの帯の「⋯」）で、ダイアログは無い
+    createStory: () => storyDialog(`${t("story")}を作る`),
     createEpic: () => epicDialog(`${t("epic")}を作る`, null),
     editEpic: () => epicDialog(t("epic"), D.epics.e1),
     viewEpic: () => epicDialog(t("epic"), D.epics.e1, true),
     // 作った人でもリーダーでもない人が開いたとき。削除のボタンの代わりに削除できる人を出す
-    editStoryNotOwner: () => storyDialog(t("story"), D.stories.s4, false, false),
     editEpicNotOwner: () => epicDialog(t("epic"), D.epics.e1, false, false),
     createTask: () => openDialog(`${t("create")}`,
       `<label class="field" for="d-title"><span class="field-label">タイトル</span><input class="input" id="d-title" placeholder="何をするか"></label>
@@ -2313,7 +2380,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   ].filter(Boolean);
   // 開いている画面。タスクの詳細を開いていればそのタスク
   function assistContext() {
-    if (drawer.id) return `${t("task")}「${esc(task(drawer.id).title)}」`;
+    if (drawer.id) return `${drawerNoun()}「${esc(drawerItem().title)}」`;
     if (!page) return esc(Object.values(D.workspaces)[0]?.name || "");
     if (["me", "admin"].includes(page.current)) return t(page.current === "me" ? "pageMe" : "pageOrgAdmin");
     if (page.current === "sprint" && D.sprints.sp14) return esc(sprintLabel("sp14"));
@@ -2860,7 +2927,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     document.querySelector("[data-switch='first']")?.addEventListener("click", cycleFirst);
     applyTheme();
     redraw();
-    const taskId = new URLSearchParams(location.search).get("task");
+    const storyId = new URLSearchParams(location.search).get("story");
+    if (storyId && D.stories[storyId] && !location.pathname.endsWith("/task.html")) openDrawer(storyId, null, false, null, "story");
+    const taskId = storyId ? null : new URLSearchParams(location.search).get("task");
     if (taskId) {
       if (location.pathname.endsWith("/task.html")) {
         drawer.mode = "page";
@@ -3066,7 +3135,23 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       [...document.querySelectorAll("#drawer #drawer-panel-comments .comment")].at(-1)?.scrollIntoView({ block: "nearest" }); return;
     }
     if (hit("data-close-drawer")) { closeDrawer(); return; }
-    if (hit("data-drawer-due-clear")) { task(drawer.id).due = null; redrawAll(); toast(`${icon("check")}保存しました`); return; }
+    if (hit("data-drawer-due-clear")) { drawerItem().due = null; redrawAll(); toast(`${icon("check")}保存しました`); return; }
+    // ストーリーの完了と取り消し。押せない理由（配下の未完了、親のエピックの完了と中止）があるあいだは aria-disabled で、押しても何も起きない
+    if ((el = hit("data-story-done")) || (el = hit("data-story-reopen"))) {
+      if (el.getAttribute("aria-disabled") === "true") return;
+      const st = D.stories[drawer.id], done = el.hasAttribute("data-story-done");
+      st.doneAt = done ? "10/20 10:12" : null;
+      redrawAll(); toast(`${icon("check")}${t("story")}の${t("done")}を${done ? "記録しました" : "取り消しました"}`);
+      document.querySelector(done ? "#drawer .hanko" : "#drawer [data-story-done]")?.focus(); return;
+    }
+    // バックログの木のストーリーの題（?story=<ID> のリンク）は、タスクと同じ引き出しをストーリーの形で開く
+    // カタログの入口（data-story-can-delete="false"）は、削除できない人の形で開く
+    if ((el = hit("data-story"))) {
+      ev.preventDefault();
+      openDrawer(el.dataset.story, el.dataset.story, false, null, "story");
+      if (drawer.kind === "story" && drawer.id === el.dataset.story) { drawer.canDelete = el.dataset.storyCanDelete !== "false"; renderDrawer(); }
+      return;
+    }
     if ((el = hit("data-drawer-mode"))) { changeDrawerMode(el.dataset.drawerMode); return; }
     if ((el = hit("data-drawer-step"))) { stepDrawer(Number(el.dataset.drawerStep), false, true); return; }
     if (hit("data-discard-draft")) {
@@ -3074,7 +3159,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       closeDialog();
       if (next?.kind === "mode") changeDrawerMode(next.mode, true);
       else if (next?.kind === "step") stepDrawer(next.delta, true, next.viaButton);
-      else if (next?.kind === "open") openDrawer(next.id, next.opener, true, next.before);
+      else if (next?.kind === "open") openDrawer(next.id, next.opener, true, next.before, next.drawerKind);
       else closeDrawer(true);
       return;
     }
@@ -3184,7 +3269,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       celebrate(e.title, `${t("party")}の ${e.party.length} 人に ${{ small: 100, medium: 300, large: 600 }[e.tier]} XP`); return;
     }
     if ((el = hit("data-close-dialog")) || (ev.target.id === "dialog" && !dialogOnlyButtons)) {
-      const msg = el && el.dataset.toast; closeDialog(); if (msg) toast(`${icon("check")}${esc(msg)}`); return;
+      const msg = el && el.dataset.toast; closeDialog(); if (msg) toast(`${icon("check")}${esc(msg)}`);
+      // ストーリーの引き出しの「⋯」から削除したら、引き出しも閉じる（本番の deleteFinished）
+      if (el && el.hasAttribute("data-close-story-drawer") && drawer.id) closeDrawer(true);
+      return;
     }
     if ((el = hit("data-toast"))) {
       // data-toast-action があれば、文の後ろに操作のボタンを付ける（押すとそのトーストを消す）

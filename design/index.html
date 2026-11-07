@@ -147,10 +147,16 @@ function colorBlock() {
 // opts.commentsView はコメントの読み込み（loading、failed、reloadFailed）、opts.commentViewer は見る人（一般のメンバーの見え方）、
 // opts.commentBlocked は直している途中に消されたコメントの番号
 // opts.adjacent は前後のタスク（{ prev, next }。端は null）。順を渡さない画面は null。既定は両側にある。ページ全体の見本には前後のボタンを出さない
+// opts.kind: "story" はストーリーの形（id はストーリーの id）。opts.canDelete が偽なら削除できない人、opts.parentFinished は親のエピックが完了か中止している形、
+// opts.doneAt は完了したストーリー、opts.remaining は配下の未完了のタスクの数（0 で完了にできる形）
 function drawerDemo(tag = "a", id = "t1", editing = [], opts = {}) {
   const st = SQ.drawerState;
-  const keep = [st.id, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked, st.adjacent];
+  const keep = [st.id, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked, st.adjacent, st.kind, st.canDelete, st.parentFinished, st.remaining];
+  const story = opts.kind === "story" ? D.stories[id] : null, storyDoneAt = story && story.doneAt;
+  if (story && "doneAt" in opts) story.doneAt = opts.doneAt;
+  st.remaining = opts.remaining ?? null;
   st.adjacent = opts.shape === "page" ? null : "adjacent" in opts ? opts.adjacent : { prev: "t5", next: "t2" };
+  st.kind = opts.kind || "task"; st.canDelete = opts.canDelete !== false; st.parentFinished = Boolean(opts.parentFinished);
   st.id = id; st.view = opts.view || null; st.errors = opts.errors || {}; st.drafts = opts.drafts || {};
   st.tab = opts.tab || "comments"; st.commentEditing = opts.commentEditing ?? null;
   st.commentsView = opts.commentsView || null; st.commentViewer = opts.commentViewer || null; st.commentBlocked = opts.commentBlocked ?? null;
@@ -163,11 +169,13 @@ function drawerDemo(tag = "a", id = "t1", editing = [], opts = {}) {
     .replace(/drawer-edit-/g, `demo-${tag}-edit-`)
     .replace(/drawer-pts/g, `demo-${tag}-pts`)
     .replace(/drawer-(tab|panel)-/g, `demo-${tag}-$1-`)
+    .replace(/drawer-story-/g, `demo-${tag}-story-`)
     .replace(/(id|for|aria-describedby)="(new-comment|comment-edit-\d+)/g, `$1="demo-${tag}-$2`)
     .replace(/data-close-drawer|data-drawer-mode/g, "disabled")
     .replace(/ data-drawer-step="-?1"/g, "")
-    .replace(/ data-drawer-(?:pts|due-clear|due)(?![\w-])(?:="[^"]*")?| data-comment-(?:edit|save|cancel|delete|send)(?:="[^"]*")?| data-tab="[^"]*"| data-task-delete="[^"]*"/g, "");
-  [st.id, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked, st.adjacent] = keep;
+    .replace(/ data-drawer-(?:pts|due-clear|due)(?![\w-])(?:="[^"]*")?| data-comment-(?:edit|save|cancel|delete|send)(?:="[^"]*")?| data-tab="[^"]*"| data-task-delete="[^"]*"| data-story-(?:done|reopen)/g, "");
+  [st.id, st.view, st.errors, st.drafts, st.tab, st.commentEditing, st.commentsView, st.commentViewer, st.commentBlocked, st.adjacent, st.kind, st.canDelete, st.parentFinished, st.remaining] = keep;
+  if (story) story.doneAt = storyDoneAt;
   return `<div class="drawer cat-drawer${shape ? ` is-${shape}` : ""}">${html}</div>`;
 }
 
@@ -375,15 +383,15 @@ const SECTIONS = [
     `<div class="tree">${treeEpic("e2")}${treeStory("s4", true)}${treeStory("s1", true, { doneAt: "2026-10-22" })}</div>` +
     `<div class="tree">${treeEpic("e1", { cleared: true, key: "e1-cleared" })}${treeEpic("e2", { canceled: true, empty: true, key: "e2-canceled" })}${treeEpic("e1", { empty: true, key: "e1-empty" })}</div>` +
     `<div class="cat-row"><span class="order-actions"><button class="icon-btn" type="button" aria-label="上へ" title="上へ" aria-disabled="true">${icon("up")}</button><button class="icon-btn" type="button" aria-label="下へ" title="下へ">${icon("down")}</button><button class="icon-btn" type="button" aria-label="親を移す" title="親を移す">${icon("swap")}</button></span><span class="field-hint">行の並べ替えと親の移動。先頭の行の「上へ」は aria-disabled</span></div>`,
-    ["最上段はエピック、親のないストーリー、親のないタスクの順。エピックの行の題はエピックの画面へのリンク（a.tree-link）。配下が無いエピックには「ストーリーはまだありません」の1行を出す。", "右端の数は「完了 / 全体」のポイント。エピックの行は、配下のストーリーの合計。", "完了したタスクは折りたたみ、件数だけ出す。", "ストーリーの行の右端に「完了にする」（.btn.is-sm）を置く。配下に未完了のタスクが残るあいだは、押してもフォーカスが残るよう aria-disabled にし、横に「残り N 件のタスク」（.tree-note）と、見えない文字の押せない理由を置き、どちらも aria-describedby で結ぶ。完了したストーリー（1つ目の木の下の行）は、「＋タスク」を出さず、完了の印（.hanko）と「取り消す」（.btn.is-sm.is-quiet）を置く。", "2つ目の木は、完了したエピック（.chip.is-done。完了の印と同じ役の色）、中止したエピック（.chip）、配下の無いエピック。完了か中止したエピックの期日には色を付けず、配下の「取り消す」は必ず断られるので aria-disabled にして、理由（.tree-note）を横に出す。エピックの行には区分の印を出さない（本番と同じ）。", "ストーリーの行の「親を移す」は、親なしと、完了も中止もしていないエピックから選ぶ（タスクの「親を移す」と同じダイアログ）。", "行は普通の要素（div）で、開閉は左端の caret のボタン（button.tree-caret の aria-expanded と aria-controls）だけが受け持つ。details と summary は使わない（行の中のボタンと開閉がぶつかるため）。", "ストーリーの題はボタン（button.tree-link）で、押すとダイアログが開く。行の右端の「＋タスク」（.tree-end）は、親を選んだ状態でタスクのダイアログを開く。caret、題、「＋タスク」は独立したボタンで、狭い幅（760px 以下）と指で押す画面では、見た目は変えず押せる範囲を 44px 四方以上に広げる。", "書き込めるときは、タスクの行（.entry-end）とストーリーとエピックの行（.tree-end）の右に .order-actions の「上へ」「下へ」を置き（エピックは親を持たないので「親を移す」は無い）、タスクの行には「親を移す」も添える。行の中で Alt と ↑ ↓ を押しても同じ。端の向きは、押した後もフォーカスが残るよう disabled でなく aria-disabled にする。狭い幅と指で押す画面では、ボタンを 44px 四方にする。"],
-    ".tree .tree-group .tree-row .is-epic .is-story .is-root .tree-caret .tree-title .tree-ratio .tree-note .tree-end .tree-children .tree-folded / .chip.is-done / a.tree-link / button.tree-link / button.tree-caret[aria-expanded] / .order-actions .icon-btn[aria-disabled]")],
+    ["最上段はエピック、親のないストーリー、親のないタスクの順。エピックの行の題はエピックの画面へのリンク、ストーリーの行の題は引き出しを開くリンク（どちらも a.tree-link）。配下が無いエピックには「ストーリーはまだありません」の1行を出す。", "右端の数は「完了 / 全体」のポイント。エピックの行は、配下のストーリーの合計。", "完了したタスクは折りたたみ、件数だけ出す。", "ストーリーの行の右端に「完了にする」（.btn.is-sm）を置く。配下に未完了のタスクが残るあいだは、押してもフォーカスが残るよう aria-disabled にし、横に「残り N 件のタスク」（.tree-note）と、見えない文字の押せない理由を置き、どちらも aria-describedby で結ぶ。完了したストーリー（1つ目の木の下の行）は、「＋タスク」を出さず、完了の印（.hanko）と「取り消す」（.btn.is-sm.is-quiet）を置く。", "2つ目の木は、完了したエピック（.chip.is-done。完了の印と同じ役の色）、中止したエピック（.chip）、配下の無いエピック。完了か中止したエピックの期日には色を付けず、配下の「取り消す」は必ず断られるので aria-disabled にして、理由（.tree-note）を横に出す。エピックの行には区分の印を出さない（本番と同じ）。", "ストーリーの行の「親を移す」は、親なしと、完了も中止もしていないエピックから選ぶ（タスクの「親を移す」と同じダイアログ）。", "行は普通の要素（div）で、開閉は左端の caret のボタン（button.tree-caret の aria-expanded と aria-controls）だけが受け持つ。details と summary は使わない（行の中のボタンと開閉がぶつかるため）。", "ストーリーの題はリンク（a.tree-link。?story=&lt;ID&gt;）で、押すとタスクと同じ引き出しをストーリーの形で開く（下の「引き出し（ストーリー）」）。行の「⋯」は並べ替えと親を移すだけで、削除は引き出しの「⋯」にある。行の右端の「＋タスク」（.tree-end）は、親を選んだ状態でタスクのダイアログを開く。caret、題、「＋タスク」は独立したボタンで、狭い幅（760px 以下）と指で押す画面では、見た目は変えず押せる範囲を 44px 四方以上に広げる。", "書き込めるときは、タスクの行（.entry-end）とストーリーとエピックの行（.tree-end）の右に .order-actions の「上へ」「下へ」を置き（エピックは親を持たないので「親を移す」は無い）、タスクの行には「親を移す」も添える。行の中で Alt と ↑ ↓ を押しても同じ。端の向きは、押した後もフォーカスが残るよう disabled でなく aria-disabled にする。狭い幅と指で押す画面では、ボタンを 44px 四方にする。"],
+    ".tree .tree-group .tree-row .is-epic .is-story .is-root .tree-caret .tree-title .tree-ratio .tree-note .tree-end .tree-children .tree-folded / .chip.is-done / a.tree-link / button.tree-caret[aria-expanded] / .order-actions .icon-btn[aria-disabled]")],
   ["row-ops", "行で直に操作する部品", () => block("row-ops", "行で直に操作する部品", "一覧の行と引き出しで、ダイアログを開かずに操作を終える部品。空の行、属性のチップ、行の「⋯」、保存の状態、取り消せるトースト、「/」の小窓。",
     `<div class="field"><span class="field-label">空の行（題を打って Enter で足し、続けて打てる。変換中の Enter と Esc、空のまま離れたときは作らない）</span><div class="book">${SQ.draftRow("root", "cat", `${t("task")}を足す`)}</div></div>` +
     `<div class="field"><span class="field-label">属性のチップ（未設定は薄い破線。押すと値の一覧が開き、選ぶと保存する）と、行の「⋯」（広い幅ではホバーと行の中のフォーカスで出す。幅 760px 以下と指の画面では常に出して 44px 四方）</span>${book([SQ.task("t3"), SQ.task("t1")], { showAssignee: true, order: { first: false, last: false, parent: true } }).replace(/ data-task-delete="[^"]*"/g, '')}</div>` +
     `<div class="field"><span class="field-label">保存の状態（欄の横に小さく出す）</span><div class="cat-row"><span class="save-state is-saved" role="status">${icon("check")}保存しました</span><span class="save-state is-failed" role="status">${icon("alert")}保存できませんでした</span></div></div>` +
     `<div class="field"><span class="field-label">取り消せるトースト（消す操作はすぐ行い、10 秒のあいだ「取り消す」で戻せる。ポインターかフォーカスがある間は消えない）</span><div class="cat-row"><button class="btn" type="button" data-toast="${t("task")}を削除しました" data-toast-action="取り消す">取り消せる知らせを出す</button></div></div>` +
     `<div class="field"><span class="field-label">「/」の小窓（行の先頭で / を打つと開く。上下で選び、Enter で入れ、Esc で閉じる。一覧の行で Enter を押すと次の行に同じ印を付ける）</span><div class="slash-wrap"><label class="visually-hidden" for="cat-slash">Markdown の欄の見本</label><textarea class="textarea" id="cat-slash" data-slash placeholder="/ を打ってみる"></textarea></div></div>`,
-    ["空の行は一覧の末尾に置く入力欄で、作る前の確認も保存のボタンも無い。バックログの木では、タスクに加えて、木の末尾に「エピックを足す」「ストーリーを足す」（親のないストーリー）、完了も中止もしていない各エピックの配下の末尾に「ストーリーを足す」を置く。日本語の変換中の Enter（<code>isComposing</code>、<code>keyCode</code> 229）では作らず、Esc か空のまま離れたときも作らない。作ったら同じ欄に戻り、続けて打てる。失敗したときは、行の直下に <code>.field-error.draft-error</code>（<code>role=\"alert\"</code>）で理由を出し、入力は <code>aria-invalid</code> にして書きかけを残す。エピックの配下の行の読み上げの名前は「ストーリーを足す: <題>」と親の題を添える。", "属性のチップは、未設定なら薄い破線（<code>.chip-btn.is-unset</code>）。作るときは題だけを決め、ポイントや担当は行のチップから後で決める。", "行の操作は、完了の丸のほかを「⋯」（<code>.row-menu</code>）にまとめる。木の行とスプリントのカードの並べ替えの操作はこのメニューに入り、<code>.order-actions</code> は設定の並べ替えられる一覧だけが使う（下の「木」「列とカード」の説明のうち、行の右端やカードの下に <code>.order-actions</code> を並べる記述は、本番が追従するまでの今の形）。メニューは <code>role=\"menu\"</code>、上下の矢印で項目を移り、Esc で閉じて「⋯」に戻る。例外として、引き出しの帯の「⋯」（本番のストーリーの引き出し。見本は追従待ち）は、ホバーする行が無いので広い幅でも常に出す（<code>.drawer .row-menu-btn</code>）。", "タスクとコメントは確認なしですぐ消し、取り消せるトーストを出す。配下のあるストーリーとエピックは確認のダイアログを残す。", "保存の状態（<code>.save-state</code>）は、色に加えてアイコンと文字で示し、読み上げは <code>role=\"status\"</code> が受け持つ。", "「/」の小窓（<code>.slash-menu</code>）は本文の欄の下に出て、欄に <code>role</code> は付けず、候補の数と選んでいる項目を見えない <code>role=\"status\"</code> の領域で伝える。"],
+    ["空の行は一覧の末尾に置く入力欄で、作る前の確認も保存のボタンも無い。バックログの木では、タスクに加えて、木の末尾に「エピックを足す」「ストーリーを足す」（親のないストーリー）、完了も中止もしていない各エピックの配下の末尾に「ストーリーを足す」を置く。日本語の変換中の Enter（<code>isComposing</code>、<code>keyCode</code> 229）では作らず、Esc か空のまま離れたときも作らない。作ったら同じ欄に戻り、続けて打てる。失敗したときは、行の直下に <code>.field-error.draft-error</code>（<code>role=\"alert\"</code>）で理由を出し、入力は <code>aria-invalid</code> にして書きかけを残す。エピックの配下の行の読み上げの名前は「ストーリーを足す: <題>」と親の題を添える。", "属性のチップは、未設定なら薄い破線（<code>.chip-btn.is-unset</code>）。作るときは題だけを決め、ポイントや担当は行のチップから後で決める。", "行の操作は、完了の丸のほかを「⋯」（<code>.row-menu</code>）にまとめる。木の行とスプリントのカードの並べ替えの操作はこのメニューに入り、<code>.order-actions</code> は設定の並べ替えられる一覧だけが使う（下の「木」「列とカード」の説明のうち、行の右端やカードの下に <code>.order-actions</code> を並べる記述は、本番が追従するまでの今の形）。メニューは <code>role=\"menu\"</code>、上下の矢印で項目を移り、Esc で閉じて「⋯」に戻る。例外として、引き出しの帯の「⋯」（ストーリーの引き出し。下の「引き出し（ストーリー）」）は、ホバーする行が無いので広い幅でも常に出す（<code>.drawer .row-menu-btn</code>）。", "タスクとコメントは確認なしですぐ消し、取り消せるトーストを出す。配下のあるストーリーとエピックは確認のダイアログを残す。", "保存の状態（<code>.save-state</code>）は、色に加えてアイコンと文字で示し、読み上げは <code>role=\"status\"</code> が受け持つ。", "「/」の小窓（<code>.slash-menu</code>）は本文の欄の下に出て、欄に <code>role</code> は付けず、候補の数と選んでいる項目を見えない <code>role=\"status\"</code> の領域で伝える。"],
     ".draft-row .draft-error / .chip-btn .is-unset / .row-menu .row-menu-btn .row-menu-list .menu-item / .save-state .is-saved .is-failed / .toast .toast-action / .slash-wrap .slash-menu .slash-item / .input.is-inline")],
   ["wiki", "Wiki の木とページの道筋", () => block("wiki", "Wiki の木とページの道筋", "ページの親子を、左の欄の入れ子の箇条書きで見せる。今開いているページは色に加えて太字と左の線で示し、枝は caret のボタンで開閉する。ページの上には、最上段から今のページまでの道筋を置く。画面は wiki.html（ワークスペースの Wiki と、?scope=organization の組織の Wiki）。",
     `<div class="two"><div class="panel"><div class="panel-title"><b>ページ</b><span class="props-note">5 件</span></div><nav aria-label="見本のページ">${SQ.wikiTree([
@@ -501,15 +509,14 @@ const SECTIONS = [
       <button class="btn" type="button" data-dialog="editEpic">${t("epic")}を直す</button>
       <button class="btn" type="button" data-dialog="viewEpic">${t("epic")}（終了した${t("workspace")}）</button>
       <button class="btn" type="button" data-dialog="createStory">${t("story")}を作る</button>
-      <button class="btn" type="button" data-dialog="editStory">${t("story")}を直す</button>
-      <button class="btn" type="button" data-dialog="viewStory">${t("story")}（終了した${t("workspace")}）</button>
+      <a class="btn" href="?story=s4" data-story="s4">${t("story")}を直す（引き出し）</a>
+      <a class="btn" href="?story=s4" data-story="s4" data-story-can-delete="false">${t("story")}を直す（引き出し。削除できない人）</a>
       <button class="btn" type="button" data-dialog="editRecord">完了の記録を直す</button>
       <button class="btn is-danger" type="button" data-dialog="deleteEpic">${t("epic")}を削除する</button>
       <button class="btn is-danger" type="button" data-dialog="deleteStory">${t("story")}を削除する</button>
       <button class="btn is-danger" type="button" data-dialog="deleteStoryEmpty">${t("story")}を削除する（配下なし）</button>
       <button class="btn is-danger" type="button" data-dialog="deleteStoryLeaderOnly">${t("story")}を削除する（まとめて削除できない）</button>
       <button class="btn" type="button" data-dialog="editEpicNotOwner">${t("epic")}を直す（削除できない人）</button>
-      <button class="btn" type="button" data-dialog="editStoryNotOwner">${t("story")}を直す（削除できない人）</button>
       <button class="btn" type="button" data-dialog="discardDraft">書きかけを捨てるか確かめる（引き出し）</button>
     </div>
     <div class="cat-row">
@@ -714,6 +721,22 @@ const SECTIONS = [
       "横と真ん中は <code>aria-modal=\"true\"</code> で外側を操作できなくする。ページ全体は通常の領域として出し、引き出しの外（左のメニューなど）にフォーカスがあるときの Esc では閉じない。終了したワークスペースでは直す口と削除を出さず、読み取り専用で開く。",
       "下の「コメント N」と「変更の履歴」はタブ（<code>role=\"tablist\"</code>、左右の矢印キーで移る）。N は消していないコメントの数。コメントは書いた順に並べ、50 件より前は上の「前のコメントを読む」で足す。本文は Markdown の <code>.doc-box</code> を枠なしで描く。見出し（名前、日時、編集済み）の右（<code>.comment-actions</code>）には、許された操作だけを <code>.btn.is-sm.is-quiet</code> の「編集」「削除」で出す（自分のコメントは両方、" + t("leader") + "は人のコメントの「削除」）。「編集」は本文がその場で書く欄に替わり、「削除」は確かめのダイアログを挟む。消したものは「削除されました」、本人以外が消したら「〇〇が削除しました」と残る。新しいコメントの欄と、直している途中のコメントは書きかけに数え、タブを切り替えても残す。終了した" + t("workspace") + "では、書く欄と操作を出さない。"],
     ".drawer .is-center .is-page .scrim .drawer-top .drawer-tools .drawer-steps .drawer-mode .drawer-close .drawer-title / .edit-trigger .is-empty .edit-form .edit-actions .field-head / .props .props-note / .doc-box .is-empty / .done-bar .done-bar-done .done-bar-dod .done-bar-dod-title .done-bar-dod-body /.thanks / .tabs .tab / .thread .comment .comment-head .comment-actions .comment-body .is-deleted .composer-foot / .history .history-changes")],
+  ["story-drawer", "引き出し（ストーリー）", () => block("story-drawer", "引き出し（ストーリー）",
+    `バックログの木のストーリーの題は、エピックの題と同じリンク（<code>a.tree-link</code>、<code>?story=&lt;ID&gt;</code>）で、押すとタスクと同じ枠（<code>.drawer</code>）をストーリーの形で開く。ストーリーを作るのだけがダイアログで、直すのは引き出し。開き方は横と真ん中（ページ全体と新しいタブは無い）。`,
+    `<div class="field"><span class="field-label">ふだんの形（配下の未完了のタスクが残るあいだ、「${t("complete")}」は押せず、横に残りの件数を添える）</span>${drawerDemo("st1", "s1", [], { kind: "story" })}</div>
+     <div class="field"><span class="field-label">配下の未完了のタスクが無い（「${t("complete")}」が押せる）</span>${drawerDemo("st2", "s4", [], { kind: "story", remaining: 0 })}</div>
+     <div class="field"><span class="field-label">${t("done")}したストーリー（完了の印と日付、「取り消す」。帯の種類の印の横にも「${t("done")}」）</span>${drawerDemo("st3", "s2", [], { kind: "story", doneAt: "10/20 10:12", remaining: 0 })}</div>
+     <div class="field"><span class="field-label">親の${t("epic")}が${t("done")}か中止している（「${t("complete")}」も「取り消す」も押せず、理由を添える）</span>${drawerDemo("st4", "s2", [], { kind: "story", parentFinished: true, remaining: 0 })}${drawerDemo("st5", "s1", [], { kind: "story", parentFinished: true, doneAt: "10/20 10:12", remaining: 0 })}</div>
+     <div class="field"><span class="field-label">削除できない人（作った人でも${t("leader")}でもない。「⋯」に削除を出さず、本文の下に理由を出す）</span>${drawerDemo("st6", "s4", [], { kind: "story", canDelete: false })}</div>
+     <div class="field"><span class="field-label">真ん中の形（620px 以下では真ん中のボタンを出さず、横で開く）</span>${drawerDemo("st7", "s3", [], { kind: "story", shape: "center" })}</div>
+     <div class="field"><span class="field-label">リンクを書いて、断られた（欄の下に理由。入力は残る）</span>${drawerDemo("st8", "s1", [], { kind: "story", errors: { link: "http か https で始まる URL を入れてください" }, drafts: { link: "ftp://example.com" } })}</div>
+     <div class="field"><span class="field-label">終了した${t("workspace")}（読み取り専用。「⋯」と直す口と完了の操作を出さない）</span>${drawerDemo("st9", "s4", [], { kind: "story", view: "readonly" })}</div>
+     <div class="field"><span class="field-label">読み込み中と、読めなかったとき（もう一度試す）</span>${drawerDemo("st10", "s4", [], { kind: "story", view: "loading" })}${drawerDemo("st11", "s4", [], { kind: "story", view: "failed" })}</div>`,
+    [`帯は、種類の印「${t("story")}」（<code>.chip</code>）、完了していれば「${t("done")}」の印（<code>.chip.is-ok</code>）、「⋯」（<code>.row-menu</code>）、右に前後・開き方・閉じるを並べる。「⋯」はホバーする行が無いので、広い幅でも常に出す（<code>.drawer .row-menu-btn</code>）。項目は「親を移す」と「この${t("story")}を削除する」（<code>is-danger</code>）。削除は引き出しの上に確認のダイアログを開き、削除したら引き出しも閉じる。`,
+     `欄の順は、題、期日、${t("category")}（親の${t("epic")}があれば引き継ぎで、選べない）、リンク、${t("ac")}、本文、完了の帯。題、リンク、${t("ac")}、本文はいつも入力欄で自動保存し、期日は選んだら保存する（タスクと同じ。保存の状態は <code>.save-state</code>）。コメント、変更の履歴、添付、感謝、今日やるは無い。`,
+     `完了の帯（<code>.done-bar</code>）は、木の行の「${t("complete")}」と同じ規則。配下の未完了のタスクが残るあいだと、親の${t("epic")}が${t("done")}か中止しているあいだは、押してもフォーカスが残るよう <code>aria-disabled</code> にし、理由（<code>.props-note</code>）を <code>aria-describedby</code> で結ぶ。完了したら完了の印（<code>.hanko</code>）へフォーカスを移す。`,
+     `前後のボタン（<code>[</code>、<code>]</code>）は、開いた画面に今見えているストーリーの題のリンクの順で移る。端では <code>aria-disabled</code>。書きかけがあるときの確認はタスクと同じ。`],
+    ".drawer .drawer-top .row-menu .row-menu-btn .chip.is-ok .props .done-bar .done-bar-done .hanko .save-state .field-hint / SQ.drawerHtml（drawer.kind = story）/ a.tree-link[data-story]")],
   ["files", "添付ファイル", () => block("files", "添付ファイル", "タスク、ストーリー、エピック、コメントに付ける。画像も動画もそれ以外も1行ずつ並べ、容量、上げた人、上げた日時を横に出す。名前を押すとプレビューが開く。「ファイルを選ぶ」は複数を選べて、選んだ数だけ行が増える（ドラッグでも同じ）。",
     `<div class="field"><span class="field-label">一覧と上げる場所</span>${SQ.attachments("t1")}</div>
      <div class="field"><span class="field-label">上げている途中と失敗</span>

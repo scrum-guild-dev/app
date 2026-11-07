@@ -93,10 +93,57 @@ test('見本のバックログ: 「⋯」のメニューと、削除の取り消
   await page.locator('.toast-action').click();
   await expect(titles).toHaveCount(before);
 
-  // 配下のあるストーリーは確認のダイアログ
-  await page.locator('.tree-row.is-story .row-menu-btn').first().click();
-  await page.locator('.tree-row.is-story [data-dialog="deleteStory"]').first().click();
+  // ストーリーの行の「⋯」に削除は無く（並べ替えと親を移すだけ）、削除は題のリンクで開く引き出しの「⋯」から、確認のダイアログで行う
+  const storyRow = page.locator('.tree-row.is-story').first();
+  await storyRow.locator('.row-menu-btn').click();
+  await expect(storyRow.locator('[data-dialog="deleteStory"]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await storyRow.locator('a.tree-link').click();
+  const drawer = page.locator('#drawer');
+  await expect(drawer.locator('.drawer-top .chip').first()).toHaveText('ストーリー');
+  await drawer.locator('.row-menu-btn').click();
+  await drawer.locator('[data-dialog="deleteStory"]').click();
   await expect(page.locator('#dialog .dialog-title')).toHaveText(/削除する/);
+  await page.locator('#dialog .btn.is-danger').click();
+  await expect(drawer).toBeHidden();
+});
+
+test('見本のバックログ: ストーリーの題のリンクで引き出しが開き、完了の帯、自動保存、前後の移動、真ん中の形が動く', async ({
+  page,
+}) => {
+  const errors = await openSample(page, 'backlog.html');
+  const links = page.locator('.tree-row.is-story a.tree-link');
+  const first = await links.first().textContent();
+  await links.first().click();
+  const drawer = page.locator('#drawer');
+  await expect(drawer).toBeVisible();
+  // 開き方は横と真ん中だけ。前後と、受け入れ基準、本文、期日、リンク、完了の帯が出る
+  await expect(drawer.locator('[data-drawer-mode]')).toHaveText(['横', '真ん中']);
+  await expect(drawer.locator('[data-drawer-step]')).toHaveCount(2);
+  await expect(drawer.locator('#drawer-edit-title')).toHaveValue(first!);
+  await expect(drawer.locator('#drawer-edit-ac')).toBeVisible();
+  await expect(drawer.locator('#drawer-edit-body')).toBeVisible();
+  await expect(drawer.locator('[data-drawer-due]')).toBeVisible();
+  await expect(drawer.locator('#drawer-edit-link')).toBeVisible();
+  // 配下の未完了のタスクが残るあいだは、完了にできず、理由を添える
+  const complete = drawer.locator('[data-story-done]');
+  await expect(complete).toHaveAttribute('aria-disabled', 'true');
+  await expect(drawer.locator('#drawer-story-remaining')).toContainText('残り');
+  // 題の自動保存は、欄を離れると木の題にも反映する
+  await drawer.locator('#drawer-edit-title').fill('題を直した');
+  await drawer.locator('#drawer-edit-ac').focus();
+  await expect(links.first()).toHaveText('題を直した');
+  // 次のストーリーへ移ると、その題が入る
+  await drawer.locator('[data-drawer-step="1"]').click();
+  await expect(drawer.locator('#drawer-edit-title')).not.toHaveValue('題を直した');
+  // 真ん中の形へ替えると、枠が真ん中になり、開き方の押した印も移る
+  await drawer.locator('[data-drawer-mode="center"]').click();
+  await expect(drawer).toHaveClass(/is-center/);
+  await expect(drawer.locator('[data-drawer-mode="center"]')).toHaveAttribute('aria-pressed', 'true');
+  // 閉じる
+  await drawer.locator('[data-close-drawer]').click();
+  await expect(drawer).toBeHidden();
+  expect(errors).toEqual([]);
 });
 
 test('見本のバックログ: 幅 390px では「⋯」が常に出て 44px 四方', async ({ page }) => {
