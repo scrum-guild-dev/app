@@ -50,7 +50,7 @@ function fakeSource(pages: Record<string, Page[]>, hooks: { fail?: ImportSourceF
   const calls: FetchPageInput[] = [];
   const source: ImportSource = {
     kind: 'github',
-    scopeKind: 'repository',
+    scopeKind: 'github_repo',
     parseSettings: () => ({}),
     isCredentialShape: () => true,
     credentialLast4: (credential) => credential.slice(-4),

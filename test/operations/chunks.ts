@@ -6,7 +6,7 @@ import { describe } from 'vitest';
 import type { ImplementedOperation } from '../../src/server/operations/implement.ts';
 import { implementedOperations } from '../../src/server/operations/index.ts';
 import { defineOperationChecks } from './harness.ts';
-import { operatorGithub, pointers } from './pointers.ts';
+import { pointers, registryFetcher } from './pointers.ts';
 
 export const productionChunkCount = 6;
 
@@ -29,7 +29,7 @@ export function operationChunk(
 // 運用者の操作は、差し替えた GitHub に問い合わせる。トークンでも、組織の分離と権限は Cookie と同じ結果になる
 export function defineProductionChunk(number: number): void {
   const chunk = operationChunk(implementedOperations, number - 1, productionChunkCount);
-  describe('本番の一覧の分離と権限', () => defineOperationChecks(chunk, pointers, { fetcher: operatorGithub.fetcher }));
+  describe('本番の一覧の分離と権限', () => defineOperationChecks(chunk, pointers, { fetcher: registryFetcher }));
   describe('本番の一覧の分離と権限（API トークン）', () =>
-    defineOperationChecks(chunk, pointers, { fetcher: operatorGithub.fetcher, credential: 'bearer' }));
+    defineOperationChecks(chunk, pointers, { fetcher: registryFetcher, credential: 'bearer' }));
 }
