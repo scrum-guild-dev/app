@@ -252,89 +252,149 @@ export function backlogTree(issues, filter = {}) {
 /**
  * @typedef {{ number: number, title: string, s: State | 'blocked', outside: boolean, blocking: boolean,
  *   holds: number, layer: number, row: number }} GraphNode
- * @typedef {{ from: number, to: number, waiting: boolean }} GraphEdge
+ * @typedef {{ layer: number, row: number }} GraphSlot
+ * @typedef {{ from: number, to: number, waiting: boolean, via: GraphSlot[] }} GraphEdge
  */
 
 /**
- * スプリントの Issue の依存関係を、先に要るものを左、待つ側を右の層に並べる。
- * 辺は今のスプリントの Issue の deps から引き、スプリントの外の前提も節に入れる。
- * blocking は、まだ誰かを待たせている（ある Issue の waitingOn に入る）節。
- * holds は、その節から辿れる済み以外の Issue の数（先に要るものがどれだけを止めうるか）
+ * スプリントの Issue の前提を辿って辺にする。スプリントの外の節も、今のスプリントへ届く鎖なら、その前提まで辿る。
+ * 自己参照と重複は辺にしない
  * @param {BoardIssue[]} issues
+ * @param {Map<number, BoardIssue>} byNumber
  * @param {number} n
- * @returns {{ nodes: GraphNode[], edges: GraphEdge[], layers: number, rows: number }}
+ * @returns {{ from: number, to: number, waiting: boolean }[]}
  */
-export function dependencyGraph(issues, n) {
-  const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
-  /** @type {GraphEdge[]} */
+function dependencyEdges(issues, byNumber, n) {
+  /** @type {{ from: number, to: number, waiting: boolean }[]} */
   const edges = [];
-  for (const issue of issues) {
-    if (issue.sprint !== n) continue;
-    for (const dep of issue.deps) edges.push({ from: dep, to: issue.number, waiting: issue.waitingOn.includes(dep) });
+  const added = new Set();
+  const expanded = new Set();
+  const stack = issues.filter((issue) => issue.sprint === n).map((issue) => issue.number);
+  while (stack.length > 0) {
+    const num = /** @type {number} */ (stack.pop());
+    const issue = byNumber.get(num);
+    if (expanded.has(num) || !issue) continue;
+    expanded.add(num);
+    for (const dep of issue.deps) {
+      const key = `${dep}>${num}`;
+      if (dep === num || added.has(key)) continue;
+      added.add(key);
+      edges.push({ from: dep, to: num, waiting: issue.waitingOn.includes(dep) });
+      stack.push(dep);
+    }
   }
-  const numbers = [...new Set(edges.flatMap((e) => [e.from, e.to]))].toSorted((a, b) => a - b);
-  /** @type {Map<number, number[]>} */
-  const preds = new Map(numbers.map((num) => [num, []]));
-  /** @type {Map<number, number[]>} */
-  const succs = new Map(numbers.map((num) => [num, []]));
-  for (const e of edges) {
-    preds.get(e.to)?.push(e.from);
-    succs.get(e.from)?.push(e.to);
-  }
+  return edges;
+}
 
-  // 輪があっても止まるよう、たどっている途中の節は 0 とみなす
+/**
+ * 節の層。先に要るものほど左（小さい番号）にし、使っていない層は詰める。
+ * 輪では、たどっている途中の節を 0 とみなして止める（輪の中の辺の1本は右から左へ戻る）
+ * @param {number[]} numbers
+ * @param {Map<number, number[]>} preds
+ * @returns {Map<number, number>}
+ */
+function layersOf(numbers, preds) {
   /** @type {Map<number, number>} */
-  const layerOf = new Map();
+  const raw = new Map();
   const visiting = new Set();
   /**
    * @param {number} num
    * @returns {number}
    */
   const layer = (num) => {
-    const known = layerOf.get(num);
+    const known = raw.get(num);
     if (known !== undefined) return known;
     if (visiting.has(num)) return 0;
     visiting.add(num);
     /** @type {number} */
     const value = Math.max(-1, ...(preds.get(num) ?? []).map(layer)) + 1;
     visiting.delete(num);
-    layerOf.set(num, value);
+    raw.set(num, value);
     return value;
   };
   numbers.forEach(layer);
+  const used = [...new Set(raw.values())].toSorted((a, b) => a - b);
+  return new Map(numbers.map((num) => [num, used.indexOf(/** @type {number} */ (raw.get(num)))]));
+}
+
+/**
+ * スプリントの Issue の依存関係を、先に要るものを左、待つ側を右の層に並べる。
+ * 2つ以上の層をまたぐ辺は、間の層に通り道（via）の枠を取り、ほかの節の箱の裏を通らないようにする。
+ * blocking は、まだ誰かを待たせている（ある Issue の waitingOn に入る）節。
+ * holds は、その節から待たせている辺だけを辿って届く、済み以外の Issue の数（自分は数えない）
+ * @param {BoardIssue[]} issues
+ * @param {number} n
+ * @returns {{ nodes: GraphNode[], edges: GraphEdge[], layers: number, rows: number }}
+ */
+export function dependencyGraph(issues, n) {
+  const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
+  const links = dependencyEdges(issues, byNumber, n);
+  const numbers = [...new Set(links.flatMap((e) => [e.from, e.to]))].toSorted((a, b) => a - b);
+  /** @type {Map<number, number[]>} */
+  const preds = new Map(numbers.map((num) => [num, []]));
+  for (const e of links) preds.get(e.to)?.push(e.from);
+  const layerOf = layersOf(numbers, preds);
+
+  // 並べる単位（slot）は、節（番号）と、層をまたぐ辺の通り道（文字列のキー）
+  /** @type {Map<number | string, number>} */
+  const slotLayer = new Map(numbers.map((num) => [num, /** @type {number} */ (layerOf.get(num))]));
+  /** @type {Map<number | string, (number | string)[]>} */
+  const slotPreds = new Map(numbers.map((num) => [num, []]));
+  const viaKeys = links.map((e) => {
+    const from = /** @type {number} */ (layerOf.get(e.from));
+    const to = /** @type {number} */ (layerOf.get(e.to));
+    /** @type {string[]} */
+    const keys = [];
+    /** @type {number | string} */
+    let prev = e.from;
+    for (let l = from + 1; l < to; l += 1) {
+      const key = `${e.from}>${e.to}@${l}`;
+      slotLayer.set(key, l);
+      slotPreds.set(key, [prev]);
+      keys.push(key);
+      prev = key;
+    }
+    slotPreds.get(e.to)?.push(prev);
+    return keys;
+  });
+
+  const layers = numbers.length === 0 ? 0 : Math.max(...layerOf.values()) + 1;
+  /** @type {Map<number | string, number>} */
+  const rowOf = new Map();
+  let rows = 0;
+  // 番号の節を先に、通り道を後ろに、それぞれの中は番号の順
+  const order = (/** @type {number | string} */ key) => (typeof key === 'number' ? key : Number.MAX_SAFE_INTEGER);
+  for (let l = 0; l < layers; l += 1) {
+    const inLayer = [...slotLayer.keys()].filter((key) => slotLayer.get(key) === l);
+    // 前の層の並びの平均に寄せ、線の交差を減らす。左に前提の無い節は後ろに置く
+    const weight = (/** @type {number | string} */ key) => {
+      const placed = (slotPreds.get(key) ?? []).map((p) => rowOf.get(p)).filter((r) => r !== undefined);
+      return placed.length === 0 ? Number.MAX_SAFE_INTEGER : placed.reduce((a, b) => a + b, 0) / placed.length;
+    };
+    inLayer.toSorted((a, b) => weight(a) - weight(b) || order(a) - order(b)).forEach((key, i) => rowOf.set(key, i));
+    rows = Math.max(rows, inLayer.length);
+  }
 
   // data.json に無い前提（not_planned などで閉じたもの）は済みとして描く
   const stateOf = (/** @type {number} */ num) => {
     const issue = byNumber.get(num);
     return issue ? displayState(issue) : 'done';
   };
+  /** @type {Map<number, number[]>} */
+  const waitingSuccs = new Map(numbers.map((num) => [num, []]));
+  for (const e of links) if (e.waiting) waitingSuccs.get(e.from)?.push(e.to);
   const holds = (/** @type {number} */ num) => {
     const seen = new Set();
-    const stack = [...(succs.get(num) ?? [])];
+    const stack = [...(waitingSuccs.get(num) ?? [])];
     while (stack.length > 0) {
       const next = /** @type {number} */ (stack.pop());
       if (seen.has(next)) continue;
       seen.add(next);
-      stack.push(...(succs.get(next) ?? []));
+      stack.push(...(waitingSuccs.get(next) ?? []));
     }
+    seen.delete(num);
     return [...seen].filter((reached) => stateOf(reached) !== 'done').length;
   };
-  const blockers = new Set(edges.filter((e) => e.waiting).map((e) => e.from));
-
-  const layers = numbers.length === 0 ? 0 : Math.max(...layerOf.values()) + 1;
-  /** @type {Map<number, number>} */
-  const rowOf = new Map();
-  let rows = 0;
-  for (let l = 0; l < layers; l += 1) {
-    const inLayer = numbers.filter((num) => layerOf.get(num) === l);
-    // 前の層の並びの平均に寄せ、線の交差を減らす。前提の無い節は番号の順で後ろに置く
-    const weight = (/** @type {number} */ num) => {
-      const placed = (preds.get(num) ?? []).map((p) => rowOf.get(p)).filter((r) => r !== undefined);
-      return placed.length === 0 ? Number.MAX_SAFE_INTEGER : placed.reduce((a, b) => a + b, 0) / placed.length;
-    };
-    inLayer.toSorted((a, b) => weight(a) - weight(b) || a - b).forEach((num, i) => rowOf.set(num, i));
-    rows = Math.max(rows, inLayer.length);
-  }
 
   const nodes = numbers.map((num) => {
     const issue = byNumber.get(num);
@@ -343,12 +403,16 @@ export function dependencyGraph(issues, n) {
       title: issue?.title ?? '',
       s: stateOf(num),
       outside: issue?.sprint !== n,
-      blocking: blockers.has(num),
+      blocking: (waitingSuccs.get(num) ?? []).length > 0,
       holds: holds(num),
       layer: /** @type {number} */ (layerOf.get(num)),
       row: /** @type {number} */ (rowOf.get(num)),
     };
   });
+  const edges = links.map((e, i) => ({
+    ...e,
+    via: viaKeys[i].map((key) => ({ layer: /** @type {number} */ (slotLayer.get(key)), row: /** @type {number} */ (rowOf.get(key)) })),
+  }));
   return { nodes, edges, layers, rows };
 }
 

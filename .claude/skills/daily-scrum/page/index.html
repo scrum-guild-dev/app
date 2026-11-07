@@ -189,8 +189,9 @@ ul.plain { margin: 0; padding-left: 1.2em; color: var(--muted); }
 .dg-node text.num { font-family: var(--font-mono); font-weight: 600; }
 .dg-node text.state { fill: var(--muted); font-size: 11px; }
 .dg-node.waiting rect.box { stroke-dasharray: 4 3; stroke: var(--edge); }
-.dg-node.settled { opacity: 0.5; }
-.dg-node.settled rect.box { fill: var(--sunken); }
+/* 済んだ前提は文字ごと薄くせず、地と線を沈め、文字を控えめの色にして読める対比を保つ */
+.dg-node.settled rect.box { fill: var(--sunken); stroke: var(--rule); }
+.dg-node.settled text { fill: var(--muted); }
 .dg-node.blocking rect.box { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 3; }
 .dg-node.blocking text.num { fill: var(--warn); }
 .dg-node rect.badge { fill: var(--warn); }
@@ -459,7 +460,8 @@ function kanban(sprint, issues) {
 /* 依存関係のグラフ */
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const DG = { w: 236, h: 56, gapX: 56, gapY: 12, pad: 6, titleChars: 16 };
+// 1 行目に番号と「止めている」のバッジ、2 行目に状態、3 行目に題を置き、バッジと状態の文字を重ねない
+const DG = { w: 236, h: 72, gapX: 56, gapY: 12, pad: 6, titleChars: 17 };
 
 // 題などの文字列は textContent で入れる（el と同じく、< などが入っても崩れない）
 function svg(tag, attrs = {}, ...kids) {
@@ -496,28 +498,37 @@ function graphNode(node) {
     svg('title', {}, label),
     svg('rect', { class: 'box', x, y, width: DG.w, height: DG.h, rx: 6 }),
     svg('text', { class: 'num', x: x + 10, y: y + 20 }, `#${node.number}`),
-    svg('text', { class: 'state', x: x + 56, y: y + 20 }, `${where}${STATE_LABELS[node.s]}`),
+    svg('text', { class: 'state', x: x + 10, y: y + 40 }, `${where}${STATE_LABELS[node.s]}`),
     node.blocking
       ? [
           svg('rect', { class: 'badge', x: x + DG.w - badgeW - 6, y: y + 7, width: badgeW, height: 18, rx: 9 }),
           svg('text', { class: 'badge', x: x + DG.w - badgeW / 2 - 6, y: y + 20, 'text-anchor': 'middle' }, badgeText),
         ]
       : null,
-    svg('text', { x: x + 10, y: y + 42 }, clip(node.title, DG.titleChars)),
+    svg('text', { x: x + 10, y: y + 60 }, clip(node.title, DG.titleChars)),
   );
 }
 
 function graphEdge(edge, byNumber) {
   const from = byNumber.get(edge.from);
   const to = byNumber.get(edge.to);
-  const x1 = nodeX(from) + DG.w;
-  const y1 = nodeY(from) + DG.h / 2;
-  const x2 = nodeX(to) - 2;
-  const y2 = nodeY(to) + DG.h / 2;
+  const mid = (slot) => nodeY(slot) + DG.h / 2;
   const c = DG.gapX / 2;
+  // 層をまたぐ辺は、間の層の通り道（via）を横切ってから次の層へ曲がる
+  let d = `M${nodeX(from) + DG.w},${mid(from)}`;
+  let y = mid(from);
+  for (const slot of edge.via) {
+    const x = nodeX(slot);
+    d += ` C${x - DG.gapX + c},${y} ${x - c},${mid(slot)} ${x},${mid(slot)} L${x + DG.w},${mid(slot)}`;
+    y = mid(slot);
+  }
+  const x2 = nodeX(to) - 2;
+  const y2 = mid(to);
+  const x1 = x2 + 2 - DG.gapX;
+  d += ` C${x1 + c},${y} ${x2 - c},${y2} ${x2},${y2}`;
   return svg('path', {
     class: edge.waiting ? 'dg-edge waiting' : 'dg-edge',
-    d: `M${x1},${y1} C${x1 + c},${y1} ${x2 - c},${y2} ${x2},${y2}`,
+    d,
     'marker-end': edge.waiting ? 'url(#dg-arrow-wait)' : 'url(#dg-arrow)',
   });
 }

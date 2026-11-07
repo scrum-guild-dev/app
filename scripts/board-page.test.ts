@@ -666,7 +666,7 @@ describe('dependencyGraph', () => {
     return found;
   };
 
-  test('今のスプリントの Issue の deps だけを辺にし、外の前提も節に入れる', () => {
+  test('今のスプリントの Issue から辿れる deps だけを辺にし、外の前提も節に入れる', () => {
     assert.deepEqual(graph.edges.map((e) => `${e.from}->${e.to}:${e.waiting}`).toSorted(), [
       '1->2:true',
       '1->3:true',
@@ -689,16 +689,26 @@ describe('dependencyGraph', () => {
     );
   });
 
-  test('層の中は前の層の並びに寄せ、前提の無い節は後ろに置く', () => {
-    assert.equal(node(1).row, 0);
-    assert.equal(node(5).row, 1);
-    // 3 は 1（0 段）と 5（1 段）の平均 0.5、2 は 1 だけで 0
-    assert.equal(node(2).row, 0);
-    assert.equal(node(3).row, 1);
-    assert.equal(graph.rows, 2);
+  test('層の中は、前の層の行の平均の順に並べる（番号の順でも最大の順でもない）', () => {
+    // 層 0 は 10、11、12（前提が無く番号の順）。層 1 の平均は 21 が 0、22 が 1、20 が 1.5。
+    // 番号の順なら 20、21、22、最大の順なら 21、20、22 になる
+    const g = dependencyGraph(
+      [
+        card(10, { sprint: 2 }),
+        card(11, { sprint: 2 }),
+        card(12, { sprint: 2 }),
+        card(20, { sprint: 2, deps: [11, 12] }),
+        card(21, { sprint: 2, deps: [10] }),
+        card(22, { sprint: 2, deps: [10, 12] }),
+      ],
+      2,
+    );
+    const rowOf = (n: number) => g.nodes.find((x) => x.number === n)?.row;
+    assert.deepEqual([10, 11, 12].map(rowOf), [0, 1, 2]);
+    assert.deepEqual([21, 22, 20].map(rowOf), [0, 1, 2]);
   });
 
-  test('待たせている節を先に要るものとし、辿れる済み以外の数を止めている数にする', () => {
+  test('待たせている節を先に要るものとし、待たせている辺で届く済み以外の数を止めている数にする', () => {
     assert.equal(node(1).blocking, true);
     assert.equal(node(1).holds, 3);
     assert.equal(node(2).blocking, true);
@@ -706,6 +716,71 @@ describe('dependencyGraph', () => {
     assert.equal(node(5).blocking, false);
     assert.equal(node(4).blocking, false);
     assert.equal(node(4).holds, 0);
+  });
+
+  test('受け入れ待ちの先は待っていないので、止めている数に入れない', () => {
+    // 2 は受け入れ待ちなので 3 の waitingOn に入らない。3 は着手できる
+    const g = dependencyGraph(
+      [
+        card(1, { sprint: 2, s: 'wip' }),
+        card(2, { sprint: 2, s: 'accept', deps: [1], waitingOn: [1] }),
+        card(3, { sprint: 2, deps: [2] }),
+        card(4, { sprint: 2, s: 'done', deps: [1], waitingOn: [1] }),
+      ],
+      2,
+    );
+    const at = (n: number) => g.nodes.find((x) => x.number === n);
+    // 2（受け入れ待ち）は数え、4（済み）と 3（待っていない）は数えない
+    assert.equal(at(1)?.holds, 1);
+    assert.equal(at(2)?.blocking, false);
+  });
+
+  test('スプリントの外の節を経由して届く前提も辿り、根を先に要るものとして出す', () => {
+    const g = dependencyGraph(
+      [
+        card(1, { sprint: 2, s: 'wip' }),
+        card(9, { sprint: 3, deps: [1], waitingOn: [1] }),
+        card(2, { sprint: 2, deps: [9], waitingOn: [9] }),
+      ],
+      2,
+    );
+    assert.deepEqual(g.edges.map((e) => `${e.from}->${e.to}`).toSorted(), ['1->9', '9->2']);
+    const at = (n: number) => g.nodes.find((x) => x.number === n);
+    assert.equal(at(1)?.blocking, true);
+    assert.equal(at(1)?.holds, 2);
+    assert.equal(at(9)?.outside, true);
+  });
+
+  test('2つ以上の層をまたぐ辺は、間の層にほかの節と別の通り道を取る', () => {
+    const g = dependencyGraph(
+      [
+        card(1, { sprint: 2 }),
+        card(2, { sprint: 2, deps: [1], waitingOn: [1] }),
+        card(3, { sprint: 2, deps: [1, 2], waitingOn: [1, 2] }),
+      ],
+      2,
+    );
+    const skip = g.edges.find((e) => e.from === 1 && e.to === 3);
+    const two = g.nodes.find((x) => x.number === 2);
+    assert.equal(skip?.via.length, 1);
+    assert.equal(skip?.via[0]?.layer, 1);
+    assert.notEqual(skip?.via[0]?.row, two?.row);
+    assert.equal(g.rows, 2);
+    assert.deepEqual(
+      g.edges.filter((e) => e !== skip).map((e) => e.via.length),
+      [0, 0],
+    );
+  });
+
+  test('同じ前提の重複と自己参照は辺にしない', () => {
+    const g = dependencyGraph(
+      [card(1, { sprint: 2 }), card(2, { sprint: 2, deps: [1, 1, 2], waitingOn: [1, 1, 2] })],
+      2,
+    );
+    assert.deepEqual(
+      g.edges.map((e) => `${e.from}->${e.to}`),
+      ['1->2'],
+    );
   });
 
   test('待ちの節は blocked、data に無い前提は済みとして出す', () => {
@@ -718,12 +793,26 @@ describe('dependencyGraph', () => {
     assert.deepEqual(dependencyGraph([card(1, { sprint: 2 })], 2), { nodes: [], edges: [], layers: 0, rows: 0 });
   });
 
-  test('輪になっていても止まる', () => {
+  test('輪でも止まり、層は 0 から詰めて振り、止めている数に自分を入れない', () => {
     const cyclic = dependencyGraph(
       [card(1, { sprint: 2, deps: [2], waitingOn: [2] }), card(2, { sprint: 2, deps: [1], waitingOn: [1] })],
       2,
     );
-    assert.equal(cyclic.nodes.length, 2);
     assert.equal(cyclic.edges.length, 2);
+    assert.equal(cyclic.layers, 2);
+    assert.deepEqual(cyclic.nodes.map((x) => x.layer).toSorted(), [0, 1]);
+    assert.deepEqual(
+      cyclic.nodes.map((x) => x.holds),
+      [1, 1],
+    );
+  });
+
+  test('自己参照だけなら依存関係は無い', () => {
+    assert.deepEqual(dependencyGraph([card(1, { sprint: 2, deps: [1], waitingOn: [1] })], 2), {
+      nodes: [],
+      edges: [],
+      layers: 0,
+      rows: 0,
+    });
   });
 });
