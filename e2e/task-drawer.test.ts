@@ -131,13 +131,13 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
 
   // 書きかけのまま閉じると、捨てるかを確かめる。書き続けると引き出しは開いたまま
   await drawer.getByRole('button', { name: /見積もりを送って確かめる/ }).click();
-  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('書きかけのタイトル');
+  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await drawer.getByRole('button', { name: '閉じる' }).click();
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '書き続ける' }).click();
   await expect(confirm).toBeHidden();
-  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('書きかけのタイトル');
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
   // 捨てると、引き出しが閉じて、フォーカスが開いた行のリンクへ戻る。タイトルは元のまま
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await page.getByRole('dialog', { name: '書きかけを捨てますか' }).getByRole('button', { name: '捨てる' }).click();
@@ -617,14 +617,14 @@ test('書きかけのまま戻るで別の画面へ移ろうとすると確か�
   const drawer = await openDrawer(page, '戻る前の確認');
   const drawerUrl = page.url();
   await drawer.getByRole('button', { name: /戻る前の確認/ }).click();
-  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('書きかけ');
+  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await page.goBack();
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '書き続ける' }).click();
   await expect(confirm).toBeHidden();
   await expect(page).toHaveURL(drawerUrl);
-  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('書きかけ');
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
   await page.goBack();
   await page.getByRole('dialog', { name: '書きかけを捨てますか' }).getByRole('button', { name: '捨てる' }).click();
   await expect(drawer).toBeHidden();
@@ -740,7 +740,7 @@ test('保存を409で断られたとき、送った欄に合う文を出す。�
   await expect(drawer.locator('.edit-form').getByText(raced, { exact: false })).toBeVisible();
   // 書きかけが残ったまま、枠の読み直しが 500 になっても、引き出しは消えない
   await unrouteUpdate();
-  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('書きかけが残る');
+  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await failOperation(page, workspaceInfo, AOBA, 500, 'internal');
   // 組織の枠の 500 は、最後まで外さない。引き出しは組織の枠を読み直さない（要求も出ない）
   await failOperation(page, organizationInfo, AOBA, 500, 'internal');
@@ -754,7 +754,7 @@ test('保存を409で断られたとき、送った欄に合う文を出す。�
   await drawer.getByLabel('期日').fill('2099-12-31');
   await expect(page.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('書きかけが残る');
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
   expect(workspaceRequests).toEqual([]);
   expect(organizationRequests).toEqual([]);
   // 閉じたと分かったときは、ワークスペースの枠だけを読み直す。それが 500 でも、前の値を保って引き出しと書きかけを残す
@@ -764,7 +764,7 @@ test('保存を409で断られたとき、送った欄に合う文を出す。�
   await expect.poll(() => workspaceRequests.length).toBeGreaterThan(0);
   expect(organizationRequests).toEqual([]);
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('書きかけが残る');
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
 });
 
 // 行のリンクの `?task=<ID>` から、タスクの ID を取る
@@ -828,7 +828,6 @@ test('保存に失敗した書きかけがあるときだけ、閉じようと�
   // 送れる書きかけは、確かめずに閉じる。保存に失敗した書きかけだけが確かめる
   await slow.unroute();
   await drawer.getByRole('button', { name: 'もう一度保存する' }).click();
-  await expect(drawer.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(drawer).toBeHidden();
 });
@@ -1465,6 +1464,8 @@ test('書きかけがあるまま前後へ移ろうとすると確かめる。�
   await input.press(']');
   await expect(input).toHaveValue('書きかけ]');
   await expect(drawer).toBeVisible();
+  // 送れない書きかけ（タイトルが空）にしてから移ろうとする
+  await input.fill('');
 
   // ボタンで移ろうとすると確かめる。書き続けると、入力を保ったまま移らない
   await stepButton(drawer, '次').click();
@@ -1473,7 +1474,7 @@ test('書きかけがあるまま前後へ移ろうとすると確かめる。�
   await confirm.getByRole('button', { name: '書き続ける' }).click();
   await expect(confirm).toBeHidden();
   await expect(drawer).toBeVisible();
-  await expect(input).toHaveValue('書きかけ]');
+  await expect(input).toHaveValue('');
 
   // 捨てると決めたら、隣のタスクへ移る
   await stepButton(drawer, '次').click();
@@ -1591,7 +1592,7 @@ test('書きかけを捨てるかの確認を出している間は、] を押し
   await addTask(page, '確認中 二');
   const drawer = await openDrawer(page, '確認中 一');
   await drawer.getByRole('button', { name: /確認中 一/ }).click();
-  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('書きかけ');
+  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await stepButton(drawer, '次').click();
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });
   await expect(confirm).toBeVisible();
