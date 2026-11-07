@@ -796,10 +796,22 @@
   let doneMark = $state<HTMLElement>();
   let completeButton = $state<HTMLElement>();
 
-  // 完了にした応答は完了した日時を持ち、取り消した応答は持たない
-  function completedAtOf(data: object): string | null {
-    const value = (data as { completed_at?: unknown }).completed_at;
-    return typeof value === 'string' ? value : null;
+  // 無効の「完了にする」を押して読み直した結果の読み上げ（件数が変わらなければ、残りの件数をもう一度伝える）
+  let recheckNote = $state('');
+  let rechecking = false;
+  async function recheck(): Promise<void> {
+    if (rechecking) return;
+    rechecking = true;
+    try {
+      await refreshFacts();
+      if (!alive || facts === null) return;
+      recheckNote =
+        facts.openTasks === 0 && !facts.parentFinished
+          ? t('storyRecheckedOpen', { task: t('task'), done: t('done') })
+          : t('storyRemaining', { count: facts.openTasks, task: t('task') });
+    } finally {
+      rechecking = false;
+    }
   }
 
   async function setCompletion(action: 'complete' | 'reopen'): Promise<void> {
@@ -809,10 +821,9 @@
     else reopening = true;
     try {
       const input = { workspace_id: workspaceId, story_id: openedId };
-      const result =
-        action === 'complete'
-          ? await callOperation(storyComplete, input, { slug })
-          : await callOperation(storyReopen, input, { slug });
+      const completeResult = action === 'complete' ? await callOperation(storyComplete, input, { slug }) : null;
+      const result = completeResult ?? (await callOperation(storyReopen, input, { slug }));
+      const completedAt = completeResult?.ok ? completeResult.data.completed_at : null;
       if (result.ok) {
         showToast(
           action === 'complete'
@@ -825,7 +836,7 @@
         if (alive && facts !== null) {
           facts = {
             ...facts,
-            completedAt: completedAtOf(result.data),
+            completedAt,
           };
         }
         await refreshFacts();
@@ -962,7 +973,7 @@
         ? t('storyCompleting', { done: t('done') })
         : reopening
           ? t('storyReopening', { done: t('done') })
-          : '',
+          : recheckNote,
   );
 </script>
 
@@ -1300,7 +1311,7 @@
             onclick={() => {
               if (!parentFinished && remaining === 0) void setCompletion('complete');
               // 数えた件数が古いかもしれない（別の人が片づけた）ので、押したときに読み直す
-              else if (!parentFinished && remaining > 0) void refreshFacts();
+              else if (!parentFinished && remaining > 0) void recheck();
             }}
           >
             <Icon name="check" />{t('complete')}
