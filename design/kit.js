@@ -1778,6 +1778,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
     const x = { id: `n${++draftSeq}`, ws: "wa", title, story: kind === "story" ? key : null, sprint: kind === "col" ? "sp14" : null, col: kind === "col" ? key : null, who: null, pts: null, creator: D.me, unfilled: true };
     D.tasks.push(x);
+    // 描き直しは空の行の書きかけを控えて戻すので、足した題が残らないよう、描き直す前に欄を空にする
+    input.value = "";
     redrawAll();
     document.getElementById(input.id)?.focus();
     toast(`${icon("check")}${t("task")}を足しました: ${esc(title)}`);
