@@ -246,6 +246,20 @@ describe('出す対象', () => {
     expect(state.hints).toEqual([{ id: 'near', text: 'Ctrl K', right: 68, top: 40 }]);
   });
 
+  test('出ている間にモーダルのダイアログが開き、dismiss で出し直しを張っても、inModal でないものは出さない', () => {
+    const { state } = setup([
+      shortcut({ id: 'page', keys: '[' }),
+      shortcut({ id: 'drawer', keys: ']', inModal: true }),
+    ]);
+    state.keydown(key('Control', { ctrlKey: true }));
+    vi.advanceTimersByTime(300);
+    expect(state.hints.map((hint) => hint.id)).toEqual(['page', 'drawer']);
+    modalState.openCount = 1;
+    state.dismiss();
+    vi.advanceTimersByTime(300);
+    expect(state.hints.map((hint) => hint.id)).toEqual(['drawer']);
+  });
+
   test('同じ要素に重ねて出さず、右端は画面の内側に寄せる', () => {
     const shared = anchor({}, { right: 995, top: 2, width: 30, height: 24 });
     const { state } = setup([
