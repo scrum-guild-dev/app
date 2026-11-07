@@ -58,7 +58,8 @@ export type FetchPageInput = {
   // 接続の設定（connections.settings_json を解釈した値）。GitHub の「自分」など、取り込み元に固有の設定
   settings: Record<string, unknown>;
   scope: ScopeCandidate;
-  // 取り込み元が返した続きの位置。最初の頁は null。同期の仕組みは中身を読まず、そのまま返す
+  // 取り込み元が返した続きの位置。最初の頁は null。同期の仕組みは中身を読まず、そのまま返す。
+  // 頁の番号などの不透明な値にし、URL は入れない（入れるなら、認証情報を付けて送る前に取り込み元のホストかを確かめる）
   cursor: string | null;
 };
 

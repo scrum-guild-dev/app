@@ -19,6 +19,28 @@ export type SyncConnection = {
   consecutive_failures: number;
 };
 
+// 登録者が無効でなく、ワークスペースに今も所属している、という条件（接続の停止は #67 で足すまでの守り）
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ownerIsActive(eb: any, q: any, ownerColumn: string, workspaceColumn: string) {
+  return eb.and([
+    eb.exists(
+      q
+        .selectFrom('users')
+        .select('users.id')
+        .whereRef('users.id', '=', ownerColumn)
+        .where('users.disabled_at', 'is', null),
+    ),
+    eb.exists(
+      q
+        .selectFrom('memberships')
+        .select('memberships.id')
+        .whereRef('memberships.user_id', '=', ownerColumn)
+        .whereRef('memberships.workspace_id', '=', workspaceColumn)
+        .where('memberships.left_at', 'is', null),
+    ),
+  ]);
+}
+
 export type SyncScope = { source_id: string; source_name: string };
 
 // 削除していない接続を、組織で絞って1件読む。ワークスペースが閉じていれば読まない（閉じたワークスペースは同期を飛ばす）
@@ -49,7 +71,9 @@ export async function readSyncConnection(
         .where('connections.workspace_id', '=', workspaceId)
         .where('connections.deleted_at', 'is', null)
         .where('workspaces.organization_id', '=', db.organizationId)
-        .where('workspaces.closed_at', 'is', null),
+        .where('workspaces.closed_at', 'is', null)
+        // 登録者が今もそのワークスペースにいて、無効にされていない（抜けた人や無効の人の認証情報で取り込まない）
+        .where((eb) => ownerIsActive(eb, q, 'connections.owner_user_id', 'connections.workspace_id')),
     ),
   );
   if (connection === undefined) return undefined;
@@ -65,7 +89,8 @@ export async function readSyncConnection(
   return { connection, scopes };
 }
 
-// 受信箱の末尾の並びの値。受信箱が空なら undefined
+// 受信箱の末尾の並びの値。受信箱が空なら undefined。組織を確かめた接続のワークスペースの ID だけを渡す（readSyncConnection の後に呼ぶ）。
+// 末尾を読んでから書くまでの間に別の取り込みが入ると並びの値が重なりうるが、並びは id で決まるので壊れない
 export async function readInboxTailPosition(db: OrganizationDb, workspaceId: string): Promise<string | undefined> {
   const row = await db.first(
     db.statement((q) =>
@@ -83,7 +108,7 @@ export async function readInboxTailPosition(db: OrganizationDb, workspaceId: str
   return row?.position;
 }
 
-// 取り込み元の入れ物（source_container_id）から、結んだリポジトリの ID への表。ワークスペースのリポジトリは50件まで
+// 組織を確かめた接続のワークスペースの ID だけを渡す。取り込み元の入れ物（source_container_id）から、結んだリポジトリの ID への表。ワークスペースのリポジトリは50件まで
 export async function readRepositoriesByContainer(
   db: OrganizationDb,
   workspaceId: string,
@@ -186,7 +211,14 @@ export function importTaskStatements(
             eb.cast<string | null>(eb.val(null), 'text').as('link_url'),
             eb.cast<string | null>(eb.val(null), 'text').as('story_id'),
             eb.cast<string | null>(eb.val(null), 'text').as('category_id'),
-            eb.cast<string | null>(eb.val(task.repositoryId), 'text').as('repository_id'),
+            // 読んだ後に削除されたリポジトリは結ばない
+            eb
+              .selectFrom('repositories')
+              .select('repositories.id')
+              .where('repositories.id', '=', task.repositoryId ?? '')
+              .where('repositories.workspace_id', '=', task.workspaceId)
+              .where('repositories.deleted_at', 'is', null)
+              .as('repository_id'),
             eb.cast<string | null>(eb.val(null), 'text').as('sprint_id'),
             eb.cast<string | null>(eb.val(null), 'text').as('column_id'),
             eb.val(task.assigneeUserId).as('assignee_user_id'),
@@ -214,7 +246,8 @@ export function importTaskStatements(
                   .where('connections.deleted_at', 'is', null)
                   .where('connections.status', '!=', 'stopped')
                   .where('workspaces.organization_id', '=', db.organizationId)
-                  .where('workspaces.closed_at', 'is', null),
+                  .where('workspaces.closed_at', 'is', null)
+                  .where((cb) => ownerIsActive(cb, q, 'connections.owner_user_id', 'connections.workspace_id')),
               ),
               eb.not(
                 eb.exists(

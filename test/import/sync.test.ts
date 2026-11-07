@@ -168,7 +168,7 @@ describe('取り込みの同期', () => {
           items: [
             item(1, { title: ' 修正​ する\n続き‮ ' }),
             item(2, { title: 'あ'.repeat(300) }),
-            item(3, { title: '​​' }),
+            item(3, { title: '\u{200B}\u{200B}' }),
           ],
           next: null,
         },
@@ -199,8 +199,9 @@ describe('取り込みの同期', () => {
         syncConnection(env, db, workspace.id, connection.id, { source: fakeSource(pages).source }),
       ),
     );
-    const imported = results.reduce((sum, r) => sum + (r.outcome === 'success' ? r.imported : 0), 0);
-    expect(imported).toBe(3);
+    // どれも成功で、入れたのは1つの同期だけ（ガードが無いと、後の同期は一意制約で error になる）
+    expect(results.every((r) => r.outcome === 'success')).toBe(true);
+    expect(results.map((r) => (r.outcome === 'success' ? r.imported : -1)).sort()).toEqual([0, 0, 0, 3]);
     const tasks = await tasksOf(db, workspace.id);
     const sources = await sourcesOf(db, workspace.id);
     expect(tasks).toHaveLength(3);
@@ -354,10 +355,135 @@ describe('取り込みの同期', () => {
     expect(await syncConnection(env, db, workspace.id, connection.id, { source: bad.source })).toMatchObject({
       outcome: 'error',
     });
-    const stuck = fakeSource({ '501': [{ items: [item(1)], next: '0' }] });
-    stuck.source.fetchPage = async () => ({ items: [], next: '0' });
-    await syncConnection(env, db, workspace.id, connection.id, { source: stuck.source });
     expect(await tasksOf(db, workspace.id)).toHaveLength(0);
+    let calls = 0;
+    const stuck: ImportSource = {
+      ...fakeSource({}).source,
+      async fetchPage() {
+        calls++;
+        return { items: [], next: '0' };
+      },
+    };
+    const result = await syncConnection(env, db, workspace.id, connection.id, { source: stuck });
+    expect(result).toEqual({ outcome: 'error', imported: 0 });
+    // 最初の頁（cursor は null）の次の '0' を返し、その次で同じ位置を返したと分かって断る
+    expect(calls).toBe(2);
+  });
+
+  test.each([
+    ['javascript の URL', { url: 'javascript:alert(1)' }],
+    ['URL でない文字列', { url: 'not a url' }],
+    ['ISO 8601 でない更新日時', { updatedAt: '2026/11/01' }],
+  ])('%s の項目は断り、何も入れない', async (_name, overrides) => {
+    const { workspace, connection, db } = await setup();
+    const { source } = fakeSource({ '501': [{ items: [item(1), item(2, overrides)], next: null }] });
+    expect(await syncConnection(env, db, workspace.id, connection.id, { source })).toEqual({
+      outcome: 'error',
+      imported: 0,
+    });
+    expect(await tasksOf(db, workspace.id)).toHaveLength(0);
+  });
+
+  test('認証情報の形が違う失敗も接続を停止にする', async () => {
+    const { workspace, connection, db } = await setup();
+    const { source } = fakeSource({}, { fail: 'invalid_format' });
+    expect(await syncConnection(env, db, workspace.id, connection.id, { source })).toEqual({
+      outcome: 'auth_failed',
+      imported: 0,
+    });
+    expect(await connectionOf(db, connection.id)).toMatchObject({ status: 'stopped', stopped_reason: 'auth_failed' });
+  });
+
+  test('抜けた登録者の接続と、閉じたワークスペース、削除した接続は同期しない', async () => {
+    const left = await setup();
+    await left.db.run(
+      left.db.statement((q) =>
+        q
+          .updateTable('memberships')
+          .set({ left_at: '2026-11-02T00:00:00.000Z', left_on: '2026-11-02' })
+          .where('user_id', '=', left.owner.id),
+      ),
+    );
+    const closed = await setup();
+    await closed.db.run(
+      closed.db.statement((q) =>
+        q
+          .updateTable('workspaces')
+          .set({ closed_at: '2026-11-02T00:00:00.000Z' })
+          .where('id', '=', closed.workspace.id),
+      ),
+    );
+    const deleted = await setup();
+    await deleted.db.run(
+      deleted.db.statement((q) =>
+        q
+          .updateTable('connections')
+          .set({
+            deleted_at: '2026-11-02T00:00:00.000Z',
+            credential_ciphertext: null,
+            credential_key_version: null,
+            credential_last4: null,
+          })
+          .where('id', '=', deleted.connection.id),
+      ),
+    );
+    const { source, calls } = fakeSource({ '501': [{ items: [item(1)], next: null }] });
+    for (const t of [left, closed, deleted]) {
+      expect(await syncConnection(env, t.db, t.workspace.id, t.connection.id, { source })).toEqual({
+        outcome: 'not_found',
+      });
+      expect(await tasksOf(t.db, t.workspace.id)).toHaveLength(0);
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  test('読んだ後に登録者が抜けたら、取り込まない', async () => {
+    const { owner, workspace, connection, db } = await setup();
+    const leaveMidway: ImportSource = {
+      ...fakeSource({}).source,
+      async fetchPage() {
+        await db.run(
+          db.statement((q) =>
+            q
+              .updateTable('memberships')
+              .set({ left_at: '2026-11-02T00:00:00.000Z', left_on: '2026-11-02' })
+              .where('user_id', '=', owner.id),
+          ),
+        );
+        return { items: [item(1)], next: null };
+      },
+    };
+    await syncConnection(env, db, workspace.id, connection.id, { source: leaveMidway });
+    expect(await tasksOf(db, workspace.id)).toHaveLength(0);
+  });
+
+  test('ちょうど上限の頁数で最後の範囲が終われば、続きを残さない', async () => {
+    const { workspace, connection, db } = await setup();
+    const { source } = fakeSource({
+      '501': [
+        { items: [item(1)], next: '1' },
+        { items: [item(2)], next: null },
+      ],
+    });
+    expect(await syncConnection(env, db, workspace.id, connection.id, { source, maxPages: 2 })).toEqual({
+      outcome: 'success',
+      imported: 2,
+      more: false,
+    });
+    expect((await connectionOf(db, connection.id)).sync_state_json).toBe('{}');
+  });
+
+  test('結んだリポジトリが削除されていれば結ばない', async () => {
+    const { organization, workspace, connection, db } = await setup();
+    await createRepository(organization, workspace.id, {
+      provider: 'github',
+      source_container_id: '501',
+      source_container_name: 'fake/box',
+      deleted_at: '2026-11-02T00:00:00.000Z',
+    });
+    const { source } = fakeSource({ '501': [{ items: [item(1)], next: null }] });
+    await syncConnection(env, db, workspace.id, connection.id, { source });
+    expect((await tasksOf(db, workspace.id))[0]!.repository_id).toBeNull();
   });
 
   test('別の組織の接続には触れない。別のワークスペースの接続も同じ', async () => {

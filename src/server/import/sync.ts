@@ -95,7 +95,7 @@ function parseSettings(json: string): Record<string, unknown> {
 export function importedTitle(raw: string, fallback: string): string {
   const cleaned = stripHiddenCharacters(raw.replace(/[\t\n\r]+/g, ' ')).trim();
   const title = cleaned === '' ? stripHiddenCharacters(fallback).trim() : cleaned;
-  return [...title].slice(0, TASK_TITLE_MAX_LENGTH).join('');
+  return [...title].slice(0, TASK_TITLE_MAX_LENGTH).join('').trim();
 }
 
 function invalid(): ImportSourceError {
@@ -104,6 +104,21 @@ function invalid(): ImportSourceError {
 
 function isText(value: unknown, allowEmpty = false): value is string {
   return typeof value === 'string' && value.length <= MAX_FIELD_LENGTH && (allowEmpty || value !== '');
+}
+
+// 画面がリンクにする値なので http と https だけを通す
+function isWebUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'https:' || protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function isIsoInstant(value: string): boolean {
+  const time = Date.parse(value);
+  return !Number.isNaN(time) && new Date(time).toISOString() === value;
 }
 
 function isDate(value: string): boolean {
@@ -124,11 +139,13 @@ function assertItem(item: ImportItem): void {
     (item.kind === 'review_request') !== (item.reviewerSourceId !== '') ||
     !isText(item.key) ||
     !isText(item.url) ||
+    !isWebUrl(item.url) ||
     !isText(item.title, true) ||
     !isText(item.containerId) ||
     !isText(item.containerName) ||
     !isText(item.status) ||
     !isText(item.updatedAt) ||
+    !isIsoInstant(item.updatedAt) ||
     typeof item.isDone !== 'boolean' ||
     (item.dueOn !== null && (typeof item.dueOn !== 'string' || !isDate(item.dueOn)))
   ) {
@@ -171,8 +188,12 @@ export async function syncConnection(
   if (connection.scope_mode !== 'exclude' && read.scopes.length === 0) return { outcome: 'no_scope' };
 
   let imported = 0;
-  const finish = async (outcome: SyncOutcome): Promise<void> => {
-    await db.run(syncOutcomeStatement(db, { id: connection.id, workspaceId }, outcome, now().toISOString()));
+  // 状態の文が通らなかった（同期の最中に接続が止まった、削除された）ときは false
+  const finish = async (outcome: SyncOutcome): Promise<boolean> => {
+    const result = await db.run(
+      syncOutcomeStatement(db, { id: connection.id, workspaceId }, outcome, now().toISOString()),
+    );
+    return result.changes > 0;
   };
 
   try {
@@ -195,7 +216,9 @@ export async function syncConnection(
       do {
         if (pages >= maxPages) {
           const resume = { scope: scope.id, cursor };
-          await finish({ kind: 'success', syncStateJson: JSON.stringify({ resume }) });
+          if (!(await finish({ kind: 'success', syncStateJson: JSON.stringify({ resume }) }))) {
+            return { outcome: 'stopped' };
+          }
           return { outcome: 'success', imported, more: true };
         }
         pages++;
@@ -216,7 +239,7 @@ export async function syncConnection(
         cursor = page.next;
       } while (cursor !== null);
     }
-    await finish({ kind: 'success', syncStateJson: '{}' });
+    if (!(await finish({ kind: 'success', syncStateJson: '{}' }))) return { outcome: 'stopped' };
     return { outcome: 'success', imported, more: false };
   } catch (error) {
     const failure = failureOf(error);
@@ -292,15 +315,15 @@ async function writePage(
     assigneeUserId: connection.owner_user_id,
     repositoryId: repositories.get(item.containerId) ?? null,
     position: positions[index]!,
-    title: importedTitle(item.title, item.key),
+    title: importedTitle(item.title, item.key) || stripHiddenCharacters(item.sourceId).trim() || '(題なし)',
     kind: item.kind,
     sourceId: item.sourceId,
     reviewerSourceId: item.reviewerSourceId,
-    key: item.key,
+    key: stripHiddenCharacters(item.key),
     url: item.url,
     containerId: item.containerId,
-    containerName: item.containerName,
-    status: item.status,
+    containerName: stripHiddenCharacters(item.containerName),
+    status: stripHiddenCharacters(item.status),
     dueOn: item.dueOn,
     updatedAt: item.updatedAt,
   }));
