@@ -505,15 +505,15 @@
       }
       if (result.status === 409 && taskCreateConflictReasonOf(result.error?.details) === 'done_column') {
         void reloadBoard();
-        return t('sprintCardMoveDoneColumn', { done: t('done'), column: t('column') });
+        return t('sprintBoardAddDoneColumn', { done: t('done'), column: t('column'), task: t('task') });
       }
       if (result.status === 409 && taskCreateConflictReasonOf(result.error?.details) === 'closed') {
         void reloadBoard();
-        return t('sprintCardMoveNotActive', { sprint: t('sprint') });
+        return t('sprintBoardAddNotActive', { sprint: t('sprint'), task: t('task') });
       }
       if (result.status === 404) {
         void reloadBoard();
-        return t('sprintBoardAddGone', { sprint: t('sprint'), column: t('column') });
+        return t('sprintBoardAddGone', { sprint: t('sprint'), column: t('column'), task: t('task') });
       }
       return t('taskCreateFailed');
     }
@@ -694,6 +694,8 @@
       <p class="action-note" id={KEY_HINT_ID}>
         {t('sprintBoardKeyHint', { column: t('column'), done: t('done') })}
       </p>
+      <!-- 空の行の案内。カードの説明（KEY_HINT_ID）に混ぜず、別の注記にする -->
+      <p class="action-note">{t('sprintBoardDraftHint', { column: t('column'), task: t('task') })}</p>
     {/if}
   {/if}
   {#key workspace.id}

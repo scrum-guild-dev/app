@@ -7,6 +7,10 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { failOperation, mockOperation } from './operations.ts';
+import { SAMPLE_BOARD } from './sprint-fixture.ts';
+import { sprintBoard } from '../src/shared/operations/sprint/index.ts';
+import { taskCreate } from '../src/shared/operations/task/index.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
@@ -43,6 +47,9 @@ test('スプリントの各列の末尾の空の行に題を打って Enter で�
   // 完了の列には空の行が無い。ほかの列には、場所の分かる名前で1つずつある
   await expect(page.locator('.board-col > .draft-row')).toHaveCount(3);
   await expect(page.getByRole('region', { name: '完了', exact: true }).locator('.draft-row')).toHaveCount(0);
+
+  // 空の行の案内は、カードの説明に結ぶ動かし方の案内とは別の注記にある
+  await expect(page.locator('.action-note', { hasText: '空の行に題を打って Enter を押すと' })).toBeVisible();
 
   const todoInput = page.getByRole('textbox', { name: 'タスクを足す: 未着手' });
   await expect(todoInput).toHaveAttribute('placeholder', 'タスクを足す（題を打って Enter）');
@@ -101,4 +108,37 @@ test('スプリントの各列の末尾の空の行に題を打って Enter で�
   await page.goto(board);
   await expect(titlesIn(page, '未着手')).toHaveText(['見積もりを送る', '請求書を出す']);
   await expect(page.locator('.draft-row')).toHaveCount(0);
+});
+
+test('作るのが断られたら、作られていないことを行の下に知らせ、書きかけを残して読み直す', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signIn(context, baseURL, 'admin');
+  await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
+  await page.goto('/aoba/w/019a0000-0000-7000-8000-000000000401/sprint');
+  const input = page.getByRole('textbox', { name: 'タスクを足す: 未着手' });
+
+  // 進行中でなくなっていた
+  const unrouteClosed = await failOperation(page, taskCreate, { slug: 'aoba' }, 409, 'conflict', {
+    details: { reason: 'closed' },
+  });
+  await input.fill('障害の連絡手順を書く');
+  await input.press('Enter');
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'もう進行中ではないので、タスクは作られていません' }),
+  ).toBeVisible();
+  await expect(input).toHaveValue('障害の連絡手順を書く');
+  await unrouteClosed();
+
+  // 列が完了の列に変わっていた
+  const unrouteDone = await failOperation(page, taskCreate, { slug: 'aoba' }, 409, 'conflict', {
+    details: { reason: 'done_column' },
+  });
+  await input.press('Enter');
+  await expect(
+    page.getByRole('alert').filter({ hasText: '完了の列にはタスクを足せないので、作られていません' }),
+  ).toBeVisible();
+  await unrouteDone();
 });
