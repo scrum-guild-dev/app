@@ -53,7 +53,7 @@ Workers & Pages の「Create application」→「Continue with GitHub」で、�
 
 2026-11-03 に個人所有の `ucan-lab/scrum-guild` から Organization の `scrum-guild-dev/app` へ移管した。移管後は、GitHub の新しい Organization で Cloudflare のアプリの許可と、既存の本番・見本の両 Worker の Builds の接続先を確認する。Worker、D1、R2、公開 URL は移管で作り直さない。GitHub のリポジトリの移管だけで Builds の再接続が済んだとは扱わない。Cloudflare 側の GitHub 接続フローから新しい Organization を認可する。GitHub の App のページから直接インストールしただけでは、Cloudflare の接続先として登録されない場合がある。
 
-同日に、Cloudflare Workers and Pages の GitHub App を `scrum-guild-dev/app` の1件だけに許可した。2026-11-07 に紹介サイトの Worker を Workers Builds につないだときは、許可は `scrum-guild-dev/app` と `scrum-guild-dev/website` の2件になっていた。
+同日に、Cloudflare Workers and Pages の GitHub App を `scrum-guild-dev/app` の1件だけに許可した。
 本番 Worker は旧接続を切り、新しい Organization の接続を保存した。接続するときだけ「Disable builds」を有効にして初回のビルドを起こさず、保存後に通常の有効状態へ戻した。
 ビルド・デプロイのコマンド、ルート、既存の API トークン、キャッシュ、プレビュー無効、監視パスを復元して保存し、再読み込みで確認した。
 見本の Worker も移管先のリポジトリを参照し、Git 連携のエラーが無いことと、既存のコマンド・監視パス・トークンの選択が維持されていることを確認した。
@@ -89,7 +89,7 @@ Workers Builds が使えるのは、Builds が自分で作ったトークンだ�
 | Account（ucan-lab のアカウントだけ） | Workers Scripts: Edit、D1: Edit、Account Settings: Read |
 | User | User Details: Read、Memberships: Read |
 
-- 紹介サイトの Worker `scrum-guild-website` も、2026-11-07 につないだときに Builds が既存のこのトークンを選び、同じトークンでデプロイしている。紹介サイトの devDependencies も、本番の D1 と Worker を書き換えられるトークンのある環境で動く
+- 紹介サイトの Worker `scrum-guild-website` は、このトークンを使わず、専用の `scrum-guild-website build token` を使う。権限は Workers Scripts: Edit、Account Settings: Read、User Details: Read、Memberships: Read の4つで、D1 の権限を持たない。2026-11-07 に Retry build でデプロイが通ることを確かめた。Workers Scripts: Edit はアカウントの全 Worker に効くので、紹介サイトの依存が乗っ取られると、本番の Worker のコードは差し替えられる
 - 作られたときは、Workers AI、Queues、Containers、Secrets Store、R2、KV、AI Gateway などの編集と、全アカウントの全ゾーンの Email Routing Rules、Workers Routes、SSL and Certificates の編集まで、30 の権限を持っていた
 - マイグレーション（`d1 time-travel info`、`d1 migrations apply`）は D1: Edit で動く見込みで、最初のマイグレーションのデプロイで確かめる
 - 機能を足して権限が要るようになったら（Queues など）、そのときに足す。R2 の添付ファイルは権限を足さずにデプロイする見込みで、扱いは上の「R2」
