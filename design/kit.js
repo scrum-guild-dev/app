@@ -3448,6 +3448,63 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }).format(date).replace(/\s/, "\u00a0");
   }
 
+  // ⌘（Windows と Linux は Ctrl）を約 0.3 秒押し続けた間だけ、ショートカットを持つもの（aria-keyshortcuts があるもの）の角にキーを出す。
+  // 見た目だけで、押したキーも動作も変えない（読み上げは aria-keyshortcuts がすでに伝える）。ほかのキーが押されたら出さず、離すと消す。
+  // 本番ではこの対象を「ショートカットの仕組み」の登録から引く（ボタンに直に属性を書かない）。
+  const keyHints = {
+    mac: /Mac|iPhone|iPad/.test(navigator.platform || ""),
+    delay: 300,
+    timer: 0,
+    layer: null,
+    modKey() { return this.mac ? "Meta" : "Control"; },
+    // aria-keyshortcuts の「Control+K Meta+K」から、この環境のキーを取り、見せる文字にする（⌘K、Ctrl K、[）
+    text(el) {
+      const mod = this.modKey();
+      const keys = (el.getAttribute("aria-keyshortcuts") || "").split(/\s+/).filter(Boolean);
+      const pick = keys.find((k) => k.startsWith(`${mod}+`)) || keys.find((k) => !k.includes("+"));
+      if (!pick) return "";
+      return pick.includes("+") ? (this.mac ? `⌘${pick.split("+").pop()}` : `Ctrl ${pick.split("+").pop()}`) : pick;
+    },
+    blocked() {
+      return matchMedia("(hover: none)").matches || !document.getElementById("dialog")?.hidden || !document.getElementById("celebrate")?.hidden;
+    },
+    show() {
+      this.timer = 0;
+      if (this.blocked()) return;
+      const layer = document.createElement("div");
+      layer.className = "key-hints"; layer.setAttribute("aria-hidden", "true");
+      const seen = new Set();
+      for (const el of document.querySelectorAll("[aria-keyshortcuts]:not([aria-disabled='true'])")) {
+        const host = el.closest(".nav-search") || el;
+        const rect = host.getBoundingClientRect();
+        const label = this.text(el);
+        if (!label || !rect.width || !rect.height || rect.bottom < 0 || rect.top > innerHeight || seen.has(host)) continue;
+        seen.add(host);
+        const kbd = document.createElement("kbd");
+        kbd.className = "kbd key-hint"; kbd.textContent = label;
+        kbd.style.left = `${Math.min(rect.right + 6, innerWidth - 4)}px`;
+        kbd.style.top = `${Math.max(rect.top, 16)}px`;
+        layer.append(kbd);
+      }
+      if (layer.children.length) { this.layer = layer; document.body.append(layer); }
+    },
+    hide() {
+      clearTimeout(this.timer); this.timer = 0;
+      this.layer?.remove(); this.layer = null;
+    },
+  };
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== keyHints.modKey()) { keyHints.hide(); return; }
+    if (ev.repeat || keyHints.timer || keyHints.layer) return;
+    if (ev.altKey || ev.shiftKey || (keyHints.mac ? ev.ctrlKey : ev.metaKey)) return;
+    keyHints.timer = setTimeout(() => keyHints.show(), keyHints.delay);
+  });
+  document.addEventListener("keyup", (ev) => { if (ev.key === keyHints.modKey()) keyHints.hide(); });
+  window.addEventListener("blur", () => keyHints.hide());
+  window.addEventListener("resize", () => keyHints.hide());
+  document.addEventListener("scroll", () => keyHints.hide(), true);
+  document.addEventListener("pointerdown", () => keyHints.hide(), true);
+
   window.SQ = {
     formatTrialStopDateTime,
     first, firstHref, firstSteps, emptyState, art,
