@@ -1,18 +1,11 @@
 // 削除したタスクを戻す（task-restore）。docs/data-model.md の「書き込みの単位」の「タスクの削除の取り消し」
 import { now } from '../../shared/clock.ts';
 import { taskRestore, type TaskRestoreConflictReason } from '../../shared/operations/task/index.ts';
-import { previousStatementChanged, type OrganizationDb } from '../db/index.ts';
+import { previousStatementChanged, tailPosition, unindexed, type OrganizationDb } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
-import {
-  activeMemberName,
-  actorUserIdOf,
-  changeLogColumns,
-  mayDeleteOwned,
-  openWorkspace,
-  throwIfClosed,
-} from './write-guards.ts';
+import { actorUserIdOf, changeLogColumns, mayDeleteOwned, openWorkspace, throwIfClosed } from './write-guards.ts';
 
 // 戻せない理由。戻せるなら null。親のストーリーが削除されているときは断らず、親なしで戻す
 export function restoreBlockOf(state: {
@@ -29,8 +22,9 @@ export function restoreBlockOf(state: {
   return null;
 }
 
-// 削除を含めて、ワークスペースの中のタスクを読む。親のストーリー、区分、リポジトリは同じワークスペースのものだけを結ぶ
+// 削除を含めて、ワークスペースの中のタスクを読む。親のストーリー、担当、区分、リポジトリは、同じ組織とワークスペースのものだけを結ぶ
 async function readDeletable(db: OrganizationDb, workspaceId: string, taskId: string) {
+  const organizationId = db.organizationId;
   return db.first(
     db.statement((q) =>
       q
@@ -38,32 +32,34 @@ async function readDeletable(db: OrganizationDb, workspaceId: string, taskId: st
         .leftJoin('stories', (join) =>
           join.onRef('stories.id', '=', 'tasks.story_id').on('stories.workspace_id', '=', workspaceId),
         )
-        .leftJoin('categories as live_category', (join) =>
-          join
-            .onRef('live_category.id', '=', 'tasks.category_id')
-            .on('live_category.workspace_id', '=', workspaceId)
-            .on('live_category.deleted_at', 'is', null),
+        .leftJoin('users as assignee', (join) =>
+          join.onRef('assignee.id', '=', 'tasks.assignee_user_id').on('assignee.organization_id', '=', organizationId),
         )
-        .leftJoin('repositories as live_repository', (join) =>
-          join
-            .onRef('live_repository.id', '=', 'tasks.repository_id')
-            .on('live_repository.workspace_id', '=', workspaceId)
-            .on('live_repository.deleted_at', 'is', null),
+        .leftJoin('categories as cat', (join) =>
+          join.onRef('cat.id', '=', 'tasks.category_id').on('cat.workspace_id', '=', workspaceId),
+        )
+        .leftJoin('repositories as repo', (join) =>
+          join.onRef('repo.id', '=', 'tasks.repository_id').on('repo.workspace_id', '=', workspaceId),
         )
         .select([
           'tasks.created_by',
           'tasks.deleted_at',
           'tasks.completed_at',
           'tasks.story_id',
+          'tasks.position',
           'tasks.assignee_user_id',
           'tasks.today_on',
           'tasks.category_id',
           'tasks.repository_id',
           'stories.id as story_row_id',
+          'stories.title as story_title',
           'stories.deleted_at as story_deleted_at',
           'stories.completed_at as story_completed_at',
-          'live_category.id as live_category_id',
-          'live_repository.id as live_repository_id',
+          'assignee.name as assignee_name',
+          'cat.name as category_name',
+          'cat.deleted_at as category_deleted_at',
+          'repo.name as repository_name',
+          'repo.deleted_at as repository_deleted_at',
         ])
         .where('tasks.id', '=', taskId)
         .where('tasks.workspace_id', '=', workspaceId),
@@ -83,6 +79,9 @@ function blockOf(row: Readout): TaskRestoreConflictReason | null {
   });
 }
 
+// 履歴の値は、task-update と同じ {id, name}
+const refOf = (id: string, name: string | null) => ({ id, name: name ?? '' });
+
 export const taskRestoreOperation = implement(taskRestore, async ({ db, actor, workspace, input }) => {
   const actorUserId = actorUserIdOf(actor);
   const organizationId = db.organizationId;
@@ -94,81 +93,145 @@ export const taskRestoreOperation = implement(taskRestore, async ({ db, actor, w
     await throwIfClosed(db, workspaceId);
     throw new ApiError(404, 'not_found');
   }
+  // 削除していないタスクは、権限より先に 409（戻した後の再送が 403 にならないように）
   const deletedAtRead = task.deleted_at;
+  if (deletedAtRead === null) throw new ApiError(409, 'conflict', { reason: 'not_deleted' });
   if (!mayDeleteOwned(task.created_by, actor, workspace)) {
     // 作った人でもリーダーでもなくても、今の削除を書いた本人は戻せる（リーダーだった人が、削除した後に外れた場合など）。
     // 前に削除して戻された分ではなく、今の deleted_at を書いた削除の履歴だけを見る
-    const deleter =
-      deletedAtRead === null
-        ? undefined
-        : await db.first(
-            db.statement((q) =>
-              q
-                .selectFrom('change_logs')
-                .select('change_logs.actor_user_id')
-                .where('change_logs.organization_id', '=', organizationId)
-                .where('change_logs.workspace_id', '=', workspaceId)
-                .where('change_logs.entity_type', '=', 'task')
-                .where('change_logs.entity_id', '=', taskId)
-                .where('change_logs.action', '=', 'delete')
-                .where('change_logs.created_at', '=', deletedAtRead)
-                .orderBy('change_logs.id', 'desc')
-                .limit(1),
-            ),
-          );
+    const deleter = await db.first(
+      db.statement((q) =>
+        q
+          .selectFrom('change_logs')
+          .select('change_logs.actor_user_id')
+          .where('change_logs.organization_id', '=', organizationId)
+          .where('change_logs.workspace_id', '=', workspaceId)
+          .where('change_logs.entity_type', '=', 'task')
+          .where('change_logs.entity_id', '=', taskId)
+          .where('change_logs.action', '=', 'delete')
+          .where('change_logs.created_at', '=', deletedAtRead)
+          .orderBy('change_logs.id', 'desc')
+          .limit(1),
+      ),
+    );
     if (deleter?.actor_user_id !== actorUserId) throw new ApiError(403, 'forbidden');
   }
   const reason = blockOf(task);
   if (reason !== null) throw new ApiError(409, 'conflict', { reason });
-  if (deletedAtRead === null) throw new ApiError(409, 'conflict', { reason: 'not_deleted' });
 
-  // 削除の間に変わった参照は、戻すときに外す。親が削除されたストーリーは親なし、所属を外れた担当は担当なし
-  // （今日やるの印も外す）、削除された区分とリポジトリは空にする。外した分は履歴に残す
+  // 削除の間に変わった参照は、戻すときに外す。親が削除されたストーリーは親なし（並びは親なしの末尾）、
+  // 所属を外れた担当は担当なし（今日やるの印も外す）、削除された区分とリポジトリは空にする。外した分は履歴に残す。
+  // 退会が担当を外すのは完了していないタスクだけなので、完了したタスクの担当は、所属を外れていても替えない
+  const completed = task.completed_at !== null;
   const parentDeleted = task.story_row_id !== null && task.story_deleted_at !== null;
-  const assigneeGone =
-    task.assignee_user_id !== null &&
-    (await db.first(
-      db.statement((q) => activeMemberName(q, organizationId, workspaceId, task.assignee_user_id as string)),
-    )) === undefined;
+  const assigneeId = task.assignee_user_id;
+  const assigneeActive =
+    assigneeId === null
+      ? true
+      : (await db.first(
+          db.statement((q) =>
+            q
+              .selectFrom('memberships as m')
+              .select('m.user_id')
+              .where('m.workspace_id', '=', workspaceId)
+              .where('m.user_id', '=', assigneeId)
+              .where('m.left_at', 'is', null),
+          ),
+        )) !== undefined;
+  const assigneeGone = assigneeId !== null && !completed && !assigneeActive;
+  const categoryGone = task.category_id !== null && task.category_deleted_at !== null;
+  const repositoryGone = task.repository_id !== null && task.repository_deleted_at !== null;
   const nextStoryId = parentDeleted ? null : task.story_id;
-  const nextAssignee = assigneeGone ? null : task.assignee_user_id;
-  const nextTodayOn = assigneeGone ? null : task.today_on;
-  const categoryGone = task.category_id !== null && task.live_category_id === null;
-  const repositoryGone = task.repository_id !== null && task.live_repository_id === null;
-  const nextCategory = categoryGone ? null : task.category_id;
-  const nextRepository = repositoryGone ? null : task.repository_id;
   const changes: Record<string, readonly [unknown, unknown]> = {
     deleted_at: [deletedAtRead, null],
-    ...(parentDeleted ? { story_id: [task.story_id, null] } : {}),
-    ...(assigneeGone ? { assignee_user_id: [task.assignee_user_id, null] } : {}),
+    ...(parentDeleted && task.story_id !== null ? { story: [refOf(task.story_id, task.story_title), null] } : {}),
+    ...(assigneeGone && assigneeId !== null ? { assignee: [refOf(assigneeId, task.assignee_name), null] } : {}),
     ...(assigneeGone && task.today_on !== null ? { today_on: [task.today_on, null] } : {}),
-    ...(categoryGone ? { category_id: [task.category_id, null] } : {}),
-    ...(repositoryGone ? { repository_id: [task.repository_id, null] } : {}),
+    ...(categoryGone && task.category_id !== null
+      ? { category: [refOf(task.category_id, task.category_name), null] }
+      : {}),
+    ...(repositoryGone && task.repository_id !== null
+      ? { repository: [refOf(task.repository_id, task.repository_name), null] }
+      : {}),
   };
 
   const at = now();
   const restoredAt = at.toISOString();
   const results = await db.batch([
-    // 読んだ削除（deleted_at が読んだ値）だけを戻す。親の条件は読んでから書くまでに変わりうるので、書く文にも入れる
+    // 読んだ削除（deleted_at が読んだ値）だけを戻す。親と参照は読んでから書くまでに変わりうるので、書く文にも条件を入れる。
+    // 外す参照は読んだ値と同じこと、残す参照は今も有効なことが条件。ずれたら 0 行で、読み直して 409（changed か理由）
     db.statement((q) =>
       q
         .updateTable('tasks')
-        .set({
+        .set((eb) => ({
           deleted_at: null,
           updated_at: restoredAt,
           story_id: nextStoryId,
-          assignee_user_id: nextAssignee,
-          today_on: nextTodayOn,
-          category_id: nextCategory,
-          repository_id: nextRepository,
-        })
+          // 親なしで戻すときは、親なしの並びの末尾に置く（元の親の中の値のままだと、親なしの並びの途中に割り込む）
+          ...(parentDeleted
+            ? {
+                position: tailPosition(
+                  eb
+                    .selectFrom('tasks')
+                    .select('tasks.position')
+                    .where('tasks.workspace_id', '=', workspaceId)
+                    .where('tasks.tray', '=', 'backlog')
+                    .where('tasks.deleted_at', 'is', null)
+                    .where(unindexed('tasks.story_id'), 'is', null)
+                    .orderBy('tasks.position', 'desc')
+                    .limit(1),
+                  eb.val('1'),
+                  eb.val('1'),
+                ),
+              }
+            : {}),
+          ...(assigneeGone ? { assignee_user_id: null, today_on: null } : {}),
+          ...(categoryGone ? { category_id: null } : {}),
+          ...(repositoryGone ? { repository_id: null } : {}),
+        }))
         .where((eb) =>
           eb.and([
             eb('id', '=', taskId),
             eb('workspace_id', '=', workspaceId),
             eb('deleted_at', '=', deletedAtRead),
             task.story_id === null ? eb('story_id', 'is', null) : eb('story_id', '=', task.story_id),
+            assigneeId === null ? eb('assignee_user_id', 'is', null) : eb('assignee_user_id', '=', assigneeId),
+            task.category_id === null ? eb('category_id', 'is', null) : eb('category_id', '=', task.category_id),
+            task.repository_id === null
+              ? eb('repository_id', 'is', null)
+              : eb('repository_id', '=', task.repository_id),
             eb.exists(openWorkspace(q, organizationId, workspaceId)),
+            // 残す担当は今も所属している（完了したタスクは確かめない）
+            assigneeId === null || assigneeGone || completed
+              ? eb.val(true)
+              : eb.exists(
+                  eb
+                    .selectFrom('memberships as m')
+                    .select('m.user_id')
+                    .whereRef('m.user_id', '=', 'tasks.assignee_user_id')
+                    .where('m.workspace_id', '=', workspaceId)
+                    .where('m.left_at', 'is', null),
+                ),
+            task.category_id === null || categoryGone
+              ? eb.val(true)
+              : eb.exists(
+                  eb
+                    .selectFrom('categories as c')
+                    .select('c.id')
+                    .whereRef('c.id', '=', 'tasks.category_id')
+                    .where('c.workspace_id', '=', workspaceId)
+                    .where('c.deleted_at', 'is', null),
+                ),
+            task.repository_id === null || repositoryGone
+              ? eb.val(true)
+              : eb.exists(
+                  eb
+                    .selectFrom('repositories as r')
+                    .select('r.id')
+                    .whereRef('r.id', '=', 'tasks.repository_id')
+                    .where('r.workspace_id', '=', workspaceId)
+                    .where('r.deleted_at', 'is', null),
+                ),
             task.story_id === null
               ? eb.val(true)
               : eb.exists(
@@ -213,7 +276,7 @@ export const taskRestoreOperation = implement(taskRestore, async ({ db, actor, w
   ]);
 
   if ((results[0]?.changes ?? 0) === 0) {
-    // 読んでから書くまでに、閉じたか、別の要求が先に戻したか、消し直したか、親が変わった。読み直して理由を返す
+    // 読んでから書くまでに、閉じたか、別の要求が先に戻したか、消し直したか、親や参照が変わった。読み直して理由を返す
     await throwIfClosed(db, workspaceId);
     const current = await readDeletable(db, workspaceId, taskId);
     if (current === undefined) throw new ApiError(404, 'not_found');
