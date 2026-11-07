@@ -42,6 +42,7 @@
   } = $props();
 
   const ids = $props.id();
+  const label = $derived(t('attrChipLabel', { attr, value: unset ? t('attrChipUnset') : text }));
   const reasonId = `${ids}-reason`;
   let open = $state(false);
   let root = $state<HTMLElement>();
@@ -166,6 +167,8 @@
 <!-- キーは中のボタンから届く。包む要素そのものはフォーカスを受けない -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <span class="row-menu" bind:this={root} onkeydown={onKeydown}>
+  <!-- アバター（lead）はボタンの外に置く。頭文字が文字として数えられ、見える名前が aria-label を含まなくなるため -->
+  {@render lead?.()}
   <button
     class="chip chip-btn"
     class:is-unset={unset}
@@ -175,17 +178,11 @@
     aria-expanded={locked === undefined ? open : undefined}
     aria-disabled={locked !== undefined ? 'true' : undefined}
     aria-describedby={locked !== undefined ? reasonId : undefined}
+    aria-label={label}
     title={locked ?? text}
     onclick={toggle}
   >
-    <!-- 名前は中身から作る（aria-label にすると、アバターの頭文字などの見える文字を含まず、見える名前と食い違う）。
-         属性の名前は、値があれば見えない接頭辞、未設定なら（見える文字が属性の名前なので）見えない接尾辞で足す -->
-    {@render lead?.()}
-    <span class="chip-text"
-      >{#if !unset}<span class="visually-hidden">{attr}: </span>{/if}{text}{#if unset}<span class="visually-hidden"
-          >: {t('attrChipUnset')}</span
-        >{/if}</span
-    >
+    <span class="chip-text">{text}</span>
   </button>
   {#if locked !== undefined}
     <span class="visually-hidden" id={reasonId}>{locked}</span>

@@ -59,7 +59,8 @@ test('行のチップでポイントと担当を選ぶと、行に出る。キ�
   await assigned;
   const assigneeChip = row.getByRole('button', { name: `担当: ${name}` });
   await expect(assigneeChip).toBeVisible();
-  await expect(assigneeChip.locator('.avatar')).toHaveCount(1);
+  // アバターは、チップの左隣（同じ .row-menu の中）に出る
+  await expect(row.locator('.row-menu', { has: assigneeChip }).locator('.avatar')).toHaveCount(1);
 
   // 読み直しても残る
   await page.reload();

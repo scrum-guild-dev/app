@@ -1691,7 +1691,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .card-foot { flex-wrap: wrap; }
 .card-foot .row-menu { min-width: 0; max-width: 100%; }
 /* 行の「⋯」（.row-menu）。広い幅ではホバーと行の中のフォーカスで出し、開いている間は出したままにする。opacity だけなので、見えなくてもキーボードで届く */
-.row-menu { position: relative; display: inline-flex; flex: none; }
+.row-menu { position: relative; display: inline-flex; flex: none; align-items: center; gap: var(--space-1); }
 .row-menu-btn { opacity: 0; }
 :is(.entry, .tree-row, .card):is(:hover, :focus-within) .row-menu-btn, .row-menu-btn[aria-expanded="true"], .row-menu-btn:focus-visible { opacity: 1; }
 .row-menu-list { position: fixed; z-index: 30; width: max-content; min-width: 12rem; max-width: min(20rem, calc(100vw - 2 * var(--space-4))); }
