@@ -133,9 +133,10 @@ test('見本のバックログ: ストーリーの題のリンクで引き出し
   await drawer.locator('#drawer-edit-title').fill('題を直した');
   await drawer.locator('#drawer-edit-ac').focus();
   await expect(links.first()).toHaveText('題を直した');
-  // 次のストーリーへ移ると、その題が入る
+  // 次のストーリーへ移ると、木で次のストーリーの題が入る
+  const next = await links.nth(1).textContent();
   await drawer.locator('[data-drawer-step="1"]').click();
-  await expect(drawer.locator('#drawer-edit-title')).not.toHaveValue('題を直した');
+  await expect(drawer.locator('#drawer-edit-title')).toHaveValue(next!);
   // 真ん中の形へ替えると、枠が真ん中になり、開き方の押した印も移る
   await drawer.locator('[data-drawer-mode="center"]').click();
   await expect(drawer).toHaveClass(/is-center/);
@@ -336,4 +337,14 @@ test('見本のバックログ: 下の行を先に、上の行を後に消し、
   await page.locator('.toast-action').first().click();
   await page.locator('.toast-action').first().click();
   expect(await titles.allTextContents()).toEqual(before);
+});
+
+test('見本のバックログ: ?story=<ID> で、ストーリーの引き出しが直接開く', async ({ page }) => {
+  const errors = await openSample(page, 'backlog.html');
+  await page.goto('/__design-catalog/backlog.html?story=s4');
+  const drawer = page.locator('#drawer');
+  await expect(drawer).toBeVisible();
+  await expect(drawer.locator('#drawer-edit-title')).toHaveValue('問い合わせの一次回答を早くする');
+  await expect(drawer.locator('[data-story-done]')).toHaveCount(1);
+  expect(errors).toEqual([]);
 });
