@@ -266,8 +266,18 @@ test('動かしを送っている最中にカードを消しても、動かし�
   await chooseRowAction(page, '消すカード', DELETE);
   await expect(page.locator('.toasts:visible .toast', { hasText: '「消すカード」を削除しました' })).toBeVisible();
   // 動かしが届くまで読み直さない。動かしたカードは作業中のまま、未着手には戻らない
+  // 読み直し（sprint-board）が走っていないことを、止めている間、一定の間確かめる
+  const boardReads: string[] = [];
+  const unrouteBoard = await routeOperation(page, sprintBoard, AOBA, async (call) => {
+    boardReads.push('read');
+    await call.passThrough();
+  });
+  await page.waitForTimeout(1000);
+  expect(boardReads).toHaveLength(0);
   await expect(titlesIn('未着手')).not.toContainText(['動かすカード']);
   release();
+  await expect.poll(() => boardReads.length).toBeGreaterThan(0);
+  await unrouteBoard();
   await expect(titlesIn('作業中')).toHaveText(['動かすカード']);
   await expect(titlesIn('未着手')).toHaveCount(0);
   await unroute();

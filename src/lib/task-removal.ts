@@ -143,7 +143,7 @@ export function adjacentRowsOf(taskId: string): AdjacentTasks | null {
   return { prev: ids[index - 1] ?? null, next: ids[index + 1] ?? null };
 }
 
-// 引き出しがこのタスクを開いているとき、消した後に引き出しを閉じる先の URL（`task` を外す。`story` と `epic_id` も外す）。開いていなければ null
+// 引き出しがこのタスクを開いているとき、消した後に引き出しを閉じる先の URL（`task` を外す。`story` と `epic_id` も外す。ハッシュは持たない）。開いていなければ null
 export function urlWithoutOpenTask(href: string, taskId: string): string | null {
   const url = new URL(href);
   if (url.searchParams.get('task') !== taskId) return null;
@@ -206,10 +206,11 @@ async function removeOnce(args: RemoveFromListArgs): Promise<void> {
       onskipped: args.onskipped,
       fromSprint: args.fromSprint === true,
     });
-    const drawerPath = urlWithoutOpenTask(location.href, args.taskId);
-    if (drawerPath !== null) await settled(() => args.closeDrawer?.(drawerPath) ?? Promise.resolve());
-    // キーボードで消したときは、木の読み直しを待つ間に10秒が尽きないよう、数えを止める（フォーカスが外れると数え直す）
+    // キーボードで消したときは、引き出しを閉じる間と木の読み直しを待つ間に10秒が尽きないよう、数えを止める（フォーカスが外れると数え直す）
     if (args.keyboard) pauseToast(toastId);
+    // 引き出しを閉じるのに失敗しても（行を消した後の読み直しには関わらない）黙って続ける
+    const drawerPath = urlWithoutOpenTask(location.href, args.taskId);
+    if (drawerPath !== null) await args.closeDrawer?.(drawerPath)?.catch(() => {});
     const reloaded = await settled(async () => {
       await args.reload();
       await tick();
@@ -231,9 +232,9 @@ async function removeOnce(args: RemoveFromListArgs): Promise<void> {
     args.onstale();
   } else if (result.status === 404) {
     showToast(t('taskGone', { task: t('task') }), 'alert');
-    if (!(await settled(args.reload))) return;
-    // 行が消えて、キーボードで押した「⋯」のフォーカスが失われる。待つ間に別の所へ移した人からは奪わない
-    await tick();
+    const reloaded = await settled(args.reload);
+    // 行が消えて、キーボードで押した「⋯」のフォーカスが失われる。待つ間に別の所へ移した人からは奪わない（読み直しが失敗しても、フォーカスは body に落ちる）
+    if (reloaded) await tick();
     if (args.keyboard && focusIsFree()) focusPageHeading();
   } else if (result.status === 403) {
     showToast(t('taskDeleteForbidden', { leader: t('leader') }), 'alert');

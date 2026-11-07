@@ -28,7 +28,13 @@ vi.mock('./focus-heading.ts', () => ({
 vi.mock('./task-order.ts', () => ({ visibleTaskIds: mocks.visibleTaskIds }));
 vi.mock('./vocabulary.svelte.ts', () => ({ t: (key: string) => key }));
 
-import { adjacentRowsOf, removeFromList, urlWithoutOpenTask, type RemoveFromListArgs } from './task-removal.ts';
+import {
+  adjacentRowsOf,
+  removeFromList,
+  restoreRemoved,
+  urlWithoutOpenTask,
+  type RemoveFromListArgs,
+} from './task-removal.ts';
 
 function failure(status: number, code?: string) {
   return { ok: false as const, status, error: code === undefined ? null : { code, message: '', details: undefined } };
@@ -114,6 +120,42 @@ describe('removeFromList', () => {
     const closeDrawer = vi.fn(async () => {});
     await removeFromList(args({ closeDrawer }));
     expect(closeDrawer).toHaveBeenCalledWith('/aoba/w/w1?q=a');
+  });
+
+  test('引き出しを閉じるのは読み直しより前。閉じるのに失敗しても読み直しへ進み、失敗の文は出さない', async () => {
+    mocks.callOperation.mockResolvedValue({ ok: true, data: null });
+    vi.stubGlobal('location', { href: 'http://localhost/aoba/w/w1?task=t1' });
+    const order: string[] = [];
+    const a = args({
+      closeDrawer: async () => {
+        order.push('close');
+        throw new Error('navigation');
+      },
+      reload: async () => {
+        order.push('reload');
+      },
+    });
+    await removeFromList(a);
+    expect(order).toEqual(['close', 'reload']);
+    expect(toastMessages()).toEqual(['taskDeleted']);
+  });
+
+  test('別のタスクの引き出しが開いているときは、閉じない', async () => {
+    mocks.callOperation.mockResolvedValue({ ok: true, data: null });
+    vi.stubGlobal('location', { href: 'http://localhost/aoba/w/w1?task=other' });
+    const closeDrawer = vi.fn(async () => {});
+    await removeFromList(args({ closeDrawer }));
+    expect(closeDrawer).not.toHaveBeenCalled();
+  });
+
+  test('404 で読み直しが失敗しても reject せず、キーボードなら見出しへフォーカスを置く', async () => {
+    mocks.callOperation.mockResolvedValue(failure(404, 'not_found'));
+    const reload = vi.fn(async () => {
+      throw new Error('network');
+    });
+    await expect(removeFromList(args({ keyboard: true, reload }))).resolves.toBeUndefined();
+    expect(toastMessages()).toEqual(['taskGone', 'taskListReloadFailed']);
+    expect(mocks.focusPageHeading).toHaveBeenCalledTimes(1);
   });
 
   test('401 は onstale だけ。トーストも読み直しもしない', async () => {
@@ -219,5 +261,42 @@ describe('adjacentRowsOf', () => {
     vi.stubGlobal('document', doc);
     expect(adjacentRowsOf('y')).toEqual({ prev: 'x', next: 'z' });
     expect(mocks.visibleTaskIds).toHaveBeenLastCalledWith(doc);
+  });
+});
+
+describe('restoreRemoved', () => {
+  function target(onrestored: (taskId: string, focus: boolean) => Promise<void>) {
+    return {
+      slug: 'aoba',
+      workspaceId: 'w1',
+      taskId: 't1',
+      title: '題',
+      near: null,
+      onchanged: vi.fn(),
+      onstale: vi.fn(),
+      onrestored,
+      onskipped: undefined,
+    };
+  }
+
+  test('戻せた後の読み直し（onrestored）が失敗しても reject せず、失敗を文で知らせる', async () => {
+    mocks.callOperation.mockResolvedValue({ ok: true, data: { cleared: [] } });
+    const onrestored = vi.fn(async () => {
+      throw new Error('network');
+    });
+    await expect(restoreRemoved(target(onrestored), true)).resolves.toBeUndefined();
+    expect(onrestored).toHaveBeenCalledWith('t1', true);
+    expect(toastMessages()).toEqual(['taskRestored', 'taskListReloadFailed']);
+  });
+
+  test('409 の not_deleted（もう戻っている）も、戻せたのと同じに扱い、読み直しの失敗は投げない', async () => {
+    mocks.callOperation.mockResolvedValue(failure(409, 'conflict'));
+    const onrestored = vi.fn(async () => {
+      throw new Error('network');
+    });
+    // details.reason が無いので not_deleted ではなく、通常の 409 の分岐（onchanged）になる
+    const t1 = target(onrestored);
+    await expect(restoreRemoved(t1)).resolves.toBeUndefined();
+    expect(t1.onchanged).toHaveBeenCalledTimes(1);
   });
 });

@@ -448,11 +448,8 @@
     if (workspace === null || !canWrite) return;
     const workspaceId = workspace.id;
     const reload = async (): Promise<void> => {
-      // 送っている動かしが終わってから読み直す（先に読み直すと、動かしたカードが一時的に元の列に見える）。空の操作を列の末尾に積んで待つ
-      await moves.send(
-        async () => ({ ok: true, data: null }) as const,
-        async () => {},
-      );
+      // 送っている動かしが終わってから読み直す（先に読み直すと、動かしたカードが一時的に元の列に見える）。MoveQueue の列が空になるまで待つ
+      await moves.whenIdle();
       try {
         await invalidate('app:sprint-board');
       } finally {
