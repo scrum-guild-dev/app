@@ -38,11 +38,12 @@
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import { epicCreate, epicMove } from '../../../../shared/operations/epic/index.ts';
   import { epicTitleProblem } from '../../../../shared/epic.ts';
+  import { taskTitleProblem, TASK_TITLE_MAX_LENGTH } from '../../../../shared/task.ts';
   import { storyTitleProblem } from '../../../../shared/story.ts';
   import { storyComplete, storyCreate, storyMove, storyReopen } from '../../../../shared/operations/story/index.ts';
   import { storyCompletionConflictReasonOf } from '../../../../shared/operations/story/story-complete.ts';
   import type { BacklogEpic, BacklogStory, BacklogTask } from '../../../../shared/operations/task/backlog-tree.ts';
-  import { taskComplete, taskMove } from '../../../../shared/operations/task/index.ts';
+  import { taskComplete, taskCreate, taskMove } from '../../../../shared/operations/task/index.ts';
   import { moveConflictReasonOf } from '../../../../shared/operations/task/task-move.ts';
   import type { PageProps } from './$types';
 
@@ -735,6 +736,74 @@
     return null;
   }
 
+  // 空の行のタスクの題の検査（画面の検査は API の検証と同じ判定）
+  function taskRowProblem(title: string): string | null {
+    const problem = taskTitleProblem(title);
+    if (problem === null) return null;
+    if (problem === 'too_long') return t('taskTitleTooLong', { max: TASK_TITLE_MAX_LENGTH });
+    if (problem === 'invalid_character') return t('taskTitleInvalidCharacter');
+    return t('taskTitleRequired');
+  }
+
+  // 空の行でタスクを作る。storyId が null なら親のないタスク。題だけで送り、属性は作った後に決める。
+  // 作れたら読み直さずに親の配下の末尾へ足す（created）。絞っているときは木を読み直し、作った行が当たらなければ知らせる
+  async function addTaskRow(storyId: string | null, title: string): Promise<string | null> {
+    if (workspace === null) return t('taskCreateFailed');
+    const sentFor = page.params.id;
+    const result = await callOperation(
+      taskCreate,
+      {
+        workspace_id: workspace.id,
+        title,
+        points: null,
+        assignee_user_id: null,
+        story_id: storyId,
+        repository_id: null,
+        category_id: null,
+      },
+      { slug: page.params.slug ?? '' },
+    );
+    // 送っている間に別のワークスペースへ移っていたら、成功も失敗も、古い応答で状態を触らない
+    if (sentFor !== page.params.id) return null;
+    if (!result.ok) {
+      if (result.status === 401) {
+        await invalidateAll();
+        return t('taskCreateFailed');
+      }
+      if (result.status === 409 && result.error?.code === 'workspace_closed') {
+        void invalidateAll();
+        return t('workspaceClosedReadOnly', { workspace: t('workspace') });
+      }
+      if (storyId !== null && result.status === 409 && result.error?.code === 'conflict') {
+        // 親のストーリーが完了した。木を読み直すと空の行ごと消えるので、知らせはトーストに出し、フォーカスは見出しへ移す
+        const message = t('treeAddTaskParentDone', { story: t('story'), done: t('done'), task: t('task') });
+        showToast(message, 'alert');
+        await rowGone();
+        return message;
+      }
+      if (storyId !== null && result.status === 404) {
+        const message = t('storyGone', { story: t('story') });
+        showToast(message, 'alert');
+        await rowGone();
+        return message;
+      }
+      if (result.status === 400) return t('taskTitleInvalidCharacter');
+      return t('taskCreateFailed');
+    }
+    const wasFiltering = filtering;
+    await created(result.data.task, storyId);
+    if (!wasFiltering) {
+      const parent = storyId === null ? undefined : openStories.find((story) => story.id === storyId);
+      showToast(
+        parent === undefined
+          ? t('taskCreated', { backlog: t('backlog') })
+          : t('taskCreatedUnder', { story: t('story'), title: parent.title }),
+        'check',
+      );
+    }
+    return null;
+  }
+
   // 直す対象のストーリーかエピックが消えていた。木を読み直し、フォーカスを見出しへ移す（ダイアログが閉じて、戻る先が無いため）
   async function rowGone(): Promise<void> {
     await invalidateAll();
@@ -1148,7 +1217,18 @@
     onMove={canWrite && !filtering ? reorderStory : undefined}
     onMoveParent={canWrite && (place?.parentId != null || openEpics.length > 0) ? openStoryMoveDialog : undefined}
     dnd={rowDnd}
-  />
+  >
+    {#snippet addRow()}
+      {#if canWrite && story.completed_at === null}
+        <DraftRow
+          label={t('treeAddTask', { task: t('task') })}
+          name={t('treeAddTaskUnder', { title: story.title, task: t('task') })}
+          problem={taskRowProblem}
+          create={(title) => addTaskRow(story.id, title)}
+        />
+      {/if}
+    {/snippet}
+  </TreeStory>
 {/snippet}
 
 {#if workspace && tree === null}
@@ -1332,6 +1412,11 @@
           label={t('treeAddStory', { story: t('story') })}
           problem={(title) => rowTitleProblem('story', title)}
           create={(title) => addStoryRow(null, title)}
+        />
+        <DraftRow
+          label={t('treeAddTask', { task: t('task') })}
+          problem={taskRowProblem}
+          create={(title) => addTaskRow(null, title)}
         />
       {/if}
     </div>

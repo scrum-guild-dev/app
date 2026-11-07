@@ -30,6 +30,7 @@
   // 行は、タスクを運ぶときの落とし先（囲み。離すと配下の末尾に入り、畳まれていれば開く）と、ストーリーを運ぶときの前後の線の落とし先を兼ねる。
   // 前後の線は、開いた配下の途中に入らないよう、配下を含めた塊（.tree-group）に引く。
   // 折りたたみの行と空の案内の行の前後は、配下の末尾の落とし先
+  // addRow を渡すと（書き込める、完了していないとき）、配下の末尾（折りたたみの行や空の案内の行の後）に「タスクを足す」の空の行（DraftRow）を置く
   let {
     story,
     completedContext,
@@ -52,6 +53,7 @@
     onMove,
     onMoveParent,
     dnd,
+    addRow,
   }: {
     story: BacklogStory;
     completedContext?: { slug: string; workspaceId: string; revision: unknown };
@@ -74,6 +76,8 @@
     onMove?: (story: BacklogStory, delta: -1 | 1) => void;
     onMoveParent?: (story: BacklogStory, trigger: HTMLElement) => void;
     dnd?: BacklogDnd;
+    // 配下の末尾に置く空の行（タスクを足す）。完了したストーリーと、閉じたワークスペースには渡さない
+    addRow?: Snippet;
   } = $props();
 
   const dropRow = $derived<DropRow>({ kind: 'story', id: story.id });
@@ -287,5 +291,6 @@
         {t('storyNoTasks', { task: t('task') })}
       </p>
     {/if}
+    {@render addRow?.()}
   </div>
 </div>

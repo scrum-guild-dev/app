@@ -425,6 +425,7 @@ test('閉じたワークスペースでは、作る操作と「＋タスク」�
   await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'ストーリーを作る' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /タスクを足す/ })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: /タスクを足す/ })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'ポイントの付与と失効を管理画面で確かめられる', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'ストーリー' });
