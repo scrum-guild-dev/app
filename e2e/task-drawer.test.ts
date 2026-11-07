@@ -76,13 +76,13 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
   // ポイントは選んだら保存し、その場で木の行に反映する
   await drawer.getByRole('radio', { name: '5', exact: true }).check();
   await expect(page.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
-  await expect(row.locator('.pts')).toHaveText('5');
+  await expect(row.getByRole('button', { name: 'ポイント: 5 pt' })).toBeVisible();
 
   // 期日も選んだら保存する。木の行に期日の印が出る
   await drawer.getByLabel('期日').fill('2099-12-31');
-  await expect(row.locator('.chip:not(.is-todo)')).toBeVisible();
+  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toBeVisible();
   await drawer.getByLabel('期日').fill('');
-  await expect(row.locator('.chip:not(.is-todo)')).toHaveCount(0);
+  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toHaveCount(0);
 
   // タイトルは押すと入力欄になり、Enter で確定する。行のタイトルが変わる
   await drawer.getByRole('button', { name: /見積もりを送る/ }).click();
@@ -178,7 +178,7 @@ test('完了したタスクのポイントは直せず、理由を添える。�
   await row.getByRole('link', { name: '済んだ依頼' }).click();
   const drawer = page.getByRole('dialog', { name: '済んだ依頼' });
   await drawer.getByRole('radio', { name: '3', exact: true }).check();
-  await expect(row.locator('.pts')).toHaveText('3');
+  await expect(row.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
   await drawer.getByRole('button', { name: '閉じる' }).click();
 
   await row.getByRole('button', { name: /完了にする/ }).click();
@@ -224,7 +224,7 @@ test('担当を引き出しで選ぶと、木の行にアバターが出る。�
   await createWorkspace(page, '担当ワークスペース');
   await addTask(page, '担当を決める');
   const row = page.locator('.entry', { hasText: '担当を決める' });
-  await expect(row.getByRole('img', { name: '担当なし' })).toBeVisible();
+  await expect(row.getByRole('button', { name: '担当: 未設定' })).toBeVisible();
   await row.getByRole('link', { name: '担当を決める' }).click();
   const drawer = page.getByRole('dialog', { name: '担当を決める' });
   const select = drawer.getByRole('combobox', { name: '担当' });
@@ -237,10 +237,10 @@ test('担当を引き出しで選ぶと、木の行にアバターが出る。�
   const drawerAvatar = drawer.locator('.props .avatar[title="ミナト"]');
   await expect(drawerAvatar).toBeVisible();
   await expect(drawerAvatar).toHaveAttribute('aria-hidden', 'true');
-  await expect(row.getByRole('img', { name: 'ミナト' })).toBeVisible();
+  await expect(row.getByRole('button', { name: '担当: ミナト' })).toBeVisible();
 
   await select.selectOption({ label: '担当なし' });
-  await expect(row.getByRole('img', { name: '担当なし' })).toBeVisible();
+  await expect(row.getByRole('button', { name: '担当: 未設定' })).toBeVisible();
   await expect(select).toHaveValue('');
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(drawer).toBeHidden();
@@ -256,7 +256,7 @@ test('担当を引き出しで選ぶと、木の行にアバターが出る。�
   await dialog.getByRole('button', { name: '起票' }).click();
   await expect(dialog).toBeHidden();
   const created = page.locator('.entry', { hasText: '担当つきの依頼' });
-  await expect(created.getByRole('img', { name: 'ミナト' })).toBeVisible();
+  await expect(created.getByRole('button', { name: '担当: ミナト' })).toBeVisible();
   // 引き出しを開くと、選んだ担当が出る
   await created.getByRole('link', { name: '担当つきの依頼' }).click();
   await expect(
@@ -293,7 +293,7 @@ test('担当は選んで少し待ってから最後の値だけを送り、断�
   await select.selectOption({ label: '担当なし' });
   await expect.poll(() => bodies.length).toBe(2);
   await expect(
-    page.locator('.entry', { hasText: '担当が断られる' }).getByRole('img', { name: '担当なし' }),
+    page.locator('.entry', { hasText: '担当が断られる' }).getByRole('button', { name: '担当: 未設定' }),
   ).toBeVisible();
 
   // 同時に替えられた（409 の conflict）
@@ -684,14 +684,16 @@ test('矢印キーでポイントを続けて動かしても、保存は1本ず�
   // 未 → 0 → 1 → 2 → 3 を続けて選ぶ
   for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
   await expect(drawer.getByRole('radio', { name: '3', exact: true })).toBeChecked();
-  await expect(row.locator('.pts')).toHaveText('3');
+  await expect(row.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
   await expect.poll(() => inFlight).toBe(0);
   expect(maxInFlight).toBe(1);
   expect(sent[sent.length - 1]).toBe(3);
   // 溜めた分は最後の選択だけで、途中の選択を全部は送らない
   expect(sent.length).toBeLessThanOrEqual(3);
   await page.reload();
-  await expect(page.locator('.entry', { hasText: '続けて選ぶ' }).locator('.pts')).toHaveText('3');
+  await expect(
+    page.locator('.entry', { hasText: '続けて選ぶ' }).getByRole('button', { name: 'ポイント: 3 pt' }),
+  ).toBeVisible();
 });
 
 test('期日は、打ちかけの年は送らず、年がそろった値だけを保存し、欄を離れたときに直っていなければ知らせる', async ({
@@ -848,7 +850,7 @@ test('期日で欄を離れた直後と、ポイントを選んだ直後に閉�
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(drawer).toBeHidden();
   await expect(page.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
-  await expect(row.locator('.chip:not(.is-todo)')).toBeVisible();
+  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toBeVisible();
   // ポイントも、選んだ直後に閉じて、結果が木に出る
   await slow.unroute();
   slow = await slowTaskUpdate(page);
@@ -856,7 +858,7 @@ test('期日で欄を離れた直後と、ポイントを選んだ直後に閉�
   await drawer.getByRole('radio', { name: '8', exact: true }).check();
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(drawer).toBeHidden();
-  await expect(row.locator('.pts')).toHaveText('8');
+  await expect(row.getByRole('button', { name: 'ポイント: 8 pt' })).toBeVisible();
   // 失敗はトーストで知らせる
   await slow.unroute();
   await slowTaskUpdate(page, { status: 500, code: 'internal' });
@@ -919,11 +921,11 @@ test('期日は Enter で保存でき、「クリア」を押すと空にして�
   await due.press('Enter');
   // 600ms を待たずに、Enter で送る
   await expect.poll(() => bodies.length, { timeout: 500 }).toBe(1);
-  await expect(row.locator('.chip:not(.is-todo)')).toBeVisible();
+  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toBeVisible();
   await drawer.getByRole('button', { name: 'クリア', exact: true }).click();
   await expect(due).toBeFocused();
   await expect(due).toHaveValue('');
-  await expect(row.locator('.chip:not(.is-todo)')).toHaveCount(0);
+  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toHaveCount(0);
   expect(bodies.map((body) => body.due_on)).toEqual(['2099-12-31', null]);
 });
 

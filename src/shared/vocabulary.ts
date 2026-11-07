@@ -1685,6 +1685,11 @@ export const dictionary = defineDictionary({
   taskSaveFailed: '保存できませんでした。もう一度試してください。',
   taskSaveConflict: 'この{task}は{done}になっているため、{points}は直せません。',
   taskBadRequest: '入力を受け付けられませんでした。内容を確かめて、もう一度試してください。',
+  // バックログの行の属性のチップ（ポイントと担当。押すと値の一覧が開く）
+  attrChipLabel: '{attr}: {value}',
+  attrChipUnset: '未設定',
+  attrMenuLabel: '{attr}を選ぶ',
+  pointsValue: '{value} pt',
   // 担当の選択（引き出しと起票のダイアログ）。候補は、そのワークスペースに今所属している人
   assigneeCandidatesFailed: '{assignee}の候補を読み込めませんでした',
   assigneeNotMember: '選んだ人は、もうこの{workspace}に所属していません。{assignee}を選び直してください',
