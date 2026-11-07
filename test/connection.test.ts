@@ -10,13 +10,14 @@ import {
   connectionList,
   connectionScopeCandidates,
   connectionScopesSave,
+  connectionSync,
 } from '../src/shared/operations/connection/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { decryptCredential } from '../src/server/crypto/credential.ts';
 import { orgDb } from '../src/server/db/index.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { createConnection } from './factories.ts';
-import { createFakePatGithub, fakePat, fakeRepos } from './import/fake-github-pat.ts';
+import { createFakePatGithub, fakeIssue, fakePat, fakeRepos } from './import/fake-github-pat.ts';
 import { post } from './operations/harness.ts';
 import { createTarget, type Person, type Target } from './operations/world.ts';
 
@@ -594,5 +595,265 @@ describe('守りの条件', () => {
     const res = await save(ctx, target, target.member, id, []);
     expect(res.status).toBe(200);
     expect((await rowsOf(target)).scopes).toHaveLength(0);
+  });
+});
+
+describe('connection-sync（今すぐ同期）', () => {
+  function sync(ctx: ReturnType<typeof setup>, target: Target, person: Person, connectionId: string) {
+    return post(ctx.app, connectionSync, {
+      slug: target.slug,
+      token: person.token,
+      body: { workspace_id: target.workspace.id, connection_id: connectionId },
+    });
+  }
+
+  // 範囲を1つ選んだ接続。範囲のリポジトリに、本人（aoba-dev）が担当の未完了の Issue を n 件置く
+  async function ready(ctx: ReturnType<typeof setup>, target: Target, person: Person, seed: string, issues = 2) {
+    const { pat, id } = await registered(ctx, target, person, seed);
+    expect((await save(ctx, target, person, id, ['1001'])).status).toBe(200);
+    ctx.github.addIssues(
+      1001,
+      Array.from({ length: issues }, (_, i) => fakeIssue('aoba-dev/shop', i + 1, { assignees: ['aoba-dev'] })),
+    );
+    return { pat, id };
+  }
+
+  async function inboxTitles(target: Target) {
+    const db = orgDb(env, target.organization.verified);
+    const rows = await db.rows(
+      db.statement((q) =>
+        q
+          .selectFrom('tasks')
+          .select('title')
+          .where('workspace_id', '=', target.workspace.id)
+          .where('tray', '=', 'inbox'),
+      ),
+    );
+    return rows.map((row) => row.title).sort();
+  }
+
+  async function lastManual(target: Target, id: string) {
+    const db = orgDb(env, target.organization.verified);
+    const row = await db.first(
+      db.statement((q) => q.selectFrom('connections').select(['last_manual_sync_at', 'status']).where('id', '=', id)),
+    );
+    return row!;
+  }
+
+  async function backdate(target: Target, id: string) {
+    const db = orgDb(env, target.organization.verified);
+    await db.run(
+      db.statement((q) =>
+        q
+          .updateTable('connections')
+          .set({ last_manual_sync_at: new Date(Date.now() - 301_000).toISOString() })
+          .where('id', '=', id),
+      ),
+    );
+  }
+
+  test('範囲を選んだ接続で押すと、担当の未完了の Issue が受信箱に入り、件数と最後に成功した日時が返る', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { pat, id } = await ready(ctx, target, target.member, 'sync1');
+
+    const res = await sync(ctx, target, target.member, id);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    const body = JSON.parse(text);
+    expect(body).toMatchObject({ result: 'success', imported: 2, more: false });
+    expect(body.connection.last_success_at).not.toBeNull();
+    expect(text).not.toContain(pat);
+    expect(await inboxTitles(target)).toEqual(['架空の課題 1', '架空の課題 2']);
+    expect((await lastManual(target, id)).last_manual_sync_at).not.toBeNull();
+  });
+
+  test('5分以内にもう一度押すと 429 で、取り込み元に問い合わせない。5分たてばまた押せる', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync2', 1);
+    expect((await sync(ctx, target, target.member, id)).status).toBe(200);
+
+    const calls = ctx.github.calls.length;
+    const again = await sync(ctx, target, target.member, id);
+    expect(again.status).toBe(429);
+    expect(((await again.json()) as { error: { code: string } }).error.code).toBe('rate_limited');
+    expect(ctx.github.calls).toHaveLength(calls);
+
+    await backdate(target, id);
+    const later = await sync(ctx, target, target.member, id);
+    expect(later.status).toBe(200);
+    expect(((await later.json()) as { imported: number }).imported).toBe(0);
+  });
+
+  test('同時に押しても、同期は1回だけ走る', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync3');
+
+    const responses = await Promise.all([1, 2, 3].map(() => sync(ctx, target, target.member, id)));
+    expect(responses.map((res) => res.status).sort()).toEqual([200, 429, 429]);
+    expect(await inboxTitles(target)).toHaveLength(2);
+    expect(ctx.github.calls.filter((call) => call.url.includes('/issues')).length).toBe(1);
+  });
+
+  test('ほかのメンバー、リーダー、管理者は 403 で、取り込み元に問い合わせず、制限の印も付かない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync4');
+    const calls = ctx.github.calls.length;
+
+    for (const person of [target.leader, target.admin]) {
+      expect((await sync(ctx, target, person, id)).status).toBe(403);
+    }
+    expect(ctx.github.calls).toHaveLength(calls);
+    expect((await lastManual(target, id)).last_manual_sync_at).toBeNull();
+    expect(await inboxTitles(target)).toEqual([]);
+  });
+
+  test('閉じたワークスペースでは 409 の workspace_closed で、取り込み元に問い合わせない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync5');
+    const db = orgDb(env, target.organization.verified);
+    await db.run(
+      db.statement((q) =>
+        q.updateTable('workspaces').set({ closed_at: new Date().toISOString() }).where('id', '=', target.workspace.id),
+      ),
+    );
+    const calls = ctx.github.calls.length;
+
+    const res = await sync(ctx, target, target.member, id);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('workspace_closed');
+    expect(ctx.github.calls).toHaveLength(calls);
+    expect((await lastManual(target, id)).last_manual_sync_at).toBeNull();
+  });
+
+  test('PAT が失効していると接続が停止になり、応答の接続に理由が出る。次に押すと 409 の connection_stopped', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync6');
+    // 保存した PAT を GitHub が受け付けなくなる（最初の問い合わせが 401）
+    ctx.github.failNext({ kind: 'status', status: 401 });
+
+    const res = await sync(ctx, target, target.member, id);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      result: string;
+      imported: number;
+      connection: { status: string; stopped_reason: string | null; last_error_message: string | null };
+    };
+    expect(body).toMatchObject({ result: 'auth_failed', imported: 0 });
+    expect(body.connection.status).toBe('stopped');
+    expect(body.connection.stopped_reason).toBe('auth_failed');
+    expect(body.connection.last_error_message).not.toBeNull();
+
+    await backdate(target, id);
+    const again = await sync(ctx, target, target.member, id);
+    expect(again.status).toBe(409);
+    const error = ((await again.json()) as { error: { details: { reason: string } } }).error;
+    expect(error.details.reason).toBe('connection_stopped');
+  });
+
+  test('取り込み元の不調は止めずに result: error で返し、範囲が空なら no_scope で何も問い合わせない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync7');
+    ctx.github.failOnIssuePage(1, { kind: 'status', status: 502 });
+    const failed = await sync(ctx, target, target.member, id);
+    expect(failed.status).toBe(200);
+    const body = (await failed.json()) as { result: string; connection: { status: string } };
+    expect(body).toMatchObject({ result: 'error', connection: { status: 'error' } });
+
+    const empty = await registered(ctx, target, target.member, 'sync8');
+    const calls = ctx.github.calls.length;
+    const none = await sync(ctx, target, target.member, empty.id);
+    expect(((await none.json()) as { result: string }).result).toBe('no_scope');
+    expect(ctx.github.calls).toHaveLength(calls);
+  });
+
+  test('5分の境目: 299秒前は 429、301秒前は 200', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync9', 1);
+    const setAgo = async (seconds: number) => {
+      const db = orgDb(env, target.organization.verified);
+      await db.run(
+        db.statement((q) =>
+          q
+            .updateTable('connections')
+            .set({ last_manual_sync_at: new Date(Date.now() - seconds * 1000).toISOString() })
+            .where('id', '=', id),
+        ),
+      );
+    };
+    await setAgo(299);
+    expect((await sync(ctx, target, target.member, id)).status).toBe(429);
+    await setAgo(301);
+    expect((await sync(ctx, target, target.member, id)).status).toBe(200);
+  });
+
+  test('範囲を保存する前の同期は枠を使い切らず、保存した直後に押せる', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await registered(ctx, target, target.member, 'sync10');
+    const first = await sync(ctx, target, target.member, id);
+    expect(((await first.json()) as { result: string }).result).toBe('no_scope');
+    expect((await lastManual(target, id)).last_manual_sync_at).toBeNull();
+
+    expect((await save(ctx, target, target.member, id, ['1001'])).status).toBe(200);
+    ctx.github.addIssues(1001, [fakeIssue('aoba-dev/shop', 1, { assignees: ['aoba-dev'] })]);
+    const second = await sync(ctx, target, target.member, id);
+    expect(second.status).toBe(200);
+    expect(((await second.json()) as { imported: number }).imported).toBe(1);
+  });
+
+  test('止まっている接続は押す間隔にかかわらず 409 で、印は変わらない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync11');
+    const db = orgDb(env, target.organization.verified);
+    await db.run(
+      db.statement((q) =>
+        q.updateTable('connections').set({ status: 'stopped', stopped_reason: 'auth_failed' }).where('id', '=', id),
+      ),
+    );
+    const calls = ctx.github.calls.length;
+    const res = await sync(ctx, target, target.member, id);
+    expect(res.status).toBe(409);
+    expect(ctx.github.calls).toHaveLength(calls);
+    expect((await lastManual(target, id)).last_manual_sync_at).toBeNull();
+  });
+
+  test('存在しない・削除済み・別のワークスペース・別の組織の接続は 404 で、取り込み元にも問い合わせず印も付かない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync12');
+    const calls = ctx.github.calls.length;
+    expect((await sync(ctx, target, target.member, crypto.randomUUID())).status).toBe(404);
+
+    // 別の組織の人が、自分の slug とワークスペースで、この接続の ID を渡す
+    const other = await createTarget();
+    expect((await sync(ctx, other, other.member, id)).status).toBe(404);
+
+    // 削除済み
+    const db = orgDb(env, target.organization.verified);
+    await db.run(
+      db.statement((q) =>
+        q
+          .updateTable('connections')
+          .set({
+            deleted_at: new Date().toISOString(),
+            credential_ciphertext: null,
+            credential_key_version: null,
+            credential_last4: null,
+          })
+          .where('id', '=', id),
+      ),
+    );
+    expect((await sync(ctx, target, target.member, id)).status).toBe(404);
+    expect(ctx.github.calls).toHaveLength(calls);
+    expect((await lastManual(target, id)).last_manual_sync_at).toBeNull();
   });
 });
