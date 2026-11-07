@@ -13,6 +13,7 @@
     type MarkdownInsertion,
     uploadAttachment,
   } from '../attachment-upload.ts';
+  import { assistKeyEdit, linkPasteEdit, type AssistEdit } from '../markdown-assist.ts';
   import { filterSlashItems, moveSlashSelection, slashEdit, slashQuery, type SlashItem } from '../markdown-slash.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
@@ -350,9 +351,48 @@
     }
   }
 
+  // 入力の補助の書き換え。ブラウザの編集として入れるので、Ctrl+Z で戻せる（input イベントが本文とアップロード中のファイルの位置を直す）。
+  // 使えない環境では applyEdit で書き込む（このときは履歴が切れる）。入れた後は選択を置く
+  function applyAssist(edit: AssistEdit): void {
+    if (!input) return;
+    input.focus();
+    input.setSelectionRange(edit.start, edit.end);
+    const done =
+      edit.text === '' ? document.execCommand('delete') : document.execCommand('insertText', false, edit.text);
+    if (!done) {
+      applyEdit(edit.start, edit.end, edit.text);
+      input.value = value;
+    }
+    input.setSelectionRange(edit.selectionStart, edit.selectionEnd);
+  }
+
+  // Enter でリストを続け、リストの中の Tab / Shift+Tab で字下げする。小窓が先にキーを受けたときと、変換中は何もしない
+  function assistKeydown(event: KeyboardEvent): void {
+    if (event.defaultPrevented || readonly || !input) return;
+    const edit = assistKeyEdit(event, composing, input.value, input.selectionStart, input.selectionEnd);
+    if (edit === null) return;
+    event.preventDefault();
+    applyAssist(edit);
+  }
+
   function paste(event: ClipboardEvent): void {
     const clipboard = event.clipboardData;
-    if (!clipboard?.files.length) return;
+    if (!clipboard?.files.length) {
+      // 文字を選んで URL を1つ貼ったときだけリンクにする。ファイルの貼り付けは下のまま
+      const edit =
+        readonly || !input
+          ? null
+          : linkPasteEdit(
+              input.value,
+              input.selectionStart,
+              input.selectionEnd,
+              clipboard?.getData('text/plain') ?? '',
+            );
+      if (edit === null) return;
+      event.preventDefault();
+      applyAssist(edit);
+      return;
+    }
     event.preventDefault();
     if (readonly) return;
     const text = clipboardTextToInsert(clipboard.getData('text/plain'), Array.from(clipboard.files));
@@ -410,7 +450,10 @@
         changed();
         updateSlash();
       }}
-      onkeydown={slashKeydown}
+      onkeydown={(event) => {
+        slashKeydown(event);
+        assistKeydown(event);
+      }}
       onkeyup={() => {
         if (slashOpen) updateSlash();
       }}
