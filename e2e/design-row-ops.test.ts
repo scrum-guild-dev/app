@@ -220,6 +220,17 @@ test('見本のスプリント: 列の末尾の空の行に題を打って Enter
   await expect(page.locator('.card-title').filter({ hasText: /^次のカード$/ })).toHaveCount(1);
 });
 
+test('見本のスプリント: 足しても、ほかの列の空の行の書きかけは残る', async ({ page }) => {
+  await openSample(page, 'sprint.html');
+  const drafts = page.locator('input[data-draft^="col:"]');
+  await drafts.nth(1).fill('書きかけ');
+  await drafts.first().fill('足すカード');
+  await drafts.first().press('Enter');
+  await expect(page.locator('.card-title').filter({ hasText: /^足すカード$/ })).toHaveCount(1);
+  await expect(drafts.first()).toHaveValue('');
+  await expect(drafts.nth(1)).toHaveValue('書きかけ');
+});
+
 test('見本のバックログ: 幅 390px で「⋯」を開くと、メニューが読める幅で画面の中に収まる', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openSample(page, 'backlog.html');
