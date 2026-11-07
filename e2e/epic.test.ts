@@ -3,7 +3,15 @@
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。CSP の違反も確かめる
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn, waitForResponses, watchViolations } from './helpers.ts';
+import {
+  chooseRowAction,
+  rowMenuToggle,
+  createWorkspace,
+  rowMenuItem,
+  signIn,
+  waitForResponses,
+  watchViolations,
+} from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
@@ -79,7 +87,7 @@ test('作ったワークスペース: エピックを作り、ストーリーを
 
   // 親のないストーリーを作り、「親を移す」でエピックの下へ移す。今が親なしなので、親なしは候補に出さない
   await createStory(page, 'ストーリーを作る', '残高が見える');
-  await page.getByRole('button', { name: '親を移す: 残高が見える' }).click();
+  await chooseRowAction(page, '残高が見える', '親を移す');
   const moveDialog = page.getByRole('dialog', { name: '「残高が見える」の親を移す' });
   await expect(moveDialog.getByLabel('移す先').locator('option')).toHaveText(['ポイント制度を公開する']);
   // 読み上げは送る前に出るので、読み直す前に応答を待つ
@@ -98,9 +106,9 @@ test('作ったワークスペース: エピックを作り、ストーリーを
 
   // 配下が無いあいだは完了にできる状態。タスクを足すと、残りの件数が出て押せなくなる
   const story = rowGroup(page, '残高が見える');
-  await story.getByRole('button', { name: 'タスクを足す: 残高が見える' }).click();
+  await page.getByRole('button', { name: '起票', exact: true }).click();
   const taskDialog = page.getByRole('dialog', { name: '起票' });
-  await expect(taskDialog.getByLabel('親のストーリー').locator('option:checked')).toHaveText('残高が見える');
+  await taskDialog.getByLabel('親のストーリー').selectOption({ label: '残高が見える' });
   // 親の候補は、親のエピックの題でまとめる
   await expect(taskDialog.getByLabel('親のストーリー').locator('optgroup')).toHaveAttribute(
     'label',
@@ -110,19 +118,17 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   await taskDialog.getByRole('radio', { name: '3', exact: true }).check();
   await taskDialog.getByRole('button', { name: '起票' }).click();
   await expect(taskDialog).toBeHidden();
-  const completeStory = story.getByRole('button', { name: '完了にする: 残高が見える' });
+  const completeStory = rowMenuItem(story, '残高が見える', '完了にする');
   await expect(completeStory).toHaveAttribute('aria-disabled', 'true');
   await expect(story.locator('.tree-note')).toHaveText('残り 1 件のタスク');
-  await expect(completeStory).toHaveAccessibleDescription(
-    '残り 1 件のタスク 未完了のタスクが残っているあいだは完了にできません',
-  );
   await expect(epic.locator('.tree-row.is-epic .tree-ratio')).toHaveText('完了 0 / 3 pt');
   // 押しても何も送らない
   let sent = 0;
   page.on('request', (request) => {
     if (request.url().endsWith('/story-complete')) sent++;
   });
-  // aria-disabled のボタンは Playwright が押せないものとして待つので、待たずに押す
+  // aria-disabled の項目は Playwright が押せないものとして待つので、待たずに押す
+  await rowMenuToggle(story, '残高が見える').click();
   await completeStory.click({ force: true });
   expect(sent).toBe(0);
 
@@ -134,12 +140,11 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   await expect(epic.locator('.tree-row.is-epic .tree-ratio')).toHaveText('完了 3 / 3 pt');
 
   // ストーリーを完了にする。完了の印と「取り消す」が出て、フォーカスは「取り消す」へ移る
-  await completeStory.click();
+  await chooseRowAction(story, '残高が見える', '完了にする');
   await expect(page.getByRole('status').filter({ hasText: 'ストーリーを完了にしました' })).toBeVisible();
   await expect(story.getByRole('img', { name: '残高が見える: 完了' })).toBeVisible();
   const reopen = story.getByRole('button', { name: '完了を取り消す: 残高が見える' });
   await expect(reopen).toBeFocused();
-  await expect(story.getByRole('button', { name: 'タスクを足す: 残高が見える' })).toHaveCount(0);
   // 完了したストーリーは、タスクの親の候補に出ない
   await page.getByRole('button', { name: '起票' }).click();
   await expect(taskDialog.getByLabel('親のストーリー').locator('option')).toHaveText(['なし']);
@@ -148,15 +153,15 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   // 取り消すと「完了にする」に戻る
   await reopen.click();
   await expect(page.getByRole('status').filter({ hasText: 'ストーリーの完了を取り消しました' })).toBeVisible();
-  await expect(completeStory).toBeFocused();
+  await expect(rowMenuToggle(story, '残高が見える')).toBeFocused();
   await expect(story.getByRole('img', { name: '残高が見える: 完了' })).toHaveCount(0);
 
   // エピックの下から親なしへ戻す
-  await story.getByRole('button', { name: '親を移す: 残高が見える' }).click();
+  await chooseRowAction(story, '残高が見える', '親を移す');
   await moveDialog.getByLabel('移す先').selectOption({ label: '親なし' });
   await moveDialog.getByRole('button', { name: '移す' }).click();
   await expect(epic.getByText('ストーリーはまだありません')).toBeVisible();
-  await expect(page.getByRole('button', { name: '親を移す: 残高が見える' })).toBeFocused();
+  await expect(rowMenuToggle(page, '残高が見える')).toBeFocused();
   expect(await collect()).toEqual([]);
 });
 
@@ -166,7 +171,7 @@ test('スクラムの言葉: 配下の無いストーリーは完了にでき、
   await createWorkspace(page, 'エピックのワークスペース');
   await createEpic(page, 'エピックを作る', '決済の障害を減らす');
   await createStory(page, 'ストーリーを作る', '検知を早くする');
-  await page.getByRole('button', { name: '親を移す: 検知を早くする' }).click();
+  await chooseRowAction(page, '検知を早くする', '親を移す');
   const moveDialog = page.getByRole('dialog', { name: '「検知を早くする」の親を移す' });
   const moved = waitForResponses(page, '/story-move');
   await moveDialog.getByRole('button', { name: '移す' }).click();
@@ -186,7 +191,7 @@ test('スクラムの言葉: 配下の無いストーリーは完了にでき、
       json: { error: { code: 'conflict', message: 'conflict', details: { reason: 'open_tasks' } } },
     }),
   );
-  await story.getByRole('button', { name: '完了にする: 検知を早くする' }).click();
+  await chooseRowAction(story, '検知を早くする', '完了にする');
   await expect(
     page
       .getByRole('status')
@@ -196,7 +201,7 @@ test('スクラムの言葉: 配下の無いストーリーは完了にでき、
   await page.unroute('**/story-complete');
 
   // 配下にタスクが1件も無くても完了にできる
-  await story.getByRole('button', { name: '完了にする: 検知を早くする' }).click();
+  await chooseRowAction(story, '検知を早くする', '完了にする');
   await expect(page.getByRole('status').filter({ hasText: 'ストーリーを完了にしました' })).toBeVisible();
   await expect(story.getByRole('img', { name: '検知を早くする: 完了' })).toBeVisible();
   await expect(story.getByRole('button', { name: '完了を取り消す: 検知を早くする' })).toBeFocused();
@@ -214,7 +219,7 @@ test('スクラムの言葉: 配下の無いストーリーは完了にでき、
 
   await story.getByRole('button', { name: '完了を取り消す: 検知を早くする' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'ストーリーの完了を取り消しました' })).toBeVisible();
-  await expect(story.getByRole('button', { name: '完了にする: 検知を早くする' })).toBeVisible();
+  await expect(rowMenuItem(story, '検知を早くする', '完了にする')).toHaveCount(1);
 });
 
 // seed のワークスペース（受託開発チーム）。エピック「ポイントの交換先を増やす」の下に、ストーリー「送料の割引にポイントを使える」がある
@@ -267,9 +272,10 @@ test('中止したエピックの下のストーリーは、完了にするを�
     rowGroup(page, 'ポイントの交換先を増やす').locator('.tree-row.is-epic .chip', { hasText: '中止' }),
   ).toBeVisible();
   const story = rowGroup(page, SEED_EPIC_STORY);
-  const complete = story.getByRole('button', { name: `完了にする: ${SEED_EPIC_STORY}` });
+  const complete = rowMenuItem(story, SEED_EPIC_STORY, '完了にする');
   await expect(complete).toHaveAttribute('aria-disabled', 'true');
-  await expect(complete).toHaveAccessibleDescription('完了か中止したエピックの下のストーリーは完了にできません');
+  await expect(story.locator('.tree-note')).toHaveText('完了か中止したエピックの下のストーリーは完了にできません');
+  await rowMenuToggle(story, SEED_EPIC_STORY).click();
   await complete.click({ force: true });
   expect(sent).toBe(0);
 });
