@@ -9,8 +9,6 @@
     taskHistory,
     taskReopen,
     taskReopenConflictReasonOf,
-    taskRestore,
-    taskRestoreConflictReasonOf,
     taskUpdate,
     type TaskDetail,
     type TaskFieldValue,
@@ -42,8 +40,8 @@
   import { formatDateTime } from '../format-datetime.ts';
   import { completedMessage, sprintLabel, sprintPeriod } from '../sprint-label.ts';
   import { historyEntryView } from '../task-history.ts';
-  import { focusPageHeading, focusIsFree } from '../focus-heading.ts';
-  import { focusToastAction, pauseToast, showToast, type ToastAction } from '../toast.svelte.ts';
+  import { pauseToast, showToast } from '../toast.svelte.ts';
+  import { announceRemoved, type RestoreTarget } from '../task-removal.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Avatar from './Avatar.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
@@ -1361,105 +1359,9 @@
   }
 
   // ---- 削除 ----
-  // 消したことを知らせるトースト。「取り消す」を押すと task-restore を送り、木を読み直す。
+  // 消したことを知らせるトースト（announceRemoved）と取り消し（restoreRemoved）は、行とカードの「⋯」と共有する（task-removal.ts）。
   // 引き出しが閉じた後でも押せるよう、props と ID は消した時点の値を取っておく（this の状態は読まない）
   // 削除を送る前に取った値を渡す（props は応答を待つ間に、前後のタスクへ移る、閉じるで変わり、閉じた後は親の今の値を返す）
-  function announceRemoved(target: RestoreTarget): number {
-    return showToast(t('taskDeleted', { task: t('task'), title: target.title }), 'check', restoreActionOf(target));
-  }
-
-  // 並んだトーストを読み上げの名前で区別できるよう、ボタンの名前にタイトルを添える。Esc で閉じたときは近い行へフォーカスを移す
-  function restoreActionOf(target: RestoreTarget): ToastAction {
-    return {
-      label: t('taskRestoreAction'),
-      ariaLabel: t('taskRestoreActionLabel', { action: t('taskRestoreAction'), title: target.title }),
-      run: (focused) => void restoreRemoved(target, focused),
-      ...(target.onskipped === undefined ? {} : { onescape: () => target.onskipped?.(target.near) }),
-    };
-  }
-
-  type RestoreTarget = {
-    slug: string;
-    workspaceId: string;
-    taskId: string;
-    title: string;
-    // 削除を送る前の前後の行（Esc で閉じたときのフォーカスの行き先）
-    near: AdjacentTasks | null;
-    onchanged: () => void;
-    onstale: () => void;
-    onrestored: ((taskId: string, focus: boolean) => Promise<void>) | undefined;
-    onskipped: ((near: AdjacentTasks | null) => void) | undefined;
-  };
-
-  // 通信の失敗と 5xx は一時的なので、「取り消す」付きのトーストで出し直す（403、404、409 は押し直しても変わらないので出し直さない）。
-  // 押したボタンにフォーカスがあったときは、出し直したトーストの「取り消す」へ置き直す
-  async function restoreRemoved(target: RestoreTarget, focused = false): Promise<void> {
-    const result = await callOperation(
-      taskRestore,
-      { workspace_id: target.workspaceId, task_id: target.taskId },
-      { slug: target.slug },
-    );
-    if (result.ok) {
-      const cleared = result.data.cleared.map((field) => t(field));
-      showToast(
-        cleared.length > 0
-          ? t('taskRestoredCleared', { task: t('task'), fields: cleared.join('、') })
-          : t('taskRestored', { task: t('task') }),
-        'check',
-      );
-      if (target.onrestored === undefined) target.onchanged();
-      else await target.onrestored(target.taskId, focused);
-    } else if (result.status === 401) {
-      target.onstale();
-    } else if (result.status === 403) {
-      showToast(t('taskRestoreForbidden', { leader: t('leader') }), 'alert');
-      keepFocus(focused);
-    } else if (result.status === 404) {
-      showToast(t('taskRestoreGone'), 'alert');
-      target.onchanged();
-      keepFocus(focused);
-    } else if (result.status === 409 && result.error?.code === 'workspace_closed') {
-      showToast(t('workspaceClosedReadOnly', { workspace: t('workspace') }), 'alert');
-      target.onstale();
-      keepFocus(focused);
-    } else if (result.status === 409) {
-      const reason = taskRestoreConflictReasonOf(result.error?.details);
-      if (reason === 'not_deleted') {
-        // 前の要求は書けたが応答だけが落ちて出し直した、または別の画面が先に戻した。戻っているので、成功と同じに扱う
-        showToast(t('taskRestored', { task: t('task') }), 'check');
-        if (target.onrestored === undefined) target.onchanged();
-        else await target.onrestored(target.taskId, focused);
-        return;
-      }
-      showToast(
-        reason === 'parent_completed'
-          ? t('taskRestoreParentCompleted', { story: t('story'), done: t('done') })
-          : t('taskRestoreGone'),
-        'alert',
-      );
-      target.onchanged();
-      keepFocus(focused);
-    } else if (result.status === 0 || result.status >= 500) {
-      const id = showToast(t('taskRestoreRetry'), 'alert', restoreActionOf(target));
-      // 待つ間に利用者が別へ移っていたら、フォーカスを奪わない
-      if (focused && focusIsFree()) {
-        pauseToast(id);
-        void focusToastAction(id);
-      }
-    } else {
-      showToast(t('taskRestoreFailed'), 'alert');
-      keepFocus(focused);
-    }
-  }
-
-  // 断られた（出し直さない）とき、押した「取り消す」が消えてフォーカスが body に落ちないよう、見出しへ置く
-  function keepFocus(focused: boolean): void {
-    if (!focused) return;
-    void tick().then(() => {
-      if (focusIsFree()) focusPageHeading();
-    });
-  }
-
   // 確認のダイアログは挟まない。消したらトーストの「取り消す」で戻せる
   // keyboard は、キーボードで押したか（click の detail が 0）。真のときだけ、消した直後に「取り消す」へフォーカスを移す
   async function remove(keyboard: boolean): Promise<void> {

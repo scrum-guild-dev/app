@@ -477,7 +477,7 @@
       <div class="entry-end">${taskDue(x)}${opts.hidePts ? "" : compact ? attrChip(x, "pts") : pts(x.pts)}${opts.showAssignee ? (compact ? attrChip(x, "who") : avatarOf(x.who)) : ""}${compact ? rowMenu(x.title, [
         { attr: `data-sun="${x.id}"`, label: x.todayOn === D.today ? "今日やるを外す" : "今日やる", icon: "sun" },
         ...orderItems(opts.order),
-        { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除`, icon: "trash", danger: true },
+        { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除する`, icon: "trash", danger: true },
       ], x.id) : ""}${opts.actions ? opts.actions(x) : doneControl(x)}</div>
     </div>`;
   }
@@ -632,7 +632,7 @@
       <div class="card-foot">${order ? attrChip(x, "pts") : pts(x.pts)}${order ? attrChip(x, "who") : avatarOf(x.who)}<span class="card-end">${order ? rowMenu(x.title, [
         { attr: `data-sun="${x.id}"`, label: x.todayOn === D.today ? "今日やるを外す" : "今日やる", icon: "sun" },
         ...orderItems(order),
-        { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除`, icon: "trash", danger: true },
+        { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除する`, icon: "trash", danger: true },
       ], x.id) : ""}${doneControl(x)}</span></div>
     </article>`;
   }

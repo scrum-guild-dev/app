@@ -42,6 +42,7 @@
   import { moveFailureMessage } from '../../../../lib/move-failure.ts';
   import { trackStoryOrder, trackTaskOrder } from '../../../../lib/task-order.ts';
   import { completedMessage } from '../../../../lib/sprint-label.ts';
+  import { focusRestored, focusSkipped, removeFromList } from '../../../../lib/task-removal.ts';
   import { showToast } from '../../../../lib/toast.svelte.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import { epicCreate, epicMove } from '../../../../shared/operations/epic/index.ts';
@@ -497,6 +498,28 @@
     treeRows[storyId]?.expand();
     const epicId = storyPlaces[storyId]?.parentId;
     if (epicId != null) epicRows[epicId]?.expand();
+  }
+
+  // 行の「⋯」の「この<タスク>を削除する」。確認は挟まず、消したら「取り消す」付きのトーストを出して木を読み直す。
+  // フォーカスの移し方は引き出しの削除と同じ（task-removal.ts）。キーボードで選んだときだけ「取り消す」へ移し、
+  // 取り消した後は戻した行の題のリンクへ、Esc で閉じたときは消した行の次の行（無ければ前の行、無ければ見出し）へ移す
+  async function removeTask(task: BacklogTask, keyboard: boolean): Promise<void> {
+    if (workspace === null || !canWrite) return;
+    const reload = (): Promise<void> => invalidate('app:backlog-tree');
+    await removeFromList({
+      slug: page.params.slug ?? '',
+      workspaceId: workspace.id,
+      taskId: task.id,
+      title: task.title,
+      keyboard,
+      reload,
+      onstale: () => void invalidateAll(),
+      onrestored: async (restoredId, focus) => {
+        await reload();
+        await focusRestored(restoredId, focus);
+      },
+      onskipped: focusSkipped,
+    });
   }
 
   async function complete(task: BacklogTask): Promise<void> {
@@ -1202,6 +1225,7 @@
     canMoveDown={place !== undefined && place.index < place.count - 1}
     onMove={canWrite && !filtering ? reorderTask : undefined}
     onMoveParent={canWrite && (place?.parentId != null || openStories.length > 0) ? openMoveDialog : undefined}
+    onDelete={canWrite ? removeTask : undefined}
     showCategory={place?.parentId == null}
     dnd={rowDnd}
     taskQuery={taskQueryBase}

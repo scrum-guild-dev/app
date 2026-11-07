@@ -73,6 +73,7 @@
     canMoveDown = false,
     onMove,
     onMoveParent,
+    onDelete,
     showCategory = false,
     dnd,
     taskQuery = '?task=',
@@ -96,6 +97,7 @@
     canMoveDown?: boolean;
     onMove?: (task: BacklogTask, delta: -1 | 1) => void;
     onMoveParent?: (task: BacklogTask, trigger: HTMLElement) => void;
+    onDelete?: (task: BacklogTask, keyboard: boolean) => void;
     showCategory?: boolean;
     dnd?: BacklogDnd;
     taskQuery?: string;
@@ -114,6 +116,9 @@
   const dropRow = $derived<DropRow>({ kind: 'task', id: task.id });
   const hasGrip = $derived(onMove !== undefined && dnd !== undefined);
   const parentMovable = $derived(onMoveParent !== undefined && !done);
+  // 削除は、画面が onDelete を渡し（書き込めるとき）、サーバーが削除できると答えた行（can_delete。作った人とリーダー、取り込んでいない）だけ
+  // 完了にした直後の行（読み直すまでその場に残る）には出さない
+  const deletable = $derived(onDelete !== undefined && task.can_delete && !done);
 
   // ---- 担当とポイントのチップ ----
   type PointsChoice = (typeof TASK_POINT_VALUES)[number] | null;
@@ -530,6 +535,18 @@
             label: t('moveParent'),
             icon: 'swap' as const,
             onselect: (trigger: HTMLButtonElement) => onMoveParent?.(task, trigger),
+          },
+        ]
+      : []),
+    // 末尾の危険色の項目。確認は挟まない（消したらトーストの「取り消す」で戻せる）
+    ...(deletable
+      ? [
+          {
+            key: 'delete',
+            label: t('taskDelete', { task: t('task') }),
+            icon: 'trash' as const,
+            danger: true,
+            onselect: (_trigger: HTMLButtonElement, keyboard: boolean) => onDelete?.(task, keyboard),
           },
         ]
       : []),

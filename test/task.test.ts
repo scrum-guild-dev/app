@@ -419,6 +419,56 @@ describe('backlog-tree', () => {
     completed_count: number;
   };
 
+  test('can_delete は task-detail と同じ判定。作った人とリーダー（管理者を含む）だけが真で、取り込んだタスクは偽（ストーリーの下も親のないタスクも）', async () => {
+    const target = await createTarget();
+    const { organization } = target;
+    const workspaceId = target.workspace.id;
+    const memberId = target.member.userId!;
+    const story = await createStory(organization, workspaceId, memberId);
+    const mine = await createTask(organization, workspaceId, memberId, { story_id: story.id, position: 'a0' });
+    const imported = await createTask(organization, workspaceId, memberId, {
+      story_id: story.id,
+      position: 'a1',
+      is_imported: 1,
+    });
+    const looseMine = await createTask(organization, workspaceId, memberId, { position: 'a2' });
+    const looseOthers = await createTask(organization, workspaceId, target.admin.userId!, { position: 'a3' });
+    const looseImported = await createTask(organization, workspaceId, memberId, { position: 'a4', is_imported: 1 });
+    const other = await createPerson({
+      organization,
+      membership: { workspaceId, role: 'member' },
+    });
+
+    const canDeleteBy = async (person: Person) => {
+      const body = (await (await tree(target, person)).json()) as TreeBody;
+      const rows = [...body.stories.flatMap((s) => s.tasks), ...body.tasks] as unknown as {
+        id: string;
+        can_delete: boolean;
+      }[];
+      return Object.fromEntries(rows.map((row) => [row.id, row.can_delete]));
+    };
+    // 作った人。自分の手で作ったものだけ真
+    expect(await canDeleteBy(target.member)).toEqual({
+      [mine.id]: true,
+      [imported.id]: false,
+      [looseMine.id]: true,
+      [looseOthers.id]: false,
+      [looseImported.id]: false,
+    });
+    // リーダーと管理者は、作った人でなくても真。取り込んだタスクは偽のまま
+    for (const person of [target.leader, target.admin]) {
+      expect(await canDeleteBy(person)).toEqual({
+        [mine.id]: true,
+        [imported.id]: false,
+        [looseMine.id]: true,
+        [looseOthers.id]: true,
+        [looseImported.id]: false,
+      });
+    }
+    // 作っていないメンバーは、どれも偽
+    expect(Object.values(await canDeleteBy(other)).every((value) => !value)).toBe(true);
+  });
+
   test('親のないストーリーを position の順に、配下の未完了のタスクと、完了の件数とポイントの合計つきで返す', async () => {
     const target = await createTarget();
     const adminId = target.admin.userId!;

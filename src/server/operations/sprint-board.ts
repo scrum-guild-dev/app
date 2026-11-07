@@ -20,7 +20,7 @@ import { implement } from './implement.ts';
 import { MAX_TIES, placeAfter, placeFirst, placeLast, type MovePlan, type Positioned } from './move-position.ts';
 import { activeSprint, firstColumn, summaryOf } from './sprint.ts';
 import { reopenBlockOf } from './task-reopen.ts';
-import { actorUserIdOf, changeLogColumns, openWorkspace, throwIfClosed } from './write-guards.ts';
+import { actorUserIdOf, changeLogColumns, mayDeleteOwned, openWorkspace, throwIfClosed } from './write-guards.ts';
 
 type From = Pick<QueryCreator<OrganizationTables>, 'selectFrom'>;
 
@@ -32,7 +32,7 @@ function columnConflict(reason: ColumnMoveConflictReason): ApiError {
 // 列は削除していないもの（ORDER BY is_done, position, id）。カードは完了したもの（completed_at がある）を完了の列に、
 // それ以外を column_id の列に、column_position、id の順に置く。削除した列を指すカード（列の削除で移し損ねたもの）は、
 // 先頭の完了でない列に置いて見失わない
-export const sprintBoardOperation = implement(sprintBoard, async ({ db, workspace }) => {
+export const sprintBoardOperation = implement(sprintBoard, async ({ db, actor, workspace }) => {
   const organizationId = db.organizationId;
   const workspaceId = workspace.workspaceId;
   const [workspaceResult, sprintResult, columnsResult, tasksResult] = await db.batch([
@@ -98,6 +98,8 @@ export const sprintBoardOperation = implement(sprintBoard, async ({ db, workspac
           'stories.completed_at as story_completed_at',
           'tasks.assignee_user_id',
           'users.name as assignee_name',
+          'tasks.created_by',
+          'tasks.is_imported',
         ])
         .where('tasks.workspace_id', '=', workspaceId)
         .where('tasks.sprint_id', '=', activeSprint(q, workspaceId))
@@ -140,6 +142,7 @@ export const sprintBoardOperation = implement(sprintBoard, async ({ db, workspac
         row.repository_id === null || row.repository_name === null
           ? null
           : { id: row.repository_id, name: row.repository_name },
+      can_delete: row.is_imported === 0 && mayDeleteOwned(row.created_by, actor, workspace),
     };
     const columnId =
       row.completed_at !== null
