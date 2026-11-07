@@ -30,7 +30,13 @@
     sameFilter,
     type BacklogFilter,
   } from '../../../../lib/backlog-filter.ts';
-  import { carriesOver, completionSettled, keepAddedRow } from '../../../../lib/added-rows.ts';
+  import {
+    carriesOver,
+    completionSettled,
+    keepAddedRow,
+    orphanedFromTree,
+    parentStoryIds,
+  } from '../../../../lib/added-rows.ts';
   import { MoveQueue } from '../../../../lib/move-queue.ts';
   import { completionFailureMessage } from '../../../../lib/story-completion.ts';
   import { moveFailureMessage } from '../../../../lib/move-failure.ts';
@@ -196,33 +202,49 @@
     const unsettled = done.filter((id) => !completionSettled(completedAt[id] ?? Infinity, loadedAtForDone));
     // 木に無い行を残すかは、足した時刻と読み直しを始めた時刻で決める（src/lib/added-rows.ts）
     const loadedAt = untrack(() => data.loadedAt);
-    added = carry
-      ? untrack(() => added).filter(
-          (entry) =>
-            unsettled.includes(entry.task.id) ||
-            keepAddedRow(entry, {
-              inLoadedTree: inTree(loaded, entry.task.id),
-              completed: done.includes(entry.task.id),
-              treeLoaded: loaded !== null,
-              loadedAt,
-            }),
-        )
-      : [];
     const keepRow = (at: number, inLoaded: boolean) =>
       carry &&
       keepAddedRow({ at }, { inLoadedTree: inLoaded, completed: false, treeLoaded: loaded !== null, loadedAt });
+    const loadedStoryIds = [...(loaded?.epics.flatMap((epic) => epic.stories) ?? []), ...(loaded?.stories ?? [])].map(
+      (story) => story.id,
+    );
+    // 画面で足したストーリーのうち、この回で残すもの。孤立の判定にも、捨てるものを含めない
+    const keptStories = untrack(() => addedStories).filter((entry) =>
+      keepRow(entry.at, loadedStoryIds.includes(entry.story.id)),
+    );
+    // 絞り込み中は、当たるタスクが唯一だった親が、その完了で木から外れる。遅れて届いた木で、写した行（fromTree）の親が木に無ければ、
+    // 行はどの親の下にも描かれず件数だけに数えられるので、印と一緒に捨てる（親ごと外れる競合の無い読み直しと同じ結果）
+    const storyIdsLoaded = parentStoryIds(
+      loadedStoryIds,
+      keptStories.map((entry) => entry.story.id),
+    );
+    const orphaned = (entry: { task: BacklogTask; storyId: string | null; fromTree?: true }) =>
+      orphanedFromTree(entry, {
+        treeLoaded: loaded !== null,
+        storyIds: storyIdsLoaded,
+        taskInTree: inTree(loaded, entry.task.id),
+      });
+    const orphanIds = untrack(() => added)
+      .filter(orphaned)
+      .map((entry) => entry.task.id);
+    added = carry
+      ? untrack(() => added).filter(
+          (entry) =>
+            !orphaned(entry) &&
+            (unsettled.includes(entry.task.id) ||
+              keepAddedRow(entry, {
+                inLoadedTree: inTree(loaded, entry.task.id),
+                completed: done.includes(entry.task.id),
+                treeLoaded: loaded !== null,
+                loadedAt,
+              })),
+        )
+      : [];
     addedEpics = untrack(() => addedEpics).filter((entry) =>
       keepRow(entry.at, loaded?.epics.some((epic) => epic.id === entry.epic.id) ?? false),
     );
-    addedStories = untrack(() => addedStories).filter((entry) =>
-      keepRow(
-        entry.at,
-        [...(loaded?.epics.flatMap((epic) => epic.stories) ?? []), ...(loaded?.stories ?? [])].some(
-          (story) => story.id === entry.story.id,
-        ),
-      ),
-    );
-    const keptDone = carry ? unsettled : [];
+    addedStories = keptStories;
+    const keptDone = carry ? unsettled.filter((id) => !orphanIds.includes(id)) : [];
     completedIds = keptDone;
     completedAt = Object.fromEntries(keptDone.map((id) => [id, completedAt[id]]));
     movedParents = {};
