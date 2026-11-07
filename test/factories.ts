@@ -602,6 +602,134 @@ export async function createTaskFieldValue(
   return row;
 }
 
+// 取り込み元の接続。登録したメンバー（ownerUserId）の持ち物
+export async function createConnection(
+  organization: OrganizationFixture,
+  workspaceId: string,
+  ownerUserId: string,
+  overrides: Partial<Row<OrganizationTables, 'connections'>> = {},
+) {
+  const row: Row<OrganizationTables, 'connections'> = {
+    id: uuidv7(),
+    workspace_id: workspaceId,
+    owner_user_id: ownerUserId,
+    provider: 'github',
+    name: 'あおばの GitHub',
+    status: 'active',
+    stopped_reason: null,
+    scope_mode: 'include',
+    ignore_source_due: 0,
+    settings_json: '{}',
+    credential_ciphertext: null,
+    credential_key_version: null,
+    credential_last4: null,
+    sync_state_json: '{}',
+    reconcile_state_json: '{}',
+    last_success_at: null,
+    last_reconciled_at: null,
+    last_error_message: null,
+    last_error_at: null,
+    consecutive_failures: 0,
+    last_manual_sync_at: null,
+    deleted_at: null,
+    created_at: AT,
+    updated_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('connections').values(row)));
+  return row;
+}
+
+// 接続の取り込む範囲。主キー（接続、種類、取り込み元の ID）にぶつかるなら sourceId を渡す
+export async function createConnectionScope(
+  organization: OrganizationFixture,
+  connectionId: string,
+  overrides: Partial<Row<OrganizationTables, 'connection_scopes'>> = {},
+) {
+  const row: Row<OrganizationTables, 'connection_scopes'> = {
+    connection_id: connectionId,
+    scope_kind: 'github_repo',
+    source_id: '1001',
+    source_name: 'aoba/shop',
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('connection_scopes').values(row)));
+  return row;
+}
+
+// 取り込み元の状態から列への対応。主キー（接続、状態名）にぶつかるなら状態名を渡す
+export async function createConnectionStatusMapping(
+  organization: OrganizationFixture,
+  connectionId: string,
+  columnId: string,
+  overrides: Partial<Row<OrganizationTables, 'connection_status_mappings'>> = {},
+) {
+  const row: Row<OrganizationTables, 'connection_status_mappings'> = {
+    connection_id: connectionId,
+    source_status: 'open',
+    column_id: columnId,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('connection_status_mappings').values(row)));
+  return row;
+}
+
+// 取り込んだタスクの取り込み元への参照。タスク1件に1行
+export async function createTaskSource(
+  organization: OrganizationFixture,
+  workspaceId: string,
+  taskId: string,
+  connectionId: string,
+  overrides: Partial<Row<OrganizationTables, 'task_sources'>> = {},
+) {
+  const row: Row<OrganizationTables, 'task_sources'> = {
+    task_id: taskId,
+    workspace_id: workspaceId,
+    connection_id: connectionId,
+    provider: 'github',
+    source_kind: 'issue',
+    source_id: `node-${taskId}`,
+    reviewer_source_id: '',
+    source_key: 'aoba/shop#12',
+    source_url: 'https://github.com/aoba/shop/issues/12',
+    source_container_id: '1001',
+    source_container_name: 'aoba/shop',
+    source_status: 'open',
+    source_due_on: null,
+    source_updated_at: AT,
+    is_source_done: 0,
+    missing_since_at: null,
+    last_seen_at: AT,
+    created_at: AT,
+    updated_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('task_sources').values(row)));
+  return row;
+}
+
+// 取り込み元の応答。タスク1件に1行
+export async function createTaskSourcePayload(
+  organization: OrganizationFixture,
+  taskId: string,
+  overrides: Partial<Row<OrganizationTables, 'task_source_payloads'>> = {},
+) {
+  const row: Row<OrganizationTables, 'task_source_payloads'> = {
+    task_id: taskId,
+    payload_json: '{"title":"支払いの画面を直す"}',
+    is_truncated: 0,
+    updated_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('task_source_payloads').values(row)));
+  return row;
+}
+
 // ポイントあたりの時間。主キー（ワークスペースと月）にぶつかるなら月を渡す
 export async function createWorkspacePointRate(
   organization: OrganizationFixture,
