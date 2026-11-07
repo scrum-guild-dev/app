@@ -4,7 +4,7 @@
 import type { Page } from '@playwright/test';
 import { columnDelete } from '../src/shared/operations/column/index.ts';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { failOperation } from './operations.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
@@ -14,15 +14,6 @@ async function openSettings(page: Page): Promise<void> {
   await page.locator('.nav-item', { hasText: /^\s*設定\s*$/ }).click();
   await expect(page).toHaveURL(/\/aoba\/w\/[0-9a-f-]{36}\/settings$/);
   await expect(page.getByRole('heading', { level: 1, name: '設定' })).toBeVisible();
-}
-
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.locator('.entry', { hasText: title })).toBeVisible();
 }
 
 // スプリントを作って 2 件入れ、始める（先頭の列にカードが並ぶ）
@@ -57,12 +48,12 @@ test('リーダーは列を足し、名前を直し、ボタンとキーで並�
   context,
   baseURL,
 }) => {
-  // 起票からスプリントを始めて設定で直すまでを1本で確かめる長い流れ。ほかのファイルと並べて走ると既定の 30 秒を超えうる
+  // タスクを作ってからスプリントを始めて設定で直すまでを1本で確かめる長い流れ。ほかのファイルと並べて走ると既定の 30 秒を超えうる
   test.setTimeout(90_000);
   await signIn(context, baseURL, 'admin');
   const collect = await watchViolations(page);
   await createWorkspace(page, '列の見張り番');
-  for (const title of ['A札', 'B札']) await addTask(page, title);
+  for (const title of ['A札', 'B札']) await addTaskRow(page, title);
   await startSprintWith(page, '第1回', '2099-05-03', ['A札', 'B札']);
 
   await openSettings(page);

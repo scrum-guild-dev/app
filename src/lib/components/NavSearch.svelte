@@ -89,6 +89,8 @@
     keys: SEARCH_KEYS,
     label: () => t('navSearchLabel'),
     inTyping: true,
+    global: true,
+    helpOrder: 1,
     hintAnchor: () => root,
     run: () => {
       if (document.activeElement !== input)

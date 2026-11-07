@@ -14,6 +14,7 @@ import { taskUpdate } from '../src/shared/operations/task/task-update.ts';
 import { memberList } from '../src/shared/operations/workspace/member-list.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
 import {
+  addTaskRow,
   createWorkspace,
   expectFocusReturned,
   expectModalFocus,
@@ -34,15 +35,6 @@ test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
 
-// 起票のダイアログから、タイトルだけでタスクを1件作る
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-}
-
 // 引き出し（かページ全体）の帯にある、開き方のボタン。押した時点で実行する
 function modeButton(scope: Page | Locator, name: string): Locator {
   return scope.getByRole('group', { name: '開き方' }).getByRole('button', { name, exact: true });
@@ -61,7 +53,7 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
 }) => {
   const collect = await watchViolations(page);
   await createWorkspace(page, '引き出しワークスペース');
-  await addTask(page, '見積もりを送る');
+  await addTaskRow(page, '見積もりを送る');
 
   // 行のリンクで開く。見出しにフォーカスが移り、URL に ?task=<ID> が付く
   // タイトルを直した後も同じ行を指せるよう、直す前後に共通の文字で探す
@@ -80,9 +72,9 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
 
   // 期日も選んだら保存する。木の行に期日の印が出る
   await drawer.getByLabel('期日').fill('2099-12-31');
-  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toBeVisible();
+  await expect(row.getByRole('button', { name: /^期日: (?!未設定)/ })).toBeVisible();
   await drawer.getByLabel('期日').fill('');
-  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toHaveCount(0);
+  await expect(row.getByRole('button', { name: '期日: 未設定' })).toBeVisible();
 
   // タイトルは押すと入力欄になり、Enter で確定する。行のタイトルが変わる
   await drawer.getByRole('button', { name: /見積もりを送る/ }).click();
@@ -175,7 +167,7 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
 
 test('完了したタスクのポイントは直せず、理由を添える。ほかの属性は直せる', async ({ page }) => {
   await createWorkspace(page, '完了の引き出しワークスペース');
-  await addTask(page, '済んだ依頼');
+  await addTaskRow(page, '済んだ依頼');
   const row = page.locator('.entry', { hasText: '済んだ依頼' });
   await row.getByRole('link', { name: '済んだ依頼' }).click();
   const drawer = page.getByRole('dialog', { name: '済んだ依頼' });
@@ -219,12 +211,12 @@ test('完了したタスクのポイントは直せず、理由を添える。�
   await expect(page.locator('.tree-folded.is-root')).toHaveText('親のない完了 1 件を折りたたんでいます');
 });
 
-test('担当を引き出しで選ぶと、木の行にアバターが出る。外すと担当なしに戻る。起票のダイアログでも選べる', async ({
+test('担当を引き出しで選ぶと、木の行にアバターが出る。外すと担当なしに戻る。行の担当のチップでも選べる', async ({
   page,
 }) => {
   // 作った管理者（ミナト）がリーダーとして所属するので、候補はミナト
   await createWorkspace(page, '担当ワークスペース');
-  await addTask(page, '担当を決める');
+  await addTaskRow(page, '担当を決める');
   const row = page.locator('.entry', { hasText: '担当を決める' });
   await expect(row.getByRole('button', { name: '担当: 未設定' })).toBeVisible();
   await row.getByRole('link', { name: '担当を決める' }).click();
@@ -247,17 +239,12 @@ test('担当を引き出しで選ぶと、木の行にアバターが出る。�
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(drawer).toBeHidden();
 
-  // 起票のダイアログでは、親の横に担当を選ぶ（既定は担当なし）
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill('担当つきの依頼');
-  const assignee = dialog.getByRole('combobox', { name: '担当' });
-  await expect(assignee).toHaveValue('');
-  await expect(assignee.getByRole('option', { name: 'ミナト' })).toBeAttached();
-  await assignee.selectOption({ label: 'ミナト' });
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
+  // 空の行で作ったタスクは担当なしで、行の担当のチップで選ぶ
+  await addTaskRow(page, '担当つきの依頼');
   const created = page.locator('.entry', { hasText: '担当つきの依頼' });
+  await expect(created.getByRole('button', { name: '担当: 未設定' })).toBeVisible();
+  await created.getByRole('button', { name: '担当: 未設定' }).click();
+  await page.getByRole('menu', { name: '担当を選ぶ' }).getByRole('menuitemradio', { name: 'ミナト' }).click();
   await expect(created.getByRole('button', { name: '担当: ミナト' })).toBeVisible();
   // 引き出しを開くと、選んだ担当が出る
   await created.getByRole('link', { name: '担当つきの依頼' }).click();
@@ -268,7 +255,7 @@ test('担当を引き出しで選ぶと、木の行にアバターが出る。�
 
 test('担当は選んで少し待ってから最後の値だけを送り、断られたら理由を出して前の値に戻す', async ({ page }) => {
   await createWorkspace(page, '担当の断られるワークスペース');
-  await addTask(page, '担当が断られる');
+  await addTaskRow(page, '担当が断られる');
   // 候補を読めないときは知らせ、「もう一度試す」で読み直せる
   const unrouteMembers = await failOperation(page, memberList, AOBA, 500, 'internal');
   const drawer = await openDrawer(page, '担当が断られる');
@@ -339,7 +326,7 @@ test('担当は選んで少し待ってから最後の値だけを送り、断�
 
 test('真ん中は幕と inert を保ち、選んだ既定は再読み込み後も残る', async ({ page }) => {
   await createWorkspace(page, '開き方ワークスペース');
-  await addTask(page, '真ん中で読む');
+  await addTaskRow(page, '真ん中で読む');
   const row = page.getByRole('link', { name: '真ん中で読む', exact: true });
   await row.click();
   const drawer = page.getByRole('dialog', { name: '真ん中で読む' });
@@ -405,7 +392,7 @@ test('終了したワークスペースは読み取り専用で開く（seed の
   page,
 }) => {
   await createWorkspace(page, '閉じたワークスペース');
-  await addTask(page, '読むだけ');
+  await addTaskRow(page, '読むだけ');
   const row = page.locator('.entry', { hasText: '読むだけ' });
   // ワークスペースの情報だけを閉じた状態に差し替える
   await rewriteOperation(page, workspaceInfo, AOBA, (output) => ({
@@ -445,7 +432,7 @@ test('変更の履歴: 読めなければ「もう一度試す」で読み直し
   page,
 }) => {
   await createWorkspace(page, '履歴の読み込みワークスペース');
-  await addTask(page, '履歴を読み直す');
+  await addTaskRow(page, '履歴を読み直す');
 
   // 初めに読めない。失敗の文と「もう一度試す」を出す
   let unrouteHistory = await failOperation(page, taskHistory, AOBA, 500, 'internal');
@@ -505,7 +492,7 @@ test('変更の履歴: 読めなければ「もう一度試す」で読み直し
 
 test('変更の履歴が無ければ「まだ変更はありません。」', async ({ page }) => {
   await createWorkspace(page, '履歴の無いワークスペース');
-  await addTask(page, '履歴の無い依頼');
+  await addTaskRow(page, '履歴の無い依頼');
   await mockOperation(page, taskHistory, AOBA, { entries: [], next: null, timezone: 'Asia/Tokyo' });
   const drawer = await openDrawer(page, '履歴の無い依頼');
   await expect((await openHistory(drawer)).getByText('まだ変更はありません。')).toBeVisible();
@@ -513,7 +500,7 @@ test('変更の履歴が無ければ「まだ変更はありません。」', as
 
 test('変更の履歴が 404（タスクが消えた）なら、「もう一度試す」を出さず、トーストで知らせて閉じる', async ({ page }) => {
   await createWorkspace(page, '履歴が消えるワークスペース');
-  await addTask(page, '履歴が消える依頼');
+  await addTaskRow(page, '履歴が消える依頼');
   await failOperation(page, taskHistory, AOBA, 404, 'not_found');
   await page.locator('.entry').getByRole('link', { name: '履歴が消える依頼' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'このタスクは見つかりません' })).toBeVisible();
@@ -523,7 +510,6 @@ test('変更の履歴が 404（タスクが消えた）なら、「もう一度�
 
 // 変更の履歴: ポイントと担当を直すと、新しい順に、日時と人と、列の名前と前と後が出る。列の名前は辞書の言葉
 const words = {
-  create: '起票',
   points: 'ポイント',
   assignee: '担当',
   unassigned: '担当なし',
@@ -534,11 +520,7 @@ test('変更の履歴を新しい順に、スクラムの言葉の列の名前�
   const collect = await watchViolations(page);
   await createWorkspace(page, '履歴のチーム');
   const title = '履歴をたどる';
-  await page.getByRole('button', { name: words.create }).click();
-  const dialog = page.getByRole('dialog', { name: words.create });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: words.create }).click();
-  await expect(dialog).toBeHidden();
+  await addTaskRow(page, title);
 
   const drawer = await openDrawer(page, title);
   const history = await openHistory(drawer);
@@ -570,7 +552,7 @@ test('変更の履歴を新しい順に、スクラムの言葉の列の名前�
 test('2048 字に近い URL を保存しても、390px の引き出しが横にはみ出さない', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await createWorkspace(page, '長いリンクワークスペース');
-  await addTask(page, '長いリンク');
+  await addTaskRow(page, '長いリンク');
   const drawer = await openDrawer(page, '長いリンク');
   const url = `https://example.com/${'a'.repeat(2000)}`;
   await drawer.getByRole('button', { name: /リンクを足す/ }).click();
@@ -595,7 +577,7 @@ test('2048 字に近い URL を保存しても、390px の引き出しが横に�
 
 test('620px 以下では真ん中を隠し、既定が真ん中でも横で開く。閉じると inert が外れる', async ({ page }) => {
   await createWorkspace(page, 'inert ワークスペース');
-  await addTask(page, '裏を操作できない');
+  await addTaskRow(page, '裏を操作できない');
   const drawer = await openDrawer(page, '裏を操作できない');
   await modeButton(drawer, '真ん中').click();
   await page.setViewportSize({ width: 620, height: 800 });
@@ -618,7 +600,7 @@ test('書きかけのまま戻るで別の画面へ移ろうとすると確か�
   page,
 }) => {
   await createWorkspace(page, '戻るワークスペース');
-  await addTask(page, '戻る前の確認');
+  await addTaskRow(page, '戻る前の確認');
   const listUrl = page.url();
   const drawer = await openDrawer(page, '戻る前の確認');
   const drawerUrl = page.url();
@@ -641,7 +623,7 @@ test('書きかけのまま戻るで別の画面へ移ろうとすると確か�
 
 test('前後の空白だけの違いは、書きかけに数えず、確認せずに閉じる', async ({ page }) => {
   await createWorkspace(page, '書きかけの判定ワークスペース');
-  await addTask(page, '同じ値');
+  await addTaskRow(page, '同じ値');
   const drawer = await openDrawer(page, '同じ値');
   await drawer.getByRole('button', { name: /同じ値/ }).click();
   await drawer.getByRole('textbox', { name: 'タイトル' }).fill('  同じ値  ');
@@ -669,7 +651,7 @@ test('一般のメンバーには、人が作ったタスクの削除のボタ�
 
 test('矢印キーでポイントを続けて動かしても、保存は1本ずつで、最後の選択が残る', async ({ page }) => {
   await createWorkspace(page, '続けて選ぶワークスペース');
-  await addTask(page, '続けて選ぶ');
+  await addTaskRow(page, '続けて選ぶ');
   const row = page.locator('.entry', { hasText: '続けて選ぶ' });
   const drawer = await openDrawer(page, '続けて選ぶ');
   let inFlight = 0;
@@ -703,7 +685,7 @@ test('期日は、打ちかけの年は送らず、年がそろった値だけ�
   page,
 }) => {
   await createWorkspace(page, '期日ワークスペース');
-  await addTask(page, '期日を打つ');
+  await addTaskRow(page, '期日を打つ');
   const drawer = await openDrawer(page, '期日を打つ');
   const requests: string[] = [];
   page.on('request', (request) => {
@@ -733,7 +715,7 @@ test('保存を409で断られたとき、送った欄に合う文を出す。�
   page,
 }) => {
   await createWorkspace(page, '断られるワークスペース');
-  await addTask(page, '断られる');
+  await addTaskRow(page, '断られる');
   const drawer = await openDrawer(page, '断られる');
   const unrouteUpdate = await failOperation(page, taskUpdate, AOBA, 409, 'conflict');
   // 断られると選択が前の値に戻るので、check（押した後に選ばれたかを確かめる）でなく click で押す
@@ -797,7 +779,7 @@ async function slowTaskUpdate(page: Page, failure?: { status: number; code: Erro
 
 test('メンバーの画面で開いて閉じても、メンバーの画面に残り、ほかのクエリも残る', async ({ page }) => {
   await createWorkspace(page, 'メンバー画面ワークスペース');
-  await addTask(page, 'メンバー画面で開く');
+  await addTaskRow(page, 'メンバー画面で開く');
   const taskId = await taskIdOf(page, 'メンバー画面で開く');
   const workspacePath = new URL(page.url()).pathname;
   await page.goto(`${workspacePath}/members?tab=all&task=${taskId}`);
@@ -818,7 +800,7 @@ test('メンバーの画面で開いて閉じても、メンバーの画面に�
 
 test('保存に失敗した書きかけがあるときだけ、閉じようとすると確かめる。失敗しても入力が消えない', async ({ page }) => {
   await createWorkspace(page, '送信中の書きかけワークスペース');
-  await addTask(page, '失敗で残る');
+  await addTaskRow(page, '失敗で残る');
   const drawer = await openDrawer(page, '失敗で残る');
   const slow = await slowTaskUpdate(page, { status: 500, code: 'internal' });
   await drawer.getByRole('button', { name: /失敗で残る/ }).click();
@@ -843,7 +825,7 @@ test('期日で欄を離れた直後と、ポイントを選んだ直後に閉�
   page,
 }) => {
   await createWorkspace(page, '閉じた後の応答ワークスペース');
-  await addTask(page, '閉じた後に返る');
+  await addTaskRow(page, '閉じた後に返る');
   const row = page.locator('.entry', { hasText: '閉じた後に返る' });
   const drawer = await openDrawer(page, '閉じた後に返る');
   let slow = await slowTaskUpdate(page);
@@ -852,7 +834,7 @@ test('期日で欄を離れた直後と、ポイントを選んだ直後に閉�
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(drawer).toBeHidden();
   await expect(page.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
-  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toBeVisible();
+  await expect(row.getByRole('button', { name: /^期日: (?!未設定)/ })).toBeVisible();
   // ポイントも、選んだ直後に閉じて、結果が木に出る
   await slow.unroute();
   slow = await slowTaskUpdate(page);
@@ -873,7 +855,7 @@ test('期日で欄を離れた直後と、ポイントを選んだ直後に閉�
 
 test('期日の 600ms の待ちの間に Esc で閉じようとすると確かめ、捨てると何も送らない', async ({ page }) => {
   await createWorkspace(page, '期日の待ちワークスペース');
-  await addTask(page, '期日を待つ');
+  await addTaskRow(page, '期日を待つ');
   const drawer = await openDrawer(page, '期日を待つ');
   const { bodies } = await slowTaskUpdate(page);
   await drawer.getByLabel('期日').fill('2099-12-31');
@@ -888,7 +870,7 @@ test('期日の 600ms の待ちの間に Esc で閉じようとすると確か�
 
 test('期日の保存中に次の値を選んでも、先の応答で入力欄が上書きされず、次の値が送られる', async ({ page }) => {
   await createWorkspace(page, '期日の連続ワークスペース');
-  await addTask(page, '期日を続ける');
+  await addTaskRow(page, '期日を続ける');
   const drawer = await openDrawer(page, '期日を続ける');
   const { bodies } = await slowTaskUpdate(page);
   const due = drawer.getByLabel('期日');
@@ -911,7 +893,7 @@ test('期日の保存中に次の値を選んでも、先の応答で入力欄�
 
 test('期日は Enter で保存でき、「クリア」を押すと空にして保存し、フォーカスを入力欄へ移す', async ({ page }) => {
   await createWorkspace(page, '期日のクリアワークスペース');
-  await addTask(page, '期日をクリアする');
+  await addTaskRow(page, '期日をクリアする');
   const row = page.locator('.entry', { hasText: '期日をクリアする' });
   const drawer = await openDrawer(page, '期日をクリアする');
   const bodies: Record<string, unknown>[] = [];
@@ -923,18 +905,18 @@ test('期日は Enter で保存でき、「クリア」を押すと空にして�
   await due.press('Enter');
   // 600ms を待たずに、Enter で送る
   await expect.poll(() => bodies.length, { timeout: 500 }).toBe(1);
-  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toBeVisible();
+  await expect(row.getByRole('button', { name: /^期日: (?!未設定)/ })).toBeVisible();
   await drawer.getByRole('button', { name: 'クリア', exact: true }).click();
   await expect(due).toBeFocused();
   await expect(due).toHaveValue('');
-  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toHaveCount(0);
+  await expect(row.getByRole('button', { name: '期日: 未設定' })).toBeVisible();
   expect(bodies.map((body) => body.due_on)).toEqual(['2099-12-31', null]);
 });
 
 test('期日が過ぎたタスクを開くと、引き出しの期日に「期日切れ」の印が出て、保存した値で出し直す', async ({ page }) => {
   // seed の行は他の e2e も読むので、このテストで作ったタスクの期日を書き換える
   await createWorkspace(page, '期日切れワークスペース');
-  await addTask(page, '期日の印を見る');
+  await addTaskRow(page, '期日の印を見る');
   const drawer = await openDrawer(page, '期日の印を見る');
   const chip = drawer.locator('.props .chip');
   await drawer.getByLabel('期日').fill('2000-01-02');
@@ -954,7 +936,7 @@ test('期日が過ぎたタスクを開くと、引き出しの期日に「期�
 
 test('取り込んだタスクは、タイトルを直せず、リンクの欄と削除を出さず、理由を添える', async ({ page }) => {
   await createWorkspace(page, '取り込みワークスペース');
-  await addTask(page, '取り込んだ体');
+  await addTaskRow(page, '取り込んだ体');
   const taskId = await taskIdOf(page, '取り込んだ体');
   // 取り込みはまだ無いので、1件の読み取りの応答を、取り込んだタスクに差し替える
   await rewriteOperation(page, taskDetail, AOBA, (output) => ({
@@ -972,7 +954,7 @@ test('取り込んだタスクは、タイトルを直せず、リンクの欄�
 
 test('1行の入力欄は、日本語の変換中の Enter では送らない', async ({ page }) => {
   await createWorkspace(page, '変換中ワークスペース');
-  await addTask(page, '変換中に送らない');
+  await addTaskRow(page, '変換中に送らない');
   const drawer = await openDrawer(page, '変換中に送らない');
   await drawer.getByRole('button', { name: /変換中に送らない/ }).click();
   const input = drawer.getByRole('textbox', { name: 'タイトル' });
@@ -998,7 +980,7 @@ test('長い本文（順序付きリスト、チェックリスト、表）を�
   const ROWS = 300;
   const collect = await watchViolations(page);
   await createWorkspace(page, '長い本文ワークスペース');
-  await addTask(page, '長い本文');
+  await addTaskRow(page, '長い本文');
   const markdown = [
     ...Array.from({ length: ORDERED }, (_, i) => `${i + 3}. 項`),
     '',

@@ -2,12 +2,12 @@
 // 一本道: タスクを作る → ポイントのチップで値を選ぶ → 担当のチップで人を選ぶ（アバターと名前が出る）→ キーボードだけで開いて選び、Esc でチップへ戻る
 // 親の集計: ストーリーの下のタスクのポイントを選ぶと、親の合計に出る。断られたら理由を出して元の値に戻し、完了にした行のチップは押せず理由が読める。
 // 最後に、選択の窓を開いた状態を4つの見た目で axe にかける。
-import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { taskDetail } from '../src/shared/operations/task/task-detail.ts';
 import { taskUpdate } from '../src/shared/operations/task/task-update.ts';
 import {
   addStoryRow,
+  addTaskRow,
   createWorkspace,
   expectNoA11yViolationsInThemes,
   signIn,
@@ -21,18 +21,10 @@ test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
 
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-}
-
 test('行のチップでポイントと担当を選ぶと、行に出る。キーボードだけで選べ、Esc でチップへ戻る', async ({ page }) => {
   const collect = await watchViolations(page);
   await createWorkspace(page, 'チップのワークスペース');
-  await addTask(page, '見積もりを送る');
+  await addTaskRow(page, '見積もりを送る');
   const row = page.locator('.entry', { hasText: '見積もりを送る' });
 
   // 値が無いチップは未設定で、押すと値の一覧が開く
@@ -95,12 +87,7 @@ test('行のチップでポイントと担当を選ぶと、行に出る。キ�
 test('ポイントのチップで選ぶと、親のストーリーの集計に反映される', async ({ page }) => {
   await createWorkspace(page, '集計のワークスペース');
   await addStoryRow(page, '会員の画面');
-  await page.getByRole('button', { name: '起票', exact: true }).click();
-  const taskDialog = page.getByRole('dialog', { name: '起票' });
-  await taskDialog.getByLabel('親のストーリー').selectOption({ label: '会員の画面' });
-  await taskDialog.getByLabel('タイトル').fill('一覧を出す');
-  await taskDialog.getByRole('button', { name: '起票' }).click();
-  await expect(taskDialog).toBeHidden();
+  await addTaskRow(page, '一覧を出す', '会員の画面');
 
   const story = page.locator('.tree-row.is-story', { hasText: '会員の画面' });
   await expect(story).toContainText('0 / 0 pt');
@@ -113,7 +100,7 @@ test('ポイントのチップで選ぶと、親のストーリーの集計に�
 
 test('断られたら理由を出して元の値に戻す。完了にした行のチップは押せず、理由が読める', async ({ page }) => {
   await createWorkspace(page, '断られるワークスペース');
-  await addTask(page, '断られる件');
+  await addTaskRow(page, '断られる件');
   const row = page.locator('.entry', { hasText: '断られる件' });
 
   const unroute = await failOperation(page, taskUpdate, { slug: 'aoba' }, 409, 'conflict');
@@ -138,7 +125,7 @@ test('断られたら理由を出して元の値に戻す。完了にした行�
 
 test('担当のチップの選択の窓を開いた状態に axe の違反が無い', async ({ page }) => {
   await createWorkspace(page, '検査のワークスペース');
-  await addTask(page, '検査する件');
+  await addTaskRow(page, '検査する件');
   const row = page.locator('.entry', { hasText: '検査する件' });
   await row.getByRole('button', { name: '担当: 未設定' }).click();
   const menu = page.getByRole('menu', { name: '担当を選ぶ' });
@@ -149,7 +136,7 @@ test('担当のチップの選択の窓を開いた状態に axe の違反が無
 
 test('送っている間に元の値へ選び直しても、サーバーの値と行が食い違わない', async ({ page }) => {
   await createWorkspace(page, '選び直しのワークスペース');
-  await addTask(page, '選び直す件');
+  await addTaskRow(page, '選び直す件');
   const row = page.locator('.entry', { hasText: '選び直す件' });
 
   // 応答を遅らせ、送っている間に「5 pt」から「未見積もり」へ選び直す
@@ -176,7 +163,7 @@ test('断られた理由を読み直せなかったら、競合とも完了と�
   page,
 }) => {
   await createWorkspace(page, '読めないワークスペース');
-  await addTask(page, '読めない件');
+  await addTaskRow(page, '読めない件');
   const row = page.locator('.entry', { hasText: '読めない件' });
 
   const unUpdate = await failOperation(page, taskUpdate, { slug: 'aoba' }, 409, 'conflict');
@@ -187,4 +174,54 @@ test('断られた理由を読み直せなかったら、競合とも完了と�
   await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
   await unUpdate();
   await unDetail();
+});
+
+test('期日のチップの窓で日付を入れると行に出て、「クリア」で外れる。打ちかけの日付では保存せず窓も閉じない', async ({
+  page,
+}) => {
+  await createWorkspace(page, '期日のワークスペース');
+  await addTaskRow(page, '期日を付ける件');
+  const row = page.locator('.entry', { hasText: '期日を付ける件' });
+
+  await row.getByRole('button', { name: '期日: 未設定' }).click();
+  const panel = page.getByRole('dialog', { name: '期日を選ぶ' });
+  const input = panel.getByLabel('期日');
+  await expect(input).toBeFocused();
+  // 年が4桁そろわない値では保存せず、窓も閉じない
+  await input.fill('0002-11-20');
+  await expect(panel).toBeVisible();
+  await expect(row.getByRole('button', { name: '期日: 未設定' })).toBeVisible();
+
+  const saved = waitForResponses(page, '/task-update');
+  await input.fill('2030-11-20');
+  await saved;
+  await expect(panel).toBeHidden();
+  await expect(row.getByRole('button', { name: '期日: 11/20' })).toBeVisible();
+  await waitForSettled(page);
+
+  await row.getByRole('button', { name: '期日: 11/20' }).click();
+  const cleared = waitForResponses(page, '/task-update');
+  await page.getByRole('dialog', { name: '期日を選ぶ' }).getByRole('button', { name: 'クリア' }).click();
+  await cleared;
+  await expect(row.getByRole('button', { name: '期日: 未設定' })).toBeVisible();
+});
+
+test('期日の窓は、続けて日付が変わる間は保存せず、変わらなくなった値を1回だけ保存する', async ({ page }) => {
+  await createWorkspace(page, '期日の連続入力のワークスペース');
+  await addTaskRow(page, '月を打ち直す件');
+  const row = page.locator('.entry', { hasText: '月を打ち直す件' });
+  const updates: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/task-update')) updates.push(request.postData() ?? '');
+  });
+
+  await row.getByRole('button', { name: '期日: 未設定' }).click();
+  const input = page.getByRole('dialog', { name: '期日を選ぶ' }).getByLabel('期日');
+  // 月を「1」→「12」と打つと change が2回出る。1回目の値(1月)は保存しない
+  await input.fill('2030-01-20');
+  await input.fill('2030-12-20');
+  await expect(row.getByRole('button', { name: '期日: 12/20' })).toBeVisible();
+  await waitForSettled(page);
+  expect(updates).toHaveLength(1);
+  expect(updates[0]).toContain('2030-12-20');
 });

@@ -1,8 +1,16 @@
-// ワークスペースの設定の画面（区分とリポジトリ）と、起票と木と引き出しでの使い方。
+// ワークスペースの設定の画面（区分とリポジトリ）と、木の行のチップと引き出しでの使い方。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。行を足すテストは、自分で作ったワークスペースで行う（seed の行は他の e2e も読むため）
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { addStoryRow, createWorkspace, dragTo, signIn, waitForResponses, watchViolations } from './helpers.ts';
+import {
+  addStoryRow,
+  addTaskRow,
+  createWorkspace,
+  dragTo,
+  signIn,
+  waitForResponses,
+  watchViolations,
+} from './helpers.ts';
 
 const SEED_CLIENT_WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 
@@ -24,7 +32,7 @@ test.describe('リーダー（あおば開発のミナト）', () => {
     await signIn(context, baseURL, 'admin');
   });
 
-  test('区分とリポジトリを足す → 起票でリポジトリを1回押して選ぶ → 木に区分とリポジトリが出る → 区分を消すと行から外れる', async ({
+  test('区分とリポジトリを足す → 行のチップでリポジトリと区分を選ぶ → 木に区分とリポジトリが出る → 区分を消すと行から外れる', async ({
     page,
   }) => {
     const collect = await watchViolations(page);
@@ -64,31 +72,39 @@ test.describe('リーダー（あおば開発のミナト）', () => {
     await expect(categories.locator('li')).toHaveText([/改修/, /保守/]);
     await expect(categories.getByRole('button', { name: '上へ: 改修' })).toBeFocused();
 
-    // バックログで起票する。リポジトリはボタンで1回押して選び、区分は親なしのときだけ選べる
+    // バックログで空の行からタスクを作る。リポジトリと区分は、作った後に行のチップで選ぶ（区分は親なしのときだけ選べる）
     await page.locator('.nav-item', { hasText: 'バックログ' }).click();
-    await page.getByRole('button', { name: '起票' }).click();
-    const dialog = page.getByRole('dialog', { name: '起票' });
-    const repositories = dialog.getByRole('radiogroup', { name: 'リポジトリ' });
-    // 2つあるので、既定は「なし」
-    await expect(repositories.getByRole('radio', { name: 'なし' })).toBeChecked();
-    await dialog.getByLabel('タイトル').fill('ポイントの失効を直す');
-    await repositories.getByRole('radio', { name: 'point-api' }).check();
-    await dialog.getByLabel('区分').selectOption({ label: '保守' });
-    await dialog.getByRole('button', { name: '起票' }).click();
-    await expect(dialog).toBeHidden();
-
-    // 新しいワークスペースには決まった欄が1つあり、書かれていないので「詳細 未記入」の印が最後に並ぶ
+    await addTaskRow(page, 'ポイントの失効を直す');
     const row = page.locator('.entry', { hasText: 'ポイントの失効を直す' });
-    await expect(row.locator('.entry-meta .chip')).toHaveText(['リポジトリ：point-api', '区分：保守', '詳細 未記入']);
+    await row.getByRole('button', { name: 'リポジトリ: 未設定' }).click();
+    const repositories = page.getByRole('menu', { name: 'リポジトリを選ぶ' });
+    // 2つあるので、既定は「なし」
+    await expect(repositories.getByRole('menuitemradio', { name: 'なし', exact: true })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await repositories.getByRole('menuitemradio', { name: 'point-api', exact: true }).click();
+    await expect(row.getByRole('button', { name: 'リポジトリ: point-api' })).toBeVisible();
+    await row.getByRole('button', { name: '区分: 未設定' }).click();
+    await page
+      .getByRole('menu', { name: '区分を選ぶ' })
+      .getByRole('menuitemradio', { name: '保守', exact: true })
+      .click();
+    await expect(row.getByRole('button', { name: '区分: 保守' })).toBeVisible();
+
+    // 新しいワークスペースには決まった欄が1つあり、書かれていないので「詳細 未記入」の印が並ぶ。リポジトリと区分は右端のチップに出る
+    await expect(row.locator('.entry-meta .chip')).toHaveText(['詳細 未記入']);
     // 読み直しても出る
     await page.reload();
-    await expect(row.locator('.entry-meta .chip')).toHaveText(['リポジトリ：point-api', '区分：保守', '詳細 未記入']);
+    await expect(row.getByRole('button', { name: 'リポジトリ: point-api' })).toBeVisible();
+    await expect(row.getByRole('button', { name: '区分: 保守' })).toBeVisible();
 
     // 引き出しでリポジトリを直す
     await row.getByRole('link', { name: 'ポイントの失効を直す' }).click();
     const drawer = page.getByRole('dialog', { name: 'ポイントの失効を直す' });
     await drawer.getByRole('radiogroup', { name: 'リポジトリ' }).getByRole('radio', { name: 'admin-web' }).check();
-    await expect(row.locator('.entry-meta .chip')).toHaveText(['リポジトリ：admin-web', '区分：保守', '詳細 未記入']);
+    await expect(row.getByRole('button', { name: 'リポジトリ: admin-web' })).toBeVisible();
+    await expect(row.getByRole('button', { name: '区分: 保守' })).toBeVisible();
     await drawer.getByRole('button', { name: '閉じる' }).click();
     await expect(drawer).toBeHidden();
 
@@ -100,7 +116,8 @@ test.describe('リーダー（あおば開発のミナト）', () => {
     await confirm.getByRole('button', { name: '削除する' }).click();
     await expect(page.getByRole('list', { name: '区分の一覧' }).locator('li')).toHaveText([/改修/]);
     await page.locator('.nav-item', { hasText: 'バックログ' }).click();
-    await expect(row.locator('.entry-meta .chip')).toHaveText(['リポジトリ：admin-web', '詳細 未記入']);
+    await expect(row.getByRole('button', { name: 'リポジトリ: admin-web' })).toBeVisible();
+    await expect(row.getByRole('button', { name: '区分: 未設定' })).toBeVisible();
     expect(await collect()).toEqual([]);
   });
 
@@ -183,21 +200,17 @@ test.describe('リーダー（あおば開発のミナト）', () => {
     const story = page.locator('.tree-group', { hasText: 'ポイントを使える' });
     await expect(story.locator('.tree-row .chip')).toHaveText('区分：保守');
 
-    // 一覧が1つだけなら、リポジトリはそれを選んだ状態で開く。親を選ぶと区分の欄は引き継ぎの表示になる
-    await page.getByRole('button', { name: '起票', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: '起票' });
-    await dialog.getByLabel('親のストーリー').selectOption({ label: 'ポイントを使える' });
-    await expect(
-      dialog.getByRole('radiogroup', { name: 'リポジトリ' }).getByRole('radio', { name: 'point-api' }),
-    ).toBeChecked();
-    await expect(dialog.getByLabel('区分')).toHaveCount(0);
-    await expect(dialog.getByText('親から引き継ぎ')).toBeVisible();
-    await dialog.getByLabel('タイトル').fill('残高の画面を作る');
-    await dialog.getByRole('button', { name: '起票' }).click();
-    await expect(dialog).toBeHidden();
+    // ストーリーの配下に作ったタスクは、リポジトリを行のチップで選ぶ。区分は親から引き継ぎ、チップは押せない
+    await addTaskRow(page, '残高の画面を作る', 'ポイントを使える');
     const task = story.locator('.entry', { hasText: '残高の画面を作る' });
-    // 配下の行では区分を繰り返さず、リポジトリだけを出す
-    await expect(task.locator('.entry-meta .chip')).toHaveText(['リポジトリ：point-api', '詳細 未記入']);
+    await task.getByRole('button', { name: 'リポジトリ: 未設定' }).click();
+    await page
+      .getByRole('menu', { name: 'リポジトリを選ぶ' })
+      .getByRole('menuitemradio', { name: 'point-api', exact: true })
+      .click();
+    await expect(task.getByRole('button', { name: 'リポジトリ: point-api' })).toBeVisible();
+    await expect(task.getByRole('button', { name: '区分: 保守' })).toHaveAttribute('aria-disabled', 'true');
+    await expect(task.locator('.entry-meta .chip')).toHaveText(['詳細 未記入']);
 
     // 引き出しでは、引き継いだ区分を読み取り専用で出す
     await task.getByRole('link', { name: '残高の画面を作る' }).click();
@@ -232,6 +245,7 @@ test.describe('一般のメンバー（あおば開発のハルカ）', () => {
     const epic = page.locator('.tree-group', { hasText: 'ポイントの交換先を増やす' }).first();
     await expect(epic.locator('.tree-row.is-epic .chip', { hasText: '区分：追加案件' })).toBeVisible();
     const task = page.locator('.entry', { hasText: 'ポイント付与のバッチを作る' });
-    await expect(task.locator('.entry-meta .chip')).toHaveText(['リポジトリ：point-api', '区分：保守', '詳細 未記入']);
+    await expect(task.getByRole('button', { name: 'リポジトリ: point-api' })).toBeVisible();
+    await expect(task.getByRole('button', { name: '区分: 保守' })).toBeVisible();
   });
 });

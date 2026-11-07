@@ -7,10 +7,12 @@ import { taskMove } from '../src/shared/operations/task/task-move.ts';
 import {
   addEpicRow,
   addStoryRow,
+  addTaskRow,
   chooseRowAction,
   createWorkspace,
   rowMenuItem,
   signIn,
+  waitForResponses,
   watchViolations,
 } from './helpers.ts';
 import { routeOperation } from './operations.ts';
@@ -21,21 +23,16 @@ test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
 
+// 木の空の行で作る。担当は、作った後に行の担当のチップで選ぶ（空の行は題だけを送る）。parent があれば、その題のストーリーの配下に作る
 async function addTask(page: Page, title: string, options: { assignee?: string; parent?: string } = {}) {
-  // ワークスペースの切り替えのボタンの名前にも、ワークスペースの名前（「…起票の…」）が入りうるので、完全一致で選ぶ。
-  await page.getByRole('button', { name: '起票', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  if (options.assignee !== undefined) {
-    const assignee = dialog.getByRole('combobox', { name: '担当' });
-    await expect(assignee.getByRole('option', { name: options.assignee })).toBeAttached();
-    await assignee.selectOption({ label: options.assignee });
-  }
-  if (options.parent !== undefined) {
-    await dialog.getByRole('combobox', { name: '親のストーリー' }).selectOption({ label: options.parent });
-  }
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
+  await addTaskRow(page, title, options.parent);
+  if (options.assignee === undefined) return;
+  const row = page.locator('.entry', { hasText: title });
+  await row.getByRole('button', { name: '担当: 未設定' }).click();
+  const assigned = waitForResponses(page, '/task-assign');
+  await page.getByRole('menu', { name: '担当を選ぶ' }).getByRole('menuitemradio', { name: options.assignee }).click();
+  await assigned;
+  await expect(row.getByRole('button', { name: `担当: ${options.assignee}` })).toBeVisible();
 }
 
 // 木の空の行で作る（作った行は読み直さずに木へ入る）。label は「エピックを作る」か「ストーリーを作る」で、どちらの行かを選ぶ
@@ -187,17 +184,18 @@ test('絞っているときに作ったタスクやストーリーが当たら�
   page,
 }) => {
   const collect = await watchViolations(page);
-  await createWorkspace(page, '絞り込みと起票のワークスペース');
-  await addTask(page, '自分のタスク', { assignee: 'ミナト' });
+  await createWorkspace(page, '絞り込みと作成のワークスペース');
+  await addTaskRow(page, '自分のタスク');
   const bar = filterBar(page);
-  await bar.getByRole('combobox', { name: '担当' }).selectOption({ label: '自分' });
-  await expect(page).toHaveURL(/\?assignee=me$/);
+  // 空の行は題だけを送る（担当は付かない）ので、題の検索で絞る
+  await bar.getByRole('searchbox', { name: 'タイトルで探す' }).fill('自分');
+  await expect(page).toHaveURL(/\?q=%E8%87%AA%E5%88%86$/);
 
   // 当たるものは、読み直した木に出し、作ったことだけを知らせる（絞る前に作った知らせを消すため読み直す）
   await page.reload();
   const added = page.getByRole('status').filter({ hasText: 'バックログの末尾に足しました' });
   await expect(added).toHaveCount(0);
-  await addTask(page, '自分のもう1つ', { assignee: 'ミナト' });
+  await addTaskRow(page, '自分のもう1つ');
   await expect(taskTitles(page)).toHaveText(['自分のタスク', '自分のもう1つ']);
   await expect(added).toBeVisible();
   const notice = page.getByRole('status').filter({ hasText: '作りました。絞り込みに当たらないので表示していません' });
@@ -205,12 +203,14 @@ test('絞っているときに作ったタスクやストーリーが当たら�
 
   // 当たらないタスクは出さず、「表示していません」の1つだけで知らせる（作った知らせは重ねない）
   await page.reload();
-  await addTask(page, '誰かのタスク');
+  const taskInput = page.locator('.tree > .draft-row').getByRole('textbox', { name: 'タスクを足す', exact: true });
+  await taskInput.fill('誰かのタスク');
+  await taskInput.press('Enter');
   await expect(notice).toBeVisible();
   await expect(added).toHaveCount(0);
   await expect(taskTitles(page)).toHaveText(['自分のタスク', '自分のもう1つ']);
 
-  // ストーリーも同じ（担当で絞っているので、配下の無いストーリーは当たらない）。前のトーストを消すため読み直す（絞り込みは残る）
+  // ストーリーも同じ（題に当たらず、配下も無いストーリーは当たらない）。前のトーストを消すため読み直す（絞り込みは残る）
   await page.reload();
   await expect(notice).toHaveCount(0);
   // 絞っている間も、木の末尾の空の行で作れる。当たらないので、木には出さずにトーストで知らせる
