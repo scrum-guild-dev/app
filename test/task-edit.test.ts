@@ -619,11 +619,14 @@ async function runWithRace(
   operation: { handler: (context: never) => Promise<unknown> },
   input: Record<string, unknown>,
   race: (n: number, db: ReturnType<typeof orgDb>) => Promise<void>,
+  // 履歴の行を返した読み取り（まとめる行を読む文）の直後に呼ぶ。読んだ後、書く前に別の履歴の行が入る状況を作る
+  afterLogRead?: (n: number) => Promise<void>,
 ) {
   const db = orgDb(env, target.organization.verified);
   const actor = actorOf(person);
   const workspace = await verifyWorkspace(db, actor, target.workspace.id);
   let reads = 0;
+  let logReads = 0;
   const racing = new Proxy(db, {
     get(base, key) {
       // 入口は #private を持つので、メソッドは本物の入口に結んで返す
@@ -634,6 +637,8 @@ async function runWithRace(
         const result = await (value as (...a: unknown[]) => Promise<unknown>).apply(base, args);
         // タスクの行を返した読み取りだけを数える（閉じたかどうかの読み取りは数えない）
         if ((result as { title?: string } | undefined)?.title !== undefined) await race(++reads, base);
+        if ((result as { changes_json?: string } | undefined)?.changes_json !== undefined)
+          await afterLogRead?.(++logReads);
         return result;
       };
     },
@@ -674,6 +679,37 @@ describe('履歴の二重書き（止めた時計で、同じ時刻に競った�
     expect((await rowOf(target, task.id))!.updated_at).toBe(FROZEN_ISO);
     expect(logs[0]).toMatchObject({ actor_user_id: target.leader.userId });
     expect(JSON.parse(logs[0]!.changes_json)).toEqual({ title: ['元', '新'] });
+  });
+
+  test('まとめる行を読んだ後に別の履歴の行が入ったら、まとめず、読み直して新しい行を足す', async () => {
+    setFixedNow(new Date(FROZEN_ISO));
+    const target = await createTarget();
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      title: '元',
+      body_md: '元の本文',
+    });
+    expect((await update(target, task.id, { body_md: '一回目' }, target.member, frozenEnv())).status).toBe(200);
+    const later = frozenEnv('2026-10-26T10:01:00+09:00');
+    const result = (await runWithRace(
+      target,
+      target.member,
+      taskUpdateOperation,
+      { task_id: task.id, body_md: '二回目' },
+      async () => {},
+      async (n) => {
+        // まとめる行（最初の本文の行）を読んだ直後に、リーダーが別の欄を直して、より新しい行を入れる
+        if (n === 1)
+          expect((await update(target, task.id, { title: '先に直した' }, target.leader, later)).status).toBe(200);
+      },
+    )) as { task: Detail };
+    expect(result.task).toMatchObject({ title: '先に直した', body_md: '二回目' });
+    const logs = (await logsOf(target, task.id)).map((log) => JSON.parse(log.changes_json));
+    // 最初の行は変わらず、リーダーの行の後ろに、自分の行が新しく足される
+    expect(logs).toEqual([
+      { body_md: ['元の本文', '一回目'] },
+      { title: ['元', '先に直した'] },
+      { body_md: ['一回目', '二回目'] },
+    ]);
   });
 
   test('先に削除した要求があれば、同じ時刻の削除は 404 で、履歴は1行だけ', async () => {
