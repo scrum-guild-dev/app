@@ -16,6 +16,7 @@ export const uiScreens = [
   'sprint',
   'sprint-start',
   'sprint-task-picker',
+  'inbox',
   'members',
   'member-remove-confirm',
   'workspace-settings',

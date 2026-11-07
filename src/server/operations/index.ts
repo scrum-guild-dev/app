@@ -108,6 +108,7 @@ import {
 } from './story.ts';
 import { taskAssignOperation, taskDeleteOperation, taskDetailOperation, taskUpdateOperation } from './task-edit.ts';
 import { taskFieldSetOperation } from './task-field.ts';
+import { inboxListOperation, inboxToBacklogOperation } from './inbox.ts';
 import { taskTodayMarkOperation } from './task-today-mark.ts';
 import { taskHistoryOperation } from './task-history.ts';
 import {
@@ -223,6 +224,8 @@ const listedOperations: readonly ImplementedOperation[] = [
   taskCreateOperation,
   backlogTreeOperation,
   backlogCompletedTasksOperation,
+  inboxListOperation,
+  inboxToBacklogOperation,
   taskCompleteOperation,
   taskReopenOperation,
   taskDetailOperation,

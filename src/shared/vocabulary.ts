@@ -2382,6 +2382,38 @@ export const dictionary = defineDictionary({
     '確かめている間に{task}が入りました。もう一度、移し先を選んでください。一覧を読み直します',
   columnDeleteTargetInvalid: '移し先に選べない{column}です。選び直してください。一覧を読み直します',
   columnDeleteNotFound: '削除する{column}か移し先の{column}が見つかりません。一覧を読み直します',
+
+  // ---- 受信箱の画面（design/inbox.html）----
+  inboxPageName: '{inbox} - {name}',
+  inboxTallyArrived: '届いたもの',
+  inboxSynced: '最後に成功した同期は {date} です。届いたものは{workspace}の全員に見えます。',
+  inboxNeverSynced: 'まだ同期に成功していません。届いたものは{workspace}の全員に見えます。',
+  inboxNoConnectionTitle: '{connection}がまだありません',
+  inboxNoConnectionText:
+    'Backlog や GitHub を{connection}として登録すると、自分が担当している課題や PR が次の同期でここに届きます。取り込み元を使わないなら、この画面は使いません。',
+  inboxEmptyTitle: '届いたものはありません',
+  inboxEmptyText: '次の同期で新しく取り込んだ{task}がここに届きます。',
+  inboxListLabel: '受信箱の{task}',
+  inboxSelectAll: 'すべて選ぶ',
+  inboxSelectRow: '「{title}」を選ぶ',
+  inboxArrived: '届いた {date}',
+  inboxRepositoryLabel: '「{title}」の{repository}',
+  inboxRepositoryNone: '{repository}を選ぶ',
+  inboxMoveRow: '{backlog}へ',
+  inboxMoveRowLabel: '「{title}」を{backlog}へ入れる',
+  inboxMoveSelected: '選んだものを{backlog}へ',
+  inboxSelectedCount: '{count} 件を選んでいます',
+  inboxNote: '{backlog}へ入れたものは末尾に並びます。入れるまで、{backlog}、{sprint}、今日やることには出ません。',
+  inboxLimitNote: '新しい {shown} 件を出しています（全 {total} 件）。入れると、残りが出ます。',
+  inboxSelectLimit: '一度に入れられるのは {limit} 件までです。',
+  inboxMoved: '{count} 件を{backlog}へ入れました',
+  inboxMovedOne: '「{title}」を{backlog}へ入れました',
+  inboxMoveStale: '受信箱が変わっていたため、入れられませんでした。一覧を読み直しました。',
+  inboxMoveNotFound: '選んだ{task}が見つかりませんでした。一覧を読み直しました。',
+  inboxMoveClosed: 'この{workspace}は終了しているため、入れられません。',
+  inboxMoveFailed: '入れられませんでした。もう一度試してください。',
+  inboxMoveUnreachable: '通信できませんでした。もう一度試してください。',
+  inboxMoveWorking: '{backlog}へ入れています',
 });
 
 export type DictionaryKey = keyof typeof dictionary;

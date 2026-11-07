@@ -81,6 +81,15 @@ test('スプリントが 390px で横にはみ出さず、押せる要素が 44p
   });
 });
 
+test('受信箱が 390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({ page }) => {
+  await expectNarrowLayout(page, 'inbox', async (w) => {
+    await page.goto(`${WORKSPACE}/inbox`);
+    await expect(page.getByRole('heading', { level: 1, name: w('inbox') })).toBeVisible();
+    await expect(page.getByRole('list', { name: `${w('inbox')}の${w('task')}` })).toBeVisible();
+    await expectWorkspaceWords(page, w);
+  });
+});
+
 test('メンバーが 390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({ page }) => {
   await expectNarrowLayout(page, 'members', async (w) => {
     await page.goto(`${WORKSPACE}/members`);
