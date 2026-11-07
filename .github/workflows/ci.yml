@@ -115,8 +115,8 @@ jobs:
       - uses: ./.github/actions/setup
       # scripts/acceptance-video.test.ts が、判定の HTML を chromium で動かす。無いとそのテストがスキップされる
       - uses: ./.github/actions/playwright
-      # 実録画の固定寸法を ffprobe で検査する。未導入によるスキップを防ぐ
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      # ffmpeg は入れない。受け入れの動画は手元で作るので、実録画の寸法（ffprobe）と字幕の合成（ffmpeg）のテストは CI では飛ばす。
+      # apt はミラーの速さに左右され、この段だけで 13 分かかり、ジョブの上限 15 分に迫った実行があった（PR #865。テストは 48 秒）
       - run: pnpm test:node
 
   migration:
