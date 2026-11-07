@@ -5,12 +5,19 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
 import { sprintDelete, sprintList, sprintTaskAdd, sprintTaskRemove } from '../src/shared/operations/sprint/index.ts';
 import { storyDelete } from '../src/shared/operations/story/index.ts';
-import { backlogTree, taskComplete, taskDelete, taskDetail, taskHistory } from '../src/shared/operations/task/index.ts';
+import {
+  backlogTree,
+  taskComplete,
+  taskCreate,
+  taskDelete,
+  taskDetail,
+  taskHistory,
+} from '../src/shared/operations/task/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb, verifyWorkspace } from '../src/server/db/index.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { sprintTaskAddOperation, sprintTaskRemoveOperation } from '../src/server/operations/sprint.ts';
-import { taskCompleteOperation } from '../src/server/operations/task.ts';
+import { taskCompleteOperation, taskCreateOperation } from '../src/server/operations/task.ts';
 import {
   createBoardColumn,
   createOrganization,
@@ -848,5 +855,187 @@ describe('読んだ後に別の要求が割り込む', () => {
     expect(state.task).toMatchObject({ sprint_id: sprint.id, completed_at: null });
     expect(state.completions).toEqual([]);
     expect(state.logs).toEqual([]);
+  });
+});
+
+describe('task-create の入れ先（スプリントの列の末尾の空の行）', () => {
+  // 処理を直に呼ぶときは、入力の検証の既定値が入らないので、省く欄も書く
+  const fullCreateInput = {
+    points: null,
+    assignee_user_id: null,
+    story_id: null,
+    repository_id: null,
+    category_id: null,
+  };
+
+  function create(target: Target, sprint: unknown, body: Record<string, unknown> = {}, person: Person = target.member) {
+    return call(target, taskCreate, { title: '見積もりを送る', sprint, ...body }, person);
+  }
+
+  async function countTasks(target: Target) {
+    const db = orgDb(env, target.organization.verified);
+    const rows = await db.rows(
+      db.statement((q) => q.selectFrom('tasks').select('id').where('workspace_id', '=', target.workspace.id)),
+    );
+    return rows.length;
+  }
+
+  test('そのスプリントのその列の末尾に、作成と入れ込みと履歴を同時に書く。バックログの置き場所のまま', async () => {
+    const { target, board, sprint } = await setup();
+    const existing = await taskInSprint(target, sprint.id, board.second);
+    await createTask(target.organization, target.workspace.id, target.member.userId!);
+
+    const res = await create(target, { sprint_id: sprint.id, column_id: board.second });
+    expect(res.status).toBe(200);
+    const { task } = (await res.json()) as { task: { id: string; sprint: { id: string; name: string | null } | null } };
+    expect(task.sprint).toMatchObject({ id: sprint.id, name: '第15回' });
+
+    const state = await stateOf(target, task.id);
+    expect(state.task).toMatchObject({
+      tray: 'backlog',
+      sprint_id: sprint.id,
+      column_id: board.second,
+      completed_at: null,
+      created_by: target.member.userId,
+    });
+    expect(state.task.column_position! > existing.column_position!).toBe(true);
+    expect(state.entries).toHaveLength(1);
+    expect(state.entries[0]).toMatchObject({
+      sprint_id: sprint.id,
+      added_by: target.member.userId,
+      ended_at: null,
+      outcome: null,
+    });
+    // 履歴は作成の1件で、入れ先も残す
+    expect(state.logs).toHaveLength(1);
+    expect(state.logs[0]).toMatchObject({ action: 'create' });
+    expect(sprintChanges(state.logs[0])).toEqual([null, { id: sprint.id, name: '第15回' }]);
+
+    // 続けて作ると、その列の末尾に並ぶ
+    const next = await create(target, { sprint_id: sprint.id, column_id: board.second }, { title: '請求書を出す' });
+    const nextId = ((await next.json()) as { task: { id: string } }).task.id;
+    const nextState = await stateOf(target, nextId);
+    expect(nextState.task.column_position! > state.task.column_position!).toBe(true);
+
+    // バックログの木にも、スプリントの印つきで出る
+    const tree = await call(target, backlogTree, {});
+    const rows = ((await tree.json()) as { tasks: { id: string; sprint: { id: string } | null }[] }).tasks;
+    expect(rows.find((row) => row.id === task.id)?.sprint).toMatchObject({ id: sprint.id });
+  });
+
+  test('始まっていないスプリントにも入れられ、入れ先を省いた作成はスプリントに入らない', async () => {
+    const { target, board, sprint } = await setup();
+    const plain = await create(target, null);
+    const plainId = ((await plain.json()) as { task: { id: string } }).task.id;
+    const plainState = await stateOf(target, plainId);
+    expect(plainState.task).toMatchObject({ sprint_id: null, column_id: null, column_position: null });
+    expect(plainState.entries).toEqual([]);
+    expect((await create(target, { sprint_id: sprint.id, column_id: board.first })).status).toBe(200);
+  });
+
+  test('完了の列、終了したスプリント、削除したスプリントや列は断り、タスクも作らない', async () => {
+    const { target, board, sprint } = await setup();
+    const closed = await createSprint(target.organization, target.workspace.id, {
+      start_on: '2026-10-05',
+      end_on: '2026-10-18',
+      status: 'closed',
+    });
+    const deletedSprint = await createSprint(target.organization, target.workspace.id, {
+      deleted_at: '2026-10-21T00:00:00.000Z',
+    });
+    const deletedColumn = await createBoardColumn(target.organization, target.workspace.id, {
+      name: '消した列',
+      position: 'a2',
+      deleted_at: '2026-10-21T00:00:00.000Z',
+    });
+
+    const doneRes = await create(target, { sprint_id: sprint.id, column_id: board.done });
+    expect(doneRes.status).toBe(409);
+    expect(await doneRes.json()).toMatchObject({ error: { code: 'conflict', details: { reason: 'done_column' } } });
+    const closedRes = await create(target, { sprint_id: closed.id, column_id: board.first });
+    expect(closedRes.status).toBe(409);
+    expect(await closedRes.json()).toMatchObject({ error: { code: 'conflict', details: { reason: 'closed' } } });
+    expect((await create(target, { sprint_id: deletedSprint.id, column_id: board.first })).status).toBe(404);
+    expect((await create(target, { sprint_id: sprint.id, column_id: deletedColumn.id })).status).toBe(404);
+    expect(await countTasks(target)).toBe(0);
+  });
+
+  test('別の組織と別のワークスペースのスプリントと列の ID は、無いときと同じ 404', async () => {
+    const { target, board, sprint } = await setup();
+    const other = await createTarget();
+    const otherBoard = await createBoard(other);
+    const foreignSprint = await createSprint(other.organization, other.workspace.id);
+    const elsewhereSprint = await createSprint(target.organization, target.otherWorkspace.id);
+    const elsewhereColumn = await createBoardColumn(target.organization, target.otherWorkspace.id, {
+      name: '別の列',
+      position: 'a0',
+    });
+
+    expect((await create(target, { sprint_id: foreignSprint.id, column_id: board.first })).status).toBe(404);
+    expect((await create(target, { sprint_id: sprint.id, column_id: otherBoard.first })).status).toBe(404);
+    expect((await create(target, { sprint_id: elsewhereSprint.id, column_id: board.first })).status).toBe(404);
+    expect((await create(target, { sprint_id: sprint.id, column_id: elsewhereColumn.id })).status).toBe(404);
+    expect(await countTasks(target)).toBe(0);
+    expect(await countTasks(other)).toBe(0);
+  });
+
+  test('スプリントか列の片方だけ送ると 400', async () => {
+    const { target, board, sprint } = await setup();
+    expect((await create(target, { sprint_id: sprint.id })).status).toBe(400);
+    expect((await create(target, { column_id: board.first })).status).toBe(400);
+    expect(await countTasks(target)).toBe(0);
+  });
+
+  test('閉じたワークスペースは 409 の workspace_closed で、何も作らない', async () => {
+    const closedTarget = await createTarget({ closed: true });
+    const board = await createBoard(closedTarget);
+    const sprint = await createSprint(closedTarget.organization, closedTarget.workspace.id);
+    const res = await create(closedTarget, { sprint_id: sprint.id, column_id: board.first });
+    expect(res.status).toBe(409);
+    expect(await errorCodeOf(res)).toBe('workspace_closed');
+    expect(await countTasks(closedTarget)).toBe(0);
+  });
+
+  test('読んでから書くまでにスプリントが終了したら、入れ込みも作成も書かず 409 の closed', async () => {
+    const { target, board, sprint } = await setup();
+    await expect(
+      handleWithRace(
+        target,
+        taskCreateOperation,
+        { ...fullCreateInput, title: '見積もりを送る', sprint: { sprint_id: sprint.id, column_id: board.first } },
+        {
+          method: 'first',
+          nth: 3,
+          run: async (db) => {
+            await updateRow(db, 'sprints', sprint.id, { status: 'closed' });
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: 'conflict' });
+    expect(await countTasks(target)).toBe(0);
+    const db = orgDb(env, target.organization.verified);
+    const entries = await db.rows(
+      db.statement((q) => q.selectFrom('sprint_entries').select('id').where('workspace_id', '=', target.workspace.id)),
+    );
+    expect(entries).toEqual([]);
+  });
+
+  test('読んでから書くまでに列が消えたら、何も書かず 404', async () => {
+    const { target, board, sprint } = await setup();
+    await expect(
+      handleWithRace(
+        target,
+        taskCreateOperation,
+        { ...fullCreateInput, title: '見積もりを送る', sprint: { sprint_id: sprint.id, column_id: board.second } },
+        {
+          method: 'first',
+          nth: 3,
+          run: async (db) => {
+            await updateRow(db, 'board_columns', board.second, { deleted_at: '2026-10-21T00:00:00.000Z' });
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(await countTasks(target)).toBe(0);
   });
 });

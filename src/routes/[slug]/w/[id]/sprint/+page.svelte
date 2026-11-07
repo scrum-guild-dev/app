@@ -4,6 +4,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { callOperation, type ApiResult } from '../../../../../lib/api.ts';
+  import DraftRow from '../../../../../lib/components/DraftRow.svelte';
   import EmptyState from '../../../../../lib/components/EmptyState.svelte';
   import Icon from '../../../../../lib/components/Icon.svelte';
   import LoadFailed from '../../../../../lib/components/LoadFailed.svelte';
@@ -30,8 +31,15 @@
     type SprintBoardColumn,
     type SprintBoardTask,
   } from '../../../../../shared/operations/sprint/index.ts';
-  import { taskComplete, taskReopen, taskReopenConflictReasonOf } from '../../../../../shared/operations/task/index.ts';
+  import {
+    taskComplete,
+    taskCreate,
+    taskCreateConflictReasonOf,
+    taskReopen,
+    taskReopenConflictReasonOf,
+  } from '../../../../../shared/operations/task/index.ts';
   import { sprintProgress } from '../../../../../shared/sprint.ts';
+  import { TASK_TITLE_MAX_LENGTH, taskTitleProblem } from '../../../../../shared/task.ts';
   import type { PageProps } from './$types';
 
   // スプリントの画面（design/sprint.html）。進行中のスプリントの列（`.board-col`）とカード（`.card`）を並べる。
@@ -50,6 +58,9 @@
   // 完了の列から落としたら、task-reopen で戻してから、落とした列と位置へ task-column-move を続ける（同じ待ち行列で順に送る）。
   // 画面を読み直したら、つかんでいるドラッグは取りやめ、離しても送らず、トーストで知らせる。落としたカードは光らせ、フォーカスは動かさない。
   // 進行中のスプリントが無いときは、見本の空の状態をロールで文を分けて出す。
+  // 各列（完了の列を除く）の末尾に、タスクを足す空の行（DraftRow）を置く。書き込めるとき（終了していないワークスペース）だけ出す。
+  // 題を打って Enter で、そのスプリントのその列の末尾に task-create で作る（作成と入れ込みは1回の書き込み）。作れたら読み直し、
+  // 空の行に戻って続けて打てる。断られたら理由を空の行の下に出し、スプリントか列が無いか進行中でなければ読み直す。
   // 見出しの右の「終える」は、リーダー（管理者を含む）にだけ、終了していないワークスペースでだけ出し、終了のダイアログ（SprintCloseDialog）を開く。
   // 最終日がワークスペースの今日より前なら、見出しの下に終えるのを促す警告（SprintOverdueNotice）を出す。
   // 終えたら読み直して進行中の無い表示に戻り、見出しへフォーカスを移す
@@ -461,6 +472,51 @@
     return reopened;
   }
 
+  // 空の行の題の検査（画面の検査は API の検証と同じ判定。空は送らないので required は出ない）
+  function cardTitleProblem(title: string): string | null {
+    const problem = taskTitleProblem(title);
+    if (problem === null) return null;
+    if (problem === 'too_long') return t('taskTitleTooLong', { max: TASK_TITLE_MAX_LENGTH });
+    if (problem === 'invalid_character') return t('taskTitleInvalidCharacter');
+    return t('taskTitleRequired');
+  }
+
+  // 列の末尾の空の行でタスクを作る。返すのは、空の行に出すエラーの文（成功は null）
+  async function addCard(column: SprintBoardColumn, title: string): Promise<string | null> {
+    if (workspace === null || sprint === null) return t('taskCreateFailed');
+    const sentFor = page.params.id;
+    const result = await callOperation(
+      taskCreate,
+      { workspace_id: workspace.id, title, sprint: { sprint_id: sprint.id, column_id: column.id } },
+      { slug },
+    );
+    // 送っている間に別のワークスペースへ移っていたら、成功も失敗も、古い応答で状態を触らない
+    if (sentFor !== page.params.id) return null;
+    if (!result.ok) {
+      if (result.status === 401) {
+        await invalidateAll();
+        return t('taskCreateFailed');
+      }
+      if (result.status === 409 && result.error?.code === 'workspace_closed') {
+        void invalidate('app:workspace');
+        return t('workspaceClosedReadOnly', { workspace: t('workspace') });
+      }
+      if (result.status === 409 && taskCreateConflictReasonOf(result.error?.details) === 'closed') {
+        void reloadBoard();
+        return t('sprintCardMoveNotActive', { sprint: t('sprint') });
+      }
+      if (result.status === 404) {
+        void reloadBoard();
+        return t('sprintBoardAddGone', { sprint: t('sprint'), column: t('column') });
+      }
+      return t('taskCreateFailed');
+    }
+    // 読み直して、足したカードを列の末尾に出す（トーストが読み上げる）
+    showToast(t('sprintBoardTaskAdded', { title: result.data.task.title, column: columnName(column) }), 'check');
+    await reloadBoard();
+    return null;
+  }
+
   function openClose(trigger: HTMLElement): void {
     if (sprint !== null) closeDialog?.show(trigger, sprint);
   }
@@ -616,12 +672,22 @@
             {:else}
               <p class="board-empty">{t('sprintBoardColumnEmpty')}</p>
             {/each}
+            {#if canWrite && !column.is_done}
+              <DraftRow
+                label={t('sprintBoardAddTask', { task: t('task') })}
+                name={t('sprintBoardAddTaskIn', { task: t('task'), column: columnName(column) })}
+                problem={cardTitleProblem}
+                create={(title) => addCard(column, title)}
+              />
+            {/if}
           </section>
         {/each}
       </div>
     </div>
     {#if canWrite}
-      <p class="action-note" id={KEY_HINT_ID}>{t('sprintBoardKeyHint', { column: t('column'), done: t('done') })}</p>
+      <p class="action-note" id={KEY_HINT_ID}>
+        {t('sprintBoardKeyHint', { column: t('column'), done: t('done'), task: t('task') })}
+      </p>
     {/if}
   {/if}
   {#key workspace.id}

@@ -45,6 +45,7 @@ export {
   type TaskFieldValue,
   taskFieldValueSchema,
 } from './task-field-set.ts';
+export { taskCreateConflictReasonOf, taskCreateConflictReasons, type TaskCreateConflictReason } from './task-create.ts';
 export { taskReopenConflictReasonOf, taskReopenConflictReasons, type TaskReopenConflictReason } from './task-reopen.ts';
 export {
   taskTodayMarkConflictReasonOf,

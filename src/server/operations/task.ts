@@ -26,6 +26,7 @@ import {
 import { taskAssigneePartyStatements } from './epic-party.ts';
 import { implement } from './implement.ts';
 import { sprintRefColumns, sprintRefOf, type SprintRefRow } from './sprint-refs.ts';
+import { openSprint } from './sprint.ts';
 import { readUnfilled, unfilledExists } from './task-field.ts';
 import {
   MAX_TIES,
@@ -89,6 +90,70 @@ async function readParentStory(db: OrganizationDb, workspaceId: string, storyId:
   return { id: story.id, title: story.title };
 }
 
+// 作ったタスクを入れる先。スプリントは同じワークスペースの削除していない、始まっていないか進行中のもの（終了したものは 409 の closed）、
+// 列は同じワークスペースの削除していない、完了でないもの（完了の列は 409 の done_column）。無ければ 404（別の組織も同じ）。
+// position は、その列の中の末尾に置く値
+async function readSprintTarget(
+  db: OrganizationDb,
+  workspaceId: string,
+  target: { sprint_id: string; column_id: string },
+) {
+  const sprint = await db.first(
+    db.statement((q) =>
+      q
+        .selectFrom('sprints')
+        .select(['sprints.id', 'sprints.name', 'sprints.start_on', 'sprints.end_on', 'sprints.status'])
+        .where('sprints.id', '=', target.sprint_id)
+        .where('sprints.workspace_id', '=', workspaceId)
+        .where('sprints.deleted_at', 'is', null),
+    ),
+  );
+  if (sprint === undefined) {
+    await throwIfClosed(db, workspaceId);
+    throw new ApiError(404, 'not_found');
+  }
+  if (sprint.status === 'closed') {
+    await throwIfClosed(db, workspaceId);
+    throw new ApiError(409, 'conflict', { reason: 'closed' });
+  }
+  const column = await db.first(
+    db.statement((q) =>
+      q
+        .selectFrom('board_columns')
+        .select(['board_columns.id', 'board_columns.is_done'])
+        .where('board_columns.id', '=', target.column_id)
+        .where('board_columns.workspace_id', '=', workspaceId)
+        .where('board_columns.deleted_at', 'is', null),
+    ),
+  );
+  if (column === undefined) {
+    await throwIfClosed(db, workspaceId);
+    throw new ApiError(404, 'not_found');
+  }
+  if (column.is_done === 1) {
+    await throwIfClosed(db, workspaceId);
+    throw new ApiError(409, 'conflict', { reason: 'done_column' });
+  }
+  const last = await db.first(
+    db.statement((q) =>
+      q
+        .selectFrom('tasks')
+        .select('tasks.column_position')
+        .where('tasks.workspace_id', '=', workspaceId)
+        .where('tasks.sprint_id', '=', sprint.id)
+        .where('tasks.column_id', '=', column.id)
+        .where('tasks.deleted_at', 'is', null)
+        .orderBy('tasks.column_position', 'desc')
+        .limit(1),
+    ),
+  );
+  return {
+    ref: { id: sprint.id, name: sprint.name, start_on: sprint.start_on, end_on: sprint.end_on },
+    columnId: column.id,
+    position: generateKeyBetween(last?.column_position ?? null, null),
+  };
+}
+
 export const taskCreateOperation = implement(taskCreate, async ({ db, actor, workspace, input }) => {
   const actorUserId = actorUserIdOf(actor);
   const organizationId = db.organizationId;
@@ -114,6 +179,9 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
   const repository =
     input.repository_id === null ? null : await readRepositoryRef(db, workspaceId, input.repository_id);
 
+  // 入れ先のスプリントと列。読んで、断る場合は書く前に断る（書く文にも同じ条件を入れる）
+  const target = input.sprint === null ? null : await readSprintTarget(db, workspaceId, input.sprint);
+
   // 位置は親の配下（親なしなら、親のないタスク）の末尾。完了したタスクも並びに残っているので、それも含めた末尾に置く。
   // 同時に作ると同じ位置になりうる。同じ位置の行は id の順に並ぶ（同じミリ秒の中では作った順とは限らない）
   const last = await db.first(lastPositionStatement(db, workspaceId, parentId));
@@ -137,6 +205,9 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
           'category_id',
           'repository_id',
           'assignee_user_id',
+          'sprint_id',
+          'column_id',
+          'column_position',
           'position',
           'created_by',
           'created_at',
@@ -155,6 +226,9 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
               eb.val(category?.id ?? null).as('category_id'),
               eb.val(repository?.id ?? null).as('repository_id'),
               eb.val(assignee?.id ?? null).as('assignee_user_id'),
+              eb.val(target?.ref.id ?? null).as('sprint_id'),
+              eb.val(target?.columnId ?? null).as('column_id'),
+              eb.val(target?.position ?? null).as('column_position'),
               eb.val(position).as('position'),
               eb.val(actorUserId).as('created_by'),
               eb.val(createdAt).as('created_at'),
@@ -176,6 +250,22 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
             )
             .$if(repository !== null, (qb) =>
               qb.where((eb) => eb.exists(repositoryRow(eb, workspaceId, repository!.id).select('repositories.id'))),
+            )
+            // 入れ先のスプリントが入れられるまま（削除していない planned か active）で、列が今も完了でない列として残っている
+            .$if(target !== null, (qb) =>
+              qb
+                .where((eb) => eb.exists(openSprint(eb, workspaceId, target!.ref.id)))
+                .where((eb) =>
+                  eb.exists(
+                    eb
+                      .selectFrom('board_columns as col')
+                      .select('col.id')
+                      .where('col.id', '=', target!.columnId)
+                      .where('col.workspace_id', '=', workspaceId)
+                      .where('col.is_done', '=', 0)
+                      .where('col.deleted_at', 'is', null),
+                  ),
+                ),
             ),
         ),
     ),
@@ -203,6 +293,17 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
                     ...(parent === null ? {} : { story: [null, parent] }),
                     ...(category === null ? {} : { category: [null, category] }),
                     ...(repository === null ? {} : { repository: [null, repository] }),
+                    ...(target === null
+                      ? {}
+                      : {
+                          sprint: [
+                            null,
+                            {
+                              id: target.ref.id,
+                              name: target.ref.name ?? `${target.ref.start_on}〜${target.ref.end_on}`,
+                            },
+                          ],
+                        }),
                   }),
                 )
                 .as('changes_json'),
@@ -231,6 +332,40 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
           at,
           taskUpdatedAt: createdAt,
         })),
+    // スプリントの列に作ったら、入った行を足す（作った行がある = 入れ先の条件を通ったときだけ）。入れ込みと作成は同じ batch() で書く。
+    // 担当の文は直前の文の結果に頼るので、その後ろに置く
+    ...(target === null
+      ? []
+      : [
+          db.statement((q) =>
+            q
+              .insertInto('sprint_entries')
+              .columns(['id', 'workspace_id', 'sprint_id', 'task_id', 'added_at', 'added_by', 'ended_at', 'outcome'])
+              .expression(
+                q
+                  .selectNoFrom((eb) => [
+                    eb.val(uuidv7(at)).as('id'),
+                    eb.val(workspaceId).as('workspace_id'),
+                    eb.val(target.ref.id).as('sprint_id'),
+                    eb.val(taskId).as('task_id'),
+                    eb.val(createdAt).as('added_at'),
+                    eb.val(actorUserId).as('added_by'),
+                    eb.val(null).as('ended_at'),
+                    eb.val(null).as('outcome'),
+                  ])
+                  .where((eb) =>
+                    eb.exists(
+                      eb
+                        .selectFrom('tasks')
+                        .select('tasks.id')
+                        .where('tasks.id', '=', taskId)
+                        .where('tasks.workspace_id', '=', workspaceId)
+                        .where('tasks.sprint_id', '=', target.ref.id),
+                    ),
+                  ),
+              ),
+          ),
+        ]),
   ]);
 
   // 読んでから書くまでに、ワークスペースが閉じたか、担当が所属を外れたか、親が消えたか完了したか、区分かリポジトリが削除されたら何も入らない
@@ -238,6 +373,8 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
     await throwIfClosed(db, workspaceId);
     // 親が消えていれば 404、完了していれば 409。親は無事なら、担当が外れたか区分かリポジトリが消えたので 404
     if (parent !== null) await readParentStory(db, workspaceId, parent.id);
+    // 入れ先が消えたか終了した、列が消えたか完了の列になった。読み直して理由どおりに断る
+    if (input.sprint !== null) await readSprintTarget(db, workspaceId, input.sprint);
     throw new ApiError(404, 'not_found');
   }
   return {
@@ -249,7 +386,7 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
       assignee,
       category,
       repository,
-      sprint: null,
+      sprint: target?.ref ?? null,
       // 作った直後は値の行が無いので、削除していない欄が1つでもあれば未記入
       unfilled: await readUnfilled(db, workspaceId, taskId),
     },
