@@ -34,12 +34,25 @@ function create(target: Target, body: Record<string, unknown>, person: Person = 
   });
 }
 
-function update(target: Target, storyId: string, body: Record<string, unknown>, person: Person = target.member) {
+function update(
+  target: Target,
+  storyId: string,
+  body: Record<string, unknown>,
+  person: Person = target.member,
+  requestEnv?: Env,
+) {
   return post(app, storyUpdate, {
     slug: target.slug,
     token: person.token,
     body: { workspace_id: target.workspace.id, story_id: storyId, ...body },
+    ...(requestEnv === undefined ? {} : { env: requestEnv }),
   });
+}
+
+// 開発用の時計（DEV_NOW）を置いた環境（ループバックの公開 URL のときだけ使える。src/server/dev-clock.ts）
+const FROZEN_ISO = '2026-10-26T01:00:00.000Z';
+function frozenEnv(devNow: string): Env {
+  return Object.assign({}, testEnv, { PUBLIC_ORIGIN: 'http://localhost:8787', DEV_NOW: devNow });
 }
 
 function actorOf(person: Person) {
@@ -535,6 +548,112 @@ describe('story-update', () => {
     await expect(storyUpdateOperation.handler(context)).rejects.toMatchObject({
       status: 409,
       code: 'workspace_closed',
+    });
+  });
+
+  describe('書き始める前の値（expected）', () => {
+    test('書く欄の値がサーバーの今の値と違えば、何も書かず 409 の conflict で今の値を返す', async () => {
+      const target = await createTarget();
+      const story = await seeded(target);
+      expect((await update(target, story.id, { acceptance_criteria_md: '先に直した基準' }, target.leader)).status).toBe(
+        200,
+      );
+      const res = await update(
+        target,
+        story.id,
+        {
+          title: '新しいタイトル',
+          acceptance_criteria_md: '自分の基準',
+          expected: { title: '元のタイトル', acceptance_criteria_md: '元の基準' },
+        },
+        target.member,
+      );
+      expect(res.status).toBe(409);
+      const body = (await res.json()) as { error: { code: string; details: unknown } };
+      expect(body.error.code).toBe('conflict');
+      expect(body.error.details).toEqual({ reason: 'stale', current: { acceptance_criteria_md: '先に直した基準' } });
+      expect(await rowOf(target, story.id)).toMatchObject({
+        title: '元のタイトル',
+        acceptance_criteria_md: '先に直した基準',
+      });
+      expect(await logsOf(target, story.id)).toHaveLength(1);
+    });
+
+    test('書かない欄の前の値が違っても、断らない', async () => {
+      const target = await createTarget();
+      const story = await seeded(target);
+      expect((await update(target, story.id, { due_on: '2026-12-01' }, target.leader)).status).toBe(200);
+      const res = await update(target, story.id, {
+        title: '新しいタイトル',
+        expected: { title: '元のタイトル', due_on: '2026-10-30' },
+      });
+      expect(res.status).toBe(200);
+      expect(await rowOf(target, story.id)).toMatchObject({ title: '新しいタイトル', due_on: '2026-12-01' });
+    });
+
+    test('添えない保存は、今のまま後の保存が勝つ', async () => {
+      const target = await createTarget();
+      const story = await seeded(target);
+      expect((await update(target, story.id, { title: '先に直した' }, target.leader)).status).toBe(200);
+      expect((await update(target, story.id, { title: '後の保存' })).status).toBe(200);
+      expect((await rowOf(target, story.id))!.title).toBe('後の保存');
+    });
+
+    test('別の組織のストーリーは、前の値を添えても 404', async () => {
+      const target = await createTarget();
+      const foreign = await createTarget();
+      const foreignStory = await seeded(foreign);
+      const res = await update(target, foreignStory.id, { title: '書き換える', expected: { title: '元のタイトル' } });
+      expect(res.status).toBe(404);
+      expect(await errorCodeOf(res)).toBe('not_found');
+    });
+  });
+
+  describe('続けて直した分の履歴のまとめ', () => {
+    const at = (minutes: number) => frozenEnv(new Date(Date.parse(FROZEN_ISO) + minutes * 60_000).toISOString());
+
+    test('同じ人が数分以内に同じ欄を続けて直すと、行は1つのままで「前」は最初の値、「後」は最後の値になる', async () => {
+      const target = await createTarget();
+      const story = await seeded(target);
+      expect((await update(target, story.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, story.id, { body_md: '二回目' }, target.member, at(2))).status).toBe(200);
+      expect((await update(target, story.id, { body_md: '三回目' }, target.member, at(5))).status).toBe(200);
+      const logs = await logsOf(target, story.id);
+      expect(logs).toHaveLength(1);
+      expect(JSON.parse(logs[0]!.changes_json)).toEqual({ body_md: ['元の本文', '三回目'] });
+      expect(logs[0]!.created_at).toBe(new Date(Date.parse(FROZEN_ISO) + 5 * 60_000).toISOString());
+    });
+
+    test.each([
+      ['別の人', { body_md: '別の人が直した' }, 'leader', 1],
+      ['間が空いた', { body_md: '間が空いた' }, 'member', 6],
+      ['別の欄', { title: '別の欄' }, 'member', 1],
+      ['2つの欄', { body_md: '2つ', title: '2つの欄' }, 'member', 1],
+    ] as const)('%s なら、新しい行を足す', async (_name, body, who, minutes) => {
+      const target = await createTarget();
+      const story = await seeded(target);
+      expect((await update(target, story.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, story.id, body, target[who], at(minutes))).status).toBe(200);
+      const logs = await logsOf(target, story.id);
+      expect(logs).toHaveLength(2);
+      expect(JSON.parse(logs[0]!.changes_json)).toEqual({ body_md: ['元の本文', '一回目'] });
+    });
+
+    test('元の値へ戻す変更は、まとめずに新しい行にする', async () => {
+      const target = await createTarget();
+      const story = await seeded(target);
+      expect((await update(target, story.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, story.id, { body_md: '元の本文' }, target.member, at(1))).status).toBe(200);
+      const logs = (await logsOf(target, story.id)).map((log) => JSON.parse(log.changes_json));
+      expect(logs).toEqual([{ body_md: ['元の本文', '一回目'] }, { body_md: ['一回目', '元の本文'] }]);
+    });
+
+    test('時計が最初に書いた時刻より戻っていても、まとめない', async () => {
+      const target = await createTarget();
+      const story = await seeded(target);
+      expect((await update(target, story.id, { body_md: '一回目' }, target.member, at(10))).status).toBe(200);
+      expect((await update(target, story.id, { body_md: '二回目' }, target.member, at(0))).status).toBe(200);
+      expect(await logsOf(target, story.id)).toHaveLength(2);
     });
   });
 
