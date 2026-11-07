@@ -94,11 +94,14 @@ function parseSettings(json: string): Record<string, unknown> {
 // 手で入れるタイトルと同じ整え方: 見えない文字を除いて前後の空白を落とし、200字（コードポイント）で切る。
 // 改行とタブは語をつなげないよう、除く前に空白にする。何も残らなければ取り込み元のキーを使う
 export function importedTitle(raw: string, fallback: string): string {
-  const cleaned = stripHiddenCharacters(raw.replace(/[\t\n\r]+/g, ' ')).trim();
-  // 手で入れるタイトルと同じく、空白や幅の無い文字だけのタイトルは空と同じ扱いにする
   const blank = (text: string) => text.replace(BLANK_CHARACTERS, '') === '';
-  const title = blank(cleaned) ? stripHiddenCharacters(fallback).trim() : cleaned;
-  return blank(title) ? '' : [...title].slice(0, TASK_TITLE_MAX_LENGTH).join('').trim();
+  // 手で入れるタイトルと同じく、空白や幅の無い文字だけのタイトルは空と同じ扱いにする。切った後に空に見えるものも同じ
+  const shape = (text: string) => {
+    const cleaned = stripHiddenCharacters(text.replace(/[\t\n\r]+/g, ' ')).trim();
+    const cut = [...cleaned].slice(0, TASK_TITLE_MAX_LENGTH).join('').trim();
+    return blank(cut) ? '' : cut;
+  };
+  return shape(raw) || shape(fallback);
 }
 
 function invalid(): ImportSourceError {

@@ -437,6 +437,7 @@ describe('取り込みの同期', () => {
             item(1, { title: '\u3164' }),
             item(2, { title: '\u{200D}' }),
             item(3, { title: `${'a'.repeat(199)} bcd` }),
+            item(4, { title: `${'\u3164'.repeat(200)}a` }),
           ],
           next: null,
         },
@@ -447,6 +448,7 @@ describe('取り込みの同期', () => {
     expect(titles).toContain('fake/box#1');
     expect(titles).toContain('fake/box#2');
     expect(titles).toContain('a'.repeat(199));
+    expect(titles).toContain('fake/box#4');
   });
 
   test('100件の頁は入り、101件の頁は断る', async () => {
@@ -560,8 +562,47 @@ describe('取り込みの同期', () => {
         return { items: [item(1)], next: null };
       },
     };
-    await syncConnection(env, db, workspace.id, connection.id, { source: leaveMidway });
+    const result = await syncConnection(env, db, workspace.id, connection.id, { source: leaveMidway });
+    expect(result).toMatchObject({ imported: 0 });
     expect(await tasksOf(db, workspace.id)).toHaveLength(0);
+    expect(await sourcesOf(db, workspace.id)).toHaveLength(0);
+  });
+
+  test('無効にされた登録者の接続は同期しない', async () => {
+    const { owner, workspace, connection, db } = await setup();
+    await db.run(
+      db.statement((q) =>
+        q.updateTable('users').set({ disabled_at: '2026-11-02T00:00:00.000Z' }).where('id', '=', owner.id),
+      ),
+    );
+    const { source, calls } = fakeSource({ '501': [{ items: [item(1)], next: null }] });
+    expect(await syncConnection(env, db, workspace.id, connection.id, { source })).toEqual({ outcome: 'not_found' });
+    expect(calls).toHaveLength(0);
+  });
+
+  test('取り込み元を呼んでいる間にリポジトリが削除されたら結ばない', async () => {
+    const { organization, workspace, connection, db } = await setup();
+    const repo = await createRepository(organization, workspace.id, {
+      provider: 'github',
+      source_container_id: '501',
+      source_container_name: 'fake/box',
+    });
+    const deleteMidway: ImportSource = {
+      ...fakeSource({}).source,
+      async fetchPage() {
+        await db.run(
+          db.statement((q) =>
+            q.updateTable('repositories').set({ deleted_at: '2026-11-02T00:00:00.000Z' }).where('id', '=', repo.id),
+          ),
+        );
+        return { items: [item(1)], next: null };
+      },
+    };
+    expect(await syncConnection(env, db, workspace.id, connection.id, { source: deleteMidway })).toMatchObject({
+      outcome: 'success',
+      imported: 1,
+    });
+    expect((await tasksOf(db, workspace.id))[0]!.repository_id).toBeNull();
   });
 
   test('ちょうど上限の頁数で最後の範囲が終われば、続きを残さない', async () => {
