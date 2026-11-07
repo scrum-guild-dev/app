@@ -84,7 +84,7 @@ test('ダークのテーマと、狭い幅（390px）でも読め、横にはみ
   await expect(rowOf(page, 'スプリントへ移る').locator('kbd')).toBeVisible();
 });
 
-test('スプリントの画面でも開き、c を この画面 に、g b を どの画面でも に並べる。画面が替わったら閉じる', async ({
+test('スプリントの画面でも開く。働かない c は出さず、g b は どの画面でも に並べる。画面が替わったら閉じる', async ({
   page,
 }) => {
   await createWorkspaceWithTree(page, 'キーの一覧');
@@ -94,7 +94,8 @@ test('スプリントの画面でも開き、c を この画面 に、g b を �
   await page.locator('body').click({ position: { x: 1, y: 1 } });
   await page.keyboard.press('?');
   await expect(help(page)).toBeVisible();
-  await expect(group(page, 'この画面').locator('.shortcut-row dt')).toHaveText(['タスクを書く']);
+  // 作ったばかりのワークスペースにはスプリントが無く、空の行が無いので c は働かない。働かないキーは出さず、組ごと消える
+  await expect(group(page, 'この画面')).toHaveCount(0);
   await expect(
     group(page, 'どの画面でも').locator('.shortcut-row', { hasText: 'バックログへ移る' }).locator('kbd'),
   ).toHaveText('g b');
