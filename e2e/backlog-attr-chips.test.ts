@@ -4,6 +4,7 @@
 // 最後に、選択の窓を開いた状態を4つの見た目で axe にかける。
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
+import { taskDetail } from '../src/shared/operations/task/task-detail.ts';
 import { taskUpdate } from '../src/shared/operations/task/task-update.ts';
 import {
   createWorkspace,
@@ -171,4 +172,21 @@ test('送っている間に元の値へ選び直しても、サーバーの値�
   await expect(
     page.locator('.entry', { hasText: '選び直す件' }).getByRole('button', { name: 'ポイント: 未設定' }),
   ).toBeVisible();
+});
+
+test('断られた理由を読み直せなかったら、競合とも完了とも言い切らず、保存できなかったと知らせて元の値に戻す', async ({
+  page,
+}) => {
+  await createWorkspace(page, '読めないワークスペース');
+  await addTask(page, '読めない件');
+  const row = page.locator('.entry', { hasText: '読めない件' });
+
+  const unUpdate = await failOperation(page, taskUpdate, { slug: 'aoba' }, 409, 'conflict');
+  const unDetail = await failOperation(page, taskDetail, { slug: 'aoba' }, 500, 'internal');
+  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
+  await page.getByRole('menuitemradio', { name: '2 pt', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '保存できませんでした' })).toBeVisible();
+  await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
+  await unUpdate();
+  await unDetail();
 });

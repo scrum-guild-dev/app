@@ -199,7 +199,9 @@
         { workspace_id: attrs.workspaceId, task_id: task.id },
         { slug: attrs.slug },
       );
-      return latest.ok && latest.data.task.completed_at !== null ? donereason : t('taskSaveRaced');
+      // 読めなかったときは、完了か競合かを言い切らない（消えていれば見つからない、通信などの失敗は保存失敗）
+      if (!latest.ok) return latest.status === 404 ? t('taskGone', { task: t('task') }) : t('taskSaveFailed');
+      return latest.data.task.completed_at !== null ? donereason : t('taskSaveRaced');
     }
     return result.status === 400 ? t('taskBadRequest') : t('taskSaveFailed');
   }
