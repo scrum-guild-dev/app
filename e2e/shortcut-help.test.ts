@@ -3,20 +3,16 @@
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { applyTheme, createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addTaskRow, applyTheme, createWorkspace, signIn, watchViolations } from './helpers.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
 
-// 何も無いバックログには木が出ない（空の行は木の末尾にある）。最初の1件を「起票」で作ると木が出る
+// 木の末尾の空の行で最初のタスクを作る（起票のダイアログは無い）。作った行は題のリンクで、フォーカスを置く先に使える
 async function createWorkspaceWithTree(page: Page, name: string): Promise<void> {
   await createWorkspace(page, name);
-  await page.getByRole('button', { name: '起票', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '起票', exact: true });
-  await dialog.getByLabel('タイトル').fill('最初のタスク');
-  await dialog.getByRole('button', { name: '起票', exact: true }).click();
-  await expect(dialog).toBeHidden();
+  await addTaskRow(page, '最初のタスク');
 }
 
 const help = (page: Page) => page.getByRole('dialog', { name: 'ショートカットの一覧' });
@@ -30,7 +26,7 @@ test('? で一覧が開き、この画面のキーを上に、どの画面でも
 }) => {
   const collect = await watchViolations(page);
   await createWorkspaceWithTree(page, 'キーの一覧');
-  const opener = page.getByRole('button', { name: '起票', exact: true });
+  const opener = page.getByRole('link', { name: '最初のタスク', exact: true });
   await opener.focus();
 
   await page.keyboard.press('?');
@@ -88,6 +84,8 @@ test('スプリントの画面でも開く。働かない c は出さず、g b �
   page,
 }) => {
   await createWorkspaceWithTree(page, 'キーの一覧');
+  // 空の行で作った直後は入力欄にフォーカスがあるので、外へ出してから g を押す
+  await page.locator('body').click({ position: { x: 1, y: 1 } });
   await page.keyboard.press('g');
   await page.keyboard.press('s');
   await expect(page.getByRole('heading', { level: 1, name: 'スプリント' })).toBeVisible();
