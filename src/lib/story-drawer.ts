@@ -38,7 +38,8 @@ export function storyTreeOf(data: unknown): StoryTree | null {
 export type StoryFacts = {
   // 完了した日時。完了していなければ null
   completedAt: string | null;
-  // 配下の未完了のタスクの件数（絞っても全体の値）
+  // 配下の未完了のタスクの件数（絞っても全体の値）。読み込み済みの木の値なので、この画面で空の行から足した直後の行は、
+  // 木を読み直すまで数えない（行の「完了にする」は足した行も数える）。その間に引き出しから完了にすると、サーバーが理由つきで断る
   openTasks: number;
   // 親のエピックが完了か中止している（完了も取り消しも必ず断られる）
   parentFinished: boolean;
