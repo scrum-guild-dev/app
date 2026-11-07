@@ -1432,8 +1432,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     el.innerHTML = message ? `${icon("alert")}${message}` : "";
     const input = document.querySelector(`#drawer [data-drawer-input="${name}"]`);
     if (input) {
-      if (message) { el.id = el.id || `drawer-edit-${name}-error`; input.setAttribute("aria-invalid", "true"); input.setAttribute("aria-describedby", el.id); }
-      else { input.removeAttribute("aria-invalid"); input.removeAttribute("aria-describedby"); }
+      // 既にあるヒントへの結び付けは残し、誤りの id だけを足し引きする
+      el.id = el.id || `drawer-edit-${name}-error`;
+      const ids = (input.getAttribute("aria-describedby") || "").split(/\s+/).filter((v) => v && v !== el.id);
+      if (message) { ids.push(el.id); input.setAttribute("aria-invalid", "true"); } else input.removeAttribute("aria-invalid");
+      if (ids.length) input.setAttribute("aria-describedby", ids.join(" ")); else input.removeAttribute("aria-describedby");
     }
     el.closest(".field")?.classList.toggle("is-invalid", Boolean(message));
   }
@@ -1609,6 +1612,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // 一覧は position: fixed で、押したボタンの右端に合わせて下に開く。画面の下に収まらなければ上に開き、左右は画面の中に収める
   // （盤面の overflow に切られず、狭い幅でも潰れない）。幅の変化では閉じ、スクロールでは置き直す
   function placeRowMenu(toggle, list) {
+    list.style.maxHeight = `${innerHeight - 16}px`; list.style.overflowY = "auto";
     const r = toggle.getBoundingClientRect(), w = list.offsetWidth, h = list.offsetHeight, gap = 4;
     const left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8));
     const top = r.bottom + gap + h <= innerHeight ? r.bottom + gap : Math.max(8, r.top - gap - h);
@@ -1648,11 +1652,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
 
   // ---- 消す操作。タスクはすぐ消して、知らせの「取り消す」で戻す ----
-  // 取り消しは、消す前の並び（id の列）を覚え、その並びで後ろにあった残りの行の前へ戻す（続けて消した分を古い順に取り消しても、元の並びになる）
+  // 取り消しは、各タスクが最初に持っていた位置（_pos）で戻す。どの順に消してもどの順に取り消しても、元の並びになる
   function deleteTaskWithUndo(id) {
     const at = D.tasks.findIndex((y) => y.id === id);
     if (at < 0) return;
-    const order = D.tasks.map((y) => y.id);
+    let next = Math.max(-1, ...D.tasks.map((y) => (y._pos == null ? -1 : y._pos))) + 1;
+    D.tasks.forEach((y) => { if (y._pos == null) y._pos = next++; });
     // 消した行の、画面に出ている「⋯」の並びの中での位置を覚える（消えた行の代わりに、同じ位置の行へフォーカスを置く）
     const menuSel = ".entry .row-menu-btn, .card .row-menu-btn";
     const shown = [...document.querySelectorAll(menuSel)].findIndex((b) => b.dataset.menuFor === id);
@@ -1663,9 +1668,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const menus = document.querySelectorAll(menuSel);
     if (shown >= 0 && menus.length) menus[Math.min(shown, menus.length - 1)].focus();
     toast(`${icon("check")}${t("task")}を削除しました`, "取り消す", () => {
-      const after = order.slice(order.indexOf(id) + 1).find((i) => D.tasks.some((y) => y.id === i));
-      const pos = after ? D.tasks.findIndex((y) => y.id === after) : D.tasks.length;
-      D.tasks.splice(pos, 0, x);
+      const pos = D.tasks.findIndex((y) => y._pos > x._pos);
+      D.tasks.splice(pos < 0 ? D.tasks.length : pos, 0, x);
       redrawAll();
     });
   }

@@ -274,3 +274,19 @@ test('見本のバックログ: 幅 390px で、チップの上端の外側 20px
   });
   expect(hit).toBe(true);
 });
+
+test('見本のバックログ: 下の行を先に、上の行を後に消し、古い方から取り消しても元の並びに戻る', async ({ page }) => {
+  await openSample(page, 'backlog.html');
+  const rows = '.tree > div:last-child > .entry';
+  const titles = page.locator(`${rows} .entry-title`);
+  const before = await titles.allTextContents();
+  // 2 行目、1 行目の順に消す
+  for (const index of [1, 0]) {
+    await page.locator(rows).nth(index).hover();
+    await page.locator(`${rows} .row-menu-btn`).nth(index).click();
+    await page.locator('.row-menu-list:not([hidden]) [data-task-delete]').click();
+  }
+  await page.locator('.toast-action').first().click();
+  await page.locator('.toast-action').first().click();
+  expect(await titles.allTextContents()).toEqual(before);
+});
