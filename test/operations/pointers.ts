@@ -18,7 +18,6 @@ import {
   createConnection,
   createDetailField,
   createEpic,
-  createConnection,
   createEpicPartyMember,
   createInvitation,
   createMembership,
