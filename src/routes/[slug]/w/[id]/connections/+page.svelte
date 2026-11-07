@@ -389,13 +389,13 @@
                 </div>
                 <div class="field">
                   <label class="field-label" for="connection-credential">{t('connectionCredentialLabel')}</label>
-                  <!-- パスワードマネージャーに保存されないよう、保存済みの値の自動入力を止め、主な拡張の無視の印を付ける -->
+                  <!-- 伏せ字のために type="password" を使う。ブラウザのパスワード管理に保存されないことは保証できない（autocomplete="off" は無視されうる）ので、主な拡張の無視の印だけを付ける。docs/design.md の「接続の画面」 -->
                   <input
                     class="input"
                     id="connection-credential"
                     type="password"
                     bind:value={credential}
-                    autocomplete="new-password"
+                    autocomplete="off"
                     data-1p-ignore
                     data-lpignore="true"
                     data-bwignore

@@ -2438,8 +2438,8 @@ export const dictionary = defineDictionary({
   connectionOwnerUnknown: '登録した人が見つかりません',
   connectionErrorCallout: '{message}（{at}、{count} 回続けて失敗）',
   connectionErrorCalloutPlain: '{message}',
-  connectionStoppedAuthFailed: '認証に失敗したので止めました。登録した本人がトークンを登録し直すと再開します。',
-  connectionStoppedOther: '止まっています。登録した本人に確かめてください。',
+  connectionStoppedAuthFailed: '認証に失敗したので止めました。',
+  connectionStoppedOther: '止まっています。',
   connectionChooseScope: '範囲を選ぶ',
   connectionEmptyTitle: '{connection}がまだありません',
   connectionEmptyText:

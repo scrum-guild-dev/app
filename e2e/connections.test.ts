@@ -227,11 +227,39 @@ test('候補を読んでいる間に別の接続を開いても、遅れて届�
   await page.locator('[data-connection-id="conn-b"]').getByRole('button', { name: '範囲を選ぶ' }).click();
   const group = page.getByRole('group', { name: '取り込むリポジトリ' });
   await expect(group.getByLabel('two/from-b')).toBeVisible();
+  // 一つ目の応答がブラウザに届き、画面の処理が済んでから確かめる（届く前に判定すると、捨てる処理が無くても通る）
+  const firstResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('connection-scope-candidates') &&
+      response.request().postDataJSON().connection_id === 'conn-a',
+  );
   releaseFirst();
-  // 遅れて届いた一つ目の候補は捨てられる
+  await firstResponse;
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(page.getByText('範囲を選ぶ接続: 二つ目')).toBeVisible();
   await expect(group.getByLabel('one/from-a')).toHaveCount(0);
   await expect(group.getByLabel('two/from-b')).toBeVisible();
+});
+
+test('止まっている接続は、止まった事実だけを出し、再開の操作を案内しない', async ({ page }) => {
+  await mockOperation(
+    page,
+    connectionList,
+    { slug: 'aoba' },
+    {
+      connections: [
+        created({ id: 'stopped-auth', name: '認証が切れた接続', status: 'stopped', stopped_reason: 'auth_failed' }),
+        created({ id: 'stopped-other', name: '別の理由の接続', status: 'stopped', stopped_reason: 'member_left' }),
+      ],
+    },
+  );
+  await page.goto(`${WORKSPACE}/connections`);
+  const auth = page.locator('[data-connection-id="stopped-auth"]');
+  await expect(auth.locator('.state-badge')).toHaveText('停止');
+  await expect(auth.locator('.callout.is-danger')).toHaveText('認証に失敗したので止めました。');
+  const other = page.locator('[data-connection-id="stopped-other"]');
+  await expect(other.locator('.callout.is-danger')).toHaveText('止まっています。');
+  await expect(page.getByText('再開')).toHaveCount(0);
 });
 
 test('他の人の接続には、範囲を選ぶボタンが出ない', async ({ context, baseURL, page }) => {
