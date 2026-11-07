@@ -736,8 +736,7 @@
     return null;
   }
 
-  // 空の行でタスクを作る。storyId が null なら親のないタスク。題だけで送り、属性は作った後に行のチップで決める。
-  // 作れたら読み直さずに親の配下の末尾へ足す（created）。絞っているときは木を読み直し、作った行が当たらなければ知らせる
+  // 空の行のタスクの題の検査（画面の検査は API の検証と同じ判定）
   function taskRowProblem(title: string): string | null {
     const problem = taskTitleProblem(title);
     if (problem === null) return null;
@@ -746,6 +745,8 @@
     return t('taskTitleRequired');
   }
 
+  // 空の行でタスクを作る。storyId が null なら親のないタスク。題だけで送り、属性は作った後に決める。
+  // 作れたら読み直さずに親の配下の末尾へ足す（created）。絞っているときは木を読み直し、作った行が当たらなければ知らせる
   async function addTaskRow(storyId: string | null, title: string): Promise<string | null> {
     if (workspace === null) return t('taskCreateFailed');
     const sentFor = page.params.id;
