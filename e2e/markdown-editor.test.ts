@@ -152,6 +152,9 @@ test('保存時に未添付のファイルが消えていても、本文と引�
   await unroute();
   await form.locator('input[type="file"]').setInputFiles({ name: '再追加.png', mimeType: 'image/png', buffer: PNG });
   await expect(input).not.toHaveValue(draft);
+  // 手を止めると自動で送り直され、保存できる。欄を離れると、描いた本文に戻る
+  await expect(drawer.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
+  await input.focus();
   await input.blur();
   await expect(input).toBeHidden();
   await expect(drawer.locator('.doc-box').filter({ hasText: '残しておく本文' })).toBeVisible();

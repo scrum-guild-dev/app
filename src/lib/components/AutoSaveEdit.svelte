@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, tick, type Snippet } from 'svelte';
+  import { onDestroy, tick, untrack, type Snippet } from 'svelte';
   import { t } from '../vocabulary.svelte.ts';
   import { showToast } from '../toast.svelte.ts';
   import Icon from './Icon.svelte';
@@ -90,6 +90,13 @@
   $effect(() => {
     // 送れる文は閉じても送るので数えない。送れない文（検査に落ちる、失敗した）と、上げている途中の添付ファイルは、確かめる
     ondirty?.(editing && (((error !== null || problem(draft) !== null) && hasChanges()) || uploading));
+  });
+  // ファイルを足したときは、入力の操作を通らずに本文が変わる（画像の差し込み）。フォーカスが入力欄に無くても、手を止めたら送る
+  $effect(() => {
+    const added = attachmentIds.length;
+    untrack(() => {
+      if (editing && added > 0) schedule();
+    });
   });
   // 部品が外れたら（欄が読み取り専用に替わったなど）、書きかけは無くなる
   $effect(() => () => ondirty?.(false));
