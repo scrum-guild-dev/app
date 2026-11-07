@@ -15,6 +15,8 @@ export type SlashItem = {
   markdown: string;
   /** 入れた Markdown の先頭からのカーソルの位置。 */
   caret: number;
+  /** 閉じの記号を持つ囲み（コード）か。 */
+  fenced?: true;
   /** 絞り込みで名前のほかに合わせる英字。 */
   aliases: readonly string[];
 };
@@ -39,7 +41,7 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
     aliases: ['ol', 'number', 'ordered'],
   },
   { key: 'quote', label: 'slashQuote', mark: '>', markdown: '> ', caret: 2, aliases: ['quote'] },
-  { key: 'code', label: 'slashCode', mark: '```', markdown: '```\n\n```', caret: 4, aliases: ['code'] },
+  { key: 'code', label: 'slashCode', mark: '```', markdown: '```\n\n```', caret: 4, fenced: true, aliases: ['code'] },
 ];
 
 export type SlashQuery = {
@@ -77,7 +79,7 @@ export function slashEdit(
   next = '',
 ): { start: number; end: number; text: string; caret: number } {
   // コードの閉じの囲みの後ろに文字が続くと閉じと認められず、以降の本文がすべてコードになる。続く文字は囲みの外の次の行に出す
-  const text = item.key === 'code' && next !== '' && next !== '\n' ? `${item.markdown}\n` : item.markdown;
+  const text = item.fenced === true && next !== '' && next !== '\n' ? `${item.markdown}\n` : item.markdown;
   return { start: query.from, end: caret, text, caret: query.from + item.caret };
 }
 

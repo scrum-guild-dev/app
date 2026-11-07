@@ -534,6 +534,7 @@ test('「/」の小窓から書式を入れ、文中の「/」と Esc では文�
   // 項目を押して入れる。コードは囲みの間にカーソルを置く
   await menu.getByRole('option', { name: /コード/ }).click();
   await expect(input).toHaveValue('```\n\n```');
+  await expect(input).toBeFocused();
   await expect.poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(4);
   await expect(menu).toBeHidden();
 });

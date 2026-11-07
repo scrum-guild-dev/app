@@ -86,11 +86,17 @@
   $effect(() => {
     if (readonly) closeSlash();
   });
-  // 矢印で選んだ項目が、小窓の中の見える範囲に入るようにする（aria-activedescendant は見た目をスクロールしない）
-  $effect(() => {
+  // 矢印で選んだ項目が、小窓の中の見える範囲に入るようにする（aria-activedescendant は見た目をスクロールしない）。
+  // scrollIntoView は引き出しやページも動かすので、小窓の scrollTop だけを直す。矢印で選んだときだけ呼ぶ
+  function revealSlashItem(): void {
     const item = slashItems[slashAt];
-    if (item) document.getElementById(optionId(item))?.scrollIntoView?.({ block: 'nearest' });
-  });
+    const option = item ? document.getElementById(optionId(item)) : null;
+    const menu = option?.parentElement;
+    if (!option || !menu) return;
+    if (option.offsetTop < menu.scrollTop) menu.scrollTop = option.offsetTop;
+    else if (option.offsetTop + option.offsetHeight > menu.scrollTop + menu.clientHeight)
+      menu.scrollTop = option.offsetTop + option.offsetHeight - menu.clientHeight;
+  }
   const size = (file: File) => (file.size / 1_048_576).toFixed(2);
   const active = () => files.filter((file) => file.state === 'uploading' || file.state === 'queued');
 
@@ -330,6 +336,7 @@
     ) {
       event.preventDefault();
       slashAt = moveSlashSelection(slashAt, slashItems.length, event.key === 'ArrowDown' ? 1 : -1);
+      void tick().then(revealSlashItem);
     } else if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
       // カーソルが「/」の行を離れていたら、小窓を閉じて普通の改行に任せる
       if (input && slashQuery(input.value, input.selectionStart, input.selectionEnd) === null) return closeSlash();

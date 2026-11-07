@@ -121,6 +121,15 @@ describe('置き換え', () => {
     expect(slashEdit(query, 1, code, '').text).toBe('```\n\n```');
   });
 
+  test('コード以外の項目は、続く文字があっても改行を足さない。続く文字が空白でも同じ', () => {
+    const query = slashQuery('/既存', 1, 1);
+    const code = SLASH_ITEMS.find((candidate) => candidate.key === 'code');
+    const todo = SLASH_ITEMS.find((candidate) => candidate.key === 'todo');
+    if (query === null || code === undefined || todo === undefined) throw new Error('前提が成り立たない');
+    expect(slashEdit(query, 1, todo, '既').text).toBe('- [ ] ');
+    expect(slashEdit(query, 1, code, ' ').text).toBe('```\n\n```\n');
+  });
+
   test('前後の行と字下げは残す', () => {
     expect(apply('前の行\n  /to', 10, 'todo')).toEqual({ value: '前の行\n  - [ ] ', caret: 12 });
   });
