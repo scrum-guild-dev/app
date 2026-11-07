@@ -2458,11 +2458,11 @@ export const dictionary = defineDictionary({
   connectionNameTooLong: '表示名は50字までです',
   connectionNameInvalid: '表示名に使えない文字が入っています',
   connectionCredentialLabel: 'fine-grained personal access token',
-  connectionCredentialPlaceholder: 'github_pat_ で始まるもの',
+  connectionCredentialPlaceholder: 'GitHub の設定で発行したもの',
   connectionCredentialHint:
     'GitHub の設定で発行した fine-grained PAT を入れます。取り込むリポジトリを選び、Issues と Pull requests を読むだけの権限にしてください。',
   connectionCredentialRequired: 'トークンを入れてください',
-  connectionCredentialShape: 'トークンの形が違います。github_pat_ で始まる fine-grained PAT を入れてください。',
+  connectionCredentialShape: 'トークンの形が違います。GitHub で発行した fine-grained PAT を入れてください。',
   connectionCredentialRejected:
     'GitHub がこのトークンを受け付けませんでした。期限切れや取り消しでないか、権限を確かめてください。',
   connectionPrivacyNotice:

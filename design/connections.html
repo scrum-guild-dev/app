@@ -59,7 +59,7 @@ function register() {
       </div>
       <div class="form-row">
         <label class="field" for="cname"><span class="field-label">表示名</span><input class="input" id="cname" value="ミナトの GitHub" placeholder="例: ミナトの GitHub"></label>
-        <label class="field" for="key"><span class="field-label">fine-grained personal access token</span><input class="input" id="key" type="password" autocomplete="off" placeholder="github_pat_ で始まるもの"></label>
+        <label class="field" for="key"><span class="field-label">fine-grained personal access token</span><input class="input" id="key" type="password" autocomplete="off" placeholder="GitHub の設定で発行したもの"></label>
       </div>
       <span class="field-hint">GitHub の設定で発行した fine-grained PAT を入れます。取り込むリポジトリを選び、Issues と Pull requests を読むだけの権限にしてください。</span>
       <div class="callout is-warn">${icon("alert")}<span>取り込んだ内容は、private なリポジトリのものも含めて${t("workspace")}の全員に見えます。範囲を選ぶまでは何も取り込みません。</span></div>
