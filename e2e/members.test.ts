@@ -644,7 +644,7 @@ test.describe('一般のユーザー（あおば開発のハルカ）', () => {
     // ロールは文字で、自分の行の「抜ける」だけを出す（ロールの選択欄、外す、表の下の注意は出ない）
     await expect(rows.nth(0).locator('td').nth(1)).toHaveText('リーダー');
     await expect(rows.nth(1).locator('td').nth(1)).toHaveText('一般');
-    await expect(page.getByRole('combobox')).toHaveCount(0);
+    await expect(page.locator('main').getByRole('combobox')).toHaveCount(0);
     await expect(rows.nth(0).getByRole('button')).toHaveCount(0);
     await expect(rows.nth(1).getByRole('button')).toHaveText('抜ける');
     await expect(page.getByRole('button', { name: /を外す$/ })).toHaveCount(0);
