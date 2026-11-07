@@ -138,7 +138,7 @@
   // fromTree は、木にもとからあった行を完了にして写したもの（親の合計は、木が持つ分に含まれるので足さない）
   let added = $state<{ task: BacklogTask; storyId: string | null; at: number; fromTree?: true }[]>([]);
   let addedFor: string | undefined;
-  // 前に読んだ木の絞り込み。絞り込みの条件が替わったときだけ、印と行を持ち越さない（carriesOver）
+  // 前の読み込みで要求した絞り込み（読み込みに失敗した読み直しも含む）。絞り込みの条件が替わったときだけ、印と行を持ち越さない（carriesOver）
   let loadedFilter: typeof filter | undefined;
   function inTree(loaded: typeof tree, id: string): boolean {
     if (loaded === null) return false;

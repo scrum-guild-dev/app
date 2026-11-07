@@ -25,6 +25,7 @@ export function completionSettled(at: number, loadedAt: number): boolean {
 // 読み直した木へ、足した行と完了の印を持ち越してよいか。同じワークスペースで、前の木と同じ絞り込みの木だけ持ち越す。
 // - 絞り込みの条件が替わった読み直しの木は別の条件の木なので、木に入らない行が残り続けないよう、印も行も捨てる
 // - 同じ絞り込みのまま遅れて届いた木は、絞っていても絞っていなくても同じ競合（completionSettled）なので、持ち越しの判定に進める
+// - 条件が替わる読み直しの最中に完了にした印は、遅れて届いた木に対して捨てる（窓は狭く、次の読み直しで直る。許容するトレードオフ）
 // previous は前に読んだ木の絞り込み（まだ読んでいなければ undefined）
 export function carriesOver(previous: BacklogFilter | undefined, next: BacklogFilter, sameWorkspace: boolean): boolean {
   return sameWorkspace && previous !== undefined && sameFilter(previous, next);
