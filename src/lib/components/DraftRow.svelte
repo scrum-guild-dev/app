@@ -34,6 +34,12 @@
   let sending = $state(false);
   let input = $state<HTMLInputElement>();
 
+  // 外（`c` のショートカットなど）から欄へフォーカスを移す。見える位置へ寄せる
+  export function focus(): void {
+    input?.focus();
+    input?.scrollIntoView?.({ block: 'nearest' });
+  }
+
   async function submit(): Promise<void> {
     if (sending) return;
     const title = value.trim();

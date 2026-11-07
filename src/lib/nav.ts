@@ -14,6 +14,13 @@ const workspaceRoutes = [
 export type WorkspaceNavRoute = (typeof workspaceRoutes)[number];
 export type NavRoute = '/[slug]' | '/[slug]/wiki' | WorkspaceNavRoute;
 
+// `g` の次のキーで移る画面。メニューの項目の label から引く（AppShell が登録し、NavMenu が aria-keyshortcuts に伝える）
+export const GO_KEYS: Partial<Record<DictionaryKey, string>> = {
+  backlog: 'g b',
+  sprint: 'g s',
+  pageToday: 'g t',
+};
+
 export function isWorkspaceRoute(route: NavRoute): route is WorkspaceNavRoute {
   return (workspaceRoutes as readonly string[]).includes(route);
 }

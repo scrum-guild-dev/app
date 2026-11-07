@@ -3,7 +3,8 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { NAV_MENU_ID } from '../nav-collapse.svelte.ts';
-  import { isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
+  import { GO_KEYS, isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
+  import { ariaKeyshortcuts } from '../shortcut-keys.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { organizationLabel } from '../organization-label.ts';
   import type { NavigationWorkspace } from '../workspace-navigation.svelte.ts';
@@ -59,6 +60,7 @@
           class="nav-item"
           class:is-wrapping={item.label === 'orgWiki'}
           {href}
+          aria-keyshortcuts={GO_KEYS[item.label] === undefined ? undefined : ariaKeyshortcuts(GO_KEYS[item.label]!)}
           aria-current={isNavItemCurrent(item.label, href, current) ? 'page' : undefined}
         >
           <Icon name={item.icon} /><span class="nav-item-label"

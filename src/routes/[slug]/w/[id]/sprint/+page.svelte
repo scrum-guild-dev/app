@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { useShortcut } from '../../../../../lib/shortcuts.svelte.ts';
   import { invalidate, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
@@ -73,6 +74,19 @@
   const isLeader = $derived(workspace !== null && (workspace.role === 'leader' || isAdmin));
   const isClosed = $derived(workspace !== null && workspace.closedAt !== null);
   const canWrite = $derived(workspace !== null && !isClosed);
+  // `c` で、完了でない最初の列の空の行へフォーカスを移す。行が無い（書き込めない、列が無い）間は働かない
+  let draftRows = $state<Record<string, DraftRow | undefined>>({});
+  const firstDraftRow = (): DraftRow | undefined => {
+    const column = columns.find((item) => !item.is_done);
+    return column === undefined ? undefined : draftRows[column.id];
+  };
+  useShortcut(() => ({
+    id: 'sprint-new-task',
+    keys: 'c',
+    label: () => t('shortcutNewTask', { task: t('task') }),
+    enabled: () => firstDraftRow() !== undefined,
+    run: () => firstDraftRow()?.focus(),
+  }));
   const canLead = $derived(isLeader && !isClosed);
   const sprint = $derived(board?.sprint ?? null);
   // 日付は YYYY-MM-DD なので、文字列の比較が日付の前後と一致する。終了したワークスペースでは、誰も終えられないので促さない
@@ -680,6 +694,7 @@
             {/each}
             {#if canWrite && !column.is_done}
               <DraftRow
+                bind:this={draftRows[column.id]}
                 label={t('sprintBoardAddTask', { task: t('task') })}
                 name={t('sprintBoardAddTaskIn', { task: t('task'), column: columnName(column) })}
                 problem={cardTitleProblem}

@@ -6,6 +6,7 @@
 // - 文字を打つ場所（入力欄など）では、inTyping を true にしたもの（Ctrl+K など修飾キー付き）だけが働く
 // - ダイアログが開いている間は、inModal を true にしたものだけが働く（引き出しの `[` `]` は、引き出し自身がダイアログのため）
 // - enabled が false を返す間は働かない
+// - 続けて押すキー（`g b`）は、1つ目で待ちに入り、約1秒のうちの2つ目で働く。待ち中に別のキーを押すと待ちは切れる
 // - 同じキーを同時に2つ登録したら、開発中は例外にする。本番では後の登録を無視する（先の登録を壊さない）
 import { untrack } from 'svelte';
 import {
@@ -49,20 +50,35 @@ function isDialogOpen(): boolean {
   return globalThis.document?.querySelector('dialog[open], [role="dialog"]:not([hidden])') != null;
 }
 
+// 続けて押すキーの、1つ目から2つ目までの待ち時間（ミリ秒）
+export const CHORD_TIMEOUT_MS = 1000;
+
 export class ShortcutRegistry {
   // 一覧の画面などが読む写し。登録と解除のたびに作り直す
   items = $state.raw<Shortcut[]>([]);
   #entries: Entry[] = [];
+  // 1つ目を押して待っている、続けて押すキー
+  #pending: { prefix: string; at: number } | null = null;
 
   register(shortcut: Shortcut): () => void {
     const normalized = normalizeKeys(shortcut.keys);
-    const clash = this.#entries.find((entry) => entry.normalized === normalized);
+    const parsed = parseKeys(shortcut.keys);
+    // 同じキーのほか、単独のキーと続けて押すキーの1つ目が同じ（`g` と `g b`）ものも重なり
+    const clash = this.#entries.find(
+      (entry) =>
+        entry.normalized === normalized ||
+        (parsed.prefix === undefined && !parsed.mod && entry.parsed.prefix === parsed.key) ||
+        (parsed.prefix !== undefined &&
+          !entry.parsed.mod &&
+          entry.parsed.prefix === undefined &&
+          entry.parsed.key === parsed.prefix),
+    );
     if (clash) {
       const message = `ショートカットのキー ${shortcut.keys} が重なっています: ${clash.shortcut.id} と ${shortcut.id}`;
       if (import.meta.env.DEV) throw new Error(message);
       return () => {};
     }
-    const entry: Entry = { shortcut, parsed: parseKeys(shortcut.keys), normalized };
+    const entry: Entry = { shortcut, parsed, normalized };
     this.#entries = [...this.#entries, entry];
     this.items = this.#entries.map((item) => item.shortcut);
     return () => {
@@ -71,15 +87,46 @@ export class ShortcutRegistry {
     };
   }
 
-  // keydown を振り分ける。働いたら true（preventDefault 済み）
-  handle = (event: KeyEventLike & { preventDefault(): void }): boolean => {
-    if (event.defaultPrevented || isComposingKey(event)) return false;
-    const entry = this.#entries.find(({ parsed }) => matchesKeys(parsed, event));
-    if (!entry) return false;
-    const { shortcut } = entry;
+  // 文字を打つ場所・ダイアログ・enabled の条件を満たすか
+  #allowed(shortcut: Shortcut, event: KeyEventLike): boolean {
     if (!shortcut.inTyping && isTypingTarget(event.target)) return false;
     if (!shortcut.inModal && isDialogOpen()) return false;
     if (shortcut.enabled && !shortcut.enabled()) return false;
+    return true;
+  }
+
+  // keydown を振り分ける。働いたら true（preventDefault 済み）
+  handle = (event: KeyEventLike & { preventDefault(): void }): boolean => {
+    // 待ちは次のキーで必ず片づける。修飾キーだけの押下（Shift など）は待ちを切らない
+    const pending = this.#pending;
+    if (['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return false;
+    this.#pending = null;
+    if (event.defaultPrevented || isComposingKey(event)) return false;
+    const waiting = pending !== null && Date.now() - pending.at <= CHORD_TIMEOUT_MS ? pending.prefix : null;
+    const entry = this.#entries.find(({ parsed }) =>
+      waiting === null
+        ? parsed.prefix === undefined && matchesKeys(parsed, event)
+        : parsed.prefix === waiting && matchesKeys(parsed, event),
+    );
+    if (!entry) {
+      // 続けて押すキーの1つ目なら待ちに入る（働く条件を満たす続きが1つでもあるときだけ）
+      if (waiting === null && !event.repeat) {
+        const starts = this.#entries.some(
+          ({ parsed, shortcut }) =>
+            parsed.prefix !== undefined &&
+            matchesKeys({ mod: false, key: parsed.prefix }, event) &&
+            this.#allowed(shortcut, event),
+        );
+        if (starts) {
+          event.preventDefault();
+          this.#pending = { prefix: event.key, at: Date.now() };
+          return true;
+        }
+      }
+      return false;
+    }
+    const { shortcut } = entry;
+    if (!this.#allowed(shortcut, event)) return false;
     // 押しっぱなしの繰り返しは働かせない。Ctrl/⌘ 付きのキーだけは奪う（Ctrl+K の長押しで、ブラウザの標準の Ctrl+K が動かないように）
     if (event.repeat && !shortcut.repeat) {
       if (!entry.parsed.mod) return false;

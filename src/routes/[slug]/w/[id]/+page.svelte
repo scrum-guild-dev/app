@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
+  import { useShortcut } from '../../../../lib/shortcuts.svelte.ts';
   import { SvelteURLSearchParams } from 'svelte/reactivity';
   import { goto, invalidate, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -117,6 +118,15 @@
     return none ? t('filterResultNone') : t('filterResultCount', { count: rows });
   });
   const canWrite = $derived(workspace !== null && workspace.closedAt === null);
+  // `c` で、親なしのタスクの空の行（木の末尾）へフォーカスを移す。行が無い（書き込めない、木を読み込み中）間は働かない
+  let rootTaskRow = $state<DraftRow>();
+  useShortcut(() => ({
+    id: 'backlog-new-task',
+    keys: 'c',
+    label: () => t('shortcutNewTask', { task: t('task') }),
+    enabled: () => rootTaskRow !== undefined,
+    run: () => rootTaskRow?.focus(),
+  }));
   // 完成の定義の畳みを開いたか。開くまで本文を描かない
   let dodOpen = $state(false);
   // 期日の印を決める、ワークスペースの今日の日付と週の始まり（API の値）
@@ -1370,6 +1380,7 @@
           create={(title) => addStoryRow(null, title)}
         />
         <DraftRow
+          bind:this={rootTaskRow}
           label={t('treeAddTask', { task: t('task') })}
           problem={taskRowProblem}
           create={(title) => addTaskRow(null, title)}

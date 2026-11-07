@@ -18,6 +18,13 @@ describe('parseKeys と normalizeKeys', () => {
     expect(normalizeKeys('c')).not.toBe(normalizeKeys('C'));
   });
 
+  test('続けて押すキーは、1つ目を prefix に分ける', () => {
+    expect(parseKeys('g b')).toEqual({ mod: false, key: 'b', prefix: 'g' });
+    expect(normalizeKeys('g b')).toBe('g b');
+    expect(ariaKeyshortcuts('g b')).toBe('g b');
+    for (const bad of ['g  b', 'g bb', 'g b c', 'Mod+g b', ' b']) expect(() => parseKeys(bad), bad).toThrow();
+  });
+
   test('読めない書き方は例外にする', () => {
     expect(() => parseKeys('')).toThrow();
     expect(() => parseKeys('Mod+')).toThrow();
