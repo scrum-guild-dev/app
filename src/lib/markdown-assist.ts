@@ -47,7 +47,7 @@ function listLine(value: string, position: number): ListLine | null {
 function inFence(value: string, lineStart: number): boolean {
   let open: { char: string; length: number } | null = null;
   for (const line of value.slice(0, lineStart).split('\n')) {
-    const match = /^ *(`{3,}|~{3,})(.*)$/u.exec(line);
+    const match = /^[ \t]*(`{3,}|~{3,})([^\n]*)$/u.exec(line);
     const mark = match?.[1];
     const info = match?.[2] ?? '';
     if (mark === undefined) continue;
@@ -156,7 +156,7 @@ export function indentListEdit(value: string, start: number, end: number, outden
   return { start: from, end: to, text: replacement, selectionStart: move(start), selectionEnd: move(end) };
 }
 
-// 貼ったのが、リンクにできる URL 1つだけか。http と https の絶対 URL で、空白と改行を含まない（画面のリンクの規則に合わせる）
+// 貼ったのが、リンクにできる URL 1つだけか。`http://` か `https://` で始まる絶対 URL で、空白、改行、`<`、`>`、`\` を含まず、ユーザー情報が付かず、正規化した後も2048字以下（画面のリンクの規則に合わせる）
 export function pastedLink(pasted: string): string | null {
   const url = pasted.trim();
   // `https:example.com` のような「//」の無い綴りは、new URL は通すが画面は文字のままにするので、先に落とす

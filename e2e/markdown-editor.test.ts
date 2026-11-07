@@ -584,7 +584,7 @@ test('入力の補助: Enter でリストを続け、Tab で字下げし、URL �
   await expect(input).not.toBeFocused();
   await expect(input).toHaveValue('メモ');
 
-  // 一覧の先頭の項目と、これ以上入れ子にできない項目の Tab も、字下げを増やさずフォーカスを移す
+  // 一覧の先頭の項目（親が無い項目）の Tab も、字下げを増やさずフォーカスを移す
   await input.fill('- あ');
   await input.focus();
   await page.keyboard.press('Tab');

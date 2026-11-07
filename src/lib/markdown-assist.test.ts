@@ -111,8 +111,14 @@ describe('Enter でリストを続ける', () => {
     expect(enter('```\n- あ\n```\n- い|\n```\nコード\n```')).toBe('```\n- あ\n```\n- い\n- |\n```\nコード\n```');
   });
 
+  test('タブで字下げした囲みと U+2028 を含む開きの行も囲みとして読む', () => {
+    expect(enter('\t```\n- あ|\n```')).toBeNull();
+    expect(enter('```js\u2028x\n- あ|\n```')).toBeNull();
+  });
+
   test('番号が10桁になるときは普通の改行に任せ、U+2028 を含む行も項目として読む', () => {
     expect(enter('999999999. あ|')).toBeNull();
+    expect(enter('999999998. あ|')).toBe('999999998. あ\n999999999. |');
     expect(enter('- あ\u2028い|')).toBe('- あ\u2028い\n- |');
   });
 
@@ -148,6 +154,14 @@ describe('Tab と Shift+Tab で字下げする', () => {
   test('空の最初の行にカーソルがあるとき、次の行を字下げしない', () => {
     expect(tab('|\n- あ')).toBeNull();
     expect(tab('|\n- あ\n- い')).toBeNull();
+  });
+
+  test('複数行を選んだときの書き換えは、最初と最後の変わる位置の間（途中の行の中身を含む）に及ぶ', () => {
+    const value = '- 親\n- あ\n- い\n- う';
+    const edit = indentListEdit(value, value.indexOf('あ'), value.length, false);
+    // 共通の前後を削るので、範囲は先頭行の頭から末尾行の途中まで。途中の行（「- い」）の中身を含む
+    expect(edit?.start).toBe(value.indexOf('- あ'));
+    expect(edit?.end).toBeGreaterThan(value.indexOf('い'));
   });
 
   test('書き換えは変わる範囲（行頭の空白）だけにする', () => {
