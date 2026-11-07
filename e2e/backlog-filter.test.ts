@@ -261,6 +261,9 @@ test('絞っているときに、木に出ていないストーリーへ親を�
   const opener = rowMenuItem(page, '自分のタスク', '親を移す');
   await dialog.getByRole('button', { name: '移す' }).click();
   await expect(dialog).toBeHidden();
+  // 件数の読み上げも、描かれる行（親なしの1行）と合う。読み直すまで 2 件のままにしない
+  await expect(page.getByRole('status').filter({ hasText: '1 件に絞りました' })).toHaveCount(1);
+  await expect(page.getByRole('status').filter({ hasText: '2 件に絞りました' })).toHaveCount(0);
   // 移した行は、木に出ていないストーリーの下へ移るので、読み直すまで画面から消え、ダイアログを開いた「親を移す」も無くなる。
   // 閉じたときに戻る先が無いので、Dialog が画面の見出しへフォーカスを移す
   await expect(opener).toHaveCount(0);

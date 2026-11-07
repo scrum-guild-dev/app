@@ -120,7 +120,9 @@
   // 絞り込みの結果の読み上げ（出したタスクの行の数か、当たるものが無いこと）。絞っていなければ空
   const filterResult = $derived.by(() => {
     if (!filtering || tree === null) return '';
-    const rows = Object.values(taskLists).reduce((sum, list) => sum + list.length, 0);
+    // 描かれる行だけ数える。親を移した先が木に無いストーリーなら、行は taskLists に入っても描かれない
+    const drawn = new Set<string>([ROOT, ...loadedStories.map(({ row: story }) => story.id)]);
+    const rows = Object.entries(taskLists).reduce((sum, [key, list]) => sum + (drawn.has(key) ? list.length : 0), 0);
     const none = epics.length === 0 && tree.stories.length === 0 && rows === 0;
     return none ? t('filterResultNone') : t('filterResultCount', { count: rows });
   });
