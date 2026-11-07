@@ -1,5 +1,12 @@
 import { expect, test } from 'vitest';
-import { carriesOver, completionSettled, keepAddedRow, orphanedFromTree, parentStoryIds } from './added-rows.ts';
+import {
+  carriesOver,
+  completionSettled,
+  keepAddedRow,
+  orphanedFromTree,
+  parentStoryIds,
+  treeStories,
+} from './added-rows.ts';
 
 const base = { inLoadedTree: false, completed: false, treeLoaded: true, loadedAt: 100 };
 
@@ -79,4 +86,10 @@ test('parentStoryIds: 画面で足したストーリーも親に数え、数え�
   const withAdded = parentStoryIds(['s1'], ['s9']);
   expect(orphanedFromTree(row, { treeLoaded: true, storyIds: withoutAdded, taskInTree: false })).toBe(true);
   expect(orphanedFromTree(row, { treeLoaded: true, storyIds: withAdded, taskInTree: false })).toBe(false);
+});
+
+test('treeStories: エピックの下のストーリーと、エピックの無いストーリーを、この順に集める', () => {
+  const tree = { epics: [{ stories: ['a', 'b'] }, { stories: [] }, { stories: ['c'] }], stories: ['d'] };
+  expect(treeStories(tree)).toEqual(['a', 'b', 'c', 'd']);
+  expect(treeStories({ epics: [], stories: [] })).toEqual([]);
 });
