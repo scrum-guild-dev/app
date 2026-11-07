@@ -30,7 +30,7 @@
     sameFilter,
     type BacklogFilter,
   } from '../../../../lib/backlog-filter.ts';
-  import { completionSettled, keepAddedRow } from '../../../../lib/added-rows.ts';
+  import { carriesOver, completionSettled, keepAddedRow } from '../../../../lib/added-rows.ts';
   import { MoveQueue } from '../../../../lib/move-queue.ts';
   import { completionFailureMessage } from '../../../../lib/story-completion.ts';
   import { moveFailureMessage } from '../../../../lib/move-failure.ts';
@@ -138,6 +138,8 @@
   // fromTree は、木にもとからあった行を完了にして写したもの（親の合計は、木が持つ分に含まれるので足さない）
   let added = $state<{ task: BacklogTask; storyId: string | null; at: number; fromTree?: true }[]>([]);
   let addedFor: string | undefined;
+  // 前の読み込みで要求した絞り込み（読み込みに失敗した読み直しも含む）。絞り込みの条件が替わったときだけ、印と行を持ち越さない（carriesOver）
+  let loadedFilter: typeof filter | undefined;
   function inTree(loaded: typeof tree, id: string): boolean {
     if (loaded === null) return false;
     const stories = [...loaded.epics.flatMap((epic) => epic.stories), ...loaded.stories];
@@ -176,11 +178,17 @@
   $effect.pre(() => {
     // 足した行は、読み直した木に入るまで残す。作る前に読んだ木が遅れて届いても、作った行を消さないため。
     // 作った後に始まった読み直しの木に無い行（別の人の削除、親ごとの消失）は、木に入る日が来ないので捨てる
-    // ワークスペースを替えたときと、絞り込んで読んだときも、木に入らない行が残り続けるので捨てる
+    // ワークスペースを替えたときと、絞り込みの条件を替えて読んだときも、木に入らない行が残り続けるので捨てる
     const loaded = tree;
     const workspaceId = page.params.id;
     const sameWorkspace = untrack(() => addedFor) === workspaceId;
     addedFor = workspaceId;
+    const carry = carriesOver(
+      untrack(() => loadedFilter),
+      filter,
+      sameWorkspace,
+    );
+    loadedFilter = filter;
     // 完了にした行は、読み直した木（未完了のタスクだけを返す）に無いので、木に入るのを待たずに捨てる。残すと完了の印を捨てた後に未完了で戻る
     const done = untrack(() => completedIds);
     const loadedAtForDone = untrack(() => data.loadedAt);
@@ -188,22 +196,20 @@
     const unsettled = done.filter((id) => !completionSettled(completedAt[id] ?? Infinity, loadedAtForDone));
     // 木に無い行を残すかは、足した時刻と読み直しを始めた時刻で決める（src/lib/added-rows.ts）
     const loadedAt = untrack(() => data.loadedAt);
-    added =
-      sameWorkspace && !filtering
-        ? untrack(() => added).filter(
-            (entry) =>
-              unsettled.includes(entry.task.id) ||
-              keepAddedRow(entry, {
-                inLoadedTree: inTree(loaded, entry.task.id),
-                completed: done.includes(entry.task.id),
-                treeLoaded: loaded !== null,
-                loadedAt,
-              }),
-          )
-        : [];
+    added = carry
+      ? untrack(() => added).filter(
+          (entry) =>
+            unsettled.includes(entry.task.id) ||
+            keepAddedRow(entry, {
+              inLoadedTree: inTree(loaded, entry.task.id),
+              completed: done.includes(entry.task.id),
+              treeLoaded: loaded !== null,
+              loadedAt,
+            }),
+        )
+      : [];
     const keepRow = (at: number, inLoaded: boolean) =>
-      sameWorkspace &&
-      !filtering &&
+      carry &&
       keepAddedRow({ at }, { inLoadedTree: inLoaded, completed: false, treeLoaded: loaded !== null, loadedAt });
     addedEpics = untrack(() => addedEpics).filter((entry) =>
       keepRow(entry.at, loaded?.epics.some((epic) => epic.id === entry.epic.id) ?? false),
@@ -216,7 +222,7 @@
         ),
       ),
     );
-    const keptDone = sameWorkspace && !filtering ? unsettled : [];
+    const keptDone = carry ? unsettled : [];
     completedIds = keptDone;
     completedAt = Object.fromEntries(keptDone.map((id) => [id, completedAt[id]]));
     movedParents = {};

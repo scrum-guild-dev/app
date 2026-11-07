@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { completionSettled, keepAddedRow } from './added-rows.ts';
+import { carriesOver, completionSettled, keepAddedRow } from './added-rows.ts';
 
 const base = { inLoadedTree: false, completed: false, treeLoaded: true, loadedAt: 100 };
 
@@ -37,4 +37,22 @@ test('完了の応答より前に始まった読み直しが遅れて届いて�
 
 test('完了の応答と読み直しを始めた時刻が同じなら残す', () => {
   expect(completionSettled(100, 100)).toBe(false);
+});
+
+const none = { assignee: '', category: '', repository: '', epic: '', q: '' };
+
+test('同じ絞り込みの木は持ち越す（絞っていても同じ）', () => {
+  expect(carriesOver(none, none, true)).toBe(true);
+  expect(carriesOver({ ...none, q: 'a' }, { ...none, q: 'a' }, true)).toBe(true);
+});
+
+test('絞り込みの条件が替わった木は持ち越さない', () => {
+  expect(carriesOver(none, { ...none, q: 'a' }, true)).toBe(false);
+  expect(carriesOver({ ...none, q: 'a' }, none, true)).toBe(false);
+  expect(carriesOver({ ...none, q: 'a' }, { ...none, q: 'b' }, true)).toBe(false);
+});
+
+test('ワークスペースが替わったときと、最初の木は持ち越さない', () => {
+  expect(carriesOver(none, none, false)).toBe(false);
+  expect(carriesOver(undefined, none, true)).toBe(false);
 });
