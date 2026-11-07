@@ -197,7 +197,7 @@ describe('task-restore', () => {
     const logs = await logsOf(target, task.id);
     expect(JSON.parse(logs[0]!.changes_json)).toEqual({
       deleted_at: ['2026-10-21T00:00:00.000Z', null],
-      story_id: [story.id, null],
+      story: [{ id: story.id, name: story.title }, null],
     });
   });
 
@@ -240,12 +240,83 @@ describe('task-restore', () => {
     });
     const logs = await logsOf(target, task.id);
     expect(Object.keys(JSON.parse(logs[0]!.changes_json)).sort()).toEqual([
-      'assignee_user_id',
-      'category_id',
+      'assignee',
+      'category',
       'deleted_at',
-      'repository_id',
+      'repository',
       'today_on',
     ]);
+  });
+
+  test('完了したタスクは、担当が所属を外れていても担当を替えずに戻す（退会が外すのは完了していないタスクだけ）', async () => {
+    const target = await createTarget();
+    const outsider = await createPerson({
+      organization: target.organization,
+      membership: { workspaceId: target.workspace.id, role: 'member' },
+    });
+    const db = orgDb(env, target.organization.verified);
+    const task = await createTask(target.organization, target.workspace.id, target.member.userId!, {
+      assignee_user_id: outsider.userId!,
+      completed_at: '2026-10-19T00:00:00.000Z',
+      completed_by: outsider.userId!,
+      deleted_at: '2026-10-21T00:00:00.000Z',
+    });
+    await db.run(
+      db.statement((q) =>
+        q
+          .updateTable('memberships')
+          .set({ left_at: '2026-10-22T00:00:00.000Z', left_on: '2026-10-22' })
+          .where('user_id', '=', outsider.userId!)
+          .where('workspace_id', '=', target.workspace.id),
+      ),
+    );
+    expect((await restore(target, task.id)).status).toBe(200);
+    expect(await rowOf(target, task.id)).toMatchObject({ deleted_at: null, assignee_user_id: outsider.userId });
+  });
+
+  test('親なしで戻すときは、親なしの並びの末尾に置く', async () => {
+    const target = await createTarget();
+    const story = await createStory(target.organization, target.workspace.id, target.admin.userId!, {
+      deleted_at: '2026-10-21T00:00:00.000Z',
+    });
+    await createTask(target.organization, target.workspace.id, target.member.userId!, { position: 'a5' });
+    const task = await createTask(target.organization, target.workspace.id, target.member.userId!, {
+      story_id: story.id,
+      position: 'a0',
+      deleted_at: '2026-10-21T00:00:00.000Z',
+    });
+    expect((await restore(target, task.id)).status).toBe(200);
+    const row = (await rowOf(target, task.id))!;
+    expect(row.story_id).toBeNull();
+    expect(row.position > 'a5').toBe(true);
+  });
+
+  test('削除した人だけが戻せる場合も、戻した後の再送は 403 でなく 409 の not_deleted', async () => {
+    const target = await createTarget();
+    const task = await createTask(target.organization, target.workspace.id, target.leader.userId!, {
+      deleted_at: '2026-10-21T00:00:00.000Z',
+    });
+    const db = orgDb(env, target.organization.verified);
+    await db.run(
+      db.statement((q) =>
+        q.insertInto('change_logs').values({
+          id: uuidv7(),
+          organization_id: target.organization.id,
+          workspace_id: target.workspace.id,
+          actor_user_id: target.member.userId!,
+          operator: null,
+          entity_type: 'task',
+          entity_id: task.id,
+          action: 'delete',
+          changes_json: JSON.stringify({ deleted_at: [null, '2026-10-21T00:00:00.000Z'] }),
+          created_at: '2026-10-21T00:00:00.000Z',
+        }),
+      ),
+    );
+    expect((await restore(target, task.id, target.member)).status).toBe(200);
+    const again = await restore(target, task.id, target.member);
+    expect(again.status).toBe(409);
+    expect(await reasonOf(again)).toBe('not_deleted');
   });
 
   test('今の担当と区分はそのまま戻る', async () => {
