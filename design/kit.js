@@ -400,23 +400,12 @@
       : `<button class="done-btn" type="button" data-done="${x.id}" aria-label="${t("complete")}" title="${t("complete")}">${icon("check")}</button>`;
   }
 
-  // 並べ替えの「上へ」「下へ」と「親を移す」（本番の TaskEntry、TreeStory と同じ組み方）。
-  // order: { first, last, parent, across }。端の向きは aria-disabled（フォーカスを失わない）。parent が真なら「親を移す」も出す。
-  // across: { first, last } を渡すと、スプリントの画面のカードのように、隣の列へ移す「前の列へ」「次の列へ」を両端に足す
-  function orderActions(title, order) {
-    const btn = (name, label, disabled) =>
-      `<button class="icon-btn" type="button" data-order="${name}" aria-label="${label}: ${esc(title)}" title="${label}"${disabled === undefined ? "" : ` aria-disabled="${disabled}"`}>${icon(name)}</button>`;
-    const left = order.across ? btn("left", `前の${t("column")}へ`, Boolean(order.across.first)) : "";
-    const right = order.across ? btn("right", `次の${t("column")}へ`, Boolean(order.across.last)) : "";
-    return `<span class="order-actions">${left}${btn("up", "上へ", Boolean(order.first))}${btn("down", "下へ", Boolean(order.last))}${right}${order.parent ? btn("swap", "親を移す") : ""}</span>`;
-  }
-
   // 行の「⋯」のメニュー（.row-menu）。完了の丸のほかの操作（今日やる、並べ替え、親を移す、削除）をまとめる。
   // 広い幅ではホバーと行の中のフォーカスで「⋯」が出て、760px 以下と pointer: coarse では常に出して 44px 四方にする。
   // items: [{ attr, label, icon, danger, disabled }]。attr は既存の操作の属性（data-order="up" など）をそのまま渡す
-  function rowMenu(title, items) {
+  function rowMenu(title, items, owner = "") {
     const buttons = items.map((it) => `<li role="none"><button class="menu-item${it.danger ? " is-danger" : ""}" type="button" role="menuitem" ${it.attr}${it.disabled === undefined ? "" : ` aria-disabled="${it.disabled}"`}>${icon(it.icon)}<span>${it.label}</span></button></li>`).join("");
-    return `<span class="row-menu"><button class="icon-btn row-menu-btn" type="button" data-row-menu aria-haspopup="menu" aria-expanded="false" aria-label="操作: ${esc(title)}" title="操作">${icon("more")}</button>` +
+    return `<span class="row-menu"><button class="icon-btn row-menu-btn" type="button" data-row-menu${owner ? ` data-menu-for="${owner}"` : ""} aria-haspopup="menu" aria-expanded="false" aria-label="操作: ${esc(title)}" title="操作">${icon("more")}</button>` +
       `<ul class="account-menu-list row-menu-list" role="menu" aria-label="操作: ${esc(title)}" hidden>${buttons}</ul></span>`;
   }
   // 並べ替えの操作を、メニューの項目の形にする
@@ -447,7 +436,7 @@
       : [["", `${label}なし`], ...Object.entries(D.users).filter(([, u]) => !u.left).map(([id, u]) => [id, u.name])];
     const current = isPts ? (x.pts == null ? "" : String(x.pts)) : (x.who || "");
     const items = options.map(([value, text]) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${value === current}" data-chip-set="${x.id}:${name}:${value}">${value === current ? icon("check") : ""}<span>${esc(text)}</span></button></li>`).join("");
-    return `<span class="row-menu"><button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-row-menu aria-haspopup="menu" aria-expanded="false" aria-label="${label}: ${set ? esc(shown) : "未設定"}">${esc(shown)}</button>` +
+    return `<span class="row-menu"><button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-row-menu data-chip-for="${x.id}:${name}" aria-haspopup="menu" aria-expanded="false" aria-label="${label}: ${set ? esc(shown) : "未設定"}">${esc(shown)}</button>` +
       `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" hidden>${items}</ul></span>`;
   }
 
@@ -462,7 +451,7 @@
   }
 
   // 台帳の1行。opts: showWs, showParent（既定 true）, showAssignee, showSprint（入っているスプリントの印。バックログの木）,
-  // order（並べ替えの操作。orderActions の order）,
+  // order（並べ替えの操作。{ first, last, parent, across }。「⋯」のメニューに入る）,
   // mark（ドラッグの状態。dropAttr）
   function entry(x, opts = {}) {
     const showParent = opts.showParent !== false;
@@ -481,7 +470,7 @@
           ${opts.showWs ? `<span class="tag">${esc(D.workspaces[x.ws].name)}</span>` : ""}
           ${opts.showSprint ? sprintTag(x) : ""}${repoTag(x)}${x.story ? "" : categoryTag(x.cat)}${sourceKey(x)}
           ${showParent && parent ? `<span>${icon("flag")} ${esc(parent)}</span>` : ""}
-          ${x.doneAt ? `<span>${t("done")} ${esc(x.doneAt)}</span>` : colName(x) ? `<span class="status-dot">${esc(colName(x))}</span>` : ""}
+          ${compact && x.todayOn === D.today ? `<span class="entry-today">${icon("sun")}今日やる</span>` : ""}${x.doneAt ? `<span>${t("done")} ${esc(x.doneAt)}</span>` : colName(x) ? `<span class="status-dot">${esc(colName(x))}</span>` : ""}
           ${taskFlags(x)}${opts.meta ? opts.meta(x) : ""}
         </span>
       </div>
@@ -489,7 +478,7 @@
         { attr: `data-sun="${x.id}"`, label: x.todayOn === D.today ? "今日やるを外す" : "今日やる", icon: "sun" },
         ...orderItems(opts.order),
         { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除`, icon: "trash", danger: true },
-      ]) : ""}${opts.actions ? opts.actions(x) : doneControl(x)}</div>
+      ], x.id) : ""}${opts.actions ? opts.actions(x) : doneControl(x)}</div>
     </div>`;
   }
   // opts.empty があれば、空のときに台帳の代わりに出す（emptyState で作る）
@@ -644,7 +633,7 @@
         { attr: `data-sun="${x.id}"`, label: x.todayOn === D.today ? "今日やるを外す" : "今日やる", icon: "sun" },
         ...orderItems(order),
         { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除`, icon: "trash", danger: true },
-      ]) : ""}${doneControl(x)}</span></div>
+      ], x.id) : ""}${doneControl(x)}</span></div>
     </article>`;
   }
   // opts.key: カードの id の接頭辞、opts.cardMarks: (x, i, c) => card のドラッグの状態、opts.columnMarks: (c) => 列の囲み（{ drop: "into" }）、opts.grab: (x) => つかめるか（既定は完了していないカードだけ。完了の列のカードは、本番では戻せるもの（reopenable）だけがつかめる）
@@ -1208,7 +1197,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       ${drawer.errors.due ? `<span class="field-error" role="alert">${icon("alert")}${drawer.errors.due}</span>` : ""}`;
   }
   function drawerLinkHtml(x) {
-    const open = x.link ? `<a class="btn is-sm" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer" aria-label="リンクを新しいタブで開く">開く</a>` : "";
+    const open = x.link ? `<a class="btn is-sm" data-drawer-open href="${esc(x.link)}" target="_blank" rel="noopener noreferrer" aria-label="リンクを新しいタブで開く">開く</a>` : "";
     if (drawerReadOnly()) return x.link ? `<span class="source-key">${icon("link")} ${esc(x.link)}</span>${open}` : "—";
     // 断られた理由は欄の下に出し、入力は残す。「開く」は保存した値にだけ付く
     const err = drawer.errors.link;
@@ -1352,7 +1341,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       ${drawerReadOnly() ? "" : `<div class="form-actions">${x.src
         ? `<button class="btn is-sm is-quiet" type="button" data-toast="${t("archive")}へ移しました">${icon("archive")}${t("archive")}へ移す</button><span class="field-hint">取り込んだ${t("task")}は削除せず、${t("archive")}へ移して外します。</span>`
         // 作った人とリーダーには削除のボタンだけを出す。一般のメンバーには、ボタンの代わりに「削除できるのは作った人と${t("leader")}です。」だけを添える
-        : `<button class="btn is-sm is-quiet is-danger" type="button" data-task-delete="${x.id}">${icon("trash")}この${t("task")}を削除する</button><span class="field-hint">すぐ消えます。消した直後は、知らせの「取り消す」で戻せます。</span>`}</div>`}`;
+        : `<button class="btn is-sm is-quiet is-danger" type="button" data-task-delete="${x.id}">${icon("trash")}この${t("task")}を削除する</button><span class="field-hint">${location.pathname.endsWith("/task.html") ? "確認なしですぐ消えます。" : "すぐ消えます。消した直後は、知らせの「取り消す」で戻せます。"}</span>`}</div>`}`;
   }
   // 引き出しの見本の状態。読み込み中と、読めなかったとき（もう一度試す）は、見出しと文だけ
   function drawerStateHtml() {
@@ -1441,10 +1430,36 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!el) return;
     el.hidden = !message;
     el.innerHTML = message ? `${icon("alert")}${message}` : "";
+    const input = document.querySelector(`#drawer [data-drawer-input="${name}"]`);
+    if (input) {
+      if (message) { el.id = el.id || `drawer-edit-${name}-error`; input.setAttribute("aria-invalid", "true"); input.setAttribute("aria-describedby", el.id); }
+      else { input.removeAttribute("aria-invalid"); input.removeAttribute("aria-describedby"); }
+    }
     el.closest(".field")?.classList.toggle("is-invalid", Boolean(message));
   }
   // 画面の本体だけを描き直す（引き出しと、書いている欄のフォーカスは残す）
-  function redrawContent() { if (page) document.getElementById("content").innerHTML = page.render(); }
+  function redrawContent() {
+    if (!page) return;
+    const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
+    document.getElementById("content").innerHTML = page.render();
+    drafts.forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
+  }
+  // 保存した欄に応じて、引き出しの見出し、リンクの「開く」、「未記入」の印だけを差し替える（書いている欄は作り直さない）
+  function refreshDrawerView(x, name) {
+    const root = document.getElementById("drawer");
+    if (!root) return;
+    if (name === "title") root.querySelectorAll("#drawer-title").forEach((el) => (el.textContent = x.title));
+    if (name === "link") {
+      const field = root.querySelector('[data-drawer-input="link"]')?.closest(".field");
+      field?.parentElement.querySelectorAll("a[data-drawer-open]").forEach((a) => a.remove());
+      if (x.link && field) field.insertAdjacentHTML("afterend", `<a class="btn is-sm" data-drawer-open href="${esc(x.link)}" target="_blank" rel="noopener noreferrer" aria-label="リンクを新しいタブで開く">開く</a>`);
+    }
+    if (name === "fields") {
+      const label = root.querySelector('label[for="drawer-edit-fields"]');
+      label?.querySelectorAll(".chip.is-todo").forEach((c) => c.remove());
+      if (x.unfilled && label) label.insertAdjacentHTML("beforeend", ` <span class="chip is-todo">未記入</span>`);
+    }
+  }
   function commitDrawerField(name) {
     clearTimeout(saveTimers[name]);
     const x = task(drawer.id), input = document.querySelector(`#drawer [data-drawer-input="${name}"]`);
@@ -1463,6 +1478,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     showDrawerError(name, "");
     delete drawer.drafts[name];
     showSaveState(name, "saved");
+    refreshDrawerView(x, name);
     redrawContent();
   }
   // 書きかけを保存した値に戻す（Esc）。戻したら true
@@ -1481,6 +1497,15 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!input || !drawer.id) return;
     const name = input.dataset.drawerInput;
     showSaveState(name, "");
+    clearTimeout(saveTimers[name]);
+    if (ev.isComposing) return;
+    saveTimers[name] = setTimeout(() => commitDrawerField(name), SAVE_WAIT);
+  });
+  // 変換が終わったら、待ちを張り直す（変換前のかなのまま保存しない）
+  document.addEventListener("compositionend", (ev) => {
+    const input = ev.target.closest && ev.target.closest("#drawer [data-drawer-input]");
+    if (!input || !drawer.id) return;
+    const name = input.dataset.drawerInput;
     clearTimeout(saveTimers[name]);
     saveTimers[name] = setTimeout(() => commitDrawerField(name), SAVE_WAIT);
   });
@@ -1580,37 +1605,64 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       if (target && list.contains(target)) toggle.focus();
     });
   }
+  const visibleItems = (list) => [...list.querySelectorAll('[role^="menuitem"]')].filter((b) => !b.closest("li").hidden);
+  // 一覧は position: fixed で、押したボタンの右端に合わせて下に開く。画面の下に収まらなければ上に開き、左右は画面の中に収める
+  // （盤面の overflow に切られず、狭い幅でも潰れない）。幅の変化では閉じ、スクロールでは置き直す
+  function placeRowMenu(toggle, list) {
+    const r = toggle.getBoundingClientRect(), w = list.offsetWidth, h = list.offsetHeight, gap = 4;
+    const left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8));
+    const top = r.bottom + gap + h <= innerHeight ? r.bottom + gap : Math.max(8, r.top - gap - h);
+    list.style.left = `${left}px`; list.style.top = `${top}px`;
+  }
   function toggleRowMenu(toggle) {
     const list = toggle.parentElement.querySelector(".row-menu-list");
     const open = list.hidden;
     list.hidden = !open; toggle.setAttribute("aria-expanded", String(open));
-    if (open) list.querySelector('[role^="menuitem"]')?.focus();
+    if (open) { placeRowMenu(toggle, list); visibleItems(list)[0]?.focus(); }
   }
+  const closeAllRowMenus = () => closeRowMenus(null, null);
+  addEventListener("resize", closeAllRowMenus);
+  // スクロールでは閉じず、開いているメニューを押したボタンに合わせて置き直す
+  addEventListener("scroll", (ev) => {
+    if (ev.target.closest?.(".row-menu-list")) return;
+    document.querySelectorAll(".row-menu-list:not([hidden])").forEach((list) => placeRowMenu(list.parentElement.querySelector("[data-row-menu]"), list));
+  }, true);
   // メニューの中のキー。上下で項目を移り、Esc で閉じて元のボタンへ戻る。Tab は閉じてから普通に移る
   function rowMenuKey(ev) {
     const list = ev.target.closest && ev.target.closest(".row-menu-list");
     const toggle = ev.target.closest && ev.target.closest("[data-row-menu][aria-expanded='true']");
-    if (!list && !toggle) return false;
+    if (!list && !toggle) {
+      const closed = ev.key === "ArrowDown" && ev.target.matches && ev.target.matches("[data-row-menu][aria-expanded='false']");
+      if (closed) { ev.preventDefault(); toggleRowMenu(ev.target); return true; }
+      return false;
+    }
     const menu = (list || toggle.parentElement.querySelector(".row-menu-list"));
     const button = menu.parentElement.querySelector("[data-row-menu]");
     if (ev.key === "Escape") { ev.stopPropagation(); menu.hidden = true; button.setAttribute("aria-expanded", "false"); button.focus(); return true; }
     if (ev.key === "Tab") { menu.hidden = true; button.setAttribute("aria-expanded", "false"); if (list) button.focus(); return false; }
     if (!list || !["ArrowDown", "ArrowUp", "Home", "End"].includes(ev.key)) return false;
-    const items = [...list.querySelectorAll('[role^="menuitem"]')];
+    const items = visibleItems(list);
     const at = items.indexOf(ev.target);
     const next = ev.key === "Home" ? 0 : ev.key === "End" ? items.length - 1 : (at + (ev.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
     ev.preventDefault(); items[next].focus(); return true;
   }
 
   // ---- 消す操作。タスクはすぐ消して、知らせの「取り消す」で戻す ----
+  // 取り消しは、消す前の並び（id の列）を覚え、その並びで後ろにあった残りの行の前へ戻す（続けて消した分を古い順に取り消しても、元の並びになる）
   function deleteTaskWithUndo(id) {
     const at = D.tasks.findIndex((y) => y.id === id);
     if (at < 0) return;
+    const order = D.tasks.map((y) => y.id);
     const [x] = D.tasks.splice(at, 1);
     if (drawer.id === id) closeDrawer(true);
     redrawAll();
+    // 消した行の近くへフォーカスを残す（行が消えると body に落ちる）
+    const menus = document.querySelectorAll(".entry .row-menu-btn, .card .row-menu-btn");
+    menus[Math.min(at, menus.length - 1)]?.focus();
     toast(`${icon("check")}${t("task")}を削除しました`, "取り消す", () => {
-      D.tasks.splice(Math.min(at, D.tasks.length), 0, x);
+      const after = order.slice(order.indexOf(id) + 1).find((i) => D.tasks.some((y) => y.id === i));
+      const pos = after ? D.tasks.findIndex((y) => y.id === after) : D.tasks.length;
+      D.tasks.splice(pos, 0, x);
       redrawAll();
     });
   }
@@ -1633,7 +1685,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const input = ev.target.matches && ev.target.matches("input[data-draft]") ? ev.target : null;
     if (!input) return false;
     if (ev.key === "Enter") { if (ev.isComposing || ev.keyCode === 229) return true; ev.preventDefault(); createFromDraft(input); return true; }
-    if (ev.key === "Escape") { if (ev.isComposing || ev.keyCode === 229) return true; ev.stopPropagation(); input.value = ""; input.blur(); return true; }
+    if (ev.key === "Escape") { if (ev.isComposing || ev.keyCode === 229) return true; ev.stopPropagation(); input.value = ""; return true; }
     return false;
   }
 
@@ -1642,7 +1694,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     ["見出し", "# ", "h1"], ["小見出し", "## ", "h2"], ["箇条書き", "- ", "list"], ["番号付きの一覧", "1. ", "ol"],
     ["チェックリスト", "- [ ] ", "todo"], ["引用", "> ", "quote"], ["コードブロック", "```\n\n```", "code"], ["区切り線", "---\n", "rule"],
   ];
-  const slash = { ta: null, items: [], at: 0, from: 0 };
+  const slash = { ta: null, items: [], at: 0, from: 0, query: "" };
   function slashQuery(ta) {
     if (ta.selectionStart !== ta.selectionEnd) return null;
     const pos = ta.selectionStart, lineStart = ta.value.lastIndexOf("\n", pos - 1) + 1;
@@ -1656,6 +1708,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       menu = document.createElement("ul");
       menu.className = "slash-menu"; menu.id = `slash-${ta.id || "menu"}`; menu.setAttribute("role", "listbox"); menu.setAttribute("aria-label", "Markdown を入れる"); menu.hidden = true;
       ta.parentElement.append(menu);
+      // 候補の数と選んでいる項目は、常に置く読み上げの領域で伝える（textarea には combobox の role を付けない）
+      const status = document.createElement("div");
+      status.className = "visually-hidden"; status.setAttribute("role", "status"); status.dataset.slashStatus = "";
+      ta.parentElement.append(status);
     }
     return menu;
   }
@@ -1663,7 +1719,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!slash.ta) return false;
     const menu = slash.ta.parentElement.querySelector(".slash-menu"), was = menu && !menu.hidden;
     if (menu) menu.hidden = true;
-    slash.ta.removeAttribute("role"); slash.ta.removeAttribute("aria-expanded"); slash.ta.removeAttribute("aria-controls"); slash.ta.removeAttribute("aria-activedescendant"); slash.ta.removeAttribute("aria-autocomplete");
+    slash.at = 0;
+    const status = slash.ta.parentElement.querySelector("[data-slash-status]");
+    if (status) status.textContent = "";
     slash.ta = null;
     return Boolean(was);
   }
@@ -1671,20 +1729,26 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const ta = slash.ta, menu = slashMenuEl(ta);
     menu.innerHTML = slash.items.map(([label, , key], i) => `<li class="slash-item" role="option" id="${menu.id}-${key}" aria-selected="${i === slash.at}" data-slash-pick="${i}"><span>${label}</span><small>${esc(SLASH_ITEMS.find((s) => s[2] === key)[1].trim() || "")}</small></li>`).join("");
     menu.hidden = false;
-    ta.setAttribute("role", "combobox"); ta.setAttribute("aria-expanded", "true"); ta.setAttribute("aria-controls", menu.id); ta.setAttribute("aria-autocomplete", "list");
-    ta.setAttribute("aria-activedescendant", `${menu.id}-${slash.items[slash.at][2]}`);
+    const status = ta.parentElement.querySelector("[data-slash-status]");
+    if (status) status.textContent = `候補 ${slash.items.length} 件。選んでいる項目: ${slash.items[slash.at][0]}。上下の矢印で選び、Enter で入れます`;
   }
   function updateSlash(ta) {
     const q = slashQuery(ta);
     const items = q ? SLASH_ITEMS.filter(([label, , key]) => label.includes(q.query) || key.startsWith(q.query.toLowerCase())) : [];
     if (!q || !items.length) { closeSlash(); return; }
     if (slash.ta && slash.ta !== ta) closeSlash();
-    slash.ta = ta; slash.items = items; slash.from = q.from; slash.at = Math.min(slash.at, items.length - 1);
+    // 開き直しと、絞り込みの文字が変わったときは、先頭を選ぶ
+    if (!slash.ta || slash.query !== q.query) slash.at = 0;
+    slash.ta = ta; slash.items = items; slash.from = q.from; slash.query = q.query; slash.at = Math.min(slash.at, items.length - 1);
     renderSlash();
   }
   function pickSlash(i) {
     const ta = slash.ta, item = slash.items[i];
     if (!ta || !item) return;
+    // キャレットを動かした後は、今の行から取り直す。「/」の行でなくなっていれば入れずに閉じる
+    const q = slashQuery(ta);
+    if (!q) { closeSlash(); return; }
+    slash.from = q.from;
     ta.setRangeText(item[1], slash.from, ta.selectionStart, "end");
     // コードブロックは、囲みの間にカーソルを置く
     if (item[2] === "code") ta.setSelectionRange(slash.from + 4, slash.from + 4);
@@ -1695,7 +1759,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function slashKey(ev) {
     if (!slash.ta || ev.target !== slash.ta || ev.isComposing || ev.keyCode === 229) return false;
     if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); slash.at = (slash.at + (ev.key === "ArrowDown" ? 1 : -1) + slash.items.length) % slash.items.length; renderSlash(); return true; }
-    if (ev.key === "Enter" || ev.key === "Tab") { ev.preventDefault(); pickSlash(slash.at); return true; }
+    if (ev.key === "Enter") {
+      // キャレットを「/」の行から離していたら、小窓を閉じて普通の Enter（改行）に任せる
+      if (!slashQuery(slash.ta)) { closeSlash(); return false; }
+      ev.preventDefault(); pickSlash(slash.at); return true;
+    }
     if (ev.key === "Escape") { ev.stopPropagation(); closeSlash(); return true; }
     return false;
   }
@@ -1703,6 +1771,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function continueList(ta) {
     const pos = ta.selectionStart;
     if (pos !== ta.selectionEnd) return false;
+    // キャレットの後ろに文字があるときは、普通の改行に任せる
+    if (ta.value[pos] !== undefined && ta.value[pos] !== "\n") return false;
     const lineStart = ta.value.lastIndexOf("\n", pos - 1) + 1;
     const m = /^(\s*)(- \[[ x]\] |[-*] |\d+\. |> )(.*)$/.exec(ta.value.slice(lineStart, pos));
     if (!m) return false;
@@ -2678,7 +2748,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     document.getElementById("breadcrumb-slot").innerHTML = breadcrumbHtml();
     document.getElementById("app-nav").innerHTML = navHtml(page.current, page.operator ? OPERATOR_PAGES : PAGES);
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
+    const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
     document.getElementById("content").innerHTML = page.render();
+    drafts.forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
     applyNavCollapsed();
     applyTheme();
     renderDrawer();
@@ -2892,7 +2964,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const [id, name, value] = el.dataset.chipSet.split(":");
       const x = task(id);
       if (x) { if (name === "pts") x.pts = value === "" ? null : Number(value); else x.who = value || null; }
-      redrawAll(); toast(`${icon("check")}保存しました`); return;
+      redrawAll(); document.querySelector(`[data-chip-for="${id}:${name}"]`)?.focus(); toast(`${icon("check")}保存しました`); return;
     }
     // 組織の切り替えを開閉する。外を押したら閉じる（押したものの動きは続ける）
     if (hit("data-org-menu")) {
@@ -2914,7 +2986,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if ((el = hit("data-sun"))) {
       const x = task(el.dataset.sun);
       x.todayOn = x.todayOn === D.today ? null : D.today;
-      redrawAll(); return;
+      redrawAll(); document.querySelector(`[data-menu-for="${x.id}"]`)?.focus(); return;
     }
     if ((el = hit("data-done"))) {
       const x = task(el.dataset.done);
@@ -3366,7 +3438,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
-    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
+    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
     card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,

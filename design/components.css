@@ -1672,17 +1672,22 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .draft-row .input { flex: 1 1 auto; min-width: 0; border-style: dashed; }
 .draft-row .input:focus { border-style: solid; }
 .tree-children .draft-row { padding-left: var(--space-10); }
+@media (max-width: 760px) { .tree-children .draft-row { padding-left: var(--space-4); } }
+.entry-today { display: inline-flex; align-items: center; gap: var(--space-1); }
 .board-col > .draft-row { padding: var(--space-2) 0 0; border-top: 0; }
 /* 属性のチップ（.chip-btn）。押すと値を選ぶ。未設定（.is-unset）は薄い破線の形で、値があれば .chip と同じ */
 .chip-btn { font: inherit; font-size: var(--text-xs); cursor: pointer; position: relative; }
 .chip-btn:hover { border-color: var(--color-control-edge); }
 .chip-btn.is-unset { color: var(--color-muted); background: none; border-style: dashed; }
 .chip-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.chip-btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.card-foot { flex-wrap: wrap; }
+.card-foot .row-menu { min-width: 0; max-width: 100%; }
 /* 行の「⋯」（.row-menu）。広い幅ではホバーと行の中のフォーカスで出し、開いている間は出したままにする。opacity だけなので、見えなくてもキーボードで届く */
 .row-menu { position: relative; display: inline-flex; flex: none; }
 .row-menu-btn { opacity: 0; }
 :is(.entry, .tree-row, .card):is(:hover, :focus-within) .row-menu-btn, .row-menu-btn[aria-expanded="true"], .row-menu-btn:focus-visible { opacity: 1; }
-.row-menu-list { right: 0; left: auto; z-index: 12; }
+.row-menu-list { position: fixed; z-index: 30; width: max-content; min-width: 12rem; max-width: min(20rem, calc(100vw - 2 * var(--space-4))); }
 .row-menu-list .menu-item { display: flex; align-items: center; gap: var(--space-2); }
 .row-menu-list .menu-item .ico { flex: none; color: var(--color-muted); }
 .row-menu-list .menu-item.is-danger { color: var(--color-danger); }
@@ -1691,10 +1696,10 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
   .chip-btn::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
   .chip-btn { margin-block: 10px; }
 }
-/* 書きっぱなしの欄（.is-inline）。罫を消して文字に近づけ、触れると罫を出し、押すと入力欄になる。引き出しのタイトル、リンク、本文に使う */
-.input.is-inline, .textarea.is-inline { background: transparent; border-color: transparent; }
-.input.is-inline:hover, .textarea.is-inline:hover { border-color: var(--color-line); }
-.input.is-inline:focus, .textarea.is-inline:focus { background: var(--color-surface); border-color: var(--color-control-edge); }
+/* 書きっぱなしの欄（.is-inline）。静止時は破線の罫で書ける欄と示し、押すと実線の入力欄になる。引き出しのタイトル、リンク、本文に使う */
+.input.is-inline, .textarea.is-inline { background: transparent; border-color: var(--color-line); border-style: dashed; }
+.input.is-inline:hover, .textarea.is-inline:hover { border-color: var(--color-control-edge); }
+.input.is-inline:focus, .textarea.is-inline:focus { background: var(--color-surface); border-color: var(--color-control-edge); border-style: solid; }
 .drawer-title .input.is-inline { font: inherit; font-weight: inherit; letter-spacing: inherit; width: 100%; }
 /* 「/」の小窓（.slash-menu）。本文の欄の下に出る候補。上下で選び、Enter で入れ、Esc で閉じる */
 .slash-wrap { position: relative; }
@@ -1703,7 +1708,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .slash-menu[hidden] { display: none; }
 .slash-item { display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-1); cursor: pointer; min-height: 36px; }
 .slash-item small { color: var(--color-muted); font-size: var(--text-xs); }
-.slash-item[aria-selected="true"] { background: var(--color-accent-soft); }
+.slash-item[aria-selected="true"] { background: var(--color-accent-soft); box-shadow: inset 3px 0 0 var(--color-accent); font-weight: 700; }
 @media (max-width: 760px), (pointer: coarse) { .slash-item { min-height: 44px; align-items: center; } }
 
 /* ===== 知らせ（トースト） ===== */

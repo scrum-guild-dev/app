@@ -164,3 +164,100 @@ test('見本のスプリント: 列の末尾の空の行に題を打って Enter
   await expect(page.locator('.card-title', { hasText: '列に足すカード' })).toHaveCount(1);
   await expect(draft).toBeFocused();
 });
+
+test('見本のバックログ: 幅 390px で「⋯」を開くと、メニューが読める幅で画面の中に収まる', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openSample(page, 'backlog.html');
+  await page.locator('.entry .row-menu-btn').first().click();
+  const list = page.locator('.row-menu-list:not([hidden])');
+  const box = (await list.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(150);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(390);
+});
+
+test('見本のスプリント: 先頭の列のカードのメニューが、盤面に切られず画面の中に収まる', async ({ page }) => {
+  await openSample(page, 'sprint.html');
+  await page.locator('.board-col').first().locator('.card .row-menu-btn').first().click();
+  const box = (await page.locator('.row-menu-list:not([hidden])').boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  const viewport = page.viewportSize()!;
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+});
+
+test('見本のバックログ: 続けて消した2件を古い方から取り消しても、元の並びに戻る', async ({ page }) => {
+  await openSample(page, 'backlog.html');
+  const titles = page.locator('.tree > div:last-child > .entry .entry-title');
+  const before = await titles.allTextContents();
+  for (let i = 0; i < 2; i++) {
+    await page.locator('.tree > div:last-child > .entry').first().hover();
+    await page.locator('.tree > div:last-child > .entry .row-menu-btn').first().click();
+    await page.locator('.row-menu-list:not([hidden]) [data-task-delete]').click();
+  }
+  await page.locator('.toast-action').first().click();
+  await page.locator('.toast-action').first().click();
+  expect(await titles.allTextContents()).toEqual(before);
+});
+
+test('見本のバックログ: 空の行の書きかけは別の行の操作で消えず、チップを選んだ後もフォーカスが戻る', async ({
+  page,
+}) => {
+  await openSample(page, 'backlog.html');
+  const story = page.locator('input[data-draft^="story:"]').first();
+  await story.fill('書きかけのA');
+  const root = page.locator('input[data-draft="root:backlog"]');
+  await root.fill('Bを作る');
+  await root.press('Enter');
+  await expect(story).toHaveValue('書きかけのA');
+
+  const chip = page.locator('.chip-btn.is-unset').first();
+  const key = (await chip.getAttribute('data-chip-for'))!;
+  await chip.click();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.locator(`[data-chip-for="${key}"]`)).toBeFocused();
+});
+
+test('見本の引き出し: 「/」の小窓は開き直すと先頭が選ばれ、キャレットを離して Enter しても本文を壊さない', async ({
+  page,
+}) => {
+  await openSample(page, 'backlog.html');
+  await page.locator('a.entry-title').first().click();
+  const body = page.locator('#drawer [data-drawer-input="body"]');
+  await body.fill('');
+  await body.focus();
+  await page.keyboard.type('/');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Escape');
+  await body.fill('');
+  await page.keyboard.type('/');
+  await page.keyboard.press('Enter');
+  await expect(body).toHaveValue('# ');
+
+  await body.fill('A\n\nB');
+  await body.evaluate((el: HTMLTextAreaElement) => el.setSelectionRange(2, 2));
+  await page.keyboard.type('/');
+  await expect(page.locator('#drawer .slash-menu')).toBeVisible();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('Enter');
+  await expect(body).toHaveValue('A\n/\nB\n');
+});
+
+test('見本の引き出し: タイトルとリンクを保存すると、見出しと「開く」が保存した値に替わる', async ({ page }) => {
+  await openSample(page, 'backlog.html');
+  await page.locator('a.entry-title').first().click();
+  const drawer = page.locator('#drawer');
+  await drawer.locator('[data-drawer-input="title"]').fill('見出しも替わる');
+  await drawer.locator('[data-drawer-input="title"]').press('Enter');
+  await expect(drawer.locator('#drawer-title')).toHaveText('見出しも替わる');
+  const link = drawer.locator('[data-drawer-input="link"]');
+  await link.fill('https://example.com/new');
+  await link.press('Enter');
+  await expect(drawer.locator('a[data-drawer-open]')).toHaveAttribute('href', 'https://example.com/new');
+  await link.fill('');
+  await link.press('Enter');
+  await expect(drawer.locator('a[data-drawer-open]')).toHaveCount(0);
+});
