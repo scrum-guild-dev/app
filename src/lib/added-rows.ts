@@ -1,3 +1,5 @@
+import { sameFilter, type BacklogFilter } from './backlog-filter.ts';
+
 // 画面で足したタスクの行を、読み直しのあとも残すか。木の画面（`src/routes/[slug]/w/[id]/+page.svelte`）が使う。
 // at は足した時刻、loadedAt は読み直しを始めた時刻（どちらも performance.now()）。
 // - 完了にした行と、読み直した木に入った行は捨てる（木が持つので、足した行は要らない）
@@ -18,4 +20,12 @@ export function keepAddedRow(
 // - 同じ時刻も残す側に倒す（時刻の粒度が粗い環境の対策）
 export function completionSettled(at: number, loadedAt: number): boolean {
   return loadedAt > at;
+}
+
+// 読み直した木へ、足した行と完了の印を持ち越してよいか。同じワークスペースで、前の木と同じ絞り込みの木だけ持ち越す。
+// - 絞り込みの条件が替わった読み直しの木は別の条件の木なので、木に入らない行が残り続けないよう、印も行も捨てる
+// - 同じ絞り込みのまま遅れて届いた木は、絞っていても絞っていなくても同じ競合（completionSettled）なので、持ち越しの判定に進める
+// previous は前に読んだ木の絞り込み（まだ読んでいなければ undefined）
+export function carriesOver(previous: BacklogFilter | undefined, next: BacklogFilter, sameWorkspace: boolean): boolean {
+  return sameWorkspace && previous !== undefined && sameFilter(previous, next);
 }
