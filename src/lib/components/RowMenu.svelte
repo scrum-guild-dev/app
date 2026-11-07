@@ -140,7 +140,7 @@
           class="menu-item"
           type="button"
           role="menuitem"
-          aria-disabled={item.disabled === true ? true : undefined}
+          aria-disabled={item.disabled === true}
           onclick={() => select(item)}><Icon name={item.icon} /><span>{item.label}</span></button
         >
       </li>

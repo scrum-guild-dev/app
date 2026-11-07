@@ -110,9 +110,9 @@
   let mark = $state<HTMLElement>();
   let menu = $state<ReturnType<typeof RowMenu>>();
   export function focusCompletion(): void {
-    if (reopenButton !== undefined) reopenButton.focus();
-    else if (mark !== undefined) mark.focus();
-    else menu?.focus();
+    // bind:this は、要素が消えると null に戻る
+    (reopenButton ?? mark)?.focus();
+    if (!reopenButton && !mark) menu?.focus();
   }
   // 親を移すと行は別の親の下に作り直されるので、画面が新しい行の「⋯」へフォーカスを戻すのに使う
   export function focusMoveParent(): void {
