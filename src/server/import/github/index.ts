@@ -20,10 +20,13 @@ const USER_AGENT = 'scrum-guild';
 const PAGE_SIZE = 100;
 // 頁送りの上限。超える（100頁目まで満杯で続く）ときは、止まらずに回り続けないよう断る
 const MAX_PAGES = 100;
+// 候補の一覧の全体の期限。1回ごとの時間切れ（10秒）とは別に、頁を送る合計を抑える
+const LIST_DEADLINE_MS = 60_000;
 
 // fine-grained PAT: `github_pat_` + 英数字とアンダースコア。全体で255文字まで
 const PAT_PATTERN = /^github_pat_[A-Za-z0-9_]{22,244}$/;
-const FULL_NAME_PATTERN = /^[^/\s]+\/[^/\s]+$/;
+// リポジトリの `owner/name`。GitHub の名前の文字（英数字、`_`、`.`、`-`）と長さに絞る（画面と DB に入る値のため）
+const FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,80}\/[A-Za-z0-9_.-]{1,100}$/;
 const LOGIN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
 
 // メッセージは固定の文だけにする。PAT、応答の本文、URL、例外の message を入れない
@@ -105,8 +108,10 @@ async function verifyCredential(credential: string, fetcher: typeof fetch): Prom
 async function listScopeCandidates(credential: string, fetcher: typeof fetch): Promise<ScopeCandidate[]> {
   const pat = requireShape(credential);
   const found = new Map<string, ScopeCandidate>();
+  const deadline = Date.now() + LIST_DEADLINE_MS;
   // 101頁目は、100頁目まで満杯だったときに続きが無いことを確かめるためだけに取る
   for (let page = 1; page <= MAX_PAGES + 1; page++) {
+    if (Date.now() > deadline) throw fail('unavailable');
     const body = await getJson(`${REPOS_URL}?per_page=${PAGE_SIZE}&page=${page}`, pat, fetcher);
     if (!Array.isArray(body)) throw fail('unavailable');
     if (page > MAX_PAGES && body.length > 0) throw fail('unavailable');

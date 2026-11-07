@@ -57,6 +57,8 @@ export function createFakePatGithub() {
   }
 
   const fetcher: typeof fetch = async (input, init) => {
+    // Workers の実行環境が RequestInit を受け付けるかを確かめる（redirect の値の誤りなどは、ここで TypeError になる）
+    new Request(input, init);
     const url = String(input);
     const headers: Record<string, string> = {};
     new Headers(init?.headers).forEach((value, key) => {
