@@ -48,6 +48,11 @@ async function createStory(page: Page, label: string, title: string): Promise<vo
   await reloaded;
 }
 
+// 送らないことは、押した後にしばらく待っても要求が来ないことで確かめる（待たずに 0 件を見ると、遅れて飛ぶ要求を見逃す）
+async function expectNoRequest(page: Page, url: RegExp): Promise<void> {
+  await expect(page.waitForRequest(url, { timeout: 1000 })).rejects.toThrow();
+}
+
 test('作ったワークスペース: エピックを作り、ストーリーを下へ移し、配下のタスクを完了にしてからストーリーを完了にし、取り消す', async ({
   page,
 }) => {
@@ -131,7 +136,8 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   // aria-disabled の項目は Playwright が押せないものとして待つので、待たずに押す
   await rowMenuToggle(story, '残高が見える').click();
   await completeStory.click({ force: true });
-  await expect.poll(() => sent).toBe(0);
+  await expectNoRequest(page, /\/story-complete$/);
+  expect(sent).toBe(0);
 
   // タスクを完了にすると、読み直さずに押せるようになり、エピックの「完了」にも足される
   await story.getByRole('button', { name: '完了にする: 残高の API を作る' }).click();
@@ -254,7 +260,8 @@ test('クリアしたエピックの下の完了したストーリーは、取�
   await expect(story.locator('.tree-note')).toBeVisible();
   // aria-disabled のボタンは Playwright が押せないものとして待つので、待たずに押す
   await reopen.click({ force: true });
-  await expect.poll(() => sent).toBe(0);
+  await expectNoRequest(page, /\/story-complete$/);
+  expect(sent).toBe(0);
 });
 
 test('中止したエピックの下のストーリーは、完了にするを押せず、理由を出す', async ({ page }) => {
@@ -279,7 +286,8 @@ test('中止したエピックの下のストーリーは、完了にするを�
   await expect(complete).toHaveAccessibleDescription('完了か中止したエピックの下のストーリーは完了にできません');
   await rowMenuToggle(story, SEED_EPIC_STORY).click();
   await complete.click({ force: true });
-  await expect.poll(() => sent).toBe(0);
+  await expectNoRequest(page, /\/story-complete$/);
+  expect(sent).toBe(0);
 });
 
 test('ストーリーの行は、メニューの横の幅と指で押す画面でも、題の列を 12rem 以上に保ち、横にはみ出さない', async ({
