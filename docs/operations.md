@@ -112,6 +112,7 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 | `GITHUB_CLIENT_SECRET` | 同じ OAuth App のクライアントシークレット |
 | `GOOGLE_CLIENT_ID` | Google のログインの OAuth クライアントのクライアント ID（下の「Google の OAuth クライアント」） |
 | `GOOGLE_CLIENT_SECRET` | 同じ OAuth クライアントのクライアントシークレット |
+| `CONNECTION_CREDENTIAL_KEYS` | 接続の認証情報を暗号化する鍵（下の「接続の認証情報の鍵」） |
 
 `GITHUB_CLIENT_ID` と `GITHUB_CLIENT_SECRET` の決まり。
 
@@ -195,6 +196,21 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 - `sub` は数字だけの長い文字列で、数値として扱うと桁が落ちる。表示された文字列をそのまま、`google:` の後ろに入れる（例 `google:118234567890123456789`）
 - Step 2 の応答に出るトークンはコピーせず、jwt.io など別のサイトにも貼らない。調べ終えたら Playground のタブを閉じ、要らなければ Google アカウントの「サードパーティ製のアプリとサービス」から Playground への許可を外す
 - 断られたログインの `sub` をログや画面に出す機能は作らない。試した人全員の ID を扱うことになるため
+
+### 接続の認証情報の鍵
+
+接続の認証情報（GitHub の PAT、Backlog の API キー）は、AES-GCM（256ビット）で暗号化して DB に保存する（`src/server/crypto/credential.ts`）。鍵はシークレット `CONNECTION_CREDENTIAL_KEYS` に、版を付けた JSON を1行で入れる。
+
+```json
+{"1":"<base64 の32バイト>"}
+```
+
+- 版は 1 以上の整数の文字列。暗号化には最大の版を使い、暗号文には使った版が付く。復号は暗号文の版の鍵を引くので、新旧の鍵を並べて置ける
+- 鍵は 32 バイトの乱数を base64 にしたもの。作り方は `openssl rand -base64 32`
+- 本番は `wrangler secret put CONNECTION_CREDENTIAL_KEYS`（か、ダッシュボードの Worker の Settings → Variables and Secrets で Type を `Secret`）で入れ、入れた後に `/api/health` が 200 で返ることを確かめる。開発用は `.dev.vars.example` の値を `.dev.vars` に写す。開発用の値を本番に使わない
+- 無いか形が違うと、認証情報の保存と読み出しは固定の文のエラーで止まる。鍵も平文も暗号文も、エラーにもログにも出さない
+- 暗号文には接続の ID を認証データとして付けるので、別の接続の行へ写しても復号できない
+- 鍵は git、ログ、Issue、PR に書かない。失った鍵の暗号文は復号できないので、各自が認証情報を登録し直す。鍵の入れ替えは下の「鍵の入れ替え」
 
 ### ログインのレート制限が見る IP
 
