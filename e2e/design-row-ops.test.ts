@@ -261,3 +261,16 @@ test('見本の引き出し: タイトルとリンクを保存すると、見出
   await link.press('Enter');
   await expect(drawer.locator('a[data-drawer-open]')).toHaveCount(0);
 });
+
+test('見本のバックログ: 幅 390px で、チップの上端の外側 20px を押してもチップが押される', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openSample(page, 'backlog.html');
+  const chip = page.locator('.chip-btn').first();
+  await chip.scrollIntoViewIfNeeded();
+  const hit = await chip.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const target = document.elementFromPoint(r.left + r.width / 2, r.top - 10);
+    return target === el || el.contains(target);
+  });
+  expect(hit).toBe(true);
+});

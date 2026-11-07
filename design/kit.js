@@ -436,7 +436,7 @@
       : [["", `${label}なし`], ...Object.entries(D.users).filter(([, u]) => !u.left).map(([id, u]) => [id, u.name])];
     const current = isPts ? (x.pts == null ? "" : String(x.pts)) : (x.who || "");
     const items = options.map(([value, text]) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${value === current}" data-chip-set="${x.id}:${name}:${value}">${value === current ? icon("check") : ""}<span>${esc(text)}</span></button></li>`).join("");
-    return `<span class="row-menu"><button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-row-menu data-chip-for="${x.id}:${name}" aria-haspopup="menu" aria-expanded="false" aria-label="${label}: ${set ? esc(shown) : "未設定"}">${esc(shown)}</button>` +
+    return `<span class="row-menu"><button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-row-menu data-chip-for="${x.id}:${name}" aria-haspopup="menu" aria-expanded="false" aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(shown)}"><span class="chip-text">${esc(shown)}</span></button>` +
       `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" hidden>${items}</ul></span>`;
   }
 
