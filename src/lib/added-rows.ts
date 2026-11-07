@@ -30,3 +30,13 @@ export function completionSettled(at: number, loadedAt: number): boolean {
 export function carriesOver(previous: BacklogFilter | undefined, next: BacklogFilter, sameWorkspace: boolean): boolean {
   return sameWorkspace && previous !== undefined && sameFilter(previous, next);
 }
+
+// 完了にして写した行（fromTree）の親が、読み直した木に無いか。絞り込み中は、当たるタスクが唯一だった親がその完了で木から外れる。
+// 遅れて届いた木でそうなると、行はどの親の下にも描かれないのに件数には数えられるので、行と印を捨てる（親ごと外れる競合の無い読み直しと同じ結果）
+// storyId が null（親なし）の行と、木を読めていない（treeLoaded が偽）ときは、孤立と言えない
+export function orphanedFromTree(
+  row: { storyId: string | null; fromTree?: true },
+  loaded: { treeLoaded: boolean; storyIds: ReadonlySet<string> },
+): boolean {
+  return loaded.treeLoaded && row.fromTree === true && row.storyId !== null && !loaded.storyIds.has(row.storyId);
+}

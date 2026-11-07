@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { carriesOver, completionSettled, keepAddedRow } from './added-rows.ts';
+import { carriesOver, completionSettled, keepAddedRow, orphanedFromTree } from './added-rows.ts';
 
 const base = { inLoadedTree: false, completed: false, treeLoaded: true, loadedAt: 100 };
 
@@ -55,4 +55,14 @@ test('絞り込みの条件が替わった木は持ち越さない', () => {
 test('ワークスペースが替わったときと、最初の木は持ち越さない', () => {
   expect(carriesOver(none, none, false)).toBe(false);
   expect(carriesOver(undefined, none, true)).toBe(false);
+});
+
+test('orphanedFromTree: 写した行の親が木に無いときだけ孤立とする', () => {
+  const ids = new Set(['s1']);
+  const row = { storyId: 's2', fromTree: true as const };
+  expect(orphanedFromTree(row, { treeLoaded: true, storyIds: ids })).toBe(true);
+  expect(orphanedFromTree({ ...row, storyId: 's1' }, { treeLoaded: true, storyIds: ids })).toBe(false);
+  expect(orphanedFromTree({ storyId: 's2' }, { treeLoaded: true, storyIds: ids })).toBe(false);
+  expect(orphanedFromTree({ ...row, storyId: null }, { treeLoaded: true, storyIds: ids })).toBe(false);
+  expect(orphanedFromTree(row, { treeLoaded: false, storyIds: new Set() })).toBe(false);
 });

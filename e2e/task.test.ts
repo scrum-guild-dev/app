@@ -2,7 +2,7 @@
 // 詳細の引き出しで完了にしたタスクは、完了の帯の「戻す」で戻せる。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。CSP の違反も確かめる
 import { expect, test } from './fixtures.ts';
-import { addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addStoryRow, addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
@@ -223,4 +223,45 @@ test('絞り込み中に木にもとからあるタスクを完了にして、�
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(row).toHaveCount(1);
   await expect(row.getByRole('img', { name: '絞られる行: 完了' })).toBeVisible();
+});
+
+test('絞り込み中にストーリーの下のタスクを完了にして、親が木から外れた読み直しが遅れて届いても、行と件数の読み上げが食い違わない', async ({
+  page,
+}) => {
+  await createWorkspace(page, '親ごと外れる遅れる読み直し');
+  // ストーリーの題は絞り込みの語を含めない。絞り込みに当たるのはタスクだけ
+  await addStoryRow(page, '親の物語');
+  await addTaskRow(page, '絞られる子の行', '親の物語');
+  await page.reload();
+  await page.goto(`${page.url().split('?')[0]}?q=${encodeURIComponent('絞られる')}`);
+  const row = page.locator('.entry', { hasText: '絞られる子の行' });
+  await expect(row).toHaveCount(1);
+  const result = page.getByRole('status').filter({ hasText: '1 件に絞りました' });
+  await expect(result).toHaveCount(1);
+
+  // ポイントの保存のあとの読み直しを、完了より前に出したまま止める
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let held = 0;
+  await page.route('**/api/aoba/backlog-tree', async (route) => {
+    if (held++ > 0) return route.continue();
+    // サーバーが答えるのは完了の後。木にタスクは無く、唯一の当たりだった親も外れる
+    await gate;
+    await route.fulfill({ response: await route.fetch() });
+  });
+  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
+  await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
+  await expect.poll(() => held).toBe(1);
+
+  await row.getByRole('button', { name: /完了にする/ }).click();
+  await expect(row.getByRole('img', { name: '絞られる子の行: 完了' })).toBeVisible();
+
+  const delivered = page.waitForResponse((response) => response.url().endsWith('/api/aoba/backlog-tree'));
+  release();
+  await delivered;
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  // 親が木に無いので、行は消える。件数の読み上げは行の数と合い、「当たるものなし」になる
+  await expect(row).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '親の物語' })).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: '当たるものはありません' })).toHaveCount(1);
 });
