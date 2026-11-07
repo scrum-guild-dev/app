@@ -24,6 +24,7 @@ import {
   asIs,
   changeLogStatement,
   linkUrl,
+  type MergeFields,
   longText,
   mergeTargetConditions,
   readMergeTarget,
@@ -365,7 +366,7 @@ const MERGE_FIELDS = {
   body_md: longText,
   due_on: asIs,
   link_url: linkUrl,
-};
+} satisfies MergeFields<(typeof EDITABLE_FIELDS)[number]>;
 
 export const storyUpdateOperation = implement(storyUpdate, async ({ db, actor, workspace, input }) => {
   const actorUserId = actorUserIdOf(actor);

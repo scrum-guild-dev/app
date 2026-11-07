@@ -9,6 +9,7 @@ import {
   asIs,
   changeLogStatement,
   linkUrl,
+  type MergeFields,
   longText,
   mergeTargetConditions,
   readMergeTarget,
@@ -237,7 +238,12 @@ function diffOf(current: EpicRow, input: UpdatedFields, nextCategory: { id: stri
 }
 
 // 照合とまとめの欄。expected の照合と履歴のまとめは change-log-merge.ts が受け持つ（story-update、task-update と共通）
-const MERGE_FIELDS = { title: trimmed, body_md: longText, due_on: asIs, link_url: linkUrl };
+const MERGE_FIELDS = {
+  title: trimmed,
+  body_md: longText,
+  due_on: asIs,
+  link_url: linkUrl,
+} satisfies MergeFields<(typeof EDITABLE_FIELDS)[number]>;
 
 // 書き方は story-update と同じ（src/server/operations/story.ts）。読んだ値からの差を、読んだ値のままなら、という条件つきで書き、
 // 通らなかったら読み直して差を作り直す。履歴だけは、直前の UPDATE に結ぶ（previousStatementChanged）

@@ -20,7 +20,7 @@ export type ChangeMap = Record<string, [unknown, unknown]>;
 
 // 照合とまとめの対象にする欄と、その欄の値を比べる前に揃える関数。expected は入力の検証で正規化されて届くので、
 // 正規化の決まりより前に保存された値（取り込み、seed、古い行）とも比べられるよう、今の値も同じに揃えて比べる。
-// 欄ごとに関数を必ず書かせる（欄を足したら、正規化の要否を決める。足し忘れは型で落ちる）
+// 欄ごとに関数を必ず書かせる（欄を足したら、正規化の要否を決める）。呼び出し側は欄の一覧（EDITABLE_FIELDS）に satisfies で結び、足し忘れを型で落とす
 export type MergeFields<F extends string> = { [K in F]: (value: string) => unknown };
 
 // 正規化の決まりが無い欄（期日、ポイントなど）
