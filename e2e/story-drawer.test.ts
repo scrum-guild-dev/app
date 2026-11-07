@@ -283,9 +283,7 @@ test('引き出しから「完了にする」と「取り消す」ができる�
   await draft.fill('残っているタスク');
   await draft.press('Enter');
   await expect(page.locator('.entry-title', { hasText: '残っているタスク' })).toBeVisible();
-  // 引き出しの完了の状態は、読み込み済みの木から取る。空の行で足した直後の行は、読み直すまで木に無い（行の側は足した行も数える）ので、読み直してから開く
-  await page.reload();
-  await expect(page.locator('.entry-title', { hasText: '残っているタスク' })).toBeVisible();
+  // 引き出しの完了の状態は story-get から読むので、空の行で足した直後のタスクも、読み直さずに数える
 
   // 配下に未完了のタスクが残るあいだは、押しても何も起きず、理由が読み上げと一緒に出る
   const blocked = await openStory(page, '配下のあるストーリー');
@@ -322,6 +320,36 @@ test('引き出しから「完了にする」と「取り消す」ができる�
   await expect(page.getByRole('status').filter({ hasText: 'ストーリーの完了を取り消しました' })).toBeVisible();
   await expect(drawer.getByRole('button', { name: '完了にする' })).toBeFocused();
   await expect(drawer.getByRole('img', { name: '完了' })).toHaveCount(0);
+});
+
+test('絞り込みで木から外れたストーリーと、バックログ以外の画面で開いたストーリーでも、完了の帯が出る', async ({
+  page,
+}) => {
+  await createWorkspace(page, '木に頼らないワークスペース');
+  await create(page, 'ストーリーを作る', '外れるストーリー');
+  await create(page, 'ストーリーを作る', '別の画面で開くストーリー');
+  const first = await openStory(page, '外れるストーリー');
+  await expect(first.getByRole('button', { name: '完了にする' })).toBeVisible();
+  const url = new URL(page.url());
+  const id = url.searchParams.get('story');
+  expect(id).not.toBeNull();
+
+  // 検索語に当たらず、木から外れたストーリーでも、帯が出て完了にできる
+  await page.goto(`${url.pathname}?q=${encodeURIComponent('当たらない語')}&story=${id}`);
+  const filtered = page.getByRole('dialog', { name: '外れるストーリー', exact: true });
+  await expect(filtered).toBeVisible();
+  await expect(filtered.getByRole('button', { name: '完了にする' })).toBeVisible();
+  const completed = waitForResponses(page, '/story-complete');
+  await filtered.getByRole('button', { name: '完了にする' }).click();
+  await completed;
+  await expect(filtered.getByRole('img', { name: '完了' })).toBeFocused();
+  await expect(filtered.getByRole('button', { name: /完了を取り消す/ })).toBeVisible();
+
+  // バックログ以外の画面（スプリント）で開いても、帯が出る
+  await page.goto(`${url.pathname}/sprint?story=${id}`);
+  const elsewhere = page.getByRole('dialog', { name: '外れるストーリー', exact: true });
+  await expect(elsewhere).toBeVisible();
+  await expect(elsewhere.getByRole('img', { name: '完了' })).toBeVisible();
 });
 
 test('引き出しの「⋯」から親を移すと、木でその親の下に並ぶ', async ({ page }) => {

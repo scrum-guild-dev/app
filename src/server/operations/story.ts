@@ -70,6 +70,9 @@ async function readStory(db: OrganizationDb, workspaceId: string, storyId: strin
           'stories.epic_id',
           'stories.category_id',
           'stories.created_by',
+          'stories.completed_at',
+          'epics.completed_at as epic_completed_at',
+          'epics.canceled_at as epic_canceled_at',
           'sc.name as category_name',
           'sc.deleted_at as category_deleted_at',
           'ec.id as epic_category_id',
@@ -110,7 +113,21 @@ function detailOf(row: StoryRow): StoryDetail {
 export const storyGetOperation = implement(storyGet, async ({ db, actor, workspace, input }) => {
   const story = await readStory(db, workspace.workspaceId, input.story_id);
   if (story === undefined) throw new ApiError(404, 'not_found');
-  return { story: detailOf(story), ...(await storyDeletion(db, actor, workspace, story)) };
+  // 完了の状態。配下の未完了のタスクは、完了にできるかの判定（story-complete）と同じく、削除していないバックログのタスクを数える
+  const open = await db.first(
+    db.statement((q) =>
+      openTasksUnder(q, workspace.workspaceId, story.id)
+        .clearSelect()
+        .select((eb) => eb.fn.countAll<number>().as('count')),
+    ),
+  );
+  return {
+    story: detailOf(story),
+    ...(await storyDeletion(db, actor, workspace, story)),
+    completed_at: story.completed_at,
+    open_task_count: Number(open?.count ?? 0),
+    parent_finished: story.epic_completed_at !== null || story.epic_canceled_at !== null,
+  };
 });
 
 // 作るストーリーの親のエピックを読む（引き継ぐ区分は、削除していないものだけ）。無ければ 404、完了か中止していれば 409（parent_completed）

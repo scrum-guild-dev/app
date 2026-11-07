@@ -24,7 +24,7 @@
   } from '../../../../lib/drawer.svelte.ts';
   import { focusPageHeading } from '../../../../lib/focus-heading.ts';
   import { formatLocalDate } from '../../../../lib/format.ts';
-  import { epicFinishedOf, parentChoicesOf, storyFactsOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
+  import { epicFinishedOf, parentChoicesOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import type { LayoutData } from './$types';
 
@@ -45,8 +45,8 @@
   // ストーリーの引き出し（StoryDrawer）は、URL の `?story=<ID>` が付いている間、同じ形で置く。タスクの引き出しと同時には開かない
   // （行のリンクが、もう一方の問い合わせを外す。両方が付いた URL は、タスクの方だけを開く）。開き方は横か真ん中だけ（ページ全体は無い）。
   // 閉じるときは `story` だけを外し、開いた行の題（data-story-id）へフォーカスを戻す。前後のストーリーへは、バックログが置いた木のストーリーの順（storyOrder）で移る。
-  // 完了の状態、期日の印の今日、親に選べるエピックは、バックログが読んだ木（page.data.tree）から渡す。木が無い画面や、絞り込みで木から外れたストーリーでは、
-  // 引き出しは完了の操作と親を移すを出さない
+  // 期日の印の今日と親に選べるエピックは、バックログが読んだ木（page.data.tree）から渡す。木が無い画面では、引き出しは親を移すを出さない。
+  // 完了の状態は、引き出しが story-get から読む（絞り込みで木から外れたストーリーでも、木の無い画面でも出る）
   let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
   const workspace = $derived(data.workspace);
@@ -147,10 +147,20 @@
   }
 
   // ---- ストーリーの引き出し ----
-  const storyAdjacent = $derived(storyId === null ? null : adjacentTaskIds(storyOrder.ids, storyId));
-  // 木のストーリーの行。完了の状態、期日の印の今日と週の始まり、親に選べるエピック。バックログの画面が読んだ木から取る
+  // 絞り込みで木から外れても（検索中に題を直した直後など）前後のボタンが消えないよう、順に載っていた間の前後を覚えておく。
+  // 別のストーリーを開き直したとき（URL から直接開いた、順に無い）は覚えがないので、ボタンを出さない
+  let lastAdjacent: { id: string; adjacent: { prev: string | null; next: string | null } } | null = null;
+  const storyAdjacent = $derived.by(() => {
+    if (storyId === null) return null;
+    const found = adjacentTaskIds(storyOrder.ids, storyId);
+    if (found !== null) {
+      lastAdjacent = { id: storyId, adjacent: found };
+      return found;
+    }
+    return lastAdjacent?.id === storyId ? lastAdjacent.adjacent : null;
+  });
+  // 期日の印の今日と週の始まり、親に選べるエピック。バックログの画面が読んだ木から取る
   const storyTree = $derived(storyTreeOf(page.data));
-  const storyFacts = $derived(storyId === null ? null : storyFactsOf(storyTree, storyId));
   const storyClock = $derived(storyTree === null ? null : { today: storyTree.today, weekStart: storyTree.week_start });
   const storyParents = $derived(parentChoicesOf(storyTree));
 
@@ -316,7 +326,6 @@
         workspaceId={workspace.id}
         {storyId}
         {canWrite}
-        facts={storyFacts}
         clock={storyClock}
         parents={storyParents}
         onclose={() => void withoutStory()}

@@ -8,7 +8,7 @@ import { orgDb, verifyWorkspace } from '../src/server/db/index.ts';
 import { envWithD1Hooks } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { storyUpdateOperation } from '../src/server/operations/story.ts';
-import { createCategory, createEpic, createStory } from './factories.ts';
+import { createCategory, createEpic, createStory, createTask } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
 import { createTarget, testEnv, type Person, type Target } from './operations/world.ts';
 
@@ -877,6 +877,54 @@ describe('story-get', () => {
       epic_id: null,
       category: null,
     });
+  });
+
+  test('完了の状態を返す。未完了の件数は、完了と削除したタスクを数えない', async () => {
+    const target = await createTarget();
+    const adminId = target.admin.userId!;
+    const epic = await createEpic(target.organization, target.workspace.id, adminId);
+    const story = await createStory(target.organization, target.workspace.id, adminId, { epic_id: epic.id });
+    const under = { story_id: story.id };
+    await createTask(target.organization, target.workspace.id, adminId, under);
+    await createTask(target.organization, target.workspace.id, adminId, under);
+    await createTask(target.organization, target.workspace.id, adminId, {
+      ...under,
+      completed_at: '2026-10-21T00:00:00.000Z',
+    });
+    await createTask(target.organization, target.workspace.id, adminId, {
+      ...under,
+      deleted_at: '2026-10-21T00:00:00.000Z',
+    });
+    const body = (await (await get(target, story.id)).json()) as {
+      completed_at: string | null;
+      open_task_count: number;
+      parent_finished: boolean;
+    };
+    expect(body).toMatchObject({ completed_at: null, open_task_count: 2, parent_finished: false });
+  });
+
+  test('完了したストーリーは完了した日時を、親のエピックが完了か中止していれば parent_finished を返す', async () => {
+    const target = await createTarget();
+    const adminId = target.admin.userId!;
+    const cleared = await createEpic(target.organization, target.workspace.id, adminId, {
+      completed_at: '2026-10-20T00:00:00.000Z',
+    });
+    const canceled = await createEpic(target.organization, target.workspace.id, adminId, {
+      canceled_at: '2026-10-20T00:00:00.000Z',
+    });
+    const done = await createStory(target.organization, target.workspace.id, adminId, {
+      epic_id: cleared.id,
+      completed_at: '2026-10-21T00:00:00.000Z',
+    });
+    const inCanceled = await createStory(target.organization, target.workspace.id, adminId, { epic_id: canceled.id });
+    const first = (await (await get(target, done.id)).json()) as Record<string, unknown>;
+    const second = (await (await get(target, inCanceled.id)).json()) as Record<string, unknown>;
+    expect(first).toMatchObject({
+      completed_at: '2026-10-21T00:00:00.000Z',
+      open_task_count: 0,
+      parent_finished: true,
+    });
+    expect(second).toMatchObject({ completed_at: null, parent_finished: true });
   });
 
   test('閉じたワークスペースでも読める', async () => {
