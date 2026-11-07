@@ -362,7 +362,8 @@ test('スクロールした先の行のリンクで開いても、木のスク�
   // 低い窓にして、seed のバックログ（あおば開発の受託開発チーム）を縦にスクロールさせる
   await page.setViewportSize({ width: 1280, height: 480 });
   await page.goto('/aoba/w/019a0000-0000-7000-8000-000000000401');
-  const link = page.locator('a.entry-title').last();
+  // 木の下のほうにある seed の親なしのタスク。.last() にすると、並べて走る e2e/tree-add-row.test.ts が足して消す行を拾う
+  const link = page.getByRole('link', { name: '問い合わせテンプレートを整える', exact: true });
   await expect(link).toBeVisible();
   // 読み込みと書体の差し替えが終わってから送る。送る位置は、その時の最後の行の位置とページの高さで決まり、後から変わっても
   // 送り直さない。後ろの木のスクロールの位置が 40px 違うことがあった（#511）。
