@@ -309,7 +309,7 @@ test('今すぐ同期は本人の接続にだけ出て、押すと届いた件�
   await expect(list.getByRole('listitem').filter({ hasText: 'ハルカの GitHub' })).not.toContainText('今すぐ同期');
   await expect(list.getByRole('listitem').filter({ hasText: '止まった GitHub' })).not.toContainText('今すぐ同期');
   await expect(list.getByRole('listitem').filter({ hasText: '止まった GitHub' })).toContainText(
-    '認証情報を受け付けなかったため',
+    '認証に失敗したので止めました',
   );
 
   await list.getByRole('button', { name: '今すぐ同期' }).click();
