@@ -70,6 +70,9 @@ async function readStory(db: OrganizationDb, workspaceId: string, storyId: strin
           'stories.epic_id',
           'stories.category_id',
           'stories.created_by',
+          'stories.completed_at',
+          'epics.completed_at as epic_completed_at',
+          'epics.canceled_at as epic_canceled_at',
           'sc.name as category_name',
           'sc.deleted_at as category_deleted_at',
           'ec.id as epic_category_id',
@@ -106,11 +109,25 @@ function detailOf(row: StoryRow): StoryDetail {
   };
 }
 
-// 削除のボタンと確認のために、呼んだ人が削除できるか（作った人かリーダー。管理者を含む）、まとめて削除できるかと、配下の件数も返す
+// 削除のボタンと確認のために、呼んだ人が削除できるか（作った人かリーダー。管理者を含む）、まとめて削除できるかと、配下の件数も返す。
+// 完了の帯のために、完了の状態（完了した日時、未完了のタスクの件数、親のエピックの完了か中止）も返す
 export const storyGetOperation = implement(storyGet, async ({ db, actor, workspace, input }) => {
   const story = await readStory(db, workspace.workspaceId, input.story_id);
   if (story === undefined) throw new ApiError(404, 'not_found');
-  return { story: detailOf(story), ...(await storyDeletion(db, actor, workspace, story)) };
+  const open = await db.first(
+    db.statement((q) =>
+      openTasksUnder(q, workspace.workspaceId, story.id)
+        .clearSelect()
+        .select((eb) => eb.fn.countAll<number>().as('count')),
+    ),
+  );
+  return {
+    story: detailOf(story),
+    completed_at: story.completed_at,
+    open_task_count: Number(open?.count ?? 0),
+    parent_finished: story.epic_completed_at !== null || story.epic_canceled_at !== null,
+    ...(await storyDeletion(db, actor, workspace, story)),
+  };
 });
 
 // 作るストーリーの親のエピックを読む（引き継ぐ区分は、削除していないものだけ）。無ければ 404、完了か中止していれば 409（parent_completed）
