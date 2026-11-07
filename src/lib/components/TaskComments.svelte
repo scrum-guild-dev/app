@@ -418,8 +418,13 @@
     if (pending.some((current) => current.id === comment.id)) return;
     pending = [...pending, comment];
     emitCount();
+    // 読み上げの領域は、同じ文字列を入れ直しても DOM が変わらず読まれない。「元に戻しました」を毎回読ませるため、先に空にする
+    announce = '';
     const toastId = showToast(
-      t('commentRemovedBy', { name: comment.author.name === '' ? t('historyUnknownName') : comment.author.name }),
+      t('commentRemovedBy', {
+        name: comment.author.name === '' ? t('historyUnknownName') : comment.author.name,
+        at: formatHistoryTime(comment.created_at, timezone),
+      }),
       'check',
       { label: t('commentUndo'), run: () => undoDelete(comment.id) },
       () => {
@@ -463,6 +468,7 @@
     if (result.ok) {
       // 読み直しで一覧の窓から外れた行は、足し直さない（消えた行が末尾に付かないように）
       if (comments.some((current) => current.id === comment.id)) record(result.data.comment);
+      else setCount(count - 1);
       if (unhide(comment.id)) emitCount();
       delete edits[comment.id];
       return;
