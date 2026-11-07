@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   dismissToast,
   escapeToast,
+  focusToastAction,
   pauseToast,
   resumeToast,
   runToastAction,
@@ -97,5 +98,27 @@ describe('フォーカスがある間は消えない', () => {
     expect(toasts).toHaveLength(1);
     vi.advanceTimersByTime(1);
     expect(toasts).toHaveLength(0);
+  });
+});
+
+describe('止めた数えの戻し', () => {
+  it('フォーカスが着かなかったときは、focusToastAction が数えを戻して消える', async () => {
+    vi.useFakeTimers();
+    const frames: (() => void)[] = [];
+    // 領域が hidden で見つからない状況（DOM の無い node では querySelector が無い）
+    vi.stubGlobal('document', { querySelector: () => null, activeElement: null });
+    vi.stubGlobal('requestAnimationFrame', (run: () => void) => frames.push(run));
+    const id = showToast('消す', 'check', { label: '取り消す', run: () => {} });
+    pauseToast(id);
+    const settled = focusToastAction(id);
+    for (let i = 0; i < 20 && toasts.length > 0; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+      frames.splice(0).forEach((run) => run());
+    }
+    expect(await settled).toBe(false);
+    // 戻した数えは10秒で尽きる（止めたままなら消えない）
+    vi.advanceTimersByTime(10_000);
+    expect(toasts).toHaveLength(0);
+    vi.unstubAllGlobals();
   });
 });

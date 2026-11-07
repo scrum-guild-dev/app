@@ -25,7 +25,7 @@
   } from '../../../../lib/drawer.svelte.ts';
   import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../lib/focus-heading.ts';
   import { formatLocalDate } from '../../../../lib/format.ts';
-  import { focusToastAction } from '../../../../lib/toast.svelte.ts';
+  import { focusToastAction, resumeToast } from '../../../../lib/toast.svelte.ts';
   import { epicFinishedOf, parentChoicesOf, storyFactsOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import type { LayoutData } from './$types';
@@ -144,9 +144,20 @@
   // （10秒で消えるのをキーボードだけの人が取り逃さないため。フォーカスがある間はトーストが消えない）
   async function removed(toastId: number | null): Promise<void> {
     focusAfterReload = true;
-    await withoutTask();
-    await invalidate('app:backlog-tree');
-    await tick();
+    try {
+      await withoutTask();
+      await invalidate('app:backlog-tree');
+      await tick();
+    } catch (error) {
+      // 読み直しが落ちても、止めておいた数えを戻す（戻さないとトーストが消えなくなる）
+      if (toastId !== null) resumeToast(toastId);
+      throw error;
+    }
+    // キーボードで消した後、待つ間に別の所へフォーカスを移した人からは奪わない（数えは戻す）
+    if (toastId !== null && !focusIsFree()) {
+      resumeToast(toastId);
+      return;
+    }
     focusPageHeading();
     if (toastId !== null) await focusToastAction(toastId);
   }

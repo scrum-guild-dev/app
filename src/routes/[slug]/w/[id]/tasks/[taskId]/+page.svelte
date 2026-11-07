@@ -11,7 +11,7 @@
     type TaskOpenMode,
   } from '../../../../../../lib/drawer.svelte.ts';
   import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../../../lib/focus-heading.ts';
-  import { focusToastAction } from '../../../../../../lib/toast.svelte.ts';
+  import { focusToastAction, resumeToast } from '../../../../../../lib/toast.svelte.ts';
   import { t } from '../../../../../../lib/vocabulary.svelte.ts';
   import type { PageData } from './$types';
 
@@ -62,13 +62,23 @@
   async function close(removed = false, toastId: number | null = null): Promise<void> {
     const id = page.params.taskId ?? '';
     await leave(async () => {
-      if (removed) await invalidate('app:backlog-tree');
-      await tick();
+      try {
+        if (removed) await invalidate('app:backlog-tree');
+        await tick();
+      } catch (error) {
+        // 読み直しが落ちても、止めておいた数えを戻す（戻さないとトーストが消えなくなる）
+        if (toastId !== null) resumeToast(toastId);
+        throw error;
+      }
       const row = !removed && document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`);
       if (row) row.focus();
-      else focusPageHeading();
-      // キーボードで削除したときは、見出しへ移した後に「取り消す」へフォーカスを移す
-      if (toastId !== null) await focusToastAction(toastId);
+      else if (toastId === null || focusIsFree()) focusPageHeading();
+      // キーボードで削除したときは、見出しへ移した後に「取り消す」へフォーカスを移す。待つ間に別の所へ移った人からは奪わず、数えを戻す
+      if (toastId !== null) {
+        if (document.activeElement === document.body || document.activeElement?.matches('h1')) {
+          await focusToastAction(toastId);
+        } else resumeToast(toastId);
+      }
     });
   }
 

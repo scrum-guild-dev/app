@@ -79,6 +79,9 @@ export async function focusToastAction(id: number): Promise<boolean> {
     }
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   }
+  // 着かなかった（モーダルが開いたまま領域が hidden、利用者が別へ移ったなど）。止めておいた数えを戻さないと、誰も数え直さず
+  // トーストが消えなくなるので、ここで数え直す
+  resumeToast(id);
   return false;
 }
 
