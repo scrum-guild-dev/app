@@ -191,7 +191,7 @@
       sameWorkspace && !filtering
         ? untrack(() => added).filter(
             (entry) =>
-              (unsettled.includes(entry.task.id) && !inTree(loaded, entry.task.id)) ||
+              unsettled.includes(entry.task.id) ||
               keepAddedRow(entry, {
                 inLoadedTree: inTree(loaded, entry.task.id),
                 completed: done.includes(entry.task.id),
@@ -479,6 +479,10 @@
       if (result.ok || (result.status === 409 && result.error?.code === 'conflict')) {
         completedIds = [...completedIds, task.id];
         completedAt[task.id] = performance.now();
+        // 木にもとからあった行は、遅れて届く古い木に無くても残すため、足した行と同じ入れ物に写す（画面で足した行はすでにある）
+        if (!added.some((entry) => entry.task.id === task.id)) {
+          added = [...added, { task, storyId: taskPlaces[task.id]?.parentId ?? null, at: performance.now() }];
+        }
         // 別の画面で先に完了にされていたときは、同じ完了の印で示し、知らせる
         showToast(
           result.ok
