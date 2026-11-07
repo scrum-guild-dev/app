@@ -1803,6 +1803,9 @@ export const dictionary = defineDictionary({
   commentSaved: 'コメントを直しました',
   commentRemoved: 'コメントを削除しました',
   commentUndo: '取り消す',
+  // 「取り消す」の付いたトースト。続けて消したとき、どのコメントかが分かるよう、書いた人を添える
+  commentRemovedBy: '{name}のコメントを削除しました',
+  commentRestored: 'コメントを元に戻しました',
   commentSendFailed: 'コメントを送れませんでした。書いた文は残しています。もう一度試してください。',
   commentSaveFailed: 'コメントを保存できませんでした。書いた文は残しています。もう一度試してください。',
   commentDeleteFailed: 'コメントを削除できませんでした。もう一度試してください。',

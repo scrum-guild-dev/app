@@ -467,8 +467,8 @@ test.describe('コメントの削除の取り消し', () => {
 
   test('取り消さずに引き出しを閉じても、削除は送られる', async ({ page }) => {
     await createWorkspace(page, 'コメントを閉じて送るワークスペース');
-    await addTask(page, '閉じて送るのを確かめる');
-    const drawer = await openDrawer(page, '閉じて送るのを確かめる');
+    await addTask(page, '閉じる前の削除を確かめる');
+    const drawer = await openDrawer(page, '閉じる前の削除を確かめる');
     const comment = await sendComment(drawer, '閉じる前に消すコメント');
     await comment.getByRole('button', { name: '削除', exact: true }).click();
     await expect(drawer.getByText('閉じる前に消すコメント')).toHaveCount(0);
@@ -479,8 +479,8 @@ test.describe('コメントの削除の取り消し', () => {
     expect((await sent).ok()).toBe(true);
 
     await page.reload();
-    await openDrawer(page, '閉じて送るのを確かめる');
-    await expect(page.getByRole('dialog', { name: '閉じて送るのを確かめる' }).locator('.comment-body')).toHaveText(
+    await openDrawer(page, '閉じる前の削除を確かめる');
+    await expect(page.getByRole('dialog', { name: '閉じる前の削除を確かめる' }).locator('.comment-body')).toHaveText(
       '削除されました',
     );
   });
@@ -503,6 +503,46 @@ test.describe('コメントの削除の取り消し', () => {
       timeout: DELETE_SENT,
     });
     await expect(comment.locator('.comment-body')).toContainText('断られるコメント');
+    await expect(drawer.getByRole('tab', { name: /^コメント/ })).toHaveText('コメント 1');
+  });
+
+  test('先に別の人が消していたら（409）、コメントが戻って理由が出る', async ({ page }) => {
+    await createWorkspace(page, 'コメントがすでに消えているワークスペース');
+    await addTask(page, '先に消されたのを確かめる');
+    const drawer = await openDrawer(page, '先に消されたのを確かめる');
+    const comment = await sendComment(drawer, '先に消されるコメント');
+    await page.route('**/comment-delete', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'conflict', message: 'x', details: { reason: 'deleted' } } }),
+      }),
+    );
+    await comment.getByRole('button', { name: '削除', exact: true }).click();
+    await expect(comment).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: 'このコメントはすでに削除されています' })).toBeVisible({
+      timeout: DELETE_SENT,
+    });
+    await expect(comment).toBeVisible();
+  });
+
+  test('権限が無くなっていたら（403）、コメントが戻って理由が出る', async ({ page }) => {
+    await createWorkspace(page, 'コメントの権限が無いワークスペース');
+    await addTask(page, '権限が無いのを確かめる');
+    const drawer = await openDrawer(page, '権限が無いのを確かめる');
+    const comment = await sendComment(drawer, '権限で断られるコメント');
+    await page.route('**/comment-delete', (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'forbidden', message: 'x' } }),
+      }),
+    );
+    await comment.getByRole('button', { name: '削除', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'このコメントは操作できません' })).toBeVisible({
+      timeout: DELETE_SENT,
+    });
+    await expect(comment).toBeVisible();
     await expect(drawer.getByRole('tab', { name: /^コメント/ })).toHaveText('コメント 1');
   });
 });

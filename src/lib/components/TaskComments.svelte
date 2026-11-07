@@ -88,7 +88,13 @@
   let writeSeq = 0;
   function setCount(value: number): void {
     count = Math.max(0, value);
-    oncount(count);
+    emitCount();
+  }
+  // タブに渡す件数。サーバーで消えていない数から、隠している（まだ送っていない）コメントのうち、今の一覧でまだ消えていないものを引く。
+  // 足し引きで持たず、毎回この式で出す（読み直しと削除の応答が重なっても、ずれない）
+  function emitCount(): void {
+    const hiding = pending.filter((p) => comments.find((c) => c.id === p.id)?.deleted_at === null).length;
+    oncount(Math.max(0, count - hiding));
   }
   // 読み上げに伝える文（読み込み、足した件数、送った、直した、削除した）
   let announce = $state('');
@@ -165,10 +171,7 @@
       timezone = result.data.timezone;
       loadState = 'ready';
       reloadFailed = false;
-      // 隠している（まだ送っていない）コメントは、サーバーでは消えていないが件数に数えない
-      setCount(
-        view.count - view.comments.filter((c) => c.deleted_at === null && pending.some((p) => p.id === c.id)).length,
-      );
+      setCount(view.count);
       for (const comment of comments) {
         const edit = edits[comment.id];
         if (edit !== undefined && comment.deleted_at !== null && !edit.blocked) {
@@ -414,9 +417,9 @@
   function remove(comment: Comment): void {
     if (pending.some((current) => current.id === comment.id)) return;
     pending = [...pending, comment];
-    setCount(count - 1);
+    emitCount();
     const toastId = showToast(
-      t('commentRemoved'),
+      t('commentRemovedBy', { name: comment.author.name === '' ? t('historyUnknownName') : comment.author.name }),
       'check',
       { label: t('commentUndo'), run: () => undoDelete(comment.id) },
       () => {
@@ -435,7 +438,8 @@
   function undoDelete(id: string): void {
     delete pendingToasts[id];
     if (!unhide(id)) return;
-    setCount(count + 1);
+    emitCount();
+    announce = t('commentRestored');
     void tick().then(() => {
       if (alive) container?.querySelector<HTMLElement>(`[data-comment-delete="${id}"]`)?.focus();
     });
@@ -457,13 +461,13 @@
       return;
     }
     if (result.ok) {
-      // 隠すときに引いた件数を戻してから、record が引く
-      if (unhide(comment.id)) setCount(count + 1);
-      record(result.data.comment);
+      // 読み直しで一覧の窓から外れた行は、足し直さない（消えた行が末尾に付かないように）
+      if (comments.some((current) => current.id === comment.id)) record(result.data.comment);
+      if (unhide(comment.id)) emitCount();
       delete edits[comment.id];
       return;
     }
-    if (unhide(comment.id)) setCount(count + 1);
+    if (unhide(comment.id)) emitCount();
     const code = result.error?.code;
     if (result.status === 409 && conflictReasonOf(result.error?.details, commentConflictReasons) === 'deleted') {
       showToast(t('commentAlreadyDeleted'), 'alert');
