@@ -6,6 +6,7 @@ import { expect, test } from './fixtures.ts';
 import {
   addEpicRow,
   addStoryRow,
+  addTaskRow,
   chooseRowAction,
   createWorkspace,
   expectFocusReturned,
@@ -64,15 +65,6 @@ async function askDeleteEpic(drawer: Locator, title: string): Promise<void> {
   await drawer.getByRole('menuitem', { name: /このエピックを削除する/ }).click();
 }
 
-async function addTask(page: Page, storyTitle: string, title: string, createLabel: string): Promise<void> {
-  await page.getByRole('button', { name: createLabel, exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: createLabel });
-  await dialog.getByLabel('親のストーリー').selectOption({ label: storyTitle });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: createLabel }).click();
-  await expect(dialog).toBeHidden();
-}
-
 test('スクラムの言葉: エピックを配下を残して削除し、残ったストーリーを配下ごと削除する', async ({
   context,
   baseURL,
@@ -93,7 +85,7 @@ test('スクラムの言葉: エピックを配下を残して削除し、残っ
   await expect(rowGroup(page, '会員証を作り直す').locator('.tree-children .tree-row.is-story a.tree-link')).toHaveText([
     'カードの画面',
   ]);
-  await addTask(page, 'カードの画面', 'バーコードを出す', '起票');
+  await addTaskRow(page, 'バーコードを出す', 'カードの画面');
   await moved;
 
   // 題を押して開く引き出しの「⋯」から、確認を開く。配下の件数と、既定の「残す」が出る
@@ -192,7 +184,7 @@ test('確認は開いたときに件数とまとめて削除できるかを読�
   await signIn(context, baseURL, 'admin');
   await createWorkspace(page, '読み直しのワークスペース');
   await create(page, 'ストーリーを作る', '問い合わせの窓口');
-  await addTask(page, '問い合わせの窓口', '返信の型を作る', '起票');
+  await addTaskRow(page, '返信の型を作る', '問い合わせの窓口');
   await page.waitForLoadState('networkidle');
 
   const storyDialog = await openStoryDrawer(page, '問い合わせの窓口');
@@ -241,7 +233,7 @@ test('確認を開いた後の読み直しで配下が無くなったら、選�
   await signIn(context, baseURL, 'admin');
   await createWorkspace(page, '配下が消えるワークスペース');
   await create(page, 'ストーリーを作る', '請求書の発行');
-  await addTask(page, '請求書の発行', '宛名を直す', '起票');
+  await addTaskRow(page, '宛名を直す', '請求書の発行');
   await page.waitForLoadState('networkidle');
 
   const storyDialog = await openStoryDrawer(page, '請求書の発行');

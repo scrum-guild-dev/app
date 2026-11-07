@@ -2,7 +2,7 @@
 // タスクの詳細の前後のボタンの角にキーが出る。別のキー（⌘C など）を押すと出ず、離すと消える。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn } from './helpers.ts';
+import { addTaskRow, createWorkspace, signIn } from './helpers.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
@@ -48,13 +48,7 @@ test('検索の欄: ポインターを押す、ウィンドウを離れる、ス
 
 test('タスクの詳細: 前後のボタンの角に [ と ] が出る。押せない端のボタンには出さない', async ({ page }) => {
   await createWorkspace(page, 'ヒントのワークスペース');
-  for (const title of ['ヒント 一', 'ヒント 二']) {
-    await page.getByRole('button', { name: '起票' }).click();
-    const dialog = page.getByRole('dialog', { name: '起票' });
-    await dialog.getByLabel('タイトル').fill(title);
-    await dialog.getByRole('button', { name: '起票' }).click();
-    await expect(dialog).toBeHidden();
-  }
+  for (const title of ['ヒント 一', 'ヒント 二']) await addTaskRow(page, title);
   await page.locator('.entry', { hasText: 'ヒント 一' }).getByRole('link', { name: 'ヒント 一' }).click();
   const drawer = page.getByRole('dialog', { name: 'ヒント 一' });
   await expect(drawer).toBeVisible();

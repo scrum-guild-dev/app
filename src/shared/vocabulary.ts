@@ -339,14 +339,14 @@ export const dictionary = defineDictionary({
   firstStepJoinedNote: 'この{workspace}の{backlog}と{sprint}を使えます。',
   firstStepPrepareTaskTitle: '自分の{task}を用意する',
   firstStepPrepareTaskNote:
-    '{backlog}の「{create}」で作ります。{points}を1以上振ったまま完了にすると、起票の経験値が付きます。',
+    '{backlog}の空の行に題を入れて作ります。{points}を1以上振ったまま完了にすると、起票の経験値が付きます。',
   firstStepBecameLeaderTitle: '{workspace}「{name}」の{leader}になる',
   firstStepBecameLeaderNote: '{member}の招待と、{backlog}の準備を進められます。',
   firstStepInviteTitle: '{member}を招待する',
   firstStepInviteNote:
     'GitHub のユーザー名か Google のメールアドレスで招待し、{organization}の URL（Google なら招待の URL）を本人に伝えます。Scrum Guild は招待をメールで送りません。',
   firstStepFirstTaskTitle: '{backlog}に最初の{task}を入れる',
-  firstStepFirstTaskNote: '「{create}」で作ります。{member}が入る前に並べておくと、何から始めるかが伝わります。',
+  firstStepFirstTaskNote: '空の行に題を入れて作ります。{member}が入る前に並べておくと、何から始めるかが伝わります。',
   firstStepSprintTitle: '最初の{sprint}を作って始める',
   firstStepSprintNote:
     '{plan}の画面で期間を決め、{backlog}から{task}を入れて始めます。{sprint}を回さないなら要りません。',
@@ -425,7 +425,7 @@ export const dictionary = defineDictionary({
   // バックログ（ワークスペースの画面）。{backlog} {task} {create} {done} {points} は、辞書の言葉を画面が渡す
   backlogTasksLabel: '{backlog}の{task}',
   backlogEmptyTitle: 'まだ{task}がありません',
-  backlogEmptyText: '{task}を優先する順に並べる場所です。上の「{create}」から最初の{task}を作ります。',
+  backlogEmptyText: '{task}を優先する順に並べる場所です。下の空の行に題を入れて、最初の{task}を作ります。',
   backlogEmptyClosedText: '終了した{workspace}には、{task}を作れません。',
   // 完了の折りたたみを開いた状態の文言。閉じた状態の文言は、親のないタスクが backlogFolded、ストーリーの配下が storyFolded
   completedCollapse: '{done} {count} 件を閉じる',
@@ -446,7 +446,7 @@ export const dictionary = defineDictionary({
   backlogPageName: '{backlog}・{name}',
   // 未完了が0件で、完了した親のないタスクがあるとき、折りたたみの行の上に出す
   backlogNoOpenTitle: '未完了の{task}はありません',
-  backlogNoOpenText: '次の{task}は、上の「{create}」から作ります。',
+  backlogNoOpenText: '次の{task}は、下の空の行に題を入れて作ります。',
   // 絞り込みの帯（見本の design/backlog.html の .toolbar）。{label} は選択欄の名前（{assignee}、{category}、リポジトリ、{epic}）
   filterLabel: '{backlog}の絞り込み',
   backlogSearch: 'タイトルで探す',
@@ -507,17 +507,12 @@ export const dictionary = defineDictionary({
   taskTitleRequired: 'タイトルを入れてください',
   taskTitleTooLong: 'タイトルは {max} 字までです',
   taskTitleInvalidCharacter: 'タイトルに使えない文字（制御文字、ゼロ幅のスペースなど）が含まれています',
-  taskPointsHint: '「未」は未見積もり。起票の経験値は、1 以上の{points}が振られたまま{task}が{done}すると付きます。',
-  taskSubmitting: '作っています',
   taskCreated: '{backlog}の末尾に足しました',
   taskCreateFailed: '作れませんでした。もう一度試してください。',
   // 親の選択欄。選べるのは、親のないストーリー。{story} {done} は、辞書の言葉を画面が渡す
   taskParent: '親の{story}',
-  taskParentNone: 'なし',
   // {title} は親のストーリーの題
   taskCreatedUnder: '{story}「{title}」の末尾に足しました',
-  taskParentGone: 'この{story}は見つかりません。親を選び直してください',
-  taskParentDone: 'この{story}はすでに{done}しています。親を選び直してください',
 
   // バックログの木（ストーリーの行、期日の印）
   storyCreate: '{story}を作る',
@@ -1647,6 +1642,10 @@ export const dictionary = defineDictionary({
   shortcutNewTask: '{task}を書く',
   // メニューの項目の説明（読み上げ）。{first} を押した次に {next} を押すと移る
   shortcutGoHint: 'ショートカット: {first} を押してから {next} を押す',
+  // ショートカットの一覧（? で開くダイアログ）。見出しの「この画面」は今の画面だけで効くキー、「どの画面でも」は全体で効くキー
+  shortcutHelp: 'ショートカットの一覧',
+  shortcutHelpScreen: 'この画面',
+  shortcutHelpGlobal: 'どの画面でも',
   drawerTab: '新しいタブ',
   drawerTabBlocked: '新しいタブを開けませんでした',
   // 上の帯の前後のボタン。{task} は一覧の前後に並ぶ行の呼び名。キーボードは [ と ]
@@ -2282,7 +2281,8 @@ export const dictionary = defineDictionary({
   repository: 'リポジトリ',
   categoriesDesc:
     '{epic}に振ると配下が引き継ぎます。「月ごとに計上する」{category}は、完了の記録に計上月を持ちます。切り替えても、すでにある完了の記録の計上月は変わりません。',
-  repositoriesDesc: '{task}がどのリポジトリの作業かを示します。{task}に1つまで振れ、起票のときにボタンで選びます。',
+  repositoriesDesc:
+    '{task}がどのリポジトリの作業かを示します。{task}に1つまで振れ、行のチップかタスクの詳細で選びます。',
   categoryBilledMonthly: '月ごとに計上する',
   categoryBilledMonthlyLabel: '月ごとに計上する: {name}',
   definitionListLabel: '{kind}の一覧',
@@ -2382,6 +2382,40 @@ export const dictionary = defineDictionary({
     '確かめている間に{task}が入りました。もう一度、移し先を選んでください。一覧を読み直します',
   columnDeleteTargetInvalid: '移し先に選べない{column}です。選び直してください。一覧を読み直します',
   columnDeleteNotFound: '削除する{column}か移し先の{column}が見つかりません。一覧を読み直します',
+
+  // ---- 受信箱の画面（design/inbox.html）----
+  inboxPageName: '{inbox} - {name}',
+  inboxTallyArrived: '届いたもの',
+  inboxSynced: '最後に成功した同期は {date} です。届いたものは{workspace}の全員に見えます。',
+  inboxNeverSynced: 'まだ同期に成功していません。届いたものは{workspace}の全員に見えます。',
+  inboxNoConnectionTitle: '{connection}がまだありません',
+  inboxNoConnectionText:
+    'Backlog や GitHub を{connection}として登録すると、自分が担当している課題や PR が次の同期でここに届きます。取り込み元を使わないなら、この画面は使いません。',
+  inboxEmptyTitle: '届いたものはありません',
+  inboxEmptyText: '次の同期で新しく取り込んだ{task}がここに届きます。',
+  inboxListLabel: '{inbox}の{task}',
+  inboxSelectAll: 'すべて選ぶ',
+  inboxSelectFirst: '先頭の {limit} 件を選ぶ',
+  inboxSelectRow: '「{title}」を選ぶ',
+  inboxArrived: '届いた {date}',
+  inboxRepositoryLabel: '「{title}」の{repository}',
+  inboxRepositoryNone: '{repository}を選ぶ',
+  inboxMoveRow: '{backlog}へ',
+  inboxMoveRowLabel: '「{title}」を{backlog}へ入れる',
+  inboxMoveSelected: '選んだものを{backlog}へ',
+  inboxSelectedCount: '{count} 件を選んでいます',
+  inboxNote: '{backlog}へ入れたものは末尾に並びます。入れるまで、{backlog}、{sprint}、{today}には出ません。',
+  inboxLimitNote: '新しい {shown} 件を出しています（全 {total} 件）。入れると、残りが出ます。',
+  inboxSelectHint: '入れる{task}の左の欄を選んでください。',
+  inboxSelectLimit: '一度に入れられるのは {limit} 件までです。',
+  inboxMoved: '{count} 件を{backlog}へ入れました',
+  inboxMovedOne: '「{title}」を{backlog}へ入れました',
+  inboxMoveStale: '{inbox}が変わっていたため、入れられませんでした。一覧を読み直しました。',
+  inboxMoveNotFound: '選んだ{task}が見つかりませんでした。一覧を読み直しました。',
+  inboxMoveClosed: 'この{workspace}は終了しているため、入れられません。',
+  inboxMoveFailed: '入れられませんでした。もう一度試してください。',
+  inboxMoveUnreachable: '通信できませんでした。もう一度試してください。',
+  inboxMoveWorking: '{backlog}へ入れています',
 });
 
 export type DictionaryKey = keyof typeof dictionary;

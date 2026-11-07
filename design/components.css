@@ -580,6 +580,11 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .avatar-stack .avatar + .avatar { margin-left: -6px; }
 
 /* ===== 台帳（タスクの一覧） ===== */
+/* 行の先頭の選ぶ欄（受信箱）を包む label */
+.row-check { display: grid; place-items: center; }
+.row-check input { accent-color: var(--color-accent); }
+/* 行のメタ行に置く選択欄（受信箱のリポジトリ）は、行いっぱいに伸ばさず小さい文字で置く */
+.entry-meta .select { width: auto; max-width: min(100%, 18rem); padding-block: 4px; font-size: var(--text-sm); }
 .book { background: var(--color-surface); border: 1px solid var(--color-line); border-left: var(--rule-double); border-radius: var(--radius-1); }
 /* --row-indent は行の中身が始まる左の位置。落とす位置の線（[data-drop]）もここから始める。
    --grip-col は先頭のつまみ（.grip）の列で、つまみを持つ行（.has-grip）だけが幅を持つ */
@@ -1360,6 +1365,11 @@ dialog.dialog::backdrop { background: none; }
   .btn:not(.is-sm), .input, .select { min-height: 44px; }
   .segmented span { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
   .table .btn.is-sm { min-width: 44px; min-height: 44px; }
+  /* 受信箱: 行の選ぶ欄を包む label、取り込み元のキーのリンク、行の「<バックログ>へ」、まとめて選ぶ切り替えを、見た目ごと 44px にする */
+  .row-check { display: grid; place-items: center; min-width: 44px; min-height: 44px; margin-inline: -6px; }
+  a.source-key { display: inline-flex; align-items: center; min-height: 44px; }
+  .entry-end .btn.is-sm { min-width: 44px; min-height: 44px; }
+  .toolbar .toggle { min-height: 44px; }
   .done-btn, .sun, .entry-end .link-btn { position: relative; }
   .done-btn::after, .sun::after, .entry-end .link-btn::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
   /* 見た目は変えず、押せる範囲だけを 44px 四方以上に広げる部品。木の行のボタン（開閉の caret、＋タスク。題のリンクは下の a.tree-link）、操作の並びと
@@ -1829,6 +1839,21 @@ button.file-name:hover { text-decoration-color: currentColor; }
   font-family: var(--font-mono); font-size: 10px; line-height: 1; padding: 3px 5px; white-space: nowrap;
   border: 1px solid var(--color-line); border-bottom-width: 2px; border-radius: var(--radius-1); color: var(--color-muted); background: var(--color-bg);
 }
+/* ===== ショートカットの一覧（? で開くダイアログ） =====
+ * 既存のダイアログ（.dialog-sheet）の本文に、「この画面」「どの画面でも」の2つの組を縦に並べる。名前を左、キー（.kbd）を右の端に置く。
+ * 画面ごとの CSS は持たず、本番（ShortcutHelp.svelte）も見本（kit.js の DIALOGS.shortcutHelp）もこの定義だけを使う。
+ */
+.shortcut-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
+.shortcut-group-title { font-size: var(--text-sm); font-weight: 700; color: var(--color-muted); }
+.shortcut-list { display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; }
+.shortcut-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  padding: var(--space-2) 0; border-bottom: 1px solid var(--color-rule);
+}
+.shortcut-row:last-child { border-bottom: 0; }
+.shortcut-row dt { min-width: 0; overflow-wrap: anywhere; }
+.shortcut-row dd { margin: 0; flex: none; }
+.shortcut-row .kbd { font-size: var(--text-xs); padding: var(--space-1) var(--space-2); }
 /* ===== ショートカットのヒント =====
  * ⌘（Windows と Linux は Ctrl）を約 0.3 秒押し続けた間だけ、ショートカットのあるものの右上の角に出す .kbd.key-hint。
  * 画面の上に重ねる層（.key-hints）に置き（角をまたいで少し外へ出す。影も光りも付けない）、押せる要素の見た目も並びも動かさない。層は見た目だけ（aria-hidden）で、操作を受けない。
@@ -2071,3 +2096,6 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   max-width: 100%;
   height: auto;
 }
+
+/* 行のチップの窓（期日の日付の入力と「クリア」）。メニューと同じ枠 `.row-menu-list` の中に縦に並べる。「クリア」は枠の `.menu-item` を使う */
+.attr-panel { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3); }

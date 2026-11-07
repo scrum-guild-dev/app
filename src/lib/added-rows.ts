@@ -11,3 +11,11 @@ export function keepAddedRow(
   if (state.completed || state.inLoadedTree) return false;
   return !state.treeLoaded || row.at >= state.loadedAt;
 }
+
+// 完了にした行の印（と、画面で足した完了の行）を、読み直しのあとも残すか。at は完了の応答が返った時刻、loadedAt は読み直しを始めた時刻。
+// - 完了の応答が返った後に始まった読み直しの木は、完了を含む。印は捨てる（木が持つ）
+// - 応答より前に始まった読み直しが遅れて届いた木は、完了を含むとは限らない（含んでいれば行が外れ、含まなければ未完了で戻る）。印も行も残す
+// - 同じ時刻も残す側に倒す（時刻の粒度が粗い環境の対策）
+export function completionSettled(at: number, loadedAt: number): boolean {
+  return loadedAt > at;
+}

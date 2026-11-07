@@ -6,6 +6,7 @@ import { expect, test } from './fixtures.ts';
 import {
   addEpicRow,
   addStoryRow,
+  addTaskRow,
   chooseRowAction,
   createWorkspace,
   dragTo,
@@ -22,14 +23,6 @@ test.use({ timezoneId: 'Asia/Tokyo' });
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
-
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-}
 
 // ストーリーの引き出しで題を直す。保存した後に、画面は木を読み直す。
 // 読み直しで木が替わると、画面は画面だけで足したタスクと並べ替えを捨てるので、このテストでは「木の読み直しを起こす」操作として使う
@@ -75,7 +68,7 @@ test('「上へ」「下へ」と Alt と ↑ ↓ で並べ替え、フォーカ
 }) => {
   const collect = await watchViolations(page);
   await createWorkspace(page, '並べ替えワークスペース');
-  for (const title of ['見積もりを送る', '請求書を出す', '議事録をまとめる']) await addTask(page, title);
+  for (const title of ['見積もりを送る', '請求書を出す', '議事録をまとめる']) await addTaskRow(page, title);
   await expect(page.getByText(/上にあるものほど優先します/)).toBeVisible();
   await expect(rootTitles(page)).toHaveText(['見積もりを送る', '請求書を出す', '議事録をまとめる']);
 
@@ -125,11 +118,8 @@ test('「親を移す」でストーリーの下の末尾へ移し、親なし�
   await createWorkspace(page, '親を移すワークスペース');
   await addStory(page, 'ポイント制度を公開する');
   await addStory(page, '決済の障害を減らす');
-  const draft = page.getByRole('textbox', { name: 'タスクを足す: ポイント制度を公開する' });
-  await draft.fill('付与のバッチを書く');
-  await draft.press('Enter');
-  await expect(page.locator('.entry-title', { hasText: '付与のバッチを書く' })).toBeVisible();
-  await addTask(page, '残高の画面を作る');
+  await addTaskRow(page, '付与のバッチを書く', 'ポイント制度を公開する');
+  await addTaskRow(page, '残高の画面を作る');
 
   // 親のないタスクを、ストーリーの下の末尾へ
   await chooseRowAction(page, '残高の画面を作る', '親を移す');
@@ -183,7 +173,7 @@ test('「親を移す」でストーリーの下の末尾へ移し、親なし�
 
 test('並べ替えを断られたら、理由を知らせて読み直す', async ({ page }) => {
   await createWorkspace(page, '断られるワークスペース');
-  for (const title of ['見積もりを送る', '請求書を出す']) await addTask(page, title);
+  for (const title of ['見積もりを送る', '請求書を出す']) await addTaskRow(page, title);
   await page.route('**/api/aoba/task-move', (route) =>
     route.fulfill({ status: 409, json: { error: { code: 'workspace_closed', message: 'workspace_closed' } } }),
   );
@@ -222,7 +212,7 @@ test('先に送った並べ替えが断られて読み直したら、待って�
   page,
 }) => {
   await createWorkspace(page, '捨てるワークスペース');
-  for (const title of ['見積もりを送る', '請求書を出す', '議事録をまとめる']) await addTask(page, title);
+  for (const title of ['見積もりを送る', '請求書を出す', '議事録をまとめる']) await addTaskRow(page, title);
   // 1件目の応答を、3回目を押し終えるまで止めてから断る。その間に2件を待たせる
   let sent = 0;
   let release!: () => void;
@@ -248,7 +238,7 @@ test('先に送った並べ替えが断られて読み直したら、待って�
 
 test('端の行で Alt と ↑ ↓ を押すと、動かせないことを読み上げる', async ({ page }) => {
   await createWorkspace(page, '端のワークスペース');
-  for (const title of ['見積もりを送る', '請求書を出す']) await addTask(page, title);
+  for (const title of ['見積もりを送る', '請求書を出す']) await addTaskRow(page, title);
   await page.getByRole('link', { name: '見積もりを送る' }).focus();
   await page.keyboard.press('Alt+ArrowUp');
   await expect(page.getByRole('status').filter({ hasText: 'いちばん上です' })).toBeAttached();
@@ -438,7 +428,7 @@ test('つまみのドラッグで、同じ親の中のタスクを並べ替え�
 }) => {
   const collect = await watchViolations(page);
   await createWorkspace(page, 'ドラッグワークスペース');
-  for (const title of ['見積もりを送る', '請求書を出す', '議事録をまとめる']) await addTask(page, title);
+  for (const title of ['見積もりを送る', '請求書を出す', '議事録をまとめる']) await addTaskRow(page, title);
   const sent: string[] = [];
   page.on('request', (request) => {
     if (request.url().includes('/task-move')) sent.push(request.postData() ?? '');
@@ -494,12 +484,9 @@ test('畳んだストーリーの行やタスクの無いストーリーの行�
   await createWorkspace(page, 'ドラッグの親ワークスペース');
   await addStory(page, 'ポイント制度を公開する');
   await addStory(page, '決済の障害を減らす');
-  const draft = page.getByRole('textbox', { name: 'タスクを足す: ポイント制度を公開する' });
-  await draft.fill('付与のバッチを書く');
-  await draft.press('Enter');
-  await expect(page.locator('.entry-title', { hasText: '付与のバッチを書く' })).toBeVisible();
-  await addTask(page, '残高の画面を作る');
-  await addTask(page, '請求書を出す');
+  await addTaskRow(page, '付与のバッチを書く', 'ポイント制度を公開する');
+  await addTaskRow(page, '残高の画面を作る');
+  await addTaskRow(page, '請求書を出す');
   const points = storyGroup(page, 'ポイント制度を公開する');
   const payments = storyGroup(page, '決済の障害を減らす');
 
@@ -595,7 +582,7 @@ test('終了したワークスペースでは、つまみを出さない', async
   // 管理の画面の行を名前で探すので、繰り返しと再試行で作った同じ名前の行に当てない
   const name = `終了したつまみワークスペース ${test.info().repeatEachIndex}-${test.info().retry}`;
   await createWorkspace(page, name);
-  await addTask(page, '見積もりを送る');
+  await addTaskRow(page, '見積もりを送る');
   await addEpic(page, 'ポイント制度を公開する');
   await expect(page.locator('.entry .grip')).toBeVisible();
   await expect(page.locator('.tree-row.is-epic .grip')).toBeVisible();
@@ -621,7 +608,7 @@ test('終了したワークスペースでは、つまみを出さない', async
 
 test('行の「⋯」は、キーボードだけで開いて項目を移り、Esc で閉じて「⋯」へ戻る。狭い幅では常に出る', async ({ page }) => {
   await createWorkspace(page, '行のメニューのワークスペース');
-  for (const title of ['見積もりを送る', '請求書を出す']) await addTask(page, title);
+  for (const title of ['見積もりを送る', '請求書を出す']) await addTaskRow(page, title);
   const toggle = rowMenuToggle(page, '見積もりを送る');
   await toggle.focus();
   await page.keyboard.press('ArrowDown');
@@ -671,7 +658,7 @@ test('行の「⋯」は、キーボードだけで開いて項目を移り、Es
 
 test('狭い幅ではつまみを出さず、題の列も空けない', async ({ page }) => {
   await createWorkspace(page, 'つまみのワークスペース');
-  await addTask(page, '見積もりを送る');
+  await addTaskRow(page, '見積もりを送る');
   await expect(page.locator('.entry .grip')).toBeVisible();
   await expect(page.locator('.drag-note')).toBeVisible();
   await page.setViewportSize({ width: 390, height: 900 });
@@ -733,7 +720,7 @@ test('一覧が広いまま指で押す画面（タブレットの横置き）�
 
 test('作って完了にしたタスクは、その後の読み直しで未完了の行として戻らない', async ({ page }) => {
   await createWorkspace(page, '完了後の読み直しワークスペース');
-  await addTask(page, '完了して消える依頼');
+  await addTaskRow(page, '完了して消える依頼');
   const completed = waitForResponses(page, '/task-complete');
   await page.getByRole('button', { name: '完了にする: 完了して消える依頼', exact: true }).click();
   await completed;
@@ -750,7 +737,7 @@ test('別の人が削除したタスクは、次の木の読み直しの後に�
   await createWorkspace(page, '削除された依頼ワークスペース');
   await addStory(page, '読み直しを起こすストーリー');
   const created = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/task-create'));
-  await addTask(page, '別の人に削除される依頼');
+  await addTaskRow(page, '別の人に削除される依頼');
   const taskId = ((await (await created).json()) as { task: { id: string } }).task.id;
   await expect(taskRow(page, '別の人に削除される依頼')).toBeVisible();
 

@@ -8,6 +8,20 @@ export function formatLocalDate(iso: string): string {
   return Number.isNaN(at.getTime()) ? iso : dateFormatter.format(at);
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat('sv-SE', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+// UTC の ISO 8601 を、ブラウザのタイムゾーンの YYYY-MM-DD HH:MM にする。読めない値は元のまま返す
+export function formatLocalDateTime(iso: string): string {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? iso : dateTimeFormatter.format(at);
+}
+
 // UTC の ISO 8601 を、UTC の YYYY-MM-DD にする。ブラウザのタイムゾーンに依らない日付で、運用の画面の「停止 <日>」が、
 // UTC の日付で数える「<日> に消す」（停止から30日後）と同じ基準で並ぶ。読めない値は元のまま返す
 export function formatUtcDate(iso: string): string {

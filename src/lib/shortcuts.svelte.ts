@@ -36,6 +36,10 @@ export interface Shortcut {
   inModal?: boolean;
   // 押しっぱなしの繰り返しでも働くか（既定は働かない）
   repeat?: boolean;
+  // どの画面でも働くか（検索、画面を移るキー、一覧を開く `?`）。一覧（ShortcutHelp）で「今の画面」の下に分けて出す。既定は今の画面のキー
+  global?: boolean;
+  // 一覧の組の中の並び（小さい順。既定は 5。同じ値は登録された順）。検索を 1、画面を移るキーを 2、一覧を開く `?` を 9 にして、部品が置かれる順によらず並べる
+  helpOrder?: number;
   // ヒント（⌘ を押し続けたときに角へ出すキー）を付ける要素。返さない（未定義、null）間は出さない。入力欄は包む枠を返す
   hintAnchor?: () => HTMLElement | null | undefined;
 }
