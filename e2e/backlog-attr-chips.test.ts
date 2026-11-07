@@ -10,6 +10,7 @@ import {
   expectNoA11yViolationsInThemes,
   signIn,
   waitForResponses,
+  waitForSettled,
   watchViolations,
 } from './helpers.ts';
 import { failOperation } from './operations.ts';
@@ -122,6 +123,8 @@ test('断られたら理由を出して元の値に戻す。完了にした行�
   await expect(page.getByRole('status').filter({ hasText: '直せません' })).toBeVisible();
   await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
   await unroute();
+  // 断られた後の木の読み直しが終わってから押す（読み直しの途中で完了にすると、完了の印が読み直しに巻き込まれる）
+  await waitForSettled(page);
 
   // 完了にした行（読み直すまで残る）のチップは押せない
   await row.getByRole('button', { name: '完了にする: 断られる件' }).click();
