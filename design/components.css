@@ -1664,6 +1664,54 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .gate-sheet > .doc-box :is(h1, h2, h3, h4, h5, h6):not(:first-child) { margin-top: var(--space-4); }
 .btn.is-wide { width: 100%; padding-block: 10px; }
 
+/* ===== 一覧の行で直に操作する部品 =====
+   空の行、属性のチップ、行の「⋯」のメニュー、書きっぱなしの欄、「/」の小窓。色は既存のトークンだけを使う。 */
+/* 空の行（.draft-row）。一覧の末尾に置く題の欄。打って Enter で行が足され、続けて打てる。変換中の Enter と Esc、空のまま離れたときは作らない */
+.draft-row { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--color-rule); min-width: 0; }
+.draft-row > .ico { flex: none; color: var(--color-faint); }
+.draft-row .input { flex: 1 1 auto; min-width: 0; border-style: dashed; }
+.draft-row .input:focus { border-style: solid; }
+.tree-children .draft-row { padding-left: var(--space-10); }
+@media (max-width: 760px) { .tree-children .draft-row { padding-left: var(--space-4); } }
+.entry-today { display: inline-flex; align-items: center; gap: var(--space-1); }
+.board-col > .draft-row { padding: var(--space-2) 0 0; border-top: 0; }
+/* 属性のチップ（.chip-btn）。押すと値を選ぶ。未設定（.is-unset）は薄い破線の形で、値があれば .chip と同じ */
+.chip-btn { font: inherit; font-size: var(--text-xs); cursor: pointer; position: relative; }
+.chip-btn:hover { border-color: var(--color-control-edge); }
+.chip-btn.is-unset { color: var(--color-muted); background: none; border-style: dashed; }
+.chip-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+/* 長い名前の省略は中の文字（.chip-text）に持たせる。ボタン本体に overflow を付けると、::after で広げた押せる範囲が切られる */
+.chip-btn { max-width: 100%; }
+.chip-text { display: block; max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-foot { flex-wrap: wrap; }
+.card-foot .row-menu { min-width: 0; max-width: 100%; }
+/* 行の「⋯」（.row-menu）。広い幅ではホバーと行の中のフォーカスで出し、開いている間は出したままにする。opacity だけなので、見えなくてもキーボードで届く */
+.row-menu { position: relative; display: inline-flex; flex: none; }
+.row-menu-btn { opacity: 0; }
+:is(.entry, .tree-row, .card):is(:hover, :focus-within) .row-menu-btn, .row-menu-btn[aria-expanded="true"], .row-menu-btn:focus-visible { opacity: 1; }
+.row-menu-list { position: fixed; z-index: 30; width: max-content; min-width: 12rem; max-width: min(20rem, calc(100vw - 2 * var(--space-4))); }
+.row-menu-list .menu-item { display: flex; align-items: center; gap: var(--space-2); }
+.row-menu-list .menu-item .ico { flex: none; color: var(--color-muted); }
+.row-menu-list .menu-item.is-danger { color: var(--color-danger); }
+@media (max-width: 760px), (pointer: coarse) {
+  .row-menu-btn { opacity: 1; width: 44px; height: 44px; }
+  .chip-btn::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+  .chip-btn { margin-block: 10px; }
+}
+/* 書きっぱなしの欄（.is-inline）。静止時は破線の罫で書ける欄と示し、押すと実線の入力欄になる。引き出しのタイトル、リンク、本文に使う */
+.input.is-inline, .textarea.is-inline { background: transparent; border-color: var(--color-control-edge); border-style: dashed; }
+.input.is-inline:focus, .textarea.is-inline:focus { background: var(--color-surface); border-color: var(--color-control-edge); border-style: solid; }
+.drawer-title .input.is-inline { font: inherit; font-weight: inherit; letter-spacing: inherit; width: 100%; }
+/* 「/」の小窓（.slash-menu）。本文の欄の下に出る候補。上下で選び、Enter で入れ、Esc で閉じる */
+.slash-wrap { position: relative; }
+.slash-menu { position: absolute; z-index: 12; left: 0; top: calc(100% + var(--space-1)); min-width: 14rem; max-width: min(22rem, 100%); list-style: none; margin: 0; padding: var(--space-1); display: grid; gap: 1px;
+  background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-1); box-shadow: var(--shadow-float); max-height: 40vh; overflow-y: auto; }
+.slash-menu[hidden] { display: none; }
+.slash-item { display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-1); cursor: pointer; min-height: 36px; }
+.slash-item small { color: var(--color-muted); font-size: var(--text-xs); }
+.slash-item[aria-selected="true"] { background: var(--color-accent-soft); box-shadow: inset 3px 0 0 var(--color-accent); font-weight: 700; }
+@media (max-width: 760px), (pointer: coarse) { .slash-item { min-height: 44px; align-items: center; } }
+
 /* ===== 知らせ（トースト） ===== */
 .toasts { position: fixed; z-index: 40; right: max(var(--space-4), env(safe-area-inset-right, 0px)); bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); display: grid; gap: var(--space-2); }
 .toast { display: flex; gap: var(--space-2); align-items: center; padding: var(--space-3) var(--space-4); background: var(--color-fg); color: var(--color-bg); border-radius: var(--radius-1); box-shadow: var(--shadow-float); font-size: var(--text-sm); overflow-wrap: anywhere; max-width: min(420px, calc(100vw - 2 * var(--space-4))); animation: toast-in var(--duration-stamp) var(--ease-out) 1; }

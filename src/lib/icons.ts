@@ -53,6 +53,7 @@ export const icons = {
   crystal: '<path d="M8 4h8l4 5-8 11L4 9z"/><path d="M4 9h16M9 9l3 11 3-11M10 4L9 9M14 4l1 5"/>',
   chest: '<path d="M4 11h16v9H4z"/><path d="M4 11V9a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2"/><path d="M10 11v3h4v-3"/>',
   crest: '<path d="M12 4l7 3.5v7.7L12 20l-7-4.8V7.5z"/><path d="M9 10.5l3 2.5 3-2.5"/>',
+  more: '<path d="M5 12h.01M12 12h.01M19 12h.01"/>',
 } as const;
 
 export type IconName = keyof typeof icons;
