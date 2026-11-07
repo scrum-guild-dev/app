@@ -360,12 +360,13 @@
     const expected = input.value.slice(0, edit.start) + edit.text + input.value.slice(edit.end);
     const done =
       edit.text === '' ? document.execCommand('delete') : document.execCommand('insertText', false, edit.text);
-    // 使えない、または期待した本文にならないときは、applyEdit で書き込む
-    if (!done || input.value !== expected) {
+    // 使えず本文が変わっていないときだけ、applyEdit で書き込む（変わっていれば、ブラウザの結果が本文。重ねて当てない）
+    if (!done) {
       applyEdit(edit.start, edit.end, edit.text);
       input.value = value;
     }
-    input.setSelectionRange(edit.selectionStart, edit.selectionEnd);
+    // 期待した本文にならなかったとき（maxlength の打ち切りなど）は、選択の位置も合わないので、ブラウザの置いた位置のままにする
+    if (input.value === expected) input.setSelectionRange(edit.selectionStart, edit.selectionEnd);
   }
 
   // Enter でリストを続け、リストの中の Tab / Shift+Tab で字下げする。小窓が先にキーを受けたときと、変換中は何もしない
