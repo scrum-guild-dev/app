@@ -18,7 +18,7 @@ import {
 } from './e2e-shard.ts';
 import { sumDurations } from './e2e-shard-weights.ts';
 
-const SHARDS = 4;
+const SHARDS = 5;
 // 見積もり（準備を含まず、重みの合計をそのまま 2 ワーカーで走らせた秒）から、CI のジョブの所要時間への換算。
 // run 41180554724 の 3 つのシャードで、テストの実時間は見積もり相当（重みの合計の半分）の 1.10〜1.19 倍、
 // ジョブ全体からテストの実時間を引いた準備（checkout、setup、Playwright、build、サーバーの起動、seed）は 29〜36 秒だった
