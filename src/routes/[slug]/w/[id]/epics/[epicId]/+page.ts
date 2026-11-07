@@ -10,7 +10,7 @@ import type { PageLoad } from './$types';
 // ワークスペースが見つからないとき（404、403）は枠が先に「見つからない」を出すので、ここでは同じ失敗に畳む。
 // 区分の一覧は、エピックのダイアログ（見出しの横の「直す」）の選択肢。読めなければ definitions が null で、ダイアログは選択肢なしで開く。
 // url は 401 のときだけ読む（読むと、移るたびにこの load が走り直る）。
-// `app:epic-detail` は、ダイアログで直した後に、この画面の値だけを読み直す印（枠の load を走らせない）
+// `app:epic-detail` は、引き出しで直した後に、この画面の値だけを読み直す印（枠の load を走らせない）
 export const load: PageLoad = async ({ params, fetch, url, depends }) => {
   depends('app:epic-detail');
   const options = { slug: params.slug, fetcher: fetch };

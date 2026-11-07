@@ -5,6 +5,7 @@
 
 type TreeStoryLike = { id: string; completed_at: string | null; open_task_count: number };
 type TreeEpicLike = {
+  id: string;
   completed_at: string | null;
   canceled_at: string | null;
   stories: readonly TreeStoryLike[];
@@ -76,4 +77,11 @@ export function staleCurrentOf(details: unknown): Record<string, unknown> | null
   const record = details as { reason?: unknown; current?: unknown };
   if (record.reason !== 'stale' || typeof record.current !== 'object' || record.current === null) return null;
   return record.current as Record<string, unknown>;
+}
+
+// エピックの引き出し（EpicDrawer）が受け取る、木のエピックの完了（クリア）か中止の状態。木に無ければ false（期日の印に色を付けない理由が無い）
+export function epicFinishedOf(tree: StoryTreeLike | null | undefined, epicId: string): boolean {
+  if (tree === null || tree === undefined) return false;
+  const row = tree.epics.find((epic) => epic.id === epicId);
+  return row !== undefined && (row.completed_at !== null || row.canceled_at !== null);
 }

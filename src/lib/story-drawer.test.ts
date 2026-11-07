@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest';
-import { parentChoicesOf, staleCurrentOf, storyFactsOf, storyTreeOf, type StoryTree } from './story-drawer.ts';
+import {
+  epicFinishedOf,
+  parentChoicesOf,
+  staleCurrentOf,
+  storyFactsOf,
+  storyTreeOf,
+  type StoryTree,
+} from './story-drawer.ts';
 
 function story(id: string, overrides: Partial<{ completed_at: string | null; open_task_count: number }> = {}) {
   return { id, completed_at: null, open_task_count: 0, ...overrides };
@@ -9,13 +16,14 @@ const tree: StoryTree = {
   today: '2026-11-06',
   week_start: 1,
   epics: [
-    { completed_at: null, canceled_at: null, stories: [story('s-open', { open_task_count: 2 })] },
+    { id: 'e1', completed_at: null, canceled_at: null, stories: [story('s-open', { open_task_count: 2 })] },
     {
+      id: 'e2',
       completed_at: '2026-11-01T00:00:00.000Z',
       canceled_at: null,
       stories: [story('s-cleared', { completed_at: '2026-10-30T00:00:00.000Z' })],
     },
-    { completed_at: null, canceled_at: '2026-11-02T00:00:00.000Z', stories: [story('s-canceled')] },
+    { id: 'e3', completed_at: null, canceled_at: '2026-11-02T00:00:00.000Z', stories: [story('s-canceled')] },
   ],
   stories: [story('s-root', { completed_at: '2026-11-03T00:00:00.000Z' })],
   choices: {
@@ -89,5 +97,18 @@ describe('staleCurrentOf', () => {
     expect(staleCurrentOf({ reason: 'stale', current: null })).toBeNull();
     expect(staleCurrentOf(undefined)).toBeNull();
     expect(staleCurrentOf('stale')).toBeNull();
+  });
+});
+
+describe('epicFinishedOf', () => {
+  test('クリアか中止したエピックは真、進行中は偽', () => {
+    expect(epicFinishedOf(tree, 'e1')).toBe(false);
+    expect(epicFinishedOf(tree, 'e2')).toBe(true);
+    expect(epicFinishedOf(tree, 'e3')).toBe(true);
+  });
+
+  test('木に無いエピックと、木が無いときは偽', () => {
+    expect(epicFinishedOf(tree, 'missing')).toBe(false);
+    expect(epicFinishedOf(null, 'e2')).toBe(false);
   });
 });

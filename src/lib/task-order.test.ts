@@ -8,15 +8,7 @@ import {
   storyOrder,
   taskOrder,
 } from './drawer.svelte.ts';
-import {
-  stepFocusTarget,
-  stepOfKey,
-  trackStoryOrder,
-  trackTaskOrder,
-  visibleStoryIds,
-  visibleTaskIds,
-  type StepKeyEvent,
-} from './task-order.ts';
+import { stepFocusTarget, trackStoryOrder, trackTaskOrder, visibleStoryIds, visibleTaskIds } from './task-order.ts';
 
 type FakeRow = { id: string | null; hidden?: boolean };
 
@@ -76,109 +68,6 @@ describe('adjacentTaskIds', () => {
   test('順に無いタスク（完了して木から外れた）と空の順は、前後を決めない', () => {
     expect(adjacentTaskIds(ids, 'x')).toBeNull();
     expect(adjacentTaskIds([], 'a')).toBeNull();
-  });
-});
-
-function keyEvent(overrides: Partial<StepKeyEvent> = {}): StepKeyEvent {
-  return {
-    key: ']',
-    keyCode: 221,
-    isComposing: false,
-    ctrlKey: false,
-    metaKey: false,
-    altKey: false,
-    shiftKey: false,
-    repeat: false,
-    defaultPrevented: false,
-    target: { tagName: 'BUTTON', closest: () => null, isContentEditable: false } as unknown as EventTarget,
-    ...overrides,
-  };
-}
-
-// 本物の要素のように、tagName と type を持ち、closest は自分のタグが並べたセレクタにあれば自分を返す
-function targetOf(tagName: string, type?: string, isContentEditable = false): EventTarget {
-  return {
-    tagName,
-    type,
-    closest: (selector: string) =>
-      selector
-        .split(',')
-        .map((part) => part.trim().toUpperCase())
-        .includes(tagName)
-        ? {}
-        : null,
-    isContentEditable,
-  } as unknown as EventTarget;
-}
-
-// 文字や数字を入れる型。ブラウザは type 属性が無いか不明な input を text として返す
-const TEXT_TYPES = [
-  'text',
-  'search',
-  'url',
-  'email',
-  'tel',
-  'password',
-  'number',
-  'date',
-  'datetime-local',
-  'month',
-  'week',
-  'time',
-];
-// 文字を打たない型（ポイントの radio など）。フォーカスがあっても移れる
-const NON_TEXT_TYPES = ['radio', 'checkbox', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image'];
-
-describe('stepOfKey', () => {
-  test('[ は前、] は次', () => {
-    expect(stepOfKey(keyEvent({ key: '[' }))).toBe(-1);
-    expect(stepOfKey(keyEvent({ key: ']' }))).toBe(1);
-  });
-
-  test('ほかのキーは移らない', () => {
-    expect(stepOfKey(keyEvent({ key: 'j' }))).toBeNull();
-    expect(stepOfKey(keyEvent({ key: 'Escape' }))).toBeNull();
-  });
-
-  test('日本語の変換中（isComposing か keyCode 229）は移らない', () => {
-    expect(stepOfKey(keyEvent({ isComposing: true }))).toBeNull();
-    expect(stepOfKey(keyEvent({ keyCode: 229 }))).toBeNull();
-  });
-
-  test.each(['ctrlKey', 'metaKey', 'altKey', 'shiftKey'] as const)('%s 付きでは移らない', (modifier) => {
-    expect(stepOfKey(keyEvent({ [modifier]: true }))).toBeNull();
-  });
-
-  test('押しっぱなしの繰り返しと、ほかの処理が受けたキーでは移らない', () => {
-    expect(stepOfKey(keyEvent({ repeat: true }))).toBeNull();
-    expect(stepOfKey(keyEvent({ defaultPrevented: true }))).toBeNull();
-  });
-
-  test.each(TEXT_TYPES)('文字や数字を入れる input（%s）の中では移らない', (type) => {
-    expect(stepOfKey(keyEvent({ target: targetOf('INPUT', type) }))).toBeNull();
-  });
-
-  test('type が無い input（text として扱う）、textarea、select、contenteditable の中では移らない', () => {
-    expect(stepOfKey(keyEvent({ target: targetOf('INPUT', undefined) }))).toBeNull();
-    expect(stepOfKey(keyEvent({ target: targetOf('INPUT', '') }))).toBeNull();
-    expect(stepOfKey(keyEvent({ target: targetOf('TEXTAREA') }))).toBeNull();
-    expect(stepOfKey(keyEvent({ target: targetOf('SELECT') }))).toBeNull();
-    expect(stepOfKey(keyEvent({ target: targetOf('DIV', undefined, true) }))).toBeNull();
-  });
-
-  test.each(NON_TEXT_TYPES)('文字を打たない input（%s）にフォーカスがあっても移る', (type) => {
-    expect(stepOfKey(keyEvent({ key: ']', target: targetOf('INPUT', type) }))).toBe(1);
-    expect(stepOfKey(keyEvent({ key: '[', target: targetOf('INPUT', type) }))).toBe(-1);
-  });
-
-  test('ボタンやリンクにフォーカスがあっても移る', () => {
-    expect(stepOfKey(keyEvent({ target: targetOf('BUTTON') }))).toBe(1);
-    expect(stepOfKey(keyEvent({ target: targetOf('A') }))).toBe(1);
-  });
-
-  test('キーの先が要素でなくても（document など）移れる', () => {
-    expect(stepOfKey(keyEvent({ target: {} as EventTarget }))).toBe(1);
-    expect(stepOfKey(keyEvent({ target: null }))).toBe(1);
   });
 });
 

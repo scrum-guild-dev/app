@@ -140,6 +140,22 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 - 辞書の型の保証は `src/shared/vocabulary.typecheck.ts` が持つ。文字列でない項目（数、オブジェクト、`{ scope, game, scrum }` の旧形式）が型で落ちることを `@ts-expect-error` で確かめ、落ちなくなると `pnpm check` が落ちる。
 - 見本の `design/kit.js` の `DICT` にあるキーは、本番も同じ中身で持つ。`scripts/design-parity.test.ts` が突き合わせる（`docs/design.md` の「デザインシステムの構成」）。
 
+### キーボードのショートカット
+
+- 画面のどこからでも働くキー（検索の `Mod+K`、引き出しの `[` `]` など、一覧に出すキー）は一か所に登録する。`src/routes/+layout.svelte` が `keydown` を1つだけ受けて `src/lib/shortcuts.svelte.ts` の `shortcuts.handle` へ渡し、そこで振り分ける。メニューや引き出しの中で閉じる Esc、矢印キーなど、部品の中だけで完結する操作は対象にせず、これまでどおり部品が受ける（Drawer の Esc は残している。登録に寄せるときは、変換中と `defaultPrevented` の判定が重なるので別の Issue にする）。
+- 登録は部品の初期化の中で `useShortcut(() => ({ id, keys, label, run, ... }))` を呼ぶ。部品が置かれている間だけ登録され、外れると解除される（画面ごとの有効・無効を別の状態で持たない）。`id` は部品をまたいで一意にし、`label` は辞書（`t`）を通した名前を返す（一覧の画面で使う）。
+- `keys` の書き方は `src/lib/shortcut-keys.ts` に決める。`Mod+K` は Ctrl か ⌘ と K（Alt と Shift は付けない）、`[`、`c`、`?` は修飾キー（Ctrl、⌘、Alt）なしの1文字で、押された `key` と同じ文字で当てる（`c` と `C` は別。Shift は見ず、`?` のように Shift で出る文字は出た文字で当てる）。`aria-keyshortcuts` の値は `ariaKeyshortcuts(keys)` で作る（`Mod+K` は `Control+K Meta+K`）。
+- 振り分けの既定は次のとおり。部品ごとに書き直さない。
+  - 日本語の変換中のキー（`isComposing`、`keyCode` 229）と、ほかの処理が受けたキー（`defaultPrevented`）には働かない。
+  - 文字を打つ場所（文字を入れる型の `input`、`textarea`、`select`、`contenteditable`）では働かない。`Mod+K` のように打つ文字と重ならないものだけ `inTyping: true` にする。
+  - ダイアログ（`dialog[open]`、`role="dialog"`、`modalState.openCount`）が開いている間は働かない。引き出しの `[` `]` のように、そのダイアログ自身のキーだけ `inModal: true` にし、書きかけの確認が開いている間などは `enabled` で止める。
+  - 押しっぱなしの繰り返しには働かない（`repeat: true` にしたものだけ）。Ctrl/⌘ 付きのキーは、働かせずにキーだけ奪う（`Mod+K` の長押しで、ブラウザの標準の Ctrl+K を動かさない）。単キーは奪わない。
+  - `enabled` が `false` を返す間は働かない。
+- 同じキーを同時に2つ登録すると、開発（`import.meta.env.DEV`）では例外にして、本番では後の登録を無視する（先の登録を壊さない）。`Mod+K` と `Mod+k` のように、書き方が違っても同じキーなら重なりとして数える。同時に置く部品が同じキーを使わないよう、`id` は部品ごとに決める。
+- ブラウザの標準のショートカット（⌘N、⌘T、⌘W など）は奪えないので割り当てない。新規作成のような単独の操作は、修飾キーなしの単キーにする。
+- Ctrl+K は、日本語の変換中は働かず、押しっぱなしでは欄へ移り直さず、ほかの処理が受けたキー（`defaultPrevented`）は奪わない。
+- テストは `src/lib/shortcut-keys.test.ts`（キーの書き方と判定）と `src/lib/shortcuts.svelte.test.ts`（登録、振り分け、衝突）。
+
 ### 書体
 
 - 書体は `@fontsource` の4つのパッケージ（`biz-udpgothic`、`zen-old-mincho`、`ibm-plex-mono`、`chakra-petch`）から、`src/routes/+layout.svelte` が使う太さだけを import する。太さは見本（`design/today.html`）の Google Fonts の URL と同じ（BIZ UDPGothic 400 と 700、Zen Old Mincho 700 と 900、IBM Plex Mono 400 と 500、Chakra Petch 500、600、700）。

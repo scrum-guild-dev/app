@@ -4,7 +4,15 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { taskMove } from '../src/shared/operations/task/task-move.ts';
-import { chooseRowAction, createWorkspace, rowMenuItem, signIn, waitForResponses, watchViolations } from './helpers.ts';
+import {
+  addEpicRow,
+  addStoryRow,
+  chooseRowAction,
+  createWorkspace,
+  rowMenuItem,
+  signIn,
+  watchViolations,
+} from './helpers.ts';
 import { routeOperation } from './operations.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
@@ -30,16 +38,10 @@ async function addTask(page: Page, title: string, options: { assignee?: string; 
   await expect(dialog).toBeHidden();
 }
 
-// 作った後は、木の読み直しが返るまで待つ。読み直しで木が替わると、画面は画面だけで足したタスクと並べ替えを捨てる（+page.svelte）。
-// 返る前に次のタスクを足すか並べ替えると、それが遅れて届いた読み直しで消えうる
+// 木の空の行で作る（作った行は読み直さずに木へ入る）。label は「エピックを作る」か「ストーリーを作る」で、どちらの行かを選ぶ
 async function create(page: Page, label: string, title: string): Promise<void> {
-  await page.getByRole('button', { name: label }).click();
-  const dialog = page.getByRole('dialog', { name: label });
-  await dialog.getByLabel('タイトル').fill(title);
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
-  await reloaded;
+  if (label === 'エピックを作る') await addEpicRow(page, title);
+  else await addStoryRow(page, title);
 }
 
 // 木に出ているタスクの題（木の順）
@@ -211,7 +213,10 @@ test('絞っているときに作ったタスクやストーリーが当たら�
   // ストーリーも同じ（担当で絞っているので、配下の無いストーリーは当たらない）。前のトーストを消すため読み直す（絞り込みは残る）
   await page.reload();
   await expect(notice).toHaveCount(0);
-  await create(page, 'ストーリーを作る', '新しい目標');
+  // 絞っている間も、木の末尾の空の行で作れる。当たらないので、木には出さずにトーストで知らせる
+  const rootInput = page.locator('.tree > .draft-row').getByRole('textbox', { name: 'ストーリーを足す', exact: true });
+  await rootInput.fill('新しい目標');
+  await rootInput.press('Enter');
   await expect(notice).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'ストーリーを作りました' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '新しい目標', exact: true })).toHaveCount(0);
