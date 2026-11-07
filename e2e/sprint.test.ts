@@ -11,7 +11,17 @@ import type { Page } from '@playwright/test';
 import { sprintBoard, sprintClose, sprintList, taskColumnMove } from '../src/shared/operations/sprint/index.ts';
 import { taskComplete, taskReopen } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, dragTo, signIn, waitForResponses, waitForSettled, watchViolations } from './helpers.ts';
+import {
+  chooseRowAction,
+  createWorkspace,
+  dragTo,
+  rowMenuItem,
+  rowMenuToggle,
+  signIn,
+  waitForResponses,
+  waitForSettled,
+  watchViolations,
+} from './helpers.ts';
 import { failOperation, mockOperation, routeOperation } from './operations.ts';
 import { OVERDUE_BOARD, OVERDUE_PLAN, SAMPLE_BOARD } from './sprint-fixture.ts';
 
@@ -148,8 +158,10 @@ test('リーダーはゴールを書いてスプリントを始め、2つ目は�
   await expect(titlesIn(page, '未着手')).toHaveText(['B札', 'C札']);
   await expect(card('A札')).toBeFocused();
 
-  // ボタンでも同じ。移した先の末尾に入る
-  await page.getByRole('button', { name: '次の列へ: B札' }).click();
+  // カードの操作は完了の丸と「⋯」だけで、下の矢印の帯は無い。「⋯」のメニューでも同じ。移した先の末尾に入る
+  await expect(page.locator('.card-moves')).toHaveCount(0);
+  await expect(card('B札').getByRole('button')).toHaveCount(2);
+  await chooseRowAction(page, 'B札', '次の列へ');
   await expect(status('「B札」を作業中の 2 番目に移しました（2 件中）')).toBeVisible();
   await expect(titlesIn(page, '作業中')).toHaveText(['A札', 'B札']);
 
@@ -161,25 +173,28 @@ test('リーダーはゴールを書いてスプリントを始め、2つ目は�
   await expect(status('いちばん上です')).toBeVisible();
   await card('A札').press('Alt+ArrowDown');
   await expect(status('いちばん下です')).toBeVisible();
-  await page.getByRole('button', { name: '下へ: B札' }).click();
+  await chooseRowAction(page, 'B札', '下へ');
   await expect(titlesIn(page, '作業中')).toHaveText(['A札', 'B札']);
-  await page.getByRole('button', { name: '上へ: B札' }).click();
+  // 動かした後も、フォーカスは同じカードの「⋯」に残る
+  await expect(rowMenuToggle(page, 'B札')).toBeFocused();
+  await chooseRowAction(page, 'B札', '上へ');
   await expect(titlesIn(page, '作業中')).toHaveText(['B札', 'A札']);
 
   // 最後の完了でない列から先（完了の列）へ Alt と → で送ると、完了にする（task-column-move では移さない）
   await card('C札').press('Alt+ArrowRight');
   await card('C札').press('Alt+ArrowRight');
   await expect(titlesIn(page, 'レビュー')).toHaveText(['C札']);
-  // その列の「次の列へ」は完了にするので、読み上げの名前と title もそう言う。動かし方の案内にも添える
-  const completeNext = page.getByRole('button', { name: '完了の列へ（完了にする）: C札' });
+  // その列の「次の列へ」は完了にするので、メニューの項目の名前もそう言う。動かし方の案内にも添える
+  const completeNext = rowMenuItem(page, 'C札', '完了の列へ（完了にする）');
   await expect(completeNext).toHaveAttribute('aria-disabled', 'false');
-  await expect(completeNext).toHaveAttribute('title', '完了の列へ（完了にする）');
-  await expect(page.getByRole('button', { name: '次の列へ: C札' })).toHaveCount(0);
+  await expect(rowMenuItem(page, 'C札', '次の列へ')).toHaveCount(0);
   await expect(page.locator('#sprint-board-key-hint')).toContainText(
     '完了の列の手前の列から次へ送ると、完了になります。',
   );
-  await expect(page.getByRole('button', { name: '前の列へ: B札' })).toHaveAttribute('aria-disabled', 'false');
-  await expect(page.getByRole('button', { name: '前の列へ: A札' })).toHaveAttribute('aria-disabled', 'false');
+  await expect(rowMenuItem(page, 'B札', '前の列へ')).toHaveAttribute('aria-disabled', 'false');
+  await expect(rowMenuItem(page, 'A札', '前の列へ')).toHaveAttribute('aria-disabled', 'false');
+  // 先頭の列のカードは、前の列へは動かせない
+  await expect(rowMenuItem(page, 'B札', '上へ')).toHaveAttribute('aria-disabled', 'true');
   await moved;
   await card('C札').press('Alt+ArrowRight');
   await expect(status('タスクを完了にしました')).toBeVisible();
@@ -368,7 +383,7 @@ test('スクラムの言葉でも、スプリントを始めて、列とカー�
   await expect(
     page.getByRole('status').filter({ hasText: '「E札」を作業中の 1 番目に移しました（1 件中）' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: '前の列へ: E札' })).toBeVisible();
+  await expect(rowMenuItem(page, 'E札', '前の列へ')).toHaveAttribute('aria-disabled', 'false');
 
   // 完了の列には、完成の定義を畳んで出す。開くまで本文を描かない
   const doneColumn = page.getByRole('region', { name: '完了', exact: true });
@@ -381,9 +396,9 @@ test('スクラムの言葉でも、スプリントを始めて、列とカー�
   await expect(page.locator('details.dod')).toHaveCount(1);
 
   // 最後の完了でない列の「次の列へ」は、完了にする
-  await page.getByRole('button', { name: '次の列へ: E札' }).click();
+  await chooseRowAction(page, 'E札', '次の列へ');
   await expect(titlesIn(page, 'レビュー')).toHaveText(['E札']);
-  await page.getByRole('button', { name: '完了の列へ（完了にする）: E札' }).click();
+  await chooseRowAction(page, 'E札', '完了の列へ（完了にする）');
   await expect(page.getByRole('status').filter({ hasText: 'タスクを完了にしました' })).toBeVisible();
   await expect(titlesIn(page, '完了')).toHaveText(['E札']);
   // 戻すと、完了の前の列へ戻る

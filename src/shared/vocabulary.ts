@@ -2054,14 +2054,11 @@ export const dictionary = defineDictionary({
   sprintBoardEmptyClosedText: '終了した{workspace}では、{sprint}を始められません。',
   sprintBoardOpenPlan: '{plan}を開く',
   sprintBoardOpenBacklog: '{backlog}を開く',
-  // カードの移動。ボタンの読み上げの名前は、同じ名前が並ぶので題を添える
+  // カードの移動。カードの「⋯」のメニューの項目（メニューの名前が題を持つので、項目には題を添えない）
   moveColumnPrev: '前の{column}へ',
   moveColumnNext: '次の{column}へ',
-  moveColumnPrevLabel: '前の{column}へ: {title}',
-  moveColumnNextLabel: '次の{column}へ: {title}',
   // 最後の完了でない列のカードの「次の列へ」。完了の列へ移す代わりに完了にする
   moveColumnComplete: '{done}の{column}へ（{complete}）',
-  moveColumnCompleteLabel: '{done}の{column}へ（{complete}）: {title}',
   // 選んだカードの説明（aria-describedby）。{points} はポイントか未見積もりの文
   sprintCardSummary: '{points}、{assignee}は{name}',
   sprintCardSummaryUnassigned: '{points}、{unassigned}',
