@@ -283,9 +283,7 @@ test('引き出しから「完了にする」と「取り消す」ができる�
   await draft.fill('残っているタスク');
   await draft.press('Enter');
   await expect(page.locator('.entry-title', { hasText: '残っているタスク' })).toBeVisible();
-  // 引き出しの完了の状態は story-get から読むので、空の行で足した直後のタスクも、読み直さずに数える
-
-  // 配下に未完了のタスクが残るあいだは、押しても何も起きず、理由が読み上げと一緒に出る
+  // 配下に未完了のタスクが残るあいだは、押しても何も起きず、理由が読み上げと一緒に出る（引き出しの完了の状態は story-get から読むので、空の行で足した直後のタスクも、読み直さずに数える）
   const blocked = await openStory(page, '配下のあるストーリー');
   const complete = blocked.getByRole('button', { name: '完了にする' });
   await expect(complete).toHaveAttribute('aria-disabled', 'true');

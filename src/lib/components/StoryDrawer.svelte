@@ -376,9 +376,12 @@
   }
 
   // 完了の状態と件数だけ読み直す（書きかけの欄を story の値で上書きしない）。読めなければ今の表示のまま
+  // 入れ違いに返った古い応答で、新しい完了の状態を上書きしないよう、最後に送った分だけを反映する
+  let factsVersion = 0;
   async function refreshFacts(): Promise<void> {
+    const mine = ++factsVersion;
     const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: openedId }, { slug });
-    if (!result.ok || !alive) return;
+    if (!result.ok || !alive || mine !== factsVersion) return;
     childTasks = result.data.children.tasks;
     facts = factsOf(result.data);
   }
@@ -512,7 +515,7 @@
         for (const key of AUTOSAVED) if (key in fields) bases[key] = fields[key] ?? '';
       }
       if (!inline || !alive) showToast(t('taskSaved'), 'check');
-      void refreshFacts();
+      if (alive) void refreshFacts();
       void onchanged();
       return null;
     }
@@ -793,6 +796,12 @@
   let doneMark = $state<HTMLElement>();
   let completeButton = $state<HTMLElement>();
 
+  // 完了にした応答は完了した日時を持ち、取り消した応答は持たない
+  function completedAtOf(data: object): string | null {
+    const value = (data as { completed_at?: unknown }).completed_at;
+    return typeof value === 'string' ? value : null;
+  }
+
   async function setCompletion(action: 'complete' | 'reopen'): Promise<void> {
     if (story === null || facts === null || completing || reopening) return;
     if (action === 'complete' ? done : !done) return;
@@ -811,7 +820,14 @@
             : t('storyReopened', { story: t('story'), done: t('done') }),
           'check',
         );
-        // 完了の状態は story-get から読み直し、木も読み直す。閉じた後に返った応答も、木は読み直す
+        // 通った結果で帯を先に更新し（読み直しが失敗しても食い違わない）、story-get から読み直し、木も読み直す。閉じた後に返った応答も、木は読み直す
+        factsVersion += 1;
+        if (alive && facts !== null) {
+          facts = {
+            ...facts,
+            completedAt: completedAtOf(result.data),
+          };
+        }
         await refreshFacts();
         await onchanged();
       } else if (result.status === 401) {
@@ -1283,6 +1299,8 @@
             bind:this={completeButton}
             onclick={() => {
               if (!parentFinished && remaining === 0) void setCompletion('complete');
+              // 数えた件数が古いかもしれない（別の人が片づけた）ので、押したときに読み直す
+              else if (!parentFinished && remaining > 0) void refreshFacts();
             }}
           >
             <Icon name="check" />{t('complete')}

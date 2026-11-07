@@ -151,7 +151,10 @@
   // 別のストーリーを開き直したとき（URL から直接開いた、順に無い）は覚えがないので、ボタンを出さない
   let lastAdjacent: { id: string; adjacent: { prev: string | null; next: string | null } } | null = null;
   const storyAdjacent = $derived.by(() => {
-    if (storyId === null) return null;
+    if (storyId === null) {
+      lastAdjacent = null;
+      return null;
+    }
     const found = adjacentTaskIds(storyOrder.ids, storyId);
     if (found !== null) {
       lastAdjacent = { id: storyId, adjacent: found };

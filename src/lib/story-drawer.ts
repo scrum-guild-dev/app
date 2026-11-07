@@ -51,7 +51,11 @@ export function storyFactsFrom(data: {
   open_task_count: number;
   parent_finished: boolean;
 }): StoryFacts {
-  return { completedAt: data.completed_at, openTasks: data.open_task_count, parentFinished: data.parent_finished };
+  return {
+    completedAt: data.completed_at ?? null,
+    openTasks: data.open_task_count,
+    parentFinished: data.parent_finished,
+  };
 }
 
 // ストーリーの親に選べるエピック（完了も中止もしていないもの）。木が無いときは null（親を移すを出さない）

@@ -927,6 +927,25 @@ describe('story-get', () => {
     expect(second).toMatchObject({ completed_at: null, parent_finished: true });
   });
 
+  test('未完了の件数は、別のストーリーのタスクと、バックログでないタスクを数えず、削除したエピックは親として数えない', async () => {
+    const target = await createTarget();
+    const adminId = target.admin.userId!;
+    const story = await createStory(target.organization, target.workspace.id, adminId);
+    const other = await createStory(target.organization, target.workspace.id, adminId);
+    await createTask(target.organization, target.workspace.id, adminId, { story_id: story.id });
+    await createTask(target.organization, target.workspace.id, adminId, { story_id: other.id });
+    await createTask(target.organization, target.workspace.id, adminId, { story_id: other.id });
+    const body = (await (await get(target, story.id)).json()) as { open_task_count: number };
+    expect(body.open_task_count).toBe(1);
+    const deleted = await createEpic(target.organization, target.workspace.id, adminId, {
+      completed_at: '2026-10-20T00:00:00.000Z',
+      deleted_at: '2026-10-21T00:00:00.000Z',
+    });
+    const orphan = await createStory(target.organization, target.workspace.id, adminId, { epic_id: deleted.id });
+    const orphanBody = (await (await get(target, orphan.id)).json()) as { parent_finished: boolean };
+    expect(orphanBody.parent_finished).toBe(false);
+  });
+
   test('閉じたワークスペースでも読める', async () => {
     const target = await createTarget({ closed: true });
     const story = await createStory(target.organization, target.workspace.id, target.admin.userId!);
