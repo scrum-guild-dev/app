@@ -35,7 +35,7 @@
   import { formatDateTime } from '../format-datetime.ts';
   import { moveFailureMessage } from '../move-failure.ts';
   import { completionFailureMessage } from '../story-completion.ts';
-  import { staleCurrentOf, type StoryFacts } from '../story-drawer.ts';
+  import { staleCurrentOf, storyFactsFrom as factsOf, type StoryFacts } from '../story-drawer.ts';
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import AutoSaveEdit from './AutoSaveEdit.svelte';
@@ -70,8 +70,7 @@
   // 配下の扱いを選ぶ確認。配下が無ければ配下が無いことを出す）を置く。削除できない人（story-get の can_delete が偽）には、項目を出さず、
   // 本文の下に理由を出す（タスクの引き出しと同じ。項目が1つも無ければ「⋯」も出さない）。
   // 消したら閉じ、トーストで知らせ、画面が木を読み直す（onremoved）。
-  // 完了の帯は、木に載っているストーリーのときだけ出す（facts。story-get は完了の状態を返さないため、画面が木から渡す）。
-  // 木に載っていなければ（絞り込みの外、一覧の無い画面）、帯の位置に、操作を出せない理由を一文で出す。
+  // 完了の帯は、story-get が返す完了の状態（facts）で出す。保存、完了、取り消し、親を移した後は読み直す。
   // 完了していなくて書けるときは「完了にする」（story-complete。確かめのダイアログは挟まない。配下の未完了のタスクが残るあいだと、
   // 親のエピックが完了か中止しているあいだは、木の行と同じく押せない理由を添えて aria-disabled）、
   // 完了していれば完了の印と日時と「取り消す」（story-reopen）。断られた理由は木の行と同じ文（completionFailureMessage）。
@@ -85,7 +84,6 @@
     workspaceId: workspaceIdProp,
     storyId,
     canWrite,
-    facts,
     clock,
     parents,
     onclose,
@@ -104,8 +102,6 @@
     workspaceId: string;
     storyId: string;
     canWrite: boolean;
-    // 完了の状態（画面が木から渡す）。木に無いストーリーは null で、完了の帯を出さない
-    facts: StoryFacts | null;
     // 期日の印を決める、ワークスペースの今日と週の始まり（画面が木から渡す）。無ければ印を出さない
     clock: { today: string; weekStart: number } | null;
     // 親に選べるエピック（完了も中止もしていないもの）。無ければ（木が無い）親を移すを出さない
@@ -151,6 +147,8 @@
   let canDelete = $state(false);
   let canDeleteChildren = $state(false);
   let childTasks = $state(0);
+  // 完了の状態（story-get が返す）。読むまでは null で、完了の帯を出さない
+  let facts = $state<StoryFacts | null>(null);
   let heading = $state<HTMLElement>();
   let retryButton = $state<HTMLButtonElement>();
   let discardDialog = $state<ReturnType<typeof ConfirmDialog>>();
@@ -318,6 +316,7 @@
       canDelete = result.data.can_delete;
       canDeleteChildren = result.data.can_delete_children;
       childTasks = result.data.children.tasks;
+      facts = factsOf(result.data);
       loadState = 'ready';
       // 区分を直せるときだけ、選択肢を読む
       if (canWrite && result.data.story.epic_id === null && definitions === null) void loadDefinitions();
@@ -371,8 +370,20 @@
       canDelete = result.data.can_delete;
       canDeleteChildren = result.data.can_delete_children;
       childTasks = result.data.children.tasks;
+      facts = factsOf(result.data);
     }
     return result.data.story;
+  }
+
+  // 完了の状態と件数だけ読み直す（書きかけの欄を story の値で上書きしない）。読めなければ今の表示のまま
+  // 入れ違いに返った古い応答で、新しい完了の状態を上書きしないよう、最後に送った分だけを反映する
+  let factsVersion = 0;
+  async function refreshFacts(): Promise<void> {
+    const mine = ++factsVersion;
+    const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: openedId }, { slug });
+    if (!result.ok || !alive || mine !== factsVersion) return;
+    childTasks = result.data.children.tasks;
+    facts = factsOf(result.data);
   }
 
   // ---- 閉じる、移る ----
@@ -504,6 +515,7 @@
         for (const key of AUTOSAVED) if (key in fields) bases[key] = fields[key] ?? '';
       }
       if (!inline || !alive) showToast(t('taskSaved'), 'check');
+      if (alive) void refreshFacts();
       void onchanged();
       return null;
     }
@@ -784,6 +796,24 @@
   let doneMark = $state<HTMLElement>();
   let completeButton = $state<HTMLElement>();
 
+  // 無効の「完了にする」を押して読み直した結果の読み上げ（件数が変わらなければ、残りの件数をもう一度伝える）
+  let recheckNote = $state('');
+  let rechecking = false;
+  async function recheck(): Promise<void> {
+    if (rechecking) return;
+    rechecking = true;
+    try {
+      await refreshFacts();
+      if (!alive || facts === null) return;
+      recheckNote =
+        facts.openTasks === 0 && !facts.parentFinished
+          ? t('storyRecheckedOpen', { task: t('task'), done: t('done') })
+          : t('storyRemaining', { count: facts.openTasks, task: t('task') });
+    } finally {
+      rechecking = false;
+    }
+  }
+
   async function setCompletion(action: 'complete' | 'reopen'): Promise<void> {
     if (story === null || facts === null || completing || reopening) return;
     if (action === 'complete' ? done : !done) return;
@@ -791,10 +821,9 @@
     else reopening = true;
     try {
       const input = { workspace_id: workspaceId, story_id: openedId };
-      const result =
-        action === 'complete'
-          ? await callOperation(storyComplete, input, { slug })
-          : await callOperation(storyReopen, input, { slug });
+      const completeResult = action === 'complete' ? await callOperation(storyComplete, input, { slug }) : null;
+      const result = completeResult ?? (await callOperation(storyReopen, input, { slug }));
+      const completedAt = completeResult?.ok ? completeResult.data.completed_at : null;
       if (result.ok) {
         showToast(
           action === 'complete'
@@ -802,7 +831,15 @@
             : t('storyReopened', { story: t('story'), done: t('done') }),
           'check',
         );
-        // 完了の状態は木から渡るので、木を読み直す。閉じた後に返った応答も、木は読み直す
+        // 通った結果で帯を先に更新し（読み直しが失敗しても食い違わない）、story-get から読み直し、木も読み直す。閉じた後に返った応答も、木は読み直す
+        factsVersion += 1;
+        if (alive && facts !== null) {
+          facts = {
+            ...facts,
+            completedAt,
+          };
+        }
+        await refreshFacts();
         await onchanged();
       } else if (result.status === 401) {
         onstale();
@@ -818,8 +855,10 @@
         const failure = completionFailureMessage(result, action);
         showToast(failure.message, 'alert');
         if (result.status === 409 && result.error?.code === 'workspace_closed') onstale();
-        if (failure.reload) await onchanged();
-        else return;
+        if (failure.reload) {
+          await refreshFacts();
+          await onchanged();
+        } else return;
       }
     } finally {
       if (alive) {
@@ -934,7 +973,7 @@
         ? t('storyCompleting', { done: t('done') })
         : reopening
           ? t('storyReopening', { done: t('done') })
-          : '',
+          : recheckNote,
   );
 </script>
 
@@ -1221,7 +1260,7 @@
       (started) => (bases.body_md = started),
     )}
 
-    <!-- 完了の帯（TaskDrawer と同じ .done-bar）。木に載っているストーリーのときだけ出す -->
+    <!-- 完了の帯（TaskDrawer と同じ .done-bar）。story-get が返した完了の状態で出す -->
     {#if facts !== null && (done || canWrite)}
       <div class="done-bar">
         {#if facts.completedAt !== null}
@@ -1271,16 +1310,13 @@
             bind:this={completeButton}
             onclick={() => {
               if (!parentFinished && remaining === 0) void setCompletion('complete');
+              // 数えた件数が古いかもしれない（別の人が片づけた）ので、押したときに読み直す
+              else if (!parentFinished && remaining > 0) void recheck();
             }}
           >
             <Icon name="check" />{t('complete')}
           </button>
         {/if}
-      </div>
-    {:else if facts === null && canWrite}
-      <!-- 木に載っていない（絞り込みの外、一覧の無い画面）ので、完了の操作は出せない。理由を帯の位置に伝える -->
-      <div class="done-bar">
-        <span class="props-note">{t('storyFactsMissing', { done: t('done') })}</span>
       </div>
     {/if}
 
