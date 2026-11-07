@@ -281,6 +281,40 @@ describe('purge-organization（解約した組織のデータを消す SQL）', 
     });
   });
 
+  test('先頭5文は、Wiki の版2つ、ページ2つ、取り込み元の応答の順で、すべて1文32件に分けてある', () => {
+    const head = sqlLines(purgeOrganizationSql(uuidv7())).slice(0, 5);
+    expect(head.map((statement) => /^DELETE FROM (\w+) /.exec(statement)?.[1])).toEqual([
+      'wiki_page_revisions',
+      'wiki_page_revisions',
+      'wiki_pages',
+      'wiki_pages',
+      'task_source_payloads',
+    ]);
+    for (const statement of head) expect(statement).toContain('LIMIT 32');
+  });
+
+  test('取り込み元の応答は先頭5文の1回で32件ずつ消え、ほかの組織の応答は残る', async () => {
+    const other = await createOrganization();
+    await fillOrganization(other, (await createAccount({ last_login_at: AT })).id);
+    const target = await createOrganization(EXPIRED());
+    const admin = await createUser(target, { is_admin: 1 });
+    const workspace = await createWorkspace(target, admin.id);
+    for (let i = 0; i < 33; i++) {
+      const task = await createTask(target, workspace.id, admin.id, { position: `a${String(i).padStart(2, '0')}` });
+      await createTaskSourcePayload(target, task.id);
+    }
+    const payloads = async (id: string) => (await counts(id))!.task_source_payloads;
+    const otherBefore = await payloads(other.id);
+    expect(otherBefore).toBeGreaterThan(0);
+
+    const head = sqlLines(purgeOrganizationSql(target.id)).slice(0, 5);
+    await runStatementsForTest(env, head);
+    expect(await payloads(target.id)).toBe(1);
+    await runStatementsForTest(env, head);
+    expect(await payloads(target.id)).toBe(0);
+    expect(await payloads(other.id)).toBe(otherBefore);
+  });
+
   test('組織の中のすべての表を消し、数える（表を足して消す文や数える列を足し忘れると落ちる）', async () => {
     const id = uuidv7();
     const statements = sqlLines(purgeOrganizationSql(id));
