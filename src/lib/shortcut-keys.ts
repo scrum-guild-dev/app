@@ -4,6 +4,7 @@
 // - `Mod+K` … Ctrl か ⌘（Meta）と K。Alt と Shift は付けない。英字は大文字小文字を区別しない
 // - `[`、`c`、`?` … 修飾キー（Ctrl、⌘、Alt）なしの1文字。押された `key` と完全に同じ文字で当てる（`c` と `C` は別）。
 //   Shift は見ない。`?` のように Shift で出る文字は、Shift を押して出た `key` の文字そのもので当てる
+// - `g b` … 続けて押す2つの単キー（空白で区切る）。1つ目を押して約1秒のうちに2つ目を押すと当たる。修飾キーは付けない
 
 export type KeyEventLike = Pick<
   KeyboardEvent,
@@ -15,9 +16,17 @@ export interface ParsedKeys {
   mod: boolean;
   // 当てる文字。mod 付きは小文字にそろえる
   key: string;
+  // 続けて押すキー（`g b`）の1つ目の文字。単独のキーでは無い
+  prefix?: string;
 }
 
 export function parseKeys(keys: string): ParsedKeys {
+  if (keys.includes(' ')) {
+    const parts = keys.split(' ');
+    if (parts.length !== 2 || parts.some((part) => part.length !== 1 || part === ' '))
+      throw new Error(`ショートカットのキーが読めません: ${keys}`);
+    return { mod: false, key: parts[1], prefix: parts[0] };
+  }
   if (keys.startsWith('Mod+')) {
     const key = keys.slice(4);
     if (key.length !== 1) throw new Error(`ショートカットのキーが読めません: ${keys}`);
@@ -29,7 +38,8 @@ export function parseKeys(keys: string): ParsedKeys {
 
 // 同じキーを同じ書き方にそろえる（衝突の検出のため）
 export function normalizeKeys(keys: string): string {
-  const { mod, key } = parseKeys(keys);
+  const { mod, key, prefix } = parseKeys(keys);
+  if (prefix !== undefined) return `${prefix} ${key}`;
   return mod ? `Mod+${key}` : key;
 }
 
@@ -46,14 +56,18 @@ export function matchesKeys(
 
 // 読み上げのための aria-keyshortcuts の値。Mod は Control と Meta の両方を並べる
 export function ariaKeyshortcuts(keys: string): string {
-  const { mod, key } = parseKeys(keys);
+  const { mod, key, prefix } = parseKeys(keys);
+  // 続けて押すキーには使えない（空白で並べると「g または b」の代わりのキーに読まれ、順番を表す書き方は WAI-ARIA に無い）。
+  // 読み上げには、リンクの説明の文（aria-describedby。辞書の shortcutGoHint）で伝える
+  if (prefix !== undefined) throw new Error(`続けて押すキーは aria-keyshortcuts にできません: ${keys}`);
   const upper = key.toUpperCase();
   return mod ? `Control+${upper} Meta+${upper}` : key;
 }
 
-// ヒントに見せる文字（`Mod+K` は Mac が `⌘K`、ほかは `Ctrl K`。単キーはそのまま）
+// ヒントに見せる文字（`Mod+K` は Mac が `⌘K`、ほかは `Ctrl K`。単キーはそのまま、続けて押すキーは `g b`）
 export function hintText(keys: string, mac: boolean): string {
-  const { mod, key } = parseKeys(keys);
+  const { mod, key, prefix } = parseKeys(keys);
+  if (prefix !== undefined) return `${prefix} ${key}`;
   if (!mod) return key;
   const upper = key.toUpperCase();
   return mac ? `⌘${upper}` : `Ctrl ${upper}`;
