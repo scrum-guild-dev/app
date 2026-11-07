@@ -24,6 +24,8 @@ test('バックログで c を押すと、親なしのタスクの空の行に�
   const row = rootTaskRow(page);
   await expect(row).toBeVisible();
   await expect(row).toHaveAttribute('aria-keyshortcuts', 'c');
+  // 木を出すために作ったタスクの直後は、空の行にフォーカスが残るので、外してから確かめる
+  await row.blur();
   await expect(row).not.toBeFocused();
 
   await page.keyboard.press('c');

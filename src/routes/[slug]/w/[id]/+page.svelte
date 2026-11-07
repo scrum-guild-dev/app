@@ -316,9 +316,13 @@
       };
     });
   });
-  const openEpics = $derived(
-    choiceEpics.filter((epic) => !epic.finished).map((epic) => ({ id: epic.id, title: epic.title })),
-  );
+  // 空の行で作ったエピックは、読み直すまで choices に無いので、画面に足した分も親の候補に入れる
+  const openEpics = $derived([
+    ...choiceEpics.filter((epic) => !epic.finished).map((epic) => ({ id: epic.id, title: epic.title })),
+    ...addedEpics
+      .filter((entry) => !choiceEpics.some((epic) => epic.id === entry.epic.id))
+      .map((entry) => ({ id: entry.epic.id, title: entry.epic.title })),
+  ]);
 
   const taskLists = $derived(
     grouped(

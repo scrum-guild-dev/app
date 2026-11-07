@@ -58,6 +58,7 @@ export const uiExclusions: readonly UiExclusion[] = [
       'today',
       'backlog',
       'backlog-attr-menu',
+      'backlog-attr-due-panel',
       'epic',
       'plan',
       'sprint',

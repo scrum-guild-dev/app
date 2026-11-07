@@ -72,9 +72,9 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
 
   // 期日も選んだら保存する。木の行に期日の印が出る
   await drawer.getByLabel('期日').fill('2099-12-31');
-  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toBeVisible();
+  await expect(row.getByRole('button', { name: /^期日: (?!未設定)/ })).toBeVisible();
   await drawer.getByLabel('期日').fill('');
-  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toHaveCount(0);
+  await expect(row.getByRole('button', { name: '期日: 未設定' })).toBeVisible();
 
   // タイトルは押すと入力欄になり、Enter で確定する。行のタイトルが変わる
   await drawer.getByRole('button', { name: /見積もりを送る/ }).click();
@@ -834,7 +834,7 @@ test('期日で欄を離れた直後と、ポイントを選んだ直後に閉�
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(drawer).toBeHidden();
   await expect(page.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
-  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toBeVisible();
+  await expect(row.getByRole('button', { name: /^期日: (?!未設定)/ })).toBeVisible();
   // ポイントも、選んだ直後に閉じて、結果が木に出る
   await slow.unroute();
   slow = await slowTaskUpdate(page);
@@ -905,11 +905,11 @@ test('期日は Enter で保存でき、「クリア」を押すと空にして�
   await due.press('Enter');
   // 600ms を待たずに、Enter で送る
   await expect.poll(() => bodies.length, { timeout: 500 }).toBe(1);
-  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toBeVisible();
+  await expect(row.getByRole('button', { name: /^期日: (?!未設定)/ })).toBeVisible();
   await drawer.getByRole('button', { name: 'クリア', exact: true }).click();
   await expect(due).toBeFocused();
   await expect(due).toHaveValue('');
-  await expect(row.locator('.chip:not(.is-todo):not(.chip-btn)')).toHaveCount(0);
+  await expect(row.getByRole('button', { name: '期日: 未設定' })).toBeVisible();
   expect(bodies.map((body) => body.due_on)).toEqual(['2099-12-31', null]);
 });
 
