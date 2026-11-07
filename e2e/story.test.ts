@@ -6,7 +6,15 @@ import { storyGet } from '../src/shared/operations/story/story-get.ts';
 import { backlogTree } from '../src/shared/operations/task/backlog-tree.ts';
 import { taskCreate } from '../src/shared/operations/task/task-create.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
-import { createWorkspace, expectModalFocus, signIn, waitForSettled, watchViolations } from './helpers.ts';
+import {
+  addStoryRow,
+  createWorkspace,
+  expectModalFocus,
+  fillStoryFields,
+  signIn,
+  waitForSettled,
+  watchViolations,
+} from './helpers.ts';
 import { failOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
@@ -30,20 +38,8 @@ test('作ったワークスペース: ストーリーを作り、親を選んで
   const collect = await watchViolations(page);
   await createWorkspace(page, '木のワークスペース');
 
-  // ストーリーを作る。タイトル以外は空でよい
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  // 空のタイトルは送らずに知らせる
-  await storyDialog.getByRole('button', { name: '作る' }).click();
-  await expect(storyDialog.getByText('タイトルを入れてください')).toBeVisible();
-  await storyDialog.getByLabel('タイトル').fill('ポイント制度を公開する');
-  await storyDialog.getByLabel('受け入れ基準').fill('- 残高が見える');
-  await storyDialog.getByLabel('リンク').fill('ftp://example.com');
-  await storyDialog.getByRole('button', { name: '作る' }).click();
-  await expect(storyDialog.getByText('http か https で始まる URL を入れてください')).toBeVisible();
-  await storyDialog.getByLabel('リンク').fill('');
-  await storyDialog.getByRole('button', { name: '作る' }).click();
-  await expect(storyDialog).toBeHidden();
+  // ストーリーを木の空の行で作る。題だけで作れ、ほかの欄は引き出しで書く
+  await addStoryRow(page, 'ポイント制度を公開する');
   await expect(page.getByRole('status').filter({ hasText: 'ストーリーを作りました' })).toBeVisible();
 
   const group = storyGroup(page, 'ポイント制度を公開する');
@@ -88,11 +84,7 @@ test('作ったワークスペース: ストーリーを作り、親を選んで
 
 test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち、題は行を開閉せずに引き出しを開く', async ({ page }) => {
   await createWorkspace(page, '木のチーム');
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const created = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await created.getByLabel('タイトル').fill('請求の流れを整える');
-  await created.getByRole('button', { name: '作る' }).click();
-  await expect(created).toBeHidden();
+  await addStoryRow(page, '請求の流れを整える');
 
   const group = storyGroup(page, '請求の流れを整える');
   const body = group.locator('.tree-children');
@@ -141,15 +133,16 @@ test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち�
 
 test('ストーリーの引き出しは、開いたら1件を読み、押せば書けて、変えた欄だけを書き始めた時点の値を添えて送る。変えなければ何も送らない。過ぎた期日は赤い印で出る', async ({
   page,
+  baseURL,
 }) => {
+  if (baseURL === undefined) throw new Error('baseURL が無い');
   await createWorkspace(page, '直すワークスペース');
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const created = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await created.getByLabel('タイトル').fill('元のタイトル');
-  await created.getByLabel('本文').fill('元の本文');
-  await created.getByLabel('リンク').fill('https://example.com/spec');
-  await created.getByRole('button', { name: '作る' }).click();
-  await expect(created).toBeHidden();
+  await addStoryRow(page, '元のタイトル');
+  // 空の行は題だけを作るので、元の本文とリンクは別の経路から書いておく
+  await fillStoryFields(page, baseURL, '元のタイトル', {
+    body_md: '元の本文',
+    link_url: 'https://example.com/spec',
+  });
 
   const updates: unknown[] = [];
   page.on('request', (request) => {
@@ -259,23 +252,22 @@ test('ストーリーの引き出しは、読んでいる間は読み込み中�
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
 });
 
-test('日付の入力が途中までしか打たれていなければ、期日の欄に知らせて送らない', async ({ page }) => {
+test('日付の入力が途中までしか打たれていなければ、引き出しの期日の欄に知らせて送らない', async ({ page }) => {
   await createWorkspace(page, '日付ワークスペース');
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const dialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await dialog.getByLabel('タイトル').fill('期日を入れる');
+  await addStoryRow(page, '期日を入れる');
+  await page.getByRole('link', { name: '期日を入れる', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '期日を入れる', exact: true });
   let requests = 0;
   page.on('request', (request) => {
-    if (request.url().endsWith('/api/aoba/story-create')) requests++;
+    if (request.url().endsWith('/api/aoba/story-update')) requests++;
   });
   // 日付の入力は、年月日の一部だけだと value が空のまま、validity.badInput が立つ
-  const due = dialog.getByLabel('期日');
+  const due = drawer.getByLabel('期日', { exact: true });
   await due.focus();
   await page.keyboard.type('12');
   await expect(due).toHaveJSProperty('value', '');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog.getByText('期日は正しい日付で入れてください')).toBeVisible();
-  await expect(due).toBeFocused();
+  await due.blur();
+  await expect(drawer.getByText('期日は正しい日付で入れてください')).toBeVisible();
   expect(requests).toBe(0);
 });
 
@@ -392,7 +384,7 @@ test('親のストーリーが消えていたら、理由を出し、その場�
 test('seed の社内ツール: ストーリーの行の合計と畳んだ件数が出る', async ({ page }) => {
   await page.goto(SEED_INTERNAL_WORKSPACE);
   await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'ストーリーを作る' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'ストーリーを足す', exact: true })).toBeVisible();
   const group = storyGroup(page, '勤怠の締め処理を月末にまとめて回せる');
   await expect(group.locator('.tree-ratio')).toHaveText('完了 1 / 6 pt');
   await expect(group.locator('.tree-folded')).toHaveText('完了 1 件を折りたたんでいます');
@@ -414,7 +406,7 @@ test('閉じたワークスペースでは、作る操作と「タスクを足�
   }));
   await page.goto(SEED_CLIENT_WORKSPACE);
   await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'ストーリーを作る' })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: /ストーリーを足す|エピックを足す/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /タスクを足す/ })).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: /タスクを足す/ })).toHaveCount(0);
 
