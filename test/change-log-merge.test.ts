@@ -56,7 +56,14 @@ describe('mergeTargetOf', () => {
     expect(mergeTargetOf(merged, 'body_md', ACTOR, next, after(HISTORY_MERGE_WINDOW_MS + 1))).toBeUndefined();
   });
 
+  test('最初に書いたのと同じミリ秒なら、まとめる', () => {
+    expect(mergeTargetOf(latestLog(), 'body_md', ACTOR, next, after(0))).toBeDefined();
+  });
+
   test('時計が最初に書いた時刻より戻っているときは、まとめない', () => {
+    // created_at が ID の時刻より前の行で、最新の行の created_at の確認でなく、最初に書いた時刻の確認が断る
+    const early = latestLog({ created_at: after(-5000).toISOString() });
+    expect(mergeTargetOf(early, 'body_md', ACTOR, next, after(-1))).toBeUndefined();
     expect(mergeTargetOf(latestLog(), 'body_md', ACTOR, next, after(-1))).toBeUndefined();
   });
 
@@ -73,6 +80,11 @@ describe('mergeTargetOf', () => {
   test.each([
     ['UUIDv7 でない ID', { id: '00000000-0000-4000-8000-000000000000' }],
     ['ハイフンの無い短い ID', { id: 'seed-story-log' }],
+    // 先頭48ビットが今の時刻でも、バージョンの桁が 7 でなければ時刻と読めない
+    ['バージョンの桁が 7 でない ID', { id: uuidv7(WRITTEN_AT).replace(/^(.{14})7/, '$14') }],
+    ['先頭が 16 進でない ID', { id: 'zzzzzzzz-zzzz-7zzz-8zzz-zzzzzzzzzzzz' }],
+    ['「前」「後」が3要素の行', { changes_json: JSON.stringify({ body_md: ['元', '一回目', '余分'] }) }],
+    ['「前」「後」が配列でない行', { changes_json: JSON.stringify({ body_md: '一回目' }) }],
     ['読めない日時', { created_at: 'いつか' }],
     ['別の人の行', { actor_user_id: 'actor-2' }],
     ['人でない行', { actor_user_id: null }],
@@ -127,6 +139,13 @@ describe('staleFields', () => {
     ).toEqual({});
     // 違うときは、正規化する前の今の値を返す
     expect(staleFields(fields, stored, { title: '新' }, { title: '別の題' })).toEqual({ title: '  題  ' });
+  });
+
+  test('リンクとして正規化できない今の値は、例外を投げず、そのまま比べる', () => {
+    const broken = { ...current, link_url: 'http://[' };
+    expect(staleFields(fields, broken, { link_url: null }, { link_url: 'https://example.com/a' })).toEqual({
+      link_url: 'http://[',
+    });
   });
 
   test('空の値（null）は正規化せず、そのまま比べる', () => {
@@ -209,6 +228,36 @@ describe('readMergeTarget（履歴の最新の行を読む）', () => {
         after(1000),
       ),
     ).toBeUndefined();
+  });
+
+  test('まとめる欄の一覧に無い欄（区分など）の続けた変更は、まとめない', async () => {
+    const { target, entity, log } = await setup();
+    await log({ changes_json: JSON.stringify({ category: [{ id: 'a' }, { id: 'b' }] }) });
+    expect(
+      await readMergeTarget(
+        orgDb(env, target.organization.verified),
+        fields,
+        entity,
+        target.member.userId,
+        { category: [{ id: 'b' }, { id: 'c' }] },
+        after(1000),
+      ),
+    ).toBeUndefined();
+  });
+
+  test('同じ ID の別の種類（task）の新しい履歴は、最新の行に数えない', async () => {
+    const { log, read } = await setup();
+    const row = await log();
+    await log({ id: uuidv7(WRITTEN_AT + 500), created_at: after(500).toISOString(), entity_type: 'task' });
+    expect(await read(after(1000))).toMatchObject({ id: row.id });
+  });
+
+  test('最新の行は created_at の新しい順で選び、同じなら ID の大きい方', async () => {
+    const { log, read } = await setup();
+    // ID は新しいが created_at が古い行と、ID は古いが created_at が新しい行
+    await log({ id: uuidv7(WRITTEN_AT + 30_000), created_at: after(30_000).toISOString() });
+    const newest = await log({ id: uuidv7(WRITTEN_AT), created_at: after(60_000).toISOString() });
+    expect(await read(after(61_000))).toMatchObject({ id: newest.id });
   });
 
   test('別の組織の履歴は読まない', async () => {
