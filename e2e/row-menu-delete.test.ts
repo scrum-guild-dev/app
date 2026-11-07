@@ -177,7 +177,9 @@ test('スプリントのカードの「⋯」にも削除が出て、キーボ�
   await expect(page.getByRole('link', { name: '下のカード', exact: true })).toBeFocused();
 });
 
-test('スプリントのカードをマウスで消して「取り消す」で戻せる。can_delete が偽のカードには出ない', async ({ page }) => {
+test('スプリントのカードをマウスで消して「取り消す」で戻すと、スプリントには戻らずバックログに戻る。can_delete が偽のカードには出ない', async ({
+  page,
+}) => {
   test.setTimeout(90_000);
   await createWorkspace(page, `カードの削除のマウス ${test.info().repeatEachIndex}-${test.info().retry}`);
   await startSprintWithCards(page, ['マウスで消すカード', '消せないカード']);
@@ -187,7 +189,9 @@ test('スプリントのカードをマウスで消して「取り消す」で�
   await expect(undo).toBeVisible();
   await expect(page.getByRole('link', { name: 'マウスで消すカード', exact: true })).toHaveCount(0);
   await undo.click();
-  await expect(page.getByRole('link', { name: 'マウスで消すカード', exact: true })).toBeVisible();
+  // 取り消しはスプリントには戻さない（task-restore）。バックログに戻るので、ボードには出ず、戻したことだけを知らせる
+  await expect(page.getByRole('status').filter({ hasText: 'タスクを戻しました' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'マウスで消すカード', exact: true })).toHaveCount(0);
 
   await rewriteOperation(page, sprintBoard, AOBA, (output) => ({
     ...output,
