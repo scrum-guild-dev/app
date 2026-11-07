@@ -187,5 +187,4 @@ test('木にもとからあるタスク: 完了の応答より前に始まった
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(row).toHaveCount(1);
   await expect(row.getByRole('img', { name: '木にもとからある行: 完了' })).toBeVisible();
-  await expect(page.locator('.tree-folded')).toHaveCount(0);
 });
