@@ -35,9 +35,12 @@ test('行のチップでポイントと担当を選ぶと、行に出る。キ�
   // 値が無いチップは未設定で、押すと値の一覧が開く
   await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
   const menu = page.getByRole('menu', { name: 'ポイントを選ぶ' });
-  await expect(menu.getByRole('menuitemradio', { name: '未見積もり' })).toHaveAttribute('aria-checked', 'true');
+  await expect(menu.getByRole('menuitemradio', { name: '未見積もり', exact: true })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
   const saved = waitForResponses(page, '/task-update');
-  await menu.getByRole('menuitemradio', { name: '5 pt' }).click();
+  await menu.getByRole('menuitemradio', { name: '5 pt', exact: true }).click();
   await expect(menu).toBeHidden();
   await expect(row.getByRole('button', { name: 'ポイント: 5 pt' })).toBeFocused();
   await saved;
@@ -45,7 +48,10 @@ test('行のチップでポイントと担当を選ぶと、行に出る。キ�
   // 担当は、候補を読んで選ぶ。行にアバターと名前が出る
   await row.getByRole('button', { name: '担当: 未設定' }).click();
   const people = page.getByRole('menu', { name: '担当を選ぶ' });
-  await expect(people.getByRole('menuitemradio', { name: '担当なし' })).toHaveAttribute('aria-checked', 'true');
+  await expect(people.getByRole('menuitemradio', { name: '担当なし', exact: true })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
   const member = people.getByRole('menuitemradio').nth(1);
   const name = (await member.innerText()).trim();
   const assigned = waitForResponses(page, '/task-assign');
@@ -66,14 +72,14 @@ test('行のチップでポイントと担当を選ぶと、行に出る。キ�
   await chip.focus();
   await page.keyboard.press('ArrowDown');
   const list = page.getByRole('menu', { name: 'ポイントを選ぶ' });
-  await expect(list.getByRole('menuitemradio', { name: '5 pt' })).toBeFocused();
+  await expect(list.getByRole('menuitemradio', { name: '5 pt', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(list).toBeHidden();
   await expect(chip).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(list.getByRole('menuitemradio', { name: '5 pt' })).toBeFocused();
+  await expect(list.getByRole('menuitemradio', { name: '5 pt', exact: true })).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await expect(list.getByRole('menuitemradio', { name: '8 pt' })).toBeFocused();
+  await expect(list.getByRole('menuitemradio', { name: '8 pt', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(again.getByRole('button', { name: 'ポイント: 8 pt' })).toBeFocused();
 
@@ -97,7 +103,7 @@ test('ポイントのチップで選ぶと、親のストーリーの集計に�
   await expect(story).toContainText('0 / 0 pt');
   const row = page.locator('.entry', { hasText: '一覧を出す' });
   await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
-  await page.getByRole('menuitemradio', { name: '3 pt' }).click();
+  await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
   await expect(row.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
   await expect(story).toContainText('0 / 3 pt');
 });
@@ -109,16 +115,17 @@ test('断られたら理由を出して元の値に戻す。完了にした行�
 
   const unroute = await failOperation(page, taskUpdate, { slug: 'aoba' }, 409, 'conflict');
   await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
-  await page.getByRole('menuitemradio', { name: '2 pt' }).click();
+  await page.getByRole('menuitemradio', { name: '2 pt', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '直せません' })).toBeVisible();
   await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
   await unroute();
 
   // 完了にした行（読み直すまで残る）のチップは押せない
-  await row.getByRole('button', { name: /を完了/ }).click();
+  await row.getByRole('button', { name: '完了にする: 断られる件' }).click();
   const locked = row.getByRole('button', { name: 'ポイント: 未設定' });
   await expect(locked).toHaveAttribute('aria-disabled', 'true');
-  await locked.click();
+  // aria-disabled のボタンは Playwright が「押せない」と待つので、押しても開かないことは force で確かめる
+  await locked.click({ force: true });
   await expect(page.getByRole('menu')).toHaveCount(0);
   const reason = await locked.getAttribute('aria-describedby');
   await expect(page.locator(`[id="${reason}"]`)).toContainText('直せません');
