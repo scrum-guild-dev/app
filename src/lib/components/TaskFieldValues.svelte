@@ -158,15 +158,15 @@
       >
         {#snippet view(begin)}
           {@render label(field)}
-          <!-- 描いた値そのものを押せば書ける。キーボードと読み上げには、視覚には出さない押せるボタンを添える（値の中のリンクは押せるままにする） -->
+          <!-- 描いた値そのものを押せば書ける。面いっぱいに透明なボタンを敷き、キーボードと読み上げの入口にする（値の中のリンクは上に重なり、押せるまま） -->
           <div class="edit-surface" onclick={(event) => beginFromSurface(event, begin)} role="presentation">
-            {@render valueView(field)}
+            <button class="edit-surface-button" type="button" onclick={begin}
+              >{field.value_md === null
+                ? t('fieldValueWriteLabel', { field: field.name })
+                : t('fieldValueRewriteLabel', { field: field.name })}</button
+            >
+            <div class="edit-surface-body">{@render valueView(field)}</div>
           </div>
-          <button class="visually-hidden" type="button" onclick={begin}
-            >{field.value_md === null
-              ? t('fieldValueWriteLabel', { field: field.name })
-              : t('fieldValueRewriteLabel', { field: field.name })}</button
-          >
         {/snippet}
       </AutoSaveEdit>
     {:else}

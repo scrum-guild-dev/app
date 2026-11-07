@@ -1829,13 +1829,13 @@
         >
           {#snippet view(begin)}
             <span class="field-label">{t('fieldBody')}</span>
-            <!-- 描いた本文そのものを押せば書ける。キーボードと読み上げには、視覚には出さない押せるボタンを添える（本文の中のリンクは押せるままにする） -->
+            <!-- 描いた本文そのものを押せば書ける。面いっぱいに透明なボタンを敷き、キーボードと読み上げの入口にする（本文の中のリンクは上に重なり、押せるまま） -->
             <div class="edit-surface" onclick={(event) => beginFromSurface(event, begin)} role="presentation">
-              {@render bodyView()}
+              <button class="edit-surface-button" type="button" onclick={begin}
+                >{t('bodyEditLabel', { field: t('fieldBody') })}</button
+              >
+              <div class="edit-surface-body">{@render bodyView()}</div>
             </div>
-            <button class="visually-hidden" type="button" onclick={begin}
-              >{t('bodyEditLabel', { field: t('fieldBody') })}</button
-            >
           {/snippet}
         </AutoSaveEdit>
       {:else}
