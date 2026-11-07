@@ -203,18 +203,6 @@ export const connectionCreateOperation = implement(connectionCreate, async ({ db
                   .where('limit_c.deleted_at', 'is', null),
               '<',
               CONNECTIONS_PER_MEMBER_MAX,
-            )
-            // 同じ人が同じ名前で同じ種類の接続を続けて登録する再送を止める（二重の取り込みの元になる）
-            .where((eb) =>
-              eb.not(
-                eb.exists(
-                  liveConnections(q, workspaceId)
-                    .select('c.id')
-                    .where('c.owner_user_id', '=', ownerUserId)
-                    .where('c.provider', '=', input.provider)
-                    .where('c.name', '=', input.name),
-                ),
-              ),
             ),
         ),
     ),
@@ -242,16 +230,8 @@ export const connectionCreateOperation = implement(connectionCreate, async ({ db
   ] as const);
   if ((results[0]?.changes ?? 0) === 0) {
     await throwIfClosed(db, workspaceId);
-    const mine = await db.first(
-      db.statement((q) =>
-        liveConnections(q, workspaceId)
-          .select((eb) => eb.fn.countAll<number>().as('n'))
-          .where('c.owner_user_id', '=', ownerUserId),
-      ),
-    );
-    throw new ApiError(409, 'conflict', {
-      reason: Number(mine?.n ?? 0) >= CONNECTIONS_PER_MEMBER_MAX ? 'connection_limit' : 'duplicate_name',
-    });
+    // 書けなかった理由は、閉じたワークスペースでなければ接続の数の上限
+    throw new ApiError(409, 'conflict', { reason: 'connection_limit' });
   }
   const [connection] = await readConnections(db, workspaceId, connectionId);
   if (connection === undefined) throw new ApiError(409, 'conflict');
@@ -312,7 +292,9 @@ export const connectionScopesSaveOperation = implement(
     if (source === undefined) throw new ApiError(409, 'conflict', { reason: 'provider_unknown' });
 
     // 名前は取り込み元の候補から引く。候補に無い ID は断る（画面から送られた名前を保存しない）
-    const candidates = new Map((await fetchCandidates(tools, row)).map((candidate) => [candidate.id, candidate]));
+    // 範囲を空にする保存は名前を引かないので、取り込み元に問い合わせない（失効した認証情報の接続でも範囲を外せる）
+    const found = input.source_ids.length === 0 ? [] : await fetchCandidates(tools, row);
+    const candidates = new Map(found.map((candidate) => [candidate.id, candidate]));
     const chosen: ScopeCandidate[] = [];
     const seen = new Set<string>();
     for (const id of input.source_ids) {
@@ -359,7 +341,7 @@ export const connectionScopesSaveOperation = implement(
                 eb.val(row.id).as('entity_id'),
                 eb.val('update').as('action'),
                 // 前の件数は履歴の文の中で数える（読んでから書くまでの並行する保存で食い違わない）
-                sql<string>`json_object('scopes_count', json_array((select count(*) from connection_scopes where connection_id = ${row.id}), ${chosen.length}))`.as(
+                sql<string>`json_object('scopes_count', json_array((select count(*) from connection_scopes where connection_id = ${row.id}), cast(${chosen.length} as integer)))`.as(
                   'changes_json',
                 ),
                 eb.val(stamp).as('created_at'),

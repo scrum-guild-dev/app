@@ -375,21 +375,17 @@ describe('connection-scopes-save', () => {
 });
 
 describe('接続の数と削除済み', () => {
-  test('同じ人が同じ種類と名前を続けて登録すると 409 の duplicate_name で、2件目はできない', async () => {
+  test('同じ名前の接続も登録できる（個人の PAT と組織の PAT に同じ名前を付けられる）', async () => {
     const ctx = setup();
     const target = await createTarget();
-    const pat = fakePat('dup');
-    ctx.github.addAccount(pat, OWNER, []);
+    const first = fakePat('same1');
+    const second = fakePat('same2');
+    ctx.github.addAccount(first, OWNER, []);
+    ctx.github.addAccount(second, { type: 'Organization', id: 7_100_002, login: 'aoba-org' }, []);
 
-    expect((await register(ctx, target, target.member, pat)).status).toBe(200);
-    const again = await register(ctx, target, target.member, pat);
-    expect(again.status).toBe(409);
-    expect(((await again.json()) as { error: { details: { reason: string } } }).error.details.reason).toBe(
-      'duplicate_name',
-    );
-    expect((await rowsOf(target)).connections).toHaveLength(1);
-    // 名前が違えば登録できる
-    expect((await register(ctx, target, target.member, pat, '別の名前')).status).toBe(200);
+    expect((await register(ctx, target, target.member, first, 'GitHub')).status).toBe(200);
+    expect((await register(ctx, target, target.member, second, 'GitHub')).status).toBe(200);
+    expect((await rowsOf(target)).connections).toHaveLength(2);
   });
 
   test('1人の接続の数が上限に達すると 409 の connection_limit。削除済みは数えず、ほかの人は数えない', async () => {
@@ -469,5 +465,134 @@ describe('connection-scopes-save の上限と取り込み元の不調', () => {
     ctx.github.failNext({ kind: 'status', status: 403 });
     const res = await candidates(ctx, target, target.member, id);
     expect(res.status).toBe(409);
+  });
+});
+
+describe('守りの条件', () => {
+  // 取り込み元に問い合わせた直後（応答を返す前）に割り込む偽の GitHub
+  function setupWithHook(hook: () => Promise<void>) {
+    const github = createFakePatGithub();
+    const fetcher: typeof fetch = async (input, init) => {
+      const res = await github.fetcher(input, init);
+      await hook();
+      return res;
+    };
+    return { github, app: createApp(implementedOperations, { fetcher }) };
+  }
+
+  async function writeWorkspaceAndConnection(
+    target: Target,
+    change: { closed_at?: string; connectionId?: string; deleted_at?: string },
+  ) {
+    const db = orgDb(env, target.organization.verified);
+    if (change.closed_at !== undefined) {
+      await db.batch([
+        db.statement((q) =>
+          q
+            .updateTable('workspaces')
+            .set({ closed_at: change.closed_at! })
+            .where('id', '=', target.workspace.id)
+            .where('organization_id', '=', db.organizationId),
+        ),
+      ]);
+    }
+    if (change.connectionId !== undefined) {
+      await db.batch([
+        db.statement((q) =>
+          q
+            .updateTable('connections')
+            .set({
+              deleted_at: change.deleted_at ?? '2026-11-01T00:00:00.000Z',
+              credential_ciphertext: null,
+              credential_key_version: null,
+              credential_last4: null,
+            })
+            .where('id', '=', change.connectionId!),
+        ),
+      ]);
+    }
+  }
+
+  test('PAT の前後の空白は取って登録でき、末尾4文字は PAT のもの', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const pat = fakePat('spaces');
+    ctx.github.addAccount(pat, OWNER, []);
+
+    const res = await register(ctx, target, target.member, ` ${pat}\n`);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { connection: { credential_last4: string } }).connection.credential_last4).toBe(
+      pat.slice(-4),
+    );
+  });
+
+  test('取り込み元で確かめている間にワークスペースが閉じたら、409 の workspace_closed で行は入らない', async () => {
+    const target = await createTarget();
+    const pat = fakePat('raceclose');
+    const ctx = setupWithHook(() => writeWorkspaceAndConnection(target, { closed_at: '2026-11-01T00:00:00.000Z' }));
+    ctx.github.addAccount(pat, OWNER, []);
+
+    const res = await register(ctx, target, target.member, pat);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('workspace_closed');
+    const rows = await rowsOf(target);
+    expect(rows.connections).toHaveLength(0);
+    expect(rows.logs).toHaveLength(0);
+  });
+
+  test('候補を取っている間に接続が削除されたら、保存は 404 で範囲も履歴も増えない', async () => {
+    const target = await createTarget();
+    const connection = await createConnection(target.organization, target.workspace.id, target.member.userId!);
+    const pat = fakePat('racedelete');
+    // 暗号化した認証情報を置く
+    const { encryptCredential } = await import('../src/server/crypto/credential.ts');
+    const sealed = await encryptCredential(env, pat, connection.id);
+    const db = orgDb(env, target.organization.verified);
+    await db.batch([
+      db.statement((q) =>
+        q
+          .updateTable('connections')
+          .set({
+            credential_ciphertext: sealed.ciphertext,
+            credential_key_version: sealed.keyVersion,
+            credential_last4: pat.slice(-4),
+          })
+          .where('id', '=', connection.id),
+      ),
+    ]);
+    const ctx = setupWithHook(() => writeWorkspaceAndConnection(target, { connectionId: connection.id }));
+    ctx.github.addAccount(pat, OWNER, fakeRepos(2));
+
+    const res = await save(ctx, target, target.member, connection.id, ['1000']);
+    expect(res.status).toBe(404);
+    const rows = await rowsOf(target);
+    expect(rows.scopes).toHaveLength(0);
+    expect(rows.logs).toHaveLength(0);
+  });
+
+  test('履歴の変更の中身は、登録が名前と種類、保存が範囲の件数の前後（整数）で、認証情報を含まない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { pat, id } = await registered(ctx, target, target.member, 'logs');
+    await save(ctx, target, target.member, id, ['1001', '1002']);
+
+    const { logs } = await rowsOf(target);
+    expect(logs.map((log) => log.changes_json)).toEqual([
+      '{"name":[null,"あおばの GitHub"],"provider":["github",""]}'.replace('["github",""]', '[null,"github"]'),
+      '{"scopes_count":[0,2]}',
+    ]);
+    expect(JSON.stringify(logs)).not.toContain(pat);
+  });
+
+  test('認証情報を取り込み元が受け付けなくなっても、範囲を空にする保存はできる', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await registered(ctx, target, target.member, 'empty');
+    await save(ctx, target, target.member, id, ['1001']);
+
+    ctx.github.failNext({ kind: 'status', status: 401 });
+    const res = await save(ctx, target, target.member, id, []);
+    expect(res.status).toBe(200);
+    expect((await rowsOf(target)).scopes).toHaveLength(0);
   });
 });
