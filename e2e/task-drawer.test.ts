@@ -808,7 +808,6 @@ test('メンバーの画面で開いて閉じても、メンバーの画面に�
   // 削除して閉じたときも、メンバーの画面のまま
   await page.goto(`${workspacePath}/members?task=${taskId}`);
   await drawer.getByRole('button', { name: 'このタスクを削除する' }).click();
-  await page.getByRole('dialog', { name: 'タスクを削除する' }).getByRole('button', { name: '削除する' }).click();
   await expect(drawer).toBeHidden();
   await expect(page).toHaveURL(`${new URL(page.url()).origin}${workspacePath}/members`);
   await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
