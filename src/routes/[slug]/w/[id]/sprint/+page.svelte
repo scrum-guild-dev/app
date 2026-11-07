@@ -75,8 +75,9 @@
   const isClosed = $derived(workspace !== null && workspace.closedAt !== null);
   const canWrite = $derived(workspace !== null && !isClosed);
   // `c` で、完了でない最初の列の空の行へフォーカスを移す。行が無い（書き込めない、列が無い）間は働かない
-  let draftRows = $state<Record<string, DraftRow | undefined>>({});
-  const firstDraftRow = (): DraftRow | undefined => {
+  // bind:this は、部品が外れると null に戻る
+  let draftRows = $state<Record<string, DraftRow | null | undefined>>({});
+  const firstDraftRow = (): DraftRow | null | undefined => {
     const column = columns.find((item) => !item.is_done);
     return column === undefined ? undefined : draftRows[column.id];
   };
@@ -84,7 +85,7 @@
     id: 'sprint-new-task',
     keys: 'c',
     label: () => t('shortcutNewTask', { task: t('task') }),
-    enabled: () => firstDraftRow() !== undefined,
+    enabled: () => firstDraftRow() != null,
     run: () => firstDraftRow()?.focus(),
   }));
   const canLead = $derived(isLeader && !isClosed);
@@ -695,6 +696,7 @@
             {#if canWrite && !column.is_done}
               <DraftRow
                 bind:this={draftRows[column.id]}
+                keyshortcut={column.id === columns.find((item) => !item.is_done)?.id ? 'c' : undefined}
                 label={t('sprintBoardAddTask', { task: t('task') })}
                 name={t('sprintBoardAddTaskIn', { task: t('task'), column: columnName(column) })}
                 problem={cardTitleProblem}

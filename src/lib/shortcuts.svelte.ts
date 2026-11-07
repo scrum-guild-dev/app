@@ -99,7 +99,7 @@ export class ShortcutRegistry {
   handle = (event: KeyEventLike & { preventDefault(): void }): boolean => {
     // 待ちは次のキーで必ず片づける。修飾キーだけの押下（Shift など）は待ちを切らない
     const pending = this.#pending;
-    if (['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return false;
+    if (['Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'CapsLock'].includes(event.key)) return false;
     this.#pending = null;
     if (event.defaultPrevented || isComposingKey(event)) return false;
     const waiting = pending !== null && Date.now() - pending.at <= CHORD_TIMEOUT_MS ? pending.prefix : null;

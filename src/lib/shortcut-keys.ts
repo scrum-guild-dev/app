@@ -57,8 +57,9 @@ export function matchesKeys(
 // 読み上げのための aria-keyshortcuts の値。Mod は Control と Meta の両方を並べる
 export function ariaKeyshortcuts(keys: string): string {
   const { mod, key, prefix } = parseKeys(keys);
-  // 続けて押すキーは、押す順に空白で並べる（WAI-ARIA に順番を表す書き方は無く、GitHub の `g b` と同じ並べ方にする）
-  if (prefix !== undefined) return `${prefix} ${key}`;
+  // 続けて押すキーには使えない（空白で並べると「g または b」の代わりのキーに読まれ、順番を表す書き方は WAI-ARIA に無い）。
+  // 読み上げには、リンクの説明の文（aria-describedby。辞書の shortcutGoHint）で伝える
+  if (prefix !== undefined) throw new Error(`続けて押すキーは aria-keyshortcuts にできません: ${keys}`);
   const upper = key.toUpperCase();
   return mod ? `Control+${upper} Meta+${upper}` : key;
 }

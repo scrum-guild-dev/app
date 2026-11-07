@@ -27,6 +27,7 @@ test('バックログで c を押すと、親なしのタスクの空の行に�
   await createWorkspaceWithTree(page, 'キーの確認');
   const row = rootTaskRow(page);
   await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute('aria-keyshortcuts', 'c');
   await expect(row).not.toBeFocused();
 
   await page.keyboard.press('c');
@@ -57,10 +58,16 @@ test('g の次の s / b / t で画面を移る。g だけでは移らない', as
   await page.keyboard.press('b');
   await expect(page).toHaveURL(backlogUrl);
 
-  // メニューの項目が、キーを読み上げに伝える
-  await expect(page.locator('nav.nav a[aria-keyshortcuts="g s"]')).toHaveCount(1);
-  await expect(page.locator('nav.nav a[aria-keyshortcuts="g t"]')).toHaveCount(1);
-  await expect(page.locator('nav.nav a[aria-keyshortcuts="g b"]')).toHaveCount(1);
+  // メニューの項目が、キーを説明として読み上げに伝える（続けて押すキーは aria-keyshortcuts に書けない）
+  await expect(page.getByRole('link', { name: 'スプリント', exact: true })).toHaveAccessibleDescription(
+    'ショートカット: g を押してから s を押す',
+  );
+  await expect(page.getByRole('link', { name: '今日やること', exact: true })).toHaveAccessibleDescription(
+    'ショートカット: g を押してから t を押す',
+  );
+  await expect(page.getByRole('link', { name: 'バックログ', exact: true })).toHaveAccessibleDescription(
+    'ショートカット: g を押してから b を押す',
+  );
 });
 
 test('欄に打っている間の g b は、画面を移さず文字になる', async ({ page }) => {

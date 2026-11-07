@@ -119,12 +119,13 @@
   });
   const canWrite = $derived(workspace !== null && workspace.closedAt === null);
   // `c` で、親なしのタスクの空の行（木の末尾）へフォーカスを移す。行が無い（書き込めない、木を読み込み中）間は働かない
-  let rootTaskRow = $state<DraftRow>();
+  // bind:this は、部品が外れると null に戻る
+  let rootTaskRow = $state<DraftRow | null>();
   useShortcut(() => ({
     id: 'backlog-new-task',
     keys: 'c',
     label: () => t('shortcutNewTask', { task: t('task') }),
-    enabled: () => rootTaskRow !== undefined,
+    enabled: () => rootTaskRow != null,
     run: () => rootTaskRow?.focus(),
   }));
   // 完成の定義の畳みを開いたか。開くまで本文を描かない
@@ -1381,6 +1382,7 @@
         />
         <DraftRow
           bind:this={rootTaskRow}
+          keyshortcut="c"
           label={t('treeAddTask', { task: t('task') })}
           problem={taskRowProblem}
           create={(title) => addTaskRow(null, title)}

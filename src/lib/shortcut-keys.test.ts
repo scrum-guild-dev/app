@@ -21,7 +21,7 @@ describe('parseKeys と normalizeKeys', () => {
   test('続けて押すキーは、1つ目を prefix に分ける', () => {
     expect(parseKeys('g b')).toEqual({ mod: false, key: 'b', prefix: 'g' });
     expect(normalizeKeys('g b')).toBe('g b');
-    expect(ariaKeyshortcuts('g b')).toBe('g b');
+    expect(() => ariaKeyshortcuts('g b')).toThrow();
     for (const bad of ['g  b', 'g bb', 'g b c', 'Mod+g b', ' b']) expect(() => parseKeys(bad), bad).toThrow();
   });
 

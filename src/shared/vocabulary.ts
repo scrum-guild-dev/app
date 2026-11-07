@@ -1645,6 +1645,8 @@ export const dictionary = defineDictionary({
   // ショートカットの名前。`g` の次のキーで画面へ移る（g b、g s、g t）、`c` で空の行へ移る
   shortcutGo: '{screen}へ移る',
   shortcutNewTask: '{task}を書く',
+  // メニューの項目の説明（読み上げ）。{first} を押した次に {next} を押すと移る
+  shortcutGoHint: 'ショートカット: {first} を押してから {next} を押す',
   drawerTab: '新しいタブ',
   drawerTabBlocked: '新しいタブを開けませんでした',
   // 上の帯の前後のボタン。{task} は一覧の前後に並ぶ行の呼び名。キーボードは [ と ]

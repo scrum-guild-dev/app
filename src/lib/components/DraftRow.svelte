@@ -15,7 +15,10 @@
     name = label,
     problem,
     create,
+    keyshortcut,
   }: {
+    // 外から `c` などでフォーカスを移せるときの、そのキー（aria-keyshortcuts で読み上げに伝える。フォーカスが移る先の欄に付ける）
+    keyshortcut?: string;
     // 行に見える文（「<ストーリー>を足す」など）
     label: string;
     // 読み上げの名前。省けば label
@@ -92,6 +95,7 @@
     type="text"
     autocomplete="off"
     enterkeyhint="done"
+    aria-keyshortcuts={keyshortcut}
     placeholder={t('draftPlaceholder', { label })}
     readonly={sending}
     aria-invalid={error !== null}
