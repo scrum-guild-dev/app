@@ -1688,7 +1688,6 @@ export const dictionary = defineDictionary({
   taskSaveConflict: 'この{task}は{done}になっているため、{points}は直せません。',
   taskBadRequest: '入力を受け付けられませんでした。内容を確かめて、もう一度試してください。',
   // バックログの行の属性のチップ（ポイントと担当。押すと値の一覧が開く）
-  attrChipLabel: '{attr}: {value}',
   attrChipUnset: '未設定',
   attrMenuLabel: '{attr}を選ぶ',
   pointsValue: '{value} pt',

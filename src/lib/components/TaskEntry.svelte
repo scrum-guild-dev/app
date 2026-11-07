@@ -148,10 +148,12 @@
   const assigneeOptions = $derived.by(() => {
     const options: { value: string; text: string }[] = [{ value: '', text: t('unassigned') }];
     for (const member of candidates ?? []) options.push({ value: member.id, text: member.name });
-    // 今の担当が候補にいない（抜けた、候補を読めない）ときも、その人を残す
+    // 今の担当が候補にいないときも、その人を残す。「離脱済み」と言えるのは、候補を読めて、その中にいないときだけ
+    // （読む前と読めなかったときは、抜けたかどうかを知らない）
     const current = task.assignee;
     if (current !== null && !options.some((option) => option.value === current.id)) {
-      options.push({ value: current.id, text: `${current.name}${t('leftMember')}` });
+      const left = candidates !== null && !candidatesFailed;
+      options.push({ value: current.id, text: left ? `${current.name}${t('leftMember')}` : current.name });
     }
     return options;
   });
