@@ -4,6 +4,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import {
+  chooseRowAction,
   createWorkspace,
   expectFocusReturned,
   signIn,
@@ -53,8 +54,9 @@ async function askDeleteStory(drawer: Locator, title: string): Promise<void> {
 }
 
 async function addTask(page: Page, storyTitle: string, title: string, createLabel: string): Promise<void> {
-  await page.getByRole('button', { name: new RegExp(`を足す: ${storyTitle}$`) }).click();
+  await page.getByRole('button', { name: createLabel, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: createLabel });
+  await dialog.getByLabel('親のストーリー').selectOption({ label: storyTitle });
   await dialog.getByLabel('タイトル').fill(title);
   await dialog.getByRole('button', { name: createLabel }).click();
   await expect(dialog).toBeHidden();
@@ -71,7 +73,7 @@ test('スクラムの言葉: エピックを配下を残して削除し、残っ
 
   await create(page, 'エピックを作る', '会員証を作り直す');
   await create(page, 'ストーリーを作る', 'カードの画面');
-  await page.getByRole('button', { name: '親を移す: カードの画面' }).click();
+  await chooseRowAction(page, 'カードの画面', '親を移す');
   const moveDialog = page.getByRole('dialog', { name: '「カードの画面」の親を移す' });
   // 親の移動は画面を先に変えてから送る。削除の確認が配下を数える前に、移動の応答を待つ（#363）
   const moved = waitForResponses(page, '/story-move');

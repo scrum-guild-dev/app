@@ -127,11 +127,10 @@ test('スクラムの言葉: ストーリーごとと1件ずつ入れ、外し�
   await storyDialog.getByRole('button', { name: '作る' }).click();
   await expect(storyDialog).toBeHidden();
   for (const title of ['フォームを置く', '送信を確かめる']) {
-    await page.getByRole('button', { name: 'タスクを足す: ログインを作り直す' }).click();
-    const taskDialog = page.getByRole('dialog', { name: '起票' });
-    await taskDialog.getByLabel('タイトル').fill(title);
-    await taskDialog.getByRole('button', { name: '起票' }).click();
-    await expect(taskDialog).toBeHidden();
+    const draft = page.getByRole('textbox', { name: 'タスクを足す: ログインを作り直す' });
+    await draft.fill(title);
+    await draft.press('Enter');
+    await expect(page.locator('.entry-title', { hasText: title })).toBeVisible();
   }
   await expect(page.locator('.entry', { hasText: '送信を確かめる' })).toBeVisible();
 

@@ -3,7 +3,16 @@
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。CSP の違反も確かめる
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, dragTo, signIn, waitForResponses, watchViolations } from './helpers.ts';
+import {
+  chooseRowAction,
+  createWorkspace,
+  dragTo,
+  rowMenuItem,
+  rowMenuToggle,
+  signIn,
+  waitForResponses,
+  watchViolations,
+} from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
@@ -51,18 +60,18 @@ test('「上へ」「下へ」と Alt と ↑ ↓ で並べ替え、フォーカ
   await expect(rootTitles(page)).toHaveText(['見積もりを送る', '請求書を出す', '議事録をまとめる']);
 
   // 端の向きは押せない（フォーカスは残せるよう aria-disabled）
-  const firstUp = page.getByRole('button', { name: '上へ: 見積もりを送る' });
+  const firstUp = rowMenuItem(page, '見積もりを送る', '上へ');
   await expect(firstUp).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.getByRole('button', { name: '下へ: 議事録をまとめる' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(rowMenuItem(page, '議事録をまとめる', '下へ')).toHaveAttribute('aria-disabled', 'true');
 
   // 読み直す前に待つ。このテストで動かすのは、下のボタンの1回と Alt と ↑ ↓ の4回
   const moved = waitForResponses(page, '/task-move', 5);
 
   // ボタンで1つ下へ。押したボタンにフォーカスが残る
-  const down = page.getByRole('button', { name: '下へ: 見積もりを送る' });
-  await down.click();
+
+  await chooseRowAction(page, '見積もりを送る', '下へ');
   await expect(rootTitles(page)).toHaveText(['請求書を出す', '見積もりを送る', '議事録をまとめる']);
-  await expect(down).toBeFocused();
+  await expect(rowMenuToggle(page, '見積もりを送る')).toBeFocused();
   await expect(page.getByRole('status').filter({ hasText: '「見積もりを送る」を 2 番目に移しました' })).toBeAttached();
   await expect(firstUp).toHaveAttribute('aria-disabled', 'false');
 
@@ -96,15 +105,14 @@ test('「親を移す」でストーリーの下の末尾へ移し、親なし�
   await createWorkspace(page, '親を移すワークスペース');
   await addStory(page, 'ポイント制度を公開する');
   await addStory(page, '決済の障害を減らす');
-  await page.getByRole('button', { name: 'タスクを足す: ポイント制度を公開する' }).click();
-  const taskDialog = page.getByRole('dialog', { name: '起票' });
-  await taskDialog.getByLabel('タイトル').fill('付与のバッチを書く');
-  await taskDialog.getByRole('button', { name: '起票' }).click();
-  await expect(taskDialog).toBeHidden();
+  const draft = page.getByRole('textbox', { name: 'タスクを足す: ポイント制度を公開する' });
+  await draft.fill('付与のバッチを書く');
+  await draft.press('Enter');
+  await expect(page.locator('.entry-title', { hasText: '付与のバッチを書く' })).toBeVisible();
   await addTask(page, '残高の画面を作る');
 
   // 親のないタスクを、ストーリーの下の末尾へ
-  await page.getByRole('button', { name: '親を移す: 残高の画面を作る' }).click();
+  await chooseRowAction(page, '残高の画面を作る', '親を移す');
   const dialog = page.getByRole('dialog', { name: '「残高の画面を作る」の親を移す' });
   const select = dialog.getByLabel('移す先');
   // 今が親なしなので、親なしは候補に出さない
@@ -121,11 +129,11 @@ test('「親を移す」でストーリーの下の末尾へ移し、親なし�
       .filter({ hasText: '「残高の画面を作る」をストーリー「ポイント制度を公開する」の末尾へ移しました' }),
   ).toBeAttached();
   // ダイアログを閉じたら、開いたボタンへフォーカスが戻る
-  await expect(page.getByRole('button', { name: '親を移す: 残高の画面を作る' })).toBeFocused();
+  await expect(rowMenuToggle(page, '残高の画面を作る')).toBeFocused();
 
   // ストーリーを並べ替える。前の親の移動の後に送られるので、この応答を待てば両方が書き終わっている
   const storyMoved = waitForResponses(page, '/story-move');
-  await page.getByRole('button', { name: '下へ: ポイント制度を公開する' }).click();
+  await chooseRowAction(page, 'ポイント制度を公開する', '下へ');
   await expect(storyTitles(page)).toHaveText(['決済の障害を減らす', 'ポイント制度を公開する']);
 
   await storyMoved;
@@ -140,7 +148,7 @@ test('「親を移す」でストーリーの下の末尾へ移し、親なし�
   ]);
 
   // ストーリーの下から親なしへ戻す
-  await page.getByRole('button', { name: '親を移す: 付与のバッチを書く' }).click();
+  await chooseRowAction(page, '付与のバッチを書く', '親を移す');
   const back = page.getByRole('dialog', { name: '「付与のバッチを書く」の親を移す' });
   await expect(back.getByLabel('移す先').locator('option')).toHaveText(['親なし', '決済の障害を減らす']);
   await back.getByLabel('移す先').selectOption({ label: '親なし' });
@@ -159,12 +167,12 @@ test('並べ替えを断られたら、理由を知らせて読み直す', async
   await page.route('**/api/aoba/task-move', (route) =>
     route.fulfill({ status: 409, json: { error: { code: 'workspace_closed', message: 'workspace_closed' } } }),
   );
-  const down = page.getByRole('button', { name: '下へ: 見積もりを送る' });
-  await down.click();
+
+  await chooseRowAction(page, '見積もりを送る', '下へ');
   await expect(page.getByRole('status').filter({ hasText: '終了したワークスペースには書き込めません' })).toBeVisible();
   // 読み直すと、送れなかった並べ替えは元に戻り、フォーカスは同じ行の同じ操作に戻る
   await expect(rootTitles(page)).toHaveText(['見積もりを送る', '請求書を出す']);
-  await expect(down).toBeFocused();
+  await expect(rowMenuToggle(page, '見積もりを送る')).toBeFocused();
 
   // 409 の conflict は、理由（details.reason）で知らせる文を選ぶ
   for (const [reason, message] of [
@@ -175,7 +183,7 @@ test('並べ替えを断られたら、理由を知らせて読み直す', async
     await page.route('**/api/aoba/task-move', (route) =>
       route.fulfill({ status: 409, json: { error: { code: 'conflict', message: 'conflict', details: { reason } } } }),
     );
-    await down.click();
+    await chooseRowAction(page, '見積もりを送る', '下へ');
     await expect(page.getByRole('status').filter({ hasText: message })).toBeVisible();
     await expect(rootTitles(page)).toHaveText(['見積もりを送る', '請求書を出す']);
   }
@@ -184,7 +192,7 @@ test('並べ替えを断られたら、理由を知らせて読み直す', async
   await page.route('**/api/aoba/task-move', (route) =>
     route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'not found' } } }),
   );
-  await down.click();
+  await chooseRowAction(page, '見積もりを送る', '下へ');
   await expect(
     page.getByRole('status').filter({ hasText: '一覧が変わったため移せませんでした。一覧を読み直します' }),
   ).toBeVisible();
@@ -207,9 +215,9 @@ test('先に送った並べ替えが断られて読み直したら、待って�
       json: { error: { code: 'conflict', message: 'conflict', details: { reason: 'changed' } } },
     });
   });
-  await page.getByRole('button', { name: '下へ: 見積もりを送る' }).click();
-  await page.getByRole('button', { name: '上へ: 議事録をまとめる' }).click();
-  await page.getByRole('button', { name: '上へ: 議事録をまとめる' }).click();
+  await chooseRowAction(page, '見積もりを送る', '下へ');
+  await chooseRowAction(page, '議事録をまとめる', '上へ');
+  await chooseRowAction(page, '議事録をまとめる', '上へ');
   release();
   await expect(
     page.getByRole('status').filter({ hasText: '動かしている間に一覧が読み直されたため、一覧を読み直しました' }),
@@ -261,18 +269,15 @@ test('エピックを「上へ」「下へ」と Alt と ↑ ↓ で並べ替え
   await expect(epicTitles(page)).toHaveText(['ポイント制度を公開する', '決済の障害を減らす', '会員ランクを見直す']);
 
   // 端の向きは押せない（フォーカスは残せるよう aria-disabled）
-  await expect(page.getByRole('button', { name: '上へ: ポイント制度を公開する' })).toHaveAttribute(
-    'aria-disabled',
-    'true',
-  );
-  await expect(page.getByRole('button', { name: '下へ: 会員ランクを見直す' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(rowMenuItem(page, 'ポイント制度を公開する', '上へ')).toHaveAttribute('aria-disabled', 'true');
+  await expect(rowMenuItem(page, '会員ランクを見直す', '下へ')).toHaveAttribute('aria-disabled', 'true');
 
   // 下の1回のボタンと、2回の Alt と ↑
   const moved = waitForResponses(page, '/epic-move', 3);
-  const down = page.getByRole('button', { name: '下へ: ポイント制度を公開する' });
-  await down.click();
+
+  await chooseRowAction(page, 'ポイント制度を公開する', '下へ');
   await expect(epicTitles(page)).toHaveText(['決済の障害を減らす', 'ポイント制度を公開する', '会員ランクを見直す']);
-  await expect(down).toBeFocused();
+  await expect(rowMenuToggle(page, 'ポイント制度を公開する')).toBeFocused();
   await expect(
     page.getByRole('status').filter({ hasText: '「ポイント制度を公開する」を 2 番目に移しました' }),
   ).toBeAttached();
@@ -306,7 +311,7 @@ test('エピックをつまみのドラッグで並べ替え、線はエピッ�
   for (const title of ['ポイント制度を公開する', '決済の障害を減らす']) await addEpic(page, title);
   // 配下のストーリーを足す（エピックの線が、開いた配下の途中に入らないことを確かめる）
   await addStory(page, '残高が見える');
-  await page.getByRole('button', { name: '親を移す: 残高が見える' }).click();
+  await chooseRowAction(page, '残高が見える', '親を移す');
   const moveDialog = page.getByRole('dialog', { name: '「残高が見える」の親を移す' });
   await moveDialog.getByLabel('移す先').selectOption({ label: 'ポイント制度を公開する' });
   await moveDialog.getByRole('button', { name: '移す' }).click();
@@ -371,7 +376,7 @@ test('完了か中止したエピックも並べ替えられる。断られた�
   await page.reload();
   await expect(epicRow(page, '決済の障害を減らす').locator('.chip', { hasText: '中止' })).toBeVisible();
   await expect(epicRow(page, '決済の障害を減らす').locator('.grip')).toBeVisible();
-  const up = page.getByRole('button', { name: '上へ: 決済の障害を減らす' });
+  const up = rowMenuItem(page, '決済の障害を減らす', '上へ');
   await expect(up).toHaveAttribute('aria-disabled', 'false');
 
   // 断られたら、ストーリーとタスクと同じ文で知らせて読み直し、フォーカスを同じ操作へ戻す
@@ -381,17 +386,17 @@ test('完了か中止したエピックも並べ替えられる。断られた�
       json: { error: { code: 'conflict', message: 'conflict', details: { reason: 'changed' } } },
     }),
   );
-  await up.click();
+  await chooseRowAction(page, '決済の障害を減らす', '上へ');
   await expect(
     page.getByRole('status').filter({ hasText: 'ほかの画面で変わったため、移せませんでした。一覧を読み直します' }),
   ).toBeVisible();
   await expect(epicTitles(page)).toHaveText(['ポイント制度を公開する', '決済の障害を減らす']);
-  await expect(up).toBeFocused();
+  await expect(rowMenuToggle(page, '決済の障害を減らす')).toBeFocused();
 
   // 通るときは、中止したエピックも先頭へ動く
   await page.unroute('**/api/aoba/epic-move');
   const moved = waitForResponses(page, '/epic-move');
-  await up.click();
+  await chooseRowAction(page, '決済の障害を減らす', '上へ');
   await expect(epicTitles(page)).toHaveText(['決済の障害を減らす', 'ポイント制度を公開する']);
   await moved;
   await page.reload();
@@ -475,11 +480,10 @@ test('畳んだストーリーの行やタスクの無いストーリーの行�
   await createWorkspace(page, 'ドラッグの親ワークスペース');
   await addStory(page, 'ポイント制度を公開する');
   await addStory(page, '決済の障害を減らす');
-  await page.getByRole('button', { name: 'タスクを足す: ポイント制度を公開する' }).click();
-  const taskDialog = page.getByRole('dialog', { name: '起票' });
-  await taskDialog.getByLabel('タイトル').fill('付与のバッチを書く');
-  await taskDialog.getByRole('button', { name: '起票' }).click();
-  await expect(taskDialog).toBeHidden();
+  const draft = page.getByRole('textbox', { name: 'タスクを足す: ポイント制度を公開する' });
+  await draft.fill('付与のバッチを書く');
+  await draft.press('Enter');
+  await expect(page.locator('.entry-title', { hasText: '付与のバッチを書く' })).toBeVisible();
   await addTask(page, '残高の画面を作る');
   await addTask(page, '請求書を出す');
   const points = storyGroup(page, 'ポイント制度を公開する');
@@ -545,11 +549,10 @@ test('親なしの段が空でも、つかんでいる間だけ出る落とし�
   const collect = await watchViolations(page);
   await createWorkspace(page, '引き出しワークスペース');
   await addStory(page, 'ポイント制度を公開する');
-  await page.getByRole('button', { name: 'タスクを足す: ポイント制度を公開する' }).click();
-  const taskDialog = page.getByRole('dialog', { name: '起票' });
-  await taskDialog.getByLabel('タイトル').fill('付与のバッチを書く');
-  await taskDialog.getByRole('button', { name: '起票' }).click();
-  await expect(taskDialog).toBeHidden();
+  const draft = page.getByRole('textbox', { name: 'タスクを足す: ポイント制度を公開する' });
+  await draft.fill('付与のバッチを書く');
+  await draft.press('Enter');
+  await expect(page.locator('.entry-title', { hasText: '付与のバッチを書く' })).toBeVisible();
   await expect(rootTitles(page)).toHaveCount(0);
   // つかんでいないときは、落とし先を出さない
   await expect(page.locator('.tree-slot')).toHaveCount(0);
@@ -599,7 +602,57 @@ test('終了したワークスペースでは、つまみを出さない', async
   await expect(page.locator('.action-note')).toHaveCount(0);
   // エピックの行にも、つまみと「上へ」「下へ」を出さない
   await expect(epicTitles(page)).toHaveText(['ポイント制度を公開する']);
-  await expect(page.locator('.order-actions')).toHaveCount(0);
+  await expect(page.locator('.row-menu')).toHaveCount(0);
+});
+
+test('行の「⋯」は、キーボードだけで開いて項目を移り、Esc で閉じて「⋯」へ戻る。狭い幅では常に出る', async ({ page }) => {
+  await createWorkspace(page, '行のメニューのワークスペース');
+  for (const title of ['見積もりを送る', '請求書を出す']) await addTask(page, title);
+  const toggle = rowMenuToggle(page, '見積もりを送る');
+  await toggle.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const menu = page.getByRole('menu', { name: '操作: 見積もりを送る' });
+  // 先頭の項目へフォーカスが移る。先頭の「上へ」は端なので押せない
+  await expect(menu.getByRole('menuitem', { name: '上へ' })).toBeFocused();
+  await expect(menu.getByRole('menuitem', { name: '上へ' })).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('menuitem', { name: '下へ' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(toggle).toBeFocused();
+  // Enter で開いて「下へ」を選ぶと、並べ替えて「⋯」へフォーカスが戻る
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(rootTitles(page)).toHaveText(['請求書を出す', '見積もりを送る']);
+  await expect(rowMenuToggle(page, '見積もりを送る')).toBeFocused();
+
+  // 開いている間の Alt と ↓ は、行を動かさない。メニューは開いたまま
+  const lower = rowMenuToggle(page, '請求書を出す');
+  await lower.press('Enter');
+  const lowerMenu = page.getByRole('menu', { name: '操作: 請求書を出す' });
+  await expect(lowerMenu).toBeVisible();
+  await page.keyboard.press('Alt+ArrowDown');
+  await expect(rootTitles(page)).toHaveText(['請求書を出す', '見積もりを送る']);
+  await expect(lowerMenu).toBeVisible();
+  // 高さだけが変わる resize では閉じず、幅が変わると閉じて「⋯」へフォーカスが戻る
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await expect(lowerMenu).toBeVisible();
+  await page.setViewportSize({ width: 1100, height: 600 });
+  await expect(lowerMenu).toBeHidden();
+  await expect(lower).toBeFocused();
+  // 閉じた「⋯」にフォーカスがあるときの Alt と ↓ は、行を動かす
+  await page.keyboard.press('Alt+ArrowDown');
+  await expect(rootTitles(page)).toHaveText(['見積もりを送る', '請求書を出す']);
+
+  // 狭い幅では、ホバーしなくても「⋯」が見え、44px 四方
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.mouse.move(0, 0);
+  await expect(rowMenuToggle(page, '請求書を出す')).toHaveCSS('opacity', '1');
+  const box = await rowMenuToggle(page, '請求書を出す').boundingBox();
+  expect(box!.width).toBeGreaterThanOrEqual(44);
+  expect(box!.height).toBeGreaterThanOrEqual(44);
 });
 
 test('狭い幅ではつまみを出さず、題の列も空けない', async ({ page }) => {
@@ -637,9 +690,9 @@ test('メニューの横で一覧が狭い幅でも、題の列は縮みすぎ�
     );
     expect(overflow, `${width}px`).toBeLessThanOrEqual(0);
   }
-  // 狭い幅では、並べ替えのボタンは 44px 四方
+  // 狭い幅では、「⋯」のボタンは 44px 四方
   await page.setViewportSize({ width: 390, height: 900 });
-  const up = page.locator('.tree-children .entry .order-actions .icon-btn').first();
+  const up = page.locator('.tree-children .entry .row-menu-btn').first();
   const box = await up.boundingBox();
   expect(box!.width).toBeGreaterThanOrEqual(44);
   expect(box!.height).toBeGreaterThanOrEqual(44);
@@ -655,7 +708,7 @@ test('一覧が広いまま指で押す画面（タブレットの横置き）�
   const page = await context.newPage();
   await page.goto(SEED_CLIENT_WORKSPACE);
   expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
-  const up = page.locator('.tree-children .entry .order-actions .icon-btn').first();
+  const up = page.locator('.tree-children .entry .row-menu-btn').first();
   expect((await up.boundingBox())!.width).toBeGreaterThanOrEqual(44);
   // 題の列は 12rem（192px）を保つ
   for (const main of await page.locator('.tree-children .entry .entry-main').all()) {
@@ -693,11 +746,10 @@ test('ストーリーを作った後の読み直しの応答が、続けて作�
   await expect(storyDialog).toBeHidden();
   await expect.poll(() => held).toBe(true);
 
-  await page.getByRole('button', { name: 'タスクを足す: ポイント制度を公開する' }).click();
-  const taskDialog = page.getByRole('dialog', { name: '起票' });
-  await taskDialog.getByLabel('タイトル').fill('付与のバッチを書く');
-  await taskDialog.getByRole('button', { name: '起票' }).click();
-  await expect(taskDialog).toBeHidden();
+  const draft = page.getByRole('textbox', { name: 'タスクを足す: ポイント制度を公開する' });
+  await draft.fill('付与のバッチを書く');
+  await draft.press('Enter');
+  await expect(page.locator('.entry-title', { hasText: '付与のバッチを書く' })).toBeVisible();
   const group = storyGroup(page, 'ポイント制度を公開する');
   await expect(group.locator('.entry-title')).toHaveText(['付与のバッチを書く']);
 

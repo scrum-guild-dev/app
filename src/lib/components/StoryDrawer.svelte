@@ -1012,7 +1012,7 @@
     <span class="chip"><Icon name="check" />{t('story')}</span>
     {#if done}<span class="chip is-ok"><Icon name="check" />{t('done')}</span>{/if}
     {#if canWrite && story !== null && menuItems.length > 0}
-      <RowMenu label={t('rowMenuLabel', { title: story.title })} items={menuItems} />
+      <RowMenu title={story.title} items={menuItems} />
     {/if}
   {/snippet}
 

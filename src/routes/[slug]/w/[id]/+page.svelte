@@ -1156,7 +1156,6 @@
     pointsDone={pointsDoneOf(story)}
     pointsAll={pointsAllOf(story)}
     {clock}
-    {canWrite}
     nested={place?.parentId != null}
     remaining={remainingOf(story)}
     pending={Object.hasOwn(storyPending, story.id)}
@@ -1164,7 +1163,6 @@
     onComplete={canWrite ? (target) => void setStoryCompletion(target, 'complete') : undefined}
     onReopen={canWrite ? (target) => void setStoryCompletion(target, 'reopen') : undefined}
     href={`${storyHrefBase}${encodeURIComponent(story.id)}`}
-    onAddTask={(target, trigger) => taskDialog?.show(trigger, target.id)}
     row={taskRow}
     canMoveUp={place !== undefined && place.index > 0}
     canMoveDown={place !== undefined && place.index < place.count - 1}
