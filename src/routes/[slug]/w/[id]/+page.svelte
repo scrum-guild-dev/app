@@ -1137,6 +1137,14 @@
     showCategory={place?.parentId == null}
     dnd={rowDnd}
     taskQuery={taskQueryBase}
+    attrs={canWrite && workspace !== null
+      ? {
+          slug: page.params.slug ?? '',
+          workspaceId: workspace.id,
+          onSaved: () => invalidateAll(),
+          onStale: () => void invalidateAll(),
+        }
+      : undefined}
   />
 {/snippet}
 

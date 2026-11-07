@@ -1686,6 +1686,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .chip-btn { font: inherit; font-size: var(--text-xs); cursor: pointer; position: relative; }
 .chip-btn:hover { border-color: var(--color-control-edge); }
 .chip-btn.is-unset { color: var(--color-muted); background: none; border-style: dashed; }
+.chip-btn[aria-disabled="true"] { cursor: default; border-style: solid; border-color: var(--color-line); }
 .chip-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 /* 長い名前の省略は中の文字（.chip-text）に持たせる。ボタン本体に overflow を付けると、::after で広げた押せる範囲が切られる */
 .chip-btn { max-width: 100%; }
@@ -1693,7 +1694,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .card-foot { flex-wrap: wrap; }
 .card-foot .row-menu { min-width: 0; max-width: 100%; }
 /* 行の「⋯」（.row-menu）。広い幅ではホバーと行の中のフォーカスで出し、開いている間は出したままにする。opacity だけなので、見えなくてもキーボードで届く */
-.row-menu { position: relative; display: inline-flex; flex: none; }
+.row-menu { position: relative; display: inline-flex; flex: none; align-items: center; gap: var(--space-1); }
 .row-menu-btn { opacity: 0; }
 :is(.entry, .tree-row, .card):is(:hover, :focus-within) .row-menu-btn, .row-menu-btn[aria-expanded="true"], .row-menu-btn:focus-visible { opacity: 1; }
 /* 引き出しの帯の「⋯」（ストーリーの引き出しの親を移すと削除）は、ホバーする行が無いので常に出す */
