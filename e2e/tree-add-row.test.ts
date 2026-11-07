@@ -82,3 +82,48 @@ test('エピックとストーリーを、木の空の行に題を打って Ente
   await expect(page.getByRole('button', { name: '親のないストーリー', exact: true })).toBeVisible();
   expect(await collect()).toEqual([]);
 });
+
+test('タスクを、ストーリーの配下の末尾と木の末尾の空の行に題を打って Enter で作る。2件続けて作ると、2件とも木に出る', async ({
+  page,
+}) => {
+  const collect = await watchViolations(page);
+  await createWorkspace(page, 'タスクの空の行のワークスペース');
+
+  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
+  const dialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
+  await dialog.getByLabel('タイトル').fill('親のストーリー');
+  await dialog.getByRole('button', { name: '作る' }).click();
+  await expect(dialog).toBeHidden();
+
+  // ストーリーの配下の末尾の「タスクを足す」。空のまま Enter を押しても何も作らない
+  const story = page.locator('.tree-group', { has: page.getByRole('button', { name: '親のストーリー', exact: true }) });
+  const underStory = story.getByRole('textbox', { name: 'タスクを足す: 親のストーリー' });
+  await underStory.press('Enter');
+  await expect(story.locator('.entry')).toHaveCount(0);
+
+  // 2件続けて作る。作れたら入力は空に戻り、フォーカスが残る
+  await underStory.fill('一つ目のタスク');
+  await underStory.press('Enter');
+  await expect(story.getByText('一つ目のタスク', { exact: true })).toBeVisible();
+  await expect(underStory).toHaveValue('');
+  await expect(underStory).toBeFocused();
+  await underStory.fill('二つ目のタスク');
+  await underStory.press('Enter');
+  await expect(story.getByText('二つ目のタスク', { exact: true })).toBeVisible();
+  await expect(story.getByText('一つ目のタスク', { exact: true })).toBeVisible();
+
+  // 木の末尾の「タスクを足す」は、親のないタスクを作る
+  const rootInput = treeTail(page).getByRole('textbox', { name: 'タスクを足す' });
+  await rootInput.fill('親のないタスク');
+  await rootInput.press('Enter');
+  await expect(page.getByText('親のないタスク', { exact: true })).toBeVisible();
+  await expect(story.getByText('親のないタスク', { exact: true })).toHaveCount(0);
+
+  // 読み直しても、親は同じ
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
+  await expect(story.getByText('一つ目のタスク', { exact: true })).toBeVisible();
+  await expect(story.getByText('二つ目のタスク', { exact: true })).toBeVisible();
+  await expect(story.getByText('親のないタスク', { exact: true })).toHaveCount(0);
+  expect(await collect()).toEqual([]);
+});
