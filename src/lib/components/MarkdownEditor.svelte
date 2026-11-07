@@ -357,9 +357,11 @@
     if (!input) return;
     input.focus();
     input.setSelectionRange(edit.start, edit.end);
+    const expected = input.value.slice(0, edit.start) + edit.text + input.value.slice(edit.end);
     const done =
       edit.text === '' ? document.execCommand('delete') : document.execCommand('insertText', false, edit.text);
-    if (!done) {
+    // 使えない、または期待した本文にならないときは、applyEdit で書き込む
+    if (!done || input.value !== expected) {
       applyEdit(edit.start, edit.end, edit.text);
       input.value = value;
     }

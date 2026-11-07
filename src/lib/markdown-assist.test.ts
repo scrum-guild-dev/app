@@ -89,6 +89,12 @@ describe('Enter でリストを続ける', () => {
     expect(enter('- «あ»')).toBeNull();
   });
 
+  test('区切り線は一覧として扱わない', () => {
+    expect(enter('- - -|')).toBeNull();
+    expect(enter('* * *|')).toBeNull();
+    expect(enter('***|')).toBeNull();
+  });
+
   test('一覧でない行、印の後ろに空白が無い行は何もしない', () => {
     expect(enter('あ|')).toBeNull();
     expect(enter('-あ|')).toBeNull();
@@ -96,6 +102,18 @@ describe('Enter でリストを続ける', () => {
     expect(enter('**太字**|')).toBeNull();
     expect(enter('> 引用|')).toBeNull();
     expect(enter('|')).toBeNull();
+  });
+
+  test('囲みの種類と長さを見て、囲みの外の項目は続け、中は続けない', () => {
+    expect(enter('~~~\n```\n~~~\n- あ|')).toBe('~~~\n```\n~~~\n- あ\n- |');
+    expect(enter('````\n```\n- あ|\n```\n````')).toBeNull();
+    expect(enter('```js code```\n- あ|')).toBe('```js code```\n- あ\n- |');
+    expect(enter('```\n- あ\n```\n- い|\n```\nコード\n```')).toBe('```\n- あ\n```\n- い\n- |\n```\nコード\n```');
+  });
+
+  test('番号が10桁になるときは普通の改行に任せ、U+2028 を含む行も項目として読む', () => {
+    expect(enter('999999999. あ|')).toBeNull();
+    expect(enter('- あ\u2028い|')).toBe('- あ\u2028い\n- |');
   });
 
   test('コードの囲みの中では続けない', () => {
@@ -116,8 +134,26 @@ describe('Tab と Shift+Tab で字下げする', () => {
     expect(tab('- あ\n  - い\n  - う|')).toBe('- あ\n  - い\n    - う|');
   });
 
-  test('先頭の項目は2字だけ下げる', () => {
-    expect(tab('- あ|')).toBe('  - あ|');
+  test('親が無い（一覧の先頭の）項目は字下げせず、フォーカスを移す', () => {
+    expect(tab('- あ|')).toBeNull();
+    expect(tab('段落\n- あ|')).toBeNull();
+    expect(tab('- あ\n\n- い|')).toBeNull();
+  });
+
+  test('続けて押しても字下げは増え続けず、入れ子の次の Tab ではフォーカスを移す', () => {
+    expect(tab('- あ\n- い|')).toBe('- あ\n  - い|');
+    expect(tab('- あ\n  - い|')).toBeNull();
+  });
+
+  test('空の最初の行にカーソルがあるとき、次の行を字下げしない', () => {
+    expect(tab('|\n- あ')).toBeNull();
+    expect(tab('|\n- あ\n- い')).toBeNull();
+  });
+
+  test('書き換えは変わる範囲（行頭の空白）だけにする', () => {
+    const value = '- あ\n- い ![x](/api/a/attachments/1)';
+    const edit = indentListEdit(value, value.length, value.length, false);
+    expect(edit).toMatchObject({ start: 4, end: 4, text: '  ' });
   });
 
   test('カーソルが行頭でも項目の前の字下げの後ろに動く', () => {
@@ -174,8 +210,17 @@ describe('選んだ文字に URL を貼ってリンクにする', () => {
   });
 
   test('リンクの文字の中の記号はエスケープし、括弧のある URL は <> で囲む', () => {
-    expect(paste('«a[1]\\b»', 'https://example.com/')).toBe('[a\\[1\\]\\\\b](https://example.com/)|');
+    expect(paste('«a[1]b»', 'https://example.com/')).toBe('[a\\[1\\]b](https://example.com/)|');
     expect(paste('«あ»', 'https://example.com/a_(b)')).toBe('[あ](<https://example.com/a_(b)>)|');
+  });
+
+  test('選んだ文字にバックスラッシュがあるときは貼り付けに任せる', () => {
+    expect(paste('«a\\b»', 'https://example.com/')).toBeNull();
+  });
+
+  test('コードの囲みの中を選んだときと、バックスラッシュを含む URL は貼り付けに任せる', () => {
+    expect(paste('```\n«foo»\n```', 'https://example.com/')).toBeNull();
+    expect(pastedLink('https://example.com/a\\*')).toBeNull();
   });
 
   test('選んでいないとき、複数行を選んだとき、空白だけを選んだときは貼り付けに任せる', () => {
@@ -202,6 +247,10 @@ describe('選んだ文字に URL を貼ってリンクにする', () => {
     expect(pastedLink(`https://example.com/${'a'.repeat(2048)}`)).toBeNull();
     expect(pastedLink('https://example.com/<a>')).toBeNull();
     expect(pastedLink('https://example.com/')).toBe('https://example.com/');
+    // 画面は「//」の無い綴りと、正規化した後の長さが上限を超える URL を文字のままにする
+    expect(pastedLink('https:example.com')).toBeNull();
+    expect(pastedLink('http:example.com')).toBeNull();
+    expect(pastedLink(`https://example.com/${'あ'.repeat(300)}`)).toBeNull();
   });
 });
 
