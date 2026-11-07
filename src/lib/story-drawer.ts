@@ -1,7 +1,7 @@
 // ストーリーの引き出し（StoryDrawer）が、画面の枠から受け取る値の組み立て。
 // 引き出しはワークスペースの枠（+layout.svelte）が置くので、バックログの画面が読んだ木（page.data.tree）から、
-// 開いたストーリーの完了の状態と、親に選べるエピックを取り出す。木に無い（絞り込みで外れた、別の画面で開いた）ときは null で、
-// 引き出しは完了の操作と親を移すを出さない（story-get は完了の状態を返さないため）。
+// 親に選べるエピックを取り出す。木が無い（別の画面で開いた）ときは null で、引き出しは親を移すを出さない。
+// 完了の状態は木でなく story-get から読む。
 
 type TreeStoryLike = { id: string; completed_at: string | null; open_task_count: number };
 type TreeEpicLike = {
@@ -39,30 +39,23 @@ export function storyTreeOf(data: unknown): StoryTree | null {
 export type StoryFacts = {
   // 完了した日時。完了していなければ null
   completedAt: string | null;
-  // 配下の未完了のタスクの件数（絞っても全体の値）。読み込み済みの木の値なので、この画面で空の行から足した直後の行は、
-  // 木を読み直すまで数えない（行の「完了にする」は足した行も数える）。その間に引き出しから完了にすると、サーバーが理由つきで断る
+  // 配下の削除していない未完了のタスクの件数（story-get が読んだ時点の値）
   openTasks: number;
   // 親のエピックが完了か中止している（完了も取り消しも必ず断られる）
   parentFinished: boolean;
 };
 
-export function storyFactsOf(tree: StoryTreeLike | null | undefined, storyId: string): StoryFacts | null {
-  if (tree === null || tree === undefined) return null;
-  const alone = tree.stories.find((story) => story.id === storyId);
-  if (alone !== undefined) {
-    return { completedAt: alone.completed_at, openTasks: alone.open_task_count, parentFinished: false };
-  }
-  for (const epic of tree.epics) {
-    const story = epic.stories.find((row) => row.id === storyId);
-    if (story !== undefined) {
-      return {
-        completedAt: story.completed_at,
-        openTasks: story.open_task_count,
-        parentFinished: epic.completed_at !== null || epic.canceled_at !== null,
-      };
-    }
-  }
-  return null;
+// story-get の出力から、完了の帯が使う値を取り出す
+export function storyFactsFrom(data: {
+  completed_at: string | null;
+  open_task_count: number;
+  parent_finished: boolean;
+}): StoryFacts {
+  return {
+    completedAt: data.completed_at ?? null,
+    openTasks: data.open_task_count,
+    parentFinished: data.parent_finished,
+  };
 }
 
 // ストーリーの親に選べるエピック（完了も中止もしていないもの）。木が無いときは null（親を移すを出さない）

@@ -3,7 +3,7 @@ import {
   epicFinishedOf,
   parentChoicesOf,
   staleCurrentOf,
-  storyFactsOf,
+  storyFactsFrom,
   storyTreeOf,
   type StoryTree,
 } from './story-drawer.ts';
@@ -35,28 +35,16 @@ const tree: StoryTree = {
   },
 };
 
-describe('storyFactsOf', () => {
-  test('親のないストーリーは、完了の状態と未完了のタスクの件数を返し、親は完了していない', () => {
-    expect(storyFactsOf(tree, 's-root')).toEqual({
-      completedAt: '2026-11-03T00:00:00.000Z',
-      openTasks: 0,
-      parentFinished: false,
+describe('storyFactsFrom', () => {
+  test('story-get の出力を、完了の帯の値にする', () => {
+    expect(
+      storyFactsFrom({ completed_at: '2026-11-03T00:00:00.000Z', open_task_count: 0, parent_finished: false }),
+    ).toEqual({ completedAt: '2026-11-03T00:00:00.000Z', openTasks: 0, parentFinished: false });
+    expect(storyFactsFrom({ completed_at: null, open_task_count: 2, parent_finished: true })).toEqual({
+      completedAt: null,
+      openTasks: 2,
+      parentFinished: true,
     });
-  });
-
-  test('エピックの下のストーリーは、親が進行中なら parentFinished が偽', () => {
-    expect(storyFactsOf(tree, 's-open')).toEqual({ completedAt: null, openTasks: 2, parentFinished: false });
-  });
-
-  test('親のエピックが完了か中止していれば parentFinished が真', () => {
-    expect(storyFactsOf(tree, 's-cleared')?.parentFinished).toBe(true);
-    expect(storyFactsOf(tree, 's-canceled')?.parentFinished).toBe(true);
-  });
-
-  test('木に無いストーリーと、木が無いときは null', () => {
-    expect(storyFactsOf(tree, 'missing')).toBeNull();
-    expect(storyFactsOf(null, 's-root')).toBeNull();
-    expect(storyFactsOf(undefined, 's-root')).toBeNull();
   });
 });
 
