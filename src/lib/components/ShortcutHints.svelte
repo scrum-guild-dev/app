@@ -9,7 +9,7 @@
 
   // 出ている間にモーダルのダイアログが開いたら消す（ヒントはダイアログより前に重なるため）
   $effect(() => {
-    if (modalState.openCount > 0) state.cancel();
+    if (modalState.openCount > 0) state.dismiss();
   });
 </script>
 
@@ -17,10 +17,10 @@
   onkeydown={state.keydown}
   onkeyup={state.keyup}
   onblur={state.cancel}
-  onresize={state.cancel}
-  onpointerdowncapture={state.cancel}
+  onresize={state.dismiss}
+  onpointerdowncapture={state.dismiss}
 />
-<svelte:document onscrollcapture={state.cancel} />
+<svelte:document onscrollcapture={state.dismiss} onvisibilitychange={state.cancel} />
 
 {#if state.hints.length > 0}
   <div class="key-hints" aria-hidden="true">

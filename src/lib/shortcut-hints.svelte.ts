@@ -33,6 +33,8 @@ type ModEvent = Pick<KeyboardEvent, 'key' | 'repeat' | 'altKey' | 'shiftKey' | '
 export class ShortcutHints {
   hints = $state.raw<ShortcutHint[]>([]);
   #timer: ReturnType<typeof setTimeout> | null = null;
+  // 修飾キーだけを押し続けている間（別のキー、離す、ウィンドウを離れるで外れる）。スクロールなどで消えても、押し続ければ出し直す
+  #armed = false;
   #registry: ShortcutRegistry;
   #mac: boolean;
   #isTouch: () => boolean;
@@ -50,14 +52,16 @@ export class ShortcutHints {
   }
 
   keydown = (event: ModEvent): void => {
-    // ほかのキー（⌘C など）が押されたら、待っていた分も出ているものも取り消す
+    // ほかのキー（⌘C など）が押されたら、待っていた分も出ているものも取り消し、離すまで出し直さない
     if (event.key !== this.#modKey) {
       this.cancel();
       return;
     }
-    if (event.repeat || this.#timer !== null || this.hints.length > 0) return;
     // 反対側の修飾キー、Alt、Shift が一緒のときは出さない
     if (event.altKey || event.shiftKey || (this.#mac ? event.ctrlKey : event.metaKey)) return;
+    // 押しっぱなしの繰り返しは、待ちを延ばさない。スクロールなどで消えた後だけ、押し続けていれば出し直す
+    if (!event.repeat) this.#armed = true;
+    if (!this.#armed || this.#timer !== null || this.hints.length > 0) return;
     this.#timer = setTimeout(() => this.#show(), HINT_DELAY_MS);
   };
 
@@ -65,7 +69,14 @@ export class ShortcutHints {
     if (event.key === this.#modKey) this.cancel();
   };
 
+  // 押している状態を終える（別のキー、離す、ウィンドウやタブを離れる）。待ちも出ているものも消す
   cancel = (): void => {
+    this.#armed = false;
+    this.dismiss();
+  };
+
+  // 今のヒントだけを消す（スクロール、リサイズ、ポインター、ダイアログ）。押し続けていれば、また出る
+  dismiss = (): void => {
     if (this.#timer !== null) clearTimeout(this.#timer);
     this.#timer = null;
     if (this.hints.length > 0) this.hints = [];
@@ -73,7 +84,7 @@ export class ShortcutHints {
 
   #show(): void {
     this.#timer = null;
-    if (this.#isTouch()) return;
+    if (this.#isTouch() || globalThis.document?.hidden) return;
     const target = this.#target();
     const shown: ShortcutHint[] = [];
     const anchors: HTMLElement[] = [];
