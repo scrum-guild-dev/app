@@ -5,6 +5,8 @@
     key: string;
     label: string;
     icon: IconName;
+    // 押せない理由を示す要素の id（aria-describedby）
+    describedby?: string;
     // 端で動かせないなど。フォーカスを失わないよう disabled でなく aria-disabled にし、押しても何もしない
     disabled?: boolean;
     // 押した項目。trigger は「⋯」のボタン（ダイアログを閉じたときのフォーカスの戻り先）
@@ -13,6 +15,7 @@
 </script>
 
 <script lang="ts">
+  import { tick } from 'svelte';
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
 
@@ -63,7 +66,7 @@
     }
     open = true;
     // 描画の後に置いて、最初の項目へフォーカスを移す
-    queueMicrotask(() => {
+    void tick().then(() => {
       place();
       itemButtons()[0]?.focus();
     });
@@ -95,6 +98,11 @@
       close(list?.contains(event.target as Node) === true);
       return;
     }
+    // 開いている間の Alt と ↑ ↓ は、行を動かさない（行のキーへ届けない）
+    if (event.altKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.stopPropagation();
+      return;
+    }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || event.altKey) return;
     if (!list?.contains(event.target as Node)) return;
     const buttons = itemButtons();
@@ -113,12 +121,33 @@
     if (open && root && event.target instanceof Node && !root.contains(event.target)) open = false;
   }
 
+  // 幅が変わったら閉じる。フォーカスがメニューの中にあれば「⋯」へ戻す（隠れた項目にフォーカスを残さない）。
+  // スマホのアドレスバーの出入りは高さだけが変わるので、閉じない
+  let lastWidth = innerWidth;
+  function onResize(): void {
+    if (innerWidth === lastWidth) return;
+    lastWidth = innerWidth;
+    close(list?.contains(document.activeElement) === true);
+  }
+
+  // 外を押す、幅の変化、スクロールを聞くのは、開いている間だけ（行の数だけリスナーを常に持たない）
+  $effect(() => {
+    if (!open) return;
+    lastWidth = innerWidth;
+    addEventListener('click', onClick);
+    addEventListener('resize', onResize);
+    addEventListener('scroll', onScroll, true);
+    return () => {
+      removeEventListener('click', onClick);
+      removeEventListener('resize', onResize);
+      removeEventListener('scroll', onScroll, true);
+    };
+  });
+
   function onScroll(event: Event): void {
     if (open && !(event.target instanceof Node && list?.contains(event.target))) place();
   }
 </script>
-
-<svelte:window onclick={onClick} onresize={() => close(false)} onscrollcapture={onScroll} />
 
 <!-- キーは中のボタンから届く -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -141,6 +170,7 @@
           type="button"
           role="menuitem"
           aria-disabled={item.disabled === true}
+          aria-describedby={item.describedby}
           onclick={() => select(item)}><Icon name={item.icon} /><span>{item.label}</span></button
         >
       </li>

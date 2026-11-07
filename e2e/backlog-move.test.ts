@@ -635,10 +635,28 @@ test('行の「⋯」は、キーボードだけで開いて項目を移り、Es
   await expect(rootTitles(page)).toHaveText(['請求書を出す', '見積もりを送る']);
   await expect(rowMenuToggle(page, '見積もりを送る')).toBeFocused();
 
+  // 開いている間の Alt と ↓ は、行を動かさない。メニューは開いたまま
+  const lower = rowMenuToggle(page, '請求書を出す');
+  await lower.press('Enter');
+  const lowerMenu = page.getByRole('menu', { name: '操作: 請求書を出す' });
+  await expect(lowerMenu).toBeVisible();
+  await page.keyboard.press('Alt+ArrowDown');
+  await expect(rootTitles(page)).toHaveText(['請求書を出す', '見積もりを送る']);
+  await expect(lowerMenu).toBeVisible();
+  // 高さだけが変わる resize では閉じず、幅が変わると閉じて「⋯」へフォーカスが戻る
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await expect(lowerMenu).toBeVisible();
+  await page.setViewportSize({ width: 1100, height: 600 });
+  await expect(lowerMenu).toBeHidden();
+  await expect(lower).toBeFocused();
+
   // 狭い幅では、ホバーしなくても「⋯」が見え、44px 四方
   await page.setViewportSize({ width: 390, height: 900 });
   await page.mouse.move(0, 0);
   await expect(rowMenuToggle(page, '請求書を出す')).toHaveCSS('opacity', '1');
+  const box = await rowMenuToggle(page, '請求書を出す').boundingBox();
+  expect(box!.width).toBeGreaterThanOrEqual(44);
+  expect(box!.height).toBeGreaterThanOrEqual(44);
 });
 
 test('狭い幅ではつまみを出さず、題の列も空けない', async ({ page }) => {

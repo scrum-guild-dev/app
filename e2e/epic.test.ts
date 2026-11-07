@@ -121,6 +121,7 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   const completeStory = rowMenuItem(story, '残高が見える', '完了にする');
   await expect(completeStory).toHaveAttribute('aria-disabled', 'true');
   await expect(story.locator('.tree-note')).toHaveText('残り 1 件のタスク');
+  await expect(completeStory).toHaveAccessibleDescription('残り 1 件のタスク');
   await expect(epic.locator('.tree-row.is-epic .tree-ratio')).toHaveText('完了 0 / 3 pt');
   // 押しても何も送らない
   let sent = 0;
@@ -130,7 +131,7 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   // aria-disabled の項目は Playwright が押せないものとして待つので、待たずに押す
   await rowMenuToggle(story, '残高が見える').click();
   await completeStory.click({ force: true });
-  expect(sent).toBe(0);
+  await expect.poll(() => sent).toBe(0);
 
   // タスクを完了にすると、読み直さずに押せるようになり、エピックの「完了」にも足される
   await story.getByRole('button', { name: '完了にする: 残高の API を作る' }).click();
@@ -253,7 +254,7 @@ test('クリアしたエピックの下の完了したストーリーは、取�
   await expect(story.locator('.tree-note')).toBeVisible();
   // aria-disabled のボタンは Playwright が押せないものとして待つので、待たずに押す
   await reopen.click({ force: true });
-  expect(sent).toBe(0);
+  await expect.poll(() => sent).toBe(0);
 });
 
 test('中止したエピックの下のストーリーは、完了にするを押せず、理由を出す', async ({ page }) => {
@@ -275,9 +276,10 @@ test('中止したエピックの下のストーリーは、完了にするを�
   const complete = rowMenuItem(story, SEED_EPIC_STORY, '完了にする');
   await expect(complete).toHaveAttribute('aria-disabled', 'true');
   await expect(story.locator('.tree-note')).toHaveText('完了か中止したエピックの下のストーリーは完了にできません');
+  await expect(complete).toHaveAccessibleDescription('完了か中止したエピックの下のストーリーは完了にできません');
   await rowMenuToggle(story, SEED_EPIC_STORY).click();
   await complete.click({ force: true });
-  expect(sent).toBe(0);
+  await expect.poll(() => sent).toBe(0);
 });
 
 test('ストーリーの行は、メニューの横の幅と指で押す画面でも、題の列を 12rem 以上に保ち、横にはみ出さない', async ({
