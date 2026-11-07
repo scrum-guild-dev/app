@@ -9,6 +9,7 @@ export const uiScreens = [
   'epic',
   'task-drawer',
   'task-dialog',
+  'backlog-attr-menu',
   'plan',
   'sprint',
   'sprint-start',
@@ -50,26 +51,36 @@ export interface UiExclusion {
 const HEADER_MENU_LABEL_ISSUE = 343;
 
 export const uiExclusions: readonly UiExclusion[] = [
-  ...(['today', 'backlog', 'epic', 'plan', 'sprint', 'members', 'workspace-settings', 'admin'] as const).flatMap(
-    (screen): UiExclusion[] => [
-      {
-        check: 'label-content-name-mismatch',
-        selector: '.org-menu-button',
-        screen,
-        reason:
-          '組織を切り替えるボタンの aria-label が、見える「組織」と組織の名前の並びを含まない。文言の決め直しが要る',
-        issue: HEADER_MENU_LABEL_ISSUE,
-      },
-      {
-        check: 'label-content-name-mismatch',
-        selector: '.account-menu-button',
-        screen,
-        reason:
-          'アカウントのメニューのボタンの aria-label が、見える名前、役割、レベルの数字の並びを含まない。文言の決め直しが要る',
-        issue: HEADER_MENU_LABEL_ISSUE,
-      },
-    ],
-  ),
+  ...(
+    [
+      'today',
+      'backlog',
+      'backlog-attr-menu',
+      'epic',
+      'plan',
+      'sprint',
+      'members',
+      'workspace-settings',
+      'admin',
+    ] as const
+  ).flatMap((screen): UiExclusion[] => [
+    {
+      check: 'label-content-name-mismatch',
+      selector: '.org-menu-button',
+      screen,
+      reason:
+        '組織を切り替えるボタンの aria-label が、見える「組織」と組織の名前の並びを含まない。文言の決め直しが要る',
+      issue: HEADER_MENU_LABEL_ISSUE,
+    },
+    {
+      check: 'label-content-name-mismatch',
+      selector: '.account-menu-button',
+      screen,
+      reason:
+        'アカウントのメニューのボタンの aria-label が、見える名前、役割、レベルの数字の並びを含まない。文言の決め直しが要る',
+      issue: HEADER_MENU_LABEL_ISSUE,
+    },
+  ]),
 ];
 
 // その画面とその種類の除外
