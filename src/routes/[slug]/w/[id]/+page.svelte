@@ -553,11 +553,7 @@
 
   // 絞っているときに作ったものを、読み直した木で探す。あれば作ったことを知らせ（ダイアログは、絞っている間は作った知らせを出さない）、
   // 無ければ（絞り込みに当たらなければ）、作った知らせの代わりに「表示していません」を、絞り込みを外す操作と一緒に知らせる
-  async function revealOrNotice(
-    kind: 'task' | 'story' | 'epic',
-    id: string,
-    createdMessage: string,
-  ): Promise<boolean> {
+  async function revealOrNotice(kind: 'task' | 'story' | 'epic', id: string, createdMessage: string): Promise<boolean> {
     await tick();
     if (data.tree === null || treeHas(kind, id)) {
       showToast(createdMessage, 'check');
