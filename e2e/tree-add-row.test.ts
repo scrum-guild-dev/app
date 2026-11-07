@@ -155,4 +155,8 @@ test('タスクの空の行が断られたら、理由を出して題を残す�
   await failOperation(page, taskCreate, { slug: 'aoba' }, 409, 'conflict');
   await input.press('Enter');
   await expect(page.getByRole('status').filter({ hasText: 'タスクを足せません' })).toBeVisible();
+  // 題は消えずに残り、行の下にも理由が出る（差し込んだ 409 では親が実際には完了していないので、読み直しても行は消えず、
+  // 空の行がフォーカスを取り戻す。行が消えるときの見出しへのフォーカスは、ストーリーの空の行と同じ rowGone が受け持つ）
+  await expect(input).toHaveValue('断られる題');
+  await expect(page.locator('.draft-error')).toContainText('タスクを足せません');
 });
