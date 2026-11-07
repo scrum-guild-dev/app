@@ -112,24 +112,41 @@ describe('押し続けて出す', () => {
     expect(state.hints).toEqual([]);
   });
 
-  test('dismiss（スクロールなど）は待つ間も出ている間も、押し続ければ約0.3秒後に出し直す', () => {
+  test('dismiss（スクロールなど）は、押し続ければ約0.3秒後に出し直す。keydown の繰り返しが届かなくてもよい', () => {
     const { state } = setup([shortcut()]);
     state.keydown(key('Control', { ctrlKey: true }));
     vi.advanceTimersByTime(100);
     state.dismiss();
-    vi.advanceTimersByTime(100);
+    vi.advanceTimersByTime(299);
     expect(state.hints).toEqual([]);
-    state.keydown(key('Control', { ctrlKey: true, repeat: true }));
-    vi.advanceTimersByTime(300);
+    vi.advanceTimersByTime(1);
     expect(state.hints).toHaveLength(1);
+    // 出ているヒントも消し、約0.3秒後にまた出す（繰り返しの keydown は無い）
     state.dismiss();
     expect(state.hints).toEqual([]);
-    state.keydown(key('Control', { ctrlKey: true, repeat: true }));
     vi.advanceTimersByTime(300);
     expect(state.hints).toHaveLength(1);
-    // 離したら出し直さない
+  });
+
+  test('スクロール中に続けて dismiss が呼ばれる間は出し直さず、止まって約0.3秒後に出す', () => {
+    const { state } = setup([shortcut()]);
+    state.keydown(key('Control', { ctrlKey: true }));
+    vi.advanceTimersByTime(300);
+    for (let i = 0; i < 5; i++) {
+      state.dismiss();
+      vi.advanceTimersByTime(100);
+      expect(state.hints).toEqual([]);
+    }
+    vi.advanceTimersByTime(200);
+    expect(state.hints).toHaveLength(1);
+  });
+
+  test('離したら、dismiss の後でも出し直さない', () => {
+    const { state } = setup([shortcut()]);
+    state.keydown(key('Control', { ctrlKey: true }));
+    vi.advanceTimersByTime(300);
+    state.dismiss();
     state.keyup(key('Control'));
-    state.keydown(key('Control', { ctrlKey: true, repeat: true }));
     vi.advanceTimersByTime(500);
     expect(state.hints).toEqual([]);
   });

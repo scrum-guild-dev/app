@@ -59,11 +59,15 @@ export class ShortcutHints {
     }
     // 反対側の修飾キー、Alt、Shift が一緒のときは出さない
     if (event.altKey || event.shiftKey || (this.#mac ? event.ctrlKey : event.metaKey)) return;
-    // 押しっぱなしの繰り返しは、待ちを延ばさない。スクロールなどで消えた後だけ、押し続けていれば出し直す
+    // 押しっぱなしの繰り返しは、待ちを延ばさない
     if (!event.repeat) this.#armed = true;
     if (!this.#armed || this.#timer !== null || this.hints.length > 0) return;
-    this.#timer = setTimeout(() => this.#show(), HINT_DELAY_MS);
+    this.#wait();
   };
+
+  #wait(): void {
+    this.#timer = setTimeout(() => this.#show(), HINT_DELAY_MS);
+  }
 
   keyup = (event: Pick<KeyboardEvent, 'key'>): void => {
     if (event.key === this.#modKey) this.cancel();
@@ -75,11 +79,13 @@ export class ShortcutHints {
     this.dismiss();
   };
 
-  // 今のヒントだけを消す（スクロール、リサイズ、ポインター、ダイアログ）。押し続けていれば、また出る
+  // 今のヒントだけを消す（スクロール、リサイズ、ポインター、ダイアログ）。押し続けていれば、約0.3秒後にまた出す。
+  // 修飾キーの keydown の繰り返しが届かない環境（Mac の ⌘ など）でも出し直せるよう、ここで待ちを張り直す。続けて呼ばれたら（スクロール中）待ちを延ばす
   dismiss = (): void => {
     if (this.#timer !== null) clearTimeout(this.#timer);
     this.#timer = null;
     if (this.hints.length > 0) this.hints = [];
+    if (this.#armed) this.#wait();
   };
 
   #show(): void {

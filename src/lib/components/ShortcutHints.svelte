@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { ShortcutHints } from '../shortcut-hints.svelte.ts';
   import { modalState } from '../toast.svelte.ts';
 
@@ -9,7 +10,8 @@
 
   // 出ている間にモーダルのダイアログが開いたら消す（ヒントはダイアログより前に重なるため）
   $effect(() => {
-    if (modalState.openCount > 0) state.dismiss();
+    // dismiss が hints を読むので、依存に入れない（ヒントが出るたびに走り直さない）
+    if (modalState.openCount > 0) untrack(() => state.dismiss());
   });
 </script>
 
