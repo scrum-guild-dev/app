@@ -2,6 +2,7 @@
 import type { AnyOperationDefinition } from '../define.ts';
 import { backlogCompletedTasks } from './backlog-completed-tasks.ts';
 import { backlogTree } from './backlog-tree.ts';
+import { inboxList, inboxToBacklog } from './inbox.ts';
 import { commentCreate, commentDelete, commentList, commentUpdate } from './comment.ts';
 import { taskAssign } from './task-assign.ts';
 import { taskComplete } from './task-complete.ts';
@@ -27,6 +28,8 @@ export {
 export {
   backlogTree,
   backlogCompletedTasks,
+  inboxList,
+  inboxToBacklog,
   taskAssign,
   taskComplete,
   taskCreate,
@@ -61,6 +64,14 @@ export {
   taskTodayMarkConflictReasons,
   type TaskTodayMarkConflictReason,
 } from './task-today-mark.ts';
+export {
+  INBOX_LIST_LIMIT,
+  INBOX_MOVE_LIMIT,
+  inboxMoveConflictReasonOf,
+  inboxMoveConflictReasons,
+  type InboxMoveConflictReason,
+  type InboxTask,
+} from './inbox.ts';
 export { taskDetailSchema, type TaskDetail } from './task.ts';
 export { TASK_HISTORY_PAGE_SIZE, type TaskHistoryEntry, type TaskHistoryValue } from './task-history.ts';
 export { commentCreate, commentDelete, commentList, commentUpdate };
@@ -76,6 +87,8 @@ export const taskOperations: readonly AnyOperationDefinition[] = [
   taskCreate,
   backlogTree,
   backlogCompletedTasks,
+  inboxList,
+  inboxToBacklog,
   taskComplete,
   taskReopen,
   taskDetail,

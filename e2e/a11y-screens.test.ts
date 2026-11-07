@@ -83,6 +83,14 @@ const screens: {
     ],
   },
   {
+    screen: 'inbox',
+    path: `${WORKSPACE}/inbox`,
+    ready: (page) => [
+      page.getByRole('heading', { level: 1, name: '受信箱' }),
+      page.getByRole('list', { name: '受信箱のタスク' }),
+    ],
+  },
+  {
     screen: 'members',
     path: `${WORKSPACE}/members`,
     ready: (page) => [
