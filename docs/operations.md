@@ -508,7 +508,7 @@ Wiki の表を足した版以降は、コードを戻した場合も削除に使
    pnpm exec wrangler d1 execute scrum-guild --remote --json --command "$(node scripts/purge-organization.ts --count "$id")" | tee "/tmp/purge-$id.before.json"
    ```
 
-5. まず、書き出したファイルの先頭4文（組織とワークスペースそれぞれの Wiki の版、ページ）だけを1文ずつ流す。版は1文32件、ページも版と子が残っていない葉から1文32件ずつ消す。`node scripts/purge-organization.ts --count "$id"` の数える文を使い、`wiki_page_revisions` と `wiki_pages` が両方0になるまで先頭4文を繰り返す。0になったら、下のループでファイル全体を1文ずつ流す。先頭4文を再実行しても安全である。
+5. まず、書き出したファイルの先頭5文（組織とワークスペースそれぞれの Wiki の版、ページ、取り込み元の応答）だけを1文ずつ流す。版は1文32件、ページも版と子が残っていない葉から1文32件ずつ、取り込み元の応答（`task_source_payloads`）も1文32件ずつ消す。`node scripts/purge-organization.ts --count "$id"` の数える文を使い、`wiki_page_revisions`、`wiki_pages`、`task_source_payloads` がすべて0になるまで先頭5文を繰り返す。0になったら、下のループでファイル全体を1文ずつ流す。先頭5文を再実行しても安全である。
 
    1文ずつ流す。`--file` は使わない。`--file` は取り込みの API を使い、流している間は D1 全体がクエリに答えなくなる（wrangler が「your D1 database will be unavailable to serve queries」と出す）。`--command` の1文は、ほかのクエリと並んで動く。文が誤りを返したら、そこで止まる
 
