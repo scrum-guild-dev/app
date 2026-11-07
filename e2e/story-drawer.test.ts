@@ -543,8 +543,10 @@ test('検索で絞って題を直し、行が木から外れても、完了の�
 
   const renamed = await openAndRenameOutOfSearch(page, '探す対象の真ん中', '別の題');
   // 検索語に当たらなくなった行は木から外れる
-  await expect(page.getByRole('link', { name: '別の題', exact: true })).toHaveCount(0);
+  // 木の読み直しが描かれるまで待つ（旧題の行が消えたことを、正の条件で見る）
+  await expect(page.getByRole('link', { name: '探す対象の真ん中', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '探す対象の前', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '探す対象の後', exact: true })).toBeVisible();
   // それでも、順に載っていた間の前後と完了の帯が残る
   await expect(renamed.getByRole('group', { name: '前後のストーリー' })).toBeVisible();
   await expect(renamed.getByRole('button', { name: '前のストーリー' })).not.toHaveAttribute('aria-disabled', 'true');
@@ -557,6 +559,10 @@ test('検索で絞って題を直し、行が木から外れても、完了の�
   await page.keyboard.press('Escape');
   await expect(renamed).toBeHidden();
   await expect(page).not.toHaveURL(/[?&]story=/);
+  // 全体の読み込みになると layout の状態ごと初期化されて確かめにならないので、読み込みを挟まないことを印で確かめる
+  await page.evaluate(() => {
+    (window as unknown as { __spa?: boolean }).__spa = true;
+  });
   await page.evaluate((href) => {
     const link = document.createElement('a');
     link.href = href;
@@ -567,6 +573,7 @@ test('検索で絞って題を直し、行が木から外れても、完了の�
   await expect(again).toBeVisible();
   await expect(again.getByRole('button', { name: '完了にする' })).toBeVisible();
   await expect(again.getByRole('group', { name: '前後のストーリー' })).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { __spa?: boolean }).__spa)).toBe(true);
 });
 
 test('押せない「完了にする」を押すと完了の状態を読み直し、残りの件数か「0 件になりました」を読み上げる。連打しても重ならない', async ({
@@ -596,6 +603,7 @@ test('押せない「完了にする」を押すと完了の状態を読み直�
   await complete.click({ force: true });
   await complete.click({ force: true });
   await expect.poll(() => reads).toBe(1);
+  // 重ならないことを縛るのは、応答を返した後の reads（下の toBe(1)）。ここでは最初の1本が届いたことだけを見る
   const note = drawer.getByRole('status').filter({ hasText: '残り 1 件のタスク' });
   await expect(note).toHaveCount(0);
   release();
