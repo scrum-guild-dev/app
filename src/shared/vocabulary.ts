@@ -41,6 +41,15 @@ export const dictionary = defineDictionary({
   attachmentCancelled: 'アップロードをやめました。',
   attachmentEmpty: '空のファイルは添付できません（0 MB）。',
 
+  slashMenuLabel: 'Markdown を入れる',
+  slashHeading: '見出し',
+  slashTodo: 'チェックリスト',
+  slashBullet: '箇条書き',
+  slashOrdered: '番号付きの一覧',
+  slashQuote: '引用',
+  slashCode: 'コード',
+  slashStatus: '候補 {count} 件。選んでいる項目: {name}。上下の矢印で選び、Enter で入れます',
+
   wikiSearch: 'Wiki の題と本文を探す',
   wikiSearchHint: 'この Wiki の中だけを探します。空白で区切って5語・100字まで。すべての語を含むページを探します。',
   wikiSearchRun: '探す',
