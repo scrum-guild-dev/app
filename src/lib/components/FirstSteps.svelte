@@ -51,7 +51,7 @@
         return {
           ...base,
           title: t('firstStepPrepareTaskTitle', { task: t('task') }),
-          note: t('firstStepPrepareTaskNote', { backlog: t('backlog'), create: t('create'), points: t('points') }),
+          note: t('firstStepPrepareTaskNote', { backlog: t('backlog'), points: t('points') }),
           action: href === null ? null : { label: t('todayEmptyAction', { backlog: t('backlog') }), href },
         };
       }
@@ -82,7 +82,7 @@
         return {
           ...base,
           title: t('firstStepFirstTaskTitle', { backlog: t('backlog'), task: t('task') }),
-          note: t('firstStepFirstTaskNote', { create: t('create'), member: t('member') }),
+          note: t('firstStepFirstTaskNote', { member: t('member') }),
           action: href === null ? null : { label: t('todayEmptyAction', { backlog: t('backlog') }), href },
         };
       }

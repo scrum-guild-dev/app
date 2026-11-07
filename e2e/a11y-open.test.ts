@@ -69,17 +69,19 @@ test('エピックの引き出しの「⋯」のメニューを開いた状態�
   await expectNoA11yViolationsInThemes(page, 'epic-drawer');
 });
 
-test('タスクを作るダイアログ（Dialog）を開いた状態に axe の違反が無い', async ({ page }) => {
+test('行のチップの選択の窓（リポジトリのメニューと期日の窓）を開いた状態に axe の違反が無い', async ({ page }) => {
   await page.goto(WORKSPACE);
   await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
-  const create = page.getByRole('button', { name: '起票' });
-  await expect(create).toBeVisible();
   await waitForSettled(page);
-  await create.click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await expect(dialog.getByLabel('タイトル')).toBeVisible();
+  const row = page.locator('.entry').first();
+  await row.getByRole('button', { name: /^リポジトリ:/ }).click();
+  await expect(page.getByRole('menu', { name: 'リポジトリを選ぶ' })).toBeVisible();
   await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
-  await expectNoA11yViolationsInThemes(page, 'task-dialog');
+  await expectNoA11yViolationsInThemes(page, 'backlog-attr-menu');
+  await page.keyboard.press('Escape');
+  await row.getByRole('button', { name: /^期日:/ }).click();
+  await expect(page.getByRole('dialog', { name: '期日を選ぶ' }).getByLabel('期日')).toBeVisible();
+  await expectNoA11yViolationsInThemes(page, 'backlog-attr-due-panel');
 });
 
 test('スプリントに入れるダイアログ（SprintTaskPicker）を開いた状態に axe の違反が無い', async ({ page }) => {

@@ -828,33 +828,9 @@ export async function chooseRowAction(scope: Page | Locator, title: string, labe
 }
 
 // ---- 木の空の行でエピックとストーリーを作る（見出しの右の「エピックを作る」「ストーリーを作る」は無い） ----
-// 何も無いバックログには木が出ない（空の行は木の末尾に置く）ので、木が無いときは先に親のないタスクを1件作って木を出す。
-// 作った行は読み直さずに木へ入る（絞り込み中は読み直す）。木を出すために作ったタスクは、エピックかストーリーができた後に消す
-// （木はエピックかストーリーがあれば出続ける。テストの数え方にそのタスクを混ぜないため）
-const TREE_SEED_TASK = '木を出すための最初のタスク';
-
-async function ensureTree(page: Page): Promise<boolean> {
-  const tail = page.locator('.tree > .draft-row').first();
-  if (await tail.isVisible()) return false;
-  await page.getByRole('button', { name: '起票', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '起票', exact: true });
-  await dialog.getByLabel('タイトル').fill(TREE_SEED_TASK);
-  await dialog.getByRole('button', { name: '起票', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(tail).toBeVisible();
-  return true;
-}
-
-async function removeTreeSeedTask(page: Page): Promise<void> {
-  await page.getByRole('link', { name: TREE_SEED_TASK, exact: true }).click();
-  const drawer = page.getByRole('dialog', { name: TREE_SEED_TASK, exact: true });
-  await expect(drawer).toBeVisible();
-  const deleted = waitForResponses(page, '/task-delete');
-  await drawer.getByRole('button', { name: 'このタスクを削除する' }).click();
-  await deleted;
-  await expect(drawer).toBeHidden();
-  await expect(page.getByRole('link', { name: TREE_SEED_TASK, exact: true })).toHaveCount(0);
-  await waitForSettled(page);
+// 何も無いバックログにも、空の状態の下に木の末尾の空の行を出す。作った行は読み直さずに木へ入る（絞り込み中は読み直す）
+async function ensureTree(page: Page): Promise<void> {
+  await expect(page.locator('.tree > .draft-row').first()).toBeVisible();
 }
 
 // 作った行が木に出るのを待つ。直前の操作（引き出しを閉じる、タスクを消す）の木の読み直しが、作った後に届くと、
@@ -872,17 +848,16 @@ async function expectRowOrReload(page: Page, title: string, input: Locator): Pro
 
 // 木の末尾の「エピックを足す」で作る
 export async function addEpicRow(page: Page, title: string): Promise<void> {
-  const seeded = await ensureTree(page);
+  await ensureTree(page);
   const input = page.locator('.tree > .draft-row').getByRole('textbox', { name: 'エピックを足す', exact: true });
   await input.fill(title);
   await input.press('Enter');
   await expectRowOrReload(page, title, input);
-  if (seeded) await removeTreeSeedTask(page);
 }
 
 // ストーリーを作る。epicTitle を渡せばそのエピックの配下の末尾の行で、渡さなければ木の末尾の行（親のないストーリー）で作る
 export async function addStoryRow(page: Page, title: string, epicTitle?: string): Promise<void> {
-  const seeded = await ensureTree(page);
+  await ensureTree(page);
   const input =
     epicTitle === undefined
       ? page.locator('.tree > .draft-row').getByRole('textbox', { name: 'ストーリーを足す', exact: true })
@@ -890,7 +865,18 @@ export async function addStoryRow(page: Page, title: string, epicTitle?: string)
   await input.fill(title);
   await input.press('Enter');
   await expectRowOrReload(page, title, input);
-  if (seeded) await removeTreeSeedTask(page);
+}
+
+// タスクを作る。storyTitle を渡せばそのストーリーの配下の末尾の行で、渡さなければ木の末尾の行（親のないタスク）で作る
+export async function addTaskRow(page: Page, title: string, storyTitle?: string): Promise<void> {
+  await ensureTree(page);
+  const input =
+    storyTitle === undefined
+      ? page.locator('.tree > .draft-row').getByRole('textbox', { name: 'タスクを足す', exact: true })
+      : page.getByRole('textbox', { name: `タスクを足す: ${storyTitle}`, exact: true });
+  await input.fill(title);
+  await input.press('Enter');
+  await expectRowOrReload(page, title, input);
 }
 
 // 空の行は題だけを作るので、本文やリンクなど、ほかの欄を最初から持つストーリーは、作った後に本物の API で書く。

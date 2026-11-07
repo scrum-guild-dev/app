@@ -47,9 +47,9 @@ test.describe('管理者（あおば開発のミナト）', () => {
     const collect = await watchViolations(page);
     const name = `終了確認ワークスペース ${runMark()}`;
     const workspaceUrl = await createWorkspace(page, name);
-    // 進行中のうちは帯が無く、起票できる
+    // 進行中のうちは帯が無く、タスクの空の行で作れる
     await expect(bannerOf(page)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '起票' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'タスクを足す', exact: true })).toBeVisible();
 
     await page.goto('/aoba/admin');
     const row = workspacesOf(page).locator('tbody tr', { hasText: name });
@@ -84,7 +84,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
     // 見出しの集計は進行中のワークスペースの数
     await expect(page.locator('.tally')).toContainText('進行中のワークスペース');
 
-    // 終了したワークスペースの画面: どの画面にも帯が出て、起票の操作は出ない。管理者には組織の管理へのリンクが付く
+    // 終了したワークスペースの画面: どの画面にも帯が出て、タスクの空の行は出ない。管理者には組織の管理へのリンクが付く
     await page.goto(workspaceUrl);
     const banner = bannerOf(page);
     await expect(banner).toHaveCount(1);
@@ -98,7 +98,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
     expect(colors[0]).toBe(colors[1]);
     await expect(link).toHaveCSS('text-decoration-line', 'underline');
     await expect(banner.getByRole('button')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '起票' })).toHaveCount(0);
+    await expect(page.getByRole('textbox', { name: 'タスクを足す', exact: true })).toHaveCount(0);
     // 見出しの右上の「終了 <日>」の印は、帯と重なるので出さない
     await expect(page.locator('.page-head .chip')).toHaveCount(0);
     await banner.getByRole('link', { name: '組織の管理で再開する' }).click();
@@ -113,7 +113,7 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await page.goto(workspaceUrl);
     await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
     await expect(bannerOf(page)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '起票' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'タスクを足す', exact: true })).toBeVisible();
     expect(await collect()).toEqual([]);
   });
 

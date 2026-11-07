@@ -354,6 +354,8 @@ test('引き出しの「⋯」から親を移すと、木でその親の下に�
   await createWorkspace(page, '親を移すワークスペース');
   await create(page, 'エピックを作る', '会員証を作り直す');
   await create(page, 'ストーリーを作る', '移されるストーリー');
+  // 引き出しの親の候補は読み直した木から作る（空の行で足しただけのエピックは、読み直すまで入らない）ので、読み直してから開く
+  await page.reload();
 
   const drawer = await openStory(page, '移されるストーリー');
   const menu = drawer.getByRole('button', { name: '操作: 移されるストーリー', exact: true });
