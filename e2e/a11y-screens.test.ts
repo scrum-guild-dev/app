@@ -91,6 +91,14 @@ const screens: {
     ],
   },
   {
+    screen: 'connections',
+    path: `${WORKSPACE}/connections`,
+    ready: (page) => [
+      page.getByRole('heading', { level: 1, name: '接続' }),
+      page.getByRole('list', { name: '接続の一覧' }),
+    ],
+  },
+  {
     screen: 'members',
     path: `${WORKSPACE}/members`,
     ready: (page) => [

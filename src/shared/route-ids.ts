@@ -9,6 +9,7 @@ export const ROUTE_IDS: readonly string[] = [
   '/[slug]/wiki',
   '/[slug]/wiki/[pageId]',
   '/[slug]/w/[id]',
+  '/[slug]/w/[id]/connections',
   '/[slug]/w/[id]/epics/[epicId]',
   '/[slug]/w/[id]/inbox',
   '/[slug]/w/[id]/members',
