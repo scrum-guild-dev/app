@@ -1027,6 +1027,7 @@ GitHub App も比べた。人が抜けても取り込みが止まらない、PAT
 - GitHub の実装（`github/index.ts`）: fine-grained PAT（`github_pat_` + 英数字とアンダースコア22文字以上、全体で255文字まで。classic は受けない）。持ち主は `GET https://api.github.com/user`（`type` が `User` か `Organization`、`id` は正の整数を10進の文字列に、`login`）。候補は `GET https://api.github.com/user/repos?per_page=100&page=N` を100件未満の頁が来るまで送り（100頁まで。超えたら `unavailable`。期限は60秒で、各頁を始める前に判定するため、最悪は1回分の時間切れ（10秒）を足した時間。`Link` ヘッダーは見ず、満杯でない頁の後に続きは無いとみなす）、`id` で重複を除いて `{id, name: full_name}` にする。通信は `redirect: 'manual'` と10秒の時間切れで、`Authorization` 以外に PAT を出さない
 - 組織が持ち主の PAT では `GET /user` が PAT を作った人を返すため、持ち主を `organization` にできるか、候補が PAT で選んだリポジトリだけになるかは、本物の PAT で確かめる（#920）。確かめた結果でこの節を直す
 - 偽の API は `test/import/fake-github-pat.ts`（ログインの `test/auth/fake-github.ts` とは別）
+- 同期（`sync.ts` の `syncConnection()`、#924）: 接続を1つ、範囲ごとに続きの位置で頁を取り、頁ごとに1回の `batch()` で新しい項目を書く。取り込み元の名前を知らず、型の `fetchPage()`（範囲と続きの位置から、取り込み元に依らない項目の形 `ImportItem` の頁と次の位置を返す）だけを呼ぶ。GitHub の `fetchPage()` は #923 で作るまで「届かない」の失敗を投げる。呼ぶ側（「今すぐ同期」、定期処理）は、組織を確かめた入口とワークスペースの ID、接続の ID を渡し、結果（`not_found`、`stopped`、`no_scope`、`success`、`auth_failed`、`error`）を見る。1回の同期は10頁で止め、続きの位置を `connections.sync_state_json` に残す。テストは `test/import/sync.test.ts`（GitHub ではない偽の取り込み元を `source` で差す）。書き込みの決まりは `docs/data-model.md` の「書き込みの単位」の取り込み（1件）
 
 ## Google のログイン
 
