@@ -20,6 +20,7 @@ import { sprintTaskAddOperation, sprintTaskRemoveOperation } from '../src/server
 import { taskCompleteOperation, taskCreateOperation } from '../src/server/operations/task.ts';
 import {
   createBoardColumn,
+  createEpic,
   createOrganization,
   createSprint,
   createSprintEntry,
@@ -923,14 +924,78 @@ describe('task-create の入れ先（スプリントの列の末尾の空の行�
     expect(rows.find((row) => row.id === task.id)?.sprint).toMatchObject({ id: sprint.id });
   });
 
-  test('始まっていないスプリントにも入れられ、入れ先を省いた作成はスプリントに入らない', async () => {
+  test('始まっていないスプリントにも進行中のスプリントにも入れられ、入れ先を省いた作成はスプリントに入らない', async () => {
     const { target, board, sprint } = await setup();
     const plain = await create(target, null);
     const plainId = ((await plain.json()) as { task: { id: string } }).task.id;
     const plainState = await stateOf(target, plainId);
     expect(plainState.task).toMatchObject({ sprint_id: null, column_id: null, column_position: null });
     expect(plainState.entries).toEqual([]);
-    expect((await create(target, { sprint_id: sprint.id, column_id: board.first })).status).toBe(200);
+
+    for (const [status, spr] of [
+      ['planned', sprint],
+      [
+        'active',
+        await createSprint(target.organization, target.workspace.id, {
+          status: 'active',
+          start_on: '2026-10-05',
+          end_on: '2026-10-18',
+        }),
+      ],
+    ] as const) {
+      const res = await create(target, { sprint_id: spr.id, column_id: board.first });
+      expect(res.status, status).toBe(200);
+      const id = ((await res.json()) as { task: { id: string } }).task.id;
+      const state = await stateOf(target, id);
+      expect(state.task).toMatchObject({ sprint_id: spr.id, column_id: board.first });
+      expect(state.entries).toHaveLength(1);
+    }
+  });
+
+  test('名前の無いスプリントへは、期間を名前にして履歴に残す', async () => {
+    const { target, board } = await setup();
+    const unnamed = await createSprint(target.organization, target.workspace.id, {
+      name: null,
+      start_on: '2026-12-01',
+      end_on: '2026-12-14',
+    });
+    const res = await create(target, { sprint_id: unnamed.id, column_id: board.first });
+    const id = ((await res.json()) as { task: { id: string } }).task.id;
+    expect(sprintChanges((await stateOf(target, id)).logs[0])).toEqual([
+      null,
+      { id: unnamed.id, name: '2026-12-01〜2026-12-14' },
+    ]);
+  });
+
+  test('担当つきで親のストーリーの下に作っても、スプリントへの入れ込みが同じ batch() で入る', async () => {
+    const { target, board, sprint } = await setup();
+    const epic = await createEpic(target.organization, target.workspace.id, target.admin.userId!, {
+      title: '親のエピック',
+    });
+    const story = await createStory(target.organization, target.workspace.id, target.admin.userId!, {
+      title: '親',
+      epic_id: epic.id,
+    });
+    const res = await create(
+      target,
+      { sprint_id: sprint.id, column_id: board.first },
+      { story_id: story.id, assignee_user_id: target.leader.userId },
+    );
+    expect(res.status).toBe(200);
+    const id = ((await res.json()) as { task: { id: string } }).task.id;
+    const state = await stateOf(target, id);
+    expect(state.task).toMatchObject({
+      story_id: story.id,
+      sprint_id: sprint.id,
+      assignee_user_id: target.leader.userId,
+    });
+    expect(state.entries).toHaveLength(1);
+    // 討伐隊の文も落ちずに入る
+    const db = orgDb(env, target.organization.verified);
+    const party = await db.rows(
+      db.statement((q) => q.selectFrom('epic_party_members').selectAll().where('epic_id', '=', epic.id)),
+    );
+    expect(party.map((row) => row.user_id)).toEqual([target.leader.userId]);
   });
 
   test('完了の列、終了したスプリント、削除したスプリントや列は断り、タスクも作らない', async () => {
@@ -1011,7 +1076,7 @@ describe('task-create の入れ先（スプリントの列の末尾の空の行�
           },
         },
       ),
-    ).rejects.toMatchObject({ status: 409, code: 'conflict' });
+    ).rejects.toMatchObject({ status: 409, code: 'conflict', details: { reason: 'closed' } });
     expect(await countTasks(target)).toBe(0);
     const db = orgDb(env, target.organization.verified);
     const entries = await db.rows(
