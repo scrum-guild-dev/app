@@ -3255,7 +3255,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
     // [ が前、] が次。文字を打つ場所の中、日本語の変換中、Ctrl・⌘・Alt 付き、押しっぱなしの繰り返しでは移らない（ページ全体では drawerAdjacent が null）
     if ((ev.key === "[" || ev.key === "]") && drawer.id && !overlay && !ev.isComposing && ev.keyCode !== 229 && !ev.repeat
-      && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !ev.shiftKey && !isTypingTarget(ev.target)) {
+      && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !isTypingTarget(ev.target)) {
       if (drawerAdjacent()) { ev.preventDefault(); stepDrawer(ev.key === "[" ? -1 : 1); }
       return;
     }
