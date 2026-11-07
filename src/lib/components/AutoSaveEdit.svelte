@@ -80,6 +80,8 @@
   let destroyed = false;
   // 部品の中を押している最中か（押した先がフォーカスを受けないとき、focusout の relatedTarget が空になる）
   let pressedInside = false;
+  // 保存に失敗したときの文（これと違う文になったら、新しい文として自動で送る）
+  let failedDraft = '';
 
   const saving = $derived(saveState === 'saving');
   // 破棄された後（onDestroy、送り終えた後）にも読むので、$derived にしない
@@ -184,6 +186,7 @@
     }
     if (result !== null) {
       error = result;
+      failedDraft = draft;
       saveState = 'failed';
       return;
     }
@@ -217,7 +220,11 @@
       return;
     }
     if (!editing) return;
-    if (error === null) await flush();
+    // 失敗した後に本文が変わっていたら（ファイルの追加など、入力の操作を通らない変更を含む）、新しい文として送る
+    if (error === null || draft !== failedDraft) {
+      error = null;
+      await flush();
+    }
     if (destroyed || !editing) return;
     if (error === null && !uploading && !hasChanges() && !sending) await finish(false);
   }

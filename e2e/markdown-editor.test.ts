@@ -426,7 +426,7 @@ test('保存前の添付を外すと次の保存から外れ、画像の前後�
 test('文字と画像を一緒に貼り付けると選択範囲を文字で置き換え、続けて画像を差し込む', async ({ page, baseURL }) => {
   const drawer = await openTask(page, baseURL, 'member');
   const input = drawer.getByRole('textbox', { name: 'コメントを書く', exact: true });
-  const form = input.locator('xpath=ancestor::*[@role="group"][1]');
+  const form = input.locator('xpath=ancestor::form');
   await input.fill('前半置換後半');
   await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(2, 4));
   // ファイルをコピーしたクリップボードのファイル名は、本文の文字としては差し込まない。
