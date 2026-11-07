@@ -651,6 +651,8 @@ export const dictionary = defineDictionary({
   // エピックの画面（/[slug]/w/[id]/epics/[epicId]）。見出しの横の「直す」は、エピックのダイアログを開く
   epicPageBack: '{backlog}へ戻る',
   epicPageEdit: '{epic}を直す',
+  // エピックの引き出しの下の、エピックの画面（討伐隊、報酬、依頼主、クリア）へのリンク
+  epicOpenPage: '{epic}の画面を開く',
   epicPageTallyDone: '{done}の{points}',
   epicPageTallyRemaining: '残りの{points}',
   epicPageRequest: '概要',

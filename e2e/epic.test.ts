@@ -4,6 +4,8 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import {
+  addEpicRow,
+  addStoryRow,
   chooseRowAction,
   rowMenuToggle,
   createWorkspace,
@@ -26,26 +28,13 @@ function rowGroup(page: Page, title: string) {
   );
 }
 
-// 作った後は、木の読み直しが返るまで待つ。読み直しで木が替わると、画面は画面だけで足したタスクと並べ替えを捨てる（+page.svelte）。
-// 返る前に次のタスクを足すか並べ替えると、それが遅れて届いた読み直しで消えうる
-async function createEpic(page: Page, label: string, title: string): Promise<void> {
-  await page.getByRole('button', { name: label }).click();
-  const dialog = page.getByRole('dialog', { name: label });
-  await dialog.getByLabel('タイトル').fill(title);
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
-  await reloaded;
+// 木の空の行で作る（作った行は読み直さずに木へ入る）。label は読みやすさのための呼び名で、操作には使わない
+async function createEpic(page: Page, _label: string, title: string): Promise<void> {
+  await addEpicRow(page, title);
 }
 
-async function createStory(page: Page, label: string, title: string): Promise<void> {
-  await page.getByRole('button', { name: label }).click();
-  const dialog = page.getByRole('dialog', { name: label });
-  await dialog.getByLabel('タイトル').fill(title);
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
-  await reloaded;
+async function createStory(page: Page, _label: string, title: string): Promise<void> {
+  await addStoryRow(page, title);
 }
 
 // 送らないことは、押した後にしばらく待っても要求が来ないことで確かめる（待たずに 0 件を見ると、遅れて飛ぶ要求を見逃す）
@@ -66,26 +55,33 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   await expect(epic.locator('.tree-row.is-epic .tree-ratio')).toHaveText('完了 0 / 0 pt');
   await expect(epic.getByText('ストーリーはまだありません')).toBeVisible();
 
-  // 題からエピックの画面を開き、見出しの横の「直す」で開くダイアログで直す。開いたら1件を読む
+  // 題を押すと引き出しが開く。本文を押して書き、欄を離れると保存される。期日は選ぶと保存される
   await page.getByRole('link', { name: 'ポイント制度を公開する', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: 'ポイント制度を公開する', exact: true });
+  await expect(drawer).toBeVisible();
+  await expect(page).toHaveURL(/\?epic=[0-9a-f-]{36}$/);
+  const bodySaved = waitForResponses(page, '/epic-update');
+  await drawer.getByRole('button', { name: '本文を書く' }).click();
+  const bodyBox = drawer.getByRole('textbox', { name: '本文' });
+  await bodyBox.fill('年内に公開する');
+  await bodyBox.blur();
+  await bodySaved;
+  const dueSaved = waitForResponses(page, '/epic-update');
+  await drawer.getByLabel('期日', { exact: true }).fill('2026-12-25');
+  await drawer.getByLabel('期日', { exact: true }).blur();
+  await dueSaved;
+  // 引き出しの下から、エピックの画面へ移る。本文は概要に、期日は概要に出る
+  await drawer.getByRole('link', { name: 'エピックの画面を開く' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'ポイント制度を公開する' })).toBeVisible();
-  const editEpic = page.getByRole('button', { name: 'エピックを直す' });
-  await editEpic.click();
-  const epicDialog = page.getByRole('dialog', { name: 'エピック' });
-  await expect(epicDialog.getByLabel('タイトル')).toHaveValue('ポイント制度を公開する');
-  await epicDialog.getByLabel('本文').fill('年内に公開する');
-  await epicDialog.getByLabel('期日').fill('2026-12-25');
-  const detailReloaded = waitForResponses(page, '/epic-detail');
-  await epicDialog.getByRole('button', { name: '保存する' }).click();
-  await expect(epicDialog).toBeHidden();
-  await expect(page.getByRole('status').filter({ hasText: 'エピックを保存しました' })).toBeVisible();
-  // 直したら画面を読み直す。本文は概要に、期日は概要に出る
-  await detailReloaded;
   await expect(page.getByText('年内に公開する')).toBeVisible();
   await expect(page.locator('.props').getByText('12/25')).toBeVisible();
-  await editEpic.click();
-  await expect(epicDialog.getByLabel('本文')).toHaveValue('年内に公開する');
-  await epicDialog.getByRole('button', { name: 'やめる' }).click();
+  // エピックの画面の「エピックを直す」でも同じ引き出しが開く（その画面では「エピックの画面を開く」は出ない）
+  await page.getByRole('link', { name: 'エピックを直す' }).click();
+  const pageDrawer = page.getByRole('dialog', { name: 'ポイント制度を公開する', exact: true });
+  await expect(pageDrawer.getByRole('button', { name: '本文を書く' })).toBeVisible();
+  await expect(pageDrawer.getByRole('link', { name: 'エピックの画面を開く' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(pageDrawer).toBeHidden();
   // バックログへ戻ると、木のエピックの行に期日が出る
   await page.getByRole('link', { name: 'バックログへ戻る' }).click();
   await expect(epic.locator('.tree-row.is-epic .chip')).toHaveText('12/25');

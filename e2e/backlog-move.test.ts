@@ -4,6 +4,8 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import {
+  addEpicRow,
+  addStoryRow,
   chooseRowAction,
   createWorkspace,
   dragTo,
@@ -28,15 +30,30 @@ async function addTask(page: Page, title: string): Promise<void> {
   await expect(dialog).toBeHidden();
 }
 
-// 作った後は、木の読み直しが返るまで待つ。読み直しで木が替わると、画面は画面だけで足したタスクと並べ替えを捨てる（+page.svelte）。
-// 返る前に次のタスクを足すか並べ替えると、それが遅れて届いた読み直しで消えうる
+// ストーリーの引き出しで題を直す。保存した後に、画面は木を読み直す。
+// 読み直しで木が替わると、画面は画面だけで足したタスクと並べ替えを捨てるので、このテストでは「木の読み直しを起こす」操作として使う
+async function renameStory(page: Page, from: string, to: string): Promise<void> {
+  await page.getByRole('link', { name: from, exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: from, exact: true });
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole('heading', { level: 2 }).getByRole('button').click();
+  const input = drawer.getByRole('textbox', { name: 'タイトル' });
+  await input.fill(to);
+  const saved = waitForResponses(page, '/story-update');
+  await input.press('Enter');
+  await saved;
+  await expect(drawer.getByRole('heading', { level: 2, name: to })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+}
+
+// 木の空の行でストーリーを作り、題を直して木を読み直す（読み直しが返るまで待つ）。
+// 読み直しで木が替わると、画面は画面だけで足したタスクと並べ替えを捨てる（+page.svelte）。返る前に次のタスクを足すか並べ替えると、
+// それが遅れて届いた読み直しで消えうる
 async function addStory(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const dialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await dialog.getByLabel('タイトル').fill(title);
+  await addStoryRow(page, `${title}（下書き）`);
   const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
+  await renameStory(page, `${title}（下書き）`, title);
   await reloaded;
 }
 
@@ -238,15 +255,9 @@ test('端の行で Alt と ↑ ↓ を押すと、動かせないことを読み
   await expect(rootTitles(page)).toHaveText(['見積もりを送る', '請求書を出す']);
 });
 
-// 作った後は、木の読み直しが返るまで待つ（上の addStory と同じ）
+// 木の空の行でエピックを作る（作った行は読み直さずに木へ入る）
 async function addEpic(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: 'エピックを作る' }).click();
-  const dialog = page.getByRole('dialog', { name: 'エピックを作る' });
-  await dialog.getByLabel('タイトル').fill(title);
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
-  await reloaded;
+  await addEpicRow(page, title);
 }
 
 function epicRow(page: Page, title: string) {
@@ -738,12 +749,18 @@ test('ストーリーを作った後の読み直しの応答が、続けて作�
     await route.fulfill({ response });
   });
 
-  // 返る前に画面へ出す印を使わずに、ダイアログを閉じるところまで進める
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await storyDialog.getByLabel('タイトル').fill('決済の障害を減らす');
-  await storyDialog.getByRole('button', { name: '作る' }).click();
-  await expect(storyDialog).toBeHidden();
+  // 木の読み直しを起こす（ストーリーの題を直して保存する）。読み直しの応答は届けず、引き出しを閉じるところまで進める
+  await page.getByRole('link', { name: 'ポイント制度を公開する', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: 'ポイント制度を公開する', exact: true });
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole('heading', { level: 2 }).getByRole('button').click();
+  const titleInput = drawer.getByRole('textbox', { name: 'タイトル' });
+  await titleInput.fill('決済の障害を減らす');
+  const renamed = waitForResponses(page, '/story-update');
+  await titleInput.press('Enter');
+  await renamed;
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
   await expect.poll(() => held).toBe(true);
 
   const draft = page.getByRole('textbox', { name: 'タスクを足す: ポイント制度を公開する' });

@@ -7,6 +7,7 @@ import { expect, test } from './fixtures.ts';
 import { taskDetail } from '../src/shared/operations/task/task-detail.ts';
 import { taskUpdate } from '../src/shared/operations/task/task-update.ts';
 import {
+  addStoryRow,
   createWorkspace,
   expectNoA11yViolationsInThemes,
   signIn,
@@ -93,11 +94,7 @@ test('行のチップでポイントと担当を選ぶと、行に出る。キ�
 
 test('ポイントのチップで選ぶと、親のストーリーの集計に反映される', async ({ page }) => {
   await createWorkspace(page, '集計のワークスペース');
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await storyDialog.getByLabel('タイトル').fill('会員の画面');
-  await storyDialog.getByRole('button', { name: '作る' }).click();
-  await expect(storyDialog).toBeHidden();
+  await addStoryRow(page, '会員の画面');
   await page.getByRole('button', { name: '起票', exact: true }).click();
   const taskDialog = page.getByRole('dialog', { name: '起票' });
   await taskDialog.getByLabel('親のストーリー').selectOption({ label: '会員の画面' });

@@ -7,6 +7,7 @@
   import Icon from '../../../../lib/components/Icon.svelte';
   import LoadFailed from '../../../../lib/components/LoadFailed.svelte';
   import NotFoundPage from '../../../../lib/components/NotFoundPage.svelte';
+  import EpicDrawer from '../../../../lib/components/EpicDrawer.svelte';
   import StoryDrawer from '../../../../lib/components/StoryDrawer.svelte';
   import TaskDrawer from '../../../../lib/components/TaskDrawer.svelte';
   import {
@@ -23,7 +24,7 @@
   } from '../../../../lib/drawer.svelte.ts';
   import { focusPageHeading } from '../../../../lib/focus-heading.ts';
   import { formatLocalDate } from '../../../../lib/format.ts';
-  import { parentChoicesOf, storyFactsOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
+  import { epicFinishedOf, parentChoicesOf, storyFactsOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import type { LayoutData } from './$types';
 
@@ -55,6 +56,10 @@
   const unavailable = $derived((status === 404 && code === 'not_found') || (status === 403 && code === 'forbidden'));
   const taskId = $derived(page.params.taskId ? null : page.url.searchParams.get('task'));
   const storyId = $derived(page.params.taskId || taskId !== null ? null : page.url.searchParams.get('story'));
+  // エピックの引き出しも、タスクとストーリーの引き出しと同時には開かない（付いていれば、そちらを開く）
+  const epicId = $derived(
+    page.params.taskId || taskId !== null || storyId !== null ? null : page.url.searchParams.get('epic'),
+  );
   let modeRevision = $state(0);
   const overlayMode = $derived(drawerState.mode === 'center' ? 'center' : 'side');
 
@@ -98,6 +103,7 @@
     const rest = new SvelteURLSearchParams(page.url.search);
     rest.delete('task');
     rest.delete('story');
+    rest.delete('epic');
     const query = rest.size > 0 ? `?${rest}` : '';
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路（page.url.pathname）に、残すクエリだけを足している
     return goto(page.url.pathname + query, {
@@ -167,6 +173,7 @@
   const withoutStory = () => {
     const rest = new SvelteURLSearchParams(page.url.search);
     rest.delete('story');
+    rest.delete('epic');
     const query = rest.size > 0 ? `?${rest}` : '';
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路（page.url.pathname）に、残すクエリだけを足している
     return goto(page.url.pathname + query, { replace: true, reset: false });
@@ -199,6 +206,64 @@
     focusStoryAfterReload = true;
     await withoutStory();
     await invalidate('app:backlog-tree');
+    await tick();
+    focusPageHeading();
+  }
+  // ---- エピックの引き出し ----
+  // 期日の印の今日と週の始まり、クリアか中止の状態は、バックログの画面が読んだ木から取る（無い画面では印を出さない）
+  const epicFinished = $derived(epicId === null ? false : epicFinishedOf(storyTree, epicId));
+
+  // 帯で形を替える（書きかけの確認は EpicDrawer が済ませている）。エピックの引き出しは横と真ん中だけ
+  function changeEpicMode(mode: TaskOpenMode): boolean {
+    setTaskOpenMode(mode);
+    modeRevision += 1;
+    return true;
+  }
+
+  // 今の URL から `epic` だけを外した画面
+  const withoutEpic = () => {
+    const rest = new SvelteURLSearchParams(page.url.search);
+    rest.delete('epic');
+    const query = rest.size > 0 ? `?${rest}` : '';
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路（page.url.pathname）に、残すクエリだけを足している
+    return goto(page.url.pathname + query, { replace: true, reset: false });
+  };
+
+  // 木とエピックの画面の値を読み直す（欄を保存した）。引き出しの書きかけを失わないため、枠は読み直さない
+  async function reloadEpic(): Promise<void> {
+    await Promise.all([invalidate('app:backlog-tree'), invalidate('app:epic-detail')]);
+  }
+
+  // 閉じたら、開いた題（data-epic-id を持つリンクかボタン）へフォーカスを戻す。無ければ（畳んだ枝の中も含む）画面の見出しへ移す。
+  // 戻る／進むで `?epic=` が外れて閉じたときも同じ。エピックが消えて閉じたときは、読み直した後に見出しへ移す（removedEpic）
+  let shownEpicId: string | null = null;
+  let focusEpicAfterReload = false;
+  $effect(() => {
+    const previous = shownEpicId;
+    shownEpicId = epicId;
+    if (previous === null || epicId !== null) return;
+    if (taskId !== null || storyId !== null) return;
+    if (focusEpicAfterReload) {
+      focusEpicAfterReload = false;
+      return;
+    }
+    void tick().then(() => {
+      const row = document.querySelector<HTMLElement>(`[data-epic-id="${CSS.escape(previous)}"]`);
+      if (row && !row.closest('[hidden]')) row.focus();
+      else focusPageHeading();
+    });
+  });
+
+  // エピックが消えた（削除した、見つからない）。エピックの画面の上で開いていたら、その画面は無いのでバックログへ戻る。
+  // そうでなければ、閉じて木を読み直し、フォーカスを見出しへ移す（戻る先の行が無いため）
+  async function removedEpic(): Promise<void> {
+    focusEpicAfterReload = true;
+    if (page.params.epicId !== undefined) {
+      await goto(resolve('/[slug]/w/[id]', { slug: data.slug, id: page.params.id ?? '' }), { refreshAll: true });
+    } else {
+      await withoutEpic();
+      await invalidate('app:backlog-tree');
+    }
     await tick();
     focusPageHeading();
   }
@@ -258,6 +323,24 @@
         onchanged={() => invalidate('app:backlog-tree')}
         onstale={() => void invalidate('app:workspace')}
         onremoved={() => void removedStory()}
+      />
+    {/key}
+  {/if}
+  {#if epicId !== null}
+    {#key `${epicId}:${modeRevision}`}
+      <EpicDrawer
+        mode={overlayMode}
+        onmode={changeEpicMode}
+        slug={page.params.slug ?? ''}
+        workspaceId={workspace.id}
+        {epicId}
+        {canWrite}
+        clock={storyClock}
+        finished={epicFinished}
+        onclose={() => void withoutEpic()}
+        onchanged={reloadEpic}
+        onstale={() => void invalidate('app:workspace')}
+        onremoved={() => void removedEpic()}
       />
     {/key}
   {/if}

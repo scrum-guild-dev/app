@@ -11,7 +11,15 @@ import { operationPath } from '../src/shared/operations/define.ts';
 import { categoryCreate } from '../src/shared/operations/definition/category.ts';
 import { storyGet } from '../src/shared/operations/story/story-get.ts';
 import { storyUpdate } from '../src/shared/operations/story/story-update.ts';
-import { chooseRowAction, createWorkspace, signIn, waitForResponses, watchViolations } from './helpers.ts';
+import {
+  addEpicRow,
+  addStoryRow,
+  chooseRowAction,
+  createWorkspace,
+  signIn,
+  waitForResponses,
+  watchViolations,
+} from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
@@ -37,16 +45,10 @@ async function post(page: Page, baseURL: string, operation: Parameters<typeof op
   });
 }
 
-// 作った後は、木の読み直しが返るまで待つ。読み直しで木が替わると、画面は画面だけで足した行を捨てる（+page.svelte）
-async function create(page: Page, label: string, title: string, fields: Record<string, string> = {}): Promise<void> {
-  await page.getByRole('button', { name: label }).click();
-  const dialog = page.getByRole('dialog', { name: label });
-  await dialog.getByLabel('タイトル').fill(title);
-  for (const [name, value] of Object.entries(fields)) await dialog.getByLabel(name).fill(value);
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
-  await reloaded;
+// 木の空の行で作る（作った行は読み直さずに木へ入る）。label は「エピックを作る」か「ストーリーを作る」で、どちらの行かを選ぶ
+async function create(page: Page, label: string, title: string): Promise<void> {
+  if (label === 'エピックを作る') await addEpicRow(page, title);
+  else await addStoryRow(page, title);
 }
 
 // 木の題のリンクでストーリーの引き出しを開く。読み込みが終わり、題が引き出しの名前になるまで待つ
@@ -127,8 +129,14 @@ test('ほかの人が先に同じ欄を直していたら、保存せずに今�
   if (baseURL === undefined) throw new Error('baseURL が無い');
   await createWorkspace(page, '先に直されるワークスペース');
   const workspaceId = new URL(page.url()).pathname.split('/')[3]!;
-  await create(page, 'ストーリーを作る', '先に直される', { 受け入れ基準: '- 元の基準' });
+  await create(page, 'ストーリーを作る', '先に直される');
   const storyId = (await page.getByRole('link', { name: '先に直される', exact: true }).getAttribute('data-story-id'))!;
+  // 空の行は題だけを作るので、元の受け入れ基準は別の経路から書いておく（本物の API）
+  const seeded = await page.request.post(operationPath(storyUpdate, 'aoba'), {
+    headers: { Origin: new URL(baseURL).origin, 'Content-Type': 'application/json' },
+    data: { workspace_id: workspaceId, story_id: storyId, acceptance_criteria_md: '- 元の基準' },
+  });
+  expect(seeded.status()).toBe(200);
   const drawer = await openStory(page, '先に直される');
 
   // 書き始めた後に、ほかの人が同じ欄を直した形にする（本物の API へ、別の経路から書く）

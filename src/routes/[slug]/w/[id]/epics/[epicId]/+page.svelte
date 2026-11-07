@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { goto, invalidate } from '$app/navigation';
+  import { invalidate } from '$app/navigation';
   import { navigating, page } from '$app/state';
   import { resolve } from '$app/paths';
   import Avatar from '../../../../../../lib/components/Avatar.svelte';
@@ -9,7 +9,6 @@
   import DueChip from '../../../../../../lib/components/DueChip.svelte';
   import Emblem from '../../../../../../lib/components/Emblem.svelte';
   import EmptyState from '../../../../../../lib/components/EmptyState.svelte';
-  import EpicDialog from '../../../../../../lib/components/EpicDialog.svelte';
   import EpicPartyAssignDialog from '../../../../../../lib/components/EpicPartyAssignDialog.svelte';
   import EpicRequesterDialog from '../../../../../../lib/components/EpicRequesterDialog.svelte';
   import EpicRewardDialog from '../../../../../../lib/components/EpicRewardDialog.svelte';
@@ -44,8 +43,9 @@
   // 依頼主とリーダー（can_manage）には、討伐隊の面の下に「<クリア>」と「<完了>を取り消す」の面も出す（クリアできない理由は押せない操作の横に出し、
   // 配下のストーリーの完了から数える）。クリアしたら演出（ClearCelebration。動きを減らす設定ではトーストだけ）、取り消しには演出を出さない。
   // 中止、添付ファイルは、後の Issue で足す。
-  // 見出しの横の「直す」は、エピックのダイアログ（EpicDialog）を開く。書き込めるときだけ出し、終了したワークスペースでは出さない
-  // （ダイアログの欄は、この画面がすべて読み取りで出している）。直したら画面の値を読み直し、削除したか消えていたらバックログへ戻る。
+  // 見出しの横の「直す」は、エピックの引き出し（EpicDrawer。`?epic=<ID>`。ワークスペースの枠が置く）を開く。書き込めるときだけ出し、終了したワークスペースでは出さない
+  // （引き出しの欄は、この画面がすべて読み取りで出している）。直したら画面の値を読み直し（引き出しが `app:epic-detail` を読み直す）、
+  // 削除したか消えていたらバックログへ戻る（枠が戻す）。
   // 無いエピック（別の組織、別のワークスペース、削除済み）は「見つかりません」、読めなかったときは読み込みの失敗を出す。
   // 同じ画面の値を読み直している間は、本文の枠を aria-busy にする
   let { data }: PageProps = $props();
@@ -66,6 +66,8 @@
   const reloading = $derived(
     refreshing || (navigating.to !== null && navigating.to.url.pathname === page.url.pathname),
   );
+  // 「<エピック>を直す」は、引き出しを開く（今の画面の上に `?epic=<ID>` を足す）
+  const editHref = $derived(`${page.url.pathname}?epic=${encodeURIComponent(page.params.epicId ?? '')}`);
   const backlogHref = $derived(resolve('/[slug]/w/[id]', { slug, id: page.params.id ?? '' }));
   const finished = $derived(detail !== null && (detail.epic.completed_at !== null || detail.epic.canceled_at !== null));
 
@@ -85,7 +87,6 @@
         ],
   );
 
-  let epicDialog = $state<ReturnType<typeof EpicDialog>>();
   let assignDialog = $state<ReturnType<typeof EpicPartyAssignDialog>>();
   let rewardDialog = $state<ReturnType<typeof EpicRewardDialog>>();
   let requesterDialog = $state<ReturnType<typeof EpicRequesterDialog>>();
@@ -249,13 +250,6 @@
       else focusPageHeading();
     }
   }
-
-  // ダイアログで削除した、または直そうとしたら無かった。バックログへ戻り、見出しへフォーカスを移す
-  async function gone(): Promise<void> {
-    await goto(backlogHref, { refreshAll: true });
-    await tick();
-    focusPageHeading();
-  }
 </script>
 
 <svelte:head>
@@ -294,9 +288,12 @@
   {#snippet actions()}
     {@render backLink()}
     {#if canWrite}
-      <button class="btn" type="button" onclick={(event) => epicDialog?.show(event.currentTarget, epic.id)}>
+      <!-- 引き出しはワークスペースの枠が置く（`?epic=<ID>`）。閉じたら、このリンクへフォーカスを戻す -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- href は resolve した経路に ?epic=<ID> を足したもの -->
+      <a class="btn" href={editHref} data-epic-id={epic.id} data-sveltekit-reset="false">
         <Icon name="pen" />{t('epicPageEdit', { epic: t('epic') })}
-      </button>
+      </a>
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
     {/if}
   {/snippet}
   <PageHead
@@ -527,17 +524,6 @@
     title={celebrateTitle}
     reward={celebrateReward}
     onclosed={focusClearControl}
-  />
-
-  <EpicDialog
-    bind:this={epicDialog}
-    {slug}
-    workspaceId={workspace.id}
-    {canWrite}
-    categories={data.definitions?.categories ?? []}
-    categoriesFailed={data.definitions === null}
-    onsaved={() => void saved()}
-    ongone={() => void gone()}
   />
 
   <EpicPartyAssignDialog

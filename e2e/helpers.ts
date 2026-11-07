@@ -826,3 +826,86 @@ export async function chooseRowAction(scope: Page | Locator, title: string, labe
   await rowMenuToggle(scope, title).click();
   await rowMenuItem(scope, title, label).click();
 }
+
+// ---- 木の空の行でエピックとストーリーを作る（見出しの右の「エピックを作る」「ストーリーを作る」は無い） ----
+// 何も無いバックログには木が出ない（空の行は木の末尾に置く）ので、木が無いときは先に親のないタスクを1件作って木を出す。
+// 作った行は読み直さずに木へ入る（絞り込み中は読み直す）
+async function ensureTree(page: Page): Promise<void> {
+  const tail = page.locator('.tree > .draft-row').first();
+  if (await tail.isVisible()) return;
+  await page.getByRole('button', { name: '起票', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '起票', exact: true });
+  await dialog.getByLabel('タイトル').fill('木を出すための最初のタスク');
+  await dialog.getByRole('button', { name: '起票', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(tail).toBeVisible();
+}
+
+// 木の末尾の「エピックを足す」で作る
+export async function addEpicRow(page: Page, title: string): Promise<void> {
+  await ensureTree(page);
+  const input = page.locator('.tree > .draft-row').getByRole('textbox', { name: 'エピックを足す', exact: true });
+  await input.fill(title);
+  await input.press('Enter');
+  await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
+  await expect(input).toHaveValue('');
+}
+
+// ストーリーを作る。epicTitle を渡せばそのエピックの配下の末尾の行で、渡さなければ木の末尾の行（親のないストーリー）で作る
+export async function addStoryRow(page: Page, title: string, epicTitle?: string): Promise<void> {
+  await ensureTree(page);
+  const input =
+    epicTitle === undefined
+      ? page.locator('.tree > .draft-row').getByRole('textbox', { name: 'ストーリーを足す', exact: true })
+      : page.getByRole('textbox', { name: `ストーリーを足す: ${epicTitle}`, exact: true });
+  await input.fill(title);
+  await input.press('Enter');
+  await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
+  await expect(input).toHaveValue('');
+}
+
+// 空の行は題だけを作るので、本文やリンクなど、ほかの欄を最初から持つストーリーは、作った後に本物の API で書く。
+// 木の題のリンク（data-story-id）から ID を取り、いまのワークスペースの story-update を呼ぶ
+export async function fillStoryFields(
+  page: Page,
+  baseURL: string,
+  title: string,
+  fields: Record<string, string | null>,
+  slug = 'aoba',
+): Promise<void> {
+  const workspaceId = new URL(page.url()).pathname.split('/')[3]!;
+  const storyId = await page.getByRole('link', { name: title, exact: true }).getAttribute('data-story-id');
+  if (storyId === null) throw new Error(`ストーリー「${title}」の ID が無い`);
+  const response = await page.request.post(`/api/${slug}/story-update`, {
+    headers: { Origin: new URL(baseURL).origin, 'Content-Type': 'application/json' },
+    data: { workspace_id: workspaceId, story_id: storyId, ...fields },
+  });
+  expect(response.status()).toBe(200);
+}
+
+// エピックの題のリンク（data-epic-id）から、本物の API で欄を書く
+export async function fillEpicFields(
+  page: Page,
+  baseURL: string,
+  title: string,
+  fields: Record<string, string | null>,
+  slug = 'aoba',
+): Promise<void> {
+  const workspaceId = new URL(page.url()).pathname.split('/')[3]!;
+  const epicId = await page.getByRole('link', { name: title, exact: true }).getAttribute('data-epic-id');
+  if (epicId === null) throw new Error(`エピック「${title}」の ID が無い`);
+  const response = await page.request.post(`/api/${slug}/epic-update`, {
+    headers: { Origin: new URL(baseURL).origin, 'Content-Type': 'application/json' },
+    data: { workspace_id: workspaceId, epic_id: epicId, ...fields },
+  });
+  expect(response.status()).toBe(200);
+}
+
+// 木のエピックの題を押して引き出しを開き、その下の「エピックの画面を開く」でエピックの画面へ移る
+export async function openEpicPage(page: Page, title: string): Promise<void> {
+  await page.getByRole('link', { name: title, exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: title, exact: true });
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole('link', { name: 'エピックの画面を開く' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+}
