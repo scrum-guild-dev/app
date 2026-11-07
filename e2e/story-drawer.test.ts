@@ -2,7 +2,8 @@
 // 書いてすぐ戻っても元のストーリーに保存される。
 // ほかの人が先に同じ欄（期日も）を直していたら、保存せずに知らせ、書いた分が残る。引き出しから完了にする、取り消す、親を移す。
 // 親なしへ移すと区分を選べる。
-// 前後のストーリーへ移る。タスクの引き出しと同時には開かない。開き方は横と真ん中だけ。
+// 前後のストーリーへ移る（検索で絞って題を直しても前後を覚え、順の外で開き直すと出さない）。タスクの引き出しと同時には開かない。開き方は横と真ん中だけ。
+// 押せない「完了にする」を押すと、完了の状態を読み直して件数を読み上げる。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。CSP の違反も確かめる。
 // 書き換える確かめは、作ったワークスペースで行う（seed の行は書き換えない）。開くだけの確かめは seed のワークスペースを使う
 import type { Page } from '@playwright/test';
@@ -11,6 +12,7 @@ import { operationPath } from '../src/shared/operations/define.ts';
 import { categoryCreate } from '../src/shared/operations/definition/category.ts';
 import { storyGet } from '../src/shared/operations/story/story-get.ts';
 import { storyUpdate } from '../src/shared/operations/story/story-update.ts';
+import { routeOperation } from './operations.ts';
 import {
   addEpicRow,
   addStoryRow,
@@ -509,4 +511,115 @@ test('親なしへ移した後は、区分の選択欄が読み込まれてい�
   await select.blur();
   await saved;
   await expect(select.locator('option:checked')).toHaveText('保守');
+});
+
+// 検索で絞ったバックログでストーリーの引き出しを開き、題を検索語に当たらない値に直す。木を読み直した後の引き出しを返す
+async function openAndRenameOutOfSearch(page: Page, from: string, to: string) {
+  const drawer = await openStory(page, from);
+  await drawer.getByRole('heading', { level: 2 }).getByRole('button').click();
+  const input = drawer.getByRole('textbox', { name: 'タイトル' });
+  await input.fill(to);
+  const saved = waitForResponses(page, '/story-update');
+  const reloaded = waitForResponses(page, '/backlog-tree');
+  await input.press('Enter');
+  await saved;
+  await reloaded;
+  const renamed = page.getByRole('dialog', { name: to, exact: true });
+  await expect(renamed).toBeVisible();
+  return renamed;
+}
+
+test('検索で絞って題を直し、行が木から外れても、完了の帯と前後のボタンが消えない。閉じた後に順の外で開くと前後は出ない', async ({
+  page,
+}) => {
+  await createWorkspace(page, '前後を覚えるワークスペース');
+  await create(page, 'ストーリーを作る', '探す対象の前');
+  await create(page, 'ストーリーを作る', '探す対象の真ん中');
+  await create(page, 'ストーリーを作る', '探す対象の後');
+  const workspacePath = new URL(page.url()).pathname;
+  const search = encodeURIComponent('探す対象');
+  await page.goto(`${workspacePath}?q=${search}`);
+  await expect(page.getByRole('link', { name: '探す対象の真ん中', exact: true })).toBeVisible();
+
+  const renamed = await openAndRenameOutOfSearch(page, '探す対象の真ん中', '別の題');
+  // 検索語に当たらなくなった行は木から外れる
+  // 木の読み直しが描かれるまで待つ（旧題の行が消えたことを、正の条件で見る）
+  await expect(page.getByRole('link', { name: '探す対象の真ん中', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '探す対象の前', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '探す対象の後', exact: true })).toBeVisible();
+  // それでも、順に載っていた間の前後と完了の帯が残る
+  await expect(renamed.getByRole('group', { name: '前後のストーリー' })).toBeVisible();
+  await expect(renamed.getByRole('button', { name: '前のストーリー' })).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(renamed.getByRole('button', { name: '次のストーリー' })).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(renamed.getByRole('button', { name: '完了にする' })).toBeVisible();
+  const id = new URL(page.url()).searchParams.get('story');
+  expect(id).not.toBeNull();
+
+  // 閉じると覚えは捨てる。画面を読み直さず（リンクの移動で）同じストーリーを順の外から開き直すと、前後は出ない
+  await page.keyboard.press('Escape');
+  await expect(renamed).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]story=/);
+  // 全体の読み込みになると layout の状態ごと初期化されて確かめにならないので、読み込みを挟まないことを印で確かめる
+  await page.evaluate(() => {
+    (window as unknown as { __spa?: boolean }).__spa = true;
+  });
+  await page.evaluate((href) => {
+    const link = document.createElement('a');
+    link.href = href;
+    document.body.append(link);
+    link.click();
+  }, `${workspacePath}?q=${search}&story=${id}`);
+  const again = page.getByRole('dialog', { name: '別の題', exact: true });
+  await expect(again).toBeVisible();
+  await expect(again.getByRole('button', { name: '完了にする' })).toBeVisible();
+  await expect(again.getByRole('group', { name: '前後のストーリー' })).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { __spa?: boolean }).__spa)).toBe(true);
+});
+
+test('押せない「完了にする」を押すと完了の状態を読み直し、残りの件数か「0 件になりました」を読み上げる。連打しても重ならない', async ({
+  page,
+}) => {
+  await createWorkspace(page, '読み直すワークスペース');
+  await create(page, 'ストーリーを作る', '読み直されるストーリー');
+  const draft = page.getByRole('textbox', { name: 'タスクを足す: 読み直されるストーリー' });
+  await draft.fill('残っているタスク');
+  await draft.press('Enter');
+  await expect(page.locator('.entry-title', { hasText: '残っているタスク' })).toBeVisible();
+  const drawer = await openStory(page, '読み直されるストーリー');
+  const complete = drawer.getByRole('button', { name: '完了にする' });
+  await expect(complete).toHaveAttribute('aria-disabled', 'true');
+  await expect(drawer.getByText('残り 1 件のタスク')).toBeVisible();
+
+  // 件数が残ったまま: 応答を止めて連打しても story-get は1本だけ。返ると、残りの件数を読み上げ、押せないまま
+  let reads = 0;
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const unroute = await routeOperation(page, storyGet, { slug: 'aoba' }, async (call) => {
+    reads += 1;
+    await gate;
+    await call.passThrough();
+  });
+  await complete.click({ force: true });
+  await complete.click({ force: true });
+  await complete.click({ force: true });
+  await expect.poll(() => reads).toBe(1);
+  // 重ならないことを縛るのは、応答を返した後の reads（下の toBe(1)）。ここでは最初の1本が届いたことだけを見る
+  const note = drawer.getByRole('status').filter({ hasText: '残り 1 件のタスク' });
+  await expect(note).toHaveCount(0);
+  release();
+  await expect(note).toBeVisible();
+  expect(reads).toBe(1);
+  await expect(complete).toHaveAttribute('aria-disabled', 'true');
+  await unroute();
+
+  // 別の人が片づけて 0 件になった形にする（応答の件数を差し替える）。読み上げが替わり、「完了にする」が押せる
+  await routeOperation(page, storyGet, { slug: 'aoba' }, async (call) => {
+    const output = await call.fetch();
+    await call.fulfill({ ...output, open_task_count: 0 });
+  });
+  await complete.click({ force: true });
+  await expect(
+    drawer.getByRole('status').filter({ hasText: '残りのタスクは 0 件になりました。完了にできます' }),
+  ).toBeVisible();
+  await expect(complete).not.toHaveAttribute('aria-disabled', 'true');
 });
