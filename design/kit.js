@@ -611,7 +611,7 @@
   }
 
   // スプリントのカード（列の中）
-  // order を渡したカード（完了していないカード）は tabindex="0" で選べ、下に移す操作（.order-actions）を持つ。
+  // order を渡したカード（完了していないカード）は tabindex="0" で選べ、移す操作を「⋯」のメニュー（.row-menu）に持つ。
   // キーボードでは、選んで Alt と ← → で隣の列、Alt と ↑ ↓ で列の中を動かす（本番の SprintBoard）。完了の列のカードは動かさない
   // ドラッグ（本番の SprintCard）: つかめるカードは draggable="true" を持ち、カード全体をつかむ（opts.grab を false にするとつかめないカード）。
   // opts.mark はドラッグの状態: { drop: "before" | "after", state: "is-dragging" | "is-dropped" }（dropAttr と同じ形。into は列に付ける）

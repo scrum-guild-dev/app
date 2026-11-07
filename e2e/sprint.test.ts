@@ -163,6 +163,8 @@ test('リーダーはゴールを書いてスプリントを始め、2つ目は�
   await expect(card('B札').getByRole('button')).toHaveCount(2);
   await chooseRowAction(page, 'B札', '次の列へ');
   await expect(status('「B札」を作業中の 2 番目に移しました（2 件中）')).toBeVisible();
+  // 列をまたいでカードが作り直されても、フォーカスは同じカードの「⋯」に残る
+  await expect(rowMenuToggle(page, 'B札')).toBeFocused();
   await expect(titlesIn(page, '作業中')).toHaveText(['A札', 'B札']);
 
   // 列の中の並べ替え。Alt と ↑ で1つ上、端では動かさず、端であることを読み上げる
@@ -444,6 +446,67 @@ test('戻すのが断られたら理由を知らせて読み直す', async ({ pa
   // 読み直した画面（差し替えた応答）では、カードは完了の列に残る
   await expect(titlesIn(page, '完了')).toHaveText(['付与の履歴を返す API を作る']);
   await unroute();
+});
+
+test('カードの「⋯」の端の項目は選べず、選んでも開いたまま何も送らず、開いたまま Alt と矢印を押してもカードは動かない', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signIn(context, baseURL, 'member');
+  await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
+  const sent: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('task-column-move') || request.url().includes('task-complete')) {
+      sent.push(request.url());
+    }
+  });
+  await page.goto(`${AOBA_TEAM}/sprint`);
+  const first = '管理画面にポイント履歴の一覧を出す';
+  const last = '障害時の連絡手順を書く';
+  const only = 'ポイント付与のバッチを作る';
+  await expect(page.getByRole('article', { name: only, exact: true })).toBeVisible();
+  await waitForSettled(page);
+  const disabled = async (title: string, label: string) =>
+    (await rowMenuItem(page, title, label).getAttribute('aria-disabled')) === 'true';
+  // 先頭の列の先頭のカードは、前の列と上へ動かせない。末尾のカードは下へ動かせない。1枚だけの列のカードは上下に動かせない
+  expect([
+    await disabled(first, '前の列へ'),
+    await disabled(first, '上へ'),
+    await disabled(first, '下へ'),
+    await disabled(first, '次の列へ'),
+  ]).toEqual([true, true, false, false]);
+  expect([await disabled(last, '前の列へ'), await disabled(last, '上へ'), await disabled(last, '下へ')]).toEqual([
+    true,
+    false,
+    true,
+  ]);
+  expect([await disabled(only, '前の列へ'), await disabled(only, '上へ'), await disabled(only, '下へ')]).toEqual([
+    false,
+    true,
+    true,
+  ]);
+
+  // 端の項目を選んでも、何も送らず、メニューは開いたまま
+  const toggle = rowMenuToggle(page, first);
+  await toggle.click();
+  await rowMenuItem(page, first, '上へ').click({ force: true });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  // 開いたまま Alt と → を押しても、カードは動かない
+  await page.keyboard.press('Alt+ArrowRight');
+  await page.keyboard.press('Alt+ArrowDown');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(titlesIn(page, '未着手')).toHaveText([first, last]);
+  await expect(titlesIn(page, '作業中')).toHaveText([only]);
+  expect(sent).toEqual([]);
+});
+
+test('カードの動かし方の案内は「⋯」のメニューを指す', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'member');
+  await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
+  await page.goto(`${AOBA_TEAM}/sprint`);
+  await expect(page.locator('#sprint-board-key-hint')).toContainText('カードの右下の「⋯」のメニューでも同じです。');
+  await expect(page.locator('#sprint-board-key-hint')).not.toContainText('カードの下のボタン');
 });
 
 test('カードが1枚も無いあいだだけ、列とカードの領域そのものに Tab で止まれる', async ({ page, context, baseURL }) => {
