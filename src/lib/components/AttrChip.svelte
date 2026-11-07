@@ -41,7 +41,7 @@
     failedNote?: string;
     busy?: boolean;
     lead?: Snippet;
-    // 渡すと、メニューの代わりに窓（role="group"）を開き、中にこの内容（期日の日付の欄など）を置く。close で窓を閉じてチップへ戻る
+    // 渡すと、メニューの代わりに窓（role="dialog"。モーダルにしない）を開き、中にこの内容（期日の日付の欄など）を置く。close で窓を閉じてチップへ戻る
     panel?: Snippet<[() => void]>;
     // 期日の切れ、今日、今週の色（DueChip と同じ .is-danger、.is-warn）
     tone?: 'danger' | 'warn';
@@ -232,7 +232,7 @@
   {#if open && panel !== undefined}
     <div
       class="account-menu-list row-menu-list"
-      role="group"
+      role="dialog"
       aria-label={t('attrMenuLabel', { attr })}
       bind:this={list}
     >

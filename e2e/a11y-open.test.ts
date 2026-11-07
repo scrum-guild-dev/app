@@ -80,7 +80,7 @@ test('行のチップの選択の窓（リポジトリのメニューと期日�
   await expectNoA11yViolationsInThemes(page, 'backlog-attr-menu');
   await page.keyboard.press('Escape');
   await row.getByRole('button', { name: /^期日:/ }).click();
-  await expect(page.getByRole('group', { name: '期日を選ぶ' }).getByLabel('期日')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '期日を選ぶ' }).getByLabel('期日')).toBeVisible();
   await expectNoA11yViolationsInThemes(page, 'backlog-attr-due-panel');
 });
 

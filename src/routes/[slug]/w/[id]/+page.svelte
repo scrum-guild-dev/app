@@ -1240,7 +1240,10 @@
   <span class="visually-hidden" role="status">{filterResult}</span>
 
   <!-- 何も無いときの最初の一歩は、見本どおり絞り込みの帯も出さない。絞っているときは、当たるものが無くても帯を出す -->
-  {#if !filtering && epics.length === 0 && tree.stories.length === 0 && rootRows.length === 0 && rootDone === 0}
+  <!-- 最初の1件を作ると空の状態だけが外れ、木と空の行は同じ位置に残す（空の行を作り直すとフォーカスを失うため） -->
+  {@const firstStep =
+    !filtering && epics.length === 0 && tree.stories.length === 0 && rootRows.length === 0 && rootDone === 0}
+  {#if firstStep}
     <EmptyState
       icon="board"
       art="notice"
@@ -1249,23 +1252,21 @@
         ? t('backlogEmptyText', { task: t('task') })
         : t('backlogEmptyClosedText', { task: t('task'), workspace: t('workspace') })}
     />
-    <!-- 起票のダイアログが無いので、書ける人には最初の一歩の空の行を出す -->
-    {#if canWrite}
-      <section class="section" aria-label={t('backlogTasksLabel', { backlog: t('backlog'), task: t('task') })}>
-        {@render treeView()}
-      </section>
-    {/if}
-  {:else}
+  {/if}
+  <!-- 起票のダイアログが無いので、書ける人には最初の一歩の空の行を出す -->
+  {#if !firstStep || canWrite}
     <section class="section" aria-label={t('backlogTasksLabel', { backlog: t('backlog'), task: t('task') })}>
-      <BacklogFilterBar
-        {filter}
-        choices={tree.choices}
-        categories={data.definitions?.categories ?? []}
-        repositories={data.definitions?.repositories ?? []}
-        definitionsFailed={data.definitions === null}
-        onchange={(next) => void applyFilter(next)}
-      />
-      {#if filtering && epics.length === 0 && tree.stories.length === 0 && rootRows.length === 0}
+      {#if !firstStep}
+        <BacklogFilterBar
+          {filter}
+          choices={tree.choices}
+          categories={data.definitions?.categories ?? []}
+          repositories={data.definitions?.repositories ?? []}
+          definitionsFailed={data.definitions === null}
+          onchange={(next) => void applyFilter(next)}
+        />
+      {/if}
+      {#if !firstStep && filtering && epics.length === 0 && tree.stories.length === 0 && rootRows.length === 0}
         <!-- 絞り込みに当たるものが無い。木の代わりに、無いことと、絞り込みを外す操作を出す -->
         <EmptyState icon="search" title={t('backlogNoMatchTitle')} text={t('backlogNoMatchText')}>
           {#snippet actions()}
@@ -1275,7 +1276,7 @@
           {/snippet}
         </EmptyState>
       {:else}
-        {#if canWrite}
+        {#if canWrite && !firstStep}
           <!-- 絞っている間は並べ替えを出さないので、外すと並べ替えられることを案内する -->
           <p class="action-note">
             {#if filtering}

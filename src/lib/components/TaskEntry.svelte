@@ -396,7 +396,12 @@
           if (!latest.ok && latest.status === 404) message = t('taskGone', { task: t('task') });
           else if (!latest.ok || key === 'due_on') message = t('taskSaveFailed');
           else message = t('definitionRefGone', { kind: key === 'repository_id' ? t('repository') : t('category') });
-        } else if (result.status === 409 && result.error?.code === 'conflict' && key === 'category_id') {
+        } else if (
+          result.status === 409 &&
+          result.error?.code === 'conflict' &&
+          key === 'category_id' &&
+          (result.error as { details?: { reason?: string } }).details?.reason === 'has_parent'
+        ) {
           message = t('categoryHasParent', { task: t('task'), category: t('category') });
         } else {
           message = await explain(result, t('taskSaveFailed'));
@@ -595,7 +600,7 @@
         onselect={(value) => chooseField('due_on', value === '' ? null : value)}
       >
         {#snippet panel(close)}
-          <div class="due-panel">
+          <div>
             <input
               class="input"
               type="date"
@@ -603,7 +608,9 @@
               value={dueShown ?? ''}
               onchange={(event) => {
                 const value = event.currentTarget.value;
-                if (value === '') return;
+                // 打ちかけ（年が4桁そろわない、読めない日付）では保存せず、窓も閉じない（引き出しの dueIsComplete と同じ）
+                if (event.currentTarget.validity.badInput || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+                if (Number(value.slice(0, 4)) < 1000) return;
                 close();
                 chooseField('due_on', value);
               }}

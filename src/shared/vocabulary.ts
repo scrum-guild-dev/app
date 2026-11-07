@@ -339,14 +339,14 @@ export const dictionary = defineDictionary({
   firstStepJoinedNote: 'この{workspace}の{backlog}と{sprint}を使えます。',
   firstStepPrepareTaskTitle: '自分の{task}を用意する',
   firstStepPrepareTaskNote:
-    '{backlog}の「{create}」で作ります。{points}を1以上振ったまま完了にすると、起票の経験値が付きます。',
+    '{backlog}の空の行に題を入れて作ります。{points}を1以上振ったまま完了にすると、起票の経験値が付きます。',
   firstStepBecameLeaderTitle: '{workspace}「{name}」の{leader}になる',
   firstStepBecameLeaderNote: '{member}の招待と、{backlog}の準備を進められます。',
   firstStepInviteTitle: '{member}を招待する',
   firstStepInviteNote:
     'GitHub のユーザー名か Google のメールアドレスで招待し、{organization}の URL（Google なら招待の URL）を本人に伝えます。Scrum Guild は招待をメールで送りません。',
   firstStepFirstTaskTitle: '{backlog}に最初の{task}を入れる',
-  firstStepFirstTaskNote: '「{create}」で作ります。{member}が入る前に並べておくと、何から始めるかが伝わります。',
+  firstStepFirstTaskNote: '空の行に題を入れて作ります。{member}が入る前に並べておくと、何から始めるかが伝わります。',
   firstStepSprintTitle: '最初の{sprint}を作って始める',
   firstStepSprintNote:
     '{plan}の画面で期間を決め、{backlog}から{task}を入れて始めます。{sprint}を回さないなら要りません。',
@@ -507,17 +507,12 @@ export const dictionary = defineDictionary({
   taskTitleRequired: 'タイトルを入れてください',
   taskTitleTooLong: 'タイトルは {max} 字までです',
   taskTitleInvalidCharacter: 'タイトルに使えない文字（制御文字、ゼロ幅のスペースなど）が含まれています',
-  taskPointsHint: '「未」は未見積もり。起票の経験値は、1 以上の{points}が振られたまま{task}が{done}すると付きます。',
-  taskSubmitting: '作っています',
   taskCreated: '{backlog}の末尾に足しました',
   taskCreateFailed: '作れませんでした。もう一度試してください。',
   // 親の選択欄。選べるのは、親のないストーリー。{story} {done} は、辞書の言葉を画面が渡す
   taskParent: '親の{story}',
-  taskParentNone: 'なし',
   // {title} は親のストーリーの題
   taskCreatedUnder: '{story}「{title}」の末尾に足しました',
-  taskParentGone: 'この{story}は見つかりません。親を選び直してください',
-  taskParentDone: 'この{story}はすでに{done}しています。親を選び直してください',
 
   // バックログの木（ストーリーの行、期日の印）
   storyCreate: '{story}を作る',
@@ -2282,7 +2277,8 @@ export const dictionary = defineDictionary({
   repository: 'リポジトリ',
   categoriesDesc:
     '{epic}に振ると配下が引き継ぎます。「月ごとに計上する」{category}は、完了の記録に計上月を持ちます。切り替えても、すでにある完了の記録の計上月は変わりません。',
-  repositoriesDesc: '{task}がどのリポジトリの作業かを示します。{task}に1つまで振れ、起票のときにボタンで選びます。',
+  repositoriesDesc:
+    '{task}がどのリポジトリの作業かを示します。{task}に1つまで振れ、行のチップかタスクの詳細で選びます。',
   categoryBilledMonthly: '月ごとに計上する',
   categoryBilledMonthlyLabel: '月ごとに計上する: {name}',
   definitionListLabel: '{kind}の一覧',

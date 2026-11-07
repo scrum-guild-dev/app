@@ -175,3 +175,33 @@ test('断られた理由を読み直せなかったら、競合とも完了と�
   await unUpdate();
   await unDetail();
 });
+
+test('期日のチップの窓で日付を入れると行に出て、「クリア」で外れる。打ちかけの日付では保存せず窓も閉じない', async ({
+  page,
+}) => {
+  await createWorkspace(page, '期日のワークスペース');
+  await addTaskRow(page, '期日を付ける件');
+  const row = page.locator('.entry', { hasText: '期日を付ける件' });
+
+  await row.getByRole('button', { name: '期日: 未設定' }).click();
+  const panel = page.getByRole('dialog', { name: '期日を選ぶ' });
+  const input = panel.getByLabel('期日');
+  await expect(input).toBeFocused();
+  // 年が4桁そろわない値では保存せず、窓も閉じない
+  await input.fill('0002-11-20');
+  await expect(panel).toBeVisible();
+  await expect(row.getByRole('button', { name: '期日: 未設定' })).toBeVisible();
+
+  const saved = waitForResponses(page, '/task-update');
+  await input.fill('2030-11-20');
+  await saved;
+  await expect(panel).toBeHidden();
+  await expect(row.getByRole('button', { name: '期日: 11/20' })).toBeVisible();
+  await waitForSettled(page);
+
+  await row.getByRole('button', { name: '期日: 11/20' }).click();
+  const cleared = waitForResponses(page, '/task-update');
+  await page.getByRole('dialog', { name: '期日を選ぶ' }).getByRole('button', { name: 'クリア' }).click();
+  await cleared;
+  await expect(row.getByRole('button', { name: '期日: 未設定' })).toBeVisible();
+});
