@@ -53,7 +53,8 @@ async function renameStory(page: Page, from: string, to: string): Promise<void> 
 // それが遅れて届いた読み直しで消えうる
 async function addStory(page: Page, title: string): Promise<void> {
   await addStoryRow(page, `${title}（下書き）`);
-  const reloaded = waitForResponses(page, '/backlog-tree');
+  // 題を保存した後の読み直しと、引き出しを閉じたときの読み直し（URL から story を外す移動）の2回
+  const reloaded = waitForResponses(page, '/backlog-tree', 2);
   await renameStory(page, `${title}（下書き）`, title);
   await reloaded;
   await waitForSettled(page);
