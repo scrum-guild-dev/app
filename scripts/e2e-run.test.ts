@@ -155,7 +155,7 @@ describe('CI とクラウドで共有する e2e の実行', () => {
       assert.equal(env.LANG, 'C.UTF-8');
       assert.equal(env.LC_ALL, 'C.UTF-8');
     }
-    for (const locale of [{ LANG: 'en_US.UTF-8' }, { LC_ALL: 'ja_JP.UTF-8' }, { LC_CTYPE: 'POSIX' }]) {
+    for (const locale of [{ LANG: 'en_US.UTF-8' }, { LC_ALL: 'ja_JP.UTF-8' }, { LC_CTYPE: 'en_US.UTF-8' }]) {
       const env = e2eEnvironment('normal', locale);
       assert.deepEqual(
         { LANG: env.LANG, LC_ALL: env.LC_ALL, LC_CTYPE: env.LC_CTYPE },
