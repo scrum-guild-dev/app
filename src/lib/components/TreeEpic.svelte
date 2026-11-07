@@ -10,7 +10,7 @@
   import RowMenu, { type RowMenuItem } from './RowMenu.svelte';
 
   // kit.js の treeEpic（バックログの木のエピックの行と、配下）。行の組み方は TreeStory と同じで、開閉は左端の caret のボタンだけが受け持ち、
-  // 題はリンクで、押すとエピックの引き出し（`?epic=<ID>`。EpicDrawer）を開く（引き出しの下から、エピックの画面へ移れる）。開閉の状態は部品の中に持ち、expand() で開ける（ストーリーを移してきたときに開く）。
+  // 題はリンクで、押すとエピックの引き出し（`?epic_id=<ID>`。EpicDrawer）を開く（引き出しの下から、エピックの画面へ移れる）。開閉の状態は部品の中に持ち、expand() で開ける（ストーリーを移してきたときに開く）。
   // 右端は配下のポイントの「完了 / 全体」（pointsDone と pointsAll は、画面が足した行と完了にした行の分を含む合計）。
   // 完了（クリア）か中止したエピックには、その状態の印を添え、期日には色を付けない。
   // 配下のストーリーの行は children の snippet で描く（ストーリーの操作は画面の側が持つ）。empty が真なら「<ストーリー>はまだありません」を出す。
@@ -45,7 +45,7 @@
     canMoveDown?: boolean;
     onMove?: (epic: BacklogEpic, delta: -1 | 1) => void;
     dnd?: BacklogDnd;
-    // 題のリンクの行き先（画面が、今の絞り込みを残して `?epic=<ID>` を付けた経路）
+    // 題のリンクの行き先（画面が、今の絞り込みを残して `?epic_id=<ID>` を付けた経路）
     href: string;
     children: Snippet;
     // 配下の末尾に置く空の行（ストーリーを足す）。完了か中止したエピックには置かない
@@ -118,7 +118,7 @@
     <span class="kind is-epic" title={t('epic')}><Icon name="flag" /></span>
     <span class="tree-title">
       <!-- 押しても、一覧のスクロールとフォーカスの位置は動かさない（引き出しが閉じたとき、data-epic-id で探してフォーカスを戻す） -->
-      <!-- eslint-disable svelte/no-navigation-without-resolve -- href は画面が resolve した経路に ?epic=<ID> を足したもの -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- href は画面が resolve した経路に ?epic_id=<ID> を足したもの -->
       <a class="tree-link" {href} data-epic-id={epic.id} data-sveltekit-reset="false">{epic.title}</a>
       <!-- eslint-enable svelte/no-navigation-without-resolve -->
       <!-- 区分はエピックに振ったものを出す（配下のストーリーとタスクは引き継ぐので、繰り返さない） -->

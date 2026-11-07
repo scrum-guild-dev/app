@@ -50,7 +50,7 @@ test('ストーリーの引き出しの「⋯」のメニューを開いた状�
 
 // エピックの引き出し。⋯のメニューを閉じた状態と、開いた状態（role="menu" の一覧）の両方を測る
 test('エピックの引き出しを開いた状態に axe の違反が無い', async ({ page }) => {
-  await page.goto(`${WORKSPACE}?epic=${EPIC_ID}`);
+  await page.goto(`${WORKSPACE}?epic_id=${EPIC_ID}`);
   const drawer = page.getByRole('dialog', { name: EPIC_TITLE });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();
@@ -60,7 +60,7 @@ test('エピックの引き出しを開いた状態に axe の違反が無い', 
 });
 
 test('エピックの引き出しの「⋯」のメニューを開いた状態に axe の違反が無い', async ({ page }) => {
-  await page.goto(`${WORKSPACE}?epic=${EPIC_ID}`);
+  await page.goto(`${WORKSPACE}?epic_id=${EPIC_ID}`);
   const drawer = page.getByRole('dialog', { name: EPIC_TITLE });
   await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();
   await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);

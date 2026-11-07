@@ -59,7 +59,7 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   await page.getByRole('link', { name: 'ポイント制度を公開する', exact: true }).click();
   const drawer = page.getByRole('dialog', { name: 'ポイント制度を公開する', exact: true });
   await expect(drawer).toBeVisible();
-  await expect(page).toHaveURL(/\?epic=[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\?epic_id=[0-9a-f-]{36}$/);
   const bodySaved = waitForResponses(page, '/epic-update');
   await drawer.getByRole('button', { name: '本文を書く' }).click();
   const bodyBox = drawer.getByRole('textbox', { name: '本文' });

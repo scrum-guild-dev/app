@@ -90,11 +90,11 @@
   });
   // 行のリンクの問い合わせ（今の絞り込みを残して task を足す）。行ごとに作らず、ここで1回だけ組み、行は task の値だけを足す
   // タスク、ストーリー、エピックの引き出しは同時に開かないので、開くリンクは、もう一方の問い合わせを外す
-  function queryBase(key: 'task' | 'story' | 'epic'): string {
+  function queryBase(key: 'task' | 'story' | 'epic_id'): string {
     const query = new SvelteURLSearchParams(page.url.search);
     query.delete('task');
     query.delete('story');
-    query.delete('epic');
+    query.delete('epic_id');
     const rest = query.toString();
     return rest === '' ? `?${key}=` : `?${rest}&${key}=`;
   }
@@ -105,7 +105,7 @@
   );
   // エピックの題のリンク（今の絞り込みを残して epic を足す）
   const epicHrefBase = $derived(
-    `${resolve('/[slug]/w/[id]', { slug: page.params.slug ?? '', id: page.params.id ?? '' })}${queryBase('epic')}`,
+    `${resolve('/[slug]/w/[id]', { slug: page.params.slug ?? '', id: page.params.id ?? '' })}${queryBase('epic_id')}`,
   );
   // 親のない完了の件数。絞っているときは返らない（null）ので 0 として扱い、折りたたみの1行を出さない
   const rootDone = $derived(tree?.completed_count ?? 0);
@@ -553,7 +553,11 @@
 
   // 絞っているときに作ったものを、読み直した木で探す。あれば作ったことを知らせ（ダイアログは、絞っている間は作った知らせを出さない）、
   // 無ければ（絞り込みに当たらなければ）、作った知らせの代わりに「表示していません」を、絞り込みを外す操作と一緒に知らせる
-  async function revealOrNotice(kind: 'task' | 'story' | 'epic', id: string, createdMessage: string): Promise<boolean> {
+  async function revealOrNotice(
+    kind: 'task' | 'story' | 'epic',
+    id: string,
+    createdMessage: string,
+  ): Promise<boolean> {
     await tick();
     if (data.tree === null || treeHas(kind, id)) {
       showToast(createdMessage, 'check');

@@ -27,7 +27,7 @@ test('木のエピックの題を押すと引き出しが開き、タイトル�
   // タイトルを直すと引き出しの名前も替わるので、枠そのもので指す
   const drawer = page.locator('.drawer');
   await expect(drawer).toHaveAttribute('aria-modal', 'true');
-  await expect(page).toHaveURL(/\?epic=[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\?epic_id=[0-9a-f-]{36}$/);
   await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();
   // 保存のボタンは無い。書いていない本文は「まだ書かれていません」
   await expect(drawer.getByRole('button', { name: '保存', exact: true })).toHaveCount(0);
@@ -75,12 +75,12 @@ test('木のエピックの題を押すと引き出しが開き、タイトル�
   // 閉じると URL から epic が外れ、フォーカスは題のリンクへ戻る。木の行に期日が出る
   await page.keyboard.press('Escape');
   await expect(drawer).toBeHidden();
-  await expect(page).not.toHaveURL(/\?epic=/);
+  await expect(page).not.toHaveURL(/\?epic_id=/);
   const row = page.locator('.tree-row.is-epic', { hasText: '会員ポイント制度を春に公開する' });
   await expect(row.getByRole('link', { name: '会員ポイント制度を春に公開する', exact: true })).toBeFocused();
-  await expect(row.locator('.chip')).toHaveText('03/31');
+  await expect(row.locator('.chip')).toHaveText('3/31');
 
-  // 読み直しても同じ。URL の ?epic= だけで引き出しが開く
+  // 読み直しても同じ。URL の ?epic_id= だけで引き出しが開く
   await page.reload();
   await row.getByRole('link', { name: '会員ポイント制度を春に公開する', exact: true }).click();
   const reopened = page.getByRole('dialog', { name: '会員ポイント制度を春に公開する', exact: true });

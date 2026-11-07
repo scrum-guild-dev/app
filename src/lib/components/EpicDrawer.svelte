@@ -30,7 +30,7 @@
   import RowMenu from './RowMenu.svelte';
   import TreeDeleteDialog from './TreeDeleteDialog.svelte';
 
-  // エピックの引き出しの中身（StoryDrawer のエピック版）。`?epic=<ID>` が付いている間、ワークスペースの枠（/[slug]/w/[id] のレイアウト）が置く。
+  // エピックの引き出しの中身（StoryDrawer のエピック版）。`?epic_id=<ID>` が付いている間、ワークスペースの枠（/[slug]/w/[id] のレイアウト）が置く。
   // 木のエピックの題と、エピックの画面の「<エピック>を直す」から開く。開いたら epic-get で1件を読む（本文は長いので、木には載せない）。
   // 読んでいる間は読み込み中を出し、読めなければ（404 以外）もう一度試すを出す（フォーカスもそこへ置く）。404 は、トーストで知らせて閉じ、画面が木を読み直す（onremoved）。
   // 欄ごとに、その場で直す。タイトル、本文、リンクは AutoSaveEdit（押したら書け、欄を離れるか手を止めると保存する。本文は Markdown の描画）。
@@ -74,7 +74,7 @@
     clock: { today: string; weekStart: number } | null;
     // エピックがクリアか中止している（画面が木から渡す。期日の印に色を付けない）。木に無ければ偽
     finished: boolean;
-    // 閉じる。画面の枠が `?epic=` を外し、フォーカスを行へ戻す
+    // 閉じる。画面の枠が `?epic_id=` を外し、フォーカスを行へ戻す
     onclose: () => void;
     // 欄を保存した。画面が木とエピックの画面を読み直す。読み直しが終わるまで待てる値を返してよい
     onchanged: () => Promise<void> | void;
@@ -286,7 +286,7 @@
       onstale();
       return;
     }
-    // 400 は、URL の `?epic=` が ID の形でないとき。見つからないのと同じに扱う
+    // 400 は、URL の `?epic_id=` が ID の形でないとき。見つからないのと同じに扱う
     if (result.status === 404 || result.status === 400) {
       gone();
       return;
@@ -360,7 +360,7 @@
     if (
       to.origin === location.origin &&
       to.pathname === location.pathname &&
-      to.searchParams.get('epic') === openedId
+      to.searchParams.get('epic_id') === openedId
     ) {
       return;
     }

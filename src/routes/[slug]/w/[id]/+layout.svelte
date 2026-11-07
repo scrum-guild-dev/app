@@ -58,7 +58,7 @@
   const storyId = $derived(page.params.taskId || taskId !== null ? null : page.url.searchParams.get('story'));
   // エピックの引き出しも、タスクとストーリーの引き出しと同時には開かない（付いていれば、そちらを開く）
   const epicId = $derived(
-    page.params.taskId || taskId !== null || storyId !== null ? null : page.url.searchParams.get('epic'),
+    page.params.taskId || taskId !== null || storyId !== null ? null : page.url.searchParams.get('epic_id'),
   );
   let modeRevision = $state(0);
   const overlayMode = $derived(drawerState.mode === 'center' ? 'center' : 'side');
@@ -103,7 +103,7 @@
     const rest = new SvelteURLSearchParams(page.url.search);
     rest.delete('task');
     rest.delete('story');
-    rest.delete('epic');
+    rest.delete('epic_id');
     const query = rest.size > 0 ? `?${rest}` : '';
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路（page.url.pathname）に、残すクエリだけを足している
     return goto(page.url.pathname + query, {
@@ -173,7 +173,7 @@
   const withoutStory = () => {
     const rest = new SvelteURLSearchParams(page.url.search);
     rest.delete('story');
-    rest.delete('epic');
+    rest.delete('epic_id');
     const query = rest.size > 0 ? `?${rest}` : '';
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路（page.url.pathname）に、残すクエリだけを足している
     return goto(page.url.pathname + query, { replace: true, reset: false });
@@ -223,7 +223,7 @@
   // 今の URL から `epic` だけを外した画面
   const withoutEpic = () => {
     const rest = new SvelteURLSearchParams(page.url.search);
-    rest.delete('epic');
+    rest.delete('epic_id');
     const query = rest.size > 0 ? `?${rest}` : '';
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路（page.url.pathname）に、残すクエリだけを足している
     return goto(page.url.pathname + query, { replace: true, reset: false });
@@ -235,7 +235,7 @@
   }
 
   // 閉じたら、開いた題（data-epic-id を持つリンクかボタン）へフォーカスを戻す。無ければ（畳んだ枝の中も含む）画面の見出しへ移す。
-  // 戻る／進むで `?epic=` が外れて閉じたときも同じ。エピックが消えて閉じたときは、読み直した後に見出しへ移す（removedEpic）
+  // 戻る／進むで `?epic_id=` が外れて閉じたときも同じ。エピックが消えて閉じたときは、読み直した後に見出しへ移す（removedEpic）
   let shownEpicId: string | null = null;
   let focusEpicAfterReload = false;
   $effect(() => {

@@ -43,7 +43,7 @@
   // 依頼主とリーダー（can_manage）には、討伐隊の面の下に「<クリア>」と「<完了>を取り消す」の面も出す（クリアできない理由は押せない操作の横に出し、
   // 配下のストーリーの完了から数える）。クリアしたら演出（ClearCelebration。動きを減らす設定ではトーストだけ）、取り消しには演出を出さない。
   // 中止、添付ファイルは、後の Issue で足す。
-  // 見出しの横の「直す」は、エピックの引き出し（EpicDrawer。`?epic=<ID>`。ワークスペースの枠が置く）を開く。書き込めるときだけ出し、終了したワークスペースでは出さない
+  // 見出しの横の「直す」は、エピックの引き出し（EpicDrawer。`?epic_id=<ID>`。ワークスペースの枠が置く）を開く。書き込めるときだけ出し、終了したワークスペースでは出さない
   // （引き出しの欄は、この画面がすべて読み取りで出している）。直したら画面の値を読み直し（引き出しが `app:epic-detail` を読み直す）、
   // 削除したか消えていたらバックログへ戻る（枠が戻す）。
   // 無いエピック（別の組織、別のワークスペース、削除済み）は「見つかりません」、読めなかったときは読み込みの失敗を出す。
@@ -66,8 +66,8 @@
   const reloading = $derived(
     refreshing || (navigating.to !== null && navigating.to.url.pathname === page.url.pathname),
   );
-  // 「<エピック>を直す」は、引き出しを開く（今の画面の上に `?epic=<ID>` を足す）
-  const editHref = $derived(`${page.url.pathname}?epic=${encodeURIComponent(page.params.epicId ?? '')}`);
+  // 「<エピック>を直す」は、引き出しを開く（今の画面の上に `?epic_id=<ID>` を足す）
+  const editHref = $derived(`${page.url.pathname}?epic_id=${encodeURIComponent(page.params.epicId ?? '')}`);
   const backlogHref = $derived(resolve('/[slug]/w/[id]', { slug, id: page.params.id ?? '' }));
   const finished = $derived(detail !== null && (detail.epic.completed_at !== null || detail.epic.canceled_at !== null));
 
@@ -288,8 +288,8 @@
   {#snippet actions()}
     {@render backLink()}
     {#if canWrite}
-      <!-- 引き出しはワークスペースの枠が置く（`?epic=<ID>`）。閉じたら、このリンクへフォーカスを戻す -->
-      <!-- eslint-disable svelte/no-navigation-without-resolve -- href は resolve した経路に ?epic=<ID> を足したもの -->
+      <!-- 引き出しはワークスペースの枠が置く（`?epic_id=<ID>`）。閉じたら、このリンクへフォーカスを戻す -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- href は resolve した経路に ?epic_id=<ID> を足したもの -->
       <a class="btn" href={editHref} data-epic-id={epic.id} data-sveltekit-reset="false">
         <Icon name="pen" />{t('epicPageEdit', { epic: t('epic') })}
       </a>
