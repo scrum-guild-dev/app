@@ -249,6 +249,109 @@ export function backlogTree(issues, filter = {}) {
   return { epics, orphans, totals: built.reduce((sum, b) => addTotals(sum, b.kept), emptyTotals()) };
 }
 
+/**
+ * @typedef {{ number: number, title: string, s: State | 'blocked', outside: boolean, blocking: boolean,
+ *   holds: number, layer: number, row: number }} GraphNode
+ * @typedef {{ from: number, to: number, waiting: boolean }} GraphEdge
+ */
+
+/**
+ * スプリントの Issue の依存関係を、先に要るものを左、待つ側を右の層に並べる。
+ * 辺は今のスプリントの Issue の deps から引き、スプリントの外の前提も節に入れる。
+ * blocking は、まだ誰かを待たせている（ある Issue の waitingOn に入る）節。
+ * holds は、その節から辿れる済み以外の Issue の数（先に要るものがどれだけを止めうるか）
+ * @param {BoardIssue[]} issues
+ * @param {number} n
+ * @returns {{ nodes: GraphNode[], edges: GraphEdge[], layers: number, rows: number }}
+ */
+export function dependencyGraph(issues, n) {
+  const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
+  /** @type {GraphEdge[]} */
+  const edges = [];
+  for (const issue of issues) {
+    if (issue.sprint !== n) continue;
+    for (const dep of issue.deps) edges.push({ from: dep, to: issue.number, waiting: issue.waitingOn.includes(dep) });
+  }
+  const numbers = [...new Set(edges.flatMap((e) => [e.from, e.to]))].toSorted((a, b) => a - b);
+  /** @type {Map<number, number[]>} */
+  const preds = new Map(numbers.map((num) => [num, []]));
+  /** @type {Map<number, number[]>} */
+  const succs = new Map(numbers.map((num) => [num, []]));
+  for (const e of edges) {
+    preds.get(e.to)?.push(e.from);
+    succs.get(e.from)?.push(e.to);
+  }
+
+  // 輪があっても止まるよう、たどっている途中の節は 0 とみなす
+  /** @type {Map<number, number>} */
+  const layerOf = new Map();
+  const visiting = new Set();
+  /**
+   * @param {number} num
+   * @returns {number}
+   */
+  const layer = (num) => {
+    const known = layerOf.get(num);
+    if (known !== undefined) return known;
+    if (visiting.has(num)) return 0;
+    visiting.add(num);
+    /** @type {number} */
+    const value = Math.max(-1, ...(preds.get(num) ?? []).map(layer)) + 1;
+    visiting.delete(num);
+    layerOf.set(num, value);
+    return value;
+  };
+  numbers.forEach(layer);
+
+  // data.json に無い前提（not_planned などで閉じたもの）は済みとして描く
+  const stateOf = (/** @type {number} */ num) => {
+    const issue = byNumber.get(num);
+    return issue ? displayState(issue) : 'done';
+  };
+  const holds = (/** @type {number} */ num) => {
+    const seen = new Set();
+    const stack = [...(succs.get(num) ?? [])];
+    while (stack.length > 0) {
+      const next = /** @type {number} */ (stack.pop());
+      if (seen.has(next)) continue;
+      seen.add(next);
+      stack.push(...(succs.get(next) ?? []));
+    }
+    return [...seen].filter((reached) => stateOf(reached) !== 'done').length;
+  };
+  const blockers = new Set(edges.filter((e) => e.waiting).map((e) => e.from));
+
+  const layers = numbers.length === 0 ? 0 : Math.max(...layerOf.values()) + 1;
+  /** @type {Map<number, number>} */
+  const rowOf = new Map();
+  let rows = 0;
+  for (let l = 0; l < layers; l += 1) {
+    const inLayer = numbers.filter((num) => layerOf.get(num) === l);
+    // 前の層の並びの平均に寄せ、線の交差を減らす。前提の無い節は番号の順で後ろに置く
+    const weight = (/** @type {number} */ num) => {
+      const placed = (preds.get(num) ?? []).map((p) => rowOf.get(p)).filter((r) => r !== undefined);
+      return placed.length === 0 ? Number.MAX_SAFE_INTEGER : placed.reduce((a, b) => a + b, 0) / placed.length;
+    };
+    inLayer.toSorted((a, b) => weight(a) - weight(b) || a - b).forEach((num, i) => rowOf.set(num, i));
+    rows = Math.max(rows, inLayer.length);
+  }
+
+  const nodes = numbers.map((num) => {
+    const issue = byNumber.get(num);
+    return {
+      number: num,
+      title: issue?.title ?? '',
+      s: stateOf(num),
+      outside: issue?.sprint !== n,
+      blocking: blockers.has(num),
+      holds: holds(num),
+      layer: /** @type {number} */ (layerOf.get(num)),
+      row: /** @type {number} */ (rowOf.get(num)),
+    };
+  });
+  return { nodes, edges, layers, rows };
+}
+
 /** 作る場所の一覧（絞り込みのボタン用）。issues に現れる area を昇順で */
 export function areasOf(/** @type {BoardIssue[]} */ issues) {
   return [...new Set(issues.flatMap((issue) => issue.areas))].toSorted();

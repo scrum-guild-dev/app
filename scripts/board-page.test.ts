@@ -5,6 +5,7 @@ import {
   areasOf,
   backlogTree,
   daysLeft,
+  dependencyGraph,
   displayState,
   featurePhase,
   featureState,
@@ -644,5 +645,85 @@ describe('normalizeFeatures', () => {
     assert.ok(feature);
     assert.equal(featureState(feature, []).key, 'none');
     assert.equal(featurePhase(feature), 'first');
+  });
+});
+
+describe('dependencyGraph', () => {
+  // 1 ─▶ 2 ─▶ 4、1 ─▶ 3、5（済み・スプリントの外）─▶ 3
+  const issues = [
+    card(1, { sprint: 2 }),
+    card(2, { sprint: 2, deps: [1], waitingOn: [1] }),
+    card(3, { sprint: 2, deps: [1, 5], waitingOn: [1] }),
+    card(4, { sprint: 2, deps: [2], waitingOn: [2] }),
+    card(5, { s: 'done' }),
+    card(6, { sprint: 2 }),
+    card(7, { sprint: 1, deps: [6], waitingOn: [6] }),
+  ];
+  const graph = dependencyGraph(issues, 2);
+  const node = (n: number) => {
+    const found = graph.nodes.find((x) => x.number === n);
+    assert.ok(found, `#${n} の節が無い`);
+    return found;
+  };
+
+  test('今のスプリントの Issue の deps だけを辺にし、外の前提も節に入れる', () => {
+    assert.deepEqual(graph.edges.map((e) => `${e.from}->${e.to}:${e.waiting}`).toSorted(), [
+      '1->2:true',
+      '1->3:true',
+      '2->4:true',
+      '5->3:false',
+    ]);
+    assert.deepEqual(
+      graph.nodes.map((x) => x.number),
+      [1, 2, 3, 4, 5],
+    );
+    assert.equal(node(5).outside, true);
+    assert.equal(node(1).outside, false);
+  });
+
+  test('先に要るものを左の層に置く', () => {
+    assert.equal(graph.layers, 3);
+    assert.deepEqual(
+      [1, 2, 3, 4, 5].map((n) => node(n).layer),
+      [0, 1, 1, 2, 0],
+    );
+  });
+
+  test('層の中は前の層の並びに寄せ、前提の無い節は後ろに置く', () => {
+    assert.equal(node(1).row, 0);
+    assert.equal(node(5).row, 1);
+    // 3 は 1（0 段）と 5（1 段）の平均 0.5、2 は 1 だけで 0
+    assert.equal(node(2).row, 0);
+    assert.equal(node(3).row, 1);
+    assert.equal(graph.rows, 2);
+  });
+
+  test('待たせている節を先に要るものとし、辿れる済み以外の数を止めている数にする', () => {
+    assert.equal(node(1).blocking, true);
+    assert.equal(node(1).holds, 3);
+    assert.equal(node(2).blocking, true);
+    assert.equal(node(2).holds, 1);
+    assert.equal(node(5).blocking, false);
+    assert.equal(node(4).blocking, false);
+    assert.equal(node(4).holds, 0);
+  });
+
+  test('待ちの節は blocked、data に無い前提は済みとして出す', () => {
+    assert.equal(node(2).s, 'blocked');
+    const missing = dependencyGraph([card(1, { sprint: 2, deps: [99] })], 2);
+    assert.equal(missing.nodes.find((x) => x.number === 99)?.s, 'done');
+  });
+
+  test('依存関係が無ければ空で、層も行も 0', () => {
+    assert.deepEqual(dependencyGraph([card(1, { sprint: 2 })], 2), { nodes: [], edges: [], layers: 0, rows: 0 });
+  });
+
+  test('輪になっていても止まる', () => {
+    const cyclic = dependencyGraph(
+      [card(1, { sprint: 2, deps: [2], waitingOn: [2] }), card(2, { sprint: 2, deps: [1], waitingOn: [1] })],
+      2,
+    );
+    assert.equal(cyclic.nodes.length, 2);
+    assert.equal(cyclic.edges.length, 2);
   });
 });

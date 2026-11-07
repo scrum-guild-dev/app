@@ -181,6 +181,36 @@ ul.plain { margin: 0; padding-left: 1.2em; color: var(--muted); }
 .accepted { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .accepted li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 
+/* 依存関係のグラフ。幅が足りなければ枠の中で横に送る（ページは横に送らない） */
+.dg-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; }
+.dg-scroll svg { display: block; }
+.dg-node rect.box { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.dg-node text { fill: var(--fg); font-family: var(--font-body); font-size: 12px; }
+.dg-node text.num { font-family: var(--font-mono); font-weight: 600; }
+.dg-node text.state { fill: var(--muted); font-size: 11px; }
+.dg-node.waiting rect.box { stroke-dasharray: 4 3; stroke: var(--edge); }
+.dg-node.settled { opacity: 0.5; }
+.dg-node.settled rect.box { fill: var(--sunken); }
+.dg-node.blocking rect.box { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 3; }
+.dg-node.blocking text.num { fill: var(--warn); }
+.dg-node rect.badge { fill: var(--warn); }
+.dg-node text.badge { fill: var(--surface); font-size: 11px; font-weight: 700; }
+.dg-node:hover rect.box { stroke: var(--accent); }
+.dg-node:focus-visible { outline: none; }
+.dg-node:focus-visible rect.box { stroke: var(--accent); stroke-width: 3; }
+.dg-edge { fill: none; stroke: var(--edge); stroke-width: 1; stroke-dasharray: 4 3; }
+.dg-edge.waiting { stroke: var(--warn); stroke-width: 2; stroke-dasharray: none; }
+.dg-arrow { fill: var(--edge); }
+.dg-arrow.waiting { fill: var(--warn); }
+.blockers { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.blockers li { display: inline-flex; align-items: center; gap: 6px; background: var(--warn-soft); color: var(--warn); border: 2px solid var(--warn); border-radius: var(--radius); padding: 3px 9px; font-weight: 700; font-size: 12px; }
+.blockers li a { color: inherit; font-family: var(--font-mono); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); margin: 0; }
+.legend span::before { display: inline-block; content: ""; width: 18px; height: 0; margin-right: 6px; vertical-align: middle; }
+.legend .l-wait::before { border-top: 2px solid var(--warn); }
+.legend .l-done::before { border-top: 1px dashed var(--edge); }
+.legend .l-block::before { width: 12px; height: 10px; border: 2px solid var(--warn); background: var(--warn-soft); border-radius: 2px; }
+
 @media (max-width: 520px) {
   h1 { font-size: 20px; }
   .feature { grid-template-columns: minmax(0, 1fr); }
@@ -220,6 +250,7 @@ try {
 const {
   areasOf,
   backlogTree,
+  dependencyGraph,
   daysLeft,
   displayState,
   featurePhase,
@@ -425,6 +456,124 @@ function kanban(sprint, issues) {
   );
 }
 
+/* 依存関係のグラフ */
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const DG = { w: 236, h: 56, gapX: 56, gapY: 12, pad: 6, titleChars: 16 };
+
+// 題などの文字列は textContent で入れる（el と同じく、< などが入っても崩れない）
+function svg(tag, attrs = {}, ...kids) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [name, value] of Object.entries(attrs)) {
+    if (value === null || value === undefined) continue;
+    node.setAttribute(name, String(value));
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined) continue;
+    node.append(typeof kid === 'string' ? document.createTextNode(kid) : kid);
+  }
+  return node;
+}
+
+const clip = (text, max) => ([...text].length > max ? `${[...text].slice(0, max - 1).join('')}…` : text);
+const nodeX = (node) => DG.pad + node.layer * (DG.w + DG.gapX);
+const nodeY = (node) => DG.pad + node.row * (DG.h + DG.gapY);
+
+function graphNode(node) {
+  const settled = node.s === 'done' || node.s === 'accept';
+  const classes = ['dg-node', node.blocking && 'blocking', node.s === 'blocked' && 'waiting', settled && !node.blocking && 'settled']
+    .filter(Boolean)
+    .join(' ');
+  const where = node.outside ? 'スプリントの外・' : '';
+  const label = `#${node.number} ${node.title}（${where}${STATE_LABELS[node.s]}${node.blocking ? `、${node.holds}件を止めている` : ''}）`;
+  const x = nodeX(node);
+  const y = nodeY(node);
+  const badgeText = `止めている ${node.holds}件`;
+  const badgeW = 14 + [...badgeText].length * 10;
+  return svg(
+    'a',
+    { class: classes, href: issueUrl(node.number), target: '_blank', rel: 'noopener', 'aria-label': label },
+    svg('title', {}, label),
+    svg('rect', { class: 'box', x, y, width: DG.w, height: DG.h, rx: 6 }),
+    svg('text', { class: 'num', x: x + 10, y: y + 20 }, `#${node.number}`),
+    svg('text', { class: 'state', x: x + 56, y: y + 20 }, `${where}${STATE_LABELS[node.s]}`),
+    node.blocking
+      ? [
+          svg('rect', { class: 'badge', x: x + DG.w - badgeW - 6, y: y + 7, width: badgeW, height: 18, rx: 9 }),
+          svg('text', { class: 'badge', x: x + DG.w - badgeW / 2 - 6, y: y + 20, 'text-anchor': 'middle' }, badgeText),
+        ]
+      : null,
+    svg('text', { x: x + 10, y: y + 42 }, clip(node.title, DG.titleChars)),
+  );
+}
+
+function graphEdge(edge, byNumber) {
+  const from = byNumber.get(edge.from);
+  const to = byNumber.get(edge.to);
+  const x1 = nodeX(from) + DG.w;
+  const y1 = nodeY(from) + DG.h / 2;
+  const x2 = nodeX(to) - 2;
+  const y2 = nodeY(to) + DG.h / 2;
+  const c = DG.gapX / 2;
+  return svg('path', {
+    class: edge.waiting ? 'dg-edge waiting' : 'dg-edge',
+    d: `M${x1},${y1} C${x1 + c},${y1} ${x2 - c},${y2} ${x2},${y2}`,
+    'marker-end': edge.waiting ? 'url(#dg-arrow-wait)' : 'url(#dg-arrow)',
+  });
+}
+
+function dependencyBlock(sprint, issues) {
+  const graph = dependencyGraph(issues, sprint.n);
+  const heading = el('h2', {}, '依存関係');
+  if (graph.edges.length === 0) {
+    return el('div', { class: 'block' }, heading, el('div', { class: 'empty' }, 'このスプリントの Issue に、登録された依存関係は無い。'));
+  }
+  const byNumber = new Map(graph.nodes.map((node) => [node.number, node]));
+  const width = DG.pad * 2 + graph.layers * DG.w + (graph.layers - 1) * DG.gapX;
+  const height = DG.pad * 2 + graph.rows * DG.h + (graph.rows - 1) * DG.gapY;
+  const marker = (id, cls) =>
+    svg(
+      'marker',
+      { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' },
+      svg('path', { class: cls, d: 'M0,0 L10,5 L0,10 z' }),
+    );
+  const chart = svg(
+    'svg',
+    { width, height, viewBox: `0 0 ${width} ${height}`, role: 'group', 'aria-label': '依存関係のグラフ。左が先に要るもの、右が待つ側' },
+    svg('defs', {}, marker('dg-arrow', 'dg-arrow'), marker('dg-arrow-wait', 'dg-arrow waiting')),
+    // 待たせている線を後に描き、済んだ前提の線の上に重ねる
+    graph.edges.filter((e) => !e.waiting).map((e) => graphEdge(e, byNumber)),
+    graph.edges.filter((e) => e.waiting).map((e) => graphEdge(e, byNumber)),
+    graph.nodes.map(graphNode),
+  );
+  const blockers = graph.nodes.filter((node) => node.blocking).toSorted((a, b) => b.holds - a.holds || a.number - b.number);
+  return el(
+    'div',
+    { class: 'block' },
+    heading,
+    blockers.length === 0
+      ? el('p', { class: 'note' }, 'まだ済んでいない先に要るものは無い。')
+      : el(
+          'div',
+          { class: 'block' },
+          el('h3', {}, '先に要るもの（止めている数の多い順）'),
+          el(
+            'ul',
+            { class: 'blockers' },
+            blockers.map((node) => el('li', {}, issueLink(node.number, ''), `${STATE_LABELS[node.s]}・${node.holds}件を止めている`)),
+          ),
+        ),
+    el('div', { class: 'dg-scroll' }, chart),
+    el(
+      'p',
+      { class: 'legend' },
+      el('span', { class: 'l-block' }, '先に要るもの（まだ済んでいない）'),
+      el('span', { class: 'l-wait' }, '待たせている'),
+      el('span', { class: 'l-done' }, '済んだか受け入れ待ちの前提'),
+    ),
+  );
+}
+
 function renderSprint({ sprint, issues, asOf }) {
   if (!sprint) {
     return el(
@@ -438,6 +587,7 @@ function renderSprint({ sprint, issues, asOf }) {
     'div',
     { class: 'view' },
     el('div', { class: 'panels' }, sprintHeader(sprint, asOf), planBarBlock(sprint, issues), sprintStats(sprint)),
+    dependencyBlock(sprint, issues),
     el('div', { class: 'block' }, el('h2', {}, 'かんばん'), kanban(sprint, issues)),
   );
 }
