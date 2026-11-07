@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { resolvedCategorySchema } from '../definition/definition.ts';
 
-// ストーリーのダイアログが出す項目。作る操作と変える操作が、書いた後の値として返す
+// ストーリーの引き出し（読む、直す）と、作るダイアログが出す項目。作る操作と変える操作が、書いた後の値として返す
 export const storyDetailSchema = z.object({
   id: z.string(),
   title: z.string(),

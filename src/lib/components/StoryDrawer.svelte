@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { beforeNavigate, goto } from '$app/navigation';
   import {
     storyComplete,
@@ -55,8 +55,10 @@
   // 受け入れ基準と本文は Markdown の描画）。期日と区分は選んだら（期日は年が4桁そろった値だけを、少し待ってから、か欄を離れる／Enter で、
   // 区分は少し待ってから、か欄を離れたときに）保存する。送る欄は今の値と違うものだけで、保存したら、その欄だけを応答で入れ替え、
   // 画面が木を読み直す（onchanged。枠の読み直しが一時的に失敗しても、引き出しと書きかけを失わないため、木だけ）。
-  // 自動保存の欄は、書き始めた時点の値（bases）を expected に添えて送る。先にほかの人が同じ欄を直していたら（409 の stale）、保存せずに
-  // 今の値を並べて知らせ、書いた分は欄に残す（TaskDrawer と同じ。次の保存は、今の値を読んだものとして送る）。
+  // 自動保存の欄と期日は、書き始めた時点の値（bases）を expected に添えて送る。先にほかの人が同じ欄を直していたら（409 の stale）、保存せずに
+  // 今の値を並べて知らせ、書いた分は欄に残す（TaskDrawer と同じ。次の保存は、今の値を読んだものとして送る。期日は、断られた値のままでは
+  // 欄を離れても送り直さず、Enter か値を替えたときに送る）。区分は expected が無く、後の保存が勝つ。
+  // 保存、完了、削除の宛先は、開いたときのストーリーの ID（openedId）。props の storyId は、閉じた後や前後へ移った後に替わる
   // ストーリーの受け入れ基準と本文には添付のファイルが無いので、Markdown の欄でなく、文字の欄にする
   // 区分は親のないストーリーだけが持つ。エピックの下のストーリーは、エピックの区分を「親から引き継ぎ」で読み取り専用に出す。
   // 閉じたワークスペース（canWrite が偽）では、直す口と操作を出さず、読み取り専用で開く。
@@ -65,9 +67,11 @@
   // 捨てるかをアプリの中のダイアログで確かめる。帯の前後のボタンと `[` `]` で前後のストーリーへ移るとき（開いた画面が順を渡したときだけ）も、同じ確認を挟む。
   // 閉じた後に返った保存の応答も、通ったら木を読み直してトーストで知らせ、失敗はトーストで知らせる（saveFields）。
   // 帯の「⋯」（RowMenu）に、親を移す（MoveParentDialog。親のエピックは画面が渡す。通ったら読み直す）と、削除（TreeDeleteDialog。
-  // 配下の扱いを選ぶ確認。配下が無ければ配下が無いことを出す）を置く。削除できない人（story-get の can_delete が偽）には、押せない理由を添える。
+  // 配下の扱いを選ぶ確認。配下が無ければ配下が無いことを出す）を置く。削除できない人（story-get の can_delete が偽）には、項目を出さず、
+  // 本文の下に理由を出す（タスクの引き出しと同じ。項目が1つも無ければ「⋯」も出さない）。
   // 消したら閉じ、トーストで知らせ、画面が木を読み直す（onremoved）。
   // 完了の帯は、木に載っているストーリーのときだけ出す（facts。story-get は完了の状態を返さないため、画面が木から渡す）。
+  // 木に載っていなければ（絞り込みの外、一覧の無い画面）、帯の位置に、操作を出せない理由を一文で出す。
   // 完了していなくて書けるときは「完了にする」（story-complete。確かめのダイアログは挟まない。配下の未完了のタスクが残るあいだと、
   // 親のエピックが完了か中止しているあいだは、木の行と同じく押せない理由を添えて aria-disabled）、
   // 完了していれば完了の印と日時と「取り消す」（story-reopen）。断られた理由は木の行と同じ文（completionFailureMessage）。
@@ -116,6 +120,10 @@
     onremoved: () => void;
   } = $props();
 
+  // この引き出しが開いたストーリーの ID。保存、完了、削除などの宛先は、props の storyId でなくこれを使う
+  // （props は親の URL から読むので、引き出しが外れた後は null、前後へ移った後は次のストーリーの ID になる。枠が ID ごとに置き直すので、開いている間は変わらない）
+  const openedId = untrack(() => storyId);
+
   const ids = $props.id();
   const titleLabelId = `${ids}-title`;
   const dueId = `${ids}-due`;
@@ -159,6 +167,10 @@
   // 期日の入力欄が、保存した値と同じ（同期済み）か、最後に送った値のときの文字。入力がこれと違えば、まだ送っていない入力がある
   let dueBase = '';
   let dueBoundTo: HTMLInputElement | undefined;
+  // ほかの人が先に直していて断られた。書いた値を欄に残す（commitDue が読んで下ろす）
+  let dueStale = false;
+  // 断られた値。同じ値のままでは、欄を離れても待っても送り直さない（Enter か、値を替えたときに送る）
+  let dueHeld: string | null = null;
   // ストーリーが消えていた。保存の続きを送らない
   let storyGone = false;
   let loadVersion = 0;
@@ -295,7 +307,7 @@
     stepFocus = null;
     const mine = ++loadVersion;
     loadState = 'loading';
-    const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: storyId }, { slug });
+    const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: openedId }, { slug });
     if (!alive || mine !== loadVersion) return;
     if (result.ok) {
       story = result.data.story;
@@ -348,7 +360,7 @@
 
   // 今の値を読み直す。読めなければ今の表示のまま（null）
   async function refresh(): Promise<StoryDetail | null> {
-    const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: storyId }, { slug });
+    const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: openedId }, { slug });
     if (!result.ok) return null;
     if (alive) {
       story = result.data.story;
@@ -418,7 +430,7 @@
     if (
       to.origin === location.origin &&
       to.pathname === location.pathname &&
-      to.searchParams.get('story') === storyId
+      to.searchParams.get('story') === openedId
     ) {
       return;
     }
@@ -444,19 +456,31 @@
   // 書き始めた時点の値（保存の expected）。直している間に読み直しで別の人の値が入っても、黙って上書きしない。
   // 断られて読み直した後は、今の値に置き換える（読み直した内容を知らせた上で、続けて書くと上書きする）。
   // 空は空の文字（expected は入力の形）。書き始めていなければ undefined で、そのときは保存の時点の値を使う
-  type Expected = { title?: string; acceptance_criteria_md?: string; body_md?: string; link_url?: string };
+  // 期日は、空を null で表す（story-update の expected の形）。期日の入力欄が保存した値に合わせるたびに、その値へ更新する（syncDue）
+  type Expected = {
+    title?: string;
+    acceptance_criteria_md?: string;
+    body_md?: string;
+    link_url?: string;
+    due_on?: string | null;
+  };
   const bases: Expected = {};
   const AUTOSAVED = ['title', 'acceptance_criteria_md', 'body_md', 'link_url'] as const;
 
   // 欄を書く。成功なら null、失敗ならエラーの文。404 は閉じる側へ回す（文は返さず、storyGone を立てる）。
   // 引き出しが閉じた後に返った応答も、黙って捨てない: 通ったら木を読み直してトーストで知らせ、失敗はトーストで知らせる（画面の状態は触らない）。
-  // 自動保存の欄（expected を添える）は、保存の状態を欄の横に出すので、画面が残っている間はトーストを出さない
-  async function saveFields(fields: Fields, expected?: Expected): Promise<string | null> {
+  // 自動保存の欄（AutoSaveEdit。inline が真）は、保存の状態を欄の横に出すので、画面が残っている間はトーストを出さない。
+  // 期日は expected を添えるが、欄の横の状態は無いので、区分と同じくトーストで知らせる（inline を偽にする）
+  async function saveFields(
+    fields: Fields,
+    expected?: Expected,
+    inline: boolean = expected !== undefined,
+  ): Promise<string | null> {
     const result = await callOperation(
       storyUpdate,
       {
         workspace_id: workspaceId,
-        story_id: storyId,
+        story_id: openedId,
         ...fields,
         ...(expected === undefined ? {} : { expected }),
       },
@@ -475,7 +499,7 @@
       if (expected !== undefined) {
         for (const key of AUTOSAVED) if (key in fields) bases[key] = fields[key] ?? '';
       }
-      if (expected === undefined || !alive) showToast(t('taskSaved'), 'check');
+      if (!inline || !alive) showToast(t('taskSaved'), 'check');
       void onchanged();
       return null;
     }
@@ -508,8 +532,8 @@
     } else {
       message = result.status === 400 ? t('storyBadRequest') : t('taskSaveFailed');
     }
-    // 自動保存の欄（expected を添える）は、閉じた後の失敗を AutoSaveEdit がトーストで知らせる
-    if (!alive && expected === undefined) showToast(message, 'alert');
+    // 自動保存の欄（inline）は、閉じた後の失敗を AutoSaveEdit がトーストで知らせる
+    if (!alive && !inline) showToast(message, 'alert');
     return message;
   }
 
@@ -526,6 +550,12 @@
         const now = stale[key];
         bases[key] = typeof now === 'string' ? now : '';
         return t('taskFieldStale', { current: excerpt(typeof now === 'string' ? now : '') });
+      }
+      if ('due_on' in stale) {
+        const now = typeof stale.due_on === 'string' ? stale.due_on : null;
+        bases.due_on = now;
+        dueStale = true;
+        return t('taskFieldStale', { current: now ?? t('dueUnset', { due: t('due') }) });
       }
     }
     if (categoryConflictReasonOf(details) === 'has_parent') {
@@ -636,6 +666,7 @@
     if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     clearTimeout(dueTimer);
+    dueHeld = null;
     void commitDue(true);
   }
 
@@ -648,11 +679,12 @@
 
   // 入力欄の値は、保存した値に追従させる。ただし、入力が最後に同期した（か送った）値のままのときだけ。
   // 送っている間に次の値を選んだ（入力が違う）ときは、先の応答で上書きしない
+  // 送っている間は触らない（ほかの人が先に直していて断られたとき、書いた値を欄に残すため。送り終えた後に commitDue が合わせる）
   $effect(() => {
     const saved = story?.due_on ?? '';
     const input = dueInput;
     // 書き込めなくなって（終了が分かって）欄が外れると、bind:this は null になるので、null も外す
-    if (input == null) return;
+    if (input == null || dueSending) return;
     if (input !== dueBoundTo) {
       dueBoundTo = input;
       dueBase = input.value;
@@ -660,6 +692,8 @@
     if (input.value === dueBase) {
       input.value = saved;
       dueBase = saved;
+      // 書き始める前の値（保存の expected）。欄が保存した値に合っている間は、保存した値
+      bases.due_on = story?.due_on ?? null;
     }
   });
 
@@ -685,19 +719,39 @@
     const next = value === '' ? null : value;
     if (next === story.due_on) {
       dueBase = value;
+      dueHeld = null;
       return;
     }
+    // ほかの人が先に直していて断られた値は、手を付けない間は送り直さない（読んだ上で上書きするなら、続けて書くか Enter）
+    if (dueHeld === value) return;
+    dueHeld = null;
     dueSending = true;
     dueBase = value;
     dueError = null;
+    dueStale = false;
     try {
-      const message = await saveFields({ due_on: next });
-      if (message !== null) {
+      const message = await saveFields(
+        { due_on: next },
+        { due_on: bases.due_on !== undefined ? bases.due_on : story.due_on },
+        false,
+      );
+      if (message === null) {
+        // 続けて書くときの読んだ値は、今保存した値にする
+        bases.due_on = next;
+      } else {
         dueError = message;
-        // 失敗したら、保存した値へ戻す。ただし、送っている間に打っている次の値は消さない
-        if (alive && input.value === value) {
+        if (dueStale) {
+          // ほかの人が先に直していた。書いた値は欄に残し、保存した値（今の値）とは違うものとして数える。次の保存は、今の値を読んだものとして送る
+          dueStale = false;
+          if (alive && input.value === value) {
+            dueHeld = value;
+            dueBase = story?.due_on ?? '';
+          }
+        } else if (alive && input.value === value) {
+          // 失敗したら、保存した値へ戻す。ただし、送っている間に打っている次の値は消さない
           input.value = story?.due_on ?? '';
           dueBase = input.value;
+          bases.due_on = story?.due_on ?? null;
         }
       }
     } finally {
@@ -713,6 +767,7 @@
   function clearDue(): void {
     if (dueInput == null) return;
     clearTimeout(dueTimer);
+    dueHeld = null;
     dueInput.value = '';
     // 「クリア」は空にすると消えるので、フォーカスを期日の入力欄へ移す
     dueInput.focus();
@@ -731,7 +786,7 @@
     if (action === 'complete') completing = true;
     else reopening = true;
     try {
-      const input = { workspace_id: workspaceId, story_id: storyId };
+      const input = { workspace_id: workspaceId, story_id: openedId };
       const result =
         action === 'complete'
           ? await callOperation(storyComplete, input, { slug })
@@ -785,6 +840,10 @@
     if (result.ok) {
       showToast(t('storyParentMoved', { story: t('story') }), 'check');
       await refresh();
+      // 親なしへ移すと、区分を選べるようになる。選択肢は、まだ読んでいなければ読む
+      if (alive && canWrite && story?.epic_id === null && definitions === null && !definitionsLoading) {
+        void loadDefinitions();
+      }
       void onchanged();
       return;
     }
@@ -792,8 +851,13 @@
       onstale();
       return;
     }
+    // 遅れて届いた応答で、今開いている別のストーリーの引き出しを閉じない
     if (result.status === 404) {
-      gone();
+      if (alive) gone();
+      else {
+        showToast(t('storyGone', { story: t('story') }), 'alert');
+        void onchanged();
+      }
       return;
     }
     if (result.status === 409 && result.error?.code === 'workspace_closed') onstale();
@@ -830,7 +894,9 @@
       outcome === 'deleted' ? t('storyDeleted', { story: t('story') }) : t('storyGone', { story: t('story') }),
       outcome === 'deleted' ? 'check' : 'alert',
     );
-    onremoved();
+    // 引き出しが外れた後（別のストーリーへ移った後）に届いたときは、今開いている引き出しを閉じず、木だけを読み直す
+    if (alive) onremoved();
+    else void onchanged();
   }
 
   const canMoveParent = $derived(canWrite && parents !== null && (hasParent || parents.length > 0));
@@ -844,15 +910,16 @@
         onselect: askMoveParent,
       });
     }
-    items.push({
-      key: 'delete',
-      label: t('storyDelete', { story: t('story') }),
-      icon: 'trash' as const,
-      danger: true,
-      disabled: !canDelete,
-      note: canDelete ? undefined : t('taskDeleteWho', { leader: t('leader') }),
-      onselect: askDelete,
-    });
+    // 削除できない人には、項目を出さず、理由を本文の下に出す（タスクの引き出しと同じ。項目に添えると、メニューの押せない項目の薄さで読みにくい）
+    if (canDelete) {
+      items.push({
+        key: 'delete',
+        label: t('storyDelete', { story: t('story') }),
+        icon: 'trash' as const,
+        danger: true,
+        onselect: askDelete,
+      });
+    }
     return items;
   });
 
@@ -944,7 +1011,7 @@
   {#snippet top()}
     <span class="chip"><Icon name="check" />{t('story')}</span>
     {#if done}<span class="chip is-ok"><Icon name="check" />{t('done')}</span>{/if}
-    {#if canWrite && story !== null}
+    {#if canWrite && story !== null && menuItems.length > 0}
       <RowMenu label={t('rowMenuLabel', { title: story.title })} items={menuItems} />
     {/if}
   {/snippet}
@@ -1203,6 +1270,18 @@
             <Icon name="check" />{t('complete')}
           </button>
         {/if}
+      </div>
+    {:else if facts === null && canWrite}
+      <!-- 木に載っていない（絞り込みの外、一覧の無い画面）ので、完了の操作は出せない。理由を帯の位置に伝える -->
+      <div class="done-bar">
+        <span class="props-note">{t('storyFactsMissing', { done: t('done') })}</span>
+      </div>
+    {/if}
+
+    {#if canWrite && !canDelete}
+      <!-- 削除できない人には、ボタンを出さず、理由を出す（タスクの引き出しと同じ） -->
+      <div class="form-actions">
+        <span class="field-hint">{t('taskDeleteWho', { leader: t('leader') })}</span>
       </div>
     {/if}
   {/if}

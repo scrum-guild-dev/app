@@ -194,7 +194,9 @@ test('ストーリーの引き出しは、開いたら1件を読み、押せば�
 
   // 「保存」のボタンは無い。押して書き始め、変えずに欄を離れると、送らずに読む形へ戻る
   await expect(drawer.getByRole('button', { name: '保存', exact: true })).toHaveCount(0);
-  await drawer.getByRole('button', { name: /元のタイトル/ }).click();
+  // 題の編集ボタンは見出しの中（帯の「⋯」の名前にも題が入るので、見出しで絞る）
+  const titleEdit = drawer.getByRole('heading', { level: 2 }).getByRole('button');
+  await titleEdit.click();
   const titleInput = drawer.getByRole('textbox', { name: 'タイトル' });
   await expect(titleInput).toBeFocused();
   await titleInput.blur();
@@ -202,10 +204,11 @@ test('ストーリーの引き出しは、開いたら1件を読み、押せば�
   expect(updates).toEqual([]);
 
   // タイトルは Enter で確定する。期日は選んだら少し待って保存する
-  await drawer.getByRole('button', { name: /元のタイトル/ }).click();
+  await titleEdit.click();
   await titleInput.fill('新しいタイトル');
   await titleInput.press('Enter');
-  await expect(drawer.getByRole('button', { name: /新しいタイトル/ })).toBeFocused();
+  await expect(titleEdit).toContainText('新しいタイトル');
+  await expect(titleEdit).toBeFocused();
   await drawer.getByLabel('期日').fill('2020-01-02');
   await expect.poll(() => updates.length).toBe(2);
   expect(Object.keys(updates[0] as object).sort()).toEqual(['expected', 'story_id', 'title', 'workspace_id']);

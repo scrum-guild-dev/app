@@ -1,11 +1,14 @@
 // ストーリーの引き出し（`?story=<ID>`）: 受け入れ基準を書いて欄を離れると保存され、開き直しても読み直しても残る。
-// ほかの人が先に同じ欄を直していたら、保存せずに知らせ、書いた分が残る。引き出しから完了にする、取り消す、親を移す。
+// 書いてすぐ戻っても元のストーリーに保存される。
+// ほかの人が先に同じ欄（期日も）を直していたら、保存せずに知らせ、書いた分が残る。引き出しから完了にする、取り消す、親を移す。
+// 親なしへ移すと区分を選べる。
 // 前後のストーリーへ移る。タスクの引き出しと同時には開かない。開き方は横と真ん中だけ。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。CSP の違反も確かめる。
 // 書き換える確かめは、作ったワークスペースで行う（seed の行は書き換えない）。開くだけの確かめは seed のワークスペースを使う
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { operationPath } from '../src/shared/operations/define.ts';
+import { categoryCreate } from '../src/shared/operations/definition/category.ts';
 import { storyGet } from '../src/shared/operations/story/story-get.ts';
 import { storyUpdate } from '../src/shared/operations/story/story-update.ts';
 import { createWorkspace, signIn, waitForResponses, watchViolations } from './helpers.ts';
@@ -25,6 +28,14 @@ const SEED_STORY_TITLES = [
   'ポイントの付与と失効を管理画面で確かめられる',
   '問い合わせの一次回答を早くする',
 ] as const;
+
+// 本物の API へ、別の経路（別の人）から書く。Origin を付けないと CSRF の検査で断られる
+async function post(page: Page, baseURL: string, operation: Parameters<typeof operationPath>[0], data: object) {
+  return page.request.post(operationPath(operation, 'aoba'), {
+    headers: { Origin: new URL(baseURL).origin, 'Content-Type': 'application/json' },
+    data,
+  });
+}
 
 // 作った後は、木の読み直しが返るまで待つ。読み直しで木が替わると、画面は画面だけで足した行を捨てる（+page.svelte）
 async function create(page: Page, label: string, title: string, fields: Record<string, string> = {}): Promise<void> {
@@ -163,6 +174,93 @@ test('ほかの人が先に同じ欄を直していたら、保存せずに今�
   expect(requests[1]).toMatchObject({ expected: { acceptance_criteria_md: '- 先に直された基準' } });
   await criteria.blur();
   await expect(drawer.getByRole('listitem').filter({ hasText: '読んだ上で書き直した基準' })).toBeVisible();
+});
+
+test('書いて1.5秒待たずに戻っても、元のストーリーに保存され、URL が戻る。開き直すと書いた本文が残る', async ({
+  page,
+}) => {
+  await createWorkspace(page, '戻るワークスペース');
+  await create(page, 'ストーリーを作る', '戻る前に書く');
+  await create(page, 'ストーリーを作る', '別のストーリー');
+  const storyId = (await page.getByRole('link', { name: '戻る前に書く', exact: true }).getAttribute('data-story-id'))!;
+  const requests: { story_id?: string; body_md?: string }[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith(operationPath(storyUpdate, 'aoba'))) requests.push(request.postDataJSON());
+  });
+  const drawer = await openStory(page, '戻る前に書く');
+  await drawer.getByRole('button', { name: '本文を書く' }).click();
+  const body = drawer.getByRole('textbox', { name: '本文' });
+
+  // 手を止めて保存されるのを待たずに、戻る（ブラウザの戻る。Alt+← と同じ）。部品が外れるときに、書きかけを送る
+  const saved = waitForResponses(page, '/story-update');
+  await body.fill('戻る前に書いた本文');
+  await page.goBack();
+  await expect(page).not.toHaveURL(/\?story=/);
+  await expect(drawer).toBeHidden();
+  expect((await saved).status()).toBe(200);
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toMatchObject({ story_id: storyId, body_md: '戻る前に書いた本文' });
+  await expect(page.getByRole('status').filter({ hasText: '保存しました' }).first()).toBeVisible();
+
+  // 元のストーリーに書かれている（別のストーリーには書かれていない）
+  const reopened = await openStory(page, '戻る前に書く');
+  await expect(reopened.getByText('戻る前に書いた本文')).toBeVisible();
+  await page.keyboard.press('Escape');
+  const other = await openStory(page, '別のストーリー');
+  await expect(other.locator('.doc-box.is-empty')).toHaveCount(2);
+});
+
+test('ほかの人が先に期日を直していたら、期日の保存は断られ、入力欄に自分の値が残る。Enter で上書きする', async ({
+  page,
+  baseURL,
+}) => {
+  if (baseURL === undefined) throw new Error('baseURL が無い');
+  await createWorkspace(page, '期日が先に直されるワークスペース');
+  const workspaceId = new URL(page.url()).pathname.split('/')[3]!;
+  await create(page, 'ストーリーを作る', '期日を先に直される');
+  const storyId = (await page
+    .getByRole('link', { name: '期日を先に直される', exact: true })
+    .getAttribute('data-story-id'))!;
+  const drawer = await openStory(page, '期日を先に直される');
+  const due = drawer.getByLabel('期日');
+  await expect(due).toHaveValue('');
+
+  // 開いた後に、ほかの人が期日を入れた形にする
+  const other = await post(page, baseURL, storyUpdate, {
+    workspace_id: workspaceId,
+    story_id: storyId,
+    due_on: '2030-04-01',
+  });
+  expect(other.status()).toBe(200);
+
+  // 書き始める前の値（なし）を添えて送り、断られる。書いた値は欄に残り、保存された値は先に直された方のまま
+  const requests: unknown[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith(operationPath(storyUpdate, 'aoba'))) requests.push(request.postDataJSON());
+  });
+  await due.fill('2030-05-06');
+  const alert = drawer.getByRole('alert').filter({ hasText: 'ほかの人が先に直しました' });
+  await expect(alert).toContainText('今の内容は「2030-04-01」です');
+  await expect(alert).toContainText('書いた内容は残してあります');
+  await expect(due).toHaveValue('2030-05-06');
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toMatchObject({ due_on: '2030-05-06', expected: { due_on: null } });
+  const current = await post(page, baseURL, storyGet, { workspace_id: workspaceId, story_id: storyId });
+  expect(((await current.json()) as { story: { due_on: string } }).story.due_on).toBe('2030-04-01');
+
+  // 欄を離れても、断られた値のままでは送り直さない
+  await due.blur();
+  await expect(due).toHaveValue('2030-05-06');
+  expect(requests).toHaveLength(1);
+
+  // 今の値を読んだ上で Enter を押すと、今の値を読んだものとして送るので、書いた値で上書きされる
+  const saved = waitForResponses(page, '/story-update');
+  await due.press('Enter');
+  await saved;
+  await expect(alert).toHaveCount(0);
+  expect(requests).toHaveLength(2);
+  expect(requests[1]).toMatchObject({ due_on: '2030-05-06', expected: { due_on: '2030-04-01' } });
+  await expect(due).toHaveValue('2030-05-06');
 });
 
 test('引き出しから「完了にする」と「取り消す」ができる。未完了のタスクが残るあいだは押せず、理由を添える', async ({
@@ -321,4 +419,53 @@ test('存在しないストーリーの ID で開くと、トーストで知ら�
   await expect(page.getByRole('status').filter({ hasText: 'このストーリーは見つかりません' })).toBeVisible();
   await expect(page).not.toHaveURL(/\?story=/);
   await expect(page.locator('.drawer')).toHaveCount(0);
+});
+
+test('ストーリーとタスクの両方が付いた URL でタスクを閉じると、ストーリーの引き出しは開かず、URL から両方が外れる', async ({
+  page,
+}) => {
+  await page.goto(`${SEED_WORKSPACE}?story=019a0000-0000-7000-8000-000000000901&task=${SEED_TASK_ID}`);
+  const task = page.getByRole('dialog', { name: SEED_TASK_TITLE, exact: true });
+  await expect(task).toBeVisible();
+  await task.locator('.drawer-close').click();
+  await expect(page.locator('.drawer')).toHaveCount(0);
+  await expect(page).not.toHaveURL(/[?&](story|task)=/);
+});
+
+test('親なしへ移した後は、区分の選択欄が読み込まれていて、区分を選んで保存できる', async ({ page, baseURL }) => {
+  if (baseURL === undefined) throw new Error('baseURL が無い');
+  await createWorkspace(page, '親なしへ戻すワークスペース');
+  const workspaceId = new URL(page.url()).pathname.split('/')[3]!;
+  const made = await post(page, baseURL, categoryCreate, { workspace_id: workspaceId, name: '保守' });
+  expect(made.status()).toBe(200);
+  await create(page, 'エピックを作る', '会員証を作り直す');
+  await create(page, 'ストーリーを作る', '親なしへ戻るストーリー');
+
+  // エピックの下へ移してから開く。親のあるストーリーは区分の選択肢を読まない
+  await page.getByRole('button', { name: '親を移す: 親なしへ戻るストーリー' }).click();
+  const rowDialog = page.getByRole('dialog', { name: '「親なしへ戻るストーリー」の親を移す' });
+  const rowMoved = waitForResponses(page, '/story-move');
+  await rowDialog.getByRole('button', { name: '移す' }).click();
+  await rowMoved;
+  await expect(rowDialog).toBeHidden();
+  const drawer = await openStory(page, '親なしへ戻るストーリー');
+  await expect(drawer.getByText('親から引き継ぎ')).toBeVisible();
+  await expect(drawer.getByLabel('区分')).toHaveCount(0);
+
+  // 引き出しの「⋯」から親なしへ移すと、区分の選択肢を読み、選べる
+  await drawer.getByRole('button', { name: '操作: 親なしへ戻るストーリー', exact: true }).click();
+  await drawer.getByRole('menuitem', { name: '親を移す' }).click();
+  const dialog = page.getByRole('dialog', { name: '「親なしへ戻るストーリー」の親を移す' });
+  await dialog.getByLabel('移す先').selectOption({ label: '親なし' });
+  const moved = waitForResponses(page, '/story-move');
+  await dialog.getByRole('button', { name: '移す' }).click();
+  await moved;
+  const select = drawer.getByLabel('区分');
+  await expect(select).toBeVisible();
+  await expect(select.getByRole('option', { name: '保守' })).toHaveCount(1);
+  const saved = waitForResponses(page, '/story-update');
+  await select.selectOption({ label: '保守' });
+  await select.blur();
+  await saved;
+  await expect(select.locator('option:checked')).toHaveText('保守');
 });

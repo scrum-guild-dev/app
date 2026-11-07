@@ -531,7 +531,7 @@ export const dictionary = defineDictionary({
   dueToday: '今日まで',
   dueThisWeek: '今週 {date}',
 
-  // ストーリーのダイアログ（作るときも直すときも同じ欄）
+  // ストーリーの欄（作るダイアログと、直す引き出しが同じ文言を使う）
   fieldBody: '本文',
   fieldLink: 'リンク',
   storyTitlePlaceholder: 'どこまで進めば区切りか',
@@ -540,14 +540,10 @@ export const dictionary = defineDictionary({
   fieldTextInvalidCharacter: '{field}に使えない文字（改行とタブ以外の制御文字、ゼロ幅のスペースなど）が含まれています',
   linkInvalid: 'http か https で始まる URL を入れてください',
   linkTooLong: 'リンクは {max} 字までです',
-  storySave: '保存する',
-  storySaving: '保存しています',
   storyCreated: '{story}を作りました',
-  storySaved: '{story}を保存しました',
-  storySaveFailed: '保存できませんでした。もう一度試してください。',
   storyGone: 'この{story}は見つかりません。一覧を読み直します',
   storyReadOnly: '終了した{workspace}の{story}は、読み取りだけできます',
-  // ストーリーのダイアログ専用の文言（タスクのダイアログの文言を流用しない）
+  // ストーリーのダイアログと引き出し専用の文言（タスクの文言を流用しない）
   storyTitleRequired: 'タイトルを入れてください',
   storyTitleTooLong: 'タイトルは {max} 字までです',
   storyTitleInvalidCharacter: 'タイトルに使えない文字（制御文字、ゼロ幅のスペースなど）が含まれています',
@@ -556,9 +552,10 @@ export const dictionary = defineDictionary({
   storyCreateFailed: '作れませんでした。もう一度試してください。',
   // 画面の検査を通った後に、サーバーが 400 で断ったとき。どの欄かは分からない
   storyBadRequest: '入力を受け付けられませんでした。内容を確かめて、もう一度試してください。',
-  storyLoading: '読み込んでいます',
   storyLoadFailed: 'この{story}を読み込めませんでした。もう一度試してください。',
   dueInvalid: '{due}は正しい日付で入れてください',
+  // ほかの人が先に直した期日が未設定だったとき、「今の内容は「…」です」に入れる言葉
+  dueUnset: '{due}なし',
   storyLinkOpen: '開く',
   storyLinkOpenLabel: 'リンクを新しいタブで開く',
   // 木の行の開閉のボタンの読み上げの名前。{title} はストーリーの題
@@ -777,6 +774,8 @@ export const dictionary = defineDictionary({
   storyReopenBlocked: '{done}か中止した{epic}の下の{story}は取り消せません',
   // 親のエピックが完了か中止しているとき、「完了にする」の横に出す（完了にすると取り消せなくなるため、断る）
   storyCompleteBlocked: '{done}か中止した{epic}の下の{story}は{done}にできません',
+  // 木に載っていないストーリー（絞り込みの外、一覧の無い画面で開いた）の引き出しで、完了の帯の代わりに出す
+  storyFactsMissing: 'この画面の一覧に載っていないため、{done}の操作は出ません',
   storyReopen: '取り消す',
   storyReopenLabel: '{done}を取り消す: {title}',
   storyCompleting: '{done}にしています',

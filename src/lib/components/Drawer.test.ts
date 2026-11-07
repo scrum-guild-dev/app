@@ -85,4 +85,11 @@ describe('開き方の切り替え', () => {
     expect(body).not.toContain('ページ全体');
     expect(body).not.toContain('新しいタブ');
   });
+
+  test('出せる形が1つだけなら、切り替えの組ごと出さない（選べる形が無いのに既定を書き換える入口にしない）', () => {
+    const body = html({ modes: ['side'] });
+    expect(body).not.toContain('drawer-mode');
+    expect(body).not.toContain('>横</button>');
+    expect(html({ modes: ['side', 'center'] })).toContain('drawer-mode');
+  });
 });

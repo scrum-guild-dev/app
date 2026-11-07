@@ -943,7 +943,8 @@ a.brand { color: inherit; text-decoration: none; }
 .tree-title { min-width: 0; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 4px var(--space-2); align-items: center; }
 .tree-link { color: inherit; text-decoration: none; }
 .tree-link:hover { text-decoration: underline; text-underline-offset: 3px; }
-/* 行の中でダイアログを開く題（ストーリー）は、リンクではなくボタンにする。エピックの題は、エピックの画面へのリンク（a.tree-link） */
+/* 行の中でダイアログを開く題（ストーリー）は、リンクではなくボタンにする。エピックの題は、エピックの画面へのリンク（a.tree-link）。
+   本番はリンクで引き出しを開く。見本は追従待ち */
 button.tree-link { border: 0; background: none; padding: 0; font: inherit; text-align: left; cursor: pointer; }
 /* 行の右端。「完了 / 全体」と、行の中の操作（＋タスク）を並べる。狭い幅では折り返す */
 .tree-end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-1) var(--space-3); }
@@ -1365,7 +1366,8 @@ dialog.dialog::backdrop { background: none; }
   .table .btn.is-sm { min-width: 44px; min-height: 44px; }
   .done-btn, .sun, .entry-end .link-btn { position: relative; }
   .done-btn::after, .sun::after, .entry-end .link-btn::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
-  /* 見た目は変えず、押せる範囲だけを 44px 四方以上に広げる部品。木の行のボタン（開閉の caret、題、＋タスク）、操作の並びと
+  /* 本番のストーリーの題はリンクで引き出しを開く（a.tree-link）。button.tree-link は見本の旧い流れで、見本は追従待ち。
+     見た目は変えず、押せる範囲だけを 44px 四方以上に広げる部品。木の行のボタン（開閉の caret、題、＋タスク）、操作の並びと
      囲みの中と絞り込みの帯の端の小さいボタン（高さを変えると、横に並ぶヒントの文字が上にずれるため）、バックログの行の押せる題
      （.entry-title）、完了の一覧の「さらに見る」と「もう一度試す」（.completed-status .btn.is-sm）、
      上の帯の小さな切り替え（.pill。引き出しの閉じるも。.pill は元から position: relative） */

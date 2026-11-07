@@ -92,10 +92,12 @@
     return goto(`${page.url.pathname}?${query}`, { replace: true, reset: false });
   }
 
-  // 今の URL から `task` だけを外した画面。開いた画面（バックログ、メンバーなど）のまま、ほかのクエリも残す
+  // 今の URL から `task` を外した画面。開いた画面（バックログ、メンバーなど）のまま、ほかのクエリも残す。
+  // `story` も一緒に外す（両方が付いた URL はタスクの方だけが開いているので、`story` を残すと、閉じた途端にストーリーの引き出しが開く）
   const withoutTask = () => {
     const rest = new SvelteURLSearchParams(page.url.search);
     rest.delete('task');
+    rest.delete('story');
     const query = rest.size > 0 ? `?${rest}` : '';
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路（page.url.pathname）に、残すクエリだけを足している
     return goto(page.url.pathname + query, {
@@ -170,7 +172,7 @@
     return goto(page.url.pathname + query, { replace: true, reset: false });
   };
 
-  // 閉じたら、開いた行の題（data-story-id を持つリンク）へフォーカスを戻す。行が無ければ画面の見出しへ移す。
+  // 閉じたら、開いた行の題（data-story-id を持つリンク）へフォーカスを戻す。行が無ければ（畳んだ枝の中も含む）画面の見出しへ移す。
   // 戻る／進むで `?story=` が外れて閉じたときも同じ。ストーリーが消えて閉じたときは、木を読み直した後に見出しへ移す（removedStory）。
   // タスクの引き出しへ移ったときは、タスクの引き出しが置いたフォーカスを奪わない
   let shownStoryId: string | null = null;
@@ -186,7 +188,8 @@
     }
     void tick().then(() => {
       const row = document.querySelector<HTMLElement>(`[data-story-id="${CSS.escape(previous)}"]`);
-      if (row) row.focus();
+      // 畳んだ行（hidden の枝）の中の題は、focus() が効かずフォーカスが失われる。畳んでいれば見出しへ移す
+      if (row && !row.closest('[hidden]')) row.focus();
       else focusPageHeading();
     });
   });
