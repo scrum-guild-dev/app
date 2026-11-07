@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
   import { useShortcut } from '../../../../lib/shortcuts.svelte.ts';
+  import { ariaKeyshortcuts, NEW_TASK_KEY } from '../../../../lib/shortcut-keys.ts';
   import { SvelteURLSearchParams } from 'svelte/reactivity';
   import { goto, invalidate, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -123,7 +124,7 @@
   let rootTaskRow = $state<DraftRow | null>();
   useShortcut(() => ({
     id: 'backlog-new-task',
-    keys: 'c',
+    keys: NEW_TASK_KEY,
     label: () => t('shortcutNewTask', { task: t('task') }),
     enabled: () => rootTaskRow != null,
     run: () => rootTaskRow?.focus(),
@@ -1382,7 +1383,7 @@
         />
         <DraftRow
           bind:this={rootTaskRow}
-          keyshortcut="c"
+          keyshortcut={ariaKeyshortcuts(NEW_TASK_KEY)}
           label={t('treeAddTask', { task: t('task') })}
           problem={taskRowProblem}
           create={(title) => addTaskRow(null, title)}

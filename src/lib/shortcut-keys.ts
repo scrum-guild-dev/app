@@ -11,6 +11,9 @@ export type KeyEventLike = Pick<
   'key' | 'keyCode' | 'isComposing' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'repeat' | 'defaultPrevented'
 > & { target: EventTarget | null };
 
+// 今見ている一覧の空の行へフォーカスを移すキー。登録（useShortcut）と DraftRow の aria-keyshortcuts が同じ値を使う
+export const NEW_TASK_KEY = 'c';
+
 export interface ParsedKeys {
   // Ctrl か ⌘ を要るか
   mod: boolean;

@@ -48,6 +48,14 @@ test('スプリントの各列の末尾の空の行に題を打って Enter で�
   await expect(page.locator('.board-col > .draft-row')).toHaveCount(3);
   await expect(page.getByRole('region', { name: '完了', exact: true }).locator('.draft-row')).toHaveCount(0);
 
+  // `c` で、完了でない最初の列（未着手）の空の行へフォーカスが移る。キーは、その行だけが読み上げに伝える
+  const todoRow = page.getByRole('textbox', { name: 'タスクを足す: 未着手' });
+  await expect(todoRow).toHaveAttribute('aria-keyshortcuts', 'c');
+  await expect(page.locator('.board-col .draft-row input[aria-keyshortcuts]')).toHaveCount(1);
+  await page.keyboard.press('c');
+  await expect(todoRow).toBeFocused();
+  await expect(todoRow).toHaveValue('');
+
   // 空の行の案内は、カードの説明に結ぶ動かし方の案内とは別の注記にある
   await expect(page.locator('.action-note', { hasText: '空の行に題を打って Enter を押すと' })).toBeVisible();
 

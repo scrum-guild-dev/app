@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { useShortcut } from '../../../../../lib/shortcuts.svelte.ts';
+  import { ariaKeyshortcuts, NEW_TASK_KEY } from '../../../../../lib/shortcut-keys.ts';
   import { invalidate, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
@@ -77,13 +78,11 @@
   // `c` で、完了でない最初の列の空の行へフォーカスを移す。行が無い（書き込めない、列が無い）間は働かない
   // bind:this は、部品が外れると null に戻る
   let draftRows = $state<Record<string, DraftRow | null | undefined>>({});
-  const firstDraftRow = (): DraftRow | null | undefined => {
-    const column = columns.find((item) => !item.is_done);
-    return column === undefined ? undefined : draftRows[column.id];
-  };
+  const firstDraftRow = (): DraftRow | null | undefined =>
+    firstOpenColumnId === undefined ? undefined : draftRows[firstOpenColumnId];
   useShortcut(() => ({
     id: 'sprint-new-task',
-    keys: 'c',
+    keys: NEW_TASK_KEY,
     label: () => t('shortcutNewTask', { task: t('task') }),
     enabled: () => firstDraftRow() != null,
     run: () => firstDraftRow()?.focus(),
@@ -104,6 +103,8 @@
   // 画面で動かした後の列とカード。読み直したら捨てる
   let local = $state<SprintBoardColumn[] | null>(null);
   const columns = $derived(local ?? board?.columns ?? []);
+  // `c` が移る列と、aria-keyshortcuts を付ける列は、同じ（完了でない最初の列）
+  const firstOpenColumnId = $derived(columns.find((item) => !item.is_done)?.id);
   // 動かし方の案内。動かせるカード（書き込めるときだけ）の説明に結ぶので、案内も書き込めるときだけ出す
   const KEY_HINT_ID = 'sprint-board-key-hint';
   const moves = new MoveQueue<ApiResult<unknown>>({
@@ -696,7 +697,7 @@
             {#if canWrite && !column.is_done}
               <DraftRow
                 bind:this={draftRows[column.id]}
-                keyshortcut={column.id === columns.find((item) => !item.is_done)?.id ? 'c' : undefined}
+                keyshortcut={column.id === firstOpenColumnId ? ariaKeyshortcuts(NEW_TASK_KEY) : undefined}
                 label={t('sprintBoardAddTask', { task: t('task') })}
                 name={t('sprintBoardAddTaskIn', { task: t('task'), column: columnName(column) })}
                 problem={cardTitleProblem}
