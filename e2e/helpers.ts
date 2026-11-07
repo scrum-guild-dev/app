@@ -854,6 +854,7 @@ async function removeTreeSeedTask(page: Page): Promise<void> {
   await deleted;
   await expect(drawer).toBeHidden();
   await expect(page.getByRole('link', { name: TREE_SEED_TASK, exact: true })).toHaveCount(0);
+  await waitForSettled(page);
 }
 
 // 木の末尾の「エピックを足す」で作る
