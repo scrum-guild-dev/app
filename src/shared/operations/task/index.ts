@@ -50,8 +50,10 @@ export {
 export { taskCreateConflictReasonOf, taskCreateConflictReasons, type TaskCreateConflictReason } from './task-create.ts';
 export { taskReopenConflictReasonOf, taskReopenConflictReasons, type TaskReopenConflictReason } from './task-reopen.ts';
 export {
+  taskRestoreClearedFields,
   taskRestoreConflictReasonOf,
   taskRestoreConflictReasons,
+  type TaskRestoreClearedField,
   type TaskRestoreConflictReason,
 } from './task-restore.ts';
 export {

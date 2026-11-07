@@ -1,7 +1,17 @@
+import { tick } from 'svelte';
 import type { IconName } from './icons.ts';
 
-// action を付けると、文の後ろに押せるボタン（.toast-action）を出す。押すと run を呼んで、そのトーストを消す
-export type ToastAction = { label: string; run: () => void };
+// action を付けると、文の後ろに押せるボタン（.toast-action）を出す。押すと run を呼んで、そのトーストを消す。
+// run には、押したときそのボタンにフォーカスがあったか（キーボードか、フォーカスを受ける押し方）を渡す。あれば、消えたボタンの代わりに
+// フォーカスを置き直す（フォーカスが無いときに奪わないため）。
+// ariaLabel は、並んだ複数のトーストを読み上げの名前で区別したいときに、ボタンの名前を替える（見える文字は label のまま）。
+// onescape を渡すと、フォーカスがあるときの Esc でそのトーストを（onclose を呼ばずに）閉じ、onescape を呼ぶ。渡さなければ Esc は何もしない
+export type ToastAction = {
+  label: string;
+  ariaLabel?: string;
+  run: (focused: boolean) => void;
+  onescape?: () => void;
+};
 
 // onclose は、操作を押さずに消えるとき（時間切れ、あふれて押し出された、dismissToast）に1回だけ呼ぶ。
 // 操作を押したときは呼ばず、run だけを呼ぶ。消えるのを待ってから送る操作（コメントの削除）のためにある
@@ -42,10 +52,37 @@ export function dismissToast(id: number, silent = false): void {
 }
 
 // 操作のボタンを押したとき。onclose は呼ばずにトーストを消し、run を呼ぶ
-export function runToastAction(id: number): void {
+export function runToastAction(id: number, focused = false): void {
   const action = toasts.find((toast) => toast.id === id)?.action;
   dismissToast(id, true);
-  action?.run();
+  action?.run(focused);
+}
+
+// フォーカスがあるトーストで Esc を押したとき。onescape を持つトーストだけを、onclose を呼ばずに閉じる
+export function escapeToast(id: number): boolean {
+  const action = toasts.find((toast) => toast.id === id)?.action;
+  if (action?.onescape === undefined) return false;
+  dismissToast(id, true);
+  action.onescape();
+  return true;
+}
+
+// 操作の付いたトーストのボタンへフォーカスを移す。フォーカスが入ると消すまでの時間が止まる（pauseToast）ので、
+// キーボードで消した人が10秒で取り逃さずに「取り消す」へ届く。描かれるのと、モーダルが閉じて領域の hidden が外れるのを待つ
+export async function focusToastAction(id: number): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await tick();
+    const button = document.querySelector<HTMLElement>(`.toasts:not([hidden]) [data-toast-id="${id}"] .toast-action`);
+    if (button) {
+      button.focus();
+      if (document.activeElement === button) return true;
+    }
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+  // 着かなかった（モーダルが開いたまま領域が hidden、利用者が別へ移ったなど）。止めておいた数えを戻さないと、誰も数え直さず
+  // トーストが消えなくなるので、ここで数え直す
+  resumeToast(id);
+  return false;
 }
 
 function schedule(id: number, lifetime: number): void {

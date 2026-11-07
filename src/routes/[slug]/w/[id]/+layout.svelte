@@ -20,10 +20,12 @@
     openTaskTab,
     setTaskOpenMode,
     taskPageHref,
+    type AdjacentTasks,
     type TaskOpenMode,
   } from '../../../../lib/drawer.svelte.ts';
-  import { focusPageHeading } from '../../../../lib/focus-heading.ts';
+  import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../lib/focus-heading.ts';
   import { formatLocalDate } from '../../../../lib/format.ts';
+  import { focusToastAction, resumeToast } from '../../../../lib/toast.svelte.ts';
   import { epicFinishedOf, parentChoicesOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import type { LayoutData } from './$types';
@@ -138,12 +140,39 @@
   });
 
   // タスクが消えた（削除した、見つからない）。閉じて、木を読み直し、フォーカスを見出しへ移す（戻る先の行が無いため）
-  async function removed(): Promise<void> {
+  // toastId は、キーボードで削除したときの「取り消す」のトースト。見出しへ移した後に、そのボタンへフォーカスを移す
+  // （10秒で消えるのをキーボードだけの人が取り逃さないため。フォーカスがある間はトーストが消えない）
+  async function removed(toastId: number | null): Promise<void> {
     focusAfterReload = true;
-    await withoutTask();
+    try {
+      await withoutTask();
+      await invalidate('app:backlog-tree');
+      await tick();
+    } catch (error) {
+      // 読み直しが落ちても、止めておいた数えを戻す（戻さないとトーストが消えなくなる）
+      if (toastId !== null) resumeToast(toastId);
+      throw error;
+    }
+    // キーボードで消した後、待つ間に別の所へフォーカスを移した人からは奪わない（数えは戻す）
+    if (toastId !== null && !focusIsFree()) {
+      resumeToast(toastId);
+      return;
+    }
+    focusPageHeading();
+    if (toastId !== null) await focusToastAction(toastId);
+  }
+
+  // 「取り消す」で戻した。木を読み直し、押したボタンにフォーカスがあり、待つ間に利用者が別へ移っていなければ、
+  // 戻したタスクの題のリンクへ（無ければ見出しへ）移す
+  async function restored(restoredId: string, focus: boolean): Promise<void> {
     await invalidate('app:backlog-tree');
     await tick();
-    focusPageHeading();
+    if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
+  }
+
+  // フォーカスがある「取り消す」のトーストを Esc で閉じた。消した行の次の行、無ければ前の行、無ければ見出しへ移す
+  function skipped(near: AdjacentTasks | null): void {
+    void tick().then(() => focusFirstTaskRow([near?.next ?? null, near?.prev ?? null]));
   }
 
   // ---- ストーリーの引き出し ----
@@ -311,7 +340,9 @@
         onclose={() => void withoutTask()}
         onchanged={() => void invalidate('app:backlog-tree')}
         onstale={() => void invalidate('app:workspace')}
-        onremoved={() => void removed()}
+        onremoved={(toastId) => void removed(toastId)}
+        onrestored={restored}
+        onskipped={skipped}
       />
     {/key}
   {/if}

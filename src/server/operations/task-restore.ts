@@ -1,11 +1,22 @@
 // 削除したタスクを戻す（task-restore）。docs/data-model.md の「書き込みの単位」の「タスクの削除の取り消し」
 import { now } from '../../shared/clock.ts';
-import { taskRestore, type TaskRestoreConflictReason } from '../../shared/operations/task/index.ts';
+import {
+  taskRestore,
+  type TaskRestoreClearedField,
+  type TaskRestoreConflictReason,
+} from '../../shared/operations/task/index.ts';
 import { previousStatementChanged, tailPosition, unindexed, type OrganizationDb } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
-import { actorUserIdOf, changeLogColumns, mayDeleteOwned, openWorkspace, throwIfClosed } from './write-guards.ts';
+import {
+  activeMemberName,
+  actorUserIdOf,
+  changeLogColumns,
+  mayDeleteOwned,
+  openWorkspace,
+  throwIfClosed,
+} from './write-guards.ts';
 
 // 戻せない理由。戻せるなら null。親のストーリーが削除されているときは断らず、親なしで戻す
 export function restoreBlockOf(state: {
@@ -79,8 +90,9 @@ function blockOf(row: Readout): TaskRestoreConflictReason | null {
   });
 }
 
-// 履歴の値は、task-update と同じ {id, name}
+// 履歴の値は、担当、区分、リポジトリは task-update と同じ {id, name}、ストーリーは task-move、tree-delete と同じ {id, title}
 const refOf = (id: string, name: string | null) => ({ id, name: name ?? '' });
+const storyRefOf = (id: string, title: string | null) => ({ id, title: title ?? '' });
 
 export const taskRestoreOperation = implement(taskRestore, async ({ db, actor, workspace, input }) => {
   const actorUserId = actorUserIdOf(actor);
@@ -125,26 +137,19 @@ export const taskRestoreOperation = implement(taskRestore, async ({ db, actor, w
   const completed = task.completed_at !== null;
   const parentDeleted = task.story_row_id !== null && task.story_deleted_at !== null;
   const assigneeId = task.assignee_user_id;
+  // 担当が今も有効かは task-assign と同じ定義（activeMemberName。所属中で、無効化されておらず、ログインの手段が決まっている人）
   const assigneeActive =
     assigneeId === null
       ? true
-      : (await db.first(
-          db.statement((q) =>
-            q
-              .selectFrom('memberships as m')
-              .select('m.user_id')
-              .where('m.workspace_id', '=', workspaceId)
-              .where('m.user_id', '=', assigneeId)
-              .where('m.left_at', 'is', null),
-          ),
-        )) !== undefined;
+      : (await db.first(db.statement((q) => activeMemberName(q, organizationId, workspaceId, assigneeId)))) !==
+        undefined;
   const assigneeGone = assigneeId !== null && !completed && !assigneeActive;
   const categoryGone = task.category_id !== null && task.category_deleted_at !== null;
   const repositoryGone = task.repository_id !== null && task.repository_deleted_at !== null;
   const nextStoryId = parentDeleted ? null : task.story_id;
   const changes: Record<string, readonly [unknown, unknown]> = {
     deleted_at: [deletedAtRead, null],
-    ...(parentDeleted && task.story_id !== null ? { story: [refOf(task.story_id, task.story_title), null] } : {}),
+    ...(parentDeleted && task.story_id !== null ? { story: [storyRefOf(task.story_id, task.story_title), null] } : {}),
     ...(assigneeGone && assigneeId !== null ? { assignee: [refOf(assigneeId, task.assignee_name), null] } : {}),
     ...(assigneeGone && task.today_on !== null ? { today_on: [task.today_on, null] } : {}),
     ...(categoryGone && task.category_id !== null
@@ -201,17 +206,14 @@ export const taskRestoreOperation = implement(taskRestore, async ({ db, actor, w
               ? eb('repository_id', 'is', null)
               : eb('repository_id', '=', task.repository_id),
             eb.exists(openWorkspace(q, organizationId, workspaceId)),
-            // 残す担当は今も所属している（完了したタスクは確かめない）
+            // 外す担当は、書く時点でもまだ有効でない（読んでから書くまでに招待などで戻っていたら、外さずに読み直す）
+            assigneeGone
+              ? eb.not(eb.exists(activeMemberName(q, organizationId, workspaceId, assigneeId!)))
+              : eb.val(true),
+            // 残す担当は今も有効（完了したタスクは確かめない）
             assigneeId === null || assigneeGone || completed
               ? eb.val(true)
-              : eb.exists(
-                  eb
-                    .selectFrom('memberships as m')
-                    .select('m.user_id')
-                    .whereRef('m.user_id', '=', 'tasks.assignee_user_id')
-                    .where('m.workspace_id', '=', workspaceId)
-                    .where('m.left_at', 'is', null),
-                ),
+              : eb.exists(activeMemberName(q, organizationId, workspaceId, assigneeId)),
             task.category_id === null || categoryGone
               ? eb.val(true)
               : eb.exists(
@@ -282,5 +284,12 @@ export const taskRestoreOperation = implement(taskRestore, async ({ db, actor, w
     if (current === undefined) throw new ApiError(404, 'not_found');
     throw new ApiError(409, 'conflict', { reason: blockOf(current) ?? 'changed' });
   }
-  return { task_id: taskId };
+  // 外した参照は、画面が「元のとおりには戻らなかった」と知らせるために返す
+  const cleared: TaskRestoreClearedField[] = [
+    ...(parentDeleted ? (['story'] as const) : []),
+    ...(assigneeGone ? (['assignee'] as const) : []),
+    ...(categoryGone ? (['category'] as const) : []),
+    ...(repositoryGone ? (['repository'] as const) : []),
+  ];
+  return { task_id: taskId, cleared };
 });
