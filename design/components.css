@@ -878,6 +878,7 @@ a.brand { color: inherit; text-decoration: none; }
 .callout.is-ok { color: var(--color-ok); background: var(--color-ok-soft); }
 .callout.is-warn { color: var(--color-warn); background: var(--color-warn-soft); }
 .callout.is-info { color: var(--color-accent); background: var(--color-accent-soft); }
+.callout.is-danger { color: var(--color-danger); background: var(--color-danger-soft); }
 
 /* ===== スプリントの列とカード ===== */
 .board-wrap { overflow-x: auto; padding-bottom: var(--space-2); }

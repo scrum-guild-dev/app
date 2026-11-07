@@ -15,6 +15,7 @@ import {
   type ImportSourceKind,
   type ScopeCandidate,
 } from '../import/index.ts';
+import { syncConnection, type SyncResult } from '../import/sync.ts';
 import {
   commonDb,
   readOrganizationRow,
@@ -49,6 +50,8 @@ export type OrganizationTools = {
   myLogins(): Promise<readonly MyLogin[]>;
   // 取り込み元の型に、取り込み元への通信（fetcher）を結んだもの。処理は env も fetch も受け取らず、確かめと候補の問い合わせはここだけを通る
   importSource(kind: ImportSourceKind): BoundImportSource;
+  // 接続を1つ同期する（同期の仕組みを、通信の口を結んで呼ぶ）。結果は件数と止まり方だけで、取り込み元の応答は返さない
+  syncConnection(workspaceId: string, connectionId: string): Promise<SyncResult>;
   // 接続の認証情報の暗号化と復号（鍵は env のシークレット）。暗号文は接続の ID に結ぶ。平文と暗号文はエラーにもログにも出さない
   sealCredential(plaintext: string, connectionId: string): Promise<EncryptedCredential>;
   openCredential(stored: EncryptedCredential, connectionId: string): Promise<string>;
@@ -102,6 +105,8 @@ export function organizationTools(
           listScopeCandidates: (credential) => source.listScopeCandidates(credential, importFetcher),
         };
       }),
+    syncConnection: (workspaceId, connectionId) =>
+      member(() => syncConnection(env, db, workspaceId, connectionId, { fetcher: importFetcher })),
     sealCredential: (plaintext, connectionId) => member(() => encryptCredential(env, plaintext, connectionId)),
     openCredential: (stored, connectionId) => member(() => decryptCredential(env, stored, connectionId)),
   };
