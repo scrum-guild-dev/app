@@ -375,6 +375,7 @@ describe('task-create の親のストーリー', () => {
           story_id: story.id,
           repository_id: null,
           category_id: null,
+          sprint: null,
         },
         defer: () => {},
       } as never;
@@ -1258,6 +1259,7 @@ describe('task-complete', () => {
         story_id: null,
         repository_id: null,
         category_id: null,
+        sprint: null,
       });
 
       await expect(taskCreateOperation.handler(context)).rejects.toMatchObject({

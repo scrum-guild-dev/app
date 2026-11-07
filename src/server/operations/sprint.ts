@@ -675,7 +675,7 @@ function taskConflict(reason: SprintTaskConflictReason): ApiError {
 }
 
 // タスクを出し入れできるスプリント。削除していない、始まっていないか進行中のもの（終了したスプリントの中身は変えない）
-function openSprint(from: From, workspaceId: string, sprintId: string) {
+export function openSprint(from: From, workspaceId: string, sprintId: string) {
   return from
     .selectFrom('sprints as target')
     .select('target.id')
