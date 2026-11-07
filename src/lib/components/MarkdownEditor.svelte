@@ -83,6 +83,14 @@
       : '',
   );
   const optionId = (item: SlashItem) => `${menuId}-${item.key}`;
+  $effect(() => {
+    if (readonly) closeSlash();
+  });
+  // 矢印で選んだ項目が、小窓の中の見える範囲に入るようにする（aria-activedescendant は見た目をスクロールしない）
+  $effect(() => {
+    const item = slashItems[slashAt];
+    if (item) document.getElementById(optionId(item))?.scrollIntoView?.({ block: 'nearest' });
+  });
   const size = (file: File) => (file.size / 1_048_576).toFixed(2);
   const active = () => files.filter((file) => file.state === 'uploading' || file.state === 'queued');
 
@@ -197,6 +205,7 @@
               start >= at ? start + markdown.length : start,
               end >= at ? end + markdown.length : end,
             );
+            if (slashOpen) updateSlash();
           }
         } catch (error) {
           if (destroyed) break;
@@ -292,11 +301,12 @@
   }
 
   function pickSlash(index: number): void {
-    const item = slashItems[index];
-    if (!input || !item || readonly) return closeSlash();
+    if (!input || readonly) return closeSlash();
+    // 表示中の候補ではなく、今の本文とカーソルから取り直す（貼り付けやアップロードで本文が動いた後の古い候補で入れない）
     const query = slashQuery(input.value, input.selectionStart, input.selectionEnd);
-    if (query === null) return closeSlash();
-    const edit = slashEdit(query, input.selectionStart, item);
+    const item = query === null ? undefined : filterSlashItems(query.query, (entry) => t(entry.label))[index];
+    if (query === null || !item) return closeSlash();
+    const edit = slashEdit(query, input.selectionStart, item, input.value.charAt(input.selectionStart));
     applyEdit(edit.start, edit.end, edit.text);
     // 貼り付けと同じく、続く操作がこの位置から始まるよう、選択を同期して置く
     input.value = value;
@@ -308,7 +318,13 @@
   // 小窓が開いているときのキー。上下で選び、Enter で入れ、Esc で閉じる（Tab は奪わない）。変換中は何もしない
   function slashKeydown(event: KeyboardEvent): void {
     if (!slashOpen || composing || event.isComposing || event.keyCode === 229) return;
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (
+      (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
       event.preventDefault();
       slashAt = moveSlashSelection(slashAt, slashItems.length, event.key === 'ArrowDown' ? 1 : -1);
     } else if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
@@ -342,6 +358,7 @@
         input.setSelectionRange(caret, caret);
       }
     }
+    if (slashOpen) updateSlash();
     add(clipboard.files, caret);
   }
 
@@ -390,7 +407,10 @@
       onclick={() => {
         if (slashOpen) updateSlash();
       }}
-      onblur={closeSlash}
+      onblur={() => {
+        composing = false;
+        closeSlash();
+      }}
       oncompositionstart={() => {
         composing = true;
         closeSlash();
@@ -404,7 +424,14 @@
       }}
       ondrop={drop}
       onpaste={paste}></textarea>
-    <ul class="slash-menu" id={menuId} role="listbox" aria-label={t('slashMenuLabel')} hidden={!slashOpen}>
+    <ul
+      class="slash-menu"
+      id={menuId}
+      role="listbox"
+      aria-label={t('slashMenuLabel')}
+      hidden={!slashOpen}
+      onmousedown={(event) => event.preventDefault()}
+    >
       {#each slashItems as item, index (item.key)}
         <!-- キーボードの操作は欄が受ける（aria-activedescendant）。ここのクリックはポインターのため -->
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -416,7 +443,7 @@
           onmousedown={(event) => event.preventDefault()}
           onclick={() => pickSlash(index)}
         >
-          <span>{t(item.label)}</span><small>{item.mark}</small>
+          <span>{t(item.label)}</span><small aria-hidden="true">{item.mark}</small>
         </li>
       {/each}
     </ul>

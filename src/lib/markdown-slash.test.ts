@@ -109,6 +109,18 @@ describe('置き換え', () => {
     expect(result.value.slice(0, result.caret)).toBe('```\n');
   });
 
+  test('行の途中の文字の前で「コード」を選ぶと、続く文字は閉じの囲みの外の次の行に出す', () => {
+    const query = slashQuery('/既存', 1, 1);
+    const code = SLASH_ITEMS.find((candidate) => candidate.key === 'code');
+    if (query === null || code === undefined) throw new Error('前提が成り立たない');
+    const edit = slashEdit(query, 1, code, '既');
+    const value = '/既存'.slice(0, edit.start) + edit.text + '/既存'.slice(edit.end);
+    expect(value).toBe('```\n\n```\n既存');
+    // 行末や改行の前なら足さない
+    expect(slashEdit(query, 1, code, '\n').text).toBe('```\n\n```');
+    expect(slashEdit(query, 1, code, '').text).toBe('```\n\n```');
+  });
+
   test('前後の行と字下げは残す', () => {
     expect(apply('前の行\n  /to', 10, 'todo')).toEqual({ value: '前の行\n  - [ ] ', caret: 12 });
   });

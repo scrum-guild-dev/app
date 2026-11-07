@@ -522,4 +522,18 @@ test('「/」の小窓から書式を入れ、文中の「/」と Esc では文�
   await page.keyboard.type('\nhttps://example.com');
   await expect(menu).toBeHidden();
   await expect(input).toHaveValue('a/\nhttps://example.com');
+
+  // 日本語の変換中は出ない。確定したときに判定し直す
+  await input.fill('');
+  await input.evaluate((element) => element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })));
+  await page.keyboard.type('/');
+  await expect(menu).toBeHidden();
+  await input.evaluate((element) => element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+  await expect(menu).toBeVisible();
+
+  // 項目を押して入れる。コードは囲みの間にカーソルを置く
+  await menu.getByRole('option', { name: /コード/ }).click();
+  await expect(input).toHaveValue('```\n\n```');
+  await expect.poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(4);
+  await expect(menu).toBeHidden();
 });

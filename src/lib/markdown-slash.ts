@@ -73,8 +73,12 @@ export function slashEdit(
   query: SlashQuery,
   caret: number,
   item: SlashItem,
+  /** カーソルの直後の1文字（無ければ空）。 */
+  next = '',
 ): { start: number; end: number; text: string; caret: number } {
-  return { start: query.from, end: caret, text: item.markdown, caret: query.from + item.caret };
+  // コードの閉じの囲みの後ろに文字が続くと閉じと認められず、以降の本文がすべてコードになる。続く文字は囲みの外の次の行に出す
+  const text = item.key === 'code' && next !== '' && next !== '\n' ? `${item.markdown}\n` : item.markdown;
+  return { start: query.from, end: caret, text, caret: query.from + item.caret };
 }
 
 /** 矢印キーで選ぶ位置。端で反対側へ回る。 */
