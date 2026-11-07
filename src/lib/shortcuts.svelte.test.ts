@@ -5,6 +5,7 @@ import { ShortcutRegistry, useShortcut, type Shortcut } from './shortcuts.svelte
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   modalState.openCount = 0;
 });
 
@@ -73,14 +74,46 @@ describe('登録と振り分け', () => {
     expect(shortcut.run).not.toHaveBeenCalled();
   });
 
-  test('押しっぱなしの繰り返しには、repeat を許したものだけ働く', () => {
+  test('押しっぱなしの繰り返しには、repeat を許したものだけ run を呼ぶ。許さないものもキーは奪う', () => {
     const registry = new ShortcutRegistry();
     const shortcut = make();
     const repeating = make({ id: 'repeating', keys: ']', repeat: true });
     registry.register(shortcut);
     registry.register(repeating);
-    expect(registry.handle(keyEvent({ repeat: true }))).toBe(false);
+    const held = keyEvent({ repeat: true });
+    expect(registry.handle(held)).toBe(true);
+    expect(held.preventDefault).toHaveBeenCalled();
+    expect(shortcut.run).not.toHaveBeenCalled();
     expect(registry.handle(keyEvent({ key: ']', repeat: true }))).toBe(true);
+    expect(repeating.run).toHaveBeenCalledTimes(1);
+  });
+
+  test('Mod+K も、変換中（isComposing、keyCode 229）には働かない', () => {
+    const registry = new ShortcutRegistry();
+    const shortcut = make({ keys: 'Mod+K', inTyping: true });
+    registry.register(shortcut);
+    const base = { key: 'k', ctrlKey: true };
+    expect(registry.handle(keyEvent({ ...base, isComposing: true }))).toBe(false);
+    expect(registry.handle(keyEvent({ ...base, keyCode: 229 }))).toBe(false);
+    expect(registry.handle(keyEvent(base))).toBe(true);
+  });
+
+  test('Mod+K を押しっぱなしにしても、ブラウザの標準の動作へ流さない', () => {
+    const registry = new ShortcutRegistry();
+    const shortcut = make({ keys: 'Mod+K', inTyping: true });
+    registry.register(shortcut);
+    const held = keyEvent({ key: 'k', metaKey: true, repeat: true });
+    registry.handle(held);
+    expect(held.preventDefault).toHaveBeenCalled();
+    expect(shortcut.run).not.toHaveBeenCalled();
+  });
+
+  test('キーの先が無い（null、undefined、要素でない）ときも働く', () => {
+    const registry = new ShortcutRegistry();
+    registry.register(make());
+    expect(registry.handle(keyEvent({ target: null }))).toBe(true);
+    expect(registry.handle(keyEvent({ target: undefined }))).toBe(true);
+    expect(registry.handle(keyEvent({ target: {} }))).toBe(true);
   });
 
   test('enabled が false の間は働かず、preventDefault もしない', () => {
@@ -166,11 +199,24 @@ describe('衝突の検出', () => {
     registry.handle(keyEvent());
     expect(first.run).toHaveBeenCalledTimes(1);
     expect(second.run).not.toHaveBeenCalled();
-    vi.unstubAllEnvs();
   });
 });
 
 describe('useShortcut（部品の置かれている間だけ登録する）', () => {
+  test('開発中に同じキーを2回登録すると、衝突を例外で知らせる', async () => {
+    const { shortcuts } = await import('./shortcuts.svelte.ts');
+    const first = make({ id: 'dup-a', keys: 'd' });
+    const second = make({ id: 'dup-b', keys: 'd' });
+    const dispose = $effect.root(() => {
+      useShortcut(() => first);
+      useShortcut(() => second);
+    });
+    expect(() => flushSync()).toThrow(/dup-a と dup-b/);
+    dispose();
+    flushSync();
+    expect(shortcuts.items).not.toContain(first);
+  });
+
   test('部品が置かれると登録し、外れると解除する', async () => {
     const { shortcuts } = await import('./shortcuts.svelte.ts');
     const shortcut = make({ id: 'use-shortcut-test', keys: 'u' });

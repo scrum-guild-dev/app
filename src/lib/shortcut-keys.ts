@@ -3,7 +3,7 @@
 // キーは文字列で書く。
 // - `Mod+K` … Ctrl か ⌘（Meta）と K。Alt と Shift は付けない。英字は大文字小文字を区別しない
 // - `[`、`c`、`?` … 修飾キー（Ctrl、⌘、Alt）なしの1文字。押された `key` と完全に同じ文字で当てる（`c` と `C` は別）。
-//   `?` のように Shift で出る文字は、Shift を押して出た文字として当てる
+//   Shift は見ない。`?` のように Shift で出る文字は、Shift を押して出た `key` の文字そのもので当てる
 
 export type KeyEventLike = Pick<
   KeyboardEvent,

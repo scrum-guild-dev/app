@@ -51,6 +51,12 @@ describe('matchesKeys', () => {
     }
   });
 
+  test('単キーは Shift を見ない。Shift で出る文字は、出た key の文字で当てる', () => {
+    expect(matchesKeys(parseKeys('?'), { ...base, key: '?', shiftKey: true })).toBe(true);
+    expect(matchesKeys(plain, { ...base, key: '[', shiftKey: true })).toBe(true);
+    expect(matchesKeys(plain, { ...base, key: '{', shiftKey: true })).toBe(false);
+  });
+
   test('単キーの英字は大文字小文字を区別する', () => {
     expect(matchesKeys(parseKeys('c'), { ...base, key: 'c' })).toBe(true);
     expect(matchesKeys(parseKeys('c'), { ...base, key: 'C', shiftKey: true })).toBe(false);
@@ -114,5 +120,6 @@ describe('isTypingTarget', () => {
     expect(isTypingTarget(targetOf('A'))).toBe(false);
     expect(isTypingTarget({})).toBe(false);
     expect(isTypingTarget(null)).toBe(false);
+    expect(isTypingTarget(undefined)).toBe(false);
   });
 });

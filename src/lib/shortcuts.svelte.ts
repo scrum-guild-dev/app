@@ -77,11 +77,12 @@ export class ShortcutRegistry {
     const entry = this.#entries.find(({ parsed }) => matchesKeys(parsed, event));
     if (!entry) return false;
     const { shortcut } = entry;
-    if (event.repeat && !shortcut.repeat) return false;
     if (!shortcut.inTyping && isTypingTarget(event.target)) return false;
     if (!shortcut.inModal && isDialogOpen()) return false;
     if (shortcut.enabled && !shortcut.enabled()) return false;
     event.preventDefault();
+    // 押しっぱなしの繰り返しは、働かせずに奪うだけにする（Ctrl+K の長押しで、ブラウザの標準の Ctrl+K が動かないように）
+    if (event.repeat && !shortcut.repeat) return true;
     shortcut.run(event as KeyboardEvent);
     return true;
   };
