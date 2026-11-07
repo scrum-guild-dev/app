@@ -18,6 +18,12 @@ export function e2eEnvironment(mode: E2eMode, inherited: NodeJS.ProcessEnv): Nod
   // build のモードは E2E_DEV_BUILD だけで決め、親の開発用設定を混ぜない。
   delete env.NODE_ENV;
   if (mode === 'dev') env.E2E_DEV_BUILD = '1';
+  // ロケールが空だと Chromium が日本語のダウンロード名を ASCII に変換できず `download` にする。
+  // 3つとも空のときだけ UTF-8 にそろえ、人や CI の設定は変えない。
+  if (!env.LC_ALL && !env.LC_CTYPE && !env.LANG) {
+    env.LANG = 'C.UTF-8';
+    env.LC_ALL = 'C.UTF-8';
+  }
   return env;
 }
 

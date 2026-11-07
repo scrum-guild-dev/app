@@ -7,12 +7,12 @@
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
-  import InlineEdit from './InlineEdit.svelte';
+  import AutoSaveEdit from './AutoSaveEdit.svelte';
   import Markdown from './Markdown.svelte';
 
   // タスクの詳細の引き出しの、決まった欄（design/kit.js の drawerHtml の「詳細」の field）。ワークスペースの決まった欄ごとに、
   // 名前（リーダーが付けたまま。辞書を通さない）を見出しにして、値を Markdown で描く。書かれていなければ「まだ書かれていません。」と、
-  // 完了していないバックログのタスクだけ「未記入」の印（.chip.is-todo）を添える。書けるときは「編集」で InlineEdit に替わる（本文と同じ操作）。
+  // 完了していないバックログのタスクだけ「未記入」の印（.chip.is-todo）を添える。書けるときは「編集」で AutoSaveEdit に替わる（本文と同じ操作）。
   // 保存は task-field-set に、読んだ値（read_md。行が無ければ null）を添えて送る。読んだ値のままなら書かれ、同時に別の人が直していれば
   // 409 の changed で断られる。断られたら引き出しに読み直してもらい（onrefresh）、書きかけは残したまま、読み直した内容を見て決められる文を出す。
   // 空にして保存すると行が消え、未記入に戻る。書きかけ（保存した値と違う入力中の欄）があるかは ondirty で引き出しに伝える
@@ -59,6 +59,13 @@
     if (dirty === has) return;
     dirtyIds = dirty ? [...dirtyIds, id] : dirtyIds.filter((other) => other !== id);
     ondirty(dirtyIds.length > 0);
+  }
+
+  // 描いた値を押したら書く欄に替える。値の中のリンクと、文字を選ぶ操作は、そのまま通す
+  function beginFromSurface(event: MouseEvent, begin: (event: Event) => void): void {
+    if (event.target instanceof Element && event.target.closest('a, button, summary, input')) return;
+    if (!(window.getSelection()?.isCollapsed ?? true)) return;
+    begin(event);
   }
 
   function problemOf(field: TaskFieldValue, raw: string): string | null {
@@ -137,7 +144,7 @@
 {#each fields as field (field.id)}
   <div class="field" data-field-id={field.id}>
     {#if canWrite}
-      <InlineEdit
+      <AutoSaveEdit
         value={field.value_md ?? ''}
         label={field.name}
         multiline
@@ -150,21 +157,18 @@
         onbegin={(started) => bases.begin(field.id, normalizeLongText(started))}
       >
         {#snippet view(begin)}
-          <div class="field-head">
-            {@render label(field)}
-            <button
-              class="btn is-sm"
-              type="button"
-              aria-label={field.value_md === null
+          {@render label(field)}
+          <!-- 描いた値そのものを押せば書ける。面いっぱいに透明なボタンを敷き、キーボードと読み上げの入口にする（値の中のリンクは上に重なり、押せるまま） -->
+          <div class="edit-surface" onclick={(event) => beginFromSurface(event, begin)} role="presentation">
+            <button class="edit-surface-button" type="button" onclick={begin}
+              >{field.value_md === null
                 ? t('fieldValueWriteLabel', { field: field.name })
-                : t('fieldValueRewriteLabel', { field: field.name })}
-              onclick={begin}
-              ><Icon name="pen" />{field.value_md === null ? t('fieldValueWrite') : t('fieldValueRewrite')}</button
+                : t('fieldValueRewriteLabel', { field: field.name })}</button
             >
+            <div class="edit-surface-body">{@render valueView(field)}</div>
           </div>
-          {@render valueView(field)}
         {/snippet}
-      </InlineEdit>
+      </AutoSaveEdit>
     {:else}
       {@render label(field)}
       {@render valueView(field)}
