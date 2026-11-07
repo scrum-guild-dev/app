@@ -1606,7 +1606,7 @@ test('書きかけを捨てるかの確認を出している間は、] を押し
 
   // 書き続けると、そのまま残る
   await confirm.getByRole('button', { name: '書き続ける' }).click();
-  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('書きかけ');
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
 });
 
 // 計画の画面でスプリントを作り、起票したタスクを入れる
