@@ -30,7 +30,7 @@
     sameFilter,
     type BacklogFilter,
   } from '../../../../lib/backlog-filter.ts';
-  import { keepAddedRow } from '../../../../lib/added-rows.ts';
+  import { completionSettled, keepAddedRow } from '../../../../lib/added-rows.ts';
   import { MoveQueue } from '../../../../lib/move-queue.ts';
   import { completionFailureMessage } from '../../../../lib/story-completion.ts';
   import { moveFailureMessage } from '../../../../lib/move-failure.ts';
@@ -148,6 +148,8 @@
   let addedEpics = $state<{ epic: BacklogEpic; at: number }[]>([]);
   let addedStories = $state<{ story: BacklogStory; epicId: string | null; at: number }[]>([]);
   let completedIds = $state<string[]>([]);
+  // 完了の応答が返った時刻（performance.now()）。これより前に始まった読み直しが遅れて届いても、完了の印を捨てない（completionSettled）
+  let completedAt: Record<string, number> = {};
   let pendingIds = $state<string[]>([]);
   // 完了か取り消しを送っている最中のストーリーと、送っている操作
   let storyPending = $state<Record<string, 'complete' | 'reopen'>>({});
@@ -180,17 +182,22 @@
     addedFor = workspaceId;
     // 完了にした行は、読み直した木（未完了のタスクだけを返す）に無いので、木に入るのを待たずに捨てる。残すと完了の印を捨てた後に未完了で戻る
     const done = untrack(() => completedIds);
+    const loadedAtForDone = untrack(() => data.loadedAt);
+    // 完了の応答より前に始まった読み直しの木は、完了を含むとは限らない。その行は木に無くても捨てず、印も残す
+    const unsettled = done.filter((id) => !completionSettled(completedAt[id] ?? Infinity, loadedAtForDone));
     // 木に無い行を残すかは、足した時刻と読み直しを始めた時刻で決める（src/lib/added-rows.ts）
     const loadedAt = untrack(() => data.loadedAt);
     added =
       sameWorkspace && !filtering
-        ? untrack(() => added).filter((entry) =>
-            keepAddedRow(entry, {
-              inLoadedTree: inTree(loaded, entry.task.id),
-              completed: done.includes(entry.task.id),
-              treeLoaded: loaded !== null,
-              loadedAt,
-            }),
+        ? untrack(() => added).filter(
+            (entry) =>
+              (unsettled.includes(entry.task.id) && !inTree(loaded, entry.task.id)) ||
+              keepAddedRow(entry, {
+                inLoadedTree: inTree(loaded, entry.task.id),
+                completed: done.includes(entry.task.id),
+                treeLoaded: loaded !== null,
+                loadedAt,
+              }),
           )
         : [];
     const keepRow = (at: number, inLoaded: boolean) =>
@@ -208,7 +215,9 @@
         ),
       ),
     );
-    completedIds = [];
+    const keptDone = sameWorkspace && !filtering ? unsettled : [];
+    completedIds = keptDone;
+    completedAt = Object.fromEntries(keptDone.map((id) => [id, completedAt[id]]));
     movedParents = {};
     taskOrders = {};
     movedStoryParents = {};
@@ -469,6 +478,7 @@
       if (workspaceId !== page.params.id) return;
       if (result.ok || (result.status === 409 && result.error?.code === 'conflict')) {
         completedIds = [...completedIds, task.id];
+        completedAt[task.id] = performance.now();
         // 別の画面で先に完了にされていたときは、同じ完了の印で示し、知らせる
         showToast(
           result.ok
