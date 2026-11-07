@@ -7,8 +7,8 @@
 
 export type ImportSourceKind = 'github';
 
-// 範囲の種類。範囲の候補の ID と名前が何を指すか（GitHub はリポジトリ）
-export type ScopeKind = 'repository';
+// 範囲の種類。connection_scopes.scope_kind に保存する値で、範囲の候補の ID と名前が何を指すか（GitHub はリポジトリ）を表す
+export type ScopeKind = 'github_repo';
 
 // 認証情報の持ち主。1接続は1人の持ち主に結ぶ。id は取り込み元の不変の ID を10進の文字列で持つ
 export type CredentialOwner = { kind: 'user' | 'organization'; id: string; name: string };

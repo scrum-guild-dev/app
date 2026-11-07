@@ -7,6 +7,7 @@ import { createApp } from '../src/server/app.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import {
   hash64,
+  createConnection,
   createInvitation,
   createMembership,
   createOrganization,
@@ -125,6 +126,26 @@ describe('first-steps: 一般', () => {
     const view = await read(world.slug, world.member);
     expect(doneOf(view)).toEqual({ joined_workspace: true, prepare_task: false, mark_today: true });
     expect(view.role).toBe('member');
+  });
+
+  test('接続を登録した一般は、起票していなくても「自分のタスクを用意する」が済んで、何も出ない。削除した接続も数える', async () => {
+    const world = await createWorld();
+    await createConnection(world.organization, world.workspace.id, world.member.userId!, {
+      deleted_at: '2026-11-01T00:00:00.000Z',
+    });
+
+    const view = await read(world.slug, world.member);
+    expect(view.role).toBeNull();
+    expect(view.steps).toEqual([]);
+  });
+
+  test('別の人が登録した接続と、別の組織の接続は、この人の手順を済ませない', async () => {
+    const world = await createWorld();
+    const other = await createWorld();
+    await createConnection(world.organization, world.workspace.id, world.leader.userId!);
+    await createConnection(other.organization, other.workspace.id, other.member.userId!);
+
+    expect(doneOf(await read(world.slug, world.member)).prepare_task).toBe(false);
   });
 
   test('別の組織で起票しても、この組織の手順は済まない', async () => {

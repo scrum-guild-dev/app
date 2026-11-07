@@ -98,8 +98,8 @@ export const firstStepsOperation = implement(firstSteps, async ({ db, actor, org
 
   if (role === 'member') {
     done.set('joined_workspace', true);
-    // 起票した（tasks.created_by）。削除したタスクも、起票したことは変わらないので数える。接続の登録は #67 が入るまで数えない
-    const [createdResult] = await db.batch([
+    // 起票した（tasks.created_by）。削除したタスクも、起票したことは変わらないので数える。接続の登録（connections.owner_user_id）も同じく、削除した接続を数える
+    const [createdResult, connectedResult] = await db.batch([
       db.statement((q) =>
         q
           .selectFrom('tasks as t')
@@ -109,8 +109,17 @@ export const firstStepsOperation = implement(firstSteps, async ({ db, actor, org
           .where('w.organization_id', '=', db.organizationId)
           .limit(1),
       ),
+      db.statement((q) =>
+        q
+          .selectFrom('connections as c')
+          .innerJoin('workspaces as w', 'w.id', 'c.workspace_id')
+          .select('c.id')
+          .where('c.owner_user_id', '=', userId)
+          .where('w.organization_id', '=', db.organizationId)
+          .limit(1),
+      ),
     ] as const);
-    const prepared = createdResult.rows.length > 0;
+    const prepared = createdResult.rows.length > 0 || connectedResult.rows.length > 0;
     done.set('prepare_task', prepared);
     if (prepared) return empty;
     const [markedResult] = await db.batch([

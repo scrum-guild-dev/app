@@ -152,3 +152,39 @@ test('完了の操作が 404 か workspace_closed を受けたら、一覧を読
     await expect(row.getByRole('button', { name: /完了にする/ })).toBeVisible();
   }
 });
+
+test('木にもとからあるタスク: 完了の応答より前に始まった読み直しが遅れて届いても、完了の印を付けたまま行が残る', async ({
+  page,
+}) => {
+  await createWorkspace(page, '遅れる読み直し');
+  await addTaskRow(page, '木にもとからある行');
+  // 読み直して、行を画面で足した行ではなく、読み込んだ木の行にする
+  await page.reload();
+  const row = page.locator('.entry', { hasText: '木にもとからある行' });
+  await expect(row).toHaveCount(1);
+
+  // ポイントの保存のあとの読み直し（木を読む要求）を、完了より前に出したまま止める
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let held = 0;
+  await page.route('**/api/aoba/backlog-tree', async (route) => {
+    if (held++ > 0) return route.continue();
+    // 要求は完了より前に出ているが、サーバーが答えるのは完了の後。木にタスクは無い（完了の応答より前に始まった読み直し）
+    await gate;
+    await route.fulfill({ response: await route.fetch() });
+  });
+  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
+  await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
+  await expect.poll(() => held).toBe(1);
+
+  await row.getByRole('button', { name: /完了にする/ }).click();
+  await expect(row.getByRole('img', { name: '木にもとからある行: 完了' })).toBeVisible();
+
+  // 完了を含む木が、完了の応答より前に始まった読み直しとして届いても、印は付いたまま、行は一覧に残る
+  const delivered = page.waitForResponse((response) => response.url().endsWith('/api/aoba/backlog-tree'));
+  release();
+  await delivered;
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(row).toHaveCount(1);
+  await expect(row.getByRole('img', { name: '木にもとからある行: 完了' })).toBeVisible();
+});
