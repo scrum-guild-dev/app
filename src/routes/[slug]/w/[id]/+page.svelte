@@ -30,7 +30,13 @@
     sameFilter,
     type BacklogFilter,
   } from '../../../../lib/backlog-filter.ts';
-  import { carriesOver, completionSettled, keepAddedRow, orphanedFromTree } from '../../../../lib/added-rows.ts';
+  import {
+    carriesOver,
+    completionSettled,
+    keepAddedRow,
+    orphanedFromTree,
+    parentStoryIds,
+  } from '../../../../lib/added-rows.ts';
   import { MoveQueue } from '../../../../lib/move-queue.ts';
   import { completionFailureMessage } from '../../../../lib/story-completion.ts';
   import { moveFailureMessage } from '../../../../lib/move-failure.ts';
@@ -208,15 +214,16 @@
     );
     // 絞り込み中は、当たるタスクが唯一だった親が、その完了で木から外れる。遅れて届いた木で、写した行（fromTree）の親が木に無ければ、
     // 行はどの親の下にも描かれず件数だけに数えられるので、印と一緒に捨てる（親ごと外れる競合の無い読み直しと同じ結果）
-    const storyIdsLoaded = new Set([
-      ...loadedStoryIds,
-      // 画面で足したストーリーは、読み直した木に入るまで描かれる親なので、孤立とは数えない
-      ...keptStories.map((entry) => entry.story.id),
-    ]);
-    // 行そのものが木に有るなら（別の人が親を移したなど）、孤立とは言えない
+    const storyIdsLoaded = parentStoryIds(
+      loadedStoryIds,
+      keptStories.map((entry) => entry.story.id),
+    );
     const orphaned = (entry: { task: BacklogTask; storyId: string | null; fromTree?: true }) =>
-      orphanedFromTree(entry, { treeLoaded: loaded !== null, storyIds: storyIdsLoaded }) &&
-      !inTree(loaded, entry.task.id);
+      orphanedFromTree(entry, {
+        treeLoaded: loaded !== null,
+        storyIds: storyIdsLoaded,
+        taskInTree: inTree(loaded, entry.task.id),
+      });
     const orphanIds = untrack(() => added)
       .filter(orphaned)
       .map((entry) => entry.task.id);

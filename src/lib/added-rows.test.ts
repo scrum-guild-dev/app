@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { carriesOver, completionSettled, keepAddedRow, orphanedFromTree } from './added-rows.ts';
+import { carriesOver, completionSettled, keepAddedRow, orphanedFromTree, parentStoryIds } from './added-rows.ts';
 
 const base = { inLoadedTree: false, completed: false, treeLoaded: true, loadedAt: 100 };
 
@@ -60,9 +60,23 @@ test('ワークスペースが替わったときと、最初の木は持ち越�
 test('orphanedFromTree: 写した行の親が木に無いときだけ孤立とする', () => {
   const ids = new Set(['s1']);
   const row = { storyId: 's2', fromTree: true as const };
-  expect(orphanedFromTree(row, { treeLoaded: true, storyIds: ids })).toBe(true);
-  expect(orphanedFromTree({ ...row, storyId: 's1' }, { treeLoaded: true, storyIds: ids })).toBe(false);
-  expect(orphanedFromTree({ storyId: 's2' }, { treeLoaded: true, storyIds: ids })).toBe(false);
-  expect(orphanedFromTree({ ...row, storyId: null }, { treeLoaded: true, storyIds: ids })).toBe(false);
-  expect(orphanedFromTree(row, { treeLoaded: false, storyIds: new Set() })).toBe(false);
+  const base = { treeLoaded: true, storyIds: ids, taskInTree: false };
+  expect(orphanedFromTree(row, base)).toBe(true);
+  expect(orphanedFromTree({ ...row, storyId: 's1' }, base)).toBe(false);
+  expect(orphanedFromTree({ storyId: 's2' }, base)).toBe(false);
+  expect(orphanedFromTree({ ...row, storyId: null }, base)).toBe(false);
+  expect(orphanedFromTree(row, { ...base, treeLoaded: false, storyIds: new Set() })).toBe(false);
+});
+
+test('orphanedFromTree: 行そのものが木に有るときは、親が木に無くても孤立としない', () => {
+  const row = { storyId: 's2', fromTree: true as const };
+  expect(orphanedFromTree(row, { treeLoaded: true, storyIds: new Set(['s1']), taskInTree: true })).toBe(false);
+});
+
+test('parentStoryIds: 画面で足したストーリーも親に数え、数えれば孤立としない', () => {
+  const row = { storyId: 's9', fromTree: true as const };
+  const withoutAdded = parentStoryIds(['s1'], []);
+  const withAdded = parentStoryIds(['s1'], ['s9']);
+  expect(orphanedFromTree(row, { treeLoaded: true, storyIds: withoutAdded, taskInTree: false })).toBe(true);
+  expect(orphanedFromTree(row, { treeLoaded: true, storyIds: withAdded, taskInTree: false })).toBe(false);
 });
