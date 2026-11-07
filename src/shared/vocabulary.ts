@@ -1797,12 +1797,12 @@ export const dictionary = defineDictionary({
   commentSend: '送る',
   commentSending: 'コメントを送っています',
   commentSaving: 'コメントを保存しています',
-  commentDeleting: 'コメントを削除しています',
   commentField: 'コメント',
   commentRequired: 'コメントを書いてから送ってください',
   commentSent: 'コメントを送りました',
   commentSaved: 'コメントを直しました',
   commentRemoved: 'コメントを削除しました',
+  commentUndo: '取り消す',
   commentSendFailed: 'コメントを送れませんでした。書いた文は残しています。もう一度試してください。',
   commentSaveFailed: 'コメントを保存できませんでした。書いた文は残しています。もう一度試してください。',
   commentDeleteFailed: 'コメントを削除できませんでした。もう一度試してください。',
@@ -1811,10 +1811,6 @@ export const dictionary = defineDictionary({
   commentAlreadyDeleted: 'このコメントはすでに削除されています',
   // 権限が無かった（ロールが替わったなど）。一覧を読み直して、出せる操作を出し直す
   commentForbidden: 'このコメントは操作できません。一覧を読み直しました。',
-  commentDeleteTitle: 'コメントを削除する',
-  // {name} は書いた人、{at} は書いた日時（ワークスペースのタイムゾーンの YYYY-MM-DD HH:mm）
-  commentDeleteText:
-    '{name}が {at} に書いたコメントを削除します。本文は戻せません。一覧には「削除されました」と残ります。',
   // フォーカスを置いたときに読む、コメントの一覧と欄の領域の名前
   commentThread: 'コメントの一覧',
   // 書きかけのまま書き込めなくなった（終了した）。欄は読み取り専用で残し、写せるようにする
