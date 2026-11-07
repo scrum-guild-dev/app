@@ -493,20 +493,29 @@ test('カードの「⋯」の端の項目は選べず、選んでも開いた�
   await rowMenuItem(page, first, '上へ').click({ force: true });
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   // 開いたまま Alt と矢印を押しても、カードは動かず、ブラウザの既定（Alt と ← → の戻る、進む）も起きない。
-  // RowMenu の keydown の後に、同じ要素で受けて defaultPrevented を控える
+  // Svelte のイベントは上位でまとめて受けるので、要素に付けたリスナーは RowMenu の処理より先に走る。
+  // キャプチャ段階でイベントそのものを控え、押し終えてから defaultPrevented を読む（Alt だけの keydown は数えない）
   await page.evaluate(() => {
-    const seen: boolean[] = [];
-    (window as unknown as { __prevented: boolean[] }).__prevented = seen;
-    document.querySelectorAll('.row-menu').forEach((menu) => {
-      menu.addEventListener('keydown', (event) => seen.push(event.defaultPrevented));
-    });
+    const seen: KeyboardEvent[] = [];
+    (window as unknown as { __keys: KeyboardEvent[] }).__keys = seen;
+    addEventListener(
+      'keydown',
+      (event) => {
+        if (event.key.startsWith('Arrow')) seen.push(event);
+      },
+      true,
+    );
   });
   const urlBefore = page.url();
   for (const key of ['Alt+ArrowLeft', 'Alt+ArrowRight', 'Alt+ArrowDown']) await page.keyboard.press(key);
-  expect(await page.evaluate(() => (window as unknown as { __prevented: boolean[] }).__prevented)).toEqual([
-    true,
-    true,
-    true,
+  expect(
+    await page.evaluate(() =>
+      (window as unknown as { __keys: KeyboardEvent[] }).__keys.map((event) => [event.key, event.defaultPrevented]),
+    ),
+  ).toEqual([
+    ['ArrowLeft', true],
+    ['ArrowRight', true],
+    ['ArrowDown', true],
   ]);
   expect(page.url()).toBe(urlBefore);
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
