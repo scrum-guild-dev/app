@@ -99,7 +99,11 @@
   function onKeydown(event: KeyboardEvent): void {
     if (event.isComposing || event.keyCode === 229) return;
     // Alt と ↑ ↓ は行の並べ替え（TaskEntry）のキー。メニューの操作に使わず、そのまま行へ通す
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    // 開いている間は、行が動いてメニューだけが取り残されないよう、行へも通さない
+    if (event.altKey || event.ctrlKey || event.metaKey) {
+      if (open) event.stopPropagation();
+      return;
+    }
     if (!open) {
       if (event.key === 'ArrowDown' && event.target === button) {
         event.preventDefault();
@@ -166,6 +170,7 @@
   $effect(() => {
     void options.length;
     void failedNote;
+    void busy;
     if (!open) return;
     void tick().then(() => {
       place();
@@ -226,7 +231,9 @@
       {/each}
       {#if busy && retry === undefined}
         <li role="none">
-          <span class="menu-item" role="menuitem" aria-disabled="true">{t('loading')}</span>
+          <button class="menu-item" type="button" role="menuitem" aria-disabled="true">
+            <span>{t('loading')}</span>
+          </button>
         </li>
       {/if}
       {#if retry !== undefined}
