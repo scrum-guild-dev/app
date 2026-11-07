@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { keepAddedRow } from './added-rows.ts';
+import { completionSettled, keepAddedRow } from './added-rows.ts';
 
 const base = { inLoadedTree: false, completed: false, treeLoaded: true, loadedAt: 100 };
 
@@ -25,4 +25,16 @@ test('読み直した木に入った行は捨てる', () => {
 
 test('完了にした行は、木に無くても残さない', () => {
   expect(keepAddedRow({ at: 101 }, { ...base, completed: true })).toBe(false);
+});
+
+test('完了の応答が返った後に始まった読み直しは、完了を含むので印を捨てる', () => {
+  expect(completionSettled(100, 101)).toBe(true);
+});
+
+test('完了の応答より前に始まった読み直しが遅れて届いても、印は残す', () => {
+  expect(completionSettled(100, 99)).toBe(false);
+});
+
+test('完了の応答と読み直しを始めた時刻が同じなら残す', () => {
+  expect(completionSettled(100, 100)).toBe(false);
 });
