@@ -19,9 +19,9 @@ test.beforeEach(async ({ context, baseURL }) => {
 const SEED_CLIENT_WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 const SEED_INTERNAL_WORKSPACE = '/hibari/w/019a0000-0000-7000-8000-000000000402';
 
-// 木のストーリー1件
+// 木のストーリー1件。題はリンクで、押すとストーリーの引き出し（?story=<ID>）が開く
 function storyGroup(page: Page, title: string) {
-  return page.locator('.tree-group', { has: page.getByRole('button', { name: title, exact: true }) });
+  return page.locator('.tree-group', { has: page.getByRole('link', { name: title, exact: true }) });
 }
 
 test('作ったワークスペース: ストーリーを作り、＋タスクでその下にタスクを作って完了にすると、「完了 / 全体」がその場で変わる', async ({
@@ -86,7 +86,7 @@ test('作ったワークスペース: ストーリーを作り、＋タスクで
   expect(await collect()).toEqual([]);
 });
 
-test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち、題と「＋タスク」は行を開閉せずにダイアログを開く', async ({
+test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち、題は引き出しを、「＋タスク」はダイアログを開いて、行を開閉しない', async ({
   page,
 }) => {
   await createWorkspace(page, '木のチーム');
@@ -100,24 +100,28 @@ test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち�
   const body = group.locator('.tree-children');
   const caret = group.locator('button.tree-caret');
   const addTask = group.getByRole('button', { name: 'タスクを足す: 請求の流れを整える' });
-  const title = group.getByRole('button', { name: '請求の流れを整える', exact: true });
+  const title = group.getByRole('link', { name: '請求の流れを整える', exact: true });
   await expect(caret).toHaveAttribute('aria-expanded', 'true');
   await expect(caret).toHaveAccessibleName('請求の流れを整えるを閉じる');
   await expect(caret).toHaveAttribute('aria-controls', (await body.getAttribute('id')) ?? '');
 
   // 開くと中にフォーカスが入り、Esc で閉じたら、開いたボタンへフォーカスが戻る（close の event は遅れて届くので、
   // 戻るのを待ってから次の操作をする）
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリー' });
+  const storyDrawer = page.getByRole('dialog', { name: '請求の流れを整える', exact: true });
   const taskDialog = page.getByRole('dialog', { name: '起票' });
 
-  // 題を押すとダイアログが開く。行は開閉しない
+  // 題を押すと引き出しが開き、URL に ?story=<ID> が付く。行は開閉せず、Esc で閉じると URL から外れて題のリンクへフォーカスが戻る
   await expectModalFocus(page, {
     opener: title,
-    modal: storyDialog,
-    whileOpen: () => expect(body).toBeVisible(),
+    modal: storyDrawer,
+    whileOpen: async () => {
+      await expect(page).toHaveURL(/\?story=[0-9a-f-]{36}$/);
+      await expect(body).toBeVisible();
+    },
   });
+  await expect(page).not.toHaveURL(/\?story=/);
 
-  // キーボード（Enter と Space）。行は開閉しない
+  // キーボード。「＋タスク」のボタンは Enter と Space で、題のリンクは Enter で開く。行は開閉しない
   for (const key of ['Enter', ' ']) {
     await expectModalFocus(page, {
       opener: addTask,
@@ -125,13 +129,13 @@ test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち�
       press: key,
       whileOpen: () => expect(caret).toHaveAttribute('aria-expanded', 'true'),
     });
-    await expectModalFocus(page, {
-      opener: title,
-      modal: storyDialog,
-      press: key,
-      whileOpen: () => expect(caret).toHaveAttribute('aria-expanded', 'true'),
-    });
   }
+  await expectModalFocus(page, {
+    opener: title,
+    modal: storyDrawer,
+    press: 'Enter',
+    whileOpen: () => expect(caret).toHaveAttribute('aria-expanded', 'true'),
+  });
 
   // caret のボタンで開閉する（クリックも Enter も Space も）。読み上げの名前は開閉で替わる
   await caret.click();
@@ -159,7 +163,7 @@ test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち�
   ).toBeVisible();
 });
 
-test('ストーリーを直すときは、開いたら1件を読み、変えた欄だけを送る。変えた欄が無ければ何も送らない。過ぎた期日は赤い印で出る', async ({
+test('ストーリーの引き出しは、開いたら1件を読み、押せば書けて、変えた欄だけを書き始めた時点の値を添えて送る。変えなければ何も送らない。過ぎた期日は赤い印で出る', async ({
   page,
 }) => {
   await createWorkspace(page, '直すワークスペース');
@@ -176,47 +180,55 @@ test('ストーリーを直すときは、開いたら1件を読み、変えた�
     if (request.url().endsWith('/api/aoba/story-update')) updates.push(request.postDataJSON());
   });
 
-  // 変えずに保存すると、閉じるだけで送らない。リンクの横に、新しいタブで開く「開く」が出る
-  await page.getByRole('button', { name: '元のタイトル', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'ストーリー' });
-  await expect(dialog.getByLabel('本文')).toHaveValue('元の本文');
-  const open = dialog.getByRole('link', { name: 'リンクを新しいタブで開く' });
+  // 題のリンクで開く。リンクの横に、新しいタブで開く「開く」が出る
+  await page.getByRole('link', { name: '元のタイトル', exact: true }).click();
+  // 題を直すと引き出しの名前も替わるので、枠そのもので指す
+  const drawer = page.locator('.drawer');
+  await expect(drawer.getByRole('heading', { level: 2 })).toContainText('元のタイトル');
+  await expect(drawer.getByText('元の本文')).toBeVisible();
+  const open = drawer.getByRole('link', { name: 'リンクを新しいタブで開く' });
   await expect(open).toHaveText('開く');
   await expect(open).toHaveAttribute('href', 'https://example.com/spec');
   await expect(open).toHaveAttribute('target', '_blank');
   await expect(open).toHaveAttribute('rel', /noopener noreferrer/);
-  await dialog.getByRole('button', { name: '保存する' }).click();
-  await expect(dialog).toBeHidden();
+
+  // 「保存」のボタンは無い。押して書き始め、変えずに欄を離れると、送らずに読む形へ戻る
+  await expect(drawer.getByRole('button', { name: '保存', exact: true })).toHaveCount(0);
+  await drawer.getByRole('button', { name: /元のタイトル/ }).click();
+  const titleInput = drawer.getByRole('textbox', { name: 'タイトル' });
+  await expect(titleInput).toBeFocused();
+  await titleInput.blur();
+  await expect(titleInput).toBeHidden();
   expect(updates).toEqual([]);
 
-  // タイトルと期日だけを変える
-  await page.getByRole('button', { name: '元のタイトル', exact: true }).click();
-  await expect(dialog.getByLabel('本文')).toHaveValue('元の本文');
-  await dialog.getByLabel('タイトル').fill('新しいタイトル');
-  await dialog.getByLabel('期日').fill('2020-01-02');
-  await dialog.getByRole('button', { name: '保存する' }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole('status').filter({ hasText: 'ストーリーを保存しました' })).toBeVisible();
-  expect(updates).toHaveLength(1);
-  expect(Object.keys(updates[0] as object).sort()).toEqual(['due_on', 'story_id', 'title', 'workspace_id']);
-  expect(updates[0]).toMatchObject({ title: '新しいタイトル', due_on: '2020-01-02' });
+  // タイトルは Enter で確定する。期日は選んだら少し待って保存する
+  await drawer.getByRole('button', { name: /元のタイトル/ }).click();
+  await titleInput.fill('新しいタイトル');
+  await titleInput.press('Enter');
+  await expect(drawer.getByRole('button', { name: /新しいタイトル/ })).toBeFocused();
+  await drawer.getByLabel('期日').fill('2020-01-02');
+  await expect.poll(() => updates.length).toBe(2);
+  expect(Object.keys(updates[0] as object).sort()).toEqual(['expected', 'story_id', 'title', 'workspace_id']);
+  expect(updates[0]).toMatchObject({ title: '新しいタイトル', expected: { title: '元のタイトル' } });
+  expect(Object.keys(updates[1] as object).sort()).toEqual(['due_on', 'story_id', 'workspace_id']);
+  expect(updates[1]).toMatchObject({ due_on: '2020-01-02' });
 
   // 読み直された木で、色だけでなく文字とアイコンを添えた赤い印が出る。ほかの欄は残っている
   const group = storyGroup(page, '新しいタイトル');
   const chip = group.locator('.chip.is-danger');
   await expect(chip).toHaveText('期日切れ 1/2');
   await expect(chip.locator('svg')).toHaveCount(1);
-  await page.getByRole('button', { name: '新しいタイトル', exact: true }).click();
-  await expect(dialog.getByLabel('本文')).toHaveValue('元の本文');
+  await expect(drawer.getByText('元の本文')).toBeVisible();
+  await expect(open).toHaveAttribute('href', 'https://example.com/spec');
 });
 
-test('ストーリーのダイアログは、読んでいる間は読み込み中を出し、読めなければもう一度試せ、消えていれば閉じて見出しにフォーカスを移す', async ({
+test('ストーリーの引き出しは、読んでいる間は読み込み中を出し、読めなければもう一度試せ、消えていれば閉じて見出しにフォーカスを移す', async ({
   page,
 }) => {
   await page.goto(SEED_CLIENT_WORKSPACE);
   await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
-  const title = page.getByRole('button', { name: '問い合わせの一次回答を早くする', exact: true });
-  const dialog = page.getByRole('dialog', { name: 'ストーリー' });
+  const title = page.getByRole('link', { name: '問い合わせの一次回答を早くする', exact: true });
+  const drawer = page.locator('.drawer');
 
   // 読んでいる間
   let release!: () => void;
@@ -226,18 +238,17 @@ test('ストーリーのダイアログは、読んでいる間は読み込み�
     await call.passThrough();
   });
   await title.click();
-  await expect(dialog.getByRole('status')).toHaveText('読み込んでいます');
-  await expect(dialog.getByLabel('タイトル')).toHaveCount(0);
-  await expect(dialog.getByRole('button', { name: '保存する' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(drawer.getByRole('status').filter({ hasText: '読み込んでいます' })).toHaveCount(1);
+  await expect(drawer.getByRole('textbox')).toHaveCount(0);
   release();
-  await expect(dialog.getByLabel('タイトル')).toHaveValue('問い合わせの一次回答を早くする');
-  await expect(dialog.getByLabel('タイトル')).toBeFocused();
-  await expect(dialog.getByLabel('受け入れ基準')).toHaveValue('- よくある問い合わせ10件にテンプレートがある');
+  await expect(drawer.getByRole('heading', { level: 2 })).toContainText('問い合わせの一次回答を早くする');
+  await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();
+  await expect(drawer.getByText('よくある問い合わせ10件にテンプレートがある')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('dialog[open]')).toHaveCount(0);
+  await expect(drawer).toHaveCount(0);
   await unrouteGate();
 
-  // 読めなかった（5xx）。もう一度試すで読み直す
+  // 読めなかった（5xx）。もう一度試すで読み直す。失敗の文と「もう一度試す」へフォーカスを移す
   let failures = 1;
   const unrouteOnce = await routeOperation(page, storyGet, { slug: 'aoba' }, async (call) => {
     if (failures-- > 0) {
@@ -247,18 +258,19 @@ test('ストーリーのダイアログは、読んでいる間は読み込み�
     }
   });
   await title.click();
-  await expect(dialog.getByText('このストーリーを読み込めませんでした。')).toBeVisible();
-  await expect(dialog.getByLabel('タイトル')).toHaveCount(0);
-  await dialog.getByRole('button', { name: 'もう一度試す' }).click();
-  await expect(dialog.getByLabel('タイトル')).toHaveValue('問い合わせの一次回答を早くする');
+  await expect(drawer.getByText('このストーリーを読み込めませんでした。')).toBeVisible();
+  await expect(drawer.getByRole('button', { name: 'もう一度試す' })).toBeFocused();
+  await drawer.getByRole('button', { name: 'もう一度試す' }).click();
+  await expect(drawer.getByRole('heading', { level: 2 })).toContainText('問い合わせの一次回答を早くする');
   await page.keyboard.press('Escape');
-  await expect(page.locator('dialog[open]')).toHaveCount(0);
+  await expect(drawer).toHaveCount(0);
   await unrouteOnce();
 
-  // 消えていた（404）。閉じて、知らせ、木を読み直し、見出しにフォーカスを移す
+  // 消えていた（404）。閉じて、知らせ、URL から外し、木を読み直し、見出しにフォーカスを移す
   await failOperation(page, storyGet, { slug: 'aoba' }, 404, 'not_found');
   await title.click();
-  await expect(page.locator('dialog[open]')).toHaveCount(0);
+  await expect(drawer).toHaveCount(0);
+  await expect(page).not.toHaveURL(/\?story=/);
   await expect(page.getByRole('status').filter({ hasText: 'このストーリーは見つかりません' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeFocused();
   // 下の方の行を押すたびに Playwright がスクロールし、404 の後の木の読み直しで位置が上に戻るかが実行の速さで変わる。
@@ -414,7 +426,7 @@ test('seed の社内ツール: ストーリーの行の合計と畳んだ件数�
   expect(order).toEqual(['tree-group', 'tree-group', '']);
 });
 
-test('閉じたワークスペースでは、作る操作と「＋タスク」を出さず、ストーリーのダイアログは readonly で開く', async ({
+test('閉じたワークスペースでは、作る操作と「＋タスク」を出さず、ストーリーの引き出しは読み取り専用で開く', async ({
   page,
 }) => {
   await rewriteOperation(page, workspaceInfo, { slug: 'aoba' }, (output) => ({
@@ -427,20 +439,19 @@ test('閉じたワークスペースでは、作る操作と「＋タスク」�
   await expect(page.getByRole('button', { name: /タスクを足す/ })).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: /タスクを足す/ })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'ポイントの付与と失効を管理画面で確かめられる', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'ストーリー' });
-  await expect(dialog.getByLabel('タイトル')).toHaveValue('ポイントの付与と失効を管理画面で確かめられる');
-  for (const label of ['タイトル', '受け入れ基準', '本文', '期日', 'リンク']) {
-    const field = dialog.getByRole('textbox', { name: label, exact: true });
-    await expect(field).toHaveAttribute('readonly', '');
-    await expect(field).not.toBeDisabled();
-  }
-  // 日付は読み取り専用の text で出す
-  await expect(dialog.getByLabel('期日')).toHaveValue('2026-10-23');
-  await expect(dialog.getByRole('button', { name: '保存する' })).toHaveCount(0);
-  await expect(dialog.getByText(/読み取りだけできます/)).toBeVisible();
+  await page.getByRole('link', { name: 'ポイントの付与と失効を管理画面で確かめられる', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: 'ポイントの付与と失効を管理画面で確かめられる', exact: true });
+  await expect(drawer.getByText(/読み取りだけできます/)).toBeVisible();
+  // 入力欄も、直す口も、操作の「⋯」も、完了の帯も出さない。受け入れ基準、本文、期日は文字で出す
+  await expect(drawer.getByRole('textbox')).toHaveCount(0);
+  await expect(drawer.getByRole('heading', { level: 2 }).getByRole('button')).toHaveCount(0);
+  await expect(drawer.getByRole('button', { name: /^操作:/ })).toHaveCount(0);
+  await expect(drawer.getByRole('button', { name: '完了にする' })).toHaveCount(0);
+  await expect(drawer.getByText('購入の確定でポイントが付く')).toBeVisible();
+  await expect(drawer.getByText('先方の運用担当が、問い合わせを受けたときに')).toBeVisible();
+  await expect(drawer.locator('.props').getByText('2026-10-23')).toBeVisible();
   // リンクは読み取り専用でも開ける
-  await expect(dialog.getByRole('link', { name: 'リンクを新しいタブで開く' })).toHaveAttribute(
+  await expect(drawer.getByRole('link', { name: 'リンクを新しいタブで開く' })).toHaveAttribute(
     'href',
     'https://example.com/notes/42',
   );
@@ -471,7 +482,7 @@ test('狭い幅では、caret、題、「＋タスク」の押せる範囲が 44
     );
   }
   const caret = group.locator('button.tree-caret');
-  const title = group.getByRole('button', { name: '問い合わせの一次回答を早くする', exact: true });
+  const title = group.getByRole('link', { name: '問い合わせの一次回答を早くする', exact: true });
   const addTask = group.getByRole('button', { name: /タスクを足す/ });
   expect(await reaches(caret, 16, 0)).toBe(true);
   expect(await reaches(title, 0, -18)).toBe(true);

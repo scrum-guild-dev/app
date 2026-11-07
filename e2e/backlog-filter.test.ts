@@ -96,7 +96,7 @@ test('担当、エピック、検索で絞り、URL に残る。絞っている�
   await assignee.selectOption({ label: '自分' });
   await expect(page).toHaveURL(/\?assignee=me$/);
   await expect(taskTitles(page)).toHaveText(['ポイント表示の API を作る']);
-  await expect(page.getByRole('button', { name: '見積もりを整える', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '見積もりを整える', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '会員ポイント制度を公開する', exact: true })).toHaveCount(0);
   // 親のない完了の折りたたみは出さない。並べ替えは出さず、外すと並べ替えられると案内する。親を移すは残す
   await expect(page.getByText('上にあるものほど優先します。絞り込みを外すと並べ替えられます。')).toBeVisible();
@@ -130,7 +130,7 @@ test('担当、エピック、検索で絞り、URL に残る。絞っている�
   // ストーリーの題に当たれば、配下のタスクも出す
   await search.fill('を整える');
   await expect(taskTitles(page)).toHaveText(['見積もりを送る']);
-  await expect(page.getByRole('button', { name: '見積もりを整える', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '見積もりを整える', exact: true })).toBeVisible();
 
   // 担当なしと検索を組み合わせる（「かつ」）
   await assignee.selectOption({ label: '担当なし' });
@@ -214,14 +214,14 @@ test('絞っているときに作ったタスクやストーリーが当たら�
   await create(page, 'ストーリーを作る', '新しい目標');
   await expect(notice).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'ストーリーを作りました' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '新しい目標', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '新しい目標', exact: true })).toHaveCount(0);
 
   // トーストの「絞り込みを外す」で外すと、作ったものが出る
   await notice.getByRole('button', { name: '絞り込みを外す' }).click();
   await expect(notice).toHaveCount(0);
   await expect(page).toHaveURL(/\/w\/[0-9a-f-]{36}$/);
   await expect(taskTitles(page)).toHaveText(['自分のタスク', '自分のもう1つ', '誰かのタスク']);
-  await expect(page.getByRole('button', { name: '新しい目標', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '新しい目標', exact: true })).toBeVisible();
 
   // 絞り込みは戻る操作の履歴を積まない。戻ると、絞り込みの手前（バックログ）ではなく、その前の画面（ワークスペースを作った管理の画面）へ戻る
   await page.goBack();
@@ -240,7 +240,7 @@ test('絞っているときに、木に出ていないストーリーへ親を�
   await filterBar(page).getByRole('combobox', { name: '担当' }).selectOption({ label: '自分' });
   await expect(page).toHaveURL(/\?assignee=me$/);
   // 配下に当たるタスクの無いストーリーは、担当で絞ると出ない
-  await expect(page.getByRole('button', { name: '配下の無い目標', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '配下の無い目標', exact: true })).toHaveCount(0);
 
   // 親の候補には、木に出ていないストーリーも出る
   await page.getByRole('button', { name: '親を移す: 自分のタスク' }).click();
@@ -262,11 +262,11 @@ test('絞っているときに、木に出ていないストーリーへ親を�
   await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeFocused();
   release();
   // 通った後に読み直すので、移した先のストーリーが当たるようになり、その下に出る。もう1つは親なしのまま
-  await expect(page.getByRole('button', { name: '配下の無い目標', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '配下の無い目標', exact: true })).toBeVisible();
   await expect(taskTitles(page)).toHaveText(['自分のタスク', '自分の2つ目']);
   // 再読み込みしても同じ（サーバーに通っている）
   await page.reload();
-  await expect(page.getByRole('button', { name: '配下の無い目標', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '配下の無い目標', exact: true })).toBeVisible();
   await expect(taskTitles(page)).toHaveText(['自分のタスク', '自分の2つ目']);
   expect(await collect()).toEqual([]);
 });

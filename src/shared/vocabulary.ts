@@ -1654,6 +1654,11 @@ export const dictionary = defineDictionary({
   drawerMoved: '{task}「{title}」に移りました',
   drawerAtFirst: '先頭です',
   drawerAtLast: '最後です',
+  // 引き出しの帯の「⋯」（ストーリーの引き出しの、親を移すと削除）。{title} は開いている行の題
+  rowMenu: '操作',
+  rowMenuLabel: '操作: {title}',
+  // ストーリーの引き出しから親（エピック）を移した知らせ
+  storyParentMoved: '{story}の親を移しました',
   taskManualChip: '手で作った{task}',
   taskImportedChip: '取り込んだ{task}',
   taskDrawerLoadFailed: 'この{task}を読み込めませんでした。もう一度試してください。',

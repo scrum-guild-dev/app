@@ -11,9 +11,10 @@
 
   // kit.js の treeStory（バックログの木のストーリーの行と、配下）。親のないストーリーの行と、エピックの下のストーリーの行（nested）。
   // 行は普通の要素で、開閉は左端の caret のボタン（aria-expanded と aria-controls）だけが受け持つ。
-  // 題を押すとストーリーのダイアログ（onEdit）、「＋タスク」を押すと親を選んだタスクのダイアログ（onAddTask）を開く。
-  // この3つは独立したボタンなので、押しても行は開閉しない。開閉の状態は部品の中に持ち、expand() で開ける（起票した親を開く）。
-  // 閉じたワークスペース（canWrite が偽）と、完了したストーリーには「＋タスク」を出さない（題は読み取り専用で開く）。
+  // 題はリンク（href）で、押すとストーリーの引き出し（`?story=<ID>`。StoryDrawer）を開く。data-story-id は、閉じたときにフォーカスを戻す目印と、
+  // 前後のストーリーへ移る順の元（trackStoryOrder）。「＋タスク」を押すと親を選んだタスクのダイアログ（onAddTask）を開く。
+  // この3つは独立した操作なので、押しても行は開閉しない。開閉の状態は部品の中に持ち、expand() で開ける（起票した親を開く）。
+  // 閉じたワークスペース（canWrite が偽）と、完了したストーリーには「＋タスク」を出さない（題は引き出しを読み取り専用で開く）。
   // 完了したストーリーの期日には色を付けない。
   // tasks は未完了の行（画面が足した行を含む）。pointsDone と pointsAll は、画面が足した行と完了にした行の分を含む合計。
   // 配下のタスクの行は row の snippet で描く（完了の操作は画面の側が持つ）。
@@ -39,7 +40,7 @@
     pointsAll,
     clock,
     canWrite,
-    onEdit,
+    href,
     onAddTask,
     row,
     nested = false,
@@ -62,7 +63,8 @@
     pointsAll: number;
     clock: { today: string; weekStart: number };
     canWrite: boolean;
-    onEdit: (story: BacklogStory, trigger: HTMLElement) => void;
+    // 題のリンクの行き先（画面が、今の絞り込みを残して `?story=<ID>` を付けた経路）
+    href: string;
     onAddTask: (story: BacklogStory, trigger: HTMLElement) => void;
     row: Snippet<[BacklogTask]>;
     nested?: boolean;
@@ -157,9 +159,10 @@
     </button>
     <span class="kind is-story" title={t('story')}><Icon name="check" /></span>
     <span class="tree-title">
-      <button class="tree-link" type="button" onclick={(event) => onEdit(story, event.currentTarget)}
-        >{story.title}</button
-      >
+      <!-- 押しても、一覧のスクロールとフォーカスの位置は動かさない（引き出しが閉じたとき、data-story-id で探してフォーカスを戻す） -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- href は画面が resolve した経路に ?story=<ID> を足したもの -->
+      <a class="tree-link" {href} data-story-id={story.id} data-sveltekit-reset="false">{story.title}</a>
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
       <!-- 区分は親のないストーリーにだけ出す（エピックの下では、エピックの行に出ている区分を引き継ぐ） -->
       {#if !nested && story.category !== null}
         <DefinitionChip kind="category" name={story.category.name} />

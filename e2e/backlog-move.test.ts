@@ -36,13 +36,9 @@ function rootTitles(page: Page) {
   return page.locator('.tree > div:not(.tree-group) .entry-title');
 }
 
-// 題の行を持つ木の1件。ストーリーの題はボタン、エピックの題はリンク
+// 題の行を持つ木の1件。ストーリーの題もエピックの題もリンク（ストーリーは引き出しへ、エピックはエピックの画面へ）
 function storyGroup(page: Page, title: string) {
-  return page.locator('.tree-group', {
-    has: page
-      .getByRole('button', { name: title, exact: true })
-      .or(page.getByRole('link', { name: title, exact: true })),
-  });
+  return page.locator('.tree-group', { has: page.getByRole('link', { name: title, exact: true }) });
 }
 
 test('「上へ」「下へ」と Alt と ↑ ↓ で並べ替え、フォーカスは同じ要素に残り、読み直しても並びが残る', async ({
@@ -130,14 +126,11 @@ test('「親を移す」でストーリーの下の末尾へ移し、親なし�
   // ストーリーを並べ替える。前の親の移動の後に送られるので、この応答を待てば両方が書き終わっている
   const storyMoved = waitForResponses(page, '/story-move');
   await page.getByRole('button', { name: '下へ: ポイント制度を公開する' }).click();
-  await expect(page.locator('.tree-group button.tree-link')).toHaveText([
-    '決済の障害を減らす',
-    'ポイント制度を公開する',
-  ]);
+  await expect(storyTitles(page)).toHaveText(['決済の障害を減らす', 'ポイント制度を公開する']);
 
   await storyMoved;
   await page.reload();
-  await expect(page.locator('.tree-group button.tree-link')).toHaveText([
+  await expect(page.locator('.tree-row.is-story a.tree-link')).toHaveText([
     '決済の障害を減らす',
     'ポイント制度を公開する',
   ]);
@@ -414,11 +407,11 @@ function taskGrip(page: Page, title: string) {
 }
 
 function storyRow(page: Page, title: string) {
-  return page.locator('.tree-row.is-story', { has: page.getByRole('button', { name: title, exact: true }) });
+  return page.locator('.tree-row.is-story', { has: page.getByRole('link', { name: title, exact: true }) });
 }
 
 function storyTitles(page: Page) {
-  return page.locator('.tree-group button.tree-link');
+  return page.locator('.tree-row.is-story a.tree-link');
 }
 
 test('つまみのドラッグで、同じ親の中のタスクを並べ替え、読み直しても同じ順になる。元と同じ位置では送らない', async ({

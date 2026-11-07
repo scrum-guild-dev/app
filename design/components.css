@@ -1694,6 +1694,8 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .row-menu { position: relative; display: inline-flex; flex: none; }
 .row-menu-btn { opacity: 0; }
 :is(.entry, .tree-row, .card):is(:hover, :focus-within) .row-menu-btn, .row-menu-btn[aria-expanded="true"], .row-menu-btn:focus-visible { opacity: 1; }
+/* 引き出しの帯の「⋯」（ストーリーの引き出しの親を移すと削除）は、ホバーする行が無いので常に出す */
+.drawer .row-menu-btn { opacity: 1; }
 .row-menu-list { position: fixed; z-index: 30; width: max-content; min-width: 12rem; max-width: min(20rem, calc(100vw - 2 * var(--space-4))); }
 .row-menu-list .menu-item { display: flex; align-items: center; gap: var(--space-2); }
 .row-menu-list .menu-item .ico { flex: none; color: var(--color-muted); }

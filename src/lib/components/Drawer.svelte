@@ -34,6 +34,8 @@
     onstep,
     initialFocus = null,
     onrequestclose,
+    noun,
+    modes,
     top,
     children,
   }: {
@@ -50,6 +52,10 @@
     // 前後のボタンで移ってきたときの、押した向き。最初のフォーカスをその向きのボタンへ置く（端で押せなければ閉じるボタン）
     initialFocus?: -1 | 1 | null;
     onrequestclose: () => void;
+    // 前後のボタンが指す行の呼び名（辞書の言葉）。渡さなければ「タスク」。ストーリーの引き出しは「ストーリー」を渡す
+    noun?: string;
+    // 開き方の切り替えに出す形。渡さなければ4つとも出す。ストーリーの引き出しは、ページ全体も新しいタブも無いので、横と真ん中だけを渡す
+    modes?: readonly TaskOpenMode[];
     // 上の帯の左（出どころの印など）
     top?: Snippet;
     children: Snippet;
@@ -65,6 +71,9 @@
     { value: 'page', label: 'drawerPage' },
     { value: 'tab', label: 'drawerTab' },
   ] as const satisfies readonly { value: TaskOpenMode; label: DictionaryKey }[];
+
+  const word = $derived(noun ?? t('task'));
+  const shownChoices = $derived(modes === undefined ? modeChoices : modeChoices.filter((c) => modes.includes(c.value)));
 
   const narrow = new MediaQuery('max-width: 620px');
   const shownMode = $derived(effectiveTaskOpenMode(mode, narrow.current));
@@ -136,14 +145,14 @@
     {#if top}{@render top()}{/if}
     <span class="drawer-tools">
       {#if stepping && adjacent}
-        <span class="drawer-steps" role="group" aria-label={t('drawerSteps', { task: t('task') })}>
+        <span class="drawer-steps" role="group" aria-label={t('drawerSteps', { task: word })}>
           <button
             class="pill"
             type="button"
             data-drawer-step="-1"
-            aria-label={t('drawerPrev', { task: t('task') })}
+            aria-label={t('drawerPrev', { task: word })}
             aria-keyshortcuts="["
-            title={adjacent.hasPrev ? t('drawerPrevTitle', { task: t('task') }) : t('drawerAtFirst')}
+            title={adjacent.hasPrev ? t('drawerPrevTitle', { task: word }) : t('drawerAtFirst')}
             aria-disabled={!adjacent.hasPrev}
             onclick={() => step(-1, 'button')}
           >
@@ -153,9 +162,9 @@
             class="pill"
             type="button"
             data-drawer-step="1"
-            aria-label={t('drawerNext', { task: t('task') })}
+            aria-label={t('drawerNext', { task: word })}
             aria-keyshortcuts="]"
-            title={adjacent.hasNext ? t('drawerNextTitle', { task: t('task') }) : t('drawerAtLast')}
+            title={adjacent.hasNext ? t('drawerNextTitle', { task: word }) : t('drawerAtLast')}
             aria-disabled={!adjacent.hasNext}
             onclick={() => step(1, 'button')}
           >
@@ -164,7 +173,7 @@
         </span>
       {/if}
       <span class="drawer-mode" role="group" aria-label={t('drawerOpenMode')}>
-        {#each modeChoices as choice (choice.value)}
+        {#each shownChoices as choice (choice.value)}
           {#if choice.value !== 'center' || !narrow.current}
             <button
               class="pill"
