@@ -19,6 +19,7 @@ import { decryptCredential } from '../crypto/credential.ts';
 import { uuidv7 } from '../uuid.ts';
 import { stripHiddenCharacters } from '../../shared/hidden-characters.ts';
 import { TASK_TITLE_MAX_LENGTH } from '../../shared/task.ts';
+import { BLANK_CHARACTERS } from '../../shared/text-rules.ts';
 import { importSourceOf, isImportSourceKind } from './index.ts';
 import { ImportSourceError, type ImportItem, type ImportSource, type ImportSourceFailure } from './source.ts';
 
@@ -94,8 +95,10 @@ function parseSettings(json: string): Record<string, unknown> {
 // 改行とタブは語をつなげないよう、除く前に空白にする。何も残らなければ取り込み元のキーを使う
 export function importedTitle(raw: string, fallback: string): string {
   const cleaned = stripHiddenCharacters(raw.replace(/[\t\n\r]+/g, ' ')).trim();
-  const title = cleaned === '' ? stripHiddenCharacters(fallback).trim() : cleaned;
-  return [...title].slice(0, TASK_TITLE_MAX_LENGTH).join('').trim();
+  // 手で入れるタイトルと同じく、空白や幅の無い文字だけのタイトルは空と同じ扱いにする
+  const blank = (text: string) => text.replace(BLANK_CHARACTERS, '') === '';
+  const title = blank(cleaned) ? stripHiddenCharacters(fallback).trim() : cleaned;
+  return blank(title) ? '' : [...title].slice(0, TASK_TITLE_MAX_LENGTH).join('').trim();
 }
 
 function invalid(): ImportSourceError {
@@ -127,8 +130,9 @@ function isDate(value: string): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-// 取り込み元の実装が返した項目の形を確かめる。外から来た値なので、書く前に形と長さを見る
-function assertItem(item: ImportItem): void {
+// 取り込み元の実装が返した項目の形を確かめる。外から来た値なので、書く前に形と長さを見る。
+// 合わない項目は取り込まずに飛ばす（1件の不備で、その頁より後の頁と後ろの範囲を塞がない）
+function isValidItem(item: ImportItem): boolean {
   const kinds = ['issue', 'pull_request', 'review_request'];
   if (
     typeof item !== 'object' ||
@@ -149,8 +153,10 @@ function assertItem(item: ImportItem): void {
     typeof item.isDone !== 'boolean' ||
     (item.dueOn !== null && (typeof item.dueOn !== 'string' || !isDate(item.dueOn)))
   ) {
-    throw invalid();
+    return false;
   }
+  // 見えない文字を除いて空になる欄は、表示に使えない
+  return [item.key, item.containerName, item.status].every((text) => stripHiddenCharacters(text).trim() !== '');
 }
 
 type Scope = { id: string; name: string };
@@ -299,9 +305,8 @@ async function writePage(
   repositories: ReadonlyMap<string, string>,
   now: () => Date,
 ): Promise<number> {
-  for (const item of items) assertItem(item);
-  // 完了した項目は入れない（取り込んでいない項目が完了していたら取り込まない）
-  const open = items.filter((item) => !item.isDone);
+  // 完了した項目は入れない（取り込んでいない項目が完了していたら取り込まない）。形の合わない項目も飛ばす
+  const open = items.filter((item) => isValidItem(item) && !item.isDone);
   if (open.length === 0) return 0;
 
   const at = now();
@@ -315,7 +320,7 @@ async function writePage(
     assigneeUserId: connection.owner_user_id,
     repositoryId: repositories.get(item.containerId) ?? null,
     position: positions[index]!,
-    title: importedTitle(item.title, item.key) || stripHiddenCharacters(item.sourceId).trim() || '(題なし)',
+    title: importedTitle(item.title, item.key) || importedTitle(item.sourceId, '') || '(題なし)',
     kind: item.kind,
     sourceId: item.sourceId,
     reviewerSourceId: item.reviewerSourceId,

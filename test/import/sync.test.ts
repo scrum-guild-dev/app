@@ -349,13 +349,8 @@ describe('取り込みの同期', () => {
     expect(after.last_error_message).not.toContain(SECRET);
   });
 
-  test('形の違う項目や進まない続きの位置は断り、何も入れない', async () => {
+  test('進まない続きの位置は断る', async () => {
     const { workspace, connection, db } = await setup();
-    const bad = fakeSource({ '501': [{ items: [item(1), item(2, { dueOn: '2026-02-30' })], next: null }] });
-    expect(await syncConnection(env, db, workspace.id, connection.id, { source: bad.source })).toMatchObject({
-      outcome: 'error',
-    });
-    expect(await tasksOf(db, workspace.id)).toHaveLength(0);
     let calls = 0;
     const stuck: ImportSource = {
       ...fakeSource({}).source,
@@ -374,14 +369,104 @@ describe('取り込みの同期', () => {
     ['javascript の URL', { url: 'javascript:alert(1)' }],
     ['URL でない文字列', { url: 'not a url' }],
     ['ISO 8601 でない更新日時', { updatedAt: '2026/11/01' }],
-  ])('%s の項目は断り、何も入れない', async (_name, overrides) => {
+    ['暦に無い期日', { dueOn: '2026-02-30' }],
+    ['見えない文字だけのキー', { key: '\u{200B}' }],
+    ['見えない文字だけの状態', { status: '\u0000' }],
+  ])('%s の項目は飛ばし、ほかの項目は入れる', async (_name, overrides) => {
     const { workspace, connection, db } = await setup();
     const { source } = fakeSource({ '501': [{ items: [item(1), item(2, overrides)], next: null }] });
     expect(await syncConnection(env, db, workspace.id, connection.id, { source })).toEqual({
+      outcome: 'success',
+      imported: 1,
+      more: false,
+    });
+    expect((await tasksOf(db, workspace.id)).map((t) => t.title)).toEqual(['項目 1']);
+  });
+
+  test('2頁目に形の悪い項目があっても、後の頁と別の範囲を取り込む', async () => {
+    const { organization, owner, workspace, db } = await setup();
+    const connectionId = uuidv7();
+    const sealed = await encryptCredential(env, SECRET, connectionId);
+    const connection = await createConnection(organization, workspace.id, owner.id, {
+      id: connectionId,
+      credential_ciphertext: sealed.ciphertext,
+      credential_key_version: sealed.keyVersion,
+      credential_last4: 'e-01',
+    });
+    await createConnectionScope(organization, connection.id, { source_id: '501', source_name: 'a' });
+    await createConnectionScope(organization, connection.id, { source_id: '502', source_name: 'b' });
+    const { source } = fakeSource({
+      '501': [
+        { items: [item(1)], next: '1' },
+        { items: [item(2, { key: 'k'.repeat(2001) }), item(3)], next: null },
+      ],
+      '502': [{ items: [item(4)], next: null }],
+    });
+    const result = await syncConnection(env, db, workspace.id, connection.id, { source });
+    expect(result).toEqual({ outcome: 'success', imported: 3, more: false });
+  });
+
+  test('空に見えるタイトルはキーに替え、200字の切れ目の空白を残さない', async () => {
+    const { workspace, connection, db } = await setup();
+    const { source } = fakeSource({
+      '501': [
+        {
+          items: [
+            item(1, { title: '\u3164' }),
+            item(2, { title: '\u{200D}' }),
+            item(3, { title: `${'a'.repeat(199)} bcd` }),
+          ],
+          next: null,
+        },
+      ],
+    });
+    await syncConnection(env, db, workspace.id, connection.id, { source });
+    const titles = (await tasksOf(db, workspace.id)).map((t) => t.title);
+    expect(titles).toContain('fake/box#1');
+    expect(titles).toContain('fake/box#2');
+    expect(titles).toContain('a'.repeat(199));
+  });
+
+  test('100件の頁は入り、101件の頁は断る', async () => {
+    const { workspace, connection, db } = await setup();
+    const many = (n: number) => Array.from({ length: n }, (_, i) => item(i + 1));
+    const ok = fakeSource({ '501': [{ items: many(100), next: null }] });
+    expect(await syncConnection(env, db, workspace.id, connection.id, { source: ok.source })).toMatchObject({
+      outcome: 'success',
+      imported: 100,
+    });
+    const over = fakeSource({ '501': [{ items: many(101), next: null }] });
+    expect(await syncConnection(env, db, workspace.id, connection.id, { source: over.source })).toEqual({
       outcome: 'error',
       imported: 0,
     });
-    expect(await tasksOf(db, workspace.id)).toHaveLength(0);
+  });
+
+  test('2つ目の範囲の先頭で上限に当たったとき、次の同期は2つ目の範囲から始める', async () => {
+    const { organization, owner, workspace, db } = await setup();
+    const connectionId = uuidv7();
+    const sealed = await encryptCredential(env, SECRET, connectionId);
+    const connection = await createConnection(organization, workspace.id, owner.id, {
+      id: connectionId,
+      credential_ciphertext: sealed.ciphertext,
+      credential_key_version: sealed.keyVersion,
+      credential_last4: 'e-01',
+    });
+    await createConnectionScope(organization, connection.id, { source_id: '501', source_name: 'a' });
+    await createConnectionScope(organization, connection.id, { source_id: '502', source_name: 'b' });
+    const pages = {
+      '501': [
+        { items: [item(1)], next: '1' },
+        { items: [item(2)], next: null },
+      ],
+      '502': [{ items: [item(3)], next: null }],
+    };
+    const first = fakeSource(pages);
+    await syncConnection(env, db, workspace.id, connection.id, { source: first.source, maxPages: 2 });
+    const second = fakeSource(pages);
+    const result = await syncConnection(env, db, workspace.id, connection.id, { source: second.source, maxPages: 2 });
+    expect(result).toEqual({ outcome: 'success', imported: 1, more: false });
+    expect(second.calls.map((call) => `${call.scope.id}:${call.cursor}`)).toEqual(['502:null']);
   });
 
   test('認証情報の形が違う失敗も接続を停止にする', async () => {
