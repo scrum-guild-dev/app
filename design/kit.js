@@ -2186,7 +2186,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const group = (title, rows) => `<section class="shortcut-group"><h3 class="shortcut-group-title">${title}</h3><dl class="shortcut-list">${rows.map(([name, key]) => `<div class="shortcut-row"><dt>${name}</dt><dd><kbd class="kbd">${key}</kbd></dd></div>`).join("")}</dl></section>`;
       openDialog("ショートカットの一覧",
         group("この画面", [[`${t("task")}を書く`, "c"]]) +
-        group("どの画面でも", [["画面とタスクを探す", keyHints.mac ? "⌘K" : "Ctrl K"], [`${t("backlog")}へ移る`, "g b"], ["今日やることへ移る", "g t"], ["ショートカットの一覧", "?"]]),
+        group("どの画面でも", [["画面とタスクを探す", keyHints.mac ? "⌘K" : "Ctrl K"], [`${t("backlog")}へ移る`, "g b"], [`${t("pageToday")}へ移る`, "g t"], ["ショートカットの一覧", "?"]]),
         "");
     },
     // 引き出しで書きかけの欄があるまま閉じる（か別のタスクへ移る）ときに、捨てるかを確かめる。安全な側（続ける）を主ボタンにする

@@ -43,6 +43,21 @@ describe('shortcutHelpGroups', () => {
     expect(groups.global.map((item) => item.id)).toEqual(['search', 'go-backlog', 'go-sprint', 'help']);
   });
 
+  test('この画面の組も helpOrder の小さい順で、順を付けないものは検索（1）より後ろの既定の位置に並ぶ', () => {
+    const groups = shortcutHelpGroups([
+      shortcut('b', { helpOrder: 2 }),
+      shortcut('a', { helpOrder: 1 }),
+      shortcut('unordered'),
+    ]);
+    expect(groups.screen.map((item) => item.id)).toEqual(['a', 'b', 'unordered']);
+    // global を付けて helpOrder を付け忘れた登録は、検索（1）や画面を移るキー（2）より上に出ない
+    const forgot = shortcutHelpGroups([
+      shortcut('forgot', { global: true }),
+      shortcut('search', { global: true, helpOrder: 1 }),
+    ]);
+    expect(forgot.global.map((item) => item.id)).toEqual(['search', 'forgot']);
+  });
+
   test('enabled が例外を投げても、その登録だけ出さずに続ける', () => {
     const groups = shortcutHelpGroups([
       shortcut('broken', {
