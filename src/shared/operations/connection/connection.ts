@@ -28,6 +28,9 @@ export const connectionProviderSchema = z.string().min(1).max(40);
 export const CONNECTION_CREDENTIAL_MAX_LENGTH = 512;
 export const connectionCredentialSchema = z.string().max(CONNECTION_CREDENTIAL_MAX_LENGTH);
 
+// 1人が1つのワークスペースに登録できる接続の数の上限。超える登録は 409（conflict、details.reason は connection_limit）
+export const CONNECTIONS_PER_MEMBER_MAX = 20;
+
 // 1接続に選べる範囲の数の上限。保存は D1 の束縛の上限に収まる数の文に分ける
 export const CONNECTION_SCOPES_MAX = 200;
 

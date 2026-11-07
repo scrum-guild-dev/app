@@ -2,8 +2,10 @@
 // 取り込み元への通信と認証情報の暗号化は、組織の道具（organization-tools.ts）だけを通す。処理は env も fetch も受け取らない。
 // 認証情報（平文、暗号文、鍵の版）は応答にもログにも出さない。出すのは末尾4文字だけ。
 // 接続の表（connections）は組織の ID を持たないので、確かめたワークスペースの ID（workspace.workspaceId）で絞る
+import { sql } from 'kysely';
 import { now } from '../../shared/clock.ts';
 import {
+  CONNECTIONS_PER_MEMBER_MAX,
   connectionCreate,
   connectionList,
   connectionScopeCandidates,
@@ -189,7 +191,31 @@ export const connectionCreateOperation = implement(connectionCreate, async ({ db
               eb.val(stamp).as('created_at'),
               eb.val(stamp).as('updated_at'),
             ])
-            .where((eb) => eb.exists(openWorkspace(q, organizationId, workspaceId))),
+            .where((eb) => eb.exists(openWorkspace(q, organizationId, workspaceId)))
+            // 1人が1つのワークスペースに持てる接続の数に上限を置く（共通の D1 を埋める登録の繰り返しを止める）
+            .where(
+              (eb) =>
+                eb
+                  .selectFrom('connections as limit_c')
+                  .select((inner) => inner.fn.countAll<number>().as('n'))
+                  .where('limit_c.workspace_id', '=', workspaceId)
+                  .where('limit_c.owner_user_id', '=', ownerUserId)
+                  .where('limit_c.deleted_at', 'is', null),
+              '<',
+              CONNECTIONS_PER_MEMBER_MAX,
+            )
+            // 同じ人が同じ名前で同じ種類の接続を続けて登録する再送を止める（二重の取り込みの元になる）
+            .where((eb) =>
+              eb.not(
+                eb.exists(
+                  liveConnections(q, workspaceId)
+                    .select('c.id')
+                    .where('c.owner_user_id', '=', ownerUserId)
+                    .where('c.provider', '=', input.provider)
+                    .where('c.name', '=', input.name),
+                ),
+              ),
+            ),
         ),
     ),
     // 履歴には表示名と種類だけを残す。認証情報は入れない
@@ -216,7 +242,16 @@ export const connectionCreateOperation = implement(connectionCreate, async ({ db
   ] as const);
   if ((results[0]?.changes ?? 0) === 0) {
     await throwIfClosed(db, workspaceId);
-    throw new ApiError(409, 'conflict');
+    const mine = await db.first(
+      db.statement((q) =>
+        liveConnections(q, workspaceId)
+          .select((eb) => eb.fn.countAll<number>().as('n'))
+          .where('c.owner_user_id', '=', ownerUserId),
+      ),
+    );
+    throw new ApiError(409, 'conflict', {
+      reason: Number(mine?.n ?? 0) >= CONNECTIONS_PER_MEMBER_MAX ? 'connection_limit' : 'duplicate_name',
+    });
   }
   const [connection] = await readConnections(db, workspaceId, connectionId);
   if (connection === undefined) throw new ApiError(409, 'conflict');
@@ -298,17 +333,6 @@ export const connectionScopesSaveOperation = implement(
     // 置き換える文は、履歴の行（この要求の ID）があるときだけ動く。履歴は、接続の更新が行を変えたときだけ入る
     const logged = (q: Pick<QueryCreator<Tables>, 'selectFrom'>) =>
       q.selectFrom('change_logs').select('change_logs.id').where('change_logs.id', '=', logId);
-    const scopeCount = (
-      await db.first(
-        db.statement((q) =>
-          q
-            .selectFrom('connection_scopes')
-            .select((eb) => eb.fn.countAll<number>().as('n'))
-            .where('connection_id', '=', row.id),
-        ),
-      )
-    )?.n;
-
     const statements = [
       db.statement((q) =>
         q
@@ -334,7 +358,10 @@ export const connectionScopesSaveOperation = implement(
                 eb.val('connection').as('entity_type'),
                 eb.val(row.id).as('entity_id'),
                 eb.val('update').as('action'),
-                eb.val(JSON.stringify({ scopes_count: [Number(scopeCount ?? 0), chosen.length] })).as('changes_json'),
+                // 前の件数は履歴の文の中で数える（読んでから書くまでの並行する保存で食い違わない）
+                sql<string>`json_object('scopes_count', json_array((select count(*) from connection_scopes where connection_id = ${row.id}), ${chosen.length}))`.as(
+                  'changes_json',
+                ),
                 eb.val(stamp).as('created_at'),
               ])
               .where(previousStatementChanged),
@@ -370,6 +397,8 @@ export const connectionScopesSaveOperation = implement(
     const results = await db.batch(statements as never);
     if (((results as readonly { changes?: number }[])[0]?.changes ?? 0) === 0) {
       await throwIfClosed(db, workspaceId);
+      // 読んだ後に接続が削除されたときは、存在しないときと同じ 404
+      await ownConnection(db, actorUserId, workspaceId, row.id);
       throw new ApiError(409, 'conflict');
     }
     const [connection] = await readConnections(db, workspaceId, row.id);

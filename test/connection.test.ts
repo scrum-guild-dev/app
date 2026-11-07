@@ -4,6 +4,8 @@
 import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
 import {
+  CONNECTION_SCOPES_MAX,
+  CONNECTIONS_PER_MEMBER_MAX,
   connectionCreate,
   connectionList,
   connectionScopeCandidates,
@@ -13,6 +15,7 @@ import { createApp } from '../src/server/app.ts';
 import { decryptCredential } from '../src/server/crypto/credential.ts';
 import { orgDb } from '../src/server/db/index.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
+import { createConnection } from './factories.ts';
 import { createFakePatGithub, fakePat, fakeRepos } from './import/fake-github-pat.ts';
 import { post } from './operations/harness.ts';
 import { createTarget, type Person, type Target } from './operations/world.ts';
@@ -271,6 +274,11 @@ describe('connection-scope-candidates', () => {
 
     expect((await candidates(ctx, target, target.member, foreign.id)).status).toBe(404);
     expect((await candidates(ctx, target, target.member, 'no-such-connection')).status).toBe(404);
+
+    // 同じ組織の別のワークスペースの接続は、ワークスペースの ID が合わないので 404
+    const sibling = await createConnection(target.organization, target.otherWorkspace.id, target.bystander.userId!);
+    expect((await candidates(ctx, target, target.member, sibling.id)).status).toBe(404);
+    expect((await save(ctx, target, target.member, sibling.id, ['1001'])).status).toBe(404);
   });
 
   test('保存した認証情報を取り込み元が受け付けなくなったら 409 の credential_rejected', async () => {
@@ -360,6 +368,106 @@ describe('connection-scopes-save', () => {
     const res = await save(ctx, target, target.member, id, ['1002']);
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe('workspace_closed');
+    const after = await rowsOf(target);
+    expect(after.scopes.map((scope) => scope.source_id)).toEqual(['1001']);
+    expect(after.logs.map((log) => log.action)).toEqual(['create', 'update']);
+  });
+});
+
+describe('接続の数と削除済み', () => {
+  test('同じ人が同じ種類と名前を続けて登録すると 409 の duplicate_name で、2件目はできない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const pat = fakePat('dup');
+    ctx.github.addAccount(pat, OWNER, []);
+
+    expect((await register(ctx, target, target.member, pat)).status).toBe(200);
+    const again = await register(ctx, target, target.member, pat);
+    expect(again.status).toBe(409);
+    expect(((await again.json()) as { error: { details: { reason: string } } }).error.details.reason).toBe(
+      'duplicate_name',
+    );
+    expect((await rowsOf(target)).connections).toHaveLength(1);
+    // 名前が違えば登録できる
+    expect((await register(ctx, target, target.member, pat, '別の名前')).status).toBe(200);
+  });
+
+  test('1人の接続の数が上限に達すると 409 の connection_limit。削除済みは数えず、ほかの人は数えない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const pat = fakePat('limit');
+    ctx.github.addAccount(pat, OWNER, []);
+    for (let i = 0; i < CONNECTIONS_PER_MEMBER_MAX; i++) {
+      await createConnection(target.organization, target.workspace.id, target.member.userId!, {
+        name: `接続 ${i}`,
+        ...(i === 0 ? { deleted_at: '2026-11-01T00:00:00.000Z' } : {}),
+      });
+    }
+    // 削除済みが1件あるので、あと1件は登録できる
+    expect((await register(ctx, target, target.member, pat, '最後の1件')).status).toBe(200);
+    const over = await register(ctx, target, target.member, pat, '上限の外');
+    expect(over.status).toBe(409);
+    expect(((await over.json()) as { error: { details: { reason: string } } }).error.details.reason).toBe(
+      'connection_limit',
+    );
+    expect((await register(ctx, target, target.leader, pat, 'リーダーの接続')).status).toBe(200);
+  });
+
+  test('削除済みの接続は一覧に出ず、候補と保存は 404', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const gone = await createConnection(target.organization, target.workspace.id, target.member.userId!, {
+      deleted_at: '2026-11-01T00:00:00.000Z',
+    });
+
+    const list = await post(ctx.app, connectionList, {
+      slug: target.slug,
+      token: target.member.token,
+      body: { workspace_id: target.workspace.id },
+    });
+    expect(((await list.json()) as { connections: unknown[] }).connections).toEqual([]);
+    expect((await candidates(ctx, target, target.member, gone.id)).status).toBe(404);
+    expect((await save(ctx, target, target.member, gone.id, [])).status).toBe(404);
+  });
+});
+
+describe('connection-scopes-save の上限と取り込み元の不調', () => {
+  test('201件は 400、200件は保存できる', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const pat = fakePat('many');
+    ctx.github.addAccount(pat, OWNER, fakeRepos(CONNECTION_SCOPES_MAX));
+    const { connection } = (await (await register(ctx, target, target.member, pat)).json()) as {
+      connection: { id: string };
+    };
+    const ids = fakeRepos(CONNECTION_SCOPES_MAX).map((repo) => String(repo.id));
+
+    const over = await save(ctx, target, target.member, connection.id, [...ids, '9999']);
+    expect(over.status).toBe(400);
+    const ok = await save(ctx, target, target.member, connection.id, ids);
+    expect(ok.status).toBe(200);
+    expect((await rowsOf(target)).scopes).toHaveLength(CONNECTION_SCOPES_MAX);
+  });
+
+  test('取り込み元に届かないときは、候補も保存も 503 で、範囲は変わらない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await registered(ctx, target, target.member, 'down2');
+    await save(ctx, target, target.member, id, ['1001']);
+
+    ctx.github.failNext({ kind: 'status', status: 502 });
+    expect((await candidates(ctx, target, target.member, id)).status).toBe(503);
+    ctx.github.failNext({ kind: 'status', status: 502 });
+    expect((await save(ctx, target, target.member, id, ['1002'])).status).toBe(503);
     expect((await rowsOf(target)).scopes.map((scope) => scope.source_id)).toEqual(['1001']);
+  });
+
+  test('取り込み元が 403 を返したときも 409 の credential_rejected', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await registered(ctx, target, target.member, 'forbid');
+    ctx.github.failNext({ kind: 'status', status: 403 });
+    const res = await candidates(ctx, target, target.member, id);
+    expect(res.status).toBe(409);
   });
 });
