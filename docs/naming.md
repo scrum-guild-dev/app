@@ -6,7 +6,7 @@
 
 名前は Scrum Guild（スクラムギルド）にする。パッケージ、ドメインは `scrum-guild`。
 
-2026-11-03 に、製品紹介サイトも別リポジトリで持つため、GitHub の Organization `scrum-guild-dev`（Free）を作り、`ucan-lab/scrum-guild` を `scrum-guild-dev/app` に移管した。Issue と PR は既存のものを引き継ぐ。製品名、パッケージ名、Worker の名前と公開 URL は変えない。紹介サイトは `scrum-guild-dev/website`（private）に置く。
+2026-11-03 に、製品紹介サイトも別リポジトリで持つため、GitHub の Organization `scrum-guild-dev`（Free）を作り、`ucan-lab/scrum-guild` を `scrum-guild-dev/app` に移管した。Issue と PR は既存のものを引き継ぐ。製品名、パッケージ名、Worker の名前と公開 URL は変えない。紹介サイトは `scrum-guild-dev/website` に置く。
 
 ## 経緯
 
