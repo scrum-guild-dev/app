@@ -4,7 +4,9 @@
   import { effectiveTaskOpenMode, type StepSource, type TaskOpenMode } from '../drawer.svelte.ts';
   import type { DictionaryKey } from '../../shared/vocabulary.ts';
   import { inertOutside } from '../inert-outside.ts';
-  import { stepFocusTarget, stepOfKey } from '../task-order.ts';
+  import { ariaKeyshortcuts } from '../shortcut-keys.ts';
+  import { useShortcut } from '../shortcuts.svelte.ts';
+  import { stepFocusTarget } from '../task-order.ts';
   import { modalState } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
@@ -88,6 +90,27 @@
     onstep?.(delta, source);
   }
 
+  // `[` が前、`]` が次（shortcuts.svelte.ts に登録する）。引き出し自身がダイアログなので inModal にし、
+  // ほかのモーダルのダイアログ（書きかけの確認など）が開いている間だけ、後ろの引き出しを動かさない
+  const PREV_KEY = '[';
+  const NEXT_KEY = ']';
+  useShortcut(() => ({
+    id: 'drawer-prev',
+    keys: PREV_KEY,
+    label: () => t('drawerPrev', { task: word }),
+    inModal: true,
+    enabled: () => stepping && modalState.openCount === 0,
+    run: () => step(-1, 'key'),
+  }));
+  useShortcut(() => ({
+    id: 'drawer-next',
+    keys: NEXT_KEY,
+    label: () => t('drawerNext', { task: word }),
+    inModal: true,
+    enabled: () => stepping && modalState.openCount === 0,
+    run: () => step(1, 'key'),
+  }));
+
   // 開いたら閉じるボタンへ。ただし前後のボタンで移ってきたなら、読み込み中から押した向きのボタンへ置く
   // （読み込みを待つ間に Enter を押し続けても、閉じるボタンに届かない）。その向きが端で押せなければ閉じるボタン
   // 要素がそろった一度だけ置く（前後の有無が後から替わっても、使っている最中のフォーカスを奪わない）
@@ -113,15 +136,6 @@
 
 <svelte:window
   onkeydown={(event) => {
-    // ほかのモーダルのダイアログ（書きかけの確認など）が開いている間は、後ろの引き出しを動かさない
-    const delta = stepOfKey(event);
-    if (delta !== null) {
-      if (stepping && modalState.openCount === 0) {
-        event.preventDefault();
-        step(delta, 'key');
-      }
-      return;
-    }
     // 日本語の変換中の Esc は変換の取り消し。keyCode 229 は、isComposing が偽になる Safari の変換確定の直後の Esc も含む
     if (event.key !== 'Escape' || event.isComposing || event.keyCode === 229) return;
     if (event.defaultPrevented || modalState.openCount > 0) return;
@@ -154,7 +168,7 @@
             type="button"
             data-drawer-step="-1"
             aria-label={t('drawerPrev', { task: word })}
-            aria-keyshortcuts="["
+            aria-keyshortcuts={ariaKeyshortcuts(PREV_KEY)}
             title={adjacent.hasPrev ? t('drawerPrevTitle', { task: word }) : t('drawerAtFirst')}
             aria-disabled={!adjacent.hasPrev}
             onclick={() => step(-1, 'button')}
@@ -166,7 +180,7 @@
             type="button"
             data-drawer-step="1"
             aria-label={t('drawerNext', { task: word })}
-            aria-keyshortcuts="]"
+            aria-keyshortcuts={ariaKeyshortcuts(NEXT_KEY)}
             title={adjacent.hasNext ? t('drawerNextTitle', { task: word }) : t('drawerAtLast')}
             aria-disabled={!adjacent.hasNext}
             onclick={() => step(1, 'button')}
