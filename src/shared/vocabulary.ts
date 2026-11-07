@@ -425,7 +425,7 @@ export const dictionary = defineDictionary({
   // バックログ（ワークスペースの画面）。{backlog} {task} {create} {done} {points} は、辞書の言葉を画面が渡す
   backlogTasksLabel: '{backlog}の{task}',
   backlogEmptyTitle: 'まだ{task}がありません',
-  backlogEmptyText: '{task}を優先する順に並べる場所です。上の「{create}」から最初の{task}を作ります。',
+  backlogEmptyText: '{task}を優先する順に並べる場所です。下の空の行に題を入れて、最初の{task}を作ります。',
   backlogEmptyClosedText: '終了した{workspace}には、{task}を作れません。',
   // 完了の折りたたみを開いた状態の文言。閉じた状態の文言は、親のないタスクが backlogFolded、ストーリーの配下が storyFolded
   completedCollapse: '{done} {count} 件を閉じる',
@@ -446,7 +446,7 @@ export const dictionary = defineDictionary({
   backlogPageName: '{backlog}・{name}',
   // 未完了が0件で、完了した親のないタスクがあるとき、折りたたみの行の上に出す
   backlogNoOpenTitle: '未完了の{task}はありません',
-  backlogNoOpenText: '次の{task}は、上の「{create}」から作ります。',
+  backlogNoOpenText: '次の{task}は、下の空の行に題を入れて作ります。',
   // 絞り込みの帯（見本の design/backlog.html の .toolbar）。{label} は選択欄の名前（{assignee}、{category}、リポジトリ、{epic}）
   filterLabel: '{backlog}の絞り込み',
   backlogSearch: 'タイトルで探す',

@@ -15,7 +15,6 @@
   import MoveParentDialog from '../../../../lib/components/MoveParentDialog.svelte';
   import PageHead from '../../../../lib/components/PageHead.svelte';
   import TeamExperience from '../../../../lib/components/TeamExperience.svelte';
-  import TaskCreateDialog from '../../../../lib/components/TaskCreateDialog.svelte';
   import TaskEntry from '../../../../lib/components/TaskEntry.svelte';
   import DraftRow from '../../../../lib/components/DraftRow.svelte';
   import TreeEpic from '../../../../lib/components/TreeEpic.svelte';
@@ -438,7 +437,6 @@
     if (storyActions.includes('reopen')) return t('storyReopening', { done: t('done') });
     return '';
   });
-  let taskDialog = $state<ReturnType<typeof TaskCreateDialog>>();
   // 完了にした行の完了の印へフォーカスを移すために持つ。読むのは操作の後の処理の中だけ。
   // bind:this で行ごとに書き込むので $state にする（ただの入れ物だと開発時に binding_property_non_reactive が出る）
   const entries = $state<Record<string, ReturnType<typeof TaskEntry> | null | undefined>>({});
@@ -1156,6 +1154,7 @@
           workspaceId: workspace.id,
           onSaved: () => invalidateAll(),
           onStale: () => void invalidateAll(),
+          definitions: data.definitions,
         }
       : undefined}
   />
@@ -1223,15 +1222,7 @@
     focusable
     tallies={[{ tone: 'warn', icon: 'pen', label: t('unfilledChip', { detail: t('detail') }), count: unfilledCount }]}
     meta={data.teamTotal === null ? undefined : teamExperience}
-  >
-    {#snippet actions()}
-      {#if canWrite}
-        <button class="btn is-primary" type="button" onclick={(event) => taskDialog?.show(event.currentTarget)}>
-          <Icon name="plus" />{t('create')}
-        </button>
-      {/if}
-    {/snippet}
-  </PageHead>
+  ></PageHead>
 
   <!-- 完成の定義（components.css の .dod）。木の上に1つだけ畳んで置き、行ごとには繰り返さない。空なら出さない。
        本文は開くまで描かない（長い定義の変換と描画を、開かない人に払わせない） -->
@@ -1255,9 +1246,15 @@
       art="notice"
       title={t('backlogEmptyTitle', { task: t('task') })}
       text={canWrite
-        ? t('backlogEmptyText', { task: t('task'), create: t('create') })
+        ? t('backlogEmptyText', { task: t('task') })
         : t('backlogEmptyClosedText', { task: t('task'), workspace: t('workspace') })}
     />
+    <!-- 起票のダイアログが無いので、書ける人には最初の一歩の空の行を出す -->
+    {#if canWrite}
+      <section class="section" aria-label={t('backlogTasksLabel', { backlog: t('backlog'), task: t('task') })}>
+        {@render treeView()}
+      </section>
+    {/if}
   {:else}
     <section class="section" aria-label={t('backlogTasksLabel', { backlog: t('backlog'), task: t('task') })}>
       <BacklogFilterBar
@@ -1345,7 +1342,7 @@
               icon="board"
               title={t('backlogNoOpenTitle', { task: t('task') })}
               text={canWrite
-                ? t('backlogNoOpenText', { task: t('task'), create: t('create') })
+                ? t('backlogNoOpenText', { task: t('task') })
                 : t('backlogEmptyClosedText', { task: t('task'), workspace: t('workspace') })}
             />
           {/if}
@@ -1393,17 +1390,6 @@
   {/snippet}
 
   {#if canWrite}
-    <TaskCreateDialog
-      bind:this={taskDialog}
-      slug={page.params.slug ?? ''}
-      workspaceId={workspace.id}
-      stories={openStories}
-      categories={data.definitions?.categories ?? []}
-      repositories={data.definitions?.repositories ?? []}
-      definitionsFailed={data.definitions === null}
-      oncreated={(task, storyId) => void created(task, storyId)}
-      announceCreated={!filtering}
-    />
     <MoveParentDialog bind:this={moveDialog} parents={openStories} onmove={moveParent} />
     <MoveParentDialog bind:this={storyMoveDialog} parents={openEpics} onmove={moveStoryParent} />
   {/if}

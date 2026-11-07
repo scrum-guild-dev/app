@@ -3,22 +3,13 @@
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, settledScrollY, signIn, waitForSettled } from './helpers.ts';
+import { addTaskRow, createWorkspace, settledScrollY, signIn, waitForSettled } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
-
-// 起票のダイアログから、タイトルだけでタスクを1件作る
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-}
 
 // 引き出し（かページ全体）の帯にある、開き方のボタン。押した時点で実行する
 function modeButton(scope: Page | Locator, name: string): Locator {
@@ -32,7 +23,7 @@ function storedMode(page: Page): Promise<string | null> {
 
 test('ページ全体は一覧を重ねず、アプリ内から来た画面へ閉じ、直接開いたらバックログへ閉じる', async ({ page }) => {
   await createWorkspace(page, '詳細ページワークスペース');
-  await addTask(page, 'ページだけで読む');
+  await addTaskRow(page, 'ページだけで読む');
   const backlog = page.url();
   await page.getByRole('link', { name: 'ページだけで読む', exact: true }).click();
   await expect(page).toHaveURL(/[?&]task=[0-9a-f-]{36}/);
@@ -76,7 +67,7 @@ test('ページ全体は一覧を重ねず、アプリ内から来た画面へ�
 
 test('開き方の変更は書きかけを確認し、新しいタブなら詳細を閉じる。既定の別タブは元画面を保つ', async ({ page }) => {
   await createWorkspace(page, '別タブワークスペース');
-  await addTask(page, '別タブで読む');
+  await addTaskRow(page, '別タブで読む');
   const backlog = page.url();
   const row = page.getByRole('link', { name: '別タブで読む', exact: true });
   await row.click();
@@ -118,7 +109,7 @@ test('開き方のボタンは押したときだけ実行する。矢印キー�
   page,
 }) => {
   await createWorkspace(page, '既定ワークスペース');
-  await addTask(page, '既定を替える');
+  await addTaskRow(page, '既定を替える');
   const backlog = page.url();
   await page.getByRole('link', { name: '既定を替える', exact: true }).click();
   await expect(page).toHaveURL(/[?&]task=[0-9a-f-]{36}/);
@@ -149,7 +140,7 @@ test('既定のページ全体へ行のリンクで来て閉じると、履歴�
 }) => {
   await page.addInitScript(() => localStorage.setItem('task-open-mode', 'page'));
   await createWorkspace(page, '絞り込みワークスペース');
-  await addTask(page, '絞り込みから読む');
+  await addTaskRow(page, '絞り込みから読む');
   const backlog = page.url();
   await page.goto(`${backlog}?q=${encodeURIComponent('絞り込み')}`);
   const filtered = page.url();
@@ -177,7 +168,7 @@ test('存在しないタスクの URL を直接開くと、トーストで知ら
 test('ページ全体から新しいタブを選ぶと、別タブで開き、元のタブは直前の画面へ戻る', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('task-open-mode', 'page'));
   await createWorkspace(page, '別タブ移りワークスペース');
-  await addTask(page, 'ページから別タブへ');
+  await addTaskRow(page, 'ページから別タブへ');
   const backlog = page.url();
   const link = page.getByRole('link', { name: 'ページから別タブへ', exact: true });
   await link.click();
@@ -196,7 +187,7 @@ test('ページ全体から新しいタブを選ぶと、別タブで開き、�
 
 test('新しいタブを開けなかったら、詳細も既定もそのままにして、トーストで知らせる', async ({ page }) => {
   await createWorkspace(page, '遮断ワークスペース');
-  await addTask(page, '遮断されて読む');
+  await addTaskRow(page, '遮断されて読む');
   const backlog = page.url();
   await page.getByRole('link', { name: '遮断されて読む', exact: true }).click();
   await expect(page).toHaveURL(/[?&]task=[0-9a-f-]{36}/);
@@ -219,7 +210,7 @@ test('新しいタブを開けなかったら、詳細も既定もそのまま�
 test('ページ全体は、左のメニューにフォーカスがあるときの Esc では閉じない', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('task-open-mode', 'page'));
   await createWorkspace(page, 'メニュー Esc ワークスペース');
-  await addTask(page, 'Esc を確かめる');
+  await addTaskRow(page, 'Esc を確かめる');
   await page.getByRole('link', { name: 'Esc を確かめる', exact: true }).click();
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]{36}$/);
   const detail = page.url();
@@ -236,7 +227,7 @@ test('ページ全体は、左のメニューにフォーカスがあるとき�
 
 test('別のタブで替えた既定は、開きっぱなしのタブにも反映される', async ({ context, page }) => {
   await createWorkspace(page, '同期ワークスペース');
-  await addTask(page, '同期して読む');
+  await addTaskRow(page, '同期して読む');
   const backlog = page.url();
   const link = page.getByRole('link', { name: '同期して読む', exact: true });
   await expect(link).toHaveAttribute('href', /\?task=/);

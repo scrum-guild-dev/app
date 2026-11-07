@@ -4,7 +4,7 @@
 // あおば開発の管理者ミナトで、ワークスペースを作ってタスクを足して使う（seed の行を消さない）
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn } from './helpers.ts';
+import { addTaskRow, createWorkspace, signIn } from './helpers.ts';
 import { routeOperation } from './operations.ts';
 import { taskDelete } from '../src/shared/operations/task/task-delete.ts';
 import { taskRestore } from '../src/shared/operations/task/task-restore.ts';
@@ -14,14 +14,6 @@ const AOBA = { slug: 'aoba' };
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
-
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-}
 
 // 行の題のリンクで引き出しを開く（キーボードの人と同じく、フォーカスを置いて Enter）
 async function openByKeyboard(page: Page, title: string) {
@@ -39,7 +31,7 @@ function deleteButton(drawer: Locator) {
 
 test('キーボードで削除すると「取り消す」へフォーカスが移り、押すと戻したタスクの題のリンクへ移る', async ({ page }) => {
   await createWorkspace(page, '削除の取り消しの鍵盤');
-  await addTask(page, '鍵盤で消す');
+  await addTaskRow(page, '鍵盤で消す');
   const drawer = await openByKeyboard(page, '鍵盤で消す');
   await deleteButton(drawer).focus();
   await page.keyboard.press('Enter');
@@ -58,7 +50,7 @@ test('「取り消す」にフォーカスがあるとき Esc で閉じると、
   page,
 }) => {
   await createWorkspace(page, '削除の取り消しの Esc');
-  for (const title of ['先頭の行', '真ん中の行', '末尾の行']) await addTask(page, title);
+  for (const title of ['先頭の行', '真ん中の行', '末尾の行']) await addTaskRow(page, title);
 
   // 真ん中を消して Esc: 次の行（末尾の行）へ
   let drawer = await openByKeyboard(page, '真ん中の行');
@@ -80,7 +72,7 @@ test('「取り消す」にフォーカスがあるとき Esc で閉じると、
 
 test('マウスで削除したときは「取り消す」へフォーカスを移さず、見出しに置く', async ({ page }) => {
   await createWorkspace(page, '削除の取り消しのマウス');
-  await addTask(page, 'マウスで消す');
+  await addTaskRow(page, 'マウスで消す');
   await page.getByRole('link', { name: 'マウスで消す', exact: true }).click();
   await page
     .getByRole('dialog', { name: 'マウスで消す' })
@@ -95,8 +87,8 @@ test('マウスで削除したときは「取り消す」へフォーカスを�
 test('続けて消すと、「取り消す」の読み上げの名前でどのタスクかが分かる。長いタイトルは折り返す', async ({ page }) => {
   await createWorkspace(page, '削除の取り消しの連続');
   const long = '長いタイトルのタスク '.repeat(8).trim();
-  await addTask(page, '一つ目');
-  await addTask(page, long);
+  await addTaskRow(page, '一つ目');
+  await addTaskRow(page, long);
   for (const title of ['一つ目', long]) {
     await page.getByRole('link', { name: title, exact: true }).click();
     await page.getByRole('dialog', { name: title }).getByRole('button', { name: 'このタスクを削除する' }).click();
@@ -120,7 +112,7 @@ test('取り消しが通信の失敗で落ちたら「取り消す」付きで�
   page,
 }) => {
   await createWorkspace(page, '削除の取り消しの出し直し');
-  await addTask(page, '出し直すタスク');
+  await addTaskRow(page, '出し直すタスク');
   let calls = 0;
   await routeOperation(page, taskRestore, AOBA, async (call) => {
     calls += 1;
@@ -150,7 +142,7 @@ test('取り消しが通信の失敗で落ちたら「取り消す」付きで�
 
 test('取り消しが 403 や 409 で断られたら、理由を知らせるだけで「取り消す」を出し直さない', async ({ page }) => {
   await createWorkspace(page, '削除の取り消しの断り');
-  await addTask(page, '断られるタスク');
+  await addTaskRow(page, '断られるタスク');
   await routeOperation(page, taskRestore, AOBA, (call) => call.fail(403, 'forbidden'));
   await page.getByRole('link', { name: '断られるタスク', exact: true }).click();
   await page
@@ -166,7 +158,7 @@ test('取り消しが 403 や 409 で断られたら、理由を知らせるだ�
 
 test('戻すときに外した参照があれば、成功のトーストにそのことを添える', async ({ page }) => {
   await createWorkspace(page, '削除の取り消しの外した参照');
-  await addTask(page, '参照を外すタスク');
+  await addTaskRow(page, '参照を外すタスク');
   await routeOperation(page, taskRestore, AOBA, async (call) => {
     const output = await call.fetch();
     await call.fulfill({ ...output, cleared: ['story', 'assignee'] });
@@ -184,7 +176,7 @@ test('戻すときに外した参照があれば、成功のトーストにそ�
 
 test('削除の応答を待つ間に引き出しを閉じても、トーストの「取り消す」が消したタスクを戻す', async ({ page }) => {
   await createWorkspace(page, '削除の取り消しの途中で閉じる');
-  await addTask(page, '待つ間に閉じるタスク');
+  await addTaskRow(page, '待つ間に閉じるタスク');
   let release: () => void = () => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -209,7 +201,7 @@ test('削除の応答を待つ間に引き出しを閉じても、トースト�
 
 test('取り消しの応答だけが落ちて出し直しても、戻っているので失敗とは告げず、戻したことを知らせる', async ({ page }) => {
   await createWorkspace(page, '削除の取り消しの応答落ち');
-  await addTask(page, '応答が落ちるタスク');
+  await addTaskRow(page, '応答が落ちるタスク');
   let calls = 0;
   await routeOperation(page, taskRestore, AOBA, async (call) => {
     calls += 1;
@@ -236,7 +228,7 @@ test('取り消しの応答だけが落ちて出し直しても、戻ってい�
 
 test('マウスで「取り消す」を押しても、戻した行へフォーカスを移さない', async ({ page }) => {
   await createWorkspace(page, '削除の取り消しのマウス取り消し');
-  await addTask(page, 'マウスで戻す');
+  await addTaskRow(page, 'マウスで戻す');
   await page.getByRole('link', { name: 'マウスで戻す', exact: true }).click();
   await page
     .getByRole('dialog', { name: 'マウスで戻す' })
@@ -258,7 +250,7 @@ test('ページ全体で開いて、キーボードで削除すると「取り�
   page,
 }) => {
   await createWorkspace(page, '削除の取り消しのページ全体');
-  await addTask(page, 'ページで消す');
+  await addTaskRow(page, 'ページで消す');
   const workspacePath = new URL(page.url()).pathname;
   const href = await page.getByRole('link', { name: 'ページで消す', exact: true }).getAttribute('href');
   const taskId = new URL(href!, page.url()).searchParams.get('task');

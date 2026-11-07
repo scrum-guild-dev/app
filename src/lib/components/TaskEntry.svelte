@@ -7,6 +7,9 @@
   import { callOperation } from '../api.ts';
   import { showToast } from '../toast.svelte.ts';
   import type { BacklogTask } from '../../shared/operations/task/backlog-tree.ts';
+  import type { DefinitionRef } from '../../shared/operations/definition/definition.ts';
+  import { dueStatus } from '../../shared/due.ts';
+  import { formatMonthDay } from '../format.ts';
   import type { DropRow } from '../backlog-drop.ts';
   import type { BacklogDnd } from '../backlog-dnd.svelte.ts';
   import { taskDetailHref, taskLinkAttrs } from '../drawer.svelte.ts';
@@ -47,7 +50,14 @@
   // 完了にした行はつかめない（列だけ空ける）。ほかの行をつかんだときの落とす位置は、行の data-drop（線）で示す。狭い幅と指の画面では CSS がつまみを隠す。
   // ドラッグの代わりは「上へ」「下へ」と Alt と ↑ ↓
   // 完了の印の判を押す動き（.is-new）は、今押した行（justDone が真）だけで再生する。開いた時点で完了済みの行（今日やることの今日完了）は静止した印を出す
-  type RowAttrs = { slug: string; workspaceId: string; onSaved: () => Promise<void> | void; onStale: () => void };
+  // definitions は、画面が読んだ区分とリポジトリの一覧（読めなかったときは null で、「なし」と今の値だけを選べる）
+  type RowAttrs = {
+    slug: string;
+    workspaceId: string;
+    onSaved: () => Promise<void> | void;
+    onStale: () => void;
+    definitions: { categories: readonly DefinitionRef[]; repositories: readonly DefinitionRef[] } | null;
+  };
   let {
     task,
     clock,
@@ -320,6 +330,134 @@
     }
   }
 
+  // ---- 期日、リポジトリ、区分のチップ ----
+  // 3つとも task-update に1欄ずつ送る。選んだ値は読み直すまで行に出し、送るのは欄ごとに1本ずつで、送っている間に選び直した分は最後の値だけを送る。
+  // 断られたら理由をトーストで知らせて元の値に戻す。リポジトリと区分が消えていたとき（404）は、消えたことを言う
+  type FieldKey = 'due_on' | 'repository_id' | 'category_id';
+  let fieldPending = $state<Partial<Record<FieldKey, { value: string | null }>>>({});
+  const fieldSending: Record<FieldKey, boolean> = { due_on: false, repository_id: false, category_id: false };
+  const fieldConfirmed: Partial<Record<FieldKey, string | null>> = {};
+
+  function fieldValue(key: FieldKey): string | null {
+    if (key === 'due_on') return task.due_on;
+    if (key === 'repository_id') return task.repository?.id ?? null;
+    return task.category?.id ?? null;
+  }
+  function fieldShown(key: FieldKey): string | null {
+    const pendingValue = fieldPending[key];
+    return pendingValue !== undefined ? pendingValue.value : fieldValue(key);
+  }
+
+  function chooseField(key: FieldKey, value: string | null): void {
+    fieldPending[key] = { value };
+    if (!fieldSending[key]) void sendField(key);
+  }
+
+  async function sendField(key: FieldKey): Promise<void> {
+    if (attrs === undefined) return;
+    fieldSending[key] = true;
+    try {
+      for (;;) {
+        const entry = fieldPending[key];
+        if (entry === undefined) break;
+        const choice = entry.value;
+        const base = key in fieldConfirmed ? fieldConfirmed[key]! : fieldValue(key);
+        if (choice === base) {
+          delete fieldPending[key];
+          if (key in fieldConfirmed) {
+            delete fieldConfirmed[key];
+            await attrs.onSaved();
+          }
+          break;
+        }
+        const result = await callOperation(
+          taskUpdate,
+          { workspace_id: attrs.workspaceId, task_id: task.id, [key]: choice },
+          { slug: attrs.slug },
+        );
+        if (result.ok) {
+          fieldConfirmed[key] = choice;
+          if (fieldPending[key]?.value === choice) {
+            showToast(t('taskSaved'), 'check');
+            await attrs.onSaved();
+            delete fieldConfirmed[key];
+            if (fieldPending[key]?.value === choice) delete fieldPending[key];
+          }
+          continue;
+        }
+        let message: string;
+        if (result.status === 404) {
+          // タスクが消えたか、選んだ区分かリポジトリが消えた。読み直して分ける
+          const latest = await callOperation(
+            taskDetail,
+            { workspace_id: attrs.workspaceId, task_id: task.id },
+            { slug: attrs.slug },
+          );
+          if (!latest.ok && latest.status === 404) message = t('taskGone', { task: t('task') });
+          else if (!latest.ok || key === 'due_on') message = t('taskSaveFailed');
+          else message = t('definitionRefGone', { kind: key === 'repository_id' ? t('repository') : t('category') });
+        } else if (result.status === 409 && result.error?.code === 'conflict' && key === 'category_id') {
+          message = t('categoryHasParent', { task: t('task'), category: t('category') });
+        } else {
+          message = await explain(result, t('taskSaveFailed'));
+        }
+        if (fieldPending[key]?.value === choice) delete fieldPending[key];
+        delete fieldConfirmed[key];
+        await rejected(message);
+      }
+    } finally {
+      fieldSending[key] = false;
+    }
+  }
+
+  const dueShown = $derived(fieldShown('due_on'));
+  const repositoryShownId = $derived(fieldShown('repository_id'));
+  const categoryShownId = $derived(fieldShown('category_id'));
+  // 親のないタスクだけが区分を選べる。親のあるタスクは、引き継いだ値を文字で出して押せない
+  const categoryLocked = $derived(
+    showCategory ? undefined : t('categoryHasParent', { task: t('task'), category: t('category') }),
+  );
+
+  function dueInfo(value: string): { text: string; tone?: 'danger' | 'warn' } {
+    try {
+      const date = formatMonthDay(value);
+      if (done) return { text: date };
+      const status = dueStatus(value, clock.today, clock.weekStart);
+      if (status === 'overdue') return { text: t('dueOverdue', { due: t('due'), date }), tone: 'danger' };
+      if (status === 'today') return { text: t('dueToday'), tone: 'warn' };
+      if (status === 'this_week') return { text: t('dueThisWeek', { date }), tone: 'warn' };
+      return { text: date };
+    } catch {
+      return { text: value };
+    }
+  }
+  const dueView = $derived(dueShown === null ? null : dueInfo(dueShown));
+
+  // 選択肢は「なし」と一覧。今の値が一覧に無い（読めなかった、直後に消えた）ときも残す
+  function definitionOptions(
+    list: readonly DefinitionRef[] | undefined,
+    current: DefinitionRef | null,
+    none: string,
+  ): { value: string; text: string }[] {
+    const options = [{ value: '', text: none }, ...(list ?? []).map((item) => ({ value: item.id, text: item.name }))];
+    if (current !== null && !options.some((option) => option.value === current.id)) {
+      options.push({ value: current.id, text: current.name });
+    }
+    return options;
+  }
+  const repositoryOptions = $derived(
+    definitionOptions(attrs?.definitions?.repositories, task.repository, t('repositoryNone')),
+  );
+  const categoryOptions = $derived(
+    definitionOptions(attrs?.definitions?.categories, task.category, t('categoryNone', { category: t('category') })),
+  );
+  const repositoryText = $derived(
+    repositoryOptions.find((option) => option.value === (repositoryShownId ?? ''))?.text ?? t('repository'),
+  );
+  const categoryText = $derived(
+    categoryOptions.find((option) => option.value === (categoryShownId ?? ''))?.text ?? t('category'),
+  );
+
   function move(delta: -1 | 1): void {
     if (!movable || (delta < 0 ? !canMoveUp : !canMoveDown)) return;
     onMove?.(task, delta);
@@ -420,16 +558,17 @@
       {...taskLinkAttrs()}>{task.title}</a
     >
     <!-- eslint-enable svelte/no-navigation-without-resolve -->
-    {#if workspaceName !== undefined || task.repository !== null || category !== null || task.sprint !== null || unfilled || metaChip !== undefined || metaText !== undefined}
+    {#if workspaceName !== undefined || (attrs === undefined && (task.repository !== null || category !== null)) || task.sprint !== null || unfilled || metaChip !== undefined || metaText !== undefined}
       <span class="entry-meta">
         {#if workspaceName !== undefined}<span class="tag">{workspaceName}</span>{/if}
         {#if task.sprint !== null}
           <DefinitionChip kind="sprint" name={sprintShortName(task.sprint, t)} mono={task.sprint.name === null} />
         {/if}
-        {#if task.repository !== null}
+        <!-- チップのある行（attrs）は、リポジトリと区分を右端のチップが出す -->
+        {#if attrs === undefined && task.repository !== null}
           <DefinitionChip kind="repository" name={task.repository.name} />
         {/if}
-        {#if category !== null}
+        {#if attrs === undefined && category !== null}
           <DefinitionChip kind="category" name={category.name} />
         {/if}
         <!-- 決まった欄が未記入（完了していないタスクだけ。見本の taskFlags の .chip.is-todo。色だけに頼らず、鉛筆の印と文字で示す） -->
@@ -442,10 +581,63 @@
     {/if}
   </div>
   <div class="entry-end">
-    {#if task.due_on !== null}
+    {#if attrs === undefined && task.due_on !== null}
       <DueChip dueOn={task.due_on} today={clock.today} weekStart={clock.weekStart} {done} />
     {/if}
     {#if attrs !== undefined}
+      <AttrChip
+        attr={t('due')}
+        text={dueView === null ? t('due') : dueView.text}
+        unset={dueView === null}
+        tone={dueView?.tone}
+        options={[]}
+        current={dueShown ?? ''}
+        onselect={(value) => chooseField('due_on', value === '' ? null : value)}
+      >
+        {#snippet panel(close)}
+          <div class="due-panel">
+            <input
+              class="input"
+              type="date"
+              aria-label={t('due')}
+              value={dueShown ?? ''}
+              onchange={(event) => {
+                const value = event.currentTarget.value;
+                if (value === '') return;
+                close();
+                chooseField('due_on', value);
+              }}
+            />
+            {#if dueShown !== null}
+              <button
+                class="btn is-sm is-quiet"
+                type="button"
+                onclick={() => {
+                  close();
+                  chooseField('due_on', null);
+                }}>{t('dueClear')}</button
+              >
+            {/if}
+          </div>
+        {/snippet}
+      </AttrChip>
+      <AttrChip
+        attr={t('repository')}
+        text={repositoryShownId === null ? t('repository') : repositoryText}
+        unset={repositoryShownId === null}
+        options={repositoryOptions}
+        current={repositoryShownId ?? ''}
+        onselect={(value) => chooseField('repository_id', value === '' ? null : value)}
+      />
+      <AttrChip
+        attr={t('category')}
+        text={categoryShownId === null ? t('category') : categoryText}
+        unset={categoryShownId === null}
+        options={categoryOptions}
+        current={categoryShownId ?? ''}
+        onselect={(value) => chooseField('category_id', value === '' ? null : value)}
+        locked={categoryLocked}
+      />
       <AttrChip
         attr={t('points')}
         text={pointsShown === null ? t('points') : t('pointsValue', { value: pointsShown })}

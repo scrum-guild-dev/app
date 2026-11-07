@@ -1,13 +1,13 @@
-// 一本道: ストーリーを作る → 「起票」で親を選んでその下にタスクを作る → 完了にする → 「完了 / 全体」がその場で変わる（読み直しても同じ）。
+// 一本道: ストーリーを作る → ストーリーの末尾の空の行でその下にタスクを作る → 完了にする → 「完了 / 全体」がその場で変わる（読み直しても同じ）。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。CSP の違反も確かめる
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { storyGet } from '../src/shared/operations/story/story-get.ts';
 import { backlogTree } from '../src/shared/operations/task/backlog-tree.ts';
-import { taskCreate } from '../src/shared/operations/task/task-create.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
 import {
   addStoryRow,
+  addTaskRow,
   createWorkspace,
   expectModalFocus,
   fillStoryFields,
@@ -32,7 +32,7 @@ function storyGroup(page: Page, title: string) {
   return page.locator('.tree-group', { has: page.getByRole('link', { name: title, exact: true }) });
 }
 
-test('作ったワークスペース: ストーリーを作り、親を選んでその下にタスクを作って完了にすると、「完了 / 全体」がその場で変わる', async ({
+test('作ったワークスペース: ストーリーを作り、その下にタスクを作って完了にすると、「完了 / 全体」がその場で変わる', async ({
   page,
 }) => {
   const collect = await watchViolations(page);
@@ -46,14 +46,8 @@ test('作ったワークスペース: ストーリーを作り、親を選んで
   await expect(group.locator('.tree-ratio')).toHaveText('完了 0 / 0 pt');
   await expect(group.getByText('タスクはまだありません')).toBeVisible();
 
-  // 見出しの右の「起票」で、親のストーリーを選んで作る。行は閉じない
-  await page.getByRole('button', { name: '起票', exact: true }).click();
-  const taskDialog = page.getByRole('dialog', { name: '起票' });
-  await taskDialog.getByLabel('親のストーリー').selectOption({ label: 'ポイント制度を公開する' });
-  await taskDialog.getByLabel('タイトル').fill('付与のバッチを書く');
-  await taskDialog.getByRole('radio', { name: '3', exact: true }).check();
-  await taskDialog.getByRole('button', { name: '起票' }).click();
-  await expect(taskDialog).toBeHidden();
+  // ストーリーの末尾の「タスクを足す」の空の行で、その下に作る。ポイントは作った後に行のチップで選ぶ
+  await addTaskRow(page, '付与のバッチを書く', 'ポイント制度を公開する');
   await expect(group.locator('.tree-children')).toBeVisible();
   // トーストには親の題を添える
   await expect(
@@ -63,8 +57,12 @@ test('作ったワークスペース: ストーリーを作り、親を選んで
   // 読み直さずに、親の配下に出る。「全体」のポイントには足される
   const row = group.locator('.entry', { hasText: '付与のバッチを書く' });
   await expect(row).toHaveCount(1);
-  await expect(group.locator('.tree-ratio')).toHaveText('完了 0 / 3 pt');
+  await expect(group.locator('.tree-ratio')).toHaveText('完了 0 / 0 pt');
   await expect(group.getByText('タスクはまだありません')).toHaveCount(0);
+  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
+  await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
+  await expect(row.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
+  await expect(group.locator('.tree-ratio')).toHaveText('完了 0 / 3 pt');
 
   // ストーリーの下でも完了にできる。行はその場に残り、完了の印が付き、その行のポイントが「完了」に足される
   await row.getByRole('button', { name: /完了にする/ }).click();
@@ -314,7 +312,7 @@ test('期日の印: 過ぎた（赤）、今日と今週（橙）、それ以外
   await expect(page.locator('.chip.is-danger')).toHaveCount(0);
 });
 
-test('完了したストーリーには「タスクを足す」の空の行を出さず、期日の印の色も付けない。タスクの親の候補にも出ない', async ({
+test('完了したストーリーには「タスクを足す」の空の行を出さず、期日の印の色も付けない', async ({
   page,
 }) => {
   await rewriteOperation(page, backlogTree, { slug: 'aoba' }, (output) => ({
@@ -336,49 +334,6 @@ test('完了したストーリーには「タスクを足す」の空の行を�
     storyGroup(page, '問い合わせの一次回答を早くする').getByRole('textbox', { name: /タスクを足す/ }),
   ).toBeVisible();
 
-  await page.getByRole('button', { name: '起票' }).click();
-  const parent = page.getByRole('dialog', { name: '起票' }).getByLabel('親のストーリー');
-  // エピックの下の完了していないストーリーも、木の順（エピックの下が先）で候補に出る
-  await expect(parent.locator('option')).toHaveText([
-    'なし',
-    '送料の割引にポイントを使える',
-    '問い合わせの一次回答を早くする',
-  ]);
-});
-
-test('親のストーリーが消えていたら、理由を出し、その場で候補を読み直して親なしに戻し、親の選択欄にフォーカスを移す', async ({
-  page,
-}) => {
-  await page.goto(SEED_CLIENT_WORKSPACE);
-  await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
-  // 送ったときだけ 404 にして、読み直した木では候補から消えているようにする
-  let gone = false;
-  await routeOperation(page, taskCreate, { slug: 'aoba' }, async (call) => {
-    gone = true;
-    await call.fail(404, 'not_found');
-  });
-  await rewriteOperation(page, backlogTree, { slug: 'aoba' }, (output) => ({
-    ...output,
-    stories: output.stories.filter((story) => !(gone && story.title === '問い合わせの一次回答を早くする')),
-  }));
-  await page.reload();
-  await waitForSettled(page);
-  await page.getByRole('button', { name: '起票', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('親のストーリー').selectOption({ label: '問い合わせの一次回答を早くする' });
-  await dialog.getByLabel('タイトル').fill('消えた親に足す');
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog.getByText('このストーリーは見つかりません。親を選び直してください')).toBeVisible();
-  const parent = dialog.getByLabel('親のストーリー');
-  await expect(parent.locator('option')).toHaveText([
-    'なし',
-    '送料の割引にポイントを使える',
-    'ポイントの付与と失効を管理画面で確かめられる',
-  ]);
-  await expect(parent).toHaveValue('');
-  await expect(parent).toBeFocused();
-  // ダイアログは開いたまま。親を選び直して作れる
-  await expect(dialog).toBeVisible();
 });
 
 test('seed の社内ツール: ストーリーの行の合計と畳んだ件数が出る', async ({ page }) => {
