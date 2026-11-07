@@ -7,6 +7,9 @@ import { createWorkspace, signIn, watchViolations } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
+// 取り消せるトースト（10 秒）が消えて、削除が送られるまでの待ち
+const DELETE_SENT = 20_000;
+
 // seed の受託開発チーム（ミナトがリーダー、ハルカが一般）の、ハルカが作った「問い合わせテンプレートを整える」。
 // 木を変えないよう、タスクは足さずにコメントだけを足す（本文は実行ごとに変える）
 const SEED_TASK_URL = '/aoba/w/019a0000-0000-7000-8000-000000000401?task=019a0000-0000-7000-8000-000000000804';
@@ -95,14 +98,13 @@ test.describe('自分のコメント', () => {
     await expect(comment.locator('.comment-head')).toContainText('編集済み');
     await expect(comment.getByRole('button', { name: '編集', exact: true })).toBeFocused();
 
-    // 消す。確かめてから消し、「削除されました」と残る。件数から外れる
+    // 消す。確認のダイアログは出さずに隠してトーストを出し、取り消さずに待つと送られて「削除されました」と残る。件数から外れる
     await comment.getByRole('button', { name: '削除', exact: true }).click();
-    const confirm = page.getByRole('dialog', { name: 'コメントを削除する' });
-    await expect(confirm).toBeVisible();
-    // 確かめの文に、書いた人と日時を添える
-    await expect(confirm).toContainText(/ミナトが \d{4}-\d{2}-\d{2} \d{2}:\d{2} に書いたコメントを削除します/);
-    await confirm.getByRole('button', { name: '削除する' }).click();
-    await expect(comment.locator('.comment-body')).toHaveText('削除されました');
+    await expect(page.getByRole('dialog', { name: 'コメントを削除する' })).toHaveCount(0);
+    await expect(comment).toHaveCount(0);
+    await expect(tab).toHaveText('コメント 0');
+    await expect(page.getByRole('status').filter({ hasText: 'コメントを削除しました' })).toBeVisible();
+    await expect(comment.locator('.comment-body')).toHaveText('削除されました', { timeout: DELETE_SENT });
     await expect(comment.getByRole('button')).toHaveCount(0);
     await expect(tab).toHaveText('コメント 0');
     await expect(comment.locator('strong')).toHaveCount(0);
@@ -382,8 +384,8 @@ test('リーダーは人のコメントを消せるが直せず、直してい�
     await expect(theirs).toContainText(body);
     await expect(theirs.getByRole('button', { name: '編集', exact: true })).toHaveCount(0);
     await theirs.getByRole('button', { name: '削除', exact: true }).click();
-    await leader.getByRole('dialog', { name: 'コメントを削除する' }).getByRole('button', { name: '削除する' }).click();
-    await expect(theirs.locator('.comment-body')).toHaveText('ミナトが削除しました');
+    await expect(theirs).toHaveCount(0);
+    await expect(theirs.locator('.comment-body')).toHaveText('ミナトが削除しました', { timeout: DELETE_SENT });
     await expect(leaderDrawer.getByText(body)).toHaveCount(0);
 
     // ハルカが保存すると断られ、書きかけを欄に残したまま知らせる
@@ -415,10 +417,100 @@ test('一般のメンバーには、人のコメントの「編集」と「削�
 
     // 後始末: 書いたコメントを消し、同じタスクを開くほかのテストの画面に本文を残さない（消した印は残る）
     await mine.getByRole('button', { name: '削除', exact: true }).click();
-    await leader.getByRole('dialog', { name: 'コメントを削除する' }).getByRole('button', { name: '削除する' }).click();
-    await expect(mine.locator('.comment-body')).toHaveText('削除されました');
+    await expect(mine.locator('.comment-body')).toHaveText('削除されました', { timeout: DELETE_SENT });
   } finally {
     await leader.context().close();
     await member.context().close();
   }
+});
+
+test.describe('コメントの削除の取り消し', () => {
+  test.beforeEach(async ({ context, baseURL }) => {
+    await signIn(context, baseURL, 'admin');
+  });
+
+  test('「取り消す」を押すと元の位置に戻り、削除は送られない。読み直しても残る', async ({ page }) => {
+    await createWorkspace(page, 'コメントの取り消しのワークスペース');
+    await addTask(page, '取り消しを確かめる');
+    const drawer = await openDrawer(page, '取り消しを確かめる');
+    const tab = drawer.getByRole('tab', { name: /^コメント/ });
+    const first = await sendComment(drawer, '消して戻すコメント');
+    await sendComment(drawer, '後ろのコメント');
+    await expect(tab).toHaveText('コメント 2');
+
+    const deletes: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('comment-delete')) deletes.push(request.url());
+    });
+
+    await first.getByRole('button', { name: '削除', exact: true }).click();
+    await expect(drawer.getByText('消して戻すコメント')).toHaveCount(0);
+    await expect(tab).toHaveText('コメント 1');
+    await page.getByRole('button', { name: '取り消す', exact: true }).click();
+
+    // 元の位置（先頭）に戻り、件数も戻る。「削除」へフォーカスが戻る
+    await expect(drawer.locator('.comment').nth(0)).toContainText('消して戻すコメント');
+    await expect(tab).toHaveText('コメント 2');
+    await expect(first.getByRole('button', { name: '削除', exact: true })).toBeFocused();
+
+    // トーストが消える時間を過ぎても送られない。開き直しても残っている
+    await page.waitForTimeout(11_000);
+    expect(deletes).toHaveLength(0);
+    await page.reload();
+    const reopened = page.getByRole('dialog', { name: '取り消しを確かめる' });
+    await expect(
+      reopened.locator('.comment', { hasText: '消して戻すコメント' }).locator('.comment-body'),
+    ).not.toHaveText('削除されました');
+    await expect(reopened.getByRole('tab', { name: /^コメント/ })).toHaveText('コメント 2');
+  });
+
+  test('取り消さずに引き出しを閉じても、削除は送られる', async ({ page }) => {
+    await createWorkspace(page, 'コメントを閉じて送るワークスペース');
+    await addTask(page, '閉じる前の削除を確かめる');
+    const drawer = await openDrawer(page, '閉じる前の削除を確かめる');
+    const comment = await sendComment(drawer, '閉じる前に消すコメント');
+    await comment.getByRole('button', { name: '削除', exact: true }).click();
+    await expect(drawer.getByText('閉じる前に消すコメント')).toHaveCount(0);
+
+    const sent = page.waitForResponse((response) => response.url().includes('comment-delete'));
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+    expect((await sent).ok()).toBe(true);
+
+    await page.reload();
+    await openDrawer(page, '閉じる前の削除を確かめる');
+    await expect(page.getByRole('dialog', { name: '閉じる前の削除を確かめる' }).locator('.comment-body')).toHaveText(
+      '削除されました',
+    );
+  });
+
+  // 送るのが断られる理由ごとに、同じコメントで試す（コメントの作成には回数の上限があり、繰り返しで足りなくなるため、1本にまとめる）
+  test('送るのが断られたら（500、409、403）、コメントが元に戻って理由が出る', async ({ page }) => {
+    // 取り消せるトースト（10 秒）が消えるのを3回待つ
+    test.setTimeout(90_000);
+    await createWorkspace(page, 'コメントの削除が断られるワークスペース');
+    await addTask(page, '断られるのを確かめる');
+    const drawer = await openDrawer(page, '断られるのを確かめる');
+    const tab = drawer.getByRole('tab', { name: /^コメント/ });
+    const comment = await sendComment(drawer, '断られるコメント');
+    const refuse = (status: number, error: object) =>
+      page.route(
+        '**/comment-delete',
+        (route) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ error }) }),
+        { times: 1 },
+      );
+    const cases: [number, object, string][] = [
+      [500, { code: 'internal', message: 'x' }, 'コメントを削除できませんでした'],
+      [409, { code: 'conflict', message: 'x', details: { reason: 'deleted' } }, 'このコメントはすでに削除されています'],
+      [403, { code: 'forbidden', message: 'x' }, 'このコメントは操作できません'],
+    ];
+    for (const [status, error, message] of cases) {
+      await refuse(status, error);
+      await comment.getByRole('button', { name: '削除', exact: true }).click();
+      await expect(comment).toHaveCount(0);
+      await expect(page.getByRole('status').filter({ hasText: message })).toBeVisible({ timeout: DELETE_SENT });
+      await expect(comment.locator('.comment-body')).toContainText('断られるコメント');
+      await expect(tab).toHaveText('コメント 1');
+    }
+  });
 });

@@ -16,10 +16,9 @@
   import { attachmentSaveFailure } from '../attachment-save.ts';
   import { reloadView } from '../comment-thread.ts';
   import { formatHistoryTime } from '../task-history.ts';
-  import { showToast } from '../toast.svelte.ts';
+  import { dismissToast, showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Avatar from './Avatar.svelte';
-  import ConfirmDialog from './ConfirmDialog.svelte';
   import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
   import MarkdownEditor from './MarkdownEditor.svelte';
@@ -28,7 +27,10 @@
   // 開いたら comment-list で新しい 50 件を読み、書いた順に並べる。それより前は、一覧の上の「前のコメントを読む」で足す。
   // 1件は、アバター、名前、日時（ワークスペースのタイムゾーン）、「編集済み」と、右に許された操作（can_edit、can_delete）だけの
   // 「編集」「削除」（.btn.is-sm.is-quiet）。本文は Markdown の部品で描く。消したものは「削除されました」、本人以外が消したら「〇〇が削除しました」。
-  // 「編集」は本文がその場で書く欄に替わり（直す前の本文が入る）、「保存」か「取り消し」で戻る。「削除」は確かめのダイアログ（danger）を挟む。
+  // 「編集」は本文がその場で書く欄に替わり（直す前の本文が入る）、「保存」か「取り消し」で戻る。
+  // 「削除」は確かめのダイアログを挟まず、コメントを一覧から隠して「取り消す」付きのトーストを出す。コメントは消すと本文が空になりサーバーでは戻せないので、
+  // 削除を送るのはトーストが消えたとき（時間切れ、押し出し）と、このタブが閉じるとき（引き出しを閉じる、画面を離れる）。「取り消す」を押せば送らずに戻す。
+  // 送るのが断られたら、コメントを元に戻して理由を出す。
   // 下に新しいコメントの欄と「送る」。送るのは1本ずつで、失敗したら文を欄に残して理由を欄の下に出し、通ったら欄を空にして末尾に足し、そこまで送る。
   // 書きかけ（hasDraft）は、新しいコメントの欄に文字があるときと、直している途中で直す前の本文と違うとき。送っている間も数える。
   // 直している間に別の人（リーダー）がそのコメントを消すと、保存は 409（deleted）で断られる。書きかけは欄に残して知らせ、一覧を読み直す。
@@ -86,7 +88,13 @@
   let writeSeq = 0;
   function setCount(value: number): void {
     count = Math.max(0, value);
-    oncount(count);
+    emitCount();
+  }
+  // タブに渡す件数。サーバーで消えていない数から、隠している（まだ送っていない）コメントのうち、今の一覧でまだ消えていないものを引く。
+  // 足し引きで持たず、毎回この式で出す（読み直しと削除の応答が重なっても、ずれない）
+  function emitCount(): void {
+    const hiding = pending.filter((p) => comments.find((c) => c.id === p.id)?.deleted_at === null).length;
+    oncount(Math.max(0, count - hiding));
   }
   // 読み上げに伝える文（読み込み、足した件数、送った、直した、削除した）
   let announce = $state('');
@@ -98,16 +106,22 @@
   let sending = $state(false);
   let newInput = $state<HTMLTextAreaElement>();
   const edits: Record<string, EditState> = $state({});
-  // 削除を送っているコメント。送っている間は、どの行の「削除」も押せなくする
-  let deleting = $state<string | null>(null);
-  // 消すかを確かめているコメント（確かめの文に、書いた人と日時を添える）
-  let deleteTarget = $state<Comment | null>(null);
-  let deleteDialog = $state<ReturnType<typeof ConfirmDialog>>();
+  // 消して、まだ送っていないコメント（トーストが出ている間）。一覧と件数から外し、サーバーにはまだ残っている
+  let pending = $state.raw<readonly Comment[]>([]);
+  // 隠している行の ID から、そのトーストの ID（このタブが閉じるときに、トーストを片付けて送る）
+  const pendingToasts: Record<string, number> = {};
   let container = $state<HTMLElement>();
 
   let alive = true;
   $effect(() => () => {
     alive = false;
+    // 送る前に閉じるときは、待たずに送る（取り消せるのはこのタブが開いている間だけ）
+    for (const [id, toastId] of Object.entries(pendingToasts)) {
+      const comment = pending.find((current) => current.id === id);
+      dismissToast(toastId, true);
+      delete pendingToasts[id];
+      if (comment !== undefined) void sendDelete(comment);
+    }
   });
 
   // 整えた後の本文。空は空の文字
@@ -399,50 +413,89 @@
   }
 
   // ---- 消す ----
-  async function remove(event: MouseEvent, comment: Comment): Promise<void> {
-    if (deleting !== null) return;
-    const trigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-    deleteTarget = comment;
-    const confirmed = (await deleteDialog?.ask(trigger)) ?? false;
-    if (!confirmed || !alive) return;
-    deleting = comment.id;
-    announce = t('commentDeleting');
-    try {
-      const result = await callOperation(
-        commentDelete,
-        { workspace_id: workspaceId, comment_id: comment.id },
-        { slug },
-      );
-      if (!alive) {
-        if (result.ok) showToast(t('commentRemoved'), 'check');
-        else showToast(t('commentDeleteFailed'), 'alert');
-        return;
-      }
-      announce = '';
-      if (result.ok) {
-        record(result.data.comment);
-        delete edits[comment.id];
-        showToast(t('commentRemoved'), 'check');
-        // 押したボタンは消えるので、一覧へフォーカスを移す
-        await tick();
-        if (alive) container?.focus();
-        return;
-      }
-      const code = result.error?.code;
-      if (result.status === 409 && conflictReasonOf(result.error?.details, commentConflictReasons) === 'deleted') {
-        showToast(t('commentAlreadyDeleted'), 'alert');
-        void load();
-      } else if (result.status === 403) {
-        showToast(t('commentForbidden'), 'alert');
-        void load();
-      } else if (result.status === 404) {
-        void load();
-      } else {
-        showToast(commonFailure(result.status, code) ?? t('commentDeleteFailed'), 'alert');
-      }
-    } finally {
-      if (alive) deleting = null;
+  // 一覧と件数から隠してトーストを出す。送るのは、トーストが消えたとき（sendDelete）
+  function remove(comment: Comment): void {
+    if (pending.some((current) => current.id === comment.id)) return;
+    pending = [...pending, comment];
+    emitCount();
+    // 読み上げの領域は、同じ文字列を入れ直しても DOM が変わらず読まれない。「元に戻しました」を毎回読ませるため、先に空にする
+    announce = '';
+    const toastId = showToast(
+      t('commentRemovedBy', {
+        name: comment.author.name === '' ? t('historyUnknownName') : comment.author.name,
+        at: formatHistoryTime(comment.created_at, timezone),
+      }),
+      'check',
+      { label: t('commentUndo'), run: () => undoDelete(comment.id) },
+      () => {
+        delete pendingToasts[comment.id];
+        void sendDelete(comment);
+      },
+    );
+    pendingToasts[comment.id] = toastId;
+    // 押したボタンは消えるので、一覧へフォーカスを移す
+    void tick().then(() => {
+      if (alive) container?.focus();
+    });
+  }
+
+  // 隠すのをやめて、元の位置に戻す。サーバーには何も送っていない
+  function undoDelete(id: string): void {
+    delete pendingToasts[id];
+    if (!unhide(id)) return;
+    emitCount();
+    announce = t('commentRestored');
+    void tick().then(() => {
+      if (alive) container?.querySelector<HTMLElement>(`[data-comment-delete="${id}"]`)?.focus();
+    });
+  }
+
+  function unhide(id: string): boolean {
+    if (!pending.some((current) => current.id === id)) return false;
+    pending = pending.filter((current) => current.id !== id);
+    return true;
+  }
+
+  // トーストが消えたコメントの削除を送る。通れば「削除されました」の行に替え、断られたら元に戻して理由を出す。
+  // 閉じた後（!alive）に返った応答は、通ったか失敗したかをトーストで知らせる
+  async function sendDelete(comment: Comment): Promise<void> {
+    const result = await callOperation(commentDelete, { workspace_id: workspaceId, comment_id: comment.id }, { slug });
+    if (!alive) {
+      if (result.ok) showToast(t('commentRemoved'), 'check');
+      else showToast(deleteFailure(result.status, result.error?.code, result.error?.details), 'alert');
+      return;
     }
+    if (result.ok) {
+      // 読み直しで一覧の窓から外れた行は、足し直さない（消えた行が末尾に付かないように）
+      if (comments.some((current) => current.id === comment.id)) record(result.data.comment);
+      else setCount(count - 1);
+      if (unhide(comment.id)) emitCount();
+      delete edits[comment.id];
+      return;
+    }
+    if (unhide(comment.id)) emitCount();
+    const code = result.error?.code;
+    if (result.status === 409 && conflictReasonOf(result.error?.details, commentConflictReasons) === 'deleted') {
+      showToast(t('commentAlreadyDeleted'), 'alert');
+      void load();
+    } else if (result.status === 403) {
+      showToast(t('commentForbidden'), 'alert');
+      void load();
+    } else if (result.status === 404) {
+      void load();
+    } else {
+      showToast(commonFailure(result.status, code) ?? t('commentDeleteFailed'), 'alert');
+    }
+  }
+
+  // 閉じた後に返った失敗の理由。引き出しには伝えない
+  function deleteFailure(status: number, code: string | undefined, details: unknown): string {
+    if (status === 409 && conflictReasonOf(details, commentConflictReasons) === 'deleted')
+      return t('commentAlreadyDeleted');
+    if (status === 403) return t('commentForbidden');
+    if (status === 409 && code === 'workspace_closed')
+      return t('workspaceClosedReadOnly', { workspace: t('workspace') });
+    return t('commentDeleteFailed');
   }
 
   function deletedText(comment: Comment): string {
@@ -500,7 +553,7 @@
     {#if older === 'failed'}
       <span class="field-error" role="alert"><Icon name="alert" />{t('commentOlderFailed')}</span>
     {/if}
-    {#each comments as comment (comment.id)}
+    {#each comments.filter((current) => !pending.some((p) => p.id === current.id)) as comment (comment.id)}
       {@const edit = edits[comment.id]}
       {@const deleted = comment.deleted_at !== null}
       {@const headId = `${ids}-head-${comment.id}`}
@@ -533,9 +586,9 @@
                   <button
                     class="btn is-sm is-quiet"
                     type="button"
+                    data-comment-delete={comment.id}
                     aria-describedby="{headId}-name {headId}-at"
-                    aria-disabled={deleting !== null}
-                    onclick={(event) => void remove(event, comment)}>{t('commentDelete')}</button
+                    onclick={() => remove(comment)}>{t('commentDelete')}</button
                   >
                 {/if}
               </span>
@@ -626,19 +679,3 @@
     </form>
   {/if}
 </div>
-
-<ConfirmDialog
-  bind:this={deleteDialog}
-  title={t('commentDeleteTitle')}
-  confirmLabel={t('taskDeleteConfirm')}
-  cancelLabel={t('taskDeleteCancel')}
-  danger
->
-  <p>
-    {t('commentDeleteText', {
-      name:
-        deleteTarget === null || deleteTarget.author.name === '' ? t('historyUnknownName') : deleteTarget.author.name,
-      at: deleteTarget === null ? '' : formatHistoryTime(deleteTarget.created_at, timezone),
-    })}
-  </p>
-</ConfirmDialog>

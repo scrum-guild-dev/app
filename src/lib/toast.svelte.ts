@@ -3,11 +3,14 @@ import type { IconName } from './icons.ts';
 // action を付けると、文の後ろに押せるボタン（.toast-action）を出す。押すと run を呼んで、そのトーストを消す
 export type ToastAction = { label: string; run: () => void };
 
-export type Toast = { id: number; message: string; icon?: IconName; action?: ToastAction };
+// onclose は、操作を押さずに消えるとき（時間切れ、あふれて押し出された、dismissToast）に1回だけ呼ぶ。
+// 操作を押したときは呼ばず、run だけを呼ぶ。消えるのを待ってから送る操作（コメントの削除）のためにある
+export type Toast = { id: number; message: string; icon?: IconName; action?: ToastAction; onclose?: () => void };
 
 // 数秒で消える短い知らせ。kit.js の toast と同じ 4 秒。操作を付けたものは、押す間があるよう 10 秒で、
 // ポインターが乗っている間とフォーカスがある間は数えるのを止め、外れてから数え直す（pauseToast、resumeToast）。
-// 操作は、同じことを画面のほかの場所でもできるものだけにする（消えても、できることを失わないため）
+// 操作は、同じことを画面のほかの場所でもできるものだけにする（消えても、できることを失わないため）。
+// 例外は、消えるのを待ってから送る取り消し（コメントの削除）。消えること自体が「送る」合図で、取り消せるのは出ている間だけ
 const toastLifetimeMs = 4000;
 const actionToastLifetimeMs = 10000;
 // 同時に出す数。あふれたら古いものから消す
@@ -28,10 +31,20 @@ function stopTimer(id: number): void {
   delete timers[id];
 }
 
-export function dismissToast(id: number): void {
+// silent を真にすると onclose を呼ばない（呼ぶ側が自分で片付けるとき）
+export function dismissToast(id: number, silent = false): void {
   stopTimer(id);
   const index = toasts.findIndex((toast) => toast.id === id);
-  if (index !== -1) toasts.splice(index, 1);
+  if (index === -1) return;
+  const [toast] = toasts.splice(index, 1);
+  if (!silent) toast?.onclose?.();
+}
+
+// 操作のボタンを押したとき。onclose は呼ばずにトーストを消し、run を呼ぶ
+export function runToastAction(id: number): void {
+  const action = toasts.find((toast) => toast.id === id)?.action;
+  dismissToast(id, true);
+  action?.run();
 }
 
 function schedule(id: number, lifetime: number): void {
@@ -50,11 +63,18 @@ export function resumeToast(id: number): void {
 }
 
 // message は文字列として出す（HTML として埋め込まない）。呼ぶ側は辞書を通した文言を渡す
-export function showToast(message: string, icon?: IconName, action?: ToastAction): void {
+export function showToast(message: string, icon?: IconName, action?: ToastAction, onclose?: () => void): number {
   const id = nextId++;
-  toasts.push({ id, message, icon, ...(action === undefined ? {} : { action }) });
+  toasts.push({
+    id,
+    message,
+    icon,
+    ...(action === undefined ? {} : { action }),
+    ...(onclose === undefined ? {} : { onclose }),
+  });
   if (toasts.length > maxToasts) {
     for (const old of toasts.slice(0, toasts.length - maxToasts)) dismissToast(old.id);
   }
   schedule(id, action === undefined ? toastLifetimeMs : actionToastLifetimeMs);
+  return id;
 }

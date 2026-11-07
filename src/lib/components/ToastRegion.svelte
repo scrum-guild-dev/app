@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { dismissToast, modalState, pauseToast, resumeToast, toasts } from '../toast.svelte.ts';
+  import { modalState, pauseToast, resumeToast, runToastAction, toasts } from '../toast.svelte.ts';
   import Icon from './Icon.svelte';
 
   // kit.js の toast の置き場。showToast() で出す。画面の外側に1つ（+layout.svelte）と、各ダイアログの中に1つ（inDialog）置く。
@@ -26,14 +26,7 @@
         onfocusout={() => resumeToast(toast.id)}
       >
         {#if toast.icon}<Icon name={toast.icon} />{/if}<span>{toast.message}</span>
-        <button
-          class="toast-action"
-          type="button"
-          onclick={() => {
-            dismissToast(toast.id);
-            action.run();
-          }}>{action.label}</button
-        >
+        <button class="toast-action" type="button" onclick={() => runToastAction(toast.id)}>{action.label}</button>
       </div>
     {:else}
       <div class="toast" role="status">
