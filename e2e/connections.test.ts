@@ -198,8 +198,8 @@ test('今すぐ同期は本人の接続にだけ出て、押すと届いた件�
   );
 
   await list.getByRole('button', { name: '今すぐ同期' }).click();
-  await expect(page.getByText('3 件届きました')).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '3 件届きました' })).toBeVisible();
   await list.getByRole('button', { name: '今すぐ同期' }).click();
-  await expect(page.getByText('5分に1回までです')).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '5分に1回までです' })).toBeVisible();
   expect(calls).toBe(2);
 });
