@@ -245,7 +245,13 @@ test('マウスで「取り消す」を押しても、戻した行へフォー�
   await page.getByRole('button', { name: '取り消す: マウスで戻す' }).click();
   const link = page.getByRole('link', { name: 'マウスで戻す', exact: true });
   await expect(link).toBeVisible();
+  // 木の読み直しとフォーカスの移動が済む（キーボードの経路なら、ここまでにリンクへ移る）のを、描画を待って見届けてから確かめる
+  await expect(page.getByRole('status').filter({ hasText: 'タスクを戻しました' })).toBeVisible();
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))),
+  );
   await expect(link).not.toBeFocused();
+  await expect.poll(() => link.evaluate((el) => el === document.activeElement), { timeout: 1000 }).toBe(false);
 });
 
 test('ページ全体で開いて、キーボードで削除すると「取り消す」へ移り、押すと戻したタスクの題のリンクへ移る', async ({

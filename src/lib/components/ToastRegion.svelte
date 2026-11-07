@@ -33,8 +33,10 @@
         }}
         onfocusin={() => pauseToast(toast.id)}
         onfocusout={(event) => {
-          // トーストの中でフォーカスが移るだけなら止めたまま。外へ出たら数え直す
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) resumeToast(toast.id);
+          // トーストの中でフォーカスが移るだけなら止めたまま。ポインターが乗ったままなら、その下では数えない
+          // （ポインターが外れたとき mouseleave が数え直す）。どちらでもなければ数え直す
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          if (!event.currentTarget.matches(':hover')) resumeToast(toast.id);
         }}
       >
         {#if toast.icon}<Icon name={toast.icon} />{/if}<span id="toast-message-{toast.id}">{toast.message}</span>
