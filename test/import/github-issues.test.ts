@@ -308,6 +308,39 @@ describe('続きの位置の堅さ', () => {
     expect(new Set(items.map((i) => i.externalId)).size).toBe(230);
   });
 
+  test.each([
+    ['境界を含む', false],
+    ['境界を含まない', true],
+  ])(
+    'since が%s GitHub でも、同じ更新日時の並びと更新日時のミリ秒なしで、再開しても漏れない',
+    async (_name, exclusive) => {
+      const fake = setup();
+      if (exclusive) fake.exclusiveIssueSince();
+      // 本物の GitHub の updated_at はミリ秒なし。先頭の 150 件が同じ秒で、1頁の境目をまたぐ
+      const all = Array.from({ length: 250 }, (_, i) =>
+        fakeIssue(REPO_A.name, i + 1, {
+          updatedAt: i < 150 ? '2026-03-01T00:00:05Z' : `2026-03-01T00:10:${String(i % 60).padStart(2, '0')}Z`,
+        }),
+      );
+      fake.addIssues(1001, all);
+      const base = params({ maxRequests: 1 });
+      const seen = new Set<string>();
+      let cursor: string | null = null;
+      let guard = 0;
+      do {
+        const result: Awaited<ReturnType<typeof source.fetchAssignedItems>> = await source.fetchAssignedItems(
+          PAT,
+          { ...base, cursor },
+          fake.fetcher,
+        );
+        result.items.forEach((i) => seen.add(i.externalId));
+        cursor = result.nextCursor;
+      } while (cursor !== null && guard++ < 20);
+      expect(cursor).toBeNull();
+      expect(seen.size).toBe(250);
+    },
+  );
+
   test('範囲の並びが変わっても、続きは同じリポジトリから始まる', async () => {
     const fake = setup();
     fake.addIssues(1001, [fakeIssue(REPO_A.name, 1)]);

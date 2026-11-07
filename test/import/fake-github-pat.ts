@@ -37,6 +37,7 @@ export function createFakePatGithub() {
   const issuePageFailures = new Map<number, FakeFailure>();
   const issues = new Map<number, unknown[]>();
   let looseFilters = false;
+  let exclusiveSince = false;
 
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -113,14 +114,14 @@ export function createFakePatGithub() {
           if (state !== 'all' && item.state !== state) return false;
           const assignees = (item.assignees ?? []) as { login: string }[];
           if (assignee !== null && !assignees.some((a) => a.login === assignee)) return false;
-          return since === null || String(item.updated_at) >= since;
+          if (since === null) return true;
+          const at = Date.parse(String(item.updated_at));
+          // 本物の GitHub が since の境界を含むかは文書で確かめられないので、含まない動きにも切り替えられる
+          return exclusiveSince ? at > Date.parse(since) : at >= Date.parse(since);
         });
       }
-      list = [...list].sort((a, b) =>
-        asc
-          ? String(a.updated_at).localeCompare(String(b.updated_at))
-          : String(b.updated_at).localeCompare(String(a.updated_at)),
-      );
+      const time = (item: Record<string, unknown>) => Date.parse(String(item.updated_at));
+      list = [...list].sort((a, b) => (asc ? time(a) - time(b) : time(b) - time(a)));
       const perPage = Math.min(Number(parsed.searchParams.get('per_page') ?? '30'), 100);
       return json(list.slice((page - 1) * perPage, page * perPage));
     }
@@ -159,6 +160,10 @@ export function createFakePatGithub() {
       issuePageFailures.set(page, failure);
     },
     // assignee、state、since の絞り込みを無視して全部返す（実装側でも絞ることの確かめ用）
+    // since を「より後」（境界を含まない）として扱う
+    exclusiveIssueSince(): void {
+      exclusiveSince = true;
+    },
     ignoreIssueFilters(): void {
       looseFilters = true;
     },

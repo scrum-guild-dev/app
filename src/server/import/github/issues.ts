@@ -156,7 +156,11 @@ export async function fetchAssignedIssues(
       return { items, nextCursor: `${params.scopes[repo]!.id}:${page}:${anchor}` };
     }
     const scope = params.scopes[repo]!;
-    const body = await getJson(urlOf(scope, params.assignee, since, page), credential, fetcher);
+    // 読んだ項目から決めた起点は、GitHub の since が境界を含むかを文書で確かめられないので、1秒戻して送る
+    // （GitHub の更新日時は秒の精度）。含まなくても、起点ちょうどの項目を取りこぼさない。重なりは externalId で吸収する
+    const requestSince =
+      since !== null && since !== baseSince ? new Date(Date.parse(since) - 1000).toISOString() : since;
+    const body = await getJson(urlOf(scope, params.assignee, requestSince, page), credential, fetcher);
     requests++;
     if (!Array.isArray(body)) throw fail('unavailable');
     for (const raw of body as unknown[]) {
