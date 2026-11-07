@@ -33,13 +33,13 @@ test('作ったワークスペース: タスクを作って完了にすると、
   const row = page.locator('.entry', { hasText: '見積もりを送る' });
   await expect(row).toHaveCount(1);
   await expect(row.getByRole('link', { name: '見積もりを送る' })).toHaveAttribute('href', /\?task=[0-9a-f-]{36}$/);
-  await expect(row.locator('.pts')).toHaveText('3');
+  await expect(row.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
   await expect(page.locator('.tree-folded')).toHaveCount(0);
 
   // 完了にする。ボタンは完了の印に替わり、フォーカスは印へ移る。行はその場に残る
   await row.getByRole('button', { name: /完了にする/ }).click();
-  // 完了の印の名前にはタイトルを添える。ポイントの印の名前は「ポイント 3」
-  await expect(row.getByRole('img', { name: 'ポイント 3' })).toBeVisible();
+  // 完了の印の名前にはタイトルを添える。ポイントはチップ（完了にした行は押せない）で、名前は「ポイント: 3 pt」
+  await expect(row.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
   const stamp = row.getByRole('img', { name: '見積もりを送る: 完了' });
   await expect(stamp).toBeVisible();
   await expect(stamp).toBeFocused();
@@ -74,9 +74,9 @@ test('スクラムの言葉: 同じ流れで、言葉がスクラムの言葉に
   await expect(dialog).toBeHidden();
 
   const row = page.locator('.entry', { hasText: '請求書を出す' });
-  await expect(row.locator('.pts')).toHaveText('未');
+  await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
   await row.getByRole('button', { name: /完了にする/ }).click();
-  await expect(row.getByRole('img', { name: '未見積もり' })).toBeVisible();
+  await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
   await expect(row.getByRole('img', { name: '請求書を出す: 完了' })).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'タスクを完了にしました' })).toBeVisible();
 
