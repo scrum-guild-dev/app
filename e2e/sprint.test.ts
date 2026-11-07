@@ -492,9 +492,23 @@ test('カードの「⋯」の端の項目は選べず、選んでも開いた�
   await toggle.click();
   await rowMenuItem(page, first, '上へ').click({ force: true });
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  // 開いたまま Alt と → を押しても、カードは動かない
-  await page.keyboard.press('Alt+ArrowRight');
-  await page.keyboard.press('Alt+ArrowDown');
+  // 開いたまま Alt と矢印を押しても、カードは動かず、ブラウザの既定（Alt と ← → の戻る、進む）も起きない。
+  // RowMenu の keydown の後に、同じ要素で受けて defaultPrevented を控える
+  await page.evaluate(() => {
+    const seen: boolean[] = [];
+    (window as unknown as { __prevented: boolean[] }).__prevented = seen;
+    document.querySelectorAll('.row-menu').forEach((menu) => {
+      menu.addEventListener('keydown', (event) => seen.push(event.defaultPrevented));
+    });
+  });
+  const urlBefore = page.url();
+  for (const key of ['Alt+ArrowLeft', 'Alt+ArrowRight', 'Alt+ArrowDown']) await page.keyboard.press(key);
+  expect(await page.evaluate(() => (window as unknown as { __prevented: boolean[] }).__prevented)).toEqual([
+    true,
+    true,
+    true,
+  ]);
+  expect(page.url()).toBe(urlBefore);
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(titlesIn(page, '未着手')).toHaveText([first, last]);
   await expect(titlesIn(page, '作業中')).toHaveText([only]);
