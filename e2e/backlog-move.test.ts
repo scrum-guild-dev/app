@@ -118,10 +118,7 @@ test('「親を移す」でストーリーの下の末尾へ移し、親なし�
   await createWorkspace(page, '親を移すワークスペース');
   await addStory(page, 'ポイント制度を公開する');
   await addStory(page, '決済の障害を減らす');
-  const draft = page.getByRole('textbox', { name: 'タスクを足す: ポイント制度を公開する' });
-  await draft.fill('付与のバッチを書く');
-  await draft.press('Enter');
-  await expect(page.locator('.entry-title', { hasText: '付与のバッチを書く' })).toBeVisible();
+  await addTaskRow(page, '付与のバッチを書く', 'ポイント制度を公開する');
   await addTaskRow(page, '残高の画面を作る');
 
   // 親のないタスクを、ストーリーの下の末尾へ
@@ -487,10 +484,7 @@ test('畳んだストーリーの行やタスクの無いストーリーの行�
   await createWorkspace(page, 'ドラッグの親ワークスペース');
   await addStory(page, 'ポイント制度を公開する');
   await addStory(page, '決済の障害を減らす');
-  const draft = page.getByRole('textbox', { name: 'タスクを足す: ポイント制度を公開する' });
-  await draft.fill('付与のバッチを書く');
-  await draft.press('Enter');
-  await expect(page.locator('.entry-title', { hasText: '付与のバッチを書く' })).toBeVisible();
+  await addTaskRow(page, '付与のバッチを書く', 'ポイント制度を公開する');
   await addTaskRow(page, '残高の画面を作る');
   await addTaskRow(page, '請求書を出す');
   const points = storyGroup(page, 'ポイント制度を公開する');
