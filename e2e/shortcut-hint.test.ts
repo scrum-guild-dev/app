@@ -20,12 +20,30 @@ test('検索の欄: 押し続けると出て、離すと消える。⌘C のよ�
   await page.keyboard.up('ControlOrMeta');
   await expect(hint).toHaveCount(0);
 
-  // 別のキーを一緒に押したときは、待っても出ない
+  // 別のキーを一緒に押したときは、待っても出ない（出ないことは、出るはずの時間を待たないと確かめられない）
   await page.keyboard.down('ControlOrMeta');
   await page.keyboard.press('c');
   await page.waitForTimeout(600);
   await expect(hint).toHaveCount(0);
   await page.keyboard.up('ControlOrMeta');
+});
+
+test('検索の欄: ポインターを押す、ウィンドウを離れる、スクロールすると消える', async ({ page }) => {
+  await page.goto('/aoba');
+  const hint = page.locator('.key-hints .key-hint');
+  await expect(page.getByRole('combobox', { name: '画面とタスクを探す' })).toBeVisible();
+  const cancels: Array<() => Promise<unknown>> = [
+    () => page.mouse.down().then(() => page.mouse.up()),
+    () => page.evaluate(() => window.dispatchEvent(new Event('blur'))),
+    () => page.evaluate(() => document.dispatchEvent(new Event('scroll'))),
+  ];
+  for (const cancel of cancels) {
+    await page.keyboard.down('ControlOrMeta');
+    await expect(hint).toHaveCount(1);
+    await cancel();
+    await expect(hint).toHaveCount(0);
+    await page.keyboard.up('ControlOrMeta');
+  }
 });
 
 test('タスクの詳細: 前後のボタンの角に [ と ] が出る。押せない端のボタンには出さない', async ({ page }) => {

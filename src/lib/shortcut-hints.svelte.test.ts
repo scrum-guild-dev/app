@@ -18,7 +18,7 @@ afterEach(() => {
 function anchor(attributes: Record<string, string> = {}, rect = { right: 200, top: 40, width: 30, height: 24 }) {
   return {
     getAttribute: (name: string) => attributes[name] ?? null,
-    getBoundingClientRect: () => ({ ...rect, bottom: rect.top + rect.height }),
+    getBoundingClientRect: () => ({ ...rect, left: rect.right - rect.width, bottom: rect.top + rect.height }),
   } as unknown as HTMLElement;
 }
 
@@ -49,7 +49,7 @@ describe('押し続けて出す', () => {
     vi.advanceTimersByTime(299);
     expect(state.hints).toEqual([]);
     vi.advanceTimersByTime(1);
-    expect(state.hints).toEqual([{ id: 'next', text: ']', left: 206, top: 40 }]);
+    expect(state.hints).toEqual([{ id: 'next', text: ']', right: 206, top: 40 }]);
     state.keyup(key('Control'));
     expect(state.hints).toEqual([]);
   });
@@ -157,6 +157,26 @@ describe('出す対象', () => {
     expect(state.hints.map((hint) => hint.id)).toEqual(['drawer']);
   });
 
+  test('左端で切れる小さな要素では、キーの幅の分だけ内側に寄せる。画面の横の外にある要素には出さない', () => {
+    const { state } = setup([
+      shortcut({
+        id: 'near',
+        keys: 'Mod+K',
+        inTyping: true,
+        hintAnchor: () => anchor({}, { right: 20, top: 40, width: 20, height: 24 }),
+      }),
+      shortcut({
+        id: 'outside',
+        keys: '[',
+        hintAnchor: () => anchor({}, { right: 1500, top: 40, width: 30, height: 24 }),
+      }),
+    ]);
+    state.keydown(key('Control', { ctrlKey: true }));
+    vi.advanceTimersByTime(300);
+    // 'Ctrl K' は 6 文字 → 幅 64、左の余白 4 を足して 68
+    expect(state.hints).toEqual([{ id: 'near', text: 'Ctrl K', right: 68, top: 40 }]);
+  });
+
   test('同じ要素に重ねて出さず、右端は画面の内側に寄せる', () => {
     const shared = anchor({}, { right: 995, top: 2, width: 30, height: 24 });
     const { state } = setup([
@@ -165,6 +185,6 @@ describe('出す対象', () => {
     ]);
     state.keydown(key('Control', { ctrlKey: true }));
     vi.advanceTimersByTime(300);
-    expect(state.hints).toEqual([{ id: 'a', text: '[', left: 996, top: 16 }]);
+    expect(state.hints).toEqual([{ id: 'a', text: '[', right: 996, top: 22 }]);
   });
 });

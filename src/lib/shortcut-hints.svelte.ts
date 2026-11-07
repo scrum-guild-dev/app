@@ -8,17 +8,20 @@ import { shortcuts as sharedShortcuts, type ShortcutRegistry } from './shortcuts
 export interface ShortcutHint {
   id: string;
   text: string;
-  // 画面の左上からの位置（px）。角をまたいで出すので、右端と上端の座標を渡す
-  left: number;
+  // 画面の左上からの位置（px）。角をまたいで出すので、キーの右端と上端の座標を渡す（CSS が右端を合わせる）
+  right: number;
   top: number;
 }
 
-export const HINT_DELAY_MS = 300;
+const HINT_DELAY_MS = 300;
+// キーの幅の見積もり（1文字あたりと余白）。左端で切れないよう内側に寄せるのに使う
+const CHAR_WIDTH = 8;
+const PADDING_WIDTH = 16;
+const EDGE = 4;
 
 interface Options {
   registry?: ShortcutRegistry;
   mac?: boolean;
-  delay?: number;
   // 指の端末（hover: none）か
   isTouch?: () => boolean;
   // キー入力の先（文字を打つ場所では、修飾キー付きでないものを出さない）
@@ -32,14 +35,12 @@ export class ShortcutHints {
   #timer: ReturnType<typeof setTimeout> | null = null;
   #registry: ShortcutRegistry;
   #mac: boolean;
-  #delay: number;
   #isTouch: () => boolean;
   #target: () => EventTarget | null;
 
   constructor(options: Options = {}) {
     this.#registry = options.registry ?? sharedShortcuts;
     this.#mac = options.mac ?? isMacPlatform();
-    this.#delay = options.delay ?? HINT_DELAY_MS;
     this.#isTouch = options.isTouch ?? (() => globalThis.matchMedia?.('(hover: none)').matches ?? false);
     this.#target = options.target ?? (() => globalThis.document?.activeElement ?? null);
   }
@@ -57,7 +58,7 @@ export class ShortcutHints {
     if (event.repeat || this.#timer !== null || this.hints.length > 0) return;
     // 反対側の修飾キー、Alt、Shift が一緒のときは出さない
     if (event.altKey || event.shiftKey || (this.#mac ? event.ctrlKey : event.metaKey)) return;
-    this.#timer = setTimeout(() => this.#show(), this.#delay);
+    this.#timer = setTimeout(() => this.#show(), HINT_DELAY_MS);
   };
 
   keyup = (event: Pick<KeyboardEvent, 'key'>): void => {
@@ -82,12 +83,16 @@ export class ShortcutHints {
       if (!this.#registry.isAvailable(shortcut, target)) continue;
       const rect = anchor.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0 || rect.bottom < 0 || rect.top > globalThis.innerHeight) continue;
+      if (rect.right < 0 || rect.left > globalThis.innerWidth) continue;
       anchors.push(anchor);
+      const text = hintText(shortcut.keys, this.#mac);
+      const width = text.length * CHAR_WIDTH + PADDING_WIDTH;
       shown.push({
         id: shortcut.id,
-        text: hintText(shortcut.keys, this.#mac),
-        left: Math.min(rect.right + 6, globalThis.innerWidth - 4),
-        top: Math.max(rect.top, 16),
+        text,
+        // 右端は画面の内側へ、左は幅の分だけ内側へ寄せる。上は伸びる分（約22px）の余白を取る
+        right: Math.max(Math.min(rect.right + 6, globalThis.innerWidth - EDGE), width + EDGE),
+        top: Math.max(rect.top, 22),
       });
     }
     this.hints = shown;

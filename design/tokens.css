@@ -44,6 +44,7 @@
   --duration-gauge: 700ms;   /* 経験値のゲージの確定の塗りが伸びる。見込みの斜線はこの後に --duration-gauge-soon で続く */
   --duration-gauge-soon: 300ms;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1); /* 少し行き過ぎて戻る。ショートカットのヒントが角から出る */
 
   /* ---- 書体の候補 ---- */
   --family-gothic: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;

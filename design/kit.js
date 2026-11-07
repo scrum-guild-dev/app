@@ -3478,12 +3478,14 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         const host = el.closest(".nav-search") || el;
         const rect = host.getBoundingClientRect();
         const label = this.text(el);
-        if (!label || !rect.width || !rect.height || rect.bottom < 0 || rect.top > innerHeight || seen.has(host)) continue;
+        if (!label || !rect.width || !rect.height || rect.bottom < 0 || rect.top > innerHeight || rect.right < 0 || rect.left > innerWidth || seen.has(host)) continue;
         seen.add(host);
         const kbd = document.createElement("kbd");
         kbd.className = "kbd key-hint"; kbd.textContent = label;
-        kbd.style.left = `${Math.min(rect.right + 6, innerWidth - 4)}px`;
-        kbd.style.top = `${Math.max(rect.top, 16)}px`;
+        // 右端を丸め、キーの幅（文字数からの見積もり）の分だけ左も内側に寄せる
+        const width = label.length * 8 + 16;
+        kbd.style.left = `${Math.max(Math.min(rect.right + 6, innerWidth - 4), width + 4)}px`;
+        kbd.style.top = `${Math.max(rect.top, 22)}px`;
         layer.append(kbd);
       }
       if (layer.children.length) { this.layer = layer; document.body.append(layer); }
