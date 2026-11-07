@@ -2,7 +2,7 @@
 // seed のセッション（seed/sessions.ts）の Cookie で開く。行を足すテストは、自分で作ったワークスペースで行う（seed の行は他の e2e も読むため）
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, dragTo, signIn, waitForResponses, watchViolations } from './helpers.ts';
+import { addStoryRow, createWorkspace, dragTo, signIn, waitForResponses, watchViolations } from './helpers.ts';
 
 const SEED_CLIENT_WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 
@@ -171,12 +171,15 @@ test.describe('リーダー（あおば開発のミナト）', () => {
     await page.locator('.nav-item', { hasText: 'バックログ' }).click();
 
     // 親のないストーリーに区分を振る
-    await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-    const storyDialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-    await storyDialog.getByLabel('タイトル').fill('ポイントを使える');
-    await storyDialog.getByLabel('区分').selectOption({ label: '保守' });
-    await storyDialog.getByRole('button', { name: '作る' }).click();
-    await expect(storyDialog).toBeHidden();
+    await addStoryRow(page, 'ポイントを使える');
+    await page.getByRole('link', { name: 'ポイントを使える', exact: true }).click();
+    const storyDrawer = page.getByRole('dialog', { name: 'ポイントを使える', exact: true });
+    const categorySaved = waitForResponses(page, '/story-update');
+    await storyDrawer.getByLabel('区分', { exact: true }).selectOption({ label: '保守' });
+    await storyDrawer.getByLabel('区分', { exact: true }).blur();
+    await categorySaved;
+    await page.keyboard.press('Escape');
+    await expect(storyDrawer).toBeHidden();
     const story = page.locator('.tree-group', { hasText: 'ポイントを使える' });
     await expect(story.locator('.tree-row .chip')).toHaveText('区分：保守');
 

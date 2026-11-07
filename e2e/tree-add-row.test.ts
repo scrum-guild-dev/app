@@ -4,7 +4,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { taskCreate } from '../src/shared/operations/task/task-create.ts';
-import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addStoryRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 import { AOBA_CLIENT_WORKSPACE_ID, E2E_SEED_TASK_PREFIX, removeE2eSeedTasks } from './local-d1.ts';
 import { failOperation } from './operations.ts';
 
@@ -27,12 +27,12 @@ test('エピックとストーリーを、木の空の行に題を打って Ente
   const collect = await watchViolations(page);
   await createWorkspace(page, '空の行のワークスペース');
 
-  // 何も無いバックログには木が出ないので、最初の1件は見出しの右のダイアログで作る
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const dialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await dialog.getByLabel('タイトル').fill('最初のストーリー');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
+  // 何も無いバックログには木が出ない（空の行は木の末尾にある）。最初の1件は見出しの右の「起票」でタスクを作ると木が出る
+  await page.getByRole('button', { name: '起票', exact: true }).click();
+  const firstDialog = page.getByRole('dialog', { name: '起票', exact: true });
+  await firstDialog.getByLabel('タイトル').fill('最初のタスク');
+  await firstDialog.getByRole('button', { name: '起票', exact: true }).click();
+  await expect(firstDialog).toBeHidden();
 
   // 木の末尾の「エピックを足す」。空のまま Enter を押しても何も作らない
   const epicInput = treeTail(page).getByRole('textbox', { name: 'エピックを足す' });
@@ -92,11 +92,7 @@ test('タスクを、ストーリーの配下の末尾と木の末尾の空の�
   const collect = await watchViolations(page);
   await createWorkspace(page, 'タスクの空の行のワークスペース');
 
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const dialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await dialog.getByLabel('タイトル').fill('親のストーリー');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
+  await addStoryRow(page, '親のストーリー');
 
   // ストーリーの配下の末尾の「タスクを足す」。空のまま Enter を押しても何も作らない
   const story = page.locator('.tree-group', { has: page.getByRole('link', { name: '親のストーリー', exact: true }) });
@@ -169,11 +165,7 @@ test('タスクの空の行が断られたら、理由を出して題を残す�
 }) => {
   await createWorkspace(page, 'タスクの空の行が断られるワークスペース');
 
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const dialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await dialog.getByLabel('タイトル').fill('断られるストーリー');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
+  await addStoryRow(page, '断られるストーリー');
 
   const input = page.getByRole('textbox', { name: 'タスクを足す: 断られるストーリー' });
 

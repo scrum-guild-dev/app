@@ -1,4 +1,4 @@
-// 開いた状態（タスクの引き出し、ストーリーの引き出し、Dialog のダイアログ、ConfirmDialog、運用の画面の管理者の指名し直し）を axe で確かめる（#334）。4つのテーマ × スクラムの言葉。
+// 開いた状態（タスクの引き出し、ストーリーの引き出し、エピックの引き出し、Dialog のダイアログ、ConfirmDialog、運用の画面の管理者の指名し直し）を axe で確かめる（#334）。4つのテーマ × スクラムの言葉。
 // 主な画面は e2e/a11y-screens.test.ts、除外は e2e/ui-exclusions.ts。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。受託開発チームも社内ツールもスクラムの言葉。
 // 開くだけで、作る、外すは押さない。seed の行もテーマの設定も書き換えない（ほかのファイルと並べて走るため）
@@ -10,6 +10,9 @@ const TASK_ID = '019a0000-0000-7000-8000-000000000801';
 // seed の親のないストーリー。受け入れ基準、本文、期日、リンクがすべてあり、配下に未完了のタスクがある
 const STORY_ID = '019a0000-0000-7000-8000-000000000901';
 const STORY_TITLE = 'ポイントの付与と失効を管理画面で確かめられる';
+// seed のエピック。本文、期日、リンクがあり、配下にストーリーがある
+const EPIC_ID = '019a0000-0000-7000-8000-000000000b01';
+const EPIC_TITLE = 'ポイントの交換先を増やす';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
@@ -43,6 +46,27 @@ test('ストーリーの引き出しの「⋯」のメニューを開いた状�
   await drawer.getByRole('button', { name: `操作: ${STORY_TITLE}` }).click();
   await expect(drawer.getByRole('menuitem', { name: '親を移す' })).toBeFocused();
   await expectNoA11yViolationsInThemes(page, 'story-drawer');
+});
+
+// エピックの引き出し。⋯のメニューを閉じた状態と、開いた状態（role="menu" の一覧）の両方を測る
+test('エピックの引き出しを開いた状態に axe の違反が無い', async ({ page }) => {
+  await page.goto(`${WORKSPACE}?epic_id=${EPIC_ID}`);
+  const drawer = page.getByRole('dialog', { name: EPIC_TITLE });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();
+  await expect(drawer.getByRole('link', { name: 'エピックの画面を開く' })).toBeVisible();
+  await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
+  await expectNoA11yViolationsInThemes(page, 'epic-drawer');
+});
+
+test('エピックの引き出しの「⋯」のメニューを開いた状態に axe の違反が無い', async ({ page }) => {
+  await page.goto(`${WORKSPACE}?epic_id=${EPIC_ID}`);
+  const drawer = page.getByRole('dialog', { name: EPIC_TITLE });
+  await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();
+  await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
+  await drawer.getByRole('button', { name: `操作: ${EPIC_TITLE}` }).click();
+  await expect(drawer.getByRole('menuitem', { name: 'このエピックを削除する' })).toBeFocused();
+  await expectNoA11yViolationsInThemes(page, 'epic-drawer');
 });
 
 test('タスクを作るダイアログ（Dialog）を開いた状態に axe の違反が無い', async ({ page }) => {

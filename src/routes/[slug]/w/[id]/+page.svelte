@@ -7,13 +7,11 @@
   import BacklogFilterBar from '../../../../lib/components/BacklogFilterBar.svelte';
   import CompletedTasks from '../../../../lib/components/CompletedTasks.svelte';
   import EmptyState from '../../../../lib/components/EmptyState.svelte';
-  import EpicDialog from '../../../../lib/components/EpicDialog.svelte';
   import Icon from '../../../../lib/components/Icon.svelte';
   import LoadFailed from '../../../../lib/components/LoadFailed.svelte';
   import Markdown from '../../../../lib/components/Markdown.svelte';
   import MoveParentDialog from '../../../../lib/components/MoveParentDialog.svelte';
   import PageHead from '../../../../lib/components/PageHead.svelte';
-  import StoryDialog from '../../../../lib/components/StoryDialog.svelte';
   import TeamExperience from '../../../../lib/components/TeamExperience.svelte';
   import TaskCreateDialog from '../../../../lib/components/TaskCreateDialog.svelte';
   import TaskEntry from '../../../../lib/components/TaskEntry.svelte';
@@ -91,11 +89,12 @@
     return !sameFilter(filterFromParams(target.url.searchParams), filter);
   });
   // 行のリンクの問い合わせ（今の絞り込みを残して task を足す）。行ごとに作らず、ここで1回だけ組み、行は task の値だけを足す
-  // タスクの引き出しとストーリーの引き出しは同時に開かないので、開くリンクは、もう一方の問い合わせを外す
-  function queryBase(key: 'task' | 'story'): string {
+  // タスク、ストーリー、エピックの引き出しは同時に開かないので、開くリンクは、もう一方の問い合わせを外す
+  function queryBase(key: 'task' | 'story' | 'epic_id'): string {
     const query = new SvelteURLSearchParams(page.url.search);
     query.delete('task');
     query.delete('story');
+    query.delete('epic_id');
     const rest = query.toString();
     return rest === '' ? `?${key}=` : `?${rest}&${key}=`;
   }
@@ -103,6 +102,10 @@
   // ストーリーの題のリンク（今の絞り込みを残して story を足す）。引き出しの前に、行の ID だけを足せば済むよう、経路まで含める
   const storyHrefBase = $derived(
     `${resolve('/[slug]/w/[id]', { slug: page.params.slug ?? '', id: page.params.id ?? '' })}${queryBase('story')}`,
+  );
+  // エピックの題のリンク（今の絞り込みを残して epic を足す）
+  const epicHrefBase = $derived(
+    `${resolve('/[slug]/w/[id]', { slug: page.params.slug ?? '', id: page.params.id ?? '' })}${queryBase('epic_id')}`,
   );
   // 親のない完了の件数。絞っているときは返らない（null）ので 0 として扱い、折りたたみの1行を出さない
   const rootDone = $derived(tree?.completed_count ?? 0);
@@ -424,8 +427,6 @@
     return '';
   });
   let taskDialog = $state<ReturnType<typeof TaskCreateDialog>>();
-  let storyDialog = $state<ReturnType<typeof StoryDialog>>();
-  let epicDialog = $state<ReturnType<typeof EpicDialog>>();
   // 完了にした行の完了の印へフォーカスを移すために持つ。読むのは操作の後の処理の中だけ。
   // bind:this で行ごとに書き込むので $state にする（ただの入れ物だと開発時に binding_property_non_reactive が出る）
   const entries = $state<Record<string, ReturnType<typeof TaskEntry> | null | undefined>>({});
@@ -1213,12 +1214,6 @@
   >
     {#snippet actions()}
       {#if canWrite}
-        <button class="btn" type="button" onclick={(event) => epicDialog?.show(event.currentTarget)}>
-          <Icon name="plus" />{t('epicCreate', { epic: t('epic') })}
-        </button>
-        <button class="btn" type="button" onclick={(event) => storyDialog?.show(event.currentTarget)}>
-          <Icon name="plus" />{t('storyCreate', { story: t('story') })}
-        </button>
         <button class="btn is-primary" type="button" onclick={(event) => taskDialog?.show(event.currentTarget)}>
           <Icon name="plus" />{t('create')}
         </button>
@@ -1307,6 +1302,7 @@
           canMoveDown={epicIndex < epics.length - 1}
           onMove={canWrite && !filtering ? reorderEpic : undefined}
           dnd={rowDnd}
+          href={`${epicHrefBase}${encodeURIComponent(epic.id)}`}
         >
           {#each epicStories(epic) as story (story.id)}
             {@render storyRow(story)}
@@ -1382,27 +1378,6 @@
     </div>
   {/snippet}
 
-  <!-- エピックとストーリーのダイアログは作るだけ（開く口は書き込めるときだけ）。ストーリーを直すのは、題から開く引き出し（`?story=`。+layout.svelte） -->
-  <EpicDialog
-    bind:this={epicDialog}
-    slug={page.params.slug ?? ''}
-    workspaceId={workspace.id}
-    {canWrite}
-    categories={data.definitions?.categories ?? []}
-    categoriesFailed={data.definitions === null}
-    onsaved={(createdId) => void saved('epic', createdId)}
-    announceCreated={!filtering}
-    ongone={() => void rowGone()}
-  />
-  <StoryDialog
-    bind:this={storyDialog}
-    slug={page.params.slug ?? ''}
-    workspaceId={workspace.id}
-    categories={data.definitions?.categories ?? []}
-    categoriesFailed={data.definitions === null}
-    onsaved={(createdId) => void saved('story', createdId)}
-    announceCreated={!filtering}
-  />
   {#if canWrite}
     <TaskCreateDialog
       bind:this={taskDialog}

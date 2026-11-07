@@ -9,7 +9,7 @@ import { epicUpdateOperation } from '../src/server/operations/epic.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { createEpic } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
-import { createTarget, type Person, type Target } from './operations/world.ts';
+import { createTarget, testEnv, type Person, type Target } from './operations/world.ts';
 
 const app = createApp(implementedOperations);
 
@@ -25,12 +25,25 @@ function create(target: Target, body: Record<string, unknown>, person: Person = 
   });
 }
 
-function update(target: Target, epicId: string, body: Record<string, unknown>, person: Person = target.member) {
+function update(
+  target: Target,
+  epicId: string,
+  body: Record<string, unknown>,
+  person: Person = target.member,
+  requestEnv?: Env,
+) {
   return post(app, epicUpdate, {
     slug: target.slug,
     token: person.token,
     body: { workspace_id: target.workspace.id, epic_id: epicId, ...body },
+    ...(requestEnv === undefined ? {} : { env: requestEnv }),
   });
+}
+
+// 開発用の時計（DEV_NOW）を置いた環境（ループバックの公開 URL のときだけ使える。src/server/dev-clock.ts）
+const FROZEN_ISO = '2026-10-26T01:00:00.000Z';
+function frozenEnv(devNow: string): Env {
+  return Object.assign({}, testEnv, { PUBLIC_ORIGIN: 'http://localhost:8787', DEV_NOW: devNow });
 }
 
 function get(target: Target, epicId: string, person: Person = target.member) {
@@ -249,6 +262,148 @@ describe('epic-update', () => {
     expect(res.status).toBe(409);
     expect(await errorCodeOf(res)).toBe('workspace_closed');
     expect(await rowOf(target, epic.id)).toEqual(epic);
+  });
+
+  describe('書き始める前の値（expected）', () => {
+    test('書く欄の値がサーバーの今の値と違えば、何も書かず 409 の conflict で今の値を返す', async () => {
+      const target = await createTarget();
+      const epic = await seeded(target);
+      expect((await update(target, epic.id, { body_md: '先に直した本文' }, target.leader)).status).toBe(200);
+      const res = await update(
+        target,
+        epic.id,
+        { title: '新しいタイトル', body_md: '自分の本文', expected: { title: '元のタイトル', body_md: '元の本文' } },
+        target.member,
+      );
+      expect(res.status).toBe(409);
+      const body = (await res.json()) as { error: { code: string; details: unknown } };
+      expect(body.error.code).toBe('conflict');
+      expect(body.error.details).toEqual({ reason: 'stale', current: { body_md: '先に直した本文' } });
+      expect(await rowOf(target, epic.id)).toMatchObject({ title: '元のタイトル', body_md: '先に直した本文' });
+      expect(await logsOf(target, epic.id)).toHaveLength(1);
+    });
+
+    test('書かない欄の前の値が違っても、断らない', async () => {
+      const target = await createTarget();
+      const epic = await seeded(target);
+      expect((await update(target, epic.id, { due_on: '2026-12-01' }, target.leader)).status).toBe(200);
+      const res = await update(target, epic.id, {
+        title: '新しいタイトル',
+        expected: { title: '元のタイトル', due_on: '2026-10-30' },
+      });
+      expect(res.status).toBe(200);
+      expect(await rowOf(target, epic.id)).toMatchObject({ title: '新しいタイトル', due_on: '2026-12-01' });
+    });
+
+    test('添えない保存は、今のまま後の保存が勝つ', async () => {
+      const target = await createTarget();
+      const epic = await seeded(target);
+      expect((await update(target, epic.id, { title: '先に直した' }, target.leader)).status).toBe(200);
+      expect((await update(target, epic.id, { title: '後の保存' })).status).toBe(200);
+      expect((await rowOf(target, epic.id))!.title).toBe('後の保存');
+    });
+
+    test('欄が空だったと思って送っても、先に誰かが書いていれば 409 の stale', async () => {
+      const target = await createTarget();
+      const epic = await seeded(target);
+      const res = await update(target, epic.id, { link_url: 'https://example.org/', expected: { link_url: '' } });
+      expect(res.status).toBe(409);
+      const body = (await res.json()) as { error: { details: unknown } };
+      expect(body.error.details).toEqual({ reason: 'stale', current: { link_url: 'https://example.com/old' } });
+    });
+
+    test('閉じたワークスペースでは、前の値が古くても stale より先に workspace_closed で断る', async () => {
+      const target = await createTarget({ closed: true });
+      const epic = await seeded(target);
+      const res = await update(
+        target,
+        epic.id,
+        { title: '新しいタイトル', expected: { title: '別の値' } },
+        target.admin,
+      );
+      expect(res.status).toBe(409);
+      expect(await errorCodeOf(res)).toBe('workspace_closed');
+    });
+
+    test('別の組織のエピックは、前の値を添えても 404', async () => {
+      const target = await createTarget();
+      const foreign = await createTarget();
+      const foreignEpic = await seeded(foreign);
+      const res = await update(target, foreignEpic.id, { title: '書き換える', expected: { title: '元のタイトル' } });
+      expect(res.status).toBe(404);
+      expect(await errorCodeOf(res)).toBe('not_found');
+    });
+  });
+
+  describe('続けて直した分の履歴のまとめ', () => {
+    const at = (minutes: number) => frozenEnv(new Date(Date.parse(FROZEN_ISO) + minutes * 60_000).toISOString());
+
+    test('同じ人が数分以内に同じ欄を続けて直すと、行は1つのままで「前」は最初の値、「後」は最後の値になる', async () => {
+      const target = await createTarget();
+      const epic = await seeded(target);
+      expect((await update(target, epic.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, epic.id, { body_md: '二回目' }, target.member, at(2))).status).toBe(200);
+      expect((await update(target, epic.id, { body_md: '三回目' }, target.member, at(5))).status).toBe(200);
+      const logs = await logsOf(target, epic.id);
+      expect(logs).toHaveLength(1);
+      expect(JSON.parse(logs[0]!.changes_json)).toEqual({ body_md: ['元の本文', '三回目'] });
+      expect(logs[0]!.created_at).toBe(new Date(Date.parse(FROZEN_ISO) + 5 * 60_000).toISOString());
+    });
+
+    test.each([
+      ['別の人', { body_md: '別の人が直した' }, 'leader', 1],
+      ['間が空いた', { body_md: '間が空いた' }, 'member', 6],
+      ['別の欄', { title: '別の欄' }, 'member', 1],
+      ['2つの欄', { body_md: '2つ', title: '2つの欄' }, 'member', 1],
+    ] as const)('%s なら、新しい行を足す', async (_name, body, who, minutes) => {
+      const target = await createTarget();
+      const epic = await seeded(target);
+      expect((await update(target, epic.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, epic.id, body, target[who], at(minutes))).status).toBe(200);
+      const logs = await logsOf(target, epic.id);
+      expect(logs).toHaveLength(2);
+      expect(JSON.parse(logs[0]!.changes_json)).toEqual({ body_md: ['元の本文', '一回目'] });
+    });
+
+    test('間は最初に書いた時刻から数える。まとめるたびに延びない', async () => {
+      const target = await createTarget();
+      const epic = await seeded(target);
+      for (const [minutes, value] of [
+        [0, '一回目'],
+        [4, '二回目'],
+        [6, '三回目'],
+      ] as const) {
+        expect((await update(target, epic.id, { body_md: value }, target.member, at(minutes))).status).toBe(200);
+      }
+      const logs = (await logsOf(target, epic.id)).map((log) => JSON.parse(log.changes_json));
+      expect(logs).toEqual([{ body_md: ['元の本文', '二回目'] }, { body_md: ['二回目', '三回目'] }]);
+    });
+
+    test('間に別の人の履歴が挟まっていれば、まとめない', async () => {
+      const target = await createTarget();
+      const epic = await seeded(target);
+      expect((await update(target, epic.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, epic.id, { title: '別の人の題' }, target.leader, at(1))).status).toBe(200);
+      expect((await update(target, epic.id, { body_md: '二回目' }, target.member, at(2))).status).toBe(200);
+      expect(await logsOf(target, epic.id)).toHaveLength(3);
+    });
+
+    test('元の値へ戻す変更は、まとめずに新しい行にする', async () => {
+      const target = await createTarget();
+      const epic = await seeded(target);
+      expect((await update(target, epic.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, epic.id, { body_md: '元の本文' }, target.member, at(1))).status).toBe(200);
+      const logs = (await logsOf(target, epic.id)).map((log) => JSON.parse(log.changes_json));
+      expect(logs).toEqual([{ body_md: ['元の本文', '一回目'] }, { body_md: ['一回目', '元の本文'] }]);
+    });
+
+    test('時計が最初に書いた時刻より戻っていても、まとめない', async () => {
+      const target = await createTarget();
+      const epic = await seeded(target);
+      expect((await update(target, epic.id, { body_md: '一回目' }, target.member, at(10))).status).toBe(200);
+      expect((await update(target, epic.id, { body_md: '二回目' }, target.member, at(0))).status).toBe(200);
+      expect(await logsOf(target, epic.id)).toHaveLength(2);
+    });
   });
 
   describe('同じ欄を同時に変える要求', () => {

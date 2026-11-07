@@ -3,7 +3,7 @@
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, expectFocusReturned, signIn, waitForResponses } from './helpers.ts';
+import { addStoryRow, createWorkspace, expectFocusReturned, signIn, waitForResponses } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
@@ -48,15 +48,9 @@ function stepButton(scope: Page | Locator, direction: '前' | '次'): Locator {
   return stepGroup(scope).getByRole('button', { name: `${direction}のタスク`, exact: true });
 }
 
-// 作った後は、木の読み直しが返るまで待つ（待たずに続けると、画面だけで足した行が読み直しで消えうる）
+// 木の空の行で作る（作った行は読み直さずに木へ入る）
 async function createStory(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
-  const dialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
-  await dialog.getByLabel('タイトル').fill(title);
-  const reloaded = waitForResponses(page, '/backlog-tree');
-  await dialog.getByRole('button', { name: '作る' }).click();
-  await expect(dialog).toBeHidden();
-  await reloaded;
+  await addStoryRow(page, title);
 }
 
 test('前後のボタンとキーで、開いたまま隣のタスクへ移る。端で止まり、履歴は積まず、Esc で最後に表示した行へ戻る', async ({

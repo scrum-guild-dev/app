@@ -1096,7 +1096,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const at = ids.indexOf(drawer.id);
     return at < 0 ? null : { prev: ids[at - 1] ?? null, next: ids[at + 1] ?? null };
   }
-  // キーの先が文字を打つ場所か（本番は task-order.ts の isTypingTarget）。文字や数字を入れる型の input、textarea、select、contenteditable。
+  // キーの先が文字を打つ場所か（本番は shortcut-keys.ts の isTypingTarget）。文字や数字を入れる型の input、textarea、select、contenteditable。
   // ポイントの radio のように文字を打たない型の input では、[ ] で移れる
   const TEXT_INPUT_TYPES = ["", "text", "search", "url", "email", "tel", "password", "number", "date", "datetime-local", "month", "week", "time"];
   function isTypingTarget(el) {
@@ -3253,9 +3253,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229 && ev.target.matches && ev.target.matches("input[data-drawer-input]")) {
       ev.preventDefault(); commitDrawerField(ev.target.dataset.drawerInput); return;
     }
-    // [ が前、] が次。文字を打つ場所の中、日本語の変換中、修飾キー付き、押しっぱなしの繰り返しでは移らない（ページ全体では drawerAdjacent が null）
+    // [ が前、] が次。文字を打つ場所の中、日本語の変換中、Ctrl・⌘・Alt 付き、押しっぱなしの繰り返しでは移らない（ページ全体では drawerAdjacent が null）
     if ((ev.key === "[" || ev.key === "]") && drawer.id && !overlay && !ev.isComposing && ev.keyCode !== 229 && !ev.repeat
-      && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !ev.shiftKey && !isTypingTarget(ev.target)) {
+      && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !isTypingTarget(ev.target)) {
       if (drawerAdjacent()) { ev.preventDefault(); stepDrawer(ev.key === "[" ? -1 : 1); }
       return;
     }
