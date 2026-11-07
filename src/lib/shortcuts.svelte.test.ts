@@ -74,18 +74,58 @@ describe('登録と振り分け', () => {
     expect(shortcut.run).not.toHaveBeenCalled();
   });
 
-  test('押しっぱなしの繰り返しには、repeat を許したものだけ run を呼ぶ。許さないものもキーは奪う', () => {
+  test('押しっぱなしの繰り返しには、repeat を許したものだけ run を呼ぶ。許さない単キーはキーも奪わない', () => {
     const registry = new ShortcutRegistry();
     const shortcut = make();
     const repeating = make({ id: 'repeating', keys: ']', repeat: true });
     registry.register(shortcut);
     registry.register(repeating);
     const held = keyEvent({ repeat: true });
-    expect(registry.handle(held)).toBe(true);
-    expect(held.preventDefault).toHaveBeenCalled();
+    expect(registry.handle(held)).toBe(false);
+    expect(held.preventDefault).not.toHaveBeenCalled();
     expect(shortcut.run).not.toHaveBeenCalled();
     expect(registry.handle(keyEvent({ key: ']', repeat: true }))).toBe(true);
     expect(repeating.run).toHaveBeenCalledTimes(1);
+  });
+
+  describe('Mod 付きのキーの押しっぱなし', () => {
+    const held = { key: 'k', ctrlKey: true, repeat: true };
+    const inInput = { tagName: 'INPUT', type: 'text', isContentEditable: false } as unknown as EventTarget;
+
+    test('run せずにキーだけ奪う（ブラウザの標準の Ctrl+K を動かさない）', () => {
+      const registry = new ShortcutRegistry();
+      const shortcut = make({ keys: 'Mod+K', inTyping: true });
+      registry.register(shortcut);
+      const event = keyEvent(held);
+      expect(registry.handle(event)).toBe(true);
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(shortcut.run).not.toHaveBeenCalled();
+    });
+
+    test('inTyping でないものは、入力欄の中の長押しを奪わない', () => {
+      const registry = new ShortcutRegistry();
+      registry.register(make({ keys: 'Mod+K' }));
+      const event = keyEvent({ ...held, target: inInput });
+      expect(registry.handle(event)).toBe(false);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+
+    test('enabled が false の間は奪わない', () => {
+      const registry = new ShortcutRegistry();
+      registry.register(make({ keys: 'Mod+K', inTyping: true, enabled: () => false }));
+      const event = keyEvent(held);
+      expect(registry.handle(event)).toBe(false);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+
+    test('モーダルのダイアログが開いている間は奪わない', () => {
+      const registry = new ShortcutRegistry();
+      registry.register(make({ keys: 'Mod+K', inTyping: true }));
+      modalState.openCount = 1;
+      const event = keyEvent(held);
+      expect(registry.handle(event)).toBe(false);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
   });
 
   test('Mod+K も、変換中（isComposing、keyCode 229）には働かない', () => {
@@ -96,16 +136,6 @@ describe('登録と振り分け', () => {
     expect(registry.handle(keyEvent({ ...base, isComposing: true }))).toBe(false);
     expect(registry.handle(keyEvent({ ...base, keyCode: 229 }))).toBe(false);
     expect(registry.handle(keyEvent(base))).toBe(true);
-  });
-
-  test('Mod+K を押しっぱなしにしても、ブラウザの標準の動作へ流さない', () => {
-    const registry = new ShortcutRegistry();
-    const shortcut = make({ keys: 'Mod+K', inTyping: true });
-    registry.register(shortcut);
-    const held = keyEvent({ key: 'k', metaKey: true, repeat: true });
-    registry.handle(held);
-    expect(held.preventDefault).toHaveBeenCalled();
-    expect(shortcut.run).not.toHaveBeenCalled();
   });
 
   test('キーの先が無い（null、undefined、要素でない）ときも働く', () => {
@@ -214,7 +244,7 @@ describe('useShortcut（部品の置かれている間だけ登録する）', ()
     expect(() => flushSync()).toThrow(/dup-a と dup-b/);
     dispose();
     flushSync();
-    expect(shortcuts.items).not.toContain(first);
+    expect(shortcuts.items.map((item) => item.id)).not.toContain('dup-a');
   });
 
   test('部品が置かれると登録し、外れると解除する', async () => {

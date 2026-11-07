@@ -80,9 +80,13 @@ export class ShortcutRegistry {
     if (!shortcut.inTyping && isTypingTarget(event.target)) return false;
     if (!shortcut.inModal && isDialogOpen()) return false;
     if (shortcut.enabled && !shortcut.enabled()) return false;
+    // 押しっぱなしの繰り返しは働かせない。Ctrl/⌘ 付きのキーだけは奪う（Ctrl+K の長押しで、ブラウザの標準の Ctrl+K が動かないように）
+    if (event.repeat && !shortcut.repeat) {
+      if (!entry.parsed.mod) return false;
+      event.preventDefault();
+      return true;
+    }
     event.preventDefault();
-    // 押しっぱなしの繰り返しは、働かせずに奪うだけにする（Ctrl+K の長押しで、ブラウザの標準の Ctrl+K が動かないように）
-    if (event.repeat && !shortcut.repeat) return true;
     shortcut.run(event as KeyboardEvent);
     return true;
   };
