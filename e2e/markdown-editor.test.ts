@@ -538,3 +538,90 @@ test('「/」の小窓から書式を入れ、文中の「/」と Esc では文�
   await expect.poll(() => input.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(4);
   await expect(menu).toBeHidden();
 });
+
+test('入力の補助: Enter でリストを続け、Tab で字下げし、URL を貼るとリンクになり、Ctrl+Z で戻せる', async ({
+  page,
+  baseURL,
+}) => {
+  const drawer = await openTask(page, baseURL, 'member');
+  const input = drawer.getByRole('textbox', { name: 'コメントを書く', exact: true });
+  const caret = () => input.evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd]);
+
+  // Enter で次の項目の記号が入る。チェックリストは未完了の箱、番号付きは次の番号
+  await input.click();
+  await page.keyboard.type('- あ');
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('- あ\n- ');
+  await page.keyboard.type('い');
+  await input.fill('- [x] 済');
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('- [x] 済\n- [ ] ');
+  await input.fill('1. 一');
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('1. 一\n2. ');
+
+  // Tab と Shift+Tab で字下げする。フォーカスは欄に残る
+  await input.fill('- あ');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('い');
+  await page.keyboard.press('Tab');
+  await expect(input).toHaveValue('- あ\n  - い');
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(input).toHaveValue('- あ\n- い');
+
+  // 空の項目で Enter を押すとリストが終わり、Ctrl+Z で印が戻る
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('- あ\n- い\n- ');
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('- あ\n- い\n');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(input).toHaveValue('- あ\n- い\n- ');
+
+  // リストの外では Tab でフォーカスが移る
+  await input.fill('メモ');
+  await page.keyboard.press('Tab');
+  await expect(input).not.toBeFocused();
+  await expect(input).toHaveValue('メモ');
+
+  // 一覧の先頭の項目（親が無い項目）の Tab も、字下げを増やさずフォーカスを移す
+  await input.fill('- あ');
+  await input.focus();
+  await page.keyboard.press('Tab');
+  await expect(input).not.toBeFocused();
+  await expect(input).toHaveValue('- あ');
+
+  // 日本語の変換中の Enter では動かない
+  await input.fill('- あ');
+  await input.focus();
+  await input.evaluate((element) => element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })));
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('- あ\n');
+  await input.evaluate((element) => element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+
+  // 文字を選んで URL を貼るとリンクになる。選んでいないときは貼り付けのまま、ファイルを貼っても今のまま
+  const pasteText = (text: string) =>
+    input.evaluate((element, pasted) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', pasted);
+      const event = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true });
+      element.dispatchEvent(event);
+      return event.defaultPrevented;
+    }, text);
+  await input.fill('詳しくは仕様を見て');
+  await input.evaluate((element: HTMLTextAreaElement) => {
+    element.focus();
+    element.setSelectionRange(4, 6);
+  });
+  expect(await pasteText('https://example.com/spec')).toBe(true);
+  await expect(input).toHaveValue('詳しくは[仕様](https://example.com/spec)を見て');
+  expect(await caret()).toEqual([34, 34]);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(input).toHaveValue('詳しくは仕様を見て');
+
+  await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(4, 6));
+  expect(await pasteText('仕様書')).toBe(false);
+  expect(await pasteText('https://example.com/a https://example.com/b')).toBe(false);
+  await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(6, 6));
+  expect(await pasteText('https://example.com/spec')).toBe(false);
+});
