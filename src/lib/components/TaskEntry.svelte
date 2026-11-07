@@ -640,7 +640,7 @@
             />
             {#if dueShown !== null}
               <button
-                class="btn is-sm is-quiet"
+                class="menu-item"
                 type="button"
                 onclick={() => {
                   clearTimeout(dueTimer);

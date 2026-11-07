@@ -2072,6 +2072,5 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   height: auto;
 }
 
-/* 行のチップの窓（期日の日付の入力と「クリア」）。メニューと同じ枠 `.row-menu-list` の中に縦に並べる */
+/* 行のチップの窓（期日の日付の入力と「クリア」）。メニューと同じ枠 `.row-menu-list` の中に縦に並べる。「クリア」は枠の `.menu-item` を使う */
 .attr-panel { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3); }
-.attr-panel .btn { width: auto; align-self: flex-start; }

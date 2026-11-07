@@ -231,7 +231,7 @@
   {/if}
   {#if open && panel !== undefined}
     <div
-      class="account-menu-list row-menu-list"
+      class="account-menu-list row-menu-list attr-panel"
       role="dialog"
       aria-label={t('attrMenuLabel', { attr })}
       bind:this={list}
