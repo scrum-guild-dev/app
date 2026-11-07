@@ -4,13 +4,12 @@
 //
 // 人が差分を読む領域（docs/development.md の「マージの判定」）
 import { type CredentialOwner, type ImportSource, type ScopeCandidate } from '../source.ts';
-import { fail, getJson, idOf, isRecord } from './client.ts';
+import { FULL_NAME_PATTERN, LOGIN_PATTERN, PAGE_SIZE, fail, getJson, idOf, isRecord } from './client.ts';
 import { fetchAssignedIssues } from './issues.ts';
 
 const USER_URL = 'https://api.github.com/user';
 const REPOS_URL = 'https://api.github.com/user/repos';
 
-const PAGE_SIZE = 100;
 // 頁送りの上限。超える（100頁目まで満杯で続く）ときは、止まらずに回り続けないよう断る
 const MAX_PAGES = 100;
 // 候補の一覧の期限。各頁を始める前に判定するので、最悪は、これに1回分の時間切れ（10秒）を足した時間になる
@@ -18,9 +17,6 @@ const LIST_DEADLINE_MS = 60_000;
 
 // fine-grained PAT: `github_pat_` + 英数字とアンダースコア。全体で255文字まで
 const PAT_PATTERN = /^github_pat_[A-Za-z0-9_]{22,244}$/;
-// リポジトリの `owner/name`。GitHub の名前の文字（英数字、`_`、`.`、`-`）と長さに絞る（画面と DB に入る値のため）
-const FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,80}\/[A-Za-z0-9_.-]{1,100}$/;
-const LOGIN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
 
 function isShape(credential: unknown): credential is string {
   return typeof credential === 'string' && PAT_PATTERN.test(credential);

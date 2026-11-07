@@ -40,7 +40,7 @@ export type ImportedItem = {
 
 // 担当の項目の取得の入力。1回の要求の数に上限を持ち、続きの位置を受け取り、返す
 // - assignee: 「自分」（PAT を発行したユーザー）のログイン名
-// - scopes: 取り込む範囲。続きから再開するときは、前回と同じ並びで渡す
+// - scopes: 取り込む範囲。続きから再開するときは、続きのリポジトリを含めて渡す（並びは変わってよい）
 // - since: これ以降に更新された項目だけを取る（ISO 8601）。初回は null。続きから再開するときは前回と同じ値を渡す
 // - maxRequests: 取り込み元への要求の数の上限（1以上）
 // - cursor: 前回返された続きの位置（不透明な文字列）。最初は null
@@ -53,7 +53,7 @@ export type FetchAssignedParams = {
 };
 
 // items は更新日時の古い順（範囲ごと）。nextCursor が null なら取り終えた。
-// 続きから取り直すと、境目の項目が重なりうるので、受け取る側は externalId で重複を許す
+// 続きは更新日時の起点で持つので、境目の項目が重なる。受け取る側は externalId で重複を許す
 export type FetchAssignedResult = { items: ImportedItem[]; nextCursor: string | null };
 
 // invalid_format: 認証情報の形が合わない（取り込み元に問い合わせていない）

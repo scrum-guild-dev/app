@@ -128,11 +128,14 @@ describe('完了条件: 不変の ID', () => {
 describe('完了条件: 頁と続きの位置', () => {
   const many = (count: number, repo = REPO_A) => Array.from({ length: count }, (_, i) => fakeIssue(repo.name, i + 1));
 
-  test.each([0, 1, 99, 100, 101, 250])('%i 件は頁をまたいでも漏れも重複も無い', async (count) => {
+  // 満杯の頁の後は最後の項目の更新日時から取り直すので、境目の1件が重なる（受け取る側が externalId で吸収する）
+  test.each([0, 1, 99, 100, 101, 250])('%i 件は頁をまたいでも漏れない（重なりは境目の1件だけ）', async (count) => {
     const fake = setup();
     fake.addIssues(1001, many(count));
     const { items, nextCursor } = await source.fetchAssignedItems(PAT, params(), fake.fetcher);
-    expect(items.map((i) => i.externalId)).toEqual(many(count).map((i) => String(i.id)));
+    const ids = items.map((i) => i.externalId);
+    expect(new Set(ids)).toEqual(new Set(many(count).map((i) => String(i.id))));
+    expect(ids.length - new Set(ids).size).toBe(Math.floor(count / 100));
     expect(nextCursor).toBeNull();
   });
 
@@ -159,7 +162,6 @@ describe('完了条件: 頁と続きの位置', () => {
       cursor = result.nextCursor;
     } while (cursor !== null);
     expect(rounds).toBe(4);
-    expect(seen).toHaveLength(251);
     expect(new Set(seen).size).toBe(251);
   });
 
@@ -215,7 +217,7 @@ describe('完了条件: 失敗の区別', () => {
     const fake = setup();
     fake.addIssues(
       1001,
-      Array.from({ length: 150 }, (_, i) => fakeIssue(REPO_A.name, i + 1)),
+      Array.from({ length: 150 }, (_, i) => fakeIssue(REPO_A.name, i + 1, { updatedAt: '2026-02-02T00:00:00.000Z' })),
     );
     fake.failOnIssuePage(2, { kind: 'status', status: 403 });
     const error = await failureOf(source.fetchAssignedItems(PAT, params(), fake.fetcher));
@@ -266,6 +268,113 @@ describe('入力の誤り', () => {
       source.fetchAssignedItems(PAT, params(override as Partial<FetchAssignedParams>), fake.fetcher),
     ).rejects.toThrow(TypeError);
     expect(fake.calls).toHaveLength(0);
+  });
+});
+
+describe('続きの位置の堅さ', () => {
+  const list250 = () => Array.from({ length: 250 }, (_, i) => fakeIssue(REPO_A.name, i + 1));
+
+  test('再開の間に先頭の Issue が更新されても、漏れない（重複は許す）', async () => {
+    const fake = setup();
+    fake.addIssues(1001, list250());
+    const base = params({ maxRequests: 1 });
+    const first = await source.fetchAssignedItems(PAT, base, fake.fetcher);
+    expect(first.nextCursor).not.toBeNull();
+    // 1件目にコメントが付き、更新日時が最新になって末尾へ動く
+    fake.addIssues(
+      1001,
+      list250().map((issue) => (issue.number === 1 ? { ...issue, updated_at: '2026-06-01T00:00:00.000Z' } : issue)),
+    );
+    const seen = new Set(first.items.map((i) => i.externalId));
+    let cursor = first.nextCursor;
+    let guard = 0;
+    while (cursor !== null && guard++ < 10) {
+      const next = await source.fetchAssignedItems(PAT, { ...base, cursor }, fake.fetcher);
+      next.items.forEach((i) => seen.add(i.externalId));
+      cursor = next.nextCursor;
+    }
+    expect(cursor).toBeNull();
+    expect(seen.size).toBe(250);
+  });
+
+  test('同じ更新日時が1頁を超えて続いても、先へ進んで漏れない', async () => {
+    const fake = setup();
+    const same = Array.from({ length: 230 }, (_, i) =>
+      fakeIssue(REPO_A.name, i + 1, { updatedAt: '2026-02-02T00:00:00.000Z' }),
+    );
+    fake.addIssues(1001, same);
+    const { items, nextCursor } = await source.fetchAssignedItems(PAT, params(), fake.fetcher);
+    expect(nextCursor).toBeNull();
+    expect(new Set(items.map((i) => i.externalId)).size).toBe(230);
+  });
+
+  test('範囲の並びが変わっても、続きは同じリポジトリから始まる', async () => {
+    const fake = setup();
+    fake.addIssues(1001, [fakeIssue(REPO_A.name, 1)]);
+    fake.addIssues(1002, [fakeIssue(REPO_B.name, 2)]);
+    const first = await source.fetchAssignedItems(
+      PAT,
+      params({ scopes: [REPO_A, REPO_B], maxRequests: 1 }),
+      fake.fetcher,
+    );
+    expect(first.nextCursor?.startsWith('1002:')).toBe(true);
+    const second = await source.fetchAssignedItems(
+      PAT,
+      params({ scopes: [REPO_B, REPO_A], cursor: first.nextCursor }),
+      fake.fetcher,
+    );
+    expect(second.items.map((i) => i.scopeId)).toEqual(['1002', '1001']);
+  });
+
+  test('続きの位置の範囲が scopes に無ければ断る', async () => {
+    const fake = setup();
+    await expect(source.fetchAssignedItems(PAT, params({ cursor: '1002:1:' }), fake.fetcher)).rejects.toThrow(
+      TypeError,
+    );
+  });
+
+  test.each([
+    ['年だけ', '2026'],
+    ['数字だけ', '1'],
+    ['タイムゾーン無し', '2026-01-01 00:00'],
+  ])('since が ISO 8601 でない（%s）と断る', async (_name, since) => {
+    const fake = setup();
+    await expect(source.fetchAssignedItems(PAT, params({ since }), fake.fetcher)).rejects.toThrow(TypeError);
+  });
+
+  test('maxRequests が上限を超えると断る', async () => {
+    const fake = setup();
+    await expect(source.fetchAssignedItems(PAT, params({ maxRequests: 10_000 }), fake.fetcher)).rejects.toThrow(
+      TypeError,
+    );
+  });
+});
+
+describe('応答の検証', () => {
+  test.each([
+    ['題が空', { title: '' }],
+    ['題が長すぎる', { title: 'あ'.repeat(257) }],
+    ['URL が別のホスト', { html_url: 'https://github.com.evil.example/guild-fake/alpha/issues/1' }],
+    ['URL が http', { html_url: 'http://github.com/guild-fake/alpha/issues/1' }],
+    ['URL が Issue の形でない', { html_url: 'https://github.com/guild-fake/alpha/pull/1' }],
+    ['URL にクエリ', { html_url: 'https://github.com/guild-fake/alpha/issues/1?x=1' }],
+    ['updated_at が不正', { updated_at: 'きのう' }],
+    ['期限が不正', { milestone: { due_on: 'あした' } }],
+  ])('%s は unavailable', async (_name, patch) => {
+    const fake = setup();
+    fake.addIssues(1001, [{ ...fakeIssue(REPO_A.name, 1), ...patch }]);
+    const error = await failureOf(source.fetchAssignedItems(PAT, params(), fake.fetcher));
+    expect(error.failure).toBe('unavailable');
+  });
+
+  test('キーは応答の URL の今のリポジトリ名から作る（改名後も食い違わない）', async () => {
+    const fake = setup();
+    fake.addIssues(1001, [
+      { ...fakeIssue(REPO_A.name, 1), html_url: 'https://github.com/guild-fake/alpha-renamed/issues/9' },
+    ]);
+    const { items } = await source.fetchAssignedItems(PAT, params(), fake.fetcher);
+    expect(items[0]?.key).toBe('guild-fake/alpha-renamed#9');
+    expect(items[0]?.scopeId).toBe('1001');
   });
 });
 
