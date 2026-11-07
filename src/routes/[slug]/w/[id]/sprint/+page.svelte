@@ -464,10 +464,14 @@
       reload,
       onstale: () => void invalidate('app:workspace'),
       // 取り消したタスクはスプリントには戻らずバックログにある。ボードに題のリンクが無いので見出しへ移す
-      // （押したボタンにフォーカスがあったときだけ）。トーストは画面をまたいで残るので、バックログの木も読み直す
+      // （押したボタンにフォーカスがあったときだけ）。トーストは画面をまたいで残るので、バックログの画面に移った後でも効くよう、
+      // 両方の画面が依存する `app:backlog-tree` を1回だけ読み直す（スプリントの load も同じ印に依存する）
       onrestored: async (restoredId, focus) => {
-        void invalidate('app:backlog-tree');
-        await reload();
+        try {
+          await invalidate('app:backlog-tree');
+        } finally {
+          local = null;
+        }
         await focusRestored(restoredId, focus);
       },
       onskipped: focusSkipped,

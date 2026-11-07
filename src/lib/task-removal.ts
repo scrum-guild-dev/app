@@ -28,7 +28,10 @@ export type RestoreTarget = {
 
 // 戻したことを知らせる文。外した参照があればそれを添え、ボードから消したときはバックログにあることを添える
 function restoredMessage(target: RestoreTarget, cleared: readonly string[] = []): string {
-  if (cleared.length > 0) return t('taskRestoredCleared', { task: t('task'), fields: cleared.join('、') });
+  if (cleared.length > 0) {
+    const params = { task: t('task'), fields: cleared.join('、'), sprint: t('sprint'), backlog: t('backlog') };
+    return t(target.fromSprint === true ? 'taskRestoredClearedToBacklog' : 'taskRestoredCleared', params);
+  }
   if (target.fromSprint === true) {
     return t('taskRestoredToBacklog', { task: t('task'), sprint: t('sprint'), backlog: t('backlog') });
   }
