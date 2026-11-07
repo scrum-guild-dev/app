@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { taskCreate } from '../src/shared/operations/task/task-create.ts';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { AOBA_CLIENT_WORKSPACE_ID, E2E_SEED_TASK_PREFIX, removeE2eSeedTasks } from './local-d1.ts';
 import { failOperation } from './operations.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
@@ -128,6 +129,39 @@ test('タスクを、ストーリーの配下の末尾と木の末尾の空の�
   await expect(story.getByText('二つ目のタスク', { exact: true })).toBeVisible();
   await expect(story.getByText('親のないタスク', { exact: true })).toHaveCount(0);
   expect(await collect()).toEqual([]);
+});
+
+// seed の受託開発チームは、完了した親なしのタスクを並びに持つ。その末尾の位置から次の位置を作れず 500 になっていた（#881）。
+// seed の行に足すので、前と後に作ったタスクを消して seed の状態へ戻す。題が固定なので、同じテストの複製を並べて走らせない
+// （CI の e2e-repeat と同じく --repeat-each は --workers=1。docs/development.md の「e2e の書き方」）
+test('seed の受託開発チームで、木の末尾の空の行から親なしのタスクを2件続けて作れ、読み直しても作った順に並ぶ', async ({
+  page,
+}) => {
+  const first = `${E2E_SEED_TASK_PREFIX} 一つ目`;
+  const second = `${E2E_SEED_TASK_PREFIX} 二つ目`;
+  const collect = await watchViolations(page);
+  await removeE2eSeedTasks();
+  try {
+    await page.goto(`/aoba/w/${AOBA_CLIENT_WORKSPACE_ID}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
+
+    const rootInput = treeTail(page).getByRole('textbox', { name: 'タスクを足す', exact: true });
+    await rootInput.fill(first);
+    await rootInput.press('Enter');
+    await expect(page.getByText(first, { exact: true })).toBeVisible();
+    await expect(rootInput).toHaveValue('');
+    await rootInput.fill(second);
+    await rootInput.press('Enter');
+    await expect(page.getByText(second, { exact: true })).toBeVisible();
+    await expect(page.locator('.draft-error')).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
+    await expect(page.getByText(new RegExp(`^${E2E_SEED_TASK_PREFIX}`))).toHaveText([first, second]);
+    expect(await collect()).toEqual([]);
+  } finally {
+    await removeE2eSeedTasks();
+  }
 });
 
 test('タスクの空の行が断られたら、理由を出して題を残す。親が完了していたら、トーストで知らせて木を読み直す', async ({
