@@ -64,6 +64,9 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
             return {
               display: getComputedStyle(el).display,
               icons: el.querySelectorAll('svg use').length,
+              // 元の locator の確かめと同じく、当たる要素がちょうど1つであることも見る（querySelector は最初の1つしか読まない）
+              currents: el.querySelectorAll('[aria-current="page"]').length,
+              labels: el.querySelectorAll('.is-wrapping .nav-item-label').length,
               currentIsWrapping: el.querySelector('[aria-current="page"]')?.classList.contains('is-wrapping') ?? false,
               overflowWrap: getComputedStyle(label).overflowWrap,
               width: rect.width,
@@ -82,6 +85,8 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
           });
           expect(read.display).toBe(width <= 760 ? 'flex' : 'grid');
           expect(read.icons).toBe(3);
+          expect(read.currents).toBe(1);
+          expect(read.labels).toBe(1);
           expect(read.currentIsWrapping).toBe(true);
           expect(read.overflowWrap).toBe('anywhere');
           expect(read.scroll).toBeLessThanOrEqual(read.width + 1);
