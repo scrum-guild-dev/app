@@ -2,6 +2,8 @@
   import { goto } from '$app/navigation';
   import { t } from '../vocabulary.svelte.ts';
   import { searchOptions, type NavSearchScreen } from '../nav-search.ts';
+  import { ariaKeyshortcuts } from '../shortcut-keys.ts';
+  import { useShortcut } from '../shortcuts.svelte.ts';
   import Icon from './Icon.svelte';
 
   // 上の帯の検索（kit.js の nav-search と同じ並び）。画面の名前を絞り、今のワークスペースがあるときは末尾に
@@ -79,17 +81,22 @@
     }
   }
 
-  // どの画面からも Ctrl+K / ⌘K で欄へ移る。ダイアログが開いている間は奪わない
-  function onWindowKeydown(event: KeyboardEvent): void {
-    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'k') return;
-    if (document.querySelector('dialog[open], [role="dialog"]:not([hidden])')) return;
-    event.preventDefault();
-    if (document.activeElement !== input)
-      opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    input?.focus();
-    input?.select();
-    show();
-  }
+  // どの画面からも Ctrl+K / ⌘K で欄へ移る。ダイアログが開いている間は奪わない（shortcuts.svelte.ts の既定）。
+  // 欄に文字を打っている間も、ほかの場所と同じく押せる
+  const SEARCH_KEYS = 'Mod+K';
+  useShortcut(() => ({
+    id: 'nav-search',
+    keys: SEARCH_KEYS,
+    label: () => t('navSearchLabel'),
+    inTyping: true,
+    run: () => {
+      if (document.activeElement !== input)
+        opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      input?.focus();
+      input?.select();
+      show();
+    },
+  }));
 
   function onFocusout(event: FocusEvent): void {
     const next = event.relatedTarget;
@@ -99,8 +106,6 @@
     }
   }
 </script>
-
-<svelte:window onkeydown={onWindowKeydown} />
 
 <div class="nav-search" bind:this={root} onfocusout={onFocusout} role="search" aria-label={t('navSearchLabel')}>
   <Icon name="search" />
@@ -115,7 +120,7 @@
     aria-expanded={open}
     aria-controls={listId}
     aria-autocomplete="list"
-    aria-keyshortcuts="Control+K Meta+K"
+    aria-keyshortcuts={ariaKeyshortcuts(SEARCH_KEYS)}
     aria-activedescendant={activeOption ? optionId(activeOption.id) : undefined}
     placeholder={t('navSearchPlaceholder')}
     bind:this={input}

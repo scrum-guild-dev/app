@@ -26,49 +26,6 @@ export function visibleStoryIds(root: ParentNode): string[] {
   return visibleIds(root, 'data-story-id');
 }
 
-// 文字や数字を入れる input の型。ブラウザは type 属性が無いか不明な値の input を 'text' として返す（空文字は属性が空のときの保険）。
-// radio、checkbox、button、range など文字を打たない型は含めない（ポイントの radio にフォーカスがあっても前後へ移れる）
-const TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
-  '',
-  'text',
-  'search',
-  'url',
-  'email',
-  'tel',
-  'password',
-  'number',
-  'date',
-  'datetime-local',
-  'month',
-  'week',
-  'time',
-]);
-
-// キー入力の先が、文字を打つ場所か（文字を入れる型の input、textarea、select、contenteditable）。`[` と `]` を打つ人の邪魔をしない
-function isTypingTarget(target: unknown): boolean {
-  const element = target as { tagName?: string; type?: string; isContentEditable?: boolean } | null;
-  if (element === null) return false;
-  if (element.isContentEditable === true) return true;
-  const tag = element.tagName?.toUpperCase();
-  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
-  return tag === 'INPUT' && TEXT_INPUT_TYPES.has((element.type ?? '').toLowerCase());
-}
-
-export type StepKeyEvent = Pick<
-  KeyboardEvent,
-  'key' | 'keyCode' | 'isComposing' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'repeat' | 'defaultPrevented'
-> & { target: EventTarget | null };
-
-// `[` が前、`]` が次。入力欄の中、日本語の変換中（keyCode 229 は、isComposing が偽になる Safari の変換確定の直後も含む）、
-// 修飾キー付き、押しっぱなしの繰り返し、ほかの処理が受けたキーでは移らない
-export function stepOfKey(event: StepKeyEvent): -1 | 1 | null {
-  if (event.key !== '[' && event.key !== ']') return null;
-  if (event.isComposing || event.keyCode === 229 || event.repeat || event.defaultPrevented) return null;
-  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return null;
-  if (isTypingTarget(event.target)) return null;
-  return event.key === '[' ? -1 : 1;
-}
-
 // 前後のボタンで移ってきて置き直した引き出しが、最初にフォーカスを置くボタンの向き。
 // 押した向きのボタンが押せるならその向き、押せない（端）か向きが無い（普通に開いた、キーで移った）なら null（閉じるボタン）。
 // 読み込み中も押した向きのボタンにフォーカスがあれば、Enter の連打が閉じるボタンに届かない
