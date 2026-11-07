@@ -5,6 +5,12 @@ declare module '*.sql?raw' {
   export default content;
 }
 
+// vite の ?raw で読む TypeScript の原文（test/import/boundary.test.ts が取り込み元の共通の型の文字列を確かめる）
+declare module '*.ts?raw' {
+  const content: string;
+  export default content;
+}
+
 // vite の import.meta.glob の型（test/operation-registry.test.ts が塊のファイルの一覧と中身を取る）。
 // vite/client を丸ごと入れると、Worker の型に無い名前が増えるので、必要な分だけ宣言する
 interface ImportMeta {

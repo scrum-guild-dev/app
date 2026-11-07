@@ -17,6 +17,9 @@ import {
   createAccountLogin,
   createAttachment,
   createBoardColumn,
+  createConnection,
+  createConnectionScope,
+  createConnectionStatusMapping,
   createCategory,
   createChangeLog,
   createComment,
@@ -35,6 +38,8 @@ import {
   createStory,
   createTask,
   createTaskFieldValue,
+  createTaskSource,
+  createTaskSourcePayload,
   createThanks,
   createUser,
   createWorkspace,
@@ -92,6 +97,11 @@ async function fillOrganization(organization: Awaited<ReturnType<typeof createOr
   });
   await createSprintEntry(organization, ws, sprint.id, task.id, admin.id);
   await createTaskFieldValue(organization, task.id, field.id, member.id);
+  const connection = await createConnection(organization, ws, member.id);
+  await createConnectionScope(organization, connection.id);
+  await createConnectionStatusMapping(organization, connection.id, column.id);
+  await createTaskSource(organization, ws, task.id, connection.id);
+  await createTaskSourcePayload(organization, task.id);
   // 討伐隊は workspace_id を持たず、エピックを通して組織に結ぶ
   await createEpicPartyMember(organization, epic.id, member.id, { added_by: admin.id });
   await createThanks(organization, ws, task.id, admin.id, member.id);
@@ -271,6 +281,40 @@ describe('purge-organization（解約した組織のデータを消す SQL）', 
     });
   });
 
+  test('先頭5文は、Wiki の版2つ、ページ2つ、取り込み元の応答の順で、すべて1文32件に分けてある', () => {
+    const head = sqlLines(purgeOrganizationSql(uuidv7())).slice(0, 5);
+    expect(head.map((statement) => /^DELETE FROM (\w+) /.exec(statement)?.[1])).toEqual([
+      'wiki_page_revisions',
+      'wiki_page_revisions',
+      'wiki_pages',
+      'wiki_pages',
+      'task_source_payloads',
+    ]);
+    for (const statement of head) expect(statement).toContain('LIMIT 32');
+  });
+
+  test('取り込み元の応答は先頭5文の1回で32件ずつ消え、ほかの組織の応答は残る', async () => {
+    const other = await createOrganization();
+    await fillOrganization(other, (await createAccount({ last_login_at: AT })).id);
+    const target = await createOrganization(EXPIRED());
+    const admin = await createUser(target, { is_admin: 1 });
+    const workspace = await createWorkspace(target, admin.id);
+    for (let i = 0; i < 33; i++) {
+      const task = await createTask(target, workspace.id, admin.id, { position: `a${String(i).padStart(2, '0')}` });
+      await createTaskSourcePayload(target, task.id);
+    }
+    const payloads = async (id: string) => (await counts(id))!.task_source_payloads;
+    const otherBefore = await payloads(other.id);
+    expect(otherBefore).toBeGreaterThan(0);
+
+    const head = sqlLines(purgeOrganizationSql(target.id)).slice(0, 5);
+    await runStatementsForTest(env, head);
+    expect(await payloads(target.id)).toBe(1);
+    await runStatementsForTest(env, head);
+    expect(await payloads(target.id)).toBe(0);
+    expect(await payloads(other.id)).toBe(otherBefore);
+  });
+
   test('組織の中のすべての表を消し、数える（表を足して消す文や数える列を足し忘れると落ちる）', async () => {
     const id = uuidv7();
     const statements = sqlLines(purgeOrganizationSql(id));
@@ -282,7 +326,11 @@ describe('purge-organization（解約した組織のデータを消す SQL）', 
     expect(deleted).not.toContain(undefined);
     expect(deleted.filter((table) => table === 'wiki_pages')).toHaveLength(2);
     expect(deleted.filter((table) => table === 'wiki_page_revisions')).toHaveLength(2);
-    const otherDeletes = deleted.filter((table) => table !== 'wiki_pages' && table !== 'wiki_page_revisions');
+    // 取り込み元の応答は、1文32件の文と、残りを拾う全件の文の2つ
+    expect(deleted.filter((table) => table === 'task_source_payloads')).toHaveLength(2);
+    const otherDeletes = deleted.filter(
+      (table) => table !== 'wiki_pages' && table !== 'wiki_page_revisions' && table !== 'task_source_payloads',
+    );
     expect(new Set(otherDeletes).size).toBe(otherDeletes.length);
     expect([...new Set(deleted)].sort()).toEqual([...organizationTables, 'organizations'].sort());
     expect(deleted.at(-1)).toBe('organizations');

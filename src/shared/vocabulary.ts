@@ -776,8 +776,8 @@ export const dictionary = defineDictionary({
   storyReopenBlocked: '{done}か中止した{epic}の下の{story}は取り消せません',
   // 親のエピックが完了か中止しているとき、「完了にする」（メニューの項目）の横に出す（完了にすると取り消せなくなるため、断る）
   storyCompleteBlocked: '{done}か中止した{epic}の下の{story}は{done}にできません',
-  // 木に載っていないストーリー（絞り込みの外、一覧の無い画面で開いた）の引き出しで、完了の帯の代わりに出す
-  storyFactsMissing: 'この画面の一覧に載っていないため、{done}の操作は出ません',
+  // 無効の「完了にする」を押して読み直した結果、残りが無くなっていたときの読み上げ
+  storyRecheckedOpen: '残りの{task}は 0 件になりました。{done}にできます',
   storyReopen: '取り消す',
   storyReopenLabel: '{done}を取り消す: {title}',
   storyCompleting: '{done}にしています',
@@ -1642,6 +1642,11 @@ export const dictionary = defineDictionary({
   drawerSide: '横',
   drawerCenter: '真ん中',
   drawerPage: 'ページ全体',
+  // ショートカットの名前。`g` の次のキーで画面へ移る（g b、g s、g t）、`c` で空の行へ移る
+  shortcutGo: '{screen}へ移る',
+  shortcutNewTask: '{task}を書く',
+  // メニューの項目の説明（読み上げ）。{first} を押した次に {next} を押すと移る
+  shortcutGoHint: 'ショートカット: {first} を押してから {next} を押す',
   drawerTab: '新しいタブ',
   drawerTabBlocked: '新しいタブを開けませんでした',
   // 上の帯の前後のボタン。{task} は一覧の前後に並ぶ行の呼び名。キーボードは [ と ]

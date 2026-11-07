@@ -12,7 +12,7 @@ import { storyDetailSchema } from './story.ts';
 export const storyGet = defineOperation({
   name: 'story-get',
   description:
-    'ストーリー1件のタイトル、受け入れ基準、本文、期日、リンクと、削除できるか、まとめて削除できるか、配下の件数を返す',
+    'ストーリー1件のタイトル、受け入れ基準、本文、期日、リンクと、削除できるか、まとめて削除できるか、配下の件数、完了の状態を返す',
   mode: 'read',
   permission: 'member',
   workspace: true,
@@ -22,5 +22,9 @@ export const storyGet = defineOperation({
     can_delete: z.boolean(),
     can_delete_children: z.boolean(),
     children: z.object({ tasks: z.number().int() }),
+    // 完了の状態。完了した日時（完了していなければ null）、配下の削除していない未完了のタスクの件数、親のエピックが完了か中止しているか
+    completed_at: z.string().nullable(),
+    open_task_count: z.number().int(),
+    parent_finished: z.boolean(),
   }),
 });

@@ -152,6 +152,9 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
   - 押しっぱなしの繰り返しには働かない（`repeat: true` にしたものだけ）。Ctrl/⌘ 付きのキーは、働かせずにキーだけ奪う（`Mod+K` の長押しで、ブラウザの標準の Ctrl+K を動かさない）。単キーは奪わない。
   - `enabled` が `false` を返す間は働かない。
 - 同じキーを同時に2つ登録すると、開発（`import.meta.env.DEV`）では例外にして、本番では後の登録を無視する（先の登録を壊さない）。`Mod+K` と `Mod+k` のように、書き方が違っても同じキーなら重なりとして数える。同時に置く部品が同じキーを使わないよう、`id` は部品ごとに決める。
+- 続けて押すキーは `g b` のように空白で区切った2つの単キーで書く（`src/lib/shortcut-keys.ts`）。1つ目を押すと待ちに入り（1つ目は `preventDefault` する）、約1秒（`CHORD_TIMEOUT_MS`）のうちの2つ目で働く。待ち中に別のキーを押すと待ちは切れ、Shift など修飾キーだけの押下は待ちを切らない。文字を打つ場所、ダイアログが開いている間、変換中、続きが `enabled` でない間は、1つ目でも待ちに入らず、キーは奪わない。1つ目と同じ単キー（`g` と `g b`）は重なりとして数える。`aria-keyshortcuts` は空白区切りを「代わりのキー」と読むので、続けて押すキーには付けない（`ariaKeyshortcuts` は例外にする）。読み上げには、リンクの `aria-describedby` に結んだ見えない文（辞書の `shortcutGoHint`）で伝える。
+- 画面を移るキーは `g b`（バックログ）、`g s`（スプリント）、`g t`（今日やること）で、`AppShell` が `src/lib/nav.ts` の `GO_KEYS` から登録する（メニューの項目の説明の文も同じキーから作る）。バックログとスプリントは、メニューの対象のワークスペースがあるときだけ働き、今いる画面へは移らない。
+- 新規作成のキーは `c` で、今見ている一覧の空の行（`DraftRow`）へフォーカスを移す。バックログは親なしのタスクの空の行、スプリントは完了でない最初の列の空の行で、空の行が無い画面（書き込めない、木を読み込み中など）では働かない。移す口は `DraftRow` の `focus()`。
 - ブラウザの標準のショートカット（⌘N、⌘T、⌘W など）は奪えないので割り当てない。新規作成のような単独の操作は、修飾キーなしの単キーにする。
 - Ctrl+K は、日本語の変換中は働かず、押しっぱなしでは欄へ移り直さず、ほかの処理が受けたキー（`defaultPrevented`）は奪わない。
 - テストは `src/lib/shortcut-keys.test.ts`（キーの書き方と判定）と `src/lib/shortcuts.svelte.test.ts`（登録、振り分け、衝突）。
@@ -1013,6 +1016,16 @@ GitHub App も比べた。人が抜けても取り込みが止まらない、PAT
 - ログインの画面への理由（`/login?error=`）: `denied`（アカウントが無く、入れる組織も招待も無い。停止した組織の分も数え、アカウントがある人はこの理由で断らない。会員登録の往復では返さない）、`retry`（state が合わない、使えない code、結ぶ書き込みの失敗）、`too_many`（レート制限）、`unavailable`（GitHub に届かない、応答が想定と違う、クライアントの ID と秘密が未設定）、`invite`（招待の URL から結べなかった。秘密の形が違う、当たらない、期限切れ、使い済み、取り消し済み、停止した組織、別のアカウント、メールアドレスが確認済みでない、のどれも同じ。どのメールアドレスに招待したかは出さない）。再度ログインできるときは `return_to` も付ける
 - レート制限: ログインの開始（画面の移動だけ）と戻り先（state の Cookie が合い、DB の state の行を使い切れたものだけ）を、同じ IP（`CF-Connecting-IP`。無いリクエストは `unknown` の1つの枠。IPv4 はそのまま。IPv6 は、1人が /64 の中の無数のアドレスを使えるので、上位 64 ビット（/64）で数え、事業者の単位の /48 も、より緩い上限で数える。IPv4 を写した IPv6 は、16進と全部を書いた形も含めて IPv4 に直す。解釈できない値は `unknown` の枠）から10分に60回まで（`src/server/auth/rate-limit.ts` の `LOGIN_RATE_LIMIT`）。1回のログインで2回数えるので30人分。同じオフィスの15人のチームが一斉に入っても詰まらない値にした。IPv6 の /48 は10分に120回まで（`LOGIN_RATE_LIMIT_IPV6_SITE`）。開始だけは、全部の IP を合わせた全体の枠も10分に600回まで数える（`LOGIN_RATE_LIMIT_GLOBAL`。数える順と理由は `docs/data-model.md` の `rate_limits`）。どれかを超えたら `too_many`。どの枠も、上限に届いた後は行を書き換えずに断る。全体の枠で断った開始は、ログの `outcome` を `too_many_global` にする。戻りが超えたときは GitHub に問い合わせない。IP は `CF-Connecting-IP` を使うので、Cloudflare の Pseudo IPv4 を Overwrite で有効にしない（`docs/operations.md`）
 - ログアウト（操作 `logout`）: 今のセッションの行を消し、Cookie を消す。ほかの端末のセッションは残す
+
+### 取り込み元の型と GitHub の PAT（`src/server/import/`）
+
+置き場所は `src/server/import/`（人が差分を読む領域）。型は `source.ts`、取り込み元の一覧（種類から実装への表）を知るのは `index.ts` だけ。GitHub に固有の値（通信先、PAT の形、API の版）と処理は `github/` の外に出さず、取り込み元を足すときは型の実装と言葉の辞書のほかを変えない。取得と変換は後のタスクで足す。
+
+- 型（`ImportSource`）: 種類（`kind`）、範囲の種類（`scopeKind`。GitHub はリポジトリ）、固有の設定の検証 `parseSettings()`、認証情報の形の検査 `isCredentialShape()` と末尾4文字 `credentialLast4()`、認証情報の確かめ `verifyCredential()`（持ち主 `{kind, id, name}` を返す）、範囲の候補 `listScopeCandidates()`（`{id, name}` の一覧）。`fetcher` は呼ぶたびに渡す（`src/server/app.ts` の `fetcher` と同じ差し替え口）
+- 失敗は `ImportSourceError`（`failure` は `invalid_format`、`unauthorized`=401、`forbidden`=403 と 429、`unavailable`=5xx・届かない・3xx・想定と違う応答）で、4xx のうち 401 と 403・429 以外（404 など）は `unavailable`。レート制限（403・429）と権限の不足は `forbidden` に混ぜ、分けるのは再試行を作るタスクで足す。PAT の前後の空白は呼ぶ側が取る（形が合わず `invalid_format`）。メッセージは固定の文だけ。PAT、応答の本文、URL、例外の message を入れない。形が合わない認証情報は GitHub に問い合わせずに `invalid_format` で断る
+- GitHub の実装（`github/index.ts`）: fine-grained PAT（`github_pat_` + 英数字とアンダースコア22文字以上、全体で255文字まで。classic は受けない）。持ち主は `GET https://api.github.com/user`（`type` が `User` か `Organization`、`id` は正の整数を10進の文字列に、`login`）。候補は `GET https://api.github.com/user/repos?per_page=100&page=N` を100件未満の頁が来るまで送り（100頁まで。超えたら `unavailable`。期限は60秒で、各頁を始める前に判定するため、最悪は1回分の時間切れ（10秒）を足した時間。`Link` ヘッダーは見ず、満杯でない頁の後に続きは無いとみなす）、`id` で重複を除いて `{id, name: full_name}` にする。通信は `redirect: 'manual'` と10秒の時間切れで、`Authorization` 以外に PAT を出さない
+- 組織が持ち主の PAT では `GET /user` が PAT を作った人を返すため、持ち主を `organization` にできるか、候補が PAT で選んだリポジトリだけになるかは、本物の PAT で確かめる（#920）。確かめた結果でこの節を直す
+- 偽の API は `test/import/fake-github-pat.ts`（ログインの `test/auth/fake-github.ts` とは別）
 
 ## Google のログイン
 

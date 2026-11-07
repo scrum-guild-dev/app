@@ -5,7 +5,9 @@
   import { NAV_MENU_ID, navState, setNavCollapsed } from '../nav-collapse.svelte.ts';
   import { page } from '$app/state';
   import { accountScreenKey, workspaceIdOf } from '../breadcrumb.ts';
-  import { isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
+  import { goto } from '$app/navigation';
+  import { useShortcut } from '../shortcuts.svelte.ts';
+  import { GO_KEYS, isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
   import { organizationLabel } from '../organization-label.ts';
   import BrandMark from './BrandMark.svelte';
   import Breadcrumb from './Breadcrumb.svelte';
@@ -82,6 +84,35 @@
     }
     return screens;
   });
+  // `g` の次のキーで、バックログ・スプリント・今日やることへ移る（shortcuts.svelte.ts に登録する）。
+  // バックログとスプリントは、メニューの対象のワークスペースがあるときだけ。今いる画面へは移らない
+  const goHref = (key: 'backlog' | 'sprint' | 'pageToday'): string | null => {
+    if (key === 'pageToday') return resolve('/[slug]', { slug });
+    if (!isWorkspaceId(workspace?.id)) return null;
+    return key === 'backlog'
+      ? resolve('/[slug]/w/[id]', { slug, id: workspace.id })
+      : resolve('/[slug]/w/[id]/sprint', { slug, id: workspace.id });
+  };
+  for (const key of ['backlog', 'sprint', 'pageToday'] as const) {
+    useShortcut(() => ({
+      id: `go-${key}`,
+      keys: GO_KEYS[key]!,
+      label: () => t('shortcutGo', { screen: t(key) }),
+      enabled: () => {
+        const href = goHref(key);
+        return href !== null && href !== current;
+      },
+      run: () => {
+        if (key === 'pageToday') void goto(resolve('/[slug]', { slug }));
+        else if (isWorkspaceId(workspace?.id))
+          void goto(
+            key === 'backlog'
+              ? resolve('/[slug]/w/[id]', { slug, id: workspace.id })
+              : resolve('/[slug]/w/[id]/sprint', { slug, id: workspace.id }),
+          );
+      },
+    }));
+  }
   // 検索から送るバックログ。ワークスペースの画面を開いているときだけ
   const backlogHref = $derived(crumbWorkspace ? resolve('/[slug]/w/[id]', { slug, id: crumbWorkspace.id }) : null);
   const screenName = $derived.by(() => {

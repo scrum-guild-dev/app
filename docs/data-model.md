@@ -601,7 +601,7 @@
   - 完了の列は、足す、名前を直す、並べ替える、並べ替えの直前に指す対象に入らない。読む文も書く文も `is_done = 0` で絞るので、完了の列を指すと、無い列（別の組織、別のワークスペース、削除済みを含む）と同じ 404 になる。並べ替え（`column-move`）は `categories` の並べ替えと同じ決まり（`after_column_id`。`null` は先頭、省くと末尾、自分自身は 400 の `invalid_input`、同じ値の振り直しも同じ）で、完了の列は並びに入らない。並べ替えは `change_logs` に残さない。
   - 変更の履歴は `entity_type = 'workspace'`、`entity_id` はワークスペースの ID、`action = 'update'`（組織の変更の履歴の画面が出す `create`、`close`、`reopen` にしない）で、列の追加は `{"column": [null, {id, name}]}`、名前の変更は `{"column": [{id, name: 前}, {id, name: 後}]}`、削除は `{"column": [{id, name}, null]}`（タスクを移したときは `"target_column": [null, {id, name}]` も）。同じ `batch()` の中で、変えた文が行を書いたときだけ入れる（`previousStatementChanged`）。
   - 削除（`column-delete`）の入力は `column_id` と省ける `target_column_id`。完了の列は 409（`done_column`）、完了以外で最後の1つは 409（`last_column`）、移すタスクがあるのに `target_column_id` が無ければ 409（`target_required`）、移し先が削除する列自身か完了の列なら 409（`target_invalid`）、削除する列と移し先が無ければ（別の組織、別のワークスペース、削除済みを含む）404。移すのは、進行中と先のスプリント（削除していない `planned` と `active`）の、削除していない未完了のタスクで、移し先の列のそのスプリントでの末尾へ、元の列の中の順（`column_position`、`id`）を保って置く。終了したスプリントのカードは変えず、削除した列を指したまま残る（終了したスプリントの中身は変えない。終了したスプリントのカードを読む画面と操作は今無い。読むようになったら、削除した列も名前を出す）。移したタスクごとに `change_logs`（`entity_type = 'task'`、`action = 'update'`、`{"column": [{id, name}, {id, name}]}`。`task-column-move` と同じ形）を書く。書き方は「書き込みの単位」の「列の削除」。
-  - 取り込み元の状態から列への対応（`connection_status_mappings`）は表がまだ無いので、列の削除は触らない。表を使い始める #67 で、列の削除が対応を外してその状態を先頭の列に置く文を、同じ `batch()` に足す。
+  - 取り込み元の状態から列への対応（`connection_status_mappings`）は表を足した（#918）が、使い始めるのは #67 なので、列の削除は触らない。表を使い始める #67 で、列の削除が対応を外してその状態を先頭の列に置く文を、同じ `batch()` に足す。
 
 ### detail_fields
 
@@ -682,15 +682,15 @@
 | provider | TEXT | NOT NULL | 取り込み元の種類（初版は `backlog` と `github`）。値は取り込み元の型の一覧でアプリが検証する |
 | name | TEXT | NOT NULL | 本人が付けた表示名 |
 | status | TEXT | NOT NULL、`active`、`error`、`stopped` | |
-| stopped_reason | TEXT | `auth_failed`、`owner`、`leader`、`member_left`、`workspace_closed`、`user_disabled` | 停止の理由。`status = 'stopped'` のときだけ入る |
+| stopped_reason | TEXT | `auth_failed`、`owner`、`leader`、`member_left`、`workspace_closed`、`user_disabled` | 停止の理由。`status = 'stopped'` のときは必ず入り、ほかは空（`CHECK`） |
 | scope_mode | TEXT | NOT NULL、`include` か `exclude`、既定 `include` | 対象を挙げるか、除外を挙げるか |
 | ignore_source_due | INTEGER | NOT NULL、既定 0 | 取り込み元の期限を無視する |
-| settings_json | TEXT | NOT NULL、既定 `'{}'` | 取り込み元に固有の設定。Backlog のスペースのドメインとユーザー ID など。型が検証する |
+| settings_json | TEXT | NOT NULL、既定 `'{}'`、`json_valid` | 取り込み元に固有の設定。Backlog のスペースのドメインとユーザー ID、GitHub の PAT を発行したユーザーの ID（担当分の判定に使う「自分」）と PAT の持ち主（ユーザーか組織。範囲の候補を出す先）など。型が検証する |
 | credential_ciphertext | TEXT | | 暗号化した認証情報。退会で消す |
 | credential_key_version | INTEGER | | 暗号化に使った鍵の版 |
 | credential_last4 | TEXT | | 画面に出す末尾4文字 |
-| sync_state_json | TEXT | NOT NULL、既定 `'{}'` | 前回成功した時点と、上限で止めたときの続きの位置 |
-| reconcile_state_json | TEXT | NOT NULL、既定 `'{}'` | 1日1回の照合の続きの位置 |
+| sync_state_json | TEXT | NOT NULL、既定 `'{}'`、`json_valid` | 前回成功した時点と、上限で止めたときの続きの位置 |
+| reconcile_state_json | TEXT | NOT NULL、既定 `'{}'`、`json_valid` | 1日1回の照合の続きの位置 |
 | last_success_at | TEXT | | |
 | last_reconciled_at | TEXT | | |
 | last_error_message | TEXT | | |
@@ -700,6 +700,7 @@
 | deleted_at | TEXT | | |
 | created_at、updated_at | TEXT | NOT NULL | |
 
+- `CHECK`: `credential_ciphertext`、`credential_key_version`、`credential_last4` は3つとも空か3つとも入る。`deleted_at` が入っていれば認証情報は空。
 - 索引: `(workspace_id) WHERE deleted_at IS NULL`、`(owner_user_id)`。`owner_user_id` は外部キーの検査にも使うので、部分索引にしない。
 - 定期処理は `status IN ('active', 'error') AND deleted_at IS NULL` を `last_success_at` の古い順に処理する。
 - 削除は論理削除にする。取り込んだタスクが `task_sources.connection_id` で指すため。削除したら認証情報の列を消す。
@@ -713,7 +714,7 @@
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
 | connection_id | TEXT | PK、FK connections | |
-| scope_kind | TEXT | PK | 範囲の種類（初版は `backlog_project`、`github_owner`、`github_repo`）。取り込み元の型が定義し、アプリが検証する |
+| scope_kind | TEXT | PK | 範囲の種類（初版は `backlog_project`、`github_repo`）。取り込み元の型が定義し、アプリが検証する |
 | source_id | TEXT | PK | 取り込み元の ID |
 | source_name | TEXT | NOT NULL | 選んだときの表示名 |
 
@@ -729,7 +730,7 @@
 | source_status | TEXT | PK | 取り込み元の状態名 |
 | column_id | TEXT | NOT NULL、FK board_columns | 完了の列は選べない（アプリが検査） |
 
-列を削除したら、その列を指す行を消す。
+列を削除したら、その列を指す行を消す。索引: `(column_id)`（列の削除が対応を外す文と、外部キーの検査のため）。
 
 ## 計画と作業
 
@@ -839,7 +840,7 @@
 - 親を変えたら、新しい親の末尾の `position` を振る。
 - 並べ替えと親の移動（`story-move`）は、`tasks` の「並べ替えと親の移動」と同じ決まりで、親は `epic_id`（null は親なし）、直前の行は `after_story_id`。違うのは次のとおり。移す先のエピックが無ければ（別の組織を含む）404、親を変えるとき、移す先のエピックも、今の親のエピックも、完了しているか中止していれば（`epics.completed_at` か `canceled_at` が空でない）409（`conflict`、理由は `parent_completed`。親なしへ出す場合も同じ。完了済みのストーリーを出すと、クリア済みのエピックが空になり、同じストーリーで別のエピックをもう一度クリアできるため。書く文も今の親が終わっていないことを条件にする）。同じエピックの中の並べ替えは、エピックが完了か中止していてもできる。完了したストーリーも動かせる。エピックの下へ移したら `category_id` を空にし、空にした区分は `tasks` と同じく履歴の `category` に残す。親が変わったときの履歴は `{"epic": [前, 後]}`（値は `{id, title}` か null）。
 - `title` は `tasks.title` と同じ決まり（前後の空白を除いて 1〜200 字）。`acceptance_criteria_md` と `body_md` はそれぞれ 1 万字まで（コードポイントで数え、改行とタブ以外の制御文字と見えない文字は断る）。改行は `\n` にそろえ、前後の空行と末尾の空白だけを落とし、先頭の行の字下げは残す。空は `NULL`。列の CHECK（10 万字）は、決まりを超えた書き込みを止める保険。`link_url` は http と https の URL だけで 2048 字まで。ユーザー名とパスワードを含む URL は断り、保存する値は解釈した URL（`new URL(...).href`）にそろえる。`due_on` は暦に存在する日付で、空は `NULL`。
-- 作る操作と変える操作は区分（`category_id`）も受ける。区分は親のないストーリーだけが持ち、エピックの下のストーリーへ送ると 409（`conflict`、理由は `has_parent`）。変える文は、区分を書くときは `epic_id IS NULL` も条件にする。作る操作（`story-create`）は、親のエピック（`epic_id`。任意）を受ける。親があれば、同じワークスペースの削除していないエピックでなければ 404（別の組織も 404）、完了か中止したエピックなら 409（`conflict`、理由は `parent_completed`。「親を移す」と同じ）で、`position` はそのエピックの配下の末尾（完了したストーリーも含む）。親のエピックと区分を一緒に送ると 409（`has_parent`）で、返す区分は親のエピックの区分（`inherited` が真）。親の条件は書く文にも入れる（読んでから書くまでにクリアか中止、削除されたら何も書かず、読み直して 404 か 409 を返す）。親なしなら、`position` は親のないストーリーの末尾。どちらも `created_by` は呼んだ人で、ストーリーと履歴は 1 回の `batch()` で書き、親のエピックの下に作ったときの履歴には `{"epic": [null, {id, title}]}` も残す（`story-move` と同じ値の形）。変える操作（`story-update`）は、送られた欄のうち今の値と違うものだけを、読んだ値のままなら、という条件つきで書き（書き方は「書き込みの単位」の「ストーリーの変更」）、変えた欄だけを `change_logs` に `{"列名": [前, 後]}` で残す。変える欄が無ければ何も書かない。ダイアログを開くときの読み取り（`story-get`）は、1件の全部の欄と、親のエピック（`epic_id`）、引き継ぎを解いた区分（`category`。`{ id, name, inherited }` か null。親のエピックがあればその区分で `inherited` が真）、呼んだ人が削除できるか（`can_delete`。作った人かリーダー（管理者を含む））、まとめて削除できるか（`can_delete_children`）、配下の件数（`children`。削除していないタスク。完了したものも含む）を返す（`backlog-tree` には載せない）。削除（`story-delete`）は `epics` の「削除」と同じ決まり。無い（別の組織、別のワークスペース、削除済みを含む）ときは 404 で、閉じたワークスペースでも読める。
+- 作る操作と変える操作は区分（`category_id`）も受ける。区分は親のないストーリーだけが持ち、エピックの下のストーリーへ送ると 409（`conflict`、理由は `has_parent`）。変える文は、区分を書くときは `epic_id IS NULL` も条件にする。作る操作（`story-create`）は、親のエピック（`epic_id`。任意）を受ける。親があれば、同じワークスペースの削除していないエピックでなければ 404（別の組織も 404）、完了か中止したエピックなら 409（`conflict`、理由は `parent_completed`。「親を移す」と同じ）で、`position` はそのエピックの配下の末尾（完了したストーリーも含む）。親のエピックと区分を一緒に送ると 409（`has_parent`）で、返す区分は親のエピックの区分（`inherited` が真）。親の条件は書く文にも入れる（読んでから書くまでにクリアか中止、削除されたら何も書かず、読み直して 404 か 409 を返す）。親なしなら、`position` は親のないストーリーの末尾。どちらも `created_by` は呼んだ人で、ストーリーと履歴は 1 回の `batch()` で書き、親のエピックの下に作ったときの履歴には `{"epic": [null, {id, title}]}` も残す（`story-move` と同じ値の形）。変える操作（`story-update`）は、送られた欄のうち今の値と違うものだけを、読んだ値のままなら、という条件つきで書き（書き方は「書き込みの単位」の「ストーリーの変更」）、変えた欄だけを `change_logs` に `{"列名": [前, 後]}` で残す。変える欄が無ければ何も書かない。ダイアログを開くときの読み取り（`story-get`）は、1件の全部の欄と、親のエピック（`epic_id`）、引き継ぎを解いた区分（`category`。`{ id, name, inherited }` か null。親のエピックがあればその区分で `inherited` が真）、呼んだ人が削除できるか（`can_delete`。作った人かリーダー（管理者を含む））、まとめて削除できるか（`can_delete_children`）、配下の件数（`children`。削除していないタスク。完了したものも含む）に加え、完了の状態として、完了した日時（`completed_at`。未完了は null）、配下の未完了のタスクの件数（`open_task_count`。削除していない `backlog` のタスクで、`story-complete` の判定と同じ）、親のエピックが完了か中止しているか（`parent_finished`。削除したエピックは親として数えない）を返す（`backlog-tree` には載せない。ストーリーの引き出しはこの完了の状態を使い、木に頼らない）。削除（`story-delete`）は `epics` の「削除」と同じ決まり。無い（別の組織、別のワークスペース、削除済みを含む）ときは 404 で、閉じたワークスペースでも読める。
 - 手での完了（`story-complete`）は、配下に削除していない未完了のバックログのタスクが無いときだけ `completed_at`、`completed_by`（呼んだ人）、`updated_at` を書く。配下にタスクが1件も無いストーリーも完了にできる。完了の経験値（`xp_grants` の `story_completed`）を同じ `batch()` で付ける（書き方は「書き込みの単位」の「ストーリーの完了」）。断るもの。無い（別の組織、別のワークスペース、削除済みを含む）ときは 404、すでに完了していれば 409（`conflict`、理由は `completed`。2つの画面から同時に完了にした後の方も同じ）、親のエピックが完了か中止していれば 409（`conflict`、理由は `parent_completed`。完了にすると取り消せず、付けた経験値も打ち消せなくなるため。削除したエピックは親として数えない）、配下に未完了のタスクが残っていれば 409（`conflict`、理由は `open_tasks`）、閉じたワークスペースは 409（`workspace_closed`）。履歴は `action = 'complete'`、`{"completed_at": [null, 日時], "completed_by": [null, {id, name}]}`。
 - 完了の取り消し（`story-reopen`）は、`completed_at` と `completed_by` を空に戻し、打ち消されていない `story_completed` の付与を打ち消しの明細で取り消す。もう一度完了にすると、新しい回のキーで付け直す。完了していなければ 409（`conflict`、理由は `not_completed`）、親のエピックが完了か中止していれば 409（`conflict`、理由は `parent_completed`）。完了と同じく、削除したエピックは親として数えない（取り消せる）。エピックの削除（`epic-delete`）は、配下のストーリーを親なしにするか一緒に削除するので、削除したエピックの下に削除していないストーリーは残らない（それより前に入った行があれば、木には出ない）。打ち消しは、受け取った人が所属を外れていても行う。履歴は `action = 'reopen'`、`{"completed_at": [前の日時, null], "completed_by": [{id, name}, null]}`。
 - 完了と取り消しの 409 の `conflict` は、理由を `details.reason` に載せる（`open_tasks`、`completed`、`not_completed`、`parent_completed`、`changed`。`src/shared/operations/story/story-complete.ts` の `storyCompletionConflictReasons`）。`changed` は、読んでから書くまでに別の要求が受け取り手か完了の回を変え、やり直しても書けなかったとき。
@@ -945,13 +946,13 @@
 | provider | TEXT | NOT NULL | 取り込み元の種類。`connections.provider` と同じ値で、一意のキーに使う |
 | source_kind | TEXT | NOT NULL、`issue`、`pull_request`、`review_request` | 種別。取り込み元を問わず共通 |
 | source_id | TEXT | NOT NULL | 取り込み元の不変の ID |
-| reviewer_source_id | TEXT | NOT NULL、既定 `''` | レビュー依頼のレビュアーの取り込み元での ID。他の種別は空文字 |
+| reviewer_source_id | TEXT | NOT NULL、既定 `''` | レビュー依頼のレビュアーの取り込み元での ID。他の種別は空文字（`CHECK ((source_kind = 'review_request') = (reviewer_source_id <> ''))`） |
 | source_key | TEXT | NOT NULL | 課題キーや `owner/repo#12` など、取り込み元での表示用のキー。移動で変わるので検索と表示にだけ使う |
 | source_url | TEXT | NOT NULL | |
 | source_container_id | TEXT | NOT NULL | Backlog のプロジェクトや GitHub のリポジトリなど、取り込み元で項目が入る先の ID。絞り込みに使う |
 | source_container_name | TEXT | NOT NULL | |
 | source_status | TEXT | NOT NULL | 取り込み元での状態名 |
-| source_due_on | TEXT | | 取り込み元の期限 |
+| source_due_on | TEXT | `CHECK (source_due_on IS date(source_due_on))` | 取り込み元の期限（ワークスペースのタイムゾーンの日付に直して書く） |
 | source_updated_at | TEXT | NOT NULL | 差分の判定に使う |
 | is_source_done | INTEGER | NOT NULL、既定 0 | 「取り込み元で完了」の印 |
 | missing_since_at | TEXT | | 「取り込み元で見つからない」の印。入っていれば印あり |
@@ -969,7 +970,7 @@
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
 | task_id | TEXT | PK、FK tasks | |
-| payload_json | TEXT | NOT NULL | 本文とラベルを含む応答。大きすぎる分は切り詰める |
+| payload_json | TEXT | NOT NULL、`json_valid` | 本文とラベルを含む応答。大きすぎる分は、大きい項目を落として JSON として有効な形のまま切り詰める |
 | is_truncated | INTEGER | NOT NULL、既定 0 | |
 | updated_at | TEXT | NOT NULL | |
 
