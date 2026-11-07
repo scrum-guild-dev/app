@@ -89,8 +89,9 @@
   // 届く前に開き直されていたら（dialog.open が true）何もしない
   // dismissible が偽の間に閉じられたときは、開き直す。Chromium は cancel を1回止めた後、ユーザーの操作が無いまま
   // もう一度 Esc を押されると、cancel を経ずに閉じる（止められない）ため。open は真のまま保つ
+  // close は閉じた後に非同期に届く。その間に部品ごと外れた（確認を閉じたまま引き出しが消えた）ときは、dialog が空なので何もしない
   function onclose(): void {
-    if (dialog.open) return;
+    if (!dialog || dialog.open) return;
     if ((!dismissible || !outsideDismiss) && open) {
       dialog.showModal();
       focusFirst();

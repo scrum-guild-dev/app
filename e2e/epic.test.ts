@@ -99,7 +99,7 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   const moved = waitForResponses(page, '/story-move');
   await moveDialog.getByRole('button', { name: '移す' }).click();
   await expect(moveDialog).toBeHidden();
-  await expect(epic.locator('.tree-children .tree-row.is-story button.tree-link')).toHaveText(['残高が見える']);
+  await expect(epic.locator('.tree-children .tree-row.is-story a.tree-link')).toHaveText(['残高が見える']);
   await expect(
     page
       .getByRole('status')
@@ -107,7 +107,7 @@ test('作ったワークスペース: エピックを作り、ストーリーを
   ).toBeAttached();
   await moved;
   await page.reload();
-  await expect(epic.locator('.tree-children .tree-row.is-story button.tree-link')).toHaveText(['残高が見える']);
+  await expect(epic.locator('.tree-children .tree-row.is-story a.tree-link')).toHaveText(['残高が見える']);
 
   // 配下が無いあいだは完了にできる状態。タスクを足すと、残りの件数が出て押せなくなる
   const story = rowGroup(page, '残高が見える');
