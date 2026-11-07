@@ -649,6 +649,9 @@ test('行の「⋯」は、キーボードだけで開いて項目を移り、Es
   await page.setViewportSize({ width: 1100, height: 600 });
   await expect(lowerMenu).toBeHidden();
   await expect(lower).toBeFocused();
+  // 閉じた「⋯」にフォーカスがあるときの Alt と ↓ は、行を動かす
+  await page.keyboard.press('Alt+ArrowDown');
+  await expect(rootTitles(page)).toHaveText(['見積もりを送る', '請求書を出す']);
 
   // 狭い幅では、ホバーしなくても「⋯」が見え、44px 四方
   await page.setViewportSize({ width: 390, height: 900 });
