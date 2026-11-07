@@ -43,7 +43,7 @@
   const tasks = $derived(inbox?.tasks ?? []);
   const visible = $derived(new Set(tasks.map((task) => task.id)));
   const chosen = $derived(selected.filter((id) => visible.has(id)));
-  const allChosen = $derived(tasks.length > 0 && chosen.length === tasks.length);
+  const allChosen = $derived(tasks.length > 0 && chosen.length === Math.min(tasks.length, INBOX_MOVE_LIMIT));
   const overLimit = $derived(chosen.length > INBOX_MOVE_LIMIT);
 
   function toggle(id: string, on: boolean): void {
@@ -51,7 +51,7 @@
   }
 
   function toggleAll(on: boolean): void {
-    selected = on ? tasks.map((task) => task.id) : [];
+    selected = on ? tasks.slice(0, INBOX_MOVE_LIMIT).map((task) => task.id) : [];
   }
 
   function itemOf(task: InboxTask) {
@@ -64,10 +64,19 @@
     // 読み直した後に残っていない行の印は捨てる
     await tick();
     selected = selected.filter((id) => visible.has(id));
+    // 読み直した後に選べなくなったリポジトリ（削除された）の選びは捨てる
+    const live = new Set(inbox?.repositories.map((repository) => repository.id));
+    for (const [id, repositoryId] of Object.entries(repositoryOf)) {
+      if (repositoryId !== '' && !live.has(repositoryId)) delete repositoryOf[id];
+    }
   }
 
   async function moveTasks(targets: InboxTask[]): Promise<void> {
-    if (working || workspace === null || targets.length === 0 || targets.length > INBOX_MOVE_LIMIT) return;
+    if (working || workspace === null || targets.length === 0) return;
+    if (targets.length > INBOX_MOVE_LIMIT) {
+      showToast(t('inboxSelectLimit', { limit: INBOX_MOVE_LIMIT }), 'alert');
+      return;
+    }
     working = true;
     try {
       const result = await callOperation(
@@ -94,7 +103,7 @@
         showToast(t('inboxMoveClosed', { workspace: t('workspace') }), 'alert');
         await invalidate('app:workspace');
       } else if (result.error?.code === 'conflict' && inboxMoveConflictReasonOf(result.error.details) !== undefined) {
-        showToast(t('inboxMoveStale'), 'alert');
+        showToast(t('inboxMoveStale', { inbox: t('inbox') }), 'alert');
       } else if (result.status === 404) showToast(t('inboxMoveNotFound', { task: t('task') }), 'alert');
       else if (result.status === 0) showToast(t('inboxMoveUnreachable'), 'alert');
       else showToast(t('inboxMoveFailed'), 'alert');
@@ -132,7 +141,7 @@
     tallies={[{ icon: 'inbox', label: t('inboxTallyArrived'), count: inbox.total }]}
   />
 
-  {#if inbox.connection_count === 0}
+  {#if inbox.connection_count === 0 && tasks.length === 0}
     <EmptyState
       icon="inbox"
       title={t('inboxNoConnectionTitle', { connection: t('connection') })}
@@ -159,8 +168,8 @@
               id="inbox-all"
               type="checkbox"
               checked={allChosen}
-              aria-disabled={working}
-              onchange={(event) => !working && toggleAll(event.currentTarget.checked)}
+              disabled={working}
+              onchange={(event) => toggleAll(event.currentTarget.checked)}
             /><span>{t('inboxSelectAll')}</span>
           </label>
           <button
@@ -177,11 +186,11 @@
                 ? t('inboxSelectedCount', { count: chosen.length })
                 : working
                   ? t('inboxMoveWorking', { backlog: t('backlog') })
-                  : ''}</span
+                  : t('inboxSelectHint', { task: t('task') })}</span
           >
         </div>
       {/if}
-      <div class="book" role="list" aria-label={t('inboxListLabel', { task: t('task') })}>
+      <div class="book" role="list" aria-label={t('inboxListLabel', { inbox: t('inbox'), task: t('task') })}>
         {#each tasks as task (task.id)}
           <div class="entry" role="listitem" data-row-id={task.id}>
             {#if canWrite}
@@ -189,9 +198,9 @@
                 <input
                   type="checkbox"
                   aria-label={t('inboxSelectRow', { title: task.title })}
-                  aria-disabled={working}
+                  disabled={working}
                   checked={chosen.includes(task.id)}
-                  onchange={(event) => !working && toggle(task.id, event.currentTarget.checked)}
+                  onchange={(event) => toggle(task.id, event.currentTarget.checked)}
                 />
               </label>
             {:else}
@@ -202,11 +211,11 @@
               <span class="entry-meta">
                 {#if /^https?:\/\//i.test(task.source_url)}
                   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- 取り込み元の絶対 URL（http か https のものだけリンクにする） -->
-                  <a class="source-key" href={task.source_url} target="_blank" rel="noopener noreferrer"
+                  <a class="source-key is-wrap" href={task.source_url} target="_blank" rel="noopener noreferrer"
                     ><Icon name="link" /> {task.source_key}</a
                   >
                 {:else}
-                  <span class="source-key"><Icon name="link" /> {task.source_key}</span>
+                  <span class="source-key is-wrap"><Icon name="link" /> {task.source_key}</span>
                 {/if}
                 <span>{t('inboxArrived', { date: formatLocalDateTime(task.arrived_at) })}</span>
                 <span>{task.connection_name}</span>
@@ -217,7 +226,9 @@
                     value={repositoryOf[task.id] ?? task.repository?.id ?? ''}
                     onchange={(event) => (repositoryOf[task.id] = event.currentTarget.value)}
                   >
-                    <option value="">{t('inboxRepositoryNone', { repository: t('repository') })}</option>
+                    {#if task.repository === null}
+                      <option value="">{t('inboxRepositoryNone', { repository: t('repository') })}</option>
+                    {/if}
                     {#each inbox.repositories as repository (repository.id)}
                       <option value={repository.id}>{repository.name}</option>
                     {/each}
@@ -249,7 +260,7 @@
       {#if inbox.total > tasks.length}
         <p class="action-note">{t('inboxLimitNote', { shown: tasks.length, total: inbox.total })}</p>
       {/if}
-      <p class="action-note">{t('inboxNote', { backlog: t('backlog'), sprint: t('sprint') })}</p>
+      <p class="action-note">{t('inboxNote', { backlog: t('backlog'), sprint: t('sprint'), today: t('pageToday') })}</p>
     {/if}
   {/if}
 {/if}

@@ -3,6 +3,7 @@ import { now } from '../../shared/clock.ts';
 import { INBOX_LIST_LIMIT, inboxList, inboxToBacklog } from '../../shared/operations/task/index.ts';
 import {
   jsonList,
+  jsonPairRows,
   previousStatementChanged,
   tailPosition,
   uuidv7Sql,
@@ -67,7 +68,18 @@ export const inboxListOperation = implement(inboxList, async ({ db, workspace })
           .limit(INBOX_LIST_LIMIT),
       ),
     ),
-    db.first(db.statement((q) => inboxTasks(q).select((eb) => eb.fn.countAll<number>().as('n')))),
+    db.first(
+      db.statement((q) =>
+        inboxTasks(q)
+          .innerJoin('task_sources as s', (join) =>
+            join.onRef('s.task_id', '=', 'tasks.id').on('s.workspace_id', '=', workspaceId),
+          )
+          .innerJoin('connections as c', (join) =>
+            join.onRef('c.id', '=', 's.connection_id').on('c.workspace_id', '=', workspaceId),
+          )
+          .select((eb) => eb.fn.countAll<number>().as('n')),
+      ),
+    ),
     db.first(
       db.statement((q) =>
         q
@@ -187,6 +199,19 @@ export const inboxToBacklogOperation = implement(inboxToBacklog, async ({ db, ac
   const at = now();
   const movedAt = at.toISOString();
   const guard = (q: From) => allInInbox(q, workspaceId, taskIds);
+  // リポジトリを振る行が、振った後の値になっている、という条件。リポジトリの UPDATE が競合で 0 行になったとき、
+  // 移す文も通さず、選んだリポジトリが付かないまま移した成功を返さない
+  const repositoriesApplied = (q: From) =>
+    q
+      .selectFrom('tasks as r')
+      .innerJoin(
+        jsonPairRows(repositoryChanges.map((change) => [change.taskId, change.after] as const)).as('p'),
+        'p.id',
+        'r.id',
+      )
+      .select((eb) => eb.fn.countAll<number>().as('n'))
+      .where('r.workspace_id', '=', workspaceId)
+      .whereRef('r.repository_id', '=', 'p.pos');
 
   const repositoryStatements = repositoryChanges.flatMap((change) => [
     db.statement((q) =>
@@ -262,6 +287,9 @@ export const inboxToBacklogOperation = implement(inboxToBacklog, async ({ db, ac
               eb.and([
                 eb.exists(openWorkspace(q, organizationId, workspaceId)),
                 eb(eb.selectFrom(guard(q).as('c')).select('c.n'), '=', count),
+                ...(repositoryChanges.length === 0
+                  ? []
+                  : [eb(eb.selectFrom(repositoriesApplied(q).as('a')).select('a.n'), '=', repositoryChanges.length)]),
               ]),
             ),
         ),
@@ -287,6 +315,9 @@ export const inboxToBacklogOperation = implement(inboxToBacklog, async ({ db, ac
               eb.and([
                 eb.exists(openWorkspace(q, organizationId, workspaceId)),
                 eb(eb.selectFrom(guard(q).as('c')).select('c.n'), '=', count),
+                ...(repositoryChanges.length === 0
+                  ? []
+                  : [eb(eb.selectFrom(repositoriesApplied(q).as('a')).select('a.n'), '=', repositoryChanges.length)]),
               ]),
             )
             .as('n'),

@@ -582,6 +582,9 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* ===== 台帳（タスクの一覧） ===== */
 /* 行の先頭の選ぶ欄（受信箱）を包む label */
 .row-check { display: grid; place-items: center; }
+.row-check input { accent-color: var(--color-accent); }
+/* 行のメタ行に置く選択欄（受信箱のリポジトリ）は、行いっぱいに伸ばさず小さい文字で置く */
+.entry-meta .select { width: auto; max-width: min(100%, 18rem); padding-block: 4px; font-size: var(--text-sm); }
 .book { background: var(--color-surface); border: 1px solid var(--color-line); border-left: var(--rule-double); border-radius: var(--radius-1); }
 /* --row-indent は行の中身が始まる左の位置。落とす位置の線（[data-drop]）もここから始める。
    --grip-col は先頭のつまみ（.grip）の列で、つまみを持つ行（.has-grip）だけが幅を持つ */
