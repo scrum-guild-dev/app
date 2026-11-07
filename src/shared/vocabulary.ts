@@ -2395,6 +2395,7 @@ export const dictionary = defineDictionary({
   inboxEmptyText: '次の同期で新しく取り込んだ{task}がここに届きます。',
   inboxListLabel: '{inbox}の{task}',
   inboxSelectAll: 'すべて選ぶ',
+  inboxSelectFirst: '先頭の {limit} 件を選ぶ',
   inboxSelectRow: '「{title}」を選ぶ',
   inboxArrived: '届いた {date}',
   inboxRepositoryLabel: '「{title}」の{repository}',

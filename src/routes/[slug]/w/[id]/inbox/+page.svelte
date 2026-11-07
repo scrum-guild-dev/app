@@ -168,9 +168,17 @@
               id="inbox-all"
               type="checkbox"
               checked={allChosen}
-              disabled={working}
-              onchange={(event) => toggleAll(event.currentTarget.checked)}
-            /><span>{t('inboxSelectAll')}</span>
+              aria-disabled={working}
+              onchange={(event) => {
+                // 送っている間の変更は無視し、見た目を状態に戻す（aria-disabled は押せるままなので）
+                if (working) event.currentTarget.checked = allChosen;
+                else toggleAll(event.currentTarget.checked);
+              }}
+            /><span
+              >{tasks.length > INBOX_MOVE_LIMIT
+                ? t('inboxSelectFirst', { limit: INBOX_MOVE_LIMIT })
+                : t('inboxSelectAll')}</span
+            >
           </label>
           <button
             class="btn is-sm"
@@ -198,9 +206,12 @@
                 <input
                   type="checkbox"
                   aria-label={t('inboxSelectRow', { title: task.title })}
-                  disabled={working}
+                  aria-disabled={working}
                   checked={chosen.includes(task.id)}
-                  onchange={(event) => toggle(task.id, event.currentTarget.checked)}
+                  onchange={(event) => {
+                    if (working) event.currentTarget.checked = chosen.includes(task.id);
+                    else toggle(task.id, event.currentTarget.checked);
+                  }}
                 />
               </label>
             {:else}

@@ -268,6 +268,41 @@ describe('inbox-to-backlog', () => {
     expect((await rowOf(target, task.id))!.tray).toBe('inbox');
   });
 
+  test('2件にリポジトリを振る要求で片方だけ競合したら、何も移さず 409 で、先に通った行のリポジトリだけ残る', async () => {
+    const target = await createTarget();
+    const connection = await connect(target);
+    const chosen = await createRepository(target.organization, target.workspace.id, { name: 'shop' });
+    const other = await createRepository(target.organization, target.workspace.id, { name: 'admin' });
+    const a = await arrive(target, connection.id, '2026-10-19T00:00:00.000Z', {}, 'aoba/shop#1');
+    const b = await arrive(target, connection.id, '2026-10-20T00:00:00.000Z', {}, 'aoba/shop#2');
+    let done = false;
+    const racing = envWithD1Hooks(testEnv, {
+      afterQuery: async (sql) => {
+        if (done || !/from "repositories"/i.test(sql)) return;
+        done = true;
+        const db = orgDb(env, target.organization.verified);
+        await db.run(
+          db.statement((q) => q.updateTable('tasks').set({ repository_id: other.id }).where('id', '=', b.id)),
+        );
+      },
+    });
+    const res = await move(
+      target,
+      [
+        { task_id: a.id, repository_id: chosen.id },
+        { task_id: b.id, repository_id: chosen.id },
+      ],
+      target.workspace.id,
+      racing,
+    );
+    expect(res.status).toBe(409);
+    expect((await rowOf(target, a.id))!).toMatchObject({ tray: 'inbox', repository_id: chosen.id });
+    expect((await rowOf(target, b.id))!).toMatchObject({ tray: 'inbox', repository_id: other.id });
+    const logs = (await logsOf(target, a.id)).map((log) => JSON.parse(log.changes_json));
+    expect(logs).toEqual([{ repository: [null, { id: chosen.id, name: 'shop' }] }]);
+    expect(await logsOf(target, b.id)).toHaveLength(0);
+  });
+
   test('リポジトリ付きで100件をまとめて移せる', async () => {
     const target = await createTarget();
     const connection = await connect(target);
