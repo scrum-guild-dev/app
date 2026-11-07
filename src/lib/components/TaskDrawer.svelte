@@ -35,13 +35,15 @@
     consumeStepFocus,
     markStepFocus,
     pickTaskOpenMode,
+    type AdjacentTasks,
     type StepSource,
     type TaskOpenMode,
   } from '../drawer.svelte.ts';
   import { formatDateTime } from '../format-datetime.ts';
   import { completedMessage, sprintLabel, sprintPeriod } from '../sprint-label.ts';
   import { historyEntryView } from '../task-history.ts';
-  import { focusToastAction, showToast, type ToastAction } from '../toast.svelte.ts';
+  import { focusPageHeading, focusIsFree } from '../focus-heading.ts';
+  import { focusToastAction, pauseToast, showToast, type ToastAction } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Avatar from './Avatar.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
@@ -114,7 +116,7 @@
     // 確認を通った後に呼ぶ。既定の保存は呼び出し側が行う。移れなかったとき（新しいタブを開けなかった）は false を返す
     onmode: (mode: TaskOpenMode) => boolean;
     // 開いた画面に今見えているタスクの行の、前と次の ID（端では null）。渡さなければ前後のボタンとキーを使わない（ページ全体など）
-    adjacent?: { prev: string | null; next: string | null };
+    adjacent?: AdjacentTasks;
     // 確認を通った後に、その ID のタスクへ移る。移り終えるまで待てる値を返す（取り消されたら、この引き出しのまま続けられる）
     onstep?: (taskId: string) => Promise<void>;
     slug: string;
@@ -138,7 +140,7 @@
     // （無ければ見出しへ）フォーカスを移す。渡さなければ onchanged で読み直すだけ（ページ全体など）
     onrestored?: (taskId: string, focus: boolean) => Promise<void>;
     // フォーカスがあるトーストを Esc で閉じた。画面が、消した行の近い所へフォーカスを移す。near は削除を送る前の前後の行（渡さなければ null）
-    onskipped?: (near: { prev: string | null; next: string | null } | null) => void;
+    onskipped?: (near: AdjacentTasks | null) => void;
   } = $props();
 
   const ids = $props.id();
@@ -1382,11 +1384,11 @@
     taskId: string;
     title: string;
     // 削除を送る前の前後の行（Esc で閉じたときのフォーカスの行き先）
-    near: { prev: string | null; next: string | null } | null;
+    near: AdjacentTasks | null;
     onchanged: () => void;
     onstale: () => void;
     onrestored: ((taskId: string, focus: boolean) => Promise<void>) | undefined;
-    onskipped: ((near: { prev: string | null; next: string | null } | null) => void) | undefined;
+    onskipped: ((near: AdjacentTasks | null) => void) | undefined;
   };
 
   // 通信の失敗と 5xx は一時的なので、「取り消す」付きのトーストで出し直す（403、404、409 は押し直しても変わらないので出し直さない）。
@@ -1411,14 +1413,24 @@
       target.onstale();
     } else if (result.status === 403) {
       showToast(t('taskRestoreForbidden', { leader: t('leader') }), 'alert');
+      keepFocus(focused);
     } else if (result.status === 404) {
       showToast(t('taskRestoreGone'), 'alert');
       target.onchanged();
+      keepFocus(focused);
     } else if (result.status === 409 && result.error?.code === 'workspace_closed') {
       showToast(t('workspaceClosedReadOnly', { workspace: t('workspace') }), 'alert');
       target.onstale();
+      keepFocus(focused);
     } else if (result.status === 409) {
       const reason = taskRestoreConflictReasonOf(result.error?.details);
+      if (reason === 'not_deleted') {
+        // 前の要求は書けたが応答だけが落ちて出し直した、または別の画面が先に戻した。戻っているので、成功と同じに扱う
+        showToast(t('taskRestored', { task: t('task') }), 'check');
+        if (target.onrestored === undefined) target.onchanged();
+        else await target.onrestored(target.taskId, focused);
+        return;
+      }
       showToast(
         reason === 'parent_completed'
           ? t('taskRestoreParentCompleted', { story: t('story'), done: t('done') })
@@ -1426,12 +1438,26 @@
         'alert',
       );
       target.onchanged();
+      keepFocus(focused);
     } else if (result.status === 0 || result.status >= 500) {
       const id = showToast(t('taskRestoreRetry'), 'alert', restoreActionOf(target));
-      if (focused) void focusToastAction(id);
+      // 待つ間に利用者が別へ移っていたら、フォーカスを奪わない
+      if (focused && focusIsFree()) {
+        pauseToast(id);
+        void focusToastAction(id);
+      }
     } else {
       showToast(t('taskRestoreFailed'), 'alert');
+      keepFocus(focused);
     }
+  }
+
+  // 断られた（出し直さない）とき、押した「取り消す」が消えてフォーカスが body に落ちないよう、見出しへ置く
+  function keepFocus(focused: boolean): void {
+    if (!focused) return;
+    void tick().then(() => {
+      if (focusIsFree()) focusPageHeading();
+    });
   }
 
   // 確認のダイアログは挟まない。消したらトーストの「取り消す」で戻せる
@@ -1470,6 +1496,9 @@
         // 消えたので、書きかけがあっても確かめずに閉じる
         leaving = true;
         const toastId = announceRemoved(removed);
+        // キーボードで消したときは、木の読み直しを待つ間に10秒が尽きないよう、フォーカスが着く前から数えを止める
+        // （フォーカスが外れると数え直す）。着かなければ、画面側が移した後の focusout で数え直す
+        if (keyboard) pauseToast(toastId);
         onremoved(keyboard ? toastId : null);
       } else if (result.status === 401) {
         onstale();

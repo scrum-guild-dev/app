@@ -202,3 +202,60 @@ test('削除の応答を待つ間に引き出しを閉じても、トースト�
   await undo.click();
   await expect(page.getByRole('link', { name: '待つ間に閉じるタスク', exact: true })).toBeVisible();
 });
+
+test('取り消しの応答だけが落ちて出し直しても、戻っているので失敗とは告げず、戻したことを知らせる', async ({ page }) => {
+  await createWorkspace(page, '削除の取り消しの応答落ち');
+  await addTask(page, '応答が落ちるタスク');
+  let calls = 0;
+  await routeOperation(page, taskRestore, AOBA, async (call) => {
+    calls += 1;
+    if (calls === 1) {
+      // サーバーは戻し終えたが、応答は届かない
+      await call.fetch();
+      await call.abort();
+    } else await call.passThrough();
+  });
+  await page.getByRole('link', { name: '応答が落ちるタスク', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '応答が落ちるタスク' })
+    .getByRole('button', { name: 'このタスクを削除する' })
+    .click();
+  await page.getByRole('button', { name: '取り消す: 応答が落ちるタスク' }).click();
+  const retry = page.locator('.toast', { hasText: '取り消せませんでした。通信を確かめて、もう一度試してください' });
+  await retry.getByRole('button', { name: '取り消す: 応答が落ちるタスク' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'タスクを戻しました' })).toBeVisible();
+  await expect(page.locator('.toast', { hasText: 'ほかの画面で変わったため' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '応答が落ちるタスク', exact: true })).toBeVisible();
+});
+
+test('マウスで「取り消す」を押しても、戻した行へフォーカスを移さない', async ({ page }) => {
+  await createWorkspace(page, '削除の取り消しのマウス取り消し');
+  await addTask(page, 'マウスで戻す');
+  await page.getByRole('link', { name: 'マウスで戻す', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'マウスで戻す' })
+    .getByRole('button', { name: 'このタスクを削除する' })
+    .click();
+  await page.getByRole('button', { name: '取り消す: マウスで戻す' }).click();
+  const link = page.getByRole('link', { name: 'マウスで戻す', exact: true });
+  await expect(link).toBeVisible();
+  await expect(link).not.toBeFocused();
+});
+
+test('ページ全体で開いて、キーボードで削除すると「取り消す」へ移り、押すと戻したタスクの題のリンクへ移る', async ({
+  page,
+}) => {
+  await createWorkspace(page, '削除の取り消しのページ全体');
+  await addTask(page, 'ページで消す');
+  const workspacePath = new URL(page.url()).pathname;
+  const href = await page.getByRole('link', { name: 'ページで消す', exact: true }).getAttribute('href');
+  const taskId = new URL(href!, page.url()).searchParams.get('task');
+  await page.goto(`${workspacePath}/tasks/${taskId}`);
+  const remove = page.getByRole('button', { name: 'このタスクを削除する' });
+  await remove.focus();
+  await page.keyboard.press('Enter');
+  const undo = page.getByRole('button', { name: '取り消す: ページで消す' });
+  await expect(undo).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('link', { name: 'ページで消す', exact: true })).toBeFocused();
+});

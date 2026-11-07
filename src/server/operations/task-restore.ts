@@ -206,6 +206,10 @@ export const taskRestoreOperation = implement(taskRestore, async ({ db, actor, w
               ? eb('repository_id', 'is', null)
               : eb('repository_id', '=', task.repository_id),
             eb.exists(openWorkspace(q, organizationId, workspaceId)),
+            // 外す担当は、書く時点でもまだ有効でない（読んでから書くまでに招待などで戻っていたら、外さずに読み直す）
+            assigneeGone
+              ? eb.not(eb.exists(activeMemberName(q, organizationId, workspaceId, assigneeId!)))
+              : eb.val(true),
             // 残す担当は今も有効（完了したタスクは確かめない）
             assigneeId === null || assigneeGone || completed
               ? eb.val(true)

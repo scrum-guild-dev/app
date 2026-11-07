@@ -27,16 +27,26 @@
           if (event.key === 'Escape' && escapeToast(toast.id)) event.stopPropagation();
         }}
         onmouseenter={() => pauseToast(toast.id)}
-        onmouseleave={() => resumeToast(toast.id)}
+        onmouseleave={(event) => {
+          // フォーカスがトーストの中にある間は、ポインターが外れても数え直さない（キーボードの人が取り逃さない）
+          if (!event.currentTarget.contains(document.activeElement)) resumeToast(toast.id);
+        }}
         onfocusin={() => pauseToast(toast.id)}
-        onfocusout={() => resumeToast(toast.id)}
+        onfocusout={(event) => {
+          // トーストの中でフォーカスが移るだけなら止めたまま。外へ出たら数え直す
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) resumeToast(toast.id);
+        }}
       >
-        {#if toast.icon}<Icon name={toast.icon} />{/if}<span>{toast.message}</span>
+        {#if toast.icon}<Icon name={toast.icon} />{/if}<span id="toast-message-{toast.id}">{toast.message}</span>
+        <!-- 名前が「取り消す: 題」だけでも、フォーカスが着いたときに、消した知らせの本文まで読まれるよう説明に結ぶ -->
         <button
           class="toast-action"
           type="button"
           aria-label={action.ariaLabel}
-          onclick={(event) => runToastAction(toast.id, event.currentTarget === document.activeElement)}
+          aria-describedby={action.ariaLabel === undefined ? undefined : `toast-message-${toast.id}`}
+          onclick={(event) =>
+            // キーボード由来（detail が 0）でフォーカスがあるときだけ true。マウスで押した人のフォーカスは動かさない
+            runToastAction(toast.id, event.detail === 0 && event.currentTarget === document.activeElement)}
           >{action.label}</button
         >
       </div>

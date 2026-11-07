@@ -10,7 +10,7 @@
     setTaskOpenMode,
     type TaskOpenMode,
   } from '../../../../../../lib/drawer.svelte.ts';
-  import { focusPageHeading } from '../../../../../../lib/focus-heading.ts';
+  import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../../../lib/focus-heading.ts';
   import { focusToastAction } from '../../../../../../lib/toast.svelte.ts';
   import { t } from '../../../../../../lib/vocabulary.svelte.ts';
   import type { PageData } from './$types';
@@ -72,6 +72,19 @@
     });
   }
 
+  // 「取り消す」で戻した（引き出しと同じ）。木を読み直し、押したボタンにフォーカスがあり、待つ間に利用者が別へ移っていなければ、
+  // 戻したタスクの題のリンクへ（無ければ見出しへ）移す
+  async function restored(restoredId: string, focus: boolean): Promise<void> {
+    await invalidate('app:backlog-tree');
+    await tick();
+    if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
+  }
+
+  // フォーカスがある「取り消す」のトーストを Esc で閉じた。消した行の次の行、無ければ前の行、無ければ見出しへ移す
+  function skipped(near: { prev: string | null; next: string | null } | null): void {
+    void tick().then(() => focusFirstTaskRow([near?.next ?? null, near?.prev ?? null]));
+  }
+
   // 帯で形を替える（書きかけの確認は TaskDrawer が済ませている）。移れなかったとき（新しいタブを開けなかった）は false を返し、
   // ページ全体も既定もそのままにする
   function changeMode(mode: TaskOpenMode): boolean {
@@ -113,6 +126,8 @@
       onchanged={() => void invalidate('app:backlog-tree')}
       onstale={() => void invalidate('app:workspace')}
       onremoved={(toastId) => void close(true, toastId)}
+      onrestored={restored}
+      onskipped={skipped}
     />
   {/key}
 {/if}

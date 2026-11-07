@@ -22,7 +22,7 @@
     type AdjacentTasks,
     type TaskOpenMode,
   } from '../../../../lib/drawer.svelte.ts';
-  import { focusPageHeading } from '../../../../lib/focus-heading.ts';
+  import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../lib/focus-heading.ts';
   import { formatLocalDate } from '../../../../lib/format.ts';
   import { focusToastAction } from '../../../../lib/toast.svelte.ts';
   import { parentChoicesOf, storyFactsOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
@@ -145,27 +145,17 @@
     if (toastId !== null) await focusToastAction(toastId);
   }
 
-  // 「取り消す」で戻した。木を読み直し、押したボタンにフォーカスがあったときは、戻したタスクの題のリンクへ（無ければ見出しへ）移す
+  // 「取り消す」で戻した。木を読み直し、押したボタンにフォーカスがあり、待つ間に利用者が別へ移っていなければ、
+  // 戻したタスクの題のリンクへ（無ければ見出しへ）移す
   async function restored(restoredId: string, focus: boolean): Promise<void> {
     await invalidate('app:backlog-tree');
     await tick();
-    if (focus) focusFirstRow([restoredId]);
+    if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
   }
 
   // フォーカスがある「取り消す」のトーストを Esc で閉じた。消した行の次の行、無ければ前の行、無ければ見出しへ移す
   function skipped(near: AdjacentTasks | null): void {
-    void tick().then(() => focusFirstRow([near?.next ?? null, near?.prev ?? null]));
-  }
-
-  // 並べた ID の行（data-task-id を持つ題のリンクか、完了した行の題のボタン）のうち、フォーカスを受けられた最初の行へ。無ければ見出しへ
-  function focusFirstRow(ids: readonly (string | null)[]): void {
-    for (const id of ids) {
-      if (id === null) continue;
-      const row = document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`);
-      row?.focus();
-      if (row !== null && document.activeElement === row) return;
-    }
-    focusPageHeading();
+    void tick().then(() => focusFirstTaskRow([near?.next ?? null, near?.prev ?? null]));
   }
 
   // ---- ストーリーの引き出し ----

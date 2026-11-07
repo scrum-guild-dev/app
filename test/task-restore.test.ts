@@ -338,6 +338,7 @@ describe('task-restore', () => {
       deleted_at: '2026-10-21T00:00:00.000Z',
     });
     await createTask(target.organization, target.workspace.id, target.member.userId!, { position: 'a5' });
+    await createTask(target.organization, target.workspace.id, target.member.userId!, { position: 'a9' });
     const task = await createTask(target.organization, target.workspace.id, target.member.userId!, {
       story_id: story.id,
       position: 'a0',
@@ -346,7 +347,7 @@ describe('task-restore', () => {
     expect((await restore(target, task.id)).status).toBe(200);
     const row = (await rowOf(target, task.id))!;
     expect(row.story_id).toBeNull();
-    expect(row.position > 'a5').toBe(true);
+    expect(row.position > 'a9').toBe(true);
   });
 
   test('削除した人だけが戻せる場合も、戻した後の再送は 403 でなく 409 の not_deleted', async () => {
@@ -556,6 +557,84 @@ describe('task-restore', () => {
         );
       });
       await expectChanged(target, task.id, await restore(target, task.id, target.member, raced));
+    });
+
+    test('外すと決めた担当が、読んだ後に所属へ戻っていたら、外さず 409 の changed。その後は担当を残して戻る', async () => {
+      const target = await createTarget();
+      const assignee = await createPerson({
+        organization: target.organization,
+        membership: { workspaceId: target.workspace.id, role: 'member' },
+      });
+      await leaveWorkspace(target, assignee.userId!);
+      const task = await createTask(target.organization, target.workspace.id, target.member.userId!, {
+        assignee_user_id: assignee.userId!,
+        deleted_at: '2026-10-21T00:00:00.000Z',
+      });
+      const db = orgDb(env, target.organization.verified);
+      const raced = racing(readsActiveMember, async () => {
+        await db.run(
+          db.statement((q) =>
+            q
+              .updateTable('memberships')
+              .set({ left_at: null, left_on: null })
+              .where('user_id', '=', assignee.userId!)
+              .where('workspace_id', '=', target.workspace.id),
+          ),
+        );
+      });
+      await expectChanged(target, task.id, await restore(target, task.id, target.member, raced));
+      // 競合のあとにもう一度呼べば、担当を残して戻る（changed が居座らない）
+      expect((await restore(target, task.id)).status).toBe(200);
+      expect(await rowOf(target, task.id)).toMatchObject({ deleted_at: null, assignee_user_id: assignee.userId });
+    });
+
+    test('残すリポジトリが削除されたら、何も書かず 409 の changed', async () => {
+      const target = await createTarget();
+      const repository = await createRepository(target.organization, target.workspace.id);
+      const task = await createTask(target.organization, target.workspace.id, target.member.userId!, {
+        repository_id: repository.id,
+        deleted_at: '2026-10-21T00:00:00.000Z',
+      });
+      const db = orgDb(env, target.organization.verified);
+      const raced = racing(readsTask, async () => {
+        await db.run(
+          db.statement((q) =>
+            q
+              .updateTable('repositories')
+              .set({ deleted_at: '2026-10-22T00:00:00.000Z' })
+              .where('id', '=', repository.id),
+          ),
+        );
+      });
+      await expectChanged(target, task.id, await restore(target, task.id, target.member, raced));
+      expect((await restore(target, task.id)).status).toBe(200);
+      expect(await rowOf(target, task.id)).toMatchObject({ deleted_at: null, repository_id: null });
+    });
+
+    test('生きている親が読んだ後に完了したら、完了していないタスクを戻さず、読み直した理由 parent_completed の 409', async () => {
+      const target = await createTarget();
+      const story = await createStory(target.organization, target.workspace.id, target.admin.userId!);
+      const task = await createTask(target.organization, target.workspace.id, target.member.userId!, {
+        story_id: story.id,
+        deleted_at: '2026-10-21T00:00:00.000Z',
+      });
+      const db = orgDb(env, target.organization.verified);
+      const raced = racing(readsTask, async () => {
+        await db.run(
+          db.statement((q) =>
+            q
+              .updateTable('stories')
+              .set({ completed_at: '2026-10-22T00:00:00.000Z', completed_by: target.admin.userId! })
+              .where('id', '=', story.id),
+          ),
+        );
+      });
+      const res = await restore(target, task.id, target.member, raced);
+      expect(res.status).toBe(409);
+      // 書く文は 0 行で、読み直して今の理由を返す
+      expect(await reasonOf(res)).toBe('parent_completed');
+      expect((await rowOf(target, task.id))!.deleted_at).not.toBeNull();
+      expect(await logsOf(target, task.id)).toEqual([]);
     });
 
     test('参照が別のものに替わったら、何も書かず 409 の changed', async () => {
