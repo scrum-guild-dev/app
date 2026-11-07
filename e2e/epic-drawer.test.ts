@@ -23,8 +23,9 @@ test('木のエピックの題を押すと引き出しが開き、タイトル�
   await addEpicRow(page, '会員ポイント制度を公開する');
 
   await page.getByRole('link', { name: '会員ポイント制度を公開する', exact: true }).click();
-  const drawer = page.getByRole('dialog', { name: '会員ポイント制度を公開する', exact: true });
-  await expect(drawer).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '会員ポイント制度を公開する', exact: true })).toBeVisible();
+  // タイトルを直すと引き出しの名前も替わるので、枠そのもので指す
+  const drawer = page.locator('.drawer');
   await expect(drawer).toHaveAttribute('aria-modal', 'true');
   await expect(page).toHaveURL(/\?epic=[0-9a-f-]{36}$/);
   await expect(drawer.getByRole('heading', { level: 2 })).toBeFocused();

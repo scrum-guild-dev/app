@@ -213,7 +213,10 @@ test('絞っているときに作ったタスクやストーリーが当たら�
   // ストーリーも同じ（担当で絞っているので、配下の無いストーリーは当たらない）。前のトーストを消すため読み直す（絞り込みは残る）
   await page.reload();
   await expect(notice).toHaveCount(0);
-  await create(page, 'ストーリーを作る', '新しい目標');
+  // 絞っている間も、木の末尾の空の行で作れる。当たらないので、木には出さずにトーストで知らせる
+  const rootInput = page.locator('.tree > .draft-row').getByRole('textbox', { name: 'ストーリーを足す', exact: true });
+  await rootInput.fill('新しい目標');
+  await rootInput.press('Enter');
   await expect(notice).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'ストーリーを作りました' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '新しい目標', exact: true })).toHaveCount(0);

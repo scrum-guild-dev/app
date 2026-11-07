@@ -35,7 +35,7 @@ test('seed の受託開発チーム: 木のエピックの題から画面が開�
 }) => {
   const collect = await watchViolations(page);
   await page.goto(WORKSPACE);
-  await page.getByRole('link', { name: EPIC_TITLE, exact: true }).click();
+  await openEpicPage(page, EPIC_TITLE);
 
   await expect(page).toHaveURL(`${WORKSPACE}/epics/${EPIC_ID}`);
   await expect(page.getByRole('heading', { level: 1, name: EPIC_TITLE })).toBeVisible();

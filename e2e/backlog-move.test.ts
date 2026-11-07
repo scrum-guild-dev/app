@@ -42,7 +42,7 @@ async function renameStory(page: Page, from: string, to: string): Promise<void> 
   const saved = waitForResponses(page, '/story-update');
   await input.press('Enter');
   await saved;
-  await expect(drawer.getByRole('heading', { level: 2, name: to })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: to, exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(drawer).toBeHidden();
 }
