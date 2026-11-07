@@ -14,6 +14,7 @@ import {
   createComment,
   createDetailField,
   createEpic,
+  createConnection,
   createEpicPartyMember,
   createInvitation,
   createMembership,
@@ -24,6 +25,7 @@ import {
   createSprintEntry,
   createStory,
   createTask,
+  createTaskSource,
   createThanks,
   createUser,
   createWorkspace,
@@ -583,6 +585,17 @@ export const pointers: Pointers = {
     ).id,
     marked: true,
   }),
+  'inbox-list': async (target) => ({ workspace_id: target.workspace.id }),
+  // 呼ぶたびに、取り込み元に結んだ受信箱のタスクを作り、バックログへ入れる（入れたタスクは続けて入れられない）
+  'inbox-to-backlog': async (target) => {
+    const connection = await createConnection(target.organization, target.workspace.id, target.admin.userId!);
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      tray: 'inbox',
+      is_imported: 1,
+    });
+    await createTaskSource(target.organization, target.workspace.id, task.id, connection.id);
+    return { workspace_id: target.workspace.id, items: [{ task_id: task.id }] };
+  },
   'task-history': async (target) => ({
     workspace_id: target.workspace.id,
     task_id: (await createTask(target.organization, target.workspace.id, target.admin.userId!)).id,

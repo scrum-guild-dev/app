@@ -3,9 +3,15 @@
 // 通信の作法はログインの auth/github.ts と同じ（固定の URL、redirect: 'manual'、時間切れ、固定の文のエラー）
 //
 // 人が差分を読む領域（docs/development.md の「マージの判定」）
-import { type CredentialOwner, type ImportSource, type ScopeCandidate } from '../source.ts';
+import {
+  type CredentialOwner,
+  type FetchPageInput,
+  type FetchPageResult,
+  type ImportSource,
+  type ScopeCandidate,
+} from '../source.ts';
 import { FULL_NAME_PATTERN, LOGIN_PATTERN, PAGE_SIZE, fail, getJson, idOf, isRecord } from './client.ts';
-import { fetchAssignedIssues } from './issues.ts';
+import { fetchAssignedIssuesPage } from './issues.ts';
 
 const USER_URL = 'https://api.github.com/user';
 const REPOS_URL = 'https://api.github.com/user/repos';
@@ -60,6 +66,11 @@ async function listScopeCandidates(credential: string, fetcher: typeof fetch): P
   throw fail('unavailable');
 }
 
+// 範囲のリポジトリの、自分が担当の未完了の Issue を1頁取る（github/issues.ts）
+async function fetchPage(input: FetchPageInput): Promise<FetchPageResult> {
+  return fetchAssignedIssuesPage({ ...input, credential: requireShape(input.credential) });
+}
+
 export const githubImportSource: ImportSource = {
   kind: 'github',
   scopeKind: 'repository',
@@ -74,7 +85,5 @@ export const githubImportSource: ImportSource = {
   },
   verifyCredential,
   listScopeCandidates,
-  async fetchAssignedItems(credential, params, fetcher) {
-    return fetchAssignedIssues(requireShape(credential), params, fetcher);
-  },
+  fetchPage,
 };

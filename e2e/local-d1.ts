@@ -260,3 +260,29 @@ export async function seedOldAccountConsent(
       `VALUES ('${SEED_SESSIONS[who].accountId}', '${termsVersion}', '${privacyVersion}', '${consentedAt}');`,
   ]);
 }
+
+// 作ったワークスペース（テストが UI で作ったもの）に、取り込み元の接続1件と、そこから届いた受信箱のタスクを入れる。
+// seed の受信箱のタスクはバックログへ入れると戻らないので、入れる操作の確かめは、テストごとに作ったワークスペースで行う。
+// ID は呼ぶたびに作り直す（繰り返しで重ならない）。値はテストが作った ID と固定の文字列だけを埋める
+export async function seedInboxTasks(workspaceId: string, ownerUserId: string, titles: string[]): Promise<void> {
+  const at = '2026-10-20T00:00:00.000Z';
+  const connectionId = crypto.randomUUID();
+  const statements = [
+    `INSERT INTO connections (id, workspace_id, owner_user_id, provider, name, status, last_success_at, created_at, updated_at) ` +
+      `VALUES ('${connectionId}', '${workspaceId}', '${ownerUserId}', 'github', 'e2e の GitHub', 'active', '${at}', '${at}', '${at}');`,
+  ];
+  titles.forEach((title, index) => {
+    const taskId = crypto.randomUUID();
+    const key = `aoba/e2e#${index + 1}`;
+    const arrived = `2026-10-20T00:0${index}:00.000Z`;
+    statements.push(
+      `INSERT INTO tasks (id, workspace_id, is_imported, tray, title, position, created_at, updated_at) ` +
+        `VALUES ('${taskId}', '${workspaceId}', 1, 'inbox', '${title}', 'a${index}', '${arrived}', '${arrived}');`,
+      `INSERT INTO task_sources (task_id, workspace_id, connection_id, provider, source_kind, source_id, source_key, source_url, ` +
+        `source_container_id, source_container_name, source_status, source_updated_at, last_seen_at, created_at, updated_at) ` +
+        `VALUES ('${taskId}', '${workspaceId}', '${connectionId}', 'github', 'issue', '${taskId}', '${key}', ` +
+        `'https://github.com/aoba/e2e/issues/${index + 1}', '3001', 'aoba/e2e', 'open', '${arrived}', '${arrived}', '${arrived}', '${arrived}');`,
+    );
+  });
+  await executeLocalD1(statements);
+}

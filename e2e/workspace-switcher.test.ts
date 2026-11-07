@@ -149,6 +149,9 @@ test.describe('所属が1つの一般のメンバー', () => {
     await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
     await expect(listOf(page)).toBeHidden();
+    // メニューの順は「受信箱」「バックログ」。続く Tab で次の項目へ移る
+    await expect(page.locator('.nav-item', { hasText: '受信箱' })).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(page.locator('.nav-item', { hasText: 'バックログ' })).toBeFocused();
     await button.click();
     await expect(listOf(page)).toBeVisible();

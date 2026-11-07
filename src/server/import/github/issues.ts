@@ -1,27 +1,29 @@
-// 担当の Issue を取り、取り込み元を問わない形（ImportedItem）に変える。DB には書かない。
+// 担当の Issue を1頁取り、取り込み元を問わない形（ImportItem）に変える。DB には書かない（書くのは同期の仕組み）。
 // リポジトリごとの Issue の一覧（GET /repositories/{id}/issues）を、更新日時の古い順に取る。
 // リポジトリの ID で呼ぶので、リポジトリの改名や移動に影響されない。一覧の API には検索 API の「1,000件まで」の上限が無い
 // （検索 API を選ばなかった理由は docs/development.md の「取り込み元の型と GitHub の PAT」）。
 // 通信の作法と失敗の区別は client.ts（401、403、それ以外）。
 //
-// 続きの位置は「リポジトリの ID:頁:更新日時の起点」。満杯の頁の後は、頁番号を進めず、
+// 続きの位置（不透明な文字列）は「自分のログイン名:頁:更新日時の起点」。満杯の頁の後は、頁番号を進めず、
 // 最後に読んだ項目の更新日時を新しい起点（since）にして頁を1に戻す。昇順の頁番号のまま進めると、
 // 取得の間に読み終えた側の項目が更新されて末尾へ動いたとき、後ろの項目が詰まって取りこぼすため。
-// 起点は含むので境目の項目は重なる（受け取る側が externalId で吸収する）。
+// GitHub の since が境界を含むかは文書で確かめられないので、起点は1秒戻して送る（更新日時は秒の精度）。
+// 境目の項目は重なる（同期の仕組みが sourceId で二重の取り込みを防ぐ）。
 // 同じ更新日時が1頁を超えて続くときだけ、起点を変えずに頁番号を進める。
 //
+// 「自分」は、接続の設定に `login` があればそれを使い、無ければ最初の頁で GET /user から読んで続きの位置に入れる
+// （続きの頁では問い合わせ直さない）。
+//
 // 人が差分を読む領域（docs/development.md の「マージの判定」）
-import type { FetchAssignedParams, FetchAssignedResult, ImportedItem, ScopeCandidate } from '../source.ts';
+import type { FetchPageInput, FetchPageResult, ImportItem, ScopeCandidate } from '../source.ts';
 import { FULL_NAME_PATTERN, LOGIN_PATTERN, PAGE_SIZE, fail, getJson, idOf, isRecord } from './client.ts';
 
+const USER_URL = 'https://api.github.com/user';
 const SCOPE_ID_PATTERN = /^[1-9][0-9]{0,15}$/;
-const CURSOR_PATTERN = /^([1-9][0-9]{0,15}):([1-9][0-9]{0,5}):(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z)?$/;
-const ISO_PATTERN = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,3})?(Z|[+-]\d\d:\d\d)$/;
+const CURSOR_PATTERN = /^([A-Za-z0-9][A-Za-z0-9_-]{0,79}):([1-9][0-9]{0,5}):(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z)?$/;
 const ISSUE_URL_PATH = /^\/[A-Za-z0-9_.-]{1,80}\/[A-Za-z0-9_.-]{1,100}\/issues\/[1-9][0-9]{0,15}$/;
 // 頁の番号の上限。超えるまで同じ更新日時の満杯が続くときは断る（回り続けないため）
 const MAX_PAGE = 1000;
-// 1回の呼び出しの要求の数の上限（Workers の1回の処理のサブリクエストの上限より小さくする）
-export const MAX_REQUESTS = 40;
 // GitHub の Issue の題の上限は256文字。超える応答は想定外として断る
 const MAX_TITLE_LENGTH = 256;
 const MAX_URL_LENGTH = 300;
@@ -48,7 +50,7 @@ function isAssignedTo(item: Record<string, unknown>, login: string): boolean {
 }
 
 // Issue の URL（https://github.com/owner/repo/issues/番号）から `owner/repo#番号` を作る。形が違えば null。
-// 改名や移動の後も、応答の URL が今の名前を指すので、キーは範囲の名前ではなく URL から作る
+// 改名や移動の後も、応答の URL が今の名前を指すので、キーは範囲の名前ではなく URL から作る。
 // 保存する URL も、検証した部品から組み立て直す（userinfo や空白の混入を通さない）
 function partsOfIssueUrl(url: string): { key: string; url: string; number: string } | null {
   if (url.length > MAX_URL_LENGTH) return null;
@@ -71,7 +73,7 @@ function partsOfIssueUrl(url: string): { key: string; url: string; number: strin
 }
 
 // null は、返さない項目（PR、閉じた Issue、担当が他人）
-function convert(raw: unknown, scope: ScopeCandidate, login: string): ImportedItem | null {
+function convert(raw: unknown, scope: ScopeCandidate, login: string): ImportItem | null {
   if (!isRecord(raw)) throw fail('unavailable');
   // 一覧は PR も返す。PR は次のストーリーで扱う
   if (raw.pull_request !== undefined) return null;
@@ -89,49 +91,45 @@ function convert(raw: unknown, scope: ScopeCandidate, login: string): ImportedIt
   const parts = typeof rawUrl === 'string' ? partsOfIssueUrl(rawUrl) : null;
   // URL の番号と応答の番号が食い違う応答は断る
   if (parts === null || parts.number !== number) throw fail('unavailable');
-  const { key, url } = parts;
 
-  let dueAt: string | null = null;
+  let dueOn: string | null = null;
   if (isRecord(raw.milestone) && raw.milestone.due_on !== null && raw.milestone.due_on !== undefined) {
-    dueAt = isoOf(raw.milestone.due_on);
+    dueOn = isoOf(raw.milestone.due_on).slice(0, 10);
   }
   return {
     kind: 'issue',
     // 不変の ID は GitHub の ID。番号は移動で変わるので使わない
-    externalId: id,
-    key,
-    url,
-    scopeId: scope.id,
-    scopeName: scope.name,
-    state: 'open',
-    dueAt,
-    updatedAt: isoOf(raw.updated_at),
+    sourceId: id,
+    reviewerSourceId: '',
+    key: parts.key,
+    url: parts.url,
     title,
-    completed: false,
+    containerId: scope.id,
+    containerName: scope.name,
+    status: 'open',
+    dueOn,
+    updatedAt: isoOf(raw.updated_at),
+    isDone: false,
   };
 }
 
-type Position = { repo: number; page: number; since: string | null };
+type Position = { login: string | null; page: number; anchor: string | null };
 
-function validate(params: FetchAssignedParams): Position {
-  if (!LOGIN_PATTERN.test(params.assignee)) invalidArgument();
-  if (!Number.isSafeInteger(params.maxRequests) || params.maxRequests < 1 || params.maxRequests > MAX_REQUESTS) {
-    invalidArgument();
-  }
-  if (params.since !== null && !ISO_PATTERN.test(params.since)) invalidArgument();
-  if (params.since !== null && Number.isNaN(Date.parse(params.since))) invalidArgument();
-  for (const scope of params.scopes) {
-    if (!SCOPE_ID_PATTERN.test(scope.id) || !FULL_NAME_PATTERN.test(scope.name)) invalidArgument();
-  }
-  const since = params.since === null ? null : new Date(params.since).toISOString();
-  if (params.cursor === null) return { repo: 0, page: 1, since };
-  const match = CURSOR_PATTERN.exec(params.cursor);
+function parseCursor(cursor: string | null): Position {
+  if (cursor === null) return { login: null, page: 1, anchor: null };
+  const match = CURSOR_PATTERN.exec(cursor);
   if (match === null) invalidArgument();
-  // 位置は範囲の ID で持つ。再開の間に範囲の並びが変わっても、別のリポジトリを指さない
-  const repo = params.scopes.findIndex((scope) => scope.id === match[1]);
   const page = Number(match[2]);
-  if (repo < 0 || page > MAX_PAGE) invalidArgument();
-  return { repo, page, since: match[3] ?? since };
+  if (page > MAX_PAGE) invalidArgument();
+  return { login: match[1]!, page, anchor: match[3] ?? null };
+}
+
+async function loginOf(input: FetchPageInput): Promise<string> {
+  const fromSettings = input.settings['login'];
+  if (typeof fromSettings === 'string' && LOGIN_PATTERN.test(fromSettings)) return fromSettings;
+  const body = await getJson(USER_URL, input.credential, input.fetcher);
+  if (!isRecord(body) || typeof body.login !== 'string' || !LOGIN_PATTERN.test(body.login)) throw fail('unavailable');
+  return body.login;
 }
 
 function urlOf(scope: ScopeCandidate, assignee: string, since: string | null, page: number): string {
@@ -147,51 +145,34 @@ function urlOf(scope: ScopeCandidate, assignee: string, since: string | null, pa
   return `https://api.github.com/repositories/${scope.id}/issues?${query.toString()}`;
 }
 
-export async function fetchAssignedIssues(
-  credential: string,
-  params: FetchAssignedParams,
-  fetcher: typeof fetch,
-): Promise<FetchAssignedResult> {
-  let { repo, page, since } = validate(params);
-  const baseSince = params.since === null ? null : new Date(params.since).toISOString();
-  // 境目の項目が重なるので、1回の返り値の中では externalId で除く（後に読んだ方を残す）
-  const found = new Map<string, ImportedItem>();
-  let requests = 0;
-  while (repo < params.scopes.length) {
-    // 上限に達したら、次の要求の位置を返す
-    if (requests >= params.maxRequests) {
-      const anchor = since !== baseSince && since !== null ? since : '';
-      return { items: [...found.values()], nextCursor: `${params.scopes[repo]!.id}:${page}:${anchor}` };
-    }
-    const scope = params.scopes[repo]!;
-    // 読んだ項目から決めた起点は、GitHub の since が境界を含むかを文書で確かめられないので、1秒戻して送る
-    // （GitHub の更新日時は秒の精度）。含まなくても、起点ちょうどの項目を取りこぼさない。重なりは externalId で吸収する
-    const requestSince =
-      since !== null && since !== baseSince ? new Date(Date.parse(since) - 1000).toISOString() : since;
-    const body = await getJson(urlOf(scope, params.assignee, requestSince, page), credential, fetcher);
-    requests++;
-    if (!Array.isArray(body)) throw fail('unavailable');
-    for (const raw of body as unknown[]) {
-      const item = convert(raw, scope, params.assignee);
-      if (item !== null) found.set(item.externalId, item);
-    }
-    if (body.length < PAGE_SIZE) {
-      repo++;
-      page = 1;
-      since = baseSince;
-      continue;
-    }
-    const last: unknown = body[body.length - 1];
-    if (!isRecord(last)) throw fail('unavailable');
-    const lastUpdated = isoOf(last.updated_at);
-    if (lastUpdated === since) {
-      // 同じ更新日時が1頁を超えて続いている
-      page++;
-      if (page > MAX_PAGE) throw fail('unavailable');
-    } else {
-      since = lastUpdated;
-      page = 1;
-    }
+export async function fetchAssignedIssuesPage(input: FetchPageInput): Promise<FetchPageResult> {
+  const { scope } = input;
+  if (!SCOPE_ID_PATTERN.test(scope.id) || !FULL_NAME_PATTERN.test(scope.name)) invalidArgument();
+  const position = parseCursor(input.cursor);
+  const login = position.login ?? (await loginOf(input));
+  const { page, anchor } = position;
+
+  // 読んだ項目から決めた起点は、1秒戻して送る（境界を含まない動きでも、起点ちょうどの項目を取りこぼさない）
+  const since = anchor === null ? null : new Date(Date.parse(anchor) - 1000).toISOString();
+  const body = await getJson(urlOf(scope, login, since, page), input.credential, input.fetcher);
+  if (!Array.isArray(body)) throw fail('unavailable');
+
+  // 境目の項目が重なるので、1頁の中では sourceId で除く（後に読んだ方を残す）
+  const found = new Map<string, ImportItem>();
+  for (const raw of body as unknown[]) {
+    const item = convert(raw, scope, login);
+    if (item !== null) found.set(item.sourceId, item);
   }
-  return { items: [...found.values()], nextCursor: null };
+  const items = [...found.values()];
+  if (body.length < PAGE_SIZE) return { items, next: null };
+
+  const last: unknown = body[body.length - 1];
+  if (!isRecord(last)) throw fail('unavailable');
+  const lastUpdated = isoOf(last.updated_at);
+  if (lastUpdated === anchor) {
+    // 同じ更新日時が1頁を超えて続いている
+    if (page + 1 > MAX_PAGE) throw fail('unavailable');
+    return { items, next: `${login}:${page + 1}:${anchor}` };
+  }
+  return { items, next: `${login}:1:${lastUpdated}` };
 }
