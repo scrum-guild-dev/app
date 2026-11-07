@@ -292,7 +292,11 @@ describe('purge-organization（解約した組織のデータを消す SQL）', 
     expect(deleted).not.toContain(undefined);
     expect(deleted.filter((table) => table === 'wiki_pages')).toHaveLength(2);
     expect(deleted.filter((table) => table === 'wiki_page_revisions')).toHaveLength(2);
-    const otherDeletes = deleted.filter((table) => table !== 'wiki_pages' && table !== 'wiki_page_revisions');
+    // 取り込み元の応答は、1文32件の文と、残りを拾う全件の文の2つ
+    expect(deleted.filter((table) => table === 'task_source_payloads')).toHaveLength(2);
+    const otherDeletes = deleted.filter(
+      (table) => table !== 'wiki_pages' && table !== 'wiki_page_revisions' && table !== 'task_source_payloads',
+    );
     expect(new Set(otherDeletes).size).toBe(otherDeletes.length);
     expect([...new Set(deleted)].sort()).toEqual([...organizationTables, 'organizations'].sort());
     expect(deleted.at(-1)).toBe('organizations');

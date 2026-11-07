@@ -88,6 +88,9 @@ export function purgeOrganizationStatements(organizationId: string): string[] {
       (scope) =>
         `DELETE FROM wiki_pages WHERE id IN (SELECT p.id FROM wiki_pages p WHERE p.${scope} AND NOT EXISTS (SELECT 1 FROM wiki_page_revisions r WHERE r.page_id = p.id) AND NOT EXISTS (SELECT 1 FROM wiki_pages c WHERE c.parent_id = p.id) ORDER BY p.id LIMIT 32) AND ${guard}`,
     ),
+    // 取り込み元の応答は1件が最大512KBで、上限いっぱいの組織では0.5GB前後になる。1文で消すと30秒の上限に当たりうるので、
+    // Wiki の版と同じく1文32件に分ける（流し方は docs/operations.md の「解約した組織のデータを消す」）。下の全件の文は、残りを拾う
+    `DELETE FROM task_source_payloads WHERE task_id IN (SELECT p.task_id FROM task_source_payloads p WHERE ${scopeOf('task', id).replace('task_id', 'p.task_id')} ORDER BY p.task_id LIMIT 32) AND ${guard}`,
     ...TABLES.map(([table, scope]) => `DELETE FROM ${table} WHERE ${scopeOf(scope, id)} AND ${guard}`),
     `DELETE FROM organizations WHERE id = ${id} AND ${guard}`,
   ];
