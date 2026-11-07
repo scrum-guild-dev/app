@@ -3,7 +3,9 @@
 // → 木の末尾の「ストーリーを足す」で親のないストーリー。読み直しても同じ位置にある。CSP の違反も確かめる
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
+import { taskCreate } from '../src/shared/operations/task/task-create.ts';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { failOperation } from './operations.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
@@ -126,4 +128,31 @@ test('タスクを、ストーリーの配下の末尾と木の末尾の空の�
   await expect(story.getByText('二つ目のタスク', { exact: true })).toBeVisible();
   await expect(story.getByText('親のないタスク', { exact: true })).toHaveCount(0);
   expect(await collect()).toEqual([]);
+});
+
+test('タスクの空の行が断られたら、理由を出して題を残す。親が完了していたら、トーストで知らせて木を読み直す', async ({
+  page,
+}) => {
+  await createWorkspace(page, 'タスクの空の行が断られるワークスペース');
+
+  await page.getByRole('button', { name: 'ストーリーを作る' }).click();
+  const dialog = page.getByRole('dialog', { name: 'ストーリーを作る' });
+  await dialog.getByLabel('タイトル').fill('断られるストーリー');
+  await dialog.getByRole('button', { name: '作る' }).click();
+  await expect(dialog).toBeHidden();
+
+  const input = page.getByRole('textbox', { name: 'タスクを足す: 断られるストーリー' });
+
+  // 題が使えない（400）。行の下に理由が出て、題が残る
+  const unroute = await failOperation(page, taskCreate, { slug: 'aoba' }, 400, 'invalid_input');
+  await input.fill('断られる題');
+  await input.press('Enter');
+  await expect(page.locator('.draft-error')).toBeVisible();
+  await expect(input).toHaveValue('断られる題');
+  await unroute();
+
+  // 親のストーリーが完了していた（409 の conflict）。トーストで知らせ、題は残る
+  await failOperation(page, taskCreate, { slug: 'aoba' }, 409, 'conflict');
+  await input.press('Enter');
+  await expect(page.getByRole('status').filter({ hasText: 'タスクを足せません' })).toBeVisible();
 });
