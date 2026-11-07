@@ -7,7 +7,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { createWorkspace, signIn, watchViolations } from './helpers.ts';
-import { failOperation, mockOperation } from './operations.ts';
+import { failOperation, routeOperation } from './operations.ts';
 import { SAMPLE_BOARD } from './sprint-fixture.ts';
 import { sprintBoard } from '../src/shared/operations/sprint/index.ts';
 import { taskCreate } from '../src/shared/operations/task/index.ts';
@@ -110,35 +110,55 @@ test('スプリントの各列の末尾の空の行に題を打って Enter で�
   await expect(page.locator('.draft-row')).toHaveCount(0);
 });
 
-test('作るのが断られたら、作られていないことを行の下に知らせ、書きかけを残して読み直す', async ({
+test('作るのが断られたら、作られていないことを行の下に知らせ、書きかけを残して盤面を読み直す', async ({
   page,
   context,
   baseURL,
 }) => {
   await signIn(context, baseURL, 'admin');
-  await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
+  // sprint-board の呼び出しを数える（断られたら読み直す）
+  let boardCalls = 0;
+  await routeOperation(page, sprintBoard, { slug: 'aoba' }, async (call) => {
+    boardCalls++;
+    await call.fulfill(SAMPLE_BOARD);
+  });
   await page.goto('/aoba/w/019a0000-0000-7000-8000-000000000401/sprint');
   const input = page.getByRole('textbox', { name: 'タスクを足す: 未着手' });
+  await expect(input).toBeVisible();
+  const alert = (text: string) => page.getByRole('alert').filter({ hasText: text });
 
-  // 進行中でなくなっていた
-  const unrouteClosed = await failOperation(page, taskCreate, { slug: 'aoba' }, 409, 'conflict', {
-    details: { reason: 'closed' },
-  });
-  await input.fill('障害の連絡手順を書く');
-  await input.press('Enter');
-  await expect(
-    page.getByRole('alert').filter({ hasText: 'もう進行中ではないので、タスクは作られていません' }),
-  ).toBeVisible();
-  await expect(input).toHaveValue('障害の連絡手順を書く');
-  await unrouteClosed();
-
-  // 列が完了の列に変わっていた
-  const unrouteDone = await failOperation(page, taskCreate, { slug: 'aoba' }, 409, 'conflict', {
-    details: { reason: 'done_column' },
-  });
-  await input.press('Enter');
-  await expect(
-    page.getByRole('alert').filter({ hasText: '完了の列にはタスクを足せないので、作られていません' }),
-  ).toBeVisible();
-  await unrouteDone();
+  // 断りの理由ごとに、行の下の文、書きかけの残り、盤面の読み直しを確かめる
+  const cases = [
+    {
+      status: 409,
+      code: 'conflict',
+      details: { reason: 'closed' },
+      text: 'もう進行中ではないので、タスクは作られていません',
+    },
+    {
+      status: 409,
+      code: 'conflict',
+      details: { reason: 'done_column' },
+      text: '完了の列にはタスクを足せないので、作られていません',
+    },
+    { status: 404, code: 'not_found', details: undefined, text: 'が見つかりません。タスクは作られていません' },
+  ] as const;
+  for (const { status, code, details, text } of cases) {
+    const unroute = await failOperation(
+      page,
+      taskCreate,
+      { slug: 'aoba' },
+      status,
+      code,
+      details === undefined ? undefined : { details },
+    );
+    const before = boardCalls;
+    await input.fill('障害の連絡手順を書く');
+    await input.press('Enter');
+    await expect(alert(text)).toBeVisible();
+    await expect(input).toHaveValue('障害の連絡手順を書く');
+    await expect.poll(() => boardCalls).toBeGreaterThan(before);
+    await unroute();
+    await input.fill('');
+  }
 });
