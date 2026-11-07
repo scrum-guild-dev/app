@@ -187,6 +187,8 @@ test('書きかけがあるまま前後へ移ろうとすると確かめる。�
   await input.press(']');
   await expect(input).toHaveValue('書きかけ]');
   await expect(drawer).toBeVisible();
+  // 送れない書きかけ（タイトルが空）にしてから移ろうとする
+  await input.fill('');
 
   // ボタンで移ろうとすると確かめる。書き続けると、入力を保ったまま移らない
   await stepButton(drawer, '次').click();
@@ -195,7 +197,7 @@ test('書きかけがあるまま前後へ移ろうとすると確かめる。�
   await confirm.getByRole('button', { name: '書き続ける' }).click();
   await expect(confirm).toBeHidden();
   await expect(drawer).toBeVisible();
-  await expect(input).toHaveValue('書きかけ]');
+  await expect(input).toHaveValue('');
 
   // 捨てると決めたら、隣のタスクへ移る
   await stepButton(drawer, '次').click();
@@ -313,7 +315,7 @@ test('書きかけを捨てるかの確認を出している間は、] を押し
   await addTask(page, '確認中 二');
   const drawer = await openDrawer(page, '確認中 一');
   await drawer.getByRole('button', { name: /確認中 一/ }).click();
-  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('書きかけ');
+  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await stepButton(drawer, '次').click();
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });
   await expect(confirm).toBeVisible();
@@ -327,7 +329,7 @@ test('書きかけを捨てるかの確認を出している間は、] を押し
 
   // 書き続けると、そのまま残る
   await confirm.getByRole('button', { name: '書き続ける' }).click();
-  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('書きかけ');
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
 });
 
 // 計画の画面でスプリントを作り、起票したタスクを入れる
