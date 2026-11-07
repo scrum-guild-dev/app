@@ -914,6 +914,18 @@ describe('story-get', () => {
     expect(body.completed_at).toBe('2026-10-22T00:00:00.000Z');
   });
 
+  test('削除したエピックは、クリアしていても親として数えない', async () => {
+    const target = await createTarget();
+    const adminId = target.admin.userId!;
+    const epic = await createEpic(target.organization, target.workspace.id, adminId, {
+      completed_at: '2026-10-21T00:00:00.000Z',
+      deleted_at: '2026-10-22T00:00:00.000Z',
+    });
+    const story = await createStory(target.organization, target.workspace.id, adminId, { epic_id: epic.id });
+    const body = (await (await get(target, story.id)).json()) as Facts;
+    expect(body.parent_finished).toBe(false);
+  });
+
   test.each([
     ['進行中', {}, false],
     ['クリア', { completed_at: '2026-10-21T00:00:00.000Z' }, true],

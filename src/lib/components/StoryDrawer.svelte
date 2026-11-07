@@ -196,7 +196,10 @@
   // ストーリーが消えていた。保存の続きを送らない
   let storyGone = false;
   let loadVersion = 0;
-  let readVersion = 0;
+  // 欄ごと入れ替える読み取り（load、refresh）と、完了の状態の読み取り（refreshFacts を含む全部）の版。
+  // 完了の状態だけを読む応答が、欄を入れ替える読み取りの応答を捨てさせない
+  let fieldsVersion = 0;
+  let factsVersion = 0;
 
   // 部品が外れた後の応答で、状態を触らない
   let alive = true;
@@ -329,7 +332,8 @@
     const wantedStepFocus = stepFocus;
     stepFocus = null;
     const mine = ++loadVersion;
-    readVersion += 1;
+    fieldsVersion += 1;
+    factsVersion += 1;
     loadState = 'loading';
     const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: openedId }, { slug });
     if (!alive || mine !== loadVersion) return;
@@ -389,20 +393,26 @@
   }
 
   // 今の値を読み直す。読めなければ今の表示のまま（null）
-  // 読み直しは、あとから出した読み取りの応答だけを使う（readVersion。古い応答が新しい完了の状態を戻さない）
+  // 読み直しは、あとから出した読み取りの応答だけを使う（fieldsVersion と factsVersion。古い応答が新しい欄や完了の状態を戻さない）
   async function refresh(): Promise<StoryDetail | null> {
-    const mine = ++readVersion;
+    const mine = ++fieldsVersion;
+    const mineFacts = ++factsVersion;
     const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: openedId }, { slug });
     if (!result.ok) return null;
-    if (alive && mine === readVersion) applyRead(result.data);
+    if (alive && mine === fieldsVersion) {
+      const kept = facts;
+      applyRead(result.data);
+      // 完了の状態は、あとから出した読み取りがあればそちらを残す
+      if (mineFacts !== factsVersion && kept !== null) facts = kept;
+    }
     return result.data.story;
   }
 
   // 完了の状態だけを読み直す（書きかけの欄や、保存で合わせた欄は替えない）。保存、完了、取り消しの後に帯を更新する。読めなければ今の表示のまま
   async function refreshFacts(): Promise<void> {
-    const mine = ++readVersion;
+    const mine = ++factsVersion;
     const result = await callOperation(storyGet, { workspace_id: workspaceId, story_id: openedId }, { slug });
-    if (!result.ok || !alive || mine !== readVersion) return;
+    if (!result.ok || !alive || mine !== factsVersion) return;
     facts = {
       completedAt: result.data.completed_at,
       openTasks: result.data.open_task_count,

@@ -73,6 +73,7 @@ async function readStory(db: OrganizationDb, workspaceId: string, storyId: strin
           'stories.completed_at',
           'epics.completed_at as epic_completed_at',
           'epics.canceled_at as epic_canceled_at',
+          'epics.deleted_at as epic_deleted_at',
           'sc.name as category_name',
           'sc.deleted_at as category_deleted_at',
           'ec.id as epic_category_id',
@@ -125,7 +126,9 @@ export const storyGetOperation = implement(storyGet, async ({ db, actor, workspa
     story: detailOf(story),
     completed_at: story.completed_at,
     open_task_count: Number(open?.count ?? 0),
-    parent_finished: story.epic_completed_at !== null || story.epic_canceled_at !== null,
+    // 削除したエピックは親として数えない（story-complete と同じ）
+    parent_finished:
+      story.epic_deleted_at === null && (story.epic_completed_at !== null || story.epic_canceled_at !== null),
     ...(await storyDeletion(db, actor, workspace, story)),
   };
 });
