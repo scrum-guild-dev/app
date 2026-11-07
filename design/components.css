@@ -1699,8 +1699,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
   .chip-btn { margin-block: 10px; }
 }
 /* 書きっぱなしの欄（.is-inline）。静止時は破線の罫で書ける欄と示し、押すと実線の入力欄になる。引き出しのタイトル、リンク、本文に使う */
-.input.is-inline, .textarea.is-inline { background: transparent; border-color: var(--color-line); border-style: dashed; }
-.input.is-inline:hover, .textarea.is-inline:hover { border-color: var(--color-control-edge); }
+.input.is-inline, .textarea.is-inline { background: transparent; border-color: var(--color-control-edge); border-style: dashed; }
 .input.is-inline:focus, .textarea.is-inline:focus { background: var(--color-surface); border-color: var(--color-control-edge); border-style: solid; }
 .drawer-title .input.is-inline { font: inherit; font-weight: inherit; letter-spacing: inherit; width: 100%; }
 /* 「/」の小窓（.slash-menu）。本文の欄の下に出る候補。上下で選び、Enter で入れ、Esc で閉じる */

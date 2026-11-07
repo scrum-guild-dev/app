@@ -1653,12 +1653,15 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const at = D.tasks.findIndex((y) => y.id === id);
     if (at < 0) return;
     const order = D.tasks.map((y) => y.id);
+    // 消した行の、画面に出ている「⋯」の並びの中での位置を覚える（消えた行の代わりに、同じ位置の行へフォーカスを置く）
+    const menuSel = ".entry .row-menu-btn, .card .row-menu-btn";
+    const shown = [...document.querySelectorAll(menuSel)].findIndex((b) => b.dataset.menuFor === id);
     const [x] = D.tasks.splice(at, 1);
     if (drawer.id === id) closeDrawer(true);
     redrawAll();
-    // 消した行の近くへフォーカスを残す（行が消えると body に落ちる）
-    const menus = document.querySelectorAll(".entry .row-menu-btn, .card .row-menu-btn");
-    menus[Math.min(at, menus.length - 1)]?.focus();
+    // 行が消えるとフォーカスは body に落ちるので、同じ位置（末尾なら最後）の行の「⋯」へ戻す
+    const menus = document.querySelectorAll(menuSel);
+    if (shown >= 0 && menus.length) menus[Math.min(shown, menus.length - 1)].focus();
     toast(`${icon("check")}${t("task")}を削除しました`, "取り消す", () => {
       const after = order.slice(order.indexOf(id) + 1).find((i) => D.tasks.some((y) => y.id === i));
       const pos = after ? D.tasks.findIndex((y) => y.id === after) : D.tasks.length;
