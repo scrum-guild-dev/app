@@ -11,7 +11,17 @@ import type { Page } from '@playwright/test';
 import { sprintBoard, sprintClose, sprintList, taskColumnMove } from '../src/shared/operations/sprint/index.ts';
 import { taskComplete, taskReopen } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, dragTo, signIn, waitForResponses, waitForSettled, watchViolations } from './helpers.ts';
+import {
+  chooseRowAction,
+  createWorkspace,
+  dragTo,
+  rowMenuItem,
+  rowMenuToggle,
+  signIn,
+  waitForResponses,
+  waitForSettled,
+  watchViolations,
+} from './helpers.ts';
 import { failOperation, mockOperation, routeOperation } from './operations.ts';
 import { OVERDUE_BOARD, OVERDUE_PLAN, SAMPLE_BOARD } from './sprint-fixture.ts';
 
@@ -148,9 +158,13 @@ test('リーダーはゴールを書いてスプリントを始め、2つ目は�
   await expect(titlesIn(page, '未着手')).toHaveText(['B札', 'C札']);
   await expect(card('A札')).toBeFocused();
 
-  // ボタンでも同じ。移した先の末尾に入る
-  await page.getByRole('button', { name: '次の列へ: B札' }).click();
+  // カードの操作は完了の丸と「⋯」だけで、下の矢印の帯は無い。「⋯」のメニューでも同じ。移した先の末尾に入る
+  await expect(page.locator('.card-moves')).toHaveCount(0);
+  await expect(card('B札').getByRole('button')).toHaveCount(2);
+  await chooseRowAction(page, 'B札', '次の列へ');
   await expect(status('「B札」を作業中の 2 番目に移しました（2 件中）')).toBeVisible();
+  // 列をまたいでカードが作り直されても、フォーカスは同じカードの「⋯」に残る
+  await expect(rowMenuToggle(page, 'B札')).toBeFocused();
   await expect(titlesIn(page, '作業中')).toHaveText(['A札', 'B札']);
 
   // 列の中の並べ替え。Alt と ↑ で1つ上、端では動かさず、端であることを読み上げる
@@ -161,25 +175,28 @@ test('リーダーはゴールを書いてスプリントを始め、2つ目は�
   await expect(status('いちばん上です')).toBeVisible();
   await card('A札').press('Alt+ArrowDown');
   await expect(status('いちばん下です')).toBeVisible();
-  await page.getByRole('button', { name: '下へ: B札' }).click();
+  await chooseRowAction(page, 'B札', '下へ');
   await expect(titlesIn(page, '作業中')).toHaveText(['A札', 'B札']);
-  await page.getByRole('button', { name: '上へ: B札' }).click();
+  // 動かした後も、フォーカスは同じカードの「⋯」に残る
+  await expect(rowMenuToggle(page, 'B札')).toBeFocused();
+  await chooseRowAction(page, 'B札', '上へ');
   await expect(titlesIn(page, '作業中')).toHaveText(['B札', 'A札']);
 
   // 最後の完了でない列から先（完了の列）へ Alt と → で送ると、完了にする（task-column-move では移さない）
   await card('C札').press('Alt+ArrowRight');
   await card('C札').press('Alt+ArrowRight');
   await expect(titlesIn(page, 'レビュー')).toHaveText(['C札']);
-  // その列の「次の列へ」は完了にするので、読み上げの名前と title もそう言う。動かし方の案内にも添える
-  const completeNext = page.getByRole('button', { name: '完了の列へ（完了にする）: C札' });
+  // その列の「次の列へ」は完了にするので、メニューの項目の名前もそう言う。動かし方の案内にも添える
+  const completeNext = rowMenuItem(page, 'C札', '完了の列へ（完了にする）');
   await expect(completeNext).toHaveAttribute('aria-disabled', 'false');
-  await expect(completeNext).toHaveAttribute('title', '完了の列へ（完了にする）');
-  await expect(page.getByRole('button', { name: '次の列へ: C札' })).toHaveCount(0);
+  await expect(rowMenuItem(page, 'C札', '次の列へ')).toHaveCount(0);
   await expect(page.locator('#sprint-board-key-hint')).toContainText(
     '完了の列の手前の列から次へ送ると、完了になります。',
   );
-  await expect(page.getByRole('button', { name: '前の列へ: B札' })).toHaveAttribute('aria-disabled', 'false');
-  await expect(page.getByRole('button', { name: '前の列へ: A札' })).toHaveAttribute('aria-disabled', 'false');
+  await expect(rowMenuItem(page, 'B札', '前の列へ')).toHaveAttribute('aria-disabled', 'false');
+  await expect(rowMenuItem(page, 'A札', '前の列へ')).toHaveAttribute('aria-disabled', 'false');
+  // 先頭の列のカードは、前の列へは動かせない
+  await expect(rowMenuItem(page, 'B札', '上へ')).toHaveAttribute('aria-disabled', 'true');
   await moved;
   await card('C札').press('Alt+ArrowRight');
   await expect(status('タスクを完了にしました')).toBeVisible();
@@ -368,7 +385,7 @@ test('スクラムの言葉でも、スプリントを始めて、列とカー�
   await expect(
     page.getByRole('status').filter({ hasText: '「E札」を作業中の 1 番目に移しました（1 件中）' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: '前の列へ: E札' })).toBeVisible();
+  await expect(rowMenuItem(page, 'E札', '前の列へ')).toHaveAttribute('aria-disabled', 'false');
 
   // 完了の列には、完成の定義を畳んで出す。開くまで本文を描かない
   const doneColumn = page.getByRole('region', { name: '完了', exact: true });
@@ -381,9 +398,9 @@ test('スクラムの言葉でも、スプリントを始めて、列とカー�
   await expect(page.locator('details.dod')).toHaveCount(1);
 
   // 最後の完了でない列の「次の列へ」は、完了にする
-  await page.getByRole('button', { name: '次の列へ: E札' }).click();
+  await chooseRowAction(page, 'E札', '次の列へ');
   await expect(titlesIn(page, 'レビュー')).toHaveText(['E札']);
-  await page.getByRole('button', { name: '完了の列へ（完了にする）: E札' }).click();
+  await chooseRowAction(page, 'E札', '完了の列へ（完了にする）');
   await expect(page.getByRole('status').filter({ hasText: 'タスクを完了にしました' })).toBeVisible();
   await expect(titlesIn(page, '完了')).toHaveText(['E札']);
   // 戻すと、完了の前の列へ戻る
@@ -429,6 +446,90 @@ test('戻すのが断られたら理由を知らせて読み直す', async ({ pa
   // 読み直した画面（差し替えた応答）では、カードは完了の列に残る
   await expect(titlesIn(page, '完了')).toHaveText(['付与の履歴を返す API を作る']);
   await unroute();
+});
+
+test('カードの「⋯」の端の項目は選べず、選んでも開いたまま何も送らず、開いたまま Alt と矢印を押してもカードは動かない', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signIn(context, baseURL, 'member');
+  await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
+  const sent: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('task-column-move') || request.url().includes('task-complete')) {
+      sent.push(request.url());
+    }
+  });
+  await page.goto(`${AOBA_TEAM}/sprint`);
+  const first = '管理画面にポイント履歴の一覧を出す';
+  const last = '障害時の連絡手順を書く';
+  const only = 'ポイント付与のバッチを作る';
+  await expect(page.getByRole('article', { name: only, exact: true })).toBeVisible();
+  await waitForSettled(page);
+  const disabled = async (title: string, label: string) =>
+    (await rowMenuItem(page, title, label).getAttribute('aria-disabled')) === 'true';
+  // 先頭の列の先頭のカードは、前の列と上へ動かせない。末尾のカードは下へ動かせない。1枚だけの列のカードは上下に動かせない
+  expect([
+    await disabled(first, '前の列へ'),
+    await disabled(first, '上へ'),
+    await disabled(first, '下へ'),
+    await disabled(first, '次の列へ'),
+  ]).toEqual([true, true, false, false]);
+  expect([await disabled(last, '前の列へ'), await disabled(last, '上へ'), await disabled(last, '下へ')]).toEqual([
+    true,
+    false,
+    true,
+  ]);
+  expect([await disabled(only, '前の列へ'), await disabled(only, '上へ'), await disabled(only, '下へ')]).toEqual([
+    false,
+    true,
+    true,
+  ]);
+
+  // 端の項目を選んでも、何も送らず、メニューは開いたまま
+  const toggle = rowMenuToggle(page, first);
+  await toggle.click();
+  await rowMenuItem(page, first, '上へ').click({ force: true });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  // 開いたまま Alt と矢印を押しても、カードは動かず、ブラウザの既定（Alt と ← → の戻る、進む）も起きない。
+  // Svelte のイベントは上位でまとめて受けるので、要素に付けたリスナーは RowMenu の処理より先に走る。
+  // キャプチャ段階でイベントそのものを控え、押し終えてから defaultPrevented を読む（Alt だけの keydown は数えない）
+  await page.evaluate(() => {
+    const seen: KeyboardEvent[] = [];
+    (window as unknown as { __keys: KeyboardEvent[] }).__keys = seen;
+    addEventListener(
+      'keydown',
+      (event) => {
+        if (event.key.startsWith('Arrow')) seen.push(event);
+      },
+      true,
+    );
+  });
+  const urlBefore = page.url();
+  for (const key of ['Alt+ArrowLeft', 'Alt+ArrowRight', 'Alt+ArrowDown']) await page.keyboard.press(key);
+  expect(
+    await page.evaluate(() =>
+      (window as unknown as { __keys: KeyboardEvent[] }).__keys.map((event) => [event.key, event.defaultPrevented]),
+    ),
+  ).toEqual([
+    ['ArrowLeft', true],
+    ['ArrowRight', true],
+    ['ArrowDown', true],
+  ]);
+  expect(page.url()).toBe(urlBefore);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(titlesIn(page, '未着手')).toHaveText([first, last]);
+  await expect(titlesIn(page, '作業中')).toHaveText([only]);
+  expect(sent).toEqual([]);
+});
+
+test('カードの動かし方の案内は「⋯」のメニューを指す', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'member');
+  await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
+  await page.goto(`${AOBA_TEAM}/sprint`);
+  await expect(page.locator('#sprint-board-key-hint')).toContainText('カードの「⋯」のメニューでも同じです。');
+  await expect(page.locator('#sprint-board-key-hint')).not.toContainText('カードの下のボタン');
 });
 
 test('カードが1枚も無いあいだだけ、列とカードの領域そのものに Tab で止まれる', async ({ page, context, baseURL }) => {

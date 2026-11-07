@@ -100,8 +100,10 @@
       close(list?.contains(event.target as Node) === true);
       return;
     }
-    // 開いている間の Alt と ↑ ↓ は、行を動かさない（行のキーへ届けない）
-    if (event.altKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    // 開いている間の Alt と矢印は、行やカードを動かさない（行のキーへ届けない。開いたまま動くと、作り直された行で隠れた項目へフォーカスを戻そうとして失う）
+    // preventDefault は、Alt と ← → のブラウザの既定（戻る、進む）を止める。カードの keydown に届かなくなった分を、ここで引き受ける
+    if (event.altKey && event.key.startsWith('Arrow')) {
+      event.preventDefault();
       event.stopPropagation();
       return;
     }

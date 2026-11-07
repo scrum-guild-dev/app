@@ -52,8 +52,8 @@ export type SprintDndOptions = {
 };
 
 // ボタンの上から始めたドラッグは動かさない。題のリンクは draggable="false" で、リンクの既定のドラッグを止めてあるので、
-// リンクの上からもカードをつかめる
-const CONTROLS = 'button, input, select, textarea, summary';
+// リンクの上からもカードをつかめる。開いた「⋯」のメニュー（role="menu"）の余白からも始めさせない
+const CONTROLS = 'button, input, select, textarea, summary, [role="menu"]';
 
 function taskIdOf(source: ElementDragPayload): string | null {
   return source.data.type === SOURCE_TYPE && typeof source.data.id === 'string' ? source.data.id : null;

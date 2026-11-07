@@ -8,15 +8,16 @@
   import DefinitionChip from './DefinitionChip.svelte';
   import DueChip from './DueChip.svelte';
   import Icon from './Icon.svelte';
+  import RowMenu, { type RowMenuItem } from './RowMenu.svelte';
 
   // スプリントの画面のカード（kit.js の card）。題は `?task=<ID>` で詳細の引き出しを開くリンク、ポイント、担当、完了の印か完了の操作。
   // 動かせるカード（完了していない、書き込める）は tabindex="0" で選べ、中のどこにフォーカスがあっても Alt と ← → で隣の列、
-  // Alt と ↑ ↓ で列の中を動かす。同じ操作を、カードの下の .order-actions のボタンでもできる。
-  // 端のボタンは aria-disabled（フォーカスを失わない）で、押したり、端で Alt と矢印を押したりしても画面に渡し、動かせないことを読み上げさせる。
+  // Alt と ↑ ↓ で列の中を動かす。同じ操作を、カードの右下の「⋯」（RowMenu）のメニューの「前の<列>へ」「上へ」「下へ」「次の<列>へ」でもできる。
+  // カードの操作は、完了の丸と「⋯」だけを出す。端の項目は aria-disabled（フォーカスを失わない）にし、端で Alt と矢印を押したときは画面に渡し、動かせないことを読み上げさせる。
   // 最後の完了でない列の「次の列へ」と Alt と → は、画面が完了にする（task-complete）。
   // 完了したカードは、完了の印の横に「戻す」（kit.js の doneControl の .link-btn。task-reopen）を、戻せるとき（canReopen）だけ出す。
   // dnd を渡すと（書き込めるとき）、カード全体をつかんで列の間と中へ落とせる（SprintDnd。つかめるのは動かせるカードと、戻せる完了のカードだけ）。
-  // 題のリンクは draggable="false" で、リンクの既定のドラッグがカードのドラッグを奪わない。ボタンは押すだけで動き出さない。
+  // 題のリンクは draggable="false" で、リンクの既定のドラッグがカードのドラッグを奪わない。ボタンと「⋯」は押すだけで動き出さない。
   // 落とす位置の印は data-drop、つかんだ薄さは .is-dragging、落とした光は .is-dropped
   let {
     task,
@@ -54,6 +55,39 @@
 
   const done = $derived(task.completed_at !== null);
   const movable = $derived(edges !== null);
+  const column = $derived(t('column'));
+  // 「⋯」のメニューの項目（kit.js の orderItems の順）。最後の完了でない列の「次の列へ」は完了にするので、名前もそう言う
+  const menuItems = $derived<RowMenuItem[]>(
+    edges === null
+      ? []
+      : [
+          {
+            key: 'left',
+            label: t('moveColumnPrev', { column }),
+            icon: 'left',
+            disabled: edges.prev,
+            onselect: () => onmove(task, 'left'),
+          },
+          { key: 'up', label: t('moveUp'), icon: 'up', disabled: edges.top, onselect: () => onmove(task, 'up') },
+          {
+            key: 'down',
+            label: t('moveDown'),
+            icon: 'down',
+            disabled: edges.bottom,
+            onselect: () => onmove(task, 'down'),
+          },
+          {
+            key: 'right',
+            label: edges.completes
+              ? t('moveColumnComplete', { done: t('done'), column, complete: t('complete') })
+              : t('moveColumnNext', { column }),
+            icon: 'right',
+            // 完了か戻しを送っている間も選べる。画面が捨てて理由を読み上げる（Alt と → と同じ。refusedWhileBusy）
+            disabled: edges.next,
+            onselect: () => onmove(task, 'right'),
+          },
+        ],
+  );
   // つかめるのは、動かせるカードと、戻せる完了のカード
   const grabbable = $derived(done ? canReopen : movable);
   const KEY_DIRECTIONS: Record<string, MoveDirection> = {
@@ -73,7 +107,6 @@
     onmove(task, direction);
   }
 
-  const column = $derived(t('column'));
   const titleId = $derived(`card-${task.id}-title`);
   const summaryId = $derived(`card-${task.id}-summary`);
   const pointsText = $derived(
@@ -147,6 +180,7 @@
       <Avatar userId={task.assignee.id} name={task.assignee.name} />
     {/if}
     <span class="card-end">
+      {#if menuItems.length > 0}<RowMenu title={task.title} items={menuItems} />{/if}
       {#if done}
         <span class="hanko" role="img" aria-label={t('doneMarkLabel', { title: task.title, done: t('done') })}
           ><Icon name="check" /><b>{t('doneStamp')}</b></span
@@ -178,46 +212,4 @@
       {/if}
     </span>
   </div>
-  {#if edges !== null}
-    <div class="card-moves">
-      <span class="order-actions">
-        <button
-          class="icon-btn"
-          type="button"
-          aria-label={t('moveColumnPrevLabel', { column, title: task.title })}
-          title={t('moveColumnPrev', { column })}
-          aria-disabled={edges.prev}
-          onclick={() => onmove(task, 'left')}><Icon name="left" /></button
-        >
-        <button
-          class="icon-btn"
-          type="button"
-          aria-label={t('moveUpLabel', { title: task.title })}
-          title={t('moveUp')}
-          aria-disabled={edges.top}
-          onclick={() => onmove(task, 'up')}><Icon name="up" /></button
-        >
-        <button
-          class="icon-btn"
-          type="button"
-          aria-label={t('moveDownLabel', { title: task.title })}
-          title={t('moveDown')}
-          aria-disabled={edges.bottom}
-          onclick={() => onmove(task, 'down')}><Icon name="down" /></button
-        >
-        <button
-          class="icon-btn"
-          type="button"
-          aria-label={edges.completes
-            ? t('moveColumnCompleteLabel', { done: t('done'), column, complete: t('complete'), title: task.title })
-            : t('moveColumnNextLabel', { column, title: task.title })}
-          title={edges.completes
-            ? t('moveColumnComplete', { done: t('done'), column, complete: t('complete') })
-            : t('moveColumnNext', { column })}
-          aria-disabled={edges.next}
-          onclick={() => onmove(task, 'right')}><Icon name="right" /></button
-        >
-      </span>
-    </div>
-  {/if}
 </article>

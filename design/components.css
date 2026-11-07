@@ -909,10 +909,8 @@ a.brand { color: inherit; text-decoration: none; }
 }
 .card.is-done .card-title { color: var(--color-muted); font-weight: 400; }
 /* キーボードで選んでいるカード。カードは tabindex="0" で、中のどこにフォーカスがあっても枠を太く出す（色だけに頼らない）。
-   Alt と ← → で隣の列、Alt と ↑ ↓ で列の中を動かす。同じ操作を、カードの下の .order-actions のボタンでもできる */
+   Alt と ← → で隣の列、Alt と ↑ ↓ で列の中を動かす。同じ操作を、カードの右下の「⋯」（.row-menu）のメニューでもできる */
 .card:focus-within { border-color: var(--color-accent); box-shadow: inset 4px 0 0 var(--color-accent); }
-.card-moves { display: flex; justify-content: flex-end; border-top: 1px dashed var(--color-line); padding-top: var(--space-2); }
-.card-moves .order-actions { gap: var(--space-2); }
 
 /* ===== バックログの木 ===== */
 .tree { background: var(--color-surface); border: 1px solid var(--color-line); border-left: var(--rule-double); border-radius: var(--radius-1); }
@@ -1487,9 +1485,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
    だけを 44px 四方に広げる。並んだボタンの押せる範囲が重ならないよう、ボタンの間を 14px 空ける（30 + 14 = 44）。名前の下へ折り返す
    切り替えとの間は --space-3 空ける（名前の広げた範囲が切り替えに重ならないように） */
 @media (max-width: 760px), (pointer: coarse) {
-  .entry-end .order-actions .icon-btn, .tree-end .order-actions .icon-btn, .card-moves .order-actions .icon-btn { width: 44px; height: 44px; }
-  /* 44px のボタン4つ（176px）がカードの内側（約 184px）に収まるよう、隙間を空けず、収まらない幅では折り返す */
-  .card-moves .order-actions { gap: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .entry-end .order-actions .icon-btn, .tree-end .order-actions .icon-btn { width: 44px; height: 44px; }
   .order-list .order-actions { gap: 14px; }
   .order-list .order-main { row-gap: var(--space-3); }
   .order-list .toggle { min-height: 44px; }
