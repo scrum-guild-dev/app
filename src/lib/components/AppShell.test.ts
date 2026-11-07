@@ -6,6 +6,7 @@ import AppShell from './AppShell.svelte';
 vi.mock('$app/state', () => ({
   page: { data: { organization: { organization: { name: '架空の組織', kind: 'team' } } } },
 }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/paths', () => ({
   asset: (path: string) => `/${path}`,
   resolve: (route: string, params: { slug: string; id?: string }) =>
@@ -77,4 +78,18 @@ test('URL のワークスペースとメニューの対象が食い違うとき�
   const body = shell('/aoba/w/w2/sprint', { id: 'w1', name: 'ふくろう班', role: 'member' });
   const nav = body.match(/<nav class="breadcrumb"[\s\S]*?<\/nav>/)?.[0] ?? '';
   expect(nav).not.toContain('ふくろう班');
+});
+
+test('上の帯に検索の欄があり、ワークスペースの画面ではバックログの検索の行き先を持つ', () => {
+  const body = render(AppShell, {
+    props: {
+      current: '/aoba',
+      slug: 'aoba',
+      hasWorkspace: false,
+      isAdmin: false,
+      children: createRawSnippet(() => ({ render: () => '<p>架空の本文</p>' })),
+    },
+  }).body;
+  expect(body).toMatch(/<input[^>]*role="combobox"[^>]*aria-label="画面とタスクを探す"/);
+  expect(body).toContain('aria-keyshortcuts="Control+K Meta+K"');
 });

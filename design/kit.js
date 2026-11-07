@@ -2188,6 +2188,70 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (assist.opener && assist.opener.focus) assist.opener.focus();
     return true;
   }
+  // 上の帯の検索。候補は左のメニューの項目（画面の名前）と、ワークスペースの画面では末尾の「バックログで「…」を探す」。
+  // 欄は combobox（aria-activedescendant）。↑↓で選び、Enter で移り、Esc で閉じて元の場所へフォーカスを戻す
+  const navSearch = {
+    active: 0, opener: null, options: [],
+    input: () => document.getElementById("nav-search-input"),
+    fold: (s) => s.normalize("NFKC").toLowerCase(),
+    collect() {
+      const q = this.input().value;
+      const words = this.fold(q).split(/\s+/).filter(Boolean);
+      const links = [...document.querySelectorAll("#app-nav a.nav-item")].map((a) => ({ label: a.querySelector(".nav-item-label").textContent, href: a.getAttribute("href") }));
+      const list = links.filter((l) => words.every((w) => this.fold(l.label).includes(w))).map((l, i) => ({ id: `s${i}`, label: l.label, href: l.href }));
+      const backlog = links.find((l) => l.href.startsWith("backlog.html"));
+      const text = q.trim();
+      if (backlog && text) {
+        const [path, query = ""] = backlog.href.split("?");
+        const params = new URLSearchParams(query); params.set("q", text);
+        list.push({ id: "backlog", label: `${t("backlog")}で「${text}」を探す`, href: `${path}?${params}`, backlog: true });
+      }
+      return list;
+    },
+    render() {
+      const input = this.input(); const ul = document.getElementById("nav-search-list");
+      this.options = this.collect();
+      this.active = Math.min(this.active, Math.max(this.options.length - 1, 0));
+      ul.hidden = false; input.setAttribute("aria-expanded", "true");
+      ul.innerHTML = this.options.length
+        ? this.options.map((o, i) => `<li id="nav-search-${o.id}" role="option" aria-selected="${i === this.active}" data-nav-search-go="${i}"${o.backlog ? ' class="is-backlog"' : ""}>${esc(o.label)}</li>`).join("")
+        : '<li class="nav-search-empty" role="presentation">候補がありません</li>';
+      if (this.options[this.active]) input.setAttribute("aria-activedescendant", `nav-search-${this.options[this.active].id}`); else input.removeAttribute("aria-activedescendant");
+      document.getElementById("nav-search-status").textContent = this.options.length ? `${this.options.length}件の候補` : "候補がありません";
+    },
+    close(restore) {
+      const input = this.input(); if (!input) return;
+      document.getElementById("nav-search-list").hidden = true; input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant");
+      input.value = ""; document.getElementById("nav-search-status").textContent = "";
+      if (restore) { if (this.opener && this.opener.isConnected) this.opener.focus(); else input.blur(); }
+      this.opener = null;
+    },
+    go(i) { const o = this.options[i]; if (o) { this.close(false); location.href = o.href; } },
+    // 欄の中のキー。扱ったら真
+    key(ev) {
+      if (ev.isComposing || ev.keyCode === 229) return false;
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        if (document.getElementById("nav-search-list").hidden) this.render();
+        else if (this.options.length) { this.active = (this.active + (ev.key === "ArrowDown" ? 1 : -1) + this.options.length) % this.options.length; this.render(); }
+        return true;
+      }
+      if (ev.key === "Enter") { if (this.options.length && !document.getElementById("nav-search-list").hidden) { ev.preventDefault(); this.go(this.active); } return true; }
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); this.close(true); return true; }
+      return false;
+    },
+  };
+  document.addEventListener("input", (ev) => { if (ev.target.id === "nav-search-input") { navSearch.active = 0; navSearch.render(); } });
+  document.addEventListener("focusin", (ev) => {
+    if (ev.target.id === "nav-search-input" && document.getElementById("nav-search-list").hidden) navSearch.render();
+    else if (navSearch.input() && !ev.target.closest(".nav-search") && !document.getElementById("nav-search-list").hidden) navSearch.close(false);
+  });
+  document.addEventListener("mousedown", (ev) => { if (ev.target.closest && ev.target.closest("[data-nav-search-go]")) ev.preventDefault(); });
+  document.addEventListener("click", (ev) => {
+    const row = ev.target.closest && ev.target.closest("[data-nav-search-go]");
+    if (row) navSearch.go(Number(row.dataset.navSearchGo));
+    else if (navSearch.input() && !ev.target.closest(".nav-search")) navSearch.close(false);
+  });
   function askAssist(text) {
     text = text.trim();
     if (!text || assistBlocked()) return false;
@@ -2454,7 +2518,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       <div class="sheet">
         <div class="topbar">
           <span id="breadcrumb-slot"></span>
-          ${page.operator ? "" : `<button class="pill assist-launch" type="button" data-assist-open aria-keyshortcuts="Control+K Meta+K">${icon("spark")}<span data-assist-label></span><kbd class="kbd">${ASSIST_KEY}</kbd></button>`}
+          ${page.operator ? "" : `<div class="nav-search" role="search" aria-label="画面とタスクを探す">${icon("search")}<input class="nav-search-input" id="nav-search-input" type="text" role="combobox" autocomplete="off" spellcheck="false" aria-label="画面とタスクを探す" aria-expanded="false" aria-controls="nav-search-list" aria-autocomplete="list" aria-keyshortcuts="Control+K Meta+K" placeholder="画面やタスクを探す"><kbd class="kbd nav-search-key" aria-hidden="true">${ASSIST_KEY}</kbd><ul class="nav-search-list" id="nav-search-list" role="listbox" aria-label="画面とタスクを探す" hidden></ul><span class="visually-hidden" role="status" id="nav-search-status"></span></div>`}
+          ${page.operator ? "" : `<button class="pill assist-launch" type="button" data-assist-open>${icon("spark")}<span data-assist-label></span></button>`}
           <button class="pill" type="button" data-switch="theme">${icon("moon")}<span data-theme-label></span></button>
           ${page.operator ? "" : `<button class="pill" type="button" data-switch="first">${icon("redo")}<span>見本: ${firstLabel(first)}</span></button>`}
           ${who}
@@ -2839,9 +2904,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   document.addEventListener("keydown", (ev) => {
     // 運用者の画面（上の帯にボタンがない）では開かない
     const overlay = !document.getElementById("dialog")?.hidden || !document.getElementById("celebrate")?.hidden;
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "k" && assistAllowed() && !overlay) {
-      ev.preventDefault(); openAssist(assist.open === "panel" ? "panel" : "palette"); return;
+    // Ctrl+K（⌘K）は上の帯の検索へ移る。アシスタントはボタンだけで開く
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === "k" && !overlay && navSearch.input()) {
+      ev.preventDefault();
+      if (document.activeElement !== navSearch.input()) navSearch.opener = document.activeElement;
+      navSearch.input().focus(); navSearch.input().select(); navSearch.render(); return;
     }
+    if (ev.target.id === "nav-search-input" && navSearch.key(ev)) return;
     // タブは左右の矢印キーと Home、End で移り、移った先を選ぶ
     if (ev.target.matches && ev.target.matches('#drawer [role="tab"]') && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(ev.key)) {
       const tabs = [...ev.target.closest('[role="tablist"]').querySelectorAll('[role="tab"]')];
