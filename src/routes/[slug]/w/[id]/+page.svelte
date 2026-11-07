@@ -204,8 +204,10 @@
       // 画面で足したストーリーは、読み直した木に入るまで描かれる親なので、孤立とは数えない
       ...untrack(() => addedStories).map((entry) => entry.story.id),
     ]);
-    const orphaned = (entry: { storyId: string | null; fromTree?: true }) =>
-      orphanedFromTree(entry, { treeLoaded: loaded !== null, storyIds: storyIdsLoaded });
+    // 行そのものが木に有るなら（別の人が親を移したなど）、孤立とは言えない
+    const orphaned = (entry: { task: BacklogTask; storyId: string | null; fromTree?: true }) =>
+      orphanedFromTree(entry, { treeLoaded: loaded !== null, storyIds: storyIdsLoaded }) &&
+      !inTree(loaded, entry.task.id);
     const orphanIds = untrack(() => added)
       .filter(orphaned)
       .map((entry) => entry.task.id);
