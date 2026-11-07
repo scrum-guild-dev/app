@@ -22,6 +22,7 @@
   // dnd を渡すと、行は、ストーリーを運ぶときの落とし先（囲み。離すと配下の末尾に入り、畳まれていれば開く）と、エピックを運ぶときの
   // 前後の線の落とし先を兼ねる。前後の線は、開いた配下の途中に入らないよう、配下を含めた塊（.tree-group）に引く（エピックの段の字下げ）。
   // 空の案内の行の前後も、配下の末尾の落とし先
+  // addRow を渡すと（書き込める、完了も中止もしていないとき）、配下の末尾に「ストーリーを足す」の空の行（TreeAddRow）を置く
   let {
     epic,
     pointsDone,
@@ -33,6 +34,7 @@
     onMove,
     dnd,
     children,
+    addRow,
   }: {
     epic: BacklogEpic;
     pointsDone: number;
@@ -44,6 +46,8 @@
     onMove?: (epic: BacklogEpic, delta: -1 | 1) => void;
     dnd?: BacklogDnd;
     children: Snippet;
+    // 配下の末尾に置く空の行（ストーリーを足す）。完了か中止したエピックには置かない
+    addRow?: Snippet;
   } = $props();
 
   const epicHref = $derived(
@@ -159,6 +163,9 @@
       <p class="tree-folded" data-drop={dnd?.markOf(tailRow)} {@attach dnd?.target(tailRow)}>
         {t('epicNoStories', { story: t('story') })}
       </p>
+    {/if}
+    {#if addRow !== undefined && !finished}
+      {@render addRow()}
     {/if}
   </div>
 </div>

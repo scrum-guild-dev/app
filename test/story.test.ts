@@ -21,6 +21,7 @@ type StoryBody = {
     body_md: string | null;
     due_on: string | null;
     link_url: string | null;
+    epic_id: string | null;
   };
 };
 
