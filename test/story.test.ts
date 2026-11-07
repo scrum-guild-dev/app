@@ -599,6 +599,44 @@ describe('story-update', () => {
       expect((await rowOf(target, story.id))!.title).toBe('後の保存');
     });
 
+    test('正規化の前に保存された値でも、同じ値を添えれば断らない', async () => {
+      const target = await createTarget();
+      const story = await createStory(target.organization, target.workspace.id, target.admin.userId!, {
+        title: '  元のタイトル  ',
+        body_md: 'a\r\nb  ',
+        link_url: 'https://Example.com/Old',
+      });
+      const res = await update(target, story.id, {
+        title: '新しいタイトル',
+        body_md: 'a\nb\nc',
+        link_url: 'https://example.org/',
+        expected: { title: '元のタイトル', body_md: 'a\nb', link_url: 'https://example.com/Old' },
+      });
+      expect(res.status).toBe(200);
+    });
+
+    test('欄が空だったと思って送っても、先に誰かが書いていれば 409 の stale', async () => {
+      const target = await createTarget();
+      const story = await seeded(target);
+      const res = await update(target, story.id, { link_url: 'https://example.org/', expected: { link_url: '' } });
+      expect(res.status).toBe(409);
+      const body = (await res.json()) as { error: { details: unknown } };
+      expect(body.error.details).toEqual({ reason: 'stale', current: { link_url: 'https://example.com/old' } });
+    });
+
+    test('閉じたワークスペースでは、前の値が古くても stale より先に workspace_closed で断る', async () => {
+      const target = await createTarget({ closed: true });
+      const story = await seeded(target);
+      const res = await update(
+        target,
+        story.id,
+        { title: '新しいタイトル', expected: { title: '別の値' } },
+        target.admin,
+      );
+      expect(res.status).toBe(409);
+      expect(await errorCodeOf(res)).toBe('workspace_closed');
+    });
+
     test('別の組織のストーリーは、前の値を添えても 404', async () => {
       const target = await createTarget();
       const foreign = await createTarget();
@@ -637,6 +675,29 @@ describe('story-update', () => {
       const logs = await logsOf(target, story.id);
       expect(logs).toHaveLength(2);
       expect(JSON.parse(logs[0]!.changes_json)).toEqual({ body_md: ['元の本文', '一回目'] });
+    });
+
+    test('間は最初に書いた時刻から数える。まとめるたびに延びない', async () => {
+      const target = await createTarget();
+      const story = await seeded(target);
+      for (const [minutes, value] of [
+        [0, '一回目'],
+        [4, '二回目'],
+        [6, '三回目'],
+      ] as const) {
+        expect((await update(target, story.id, { body_md: value }, target.member, at(minutes))).status).toBe(200);
+      }
+      const logs = (await logsOf(target, story.id)).map((log) => JSON.parse(log.changes_json));
+      expect(logs).toEqual([{ body_md: ['元の本文', '二回目'] }, { body_md: ['二回目', '三回目'] }]);
+    });
+
+    test('間に別の人の履歴が挟まっていれば、まとめない', async () => {
+      const target = await createTarget();
+      const story = await seeded(target);
+      expect((await update(target, story.id, { body_md: '一回目' }, target.member, at(0))).status).toBe(200);
+      expect((await update(target, story.id, { title: '別の人の題' }, target.leader, at(1))).status).toBe(200);
+      expect((await update(target, story.id, { body_md: '二回目' }, target.member, at(2))).status).toBe(200);
+      expect(await logsOf(target, story.id)).toHaveLength(3);
     });
 
     test('元の値へ戻す変更は、まとめずに新しい行にする', async () => {

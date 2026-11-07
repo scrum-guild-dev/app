@@ -342,6 +342,8 @@ function normalizedForCompare(field: (typeof MERGEABLE_FIELDS)[number], value: u
     const link = normalizeLinkUrl(value);
     return link === null || linkUrlProblem(link) !== null ? link : canonicalLinkUrl(link);
   }
+  // due_on は正規化の決まりが無い。欄を足したら、storyUpdate の expected と、ここの正規化の要否を決める（足し忘れは型で落ちる）
+  field satisfies 'due_on';
   return value;
 }
 
@@ -399,7 +401,9 @@ async function readMergeTarget(
   const firstWrittenAt = Number.parseInt(idHex.slice(0, 12), 16);
   const elapsed = at.getTime() - firstWrittenAt;
   if (!Number.isFinite(elapsed) || elapsed < 0 || elapsed > HISTORY_MERGE_WINDOW_MS) return undefined;
-  if (at.getTime() < Date.parse(latest.created_at)) return undefined;
+  // 最新の行の created_at より時計が戻っているときと、読めない日時のときもまとめない（created_at が過去へ戻らないように）
+  const latestAt = Date.parse(latest.created_at);
+  if (Number.isNaN(latestAt) || at.getTime() < latestAt) return undefined;
   let logged: unknown;
   try {
     logged = JSON.parse(latest.changes_json);
