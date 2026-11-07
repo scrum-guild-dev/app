@@ -1,7 +1,7 @@
 // 接続の画面（connections/+page.svelte）の、登録・範囲の候補・範囲の保存の失敗の振り分け。
 // 画面の状態を持たない関数だけを置く（$app を読まないので、node で試せる）。文言は言葉の辞書から出す
 import type { ApiResult } from './api.ts';
-import { CONNECTION_NAME_MAX_LENGTH, connectionNameProblem } from '../shared/operations/connection/index.ts';
+import { connectionNameProblem } from '../shared/operations/connection/index.ts';
 import type { DictionaryKey } from '../shared/vocabulary.ts';
 
 type FailedResult = Extract<ApiResult<unknown>, { ok: false }>;
@@ -14,12 +14,13 @@ export type ConnectionFailure = { field: ConnectionField; key: DictionaryKey };
 export function validateConnectionCreate(input: { name: string; credential: string }): ConnectionFailure | null {
   const name = input.name.trim();
   if (name === '') return { field: 'name', key: 'connectionNameRequired' };
-  if (connectionNameProblem(name) !== null) return { field: 'name', key: 'connectionNameTooLong' };
+  const problem = connectionNameProblem(name);
+  if (problem === 'required') return { field: 'name', key: 'connectionNameRequired' };
+  if (problem === 'invalid_character') return { field: 'name', key: 'connectionNameInvalid' };
+  if (problem === 'too_long') return { field: 'name', key: 'connectionNameTooLong' };
   if (input.credential.trim() === '') return { field: 'credential', key: 'connectionCredentialRequired' };
   return null;
 }
-
-export const CONNECTION_NAME_LIMIT = CONNECTION_NAME_MAX_LENGTH;
 
 // 400 の details のうち、path が引数の項目の code
 function codeOf(result: FailedResult, path: string): string | undefined {
@@ -33,20 +34,24 @@ function codeOf(result: FailedResult, path: string): string | undefined {
 }
 
 // 登録（connection-create）の失敗。400 は認証情報の形（credential_shape）と取り込み元が受け付けなかった（credential_rejected）で、
-// どちらも登録されず、認証情報の欄に理由を出す。届かない（503、通信できない）は何も登録されていないので、もう一度試せる。
+// どちらも登録されず、認証情報の欄に理由を出す。届かない（503、通信できない）は何も登録されていないので、トークンを入れ直してもう一度試せる。
 // 409 の workspace_closed と connection_limit は枠に出す。ログインが切れた（401）は呼び出し側が画面ごと移すので、ここへ渡さない
 export function connectionCreateFailure(result: FailedResult): ConnectionFailure {
   if (result.status === 400) {
     const code = codeOf(result, 'credential');
     if (code === 'credential_shape') return { field: 'credential', key: 'connectionCredentialShape' };
     if (code === 'credential_rejected') return { field: 'credential', key: 'connectionCredentialRejected' };
-    if (codeOf(result, 'name') !== undefined) return { field: 'name', key: 'connectionNameTooLong' };
+    // 長すぎるなど、入力の上限で断られた認証情報も、形が違うものとして欄に出す
+    if (code !== undefined) return { field: 'credential', key: 'connectionCredentialShape' };
+    const nameCode = codeOf(result, 'name');
+    if (nameCode !== undefined) return { field: 'name', key: 'connectionNameInvalid' };
     return { field: 'form', key: 'connectionCreateInvalid' };
   }
   if (result.error?.code === 'workspace_closed') return { field: 'form', key: 'connectionWorkspaceClosed' };
   if (result.status === 409) return { field: 'form', key: 'connectionLimit' };
-  if (result.status === 429) return { field: 'form', key: 'connectionRateLimited' };
-  if (result.status === 0 || result.status === 503) return { field: 'form', key: 'connectionUnreachable' };
+  // 認証情報は送った直後に欄から消してあるので、やり直すときは入れ直す
+  if (result.status === 429) return { field: 'form', key: 'connectionCreateRateLimited' };
+  if (result.status === 0 || result.status === 503) return { field: 'form', key: 'connectionCreateUnreachable' };
   return { field: 'form', key: 'connectionCreateFailed' };
 }
 
