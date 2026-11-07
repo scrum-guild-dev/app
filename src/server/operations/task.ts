@@ -37,7 +37,14 @@ import {
   type MovePlan,
   type Positioned,
 } from './move-position.ts';
-import { activeMemberName, actorUserIdOf, changeLogColumns, openWorkspace, throwIfClosed } from './write-guards.ts';
+import {
+  activeMemberName,
+  actorUserIdOf,
+  changeLogColumns,
+  mayDeleteOwned,
+  openWorkspace,
+  throwIfClosed,
+} from './write-guards.ts';
 
 type Tables = OrganizationTables;
 
@@ -389,6 +396,8 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
       sprint: target?.ref ?? null,
       // 作った直後は値の行が無いので、削除していない欄が1つでもあれば未記入
       unfilled: await readUnfilled(db, workspaceId, taskId),
+      // 作った人は自分で、手で作ったタスクなので、削除できる
+      can_delete: true,
     },
   };
 });
@@ -474,6 +483,8 @@ export function openStoryTasksStatement(db: OrganizationDb, workspaceId: string,
         'tasks.position',
         'tasks.assignee_user_id',
         'users.name as assignee_name',
+        'tasks.created_by',
+        'tasks.is_imported',
         'repositories.id as repository_ref_id',
         'repositories.name as repository_name',
         ...sprintRefColumns,
@@ -566,6 +577,8 @@ export function rootOpenTasksStatement(db: OrganizationDb, workspaceId: string, 
         'tasks.due_on',
         'tasks.assignee_user_id',
         'users.name as assignee_name',
+        'tasks.created_by',
+        'tasks.is_imported',
         'categories.id as category_ref_id',
         'categories.name as category_name',
         'repositories.id as repository_ref_id',
@@ -763,6 +776,8 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
     due_on: string | null;
     assignee_user_id: string | null;
     assignee_name: string | null;
+    created_by: string | null;
+    is_imported: number;
     repository_ref_id: string | null;
     repository_name: string | null;
     unfilled: unknown;
@@ -779,6 +794,8 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
     repository: refOf(row.repository_ref_id, row.repository_name),
     sprint: sprintRefOf(row),
     unfilled: Number(row.unfilled) === 1,
+    // task-detail の can_delete と同じ判定。取り込んだタスクは削除できない
+    can_delete: row.is_imported === 0 && mayDeleteOwned(row.created_by, actor, workspace),
   });
 
   // 区分は、エピック、ストーリー、タスクの順に引き継ぐ。エピックの区分を先に引いておく

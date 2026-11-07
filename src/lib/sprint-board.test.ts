@@ -13,6 +13,7 @@ function card(id: string) {
     story: null,
     due_on: null,
     repository: null,
+    can_delete: false,
   };
 }
 

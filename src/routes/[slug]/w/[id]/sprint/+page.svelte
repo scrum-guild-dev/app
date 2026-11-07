@@ -18,7 +18,8 @@
   import SprintGoalNotice from '../../../../../lib/components/SprintGoalNotice.svelte';
   import SprintCloseDialog from '../../../../../lib/components/SprintCloseDialog.svelte';
   import SprintOverdueNotice from '../../../../../lib/components/SprintOverdueNotice.svelte';
-  import { focusPageHeading } from '../../../../../lib/focus-heading.ts';
+  import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../../lib/focus-heading.ts';
+  import { removeFromList } from '../../../../../lib/task-removal.ts';
   import { MoveQueue } from '../../../../../lib/move-queue.ts';
   import { edgesOf, planCardMove, type MoveDirection, type MoveEdge } from '../../../../../lib/sprint-board.ts';
   import { SprintDnd } from '../../../../../lib/sprint-dnd.svelte.ts';
@@ -440,6 +441,37 @@
     }
   }
 
+  // 「⋯」の「この<タスク>を削除する」。確認は挟まず、消したら「取り消す」付きのトーストを出してボードを読み直す。
+  // 消したカードの前後（無ければ見出し）へのフォーカスの移し方は、引き出しの削除と同じ（task-removal.ts）。
+  // カードが消えるので、読み直しでフォーカスを戻す先（savedFocus）は使わない
+  async function removeCard(task: SprintBoardTask, keyboard: boolean): Promise<void> {
+    if (workspace === null || !canWrite) return;
+    const workspaceId = workspace.id;
+    const reload = async (): Promise<void> => {
+      try {
+        await invalidate('app:sprint-board');
+      } finally {
+        local = null;
+      }
+    };
+    await removeFromList({
+      slug,
+      workspaceId,
+      taskId: task.id,
+      title: task.title,
+      keyboard,
+      reload,
+      onstale: () => void invalidate('app:workspace'),
+      // 取り消したカードの題のリンクへ（ボードに無ければ見出しへ）。押したボタンにフォーカスがあったときだけ移す
+      onrestored: async (restoredId, focus) => {
+        await reload();
+        await tick();
+        if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
+      },
+      onskipped: (near) => void tick().then(() => focusFirstTaskRow([near?.next ?? null, near?.prev ?? null])),
+    });
+  }
+
   // 戻す。戻せたら true。followed が真のとき（ドラッグで別の列へ落とすとき）は、通ってもトーストを出さず、読み直さず、
   // フォーカスも動かさない（続けて task-column-move を送り、列が空になった後で画面が読み直し、位置を読み上げる）。断られたときの扱いは同じ
   async function reopen(task: SprintBoardTask, followed = false): Promise<boolean> {
@@ -690,6 +722,7 @@
                 onmove={moveCard}
                 oncomplete={(target) => void complete(target)}
                 onreopen={(target) => void reopen(target)}
+                ondelete={canWrite ? (target, keyboard) => void removeCard(target, keyboard) : undefined}
               />
             {:else}
               <p class="board-empty">{t('sprintBoardColumnEmpty')}</p>

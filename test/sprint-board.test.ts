@@ -504,6 +504,42 @@ describe('sprint-board', () => {
     ]);
   });
 
+  test('can_delete は task-detail と同じ判定。作った人とリーダー（管理者を含む）だけが真で、取り込んだカードは偽。完了したカードも同じ', async () => {
+    const { target, board } = await setup();
+    const sprint = await activeSprintWith(target);
+    const mine = await card(target, sprint.id, board.first.id, 'a0', { title: '自分の札' });
+    const others = await card(target, sprint.id, board.first.id, 'a1', {
+      title: '管理者の札',
+      created_by: target.admin.userId!,
+    });
+    const imported = await card(target, sprint.id, board.first.id, 'a2', { title: '取り込んだ札', is_imported: 1 });
+    const done = await card(target, sprint.id, board.first.id, 'a3', {
+      title: '終えた札',
+      completed_at: '2026-10-20T00:00:00.000Z',
+    });
+
+    const canDeleteBy = async (person: Person) => {
+      const body = (await (await call(target, sprintBoard, {}, person)).json()) as {
+        columns: { tasks: { id: string; can_delete: boolean }[] }[];
+      };
+      return Object.fromEntries(body.columns.flatMap((column) => column.tasks).map((row) => [row.id, row.can_delete]));
+    };
+    expect(await canDeleteBy(target.member)).toEqual({
+      [mine.id]: true,
+      [others.id]: false,
+      [imported.id]: false,
+      [done.id]: true,
+    });
+    for (const person of [target.leader, target.admin]) {
+      expect(await canDeleteBy(person)).toEqual({
+        [mine.id]: true,
+        [others.id]: true,
+        [imported.id]: false,
+        [done.id]: true,
+      });
+    }
+  });
+
   test('task-complete で完了にしたカードは完了の列に出る', async () => {
     const { target, board } = await setup();
     const sprint = await activeSprintWith(target);

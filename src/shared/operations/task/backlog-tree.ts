@@ -25,6 +25,8 @@ export const backlogTaskSchema = z.object({
   // 決まった欄が未記入か。完了していないタスクで、削除していない欄に値の行が無いものがあるとき真（行は完了していないタスクだけなので、
   // 欄が1つも無いワークスペースでは常に偽）
   unfilled: z.boolean(),
+  // 削除できるか（task-detail の can_delete と同じ判定。作った人とリーダー（管理者を含む）で、取り込んだタスクは偽）
+  can_delete: z.boolean(),
 });
 
 export type BacklogTask = z.output<typeof backlogTaskSchema>;
