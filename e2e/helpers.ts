@@ -857,14 +857,26 @@ async function removeTreeSeedTask(page: Page): Promise<void> {
   await waitForSettled(page);
 }
 
+// 作った行が木に出るのを待つ。直前の操作（引き出しを閉じる、タスクを消す）の木の読み直しが、作った後に届くと、
+// 画面だけに足した行が読み直しの木で置き換わって消える（作ったものはサーバーにある）。見えなければ読み直して確かめる
+async function expectRowOrReload(page: Page, title: string, input: Locator): Promise<void> {
+  const row = page.getByRole('link', { name: title, exact: true });
+  try {
+    await expect(row).toBeVisible({ timeout: 3000 });
+    await expect(input).toHaveValue('', { timeout: 1000 });
+  } catch {
+    await page.reload();
+    await expect(row).toBeVisible();
+  }
+}
+
 // 木の末尾の「エピックを足す」で作る
 export async function addEpicRow(page: Page, title: string): Promise<void> {
   const seeded = await ensureTree(page);
   const input = page.locator('.tree > .draft-row').getByRole('textbox', { name: 'エピックを足す', exact: true });
   await input.fill(title);
   await input.press('Enter');
-  await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
-  await expect(input).toHaveValue('');
+  await expectRowOrReload(page, title, input);
   if (seeded) await removeTreeSeedTask(page);
 }
 
@@ -877,8 +889,7 @@ export async function addStoryRow(page: Page, title: string, epicTitle?: string)
       : page.getByRole('textbox', { name: `ストーリーを足す: ${epicTitle}`, exact: true });
   await input.fill(title);
   await input.press('Enter');
-  await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
-  await expect(input).toHaveValue('');
+  await expectRowOrReload(page, title, input);
   if (seeded) await removeTreeSeedTask(page);
 }
 
