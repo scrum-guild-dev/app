@@ -77,11 +77,11 @@ test('行のチップの選択の窓（リポジトリのメニューと期日�
   await row.getByRole('button', { name: /^リポジトリ:/ }).click();
   await expect(page.getByRole('menu', { name: 'リポジトリを選ぶ' })).toBeVisible();
   await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
-  await expectNoA11yViolationsInThemes(page, 'attr-chip-menu');
+  await expectNoA11yViolationsInThemes(page, 'backlog-attr-menu');
   await page.keyboard.press('Escape');
   await row.getByRole('button', { name: /^期日:/ }).click();
   await expect(page.getByRole('group', { name: '期日を選ぶ' }).getByLabel('期日')).toBeVisible();
-  await expectNoA11yViolationsInThemes(page, 'attr-chip-due-panel');
+  await expectNoA11yViolationsInThemes(page, 'backlog-attr-due-panel');
 });
 
 test('スプリントに入れるダイアログ（SprintTaskPicker）を開いた状態に axe の違反が無い', async ({ page }) => {

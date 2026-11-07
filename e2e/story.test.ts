@@ -312,9 +312,7 @@ test('期日の印: 過ぎた（赤）、今日と今週（橙）、それ以外
   await expect(page.locator('.chip.is-danger')).toHaveCount(0);
 });
 
-test('完了したストーリーには「タスクを足す」の空の行を出さず、期日の印の色も付けない', async ({
-  page,
-}) => {
+test('完了したストーリーには「タスクを足す」の空の行を出さず、期日の印の色も付けない', async ({ page }) => {
   await rewriteOperation(page, backlogTree, { slug: 'aoba' }, (output) => ({
     ...output,
     today: '2026-10-20',
@@ -333,7 +331,6 @@ test('完了したストーリーには「タスクを足す」の空の行を�
   await expect(
     storyGroup(page, '問い合わせの一次回答を早くする').getByRole('textbox', { name: /タスクを足す/ }),
   ).toBeVisible();
-
 });
 
 test('seed の社内ツール: ストーリーの行の合計と畳んだ件数が出る', async ({ page }) => {

@@ -2,11 +2,19 @@
 // 一本道: タスクを作る → ポイントのチップで値を選ぶ → 担当のチップで人を選ぶ（アバターと名前が出る）→ キーボードだけで開いて選び、Esc でチップへ戻る
 // 親の集計: ストーリーの下のタスクのポイントを選ぶと、親の合計に出る。断られたら理由を出して元の値に戻し、完了にした行のチップは押せず理由が読める。
 // 最後に、選択の窓を開いた状態を4つの見た目で axe にかける。
-import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { taskDetail } from '../src/shared/operations/task/task-detail.ts';
 import { taskUpdate } from '../src/shared/operations/task/task-update.ts';
-import { addStoryRow, addTaskRow, createWorkspace, expectNoA11yViolationsInThemes, signIn, waitForResponses, waitForSettled, watchViolations } from './helpers.ts';
+import {
+  addStoryRow,
+  addTaskRow,
+  createWorkspace,
+  expectNoA11yViolationsInThemes,
+  signIn,
+  waitForResponses,
+  waitForSettled,
+  watchViolations,
+} from './helpers.ts';
 import { failOperation } from './operations.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {

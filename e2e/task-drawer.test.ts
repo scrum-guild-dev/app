@@ -13,7 +13,17 @@ import { taskHistory } from '../src/shared/operations/task/task-history.ts';
 import { taskUpdate } from '../src/shared/operations/task/task-update.ts';
 import { memberList } from '../src/shared/operations/workspace/member-list.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
-import { addTaskRow, createWorkspace, expectFocusReturned, expectModalFocus, settledScrollY, signIn, waitForResponses, waitForSettled, watchViolations } from './helpers.ts';
+import {
+  addTaskRow,
+  createWorkspace,
+  expectFocusReturned,
+  expectModalFocus,
+  settledScrollY,
+  signIn,
+  waitForResponses,
+  waitForSettled,
+  watchViolations,
+} from './helpers.ts';
 import { failOperation, mockOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 // 組織の中の操作の slug。このファイルはあおば開発だけを使う

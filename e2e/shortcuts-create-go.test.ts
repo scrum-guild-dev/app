@@ -3,20 +3,16 @@
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
 
-// 何も無いバックログには木が出ない（空の行は木の末尾にある）。最初の1件を「起票」で作ると木が出る
+// 木にタスクが1件ある状態にする（最初の1件は木の末尾の空の行で作る）
 async function createWorkspaceWithTree(page: Page, name: string): Promise<void> {
   await createWorkspace(page, name);
-  await page.getByRole('button', { name: '起票', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '起票', exact: true });
-  await dialog.getByLabel('タイトル').fill('最初のタスク');
-  await dialog.getByRole('button', { name: '起票', exact: true }).click();
-  await expect(dialog).toBeHidden();
+  await addTaskRow(page, '最初のタスク');
 }
 
 // 木の末尾の、親なしのタスクの空の行
