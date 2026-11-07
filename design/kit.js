@@ -778,7 +778,7 @@
         blocked: finished,
         ...(opts.storyOpts ? opts.storyOpts(s, i) : {}),
         ...(opts.order ? { order: { first: i === 0, last: i === stories.length - 1, parent: true } } : {}) })).join("")}
-        ${stories.length ? "" : `<p class="tree-folded"${dropAttr(opts.tailMark || {})}>${t("story")}はまだありません</p>`}</div>
+        ${stories.length ? "" : `<p class="tree-folded"${dropAttr(opts.tailMark || {})}>${t("story")}はまだありません</p>`}${opts.draft && !finished ? draftRow("new-story", eid, `${t("story")}を足す: ${e.title}`) : ""}</div>
     </div>`;
   }
 
@@ -1681,6 +1681,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const title = input.value.trim();
     if (!title) return;
     const [kind, key] = input.dataset.draft.split(":");
+    // エピックとストーリーの空の行。見本は木を組み替えず、足したことだけ知らせて、同じ欄に戻る
+    if (kind === "new-epic" || kind === "new-story") {
+      input.value = "";
+      input.focus();
+      toast(`${icon("check")}${t(kind === "new-epic" ? "epic" : "story")}を足しました: ${esc(title)}`);
+      return;
+    }
     const x = { id: `n${++draftSeq}`, ws: "wa", title, story: kind === "story" ? key : null, sprint: kind === "col" ? "sp14" : null, col: kind === "col" ? key : null, who: null, pts: null, creator: D.me, unfilled: true };
     D.tasks.push(x);
     redrawAll();

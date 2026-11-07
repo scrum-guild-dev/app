@@ -621,6 +621,14 @@ export const dictionary = defineDictionary({
   epicCreateSubmit: '作る',
   epicCreating: '作っています',
   epicCreateFailed: '作れませんでした。もう一度試してください。',
+  // 木の空の行（題を打って Enter で作る）
+  treeAddEpic: '{epic}を足す',
+  treeAddStory: '{story}を足す',
+  treeAddStoryUnder: '{story}を足す: {title}',
+  draftPlaceholder: '{label}（題を打って Enter）',
+  treeAddSending: '作っています',
+  // 親の{epic}が完了か中止になっていた（読み直して、空の行を消す）
+  treeAddParentDone: 'この{epic}は{done}か中止したので、{story}を足せません。一覧を読み直します',
   epicSave: '保存する',
   epicSaving: '保存しています',
   epicSaveFailed: '保存できませんでした。もう一度試してください。',

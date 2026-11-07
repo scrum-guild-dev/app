@@ -409,7 +409,7 @@ test('seed の社内ツール: ストーリーの行の合計と畳んだ件数�
   await expect(storyGroup(page, '有給の残日数を自分で確かめられる').getByText('タスクはまだありません')).toBeVisible();
   // ストーリーの段が先で、親のないタスクは後
   const order = await page
-    .locator('.tree > .tree-group, .tree > div')
+    .locator('.tree > .tree-group, .tree > div:not(.draft-row)')
     .evaluateAll((nodes) => nodes.map((node) => node.className));
   expect(order).toEqual(['tree-group', 'tree-group', '']);
 });

@@ -16,6 +16,7 @@
   import TeamExperience from '../../../../lib/components/TeamExperience.svelte';
   import TaskCreateDialog from '../../../../lib/components/TaskCreateDialog.svelte';
   import TaskEntry from '../../../../lib/components/TaskEntry.svelte';
+  import DraftRow from '../../../../lib/components/DraftRow.svelte';
   import TreeEpic from '../../../../lib/components/TreeEpic.svelte';
   import TreeStory from '../../../../lib/components/TreeStory.svelte';
   import { callOperation, type ApiResult } from '../../../../lib/api.ts';
@@ -35,8 +36,10 @@
   import { completedMessage } from '../../../../lib/sprint-label.ts';
   import { showToast } from '../../../../lib/toast.svelte.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
-  import { epicMove } from '../../../../shared/operations/epic/index.ts';
-  import { storyComplete, storyMove, storyReopen } from '../../../../shared/operations/story/index.ts';
+  import { epicCreate, epicMove } from '../../../../shared/operations/epic/index.ts';
+  import { epicTitleProblem } from '../../../../shared/epic.ts';
+  import { storyTitleProblem } from '../../../../shared/story.ts';
+  import { storyComplete, storyCreate, storyMove, storyReopen } from '../../../../shared/operations/story/index.ts';
   import { storyCompletionConflictReasonOf } from '../../../../shared/operations/story/story-complete.ts';
   import type { BacklogEpic, BacklogStory, BacklogTask } from '../../../../shared/operations/task/backlog-tree.ts';
   import { taskComplete, taskMove } from '../../../../shared/operations/task/index.ts';
@@ -67,7 +70,7 @@
   // 起票したタスクは、読み直さずに親の配下（親なしなら一覧の末尾）に足し、親の「全体」のポイントにも足す。親の行が畳まれていれば開く。
   // 足した行は、読み直した木に入るか、作った後に始まった読み直しの木に無い（別の人の削除など）と外す。
   // ただし絞っているときは、末尾に足さずに木を読み直す（上の帯の段落）。
-  // エピックとストーリーを作った、直したときは、木を読み直す。
+  // ダイアログでエピックとストーリーを作った、直したときは、木を読み直す（空の行で作ったときは、読み直さずに木へ足す）。
   // 完了の操作を送っている最中の行（pendingIds、storyPending）は、読み直しでは捨てず、応答が来たら外す。
   // 見出しの下に、ワークスペースの完成の定義（枠の値。空なら出さない）を畳んで1つだけ置く
   let { data }: PageProps = $props();
@@ -117,6 +120,9 @@
       loaded.tasks.some((task) => task.id === id) || stories.some((story) => story.tasks.some((row) => row.id === id))
     );
   }
+  // 空の行で作ったエピックとストーリー。読み直さずに木へ足し、読み直した木に入ったら捨てる（タスクの added と同じ考え方）
+  let addedEpics = $state<{ epic: BacklogEpic; at: number }[]>([]);
+  let addedStories = $state<{ story: BacklogStory; epicId: string | null; at: number }[]>([]);
   let completedIds = $state<string[]>([]);
   let pendingIds = $state<string[]>([]);
   // 完了か取り消しを送っている最中のストーリーと、送っている操作
@@ -163,6 +169,21 @@
             }),
           )
         : [];
+    const keepRow = (at: number, inLoaded: boolean) =>
+      sameWorkspace &&
+      !filtering &&
+      keepAddedRow({ at }, { inLoadedTree: inLoaded, completed: false, treeLoaded: loaded !== null, loadedAt });
+    addedEpics = untrack(() => addedEpics).filter((entry) =>
+      keepRow(entry.at, loaded?.epics.some((epic) => epic.id === entry.epic.id) ?? false),
+    );
+    addedStories = untrack(() => addedStories).filter((entry) =>
+      keepRow(
+        entry.at,
+        [...(loaded?.epics.flatMap((epic) => epic.stories) ?? []), ...(loaded?.stories ?? [])].some(
+          (story) => story.id === entry.story.id,
+        ),
+      ),
+    );
     completedIds = [];
     movedParents = {};
     taskOrders = {};
@@ -216,12 +237,18 @@
   }
 
   // エピックは、画面で並べ替えた並びがあればそれに従う
-  const epics = $derived(epicOrder === null ? (tree?.epics ?? []) : sortedBy(tree?.epics ?? [], epicOrder));
+  // 空の行で足したエピックは、読み直した木に入るまで末尾に置く
+  const treeEpics = $derived([
+    ...(tree?.epics ?? []),
+    ...addedEpics.filter((entry) => !(tree?.epics ?? []).some((epic) => epic.id === entry.epic.id)).map((e) => e.epic),
+  ]);
+  const epics = $derived(epicOrder === null ? treeEpics : sortedBy(treeEpics, epicOrder));
   const epicIds = $derived(epics.map((epic) => epic.id));
   // 読み直した木のストーリー（エピックの下のものと親のないもの）と、その親
   const loadedStories = $derived([
     ...epics.flatMap((epic) => epic.stories.map((story) => ({ row: story, parentId: epic.id as string | null }))),
     ...(tree?.stories ?? []).map((story) => ({ row: story, parentId: null })),
+    ...addedStories.map((entry) => ({ row: entry.story, parentId: entry.epicId })),
   ]);
   const storyLists = $derived(grouped(loadedStories, movedStoryParents, storyOrders));
   const storyPlaces = $derived(placesOf(storyLists));
@@ -581,6 +608,131 @@
     if (createdId === null || !wasFiltering) return;
     const message = kind === 'story' ? t('storyCreated', { story: t('story') }) : t('epicCreated', { epic: t('epic') });
     await revealOrNotice(kind, createdId, message);
+  }
+
+  // 空の行の題の検査（画面の検査は API の検証と同じ判定。空は送らないので required は出ない）
+  function rowTitleProblem(kind: 'epic' | 'story', title: string): string | null {
+    const problem = kind === 'epic' ? epicTitleProblem(title) : storyTitleProblem(title);
+    if (problem === null) return null;
+    const key = kind === 'epic' ? 'epic' : 'story';
+    if (problem === 'too_long') return t(`${key}TitleTooLong`, { max: 200 });
+    if (problem === 'invalid_character') return t(`${key}TitleInvalidCharacter`);
+    return t(`${key}TitleRequired`);
+  }
+
+  // 空の行でエピックを作る。作れたら読み直さずに木の末尾へ足す。絞っているときは木を読み直し、作ったものを知らせる。
+  // 返すのは、空の行に出すエラーの文（成功は null）
+  async function addEpicRow(title: string): Promise<string | null> {
+    if (workspace === null) return t('epicCreateFailed');
+    const sentFor = page.params.id;
+    const result = await callOperation(
+      epicCreate,
+      { workspace_id: workspace.id, title },
+      { slug: page.params.slug ?? '' },
+    );
+    // 送っている間に別のワークスペースへ移っていたら、成功も失敗も、古い応答で状態を触らない
+    if (sentFor !== page.params.id) return null;
+    if (!result.ok) {
+      if (result.status === 401) {
+        await invalidateAll();
+        return t('epicCreateFailed');
+      }
+      if (result.status === 409 && result.error?.code === 'workspace_closed') {
+        void invalidateAll();
+        return t('workspaceClosedReadOnly', { workspace: t('workspace') });
+      }
+      return t('epicCreateFailed');
+    }
+    const made = result.data.epic;
+    if (filtering) {
+      await saved('epic', made.id);
+      return null;
+    }
+    addedEpics = [
+      ...addedEpics,
+      {
+        epic: {
+          id: made.id,
+          title: made.title,
+          due_on: made.due_on,
+          link_url: made.link_url,
+          completed_at: null,
+          canceled_at: null,
+          category: null,
+          stories: [],
+          points_done: 0,
+          points_all: 0,
+        },
+        at: performance.now(),
+      },
+    ];
+    showToast(t('epicCreated', { epic: t('epic') }), 'check');
+    return null;
+  }
+
+  // 空の行でストーリーを作る。epicId が null なら親のないストーリー。作れたら読み直さずに配下の末尾へ足す
+  async function addStoryRow(epicId: string | null, title: string): Promise<string | null> {
+    if (workspace === null) return t('storyCreateFailed');
+    const sentFor = page.params.id;
+    const result = await callOperation(
+      storyCreate,
+      { workspace_id: workspace.id, title, epic_id: epicId },
+      { slug: page.params.slug ?? '' },
+    );
+    // 送っている間に別のワークスペースへ移っていたら、成功も失敗も、古い応答で状態を触らない
+    if (sentFor !== page.params.id) return null;
+    if (!result.ok) {
+      if (result.status === 401) {
+        await invalidateAll();
+        return t('storyCreateFailed');
+      }
+      if (result.status === 409 && result.error?.code === 'workspace_closed') {
+        void invalidateAll();
+        return t('workspaceClosedReadOnly', { workspace: t('workspace') });
+      }
+      if (epicId !== null && result.status === 409 && result.error?.code === 'conflict') {
+        // 親のエピックが完了か中止した。木を読み直すと空の行ごと消えるので、知らせはトーストに出し、フォーカスは見出しへ移す
+        const message = t('treeAddParentDone', { epic: t('epic'), done: t('done'), story: t('story') });
+        showToast(message, 'alert');
+        await rowGone();
+        return message;
+      }
+      if (epicId !== null && result.status === 404) {
+        const message = t('epicGone', { epic: t('epic') });
+        showToast(message, 'alert');
+        await rowGone();
+        return message;
+      }
+      return t('storyCreateFailed');
+    }
+    const made = result.data.story;
+    if (filtering) {
+      await saved('story', made.id);
+      return null;
+    }
+    addedStories = [
+      ...addedStories,
+      {
+        story: {
+          id: made.id,
+          title: made.title,
+          due_on: made.due_on,
+          link_url: made.link_url,
+          category: made.category === null ? null : { id: made.category.id, name: made.category.name },
+          completed_at: null,
+          tasks: [],
+          completed_task_count: 0,
+          open_task_count: 0,
+          points_done: 0,
+          points_all: 0,
+        },
+        epicId,
+        at: performance.now(),
+      },
+    ];
+    if (epicId !== null) epicRows[epicId]?.expand();
+    showToast(t('storyCreated', { story: t('story') }), 'check');
+    return null;
   }
 
   // 直す対象のストーリーかエピックが消えていた。木を読み直し、フォーカスを見出しへ移す（ダイアログが閉じて、戻る先が無いため）
@@ -1119,6 +1271,16 @@
           {#each epicStories(epic) as story (story.id)}
             {@render storyRow(story)}
           {/each}
+          {#snippet addRow()}
+            {#if canWrite}
+              <DraftRow
+                label={t('treeAddStory', { story: t('story') })}
+                name={t('treeAddStoryUnder', { title: epic.title, story: t('story') })}
+                problem={(title) => rowTitleProblem('story', title)}
+                create={(title) => addStoryRow(epic.id, title)}
+              />
+            {/if}
+          {/snippet}
         </TreeEpic>
       {/each}
       {#each rootStoryList as story (story.id)}
@@ -1158,6 +1320,19 @@
         </div>
       {:else if rowDnd?.item?.kind === 'task'}
         {@render dropSlot(taskSlot, t('dropSlotTask', { task: t('task') }))}
+      {/if}
+      <!-- 木の末尾の空の行。エピックは最上段に、親のないストーリーは親なしで作る（エピックの下は、各エピックの末尾の行） -->
+      {#if canWrite}
+        <DraftRow
+          label={t('treeAddEpic', { epic: t('epic') })}
+          problem={(title) => rowTitleProblem('epic', title)}
+          create={addEpicRow}
+        />
+        <DraftRow
+          label={t('treeAddStory', { story: t('story') })}
+          problem={(title) => rowTitleProblem('story', title)}
+          create={(title) => addStoryRow(null, title)}
+        />
       {/if}
     </div>
   {/snippet}

@@ -1672,7 +1672,10 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .draft-row .input { flex: 1 1 auto; min-width: 0; border-style: dashed; }
 .draft-row .input:focus { border-style: solid; }
 .tree-children .draft-row { padding-left: var(--space-10); }
-@media (max-width: 760px) { .tree-children .draft-row { padding-left: var(--space-4); } }
+/* 空の行の失敗の文。行の下に出し、字下げは行と揃える */
+.draft-error { margin: 0; padding: 0 var(--space-3) var(--space-2) calc(var(--space-3) + 20px + var(--space-2)); }
+.tree-children .draft-error { padding-left: calc(var(--space-10) + 20px + var(--space-2)); }
+@media (max-width: 760px) { .tree-children .draft-row { padding-left: var(--space-4); } .tree-children .draft-error { padding-left: calc(var(--space-4) + 20px + var(--space-2)); } }
 .entry-today { display: inline-flex; align-items: center; gap: var(--space-1); }
 .board-col > .draft-row { padding: var(--space-2) 0 0; border-top: 0; }
 /* 属性のチップ（.chip-btn）。押すと値を選ぶ。未設定（.is-unset）は薄い破線の形で、値があれば .chip と同じ */

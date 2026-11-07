@@ -5,11 +5,12 @@ import { describe, expect, test } from 'vitest';
 import { storyCreate, storyGet, storyUpdate } from '../src/shared/operations/story/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb, verifyWorkspace } from '../src/server/db/index.ts';
+import { envWithD1Hooks } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { storyUpdateOperation } from '../src/server/operations/story.ts';
-import { createStory } from './factories.ts';
+import { createCategory, createEpic, createStory } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
-import { createTarget, type Person, type Target } from './operations/world.ts';
+import { createTarget, testEnv, type Person, type Target } from './operations/world.ts';
 
 const app = createApp(implementedOperations);
 
@@ -21,6 +22,7 @@ type StoryBody = {
     body_md: string | null;
     due_on: string | null;
     link_url: string | null;
+    epic_id: string | null;
   };
 };
 
@@ -51,6 +53,14 @@ async function rowOf(target: Target, storyId: string) {
       q.selectFrom('stories').selectAll().where('id', '=', storyId).where('workspace_id', '=', target.workspace.id),
     ),
   );
+}
+
+async function storyCount(target: Target): Promise<number> {
+  const db = orgDb(env, target.organization.verified);
+  const rows = await db.rows(
+    db.statement((q) => q.selectFrom('stories').select('id').where('workspace_id', '=', target.workspace.id)),
+  );
+  return rows.length;
 }
 
 async function logsOf(target: Target, storyId: string) {
@@ -179,6 +189,135 @@ describe('story-create', () => {
       link_url: `https://example.com/${'a'.repeat(2048 - 'https://example.com/'.length)}`,
     });
     expect(res.status).toBe(200);
+  });
+
+  test('親のエピックを指すと、そのエピックの配下の末尾に置き、親のないストーリーの並びには混ぜない', async () => {
+    const target = await createTarget();
+    const adminId = target.admin.userId!;
+    const epic = await createEpic(target.organization, target.workspace.id, adminId);
+    const other = await createEpic(target.organization, target.workspace.id, adminId, { position: 'a1' });
+    const rootBefore = await create(target, { title: '親なし' });
+    const rootId = ((await rootBefore.json()) as StoryBody).story.id;
+
+    const first = await create(target, { title: '一つ目', epic_id: epic.id });
+    expect(first.status).toBe(200);
+    const firstStory = ((await first.json()) as StoryBody).story;
+    expect(firstStory.epic_id).toBe(epic.id);
+    const second = ((await (await create(target, { title: '二つ目', epic_id: epic.id })).json()) as StoryBody).story;
+    const inOther = ((await (await create(target, { title: '別のエピック', epic_id: other.id })).json()) as StoryBody)
+      .story;
+
+    const a = (await rowOf(target, firstStory.id))!;
+    const b = (await rowOf(target, second.id))!;
+    const c = (await rowOf(target, inOther.id))!;
+    expect(a.epic_id).toBe(epic.id);
+    expect(b.epic_id).toBe(epic.id);
+    expect(b.position > a.position).toBe(true);
+    expect(c.epic_id).toBe(other.id);
+    // 親のないストーリーの末尾は、エピックの下に作っても動かない
+    const root = (await rowOf(target, rootId))!;
+    const next = ((await (await create(target, { title: '親なし二つ目' })).json()) as StoryBody).story;
+    expect((await rowOf(target, next.id))!.position > root.position).toBe(true);
+    expect(JSON.parse((await logsOf(target, firstStory.id))[0]!.changes_json)).toEqual({
+      title: [null, '一つ目'],
+      epic: [null, { id: epic.id, title: epic.title }],
+    });
+  });
+
+  test('エピックの下に作ると、エピックの区分を引き継いで返す', async () => {
+    const target = await createTarget();
+    const adminId = target.admin.userId!;
+    const category = await createCategory(target.organization, target.workspace.id);
+    const epic = await createEpic(target.organization, target.workspace.id, adminId, { category_id: category.id });
+    const res = await create(target, { title: '引き継ぐ', epic_id: epic.id });
+    expect(res.status).toBe(200);
+    const { story } = (await res.json()) as StoryBody & {
+      story: { category: { id: string; inherited: boolean } | null };
+    };
+    expect(story.category).toMatchObject({ id: category.id, inherited: true });
+    expect((await rowOf(target, story.id))!.category_id).toBeNull();
+  });
+
+  test('エピックと区分を一緒に送ると 409 の conflict（has_parent）で、何も書かない', async () => {
+    const target = await createTarget();
+    const category = await createCategory(target.organization, target.workspace.id);
+    const epic = await createEpic(target.organization, target.workspace.id, target.admin.userId!);
+    const res = await create(target, { title: 'x', epic_id: epic.id, category_id: category.id });
+    expect(res.status).toBe(409);
+    expect(await errorCodeOf(res)).toBe('conflict');
+    expect(await storyCount(target)).toBe(0);
+  });
+
+  test.each([
+    ['完了した', { completed_at: '2026-10-21T00:00:00.000Z' }],
+    ['中止した', { canceled_at: '2026-10-21T00:00:00.000Z' }],
+  ])('%sエピックの下には 409 の conflict（parent_completed）で作らない', async (_name, overrides) => {
+    const target = await createTarget();
+    const epic = await createEpic(target.organization, target.workspace.id, target.admin.userId!, overrides);
+    const res = await create(target, { title: 'x', epic_id: epic.id });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: { code: string; details?: { reason?: string } } };
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.details?.reason).toBe('parent_completed');
+    expect(await storyCount(target)).toBe(0);
+  });
+
+  test.each([
+    ['クリア', { completed_at: '2026-10-21T00:00:00.000Z' }, 409],
+    ['中止', { canceled_at: '2026-10-21T00:00:00.000Z' }, 409],
+    ['削除', { deleted_at: '2026-10-21T00:00:00.000Z' }, 404],
+  ])(
+    '読んでから書くまでに親のエピックが%sされたら、何も書かず、読み直して %d を返す',
+    async (_name, change, status) => {
+      const target = await createTarget();
+      const epic = await createEpic(target.organization, target.workspace.id, target.admin.userId!);
+      let done = false;
+      const requestEnv = envWithD1Hooks(testEnv, {
+        afterQuery: async (sql) => {
+          // 親のエピックを読んだ直後に、別の要求がクリアか削除を通す
+          if (done || !sql.startsWith('select "epics"."id", "epics"."title"')) return;
+          done = true;
+          const db = orgDb(env, target.organization.verified);
+          await db.batch([db.statement((q) => q.updateTable('epics').set(change).where('id', '=', epic.id))]);
+        },
+      });
+      const res = await post(app, storyCreate, {
+        slug: target.slug,
+        token: target.member.token,
+        body: { workspace_id: target.workspace.id, title: 'x', epic_id: epic.id },
+        env: requestEnv,
+      });
+      expect(done).toBe(true);
+      expect(res.status).toBe(status);
+      expect(await storyCount(target)).toBe(0);
+    },
+  );
+
+  test('閉じたワークスペースでは、完了したエピックを指しても 409 の workspace_closed で断る', async () => {
+    const target = await createTarget({ closed: true });
+    const epic = await createEpic(target.organization, target.workspace.id, target.admin.userId!, {
+      completed_at: '2026-10-21T00:00:00.000Z',
+    });
+    const res = await create(target, { title: 'x', epic_id: epic.id }, target.admin);
+    expect(res.status).toBe(409);
+    expect(await errorCodeOf(res)).toBe('workspace_closed');
+  });
+
+  test('別の組織・別のワークスペース・削除済み・存在しないエピックは 404 で、何も書かない', async () => {
+    const target = await createTarget();
+    const foreign = await createTarget();
+    const foreignEpic = await createEpic(foreign.organization, foreign.workspace.id, foreign.admin.userId!);
+    const elsewhere = await createEpic(target.organization, target.otherWorkspace.id, target.admin.userId!);
+    const deleted = await createEpic(target.organization, target.workspace.id, target.admin.userId!, {
+      deleted_at: '2026-10-21T00:00:00.000Z',
+    });
+    for (const id of [foreignEpic.id, elsewhere.id, deleted.id, '019a0000-0000-7000-8000-00000000ffff']) {
+      const res = await create(target, { title: 'x', epic_id: id });
+      expect(res.status, id).toBe(404);
+      expect(await errorCodeOf(res)).toBe('not_found');
+    }
+    expect(await storyCount(target)).toBe(0);
+    expect(await storyCount(foreign)).toBe(0);
   });
 
   test('閉じたワークスペースでは 409 の workspace_closed で、何も書かない', async () => {
