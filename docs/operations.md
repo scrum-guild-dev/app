@@ -103,7 +103,7 @@ Workers Builds が使えるのは、Builds が自分で作ったトークンだ�
 
 ### シークレット
 
-Worker のシークレットは、ダッシュボードの Worker の Settings → Variables and Secrets か `wrangler secret put` で入れる。ダッシュボードでは Type を `Secret` にする。`Variable` で入れると、Workers Builds の次のデプロイで、`wrangler.jsonc` の `vars` に無い名前として消える。消えても `/api/health` は 200 のままで、運用者がいない状態になるか、GitHub のログインが「いまログインを受け付けられません」になるだけなので、気づいたら `Secret` として入れ直す。どちらで入れても、保存するとその場で新しい版が本番に出る。値は git に入れず、手元の開発用の値は、本体の作業コピーで `.dev.vars.example` を `.dev.vars` に写して入れる。ワークツリーの `.dev.vars` は本体へのリンクなので、そこで写すと本体の値を上書きする（`docs/development.md` の「ワークツリーで作業する」）。
+Worker のシークレットは、ダッシュボードの Worker の Settings → Variables and Secrets か `wrangler secret put` で入れる。ダッシュボードでは Type を `Secret` にする。`Variable` で入れると、Workers Builds の次のデプロイで、`wrangler.jsonc` の `vars` に無い名前として消える。消えても `/api/health` は 200 のままで、運用者がいない状態になるか、GitHub のログインが「いまログインを受け付けられません」になるか、接続の認証情報の保存と読み出しが止まるだけなので、気づいたら `Secret` として入れ直す。どちらで入れても、保存するとその場で新しい版が本番に出る。値は git に入れず、手元の開発用の値は、本体の作業コピーで `.dev.vars.example` を `.dev.vars` に写して入れる。ワークツリーの `.dev.vars` は本体へのリンクなので、そこで写すと本体の値を上書きする（`docs/development.md` の「ワークツリーで作業する」）。
 
 | 名前 | 中身 |
 | --- | --- |
@@ -112,6 +112,7 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 | `GITHUB_CLIENT_SECRET` | 同じ OAuth App のクライアントシークレット |
 | `GOOGLE_CLIENT_ID` | Google のログインの OAuth クライアントのクライアント ID（下の「Google の OAuth クライアント」） |
 | `GOOGLE_CLIENT_SECRET` | 同じ OAuth クライアントのクライアントシークレット |
+| `CONNECTION_CREDENTIAL_KEYS` | 接続の認証情報を暗号化する鍵（下の「接続の認証情報の鍵」） |
 
 `GITHUB_CLIENT_ID` と `GITHUB_CLIENT_SECRET` の決まり。
 
@@ -195,6 +196,22 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 - `sub` は数字だけの長い文字列で、数値として扱うと桁が落ちる。表示された文字列をそのまま、`google:` の後ろに入れる（例 `google:118234567890123456789`）
 - Step 2 の応答に出るトークンはコピーせず、jwt.io など別のサイトにも貼らない。調べ終えたら Playground のタブを閉じ、要らなければ Google アカウントの「サードパーティ製のアプリとサービス」から Playground への許可を外す
 - 断られたログインの `sub` をログや画面に出す機能は作らない。試した人全員の ID を扱うことになるため
+
+### 接続の認証情報の鍵
+
+接続の認証情報（GitHub の PAT、Backlog の API キー）は、AES-GCM（256ビット）で暗号化して DB に保存する（`src/server/crypto/credential.ts`）。鍵はシークレット `CONNECTION_CREDENTIAL_KEYS` に、版を付けた JSON を1行で入れる。
+
+```json
+{"1":"<base64 の32バイト>"}
+```
+
+- 版は 1 以上の整数（9桁まで。JSON のキーは文字列で書く。DB の `credential_key_version` は INTEGER）。暗号化には最大の版を使い、暗号文には使った版が付く。復号は暗号文の版の鍵を引くので、新旧の鍵を並べて置ける
+- 鍵は 32 バイトの乱数を base64 にしたもの。作り方は `openssl rand -base64 32`
+- 本番は `wrangler secret put CONNECTION_CREDENTIAL_KEYS`（か、ダッシュボードの Worker の Settings → Variables and Secrets で Type を `Secret`）で入れる。`/api/health` は鍵を見ないので確かめにならず、鍵が使えるかは接続の認証情報を保存して初めて分かる（保存の操作ができたら、入れた後に保存を試す。それまでは `openssl rand -base64 32` で作った値を JSON の `<base64>` に入れたかを目で確かめる）。開発用は `.dev.vars.example` の値を `.dev.vars` に写す。開発用の値を本番に使わない
+- 無いか形が違うと、認証情報の保存と読み出しは固定の文のエラーで止まる。鍵も平文も暗号文も、エラーにもログにも出さない
+- 暗号文は、`connection-credential:` に接続の ID を続けた文字列を認証データにするので、接続の ID を決めてから暗号化する。別の接続の行へ写しても復号できない
+- JSON に同じ版を2回書くと、後ろの鍵が黙って採られ、前の鍵で書いた暗号文が復号できなくなる。鍵を足すときは、必ず新しい版（今の最大より大きい整数）で足し、同じ版を書き換えない
+- 鍵は git、ログ、Issue、PR に書かない。失った鍵の暗号文は復号できないので、各自が認証情報を登録し直す。鍵の入れ替えの手順は、入れ替えの処理を作るときに「鍵の入れ替え」へ書く（未作成）
 
 ### ログインのレート制限が見る IP
 
@@ -553,7 +570,7 @@ Wiki の表を足した版以降は、コードを戻した場合も削除に使
 
 ## 鍵の入れ替え
 
-まだ書いていない。シークレットを持つ機能ができたら書く。
+鍵の入れ替えの手順は、暗号文を書き直す処理を作るときに書く。鍵そのものの入れ方は、上の「接続の認証情報の鍵」にある。
 
 ## 本番で壊れたとき
 
