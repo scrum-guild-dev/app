@@ -188,3 +188,39 @@ test('木にもとからあるタスク: 完了の応答より前に始まった
   await expect(row).toHaveCount(1);
   await expect(row.getByRole('img', { name: '木にもとからある行: 完了' })).toBeVisible();
 });
+
+test('絞り込み中に木にもとからあるタスクを完了にして、読み直しが遅れて届いても、完了の印を付けたまま行が残る', async ({
+  page,
+}) => {
+  await createWorkspace(page, '絞り込み中の遅れる読み直し');
+  await addTaskRow(page, '絞られる行');
+  // 木にもとからある行にしてから、題で絞る
+  await page.reload();
+  await page.goto(`${page.url().split('?')[0]}?q=${encodeURIComponent('絞られる')}`);
+  const row = page.locator('.entry', { hasText: '絞られる行' });
+  await expect(row).toHaveCount(1);
+
+  // ポイントの保存のあとの読み直し（木を読む要求）を、完了より前に出したまま止める
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let held = 0;
+  await page.route('**/api/aoba/backlog-tree', async (route) => {
+    if (held++ > 0) return route.continue();
+    await gate;
+    await route.fulfill({ response: await route.fetch() });
+  });
+  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
+  await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
+  await expect.poll(() => held).toBe(1);
+
+  await row.getByRole('button', { name: /完了にする/ }).click();
+  await expect(row.getByRole('img', { name: '絞られる行: 完了' })).toBeVisible();
+
+  // 同じ絞り込みのまま、完了の応答より前に始まった読み直しが遅れて届いても、印は付いたまま、行は一覧に残る
+  const delivered = page.waitForResponse((response) => response.url().endsWith('/api/aoba/backlog-tree'));
+  release();
+  await delivered;
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(row).toHaveCount(1);
+  await expect(row.getByRole('img', { name: '絞られる行: 完了' })).toBeVisible();
+});
