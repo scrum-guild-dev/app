@@ -20,6 +20,8 @@ async function createWorkspaceWithTree(page: Page, name: string): Promise<void> 
 }
 
 const help = (page: Page) => page.getByRole('dialog', { name: 'ショートカットの一覧' });
+const group = (page: Page, title: string) =>
+  help(page).locator('.shortcut-group', { has: page.getByRole('heading', { name: title, exact: true }) });
 const rowOf = (page: Page, name: string) =>
   help(page).locator('.shortcut-row', { has: page.getByText(name, { exact: true }) });
 
@@ -37,6 +39,13 @@ test('? で一覧が開き、この画面のキーを上に、どの画面でも
   await expect(groups).toHaveText(['この画面', 'どの画面でも']);
 
   // この画面（バックログ）: c。どの画面でも: 検索、g の移動（今いる画面のバックログは除く）、? 自身
+  await expect(group(page, 'この画面').locator('.shortcut-row dt')).toHaveText(['タスクを書く']);
+  await expect(group(page, 'どの画面でも').locator('.shortcut-row dt')).toHaveText([
+    '画面とタスクを探す',
+    'スプリントへ移る',
+    '今日やることへ移る',
+    'ショートカットの一覧',
+  ]);
   await expect(rowOf(page, 'タスクを書く').locator('kbd')).toHaveText('c');
   await expect(rowOf(page, '画面とタスクを探す').locator('kbd')).toHaveText(/^(⌘K|Ctrl K)$/);
   await expect(rowOf(page, 'スプリントへ移る').locator('kbd')).toHaveText('g s');
@@ -73,4 +82,23 @@ test('ダークのテーマと、狭い幅（390px）でも読め、横にはみ
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   expect(await sheet.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await expect(rowOf(page, 'スプリントへ移る').locator('kbd')).toBeVisible();
+});
+
+test('スプリントの画面でも開き、c を この画面 に、g b を どの画面でも に並べる。画面が替わったら閉じる', async ({
+  page,
+}) => {
+  await createWorkspaceWithTree(page, 'キーの一覧');
+  await page.keyboard.press('g');
+  await page.keyboard.press('s');
+  await expect(page.getByRole('heading', { level: 1, name: 'スプリント' })).toBeVisible();
+  await page.locator('body').click({ position: { x: 1, y: 1 } });
+  await page.keyboard.press('?');
+  await expect(help(page)).toBeVisible();
+  await expect(group(page, 'この画面').locator('.shortcut-row dt')).toHaveText(['タスクを書く']);
+  await expect(
+    group(page, 'どの画面でも').locator('.shortcut-row', { hasText: 'バックログへ移る' }).locator('kbd'),
+  ).toHaveText('g b');
+  await expect(group(page, 'どの画面でも').locator('.shortcut-row', { hasText: 'スプリントへ移る' })).toHaveCount(0);
+  await page.goBack();
+  await expect(help(page)).toBeHidden();
 });

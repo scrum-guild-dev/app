@@ -2181,15 +2181,15 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
        <div class="field"><span class="field-label">添付ファイル</span>${attachments("new", { button: true })}
          <span class="field-hint">保存せずに閉じると、上げたファイルは 1 日で消えます。</span></div>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("backlog")}の末尾に足しました">${t("create")}</button>`),
-    // 引き出しで書きかけの欄があるまま閉じる（か別のタスクへ移る）ときに、捨てるかを確かめる。安全な側（続ける）を主ボタンにする
-    // ショートカットの一覧（本番の ShortcutHelp）。? で開く。今の画面のキーを上に、どの画面でも効くキーをその下に並べる。足元の操作は無く、Esc か × で閉じる
+    // ショートカットの一覧（本番の ShortcutHelp）。? で開く。今の画面のキーを上に、どの画面でも効くキーをその下に並べる。足元の操作は無く、Esc、×、背景で閉じる。この見本はスプリントの画面で開いた形（今いる画面へ移る g s は出ない）。本番は登録の helpOrder の順（検索、画面を移るキー、?）に並べる
     shortcutHelp: () => {
       const group = (title, rows) => `<section class="shortcut-group"><h3 class="shortcut-group-title">${title}</h3><dl class="shortcut-list">${rows.map(([name, key]) => `<div class="shortcut-row"><dt>${name}</dt><dd><kbd class="kbd">${key}</kbd></dd></div>`).join("")}</dl></section>`;
       openDialog("ショートカットの一覧",
         group("この画面", [[`${t("task")}を書く`, "c"]]) +
-        group("どの画面でも", [["画面とタスクを探す", keyHints.mac ? "⌘K" : "Ctrl K"], [`${t("sprint")}へ移る`, "g s"], [`${t("backlog")}へ移る`, "g b"], ["ショートカットの一覧", "?"]]),
+        group("どの画面でも", [["画面とタスクを探す", keyHints.mac ? "⌘K" : "Ctrl K"], [`${t("backlog")}へ移る`, "g b"], ["今日やることへ移る", "g t"], ["ショートカットの一覧", "?"]]),
         "");
     },
+    // 引き出しで書きかけの欄があるまま閉じる（か別のタスクへ移る）ときに、捨てるかを確かめる。安全な側（続ける）を主ボタンにする
     discardDraft: () => {
       openDialog("書きかけを捨てますか",
         `<p>保存していない変更があります。捨てると元に戻せません。</p>`,

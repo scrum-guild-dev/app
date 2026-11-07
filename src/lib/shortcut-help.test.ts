@@ -33,6 +33,28 @@ describe('shortcutHelpGroups', () => {
     expect(groups.global).toEqual([]);
   });
 
+  test('組の中は helpOrder の小さい順で、同じ値は登録順', () => {
+    const groups = shortcutHelpGroups([
+      shortcut('help', { global: true, helpOrder: 9 }),
+      shortcut('go-backlog', { global: true, helpOrder: 2 }),
+      shortcut('go-sprint', { global: true, helpOrder: 2 }),
+      shortcut('search', { global: true, helpOrder: 1 }),
+    ]);
+    expect(groups.global.map((item) => item.id)).toEqual(['search', 'go-backlog', 'go-sprint', 'help']);
+  });
+
+  test('enabled が例外を投げても、その登録だけ出さずに続ける', () => {
+    const groups = shortcutHelpGroups([
+      shortcut('broken', {
+        enabled: () => {
+          throw new Error('部品が外れた');
+        },
+      }),
+      shortcut('fine'),
+    ]);
+    expect(groups.screen.map((item) => item.id)).toEqual(['fine']);
+  });
+
   test('同じ id は1回だけ出す', () => {
     const groups = shortcutHelpGroups([shortcut('a'), shortcut('a')]);
     expect(groups.screen).toHaveLength(1);

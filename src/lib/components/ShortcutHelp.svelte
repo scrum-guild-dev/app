@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { page } from '$app/state';
   import { hintText, isMacPlatform } from '../shortcut-keys.ts';
   import { shortcutHelpGroups } from '../shortcut-help.ts';
   import { shortcuts, useShortcut, type Shortcut } from '../shortcuts.svelte.ts';
@@ -14,11 +16,18 @@
   let groups = $state.raw<{ screen: Shortcut[]; global: Shortcut[] }>({ screen: [], global: [] });
   const mac = isMacPlatform();
 
+  // 開いている間に画面が替わったら（ブラウザの「戻る」など）閉じる。前の画面のキーを見せ続けない
+  $effect(() => {
+    void page.url.pathname;
+    untrack(() => (open = false));
+  });
+
   useShortcut(() => ({
     id: 'shortcut-help',
     keys: HELP_KEYS,
     label: () => t('shortcutHelp'),
     global: true,
+    helpOrder: 9,
     run: () => {
       groups = shortcutHelpGroups(shortcuts.items);
       open = true;
