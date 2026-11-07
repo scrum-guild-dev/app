@@ -9,6 +9,7 @@
   import DefinitionChip from './DefinitionChip.svelte';
   import DueChip from './DueChip.svelte';
   import Icon from './Icon.svelte';
+  import RowMenu, { type RowMenuItem } from './RowMenu.svelte';
 
   // kit.js の treeEpic（バックログの木のエピックの行と、配下）。行の組み方は TreeStory と同じで、開閉は左端の caret のボタンだけが受け持ち、
   // 題はエピックの画面へのリンク（今のワークスペースの下の epics/<ID>。ストーリーの題は、ダイアログを開くボタン）。開閉の状態は部品の中に持ち、expand() で開ける（ストーリーを移してきたときに開く）。
@@ -16,7 +17,7 @@
   // 完了（クリア）か中止したエピックには、その状態の印を添え、期日には色を付けない。
   // 配下のストーリーの行は children の snippet で描く（ストーリーの操作は画面の側が持つ）。empty が真なら「<ストーリー>はまだありません」を出す。
   // クリア、中止は、エピックの画面の続きの Issue（#65）で足す。
-  // onMove を渡すと（書き込めて、絞っていないとき）、行の右端に「上へ」「下へ」を出し、エピックの行の中で Alt と ↑ ↓ を押しても同じことをする
+  // onMove を渡すと（書き込めて、絞っていないとき）、行の右端の「⋯」のメニューに「上へ」「下へ」を出し、エピックの行の中で Alt と ↑ ↓ を押しても同じことをする
   // （TreeStory と同じ。キーは配下のストーリーとタスクの行には掛けない。端の向きは aria-disabled）。完了と中止したエピックも並べ替えられる。
   // onMove と dnd を渡すと、行の先頭にドラッグのつまみ（.grip。飾りで aria-hidden）を置く。つかむのはここだけ。
   // dnd を渡すと、行は、ストーリーを運ぶときの落とし先（囲み。離すと配下の末尾に入り、畳まれていれば開く）と、エピックを運ぶときの
@@ -66,6 +67,11 @@
     if (delta < 0 ? !canMoveUp : !canMoveDown) return;
     onMove?.(epic, delta);
   }
+
+  const menuItems = $derived<RowMenuItem[]>([
+    { key: 'up', label: t('moveUp'), icon: 'up' as const, disabled: !canMoveUp, onselect: () => move(-1) },
+    { key: 'down', label: t('moveDown'), icon: 'down' as const, disabled: !canMoveDown, onselect: () => move(1) },
+  ]);
 
   function keydown(event: KeyboardEvent): void {
     if (onMove === undefined || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -136,24 +142,7 @@
         >{t('treeRatio', { done: t('done'), value: pointsDone, all: pointsAll })}</span
       >
       {#if onMove !== undefined}
-        <span class="order-actions">
-          <button
-            class="icon-btn"
-            type="button"
-            aria-label={t('moveUpLabel', { title: epic.title })}
-            title={t('moveUp')}
-            aria-disabled={!canMoveUp}
-            onclick={() => move(-1)}><Icon name="up" /></button
-          >
-          <button
-            class="icon-btn"
-            type="button"
-            aria-label={t('moveDownLabel', { title: epic.title })}
-            title={t('moveDown')}
-            aria-disabled={!canMoveDown}
-            onclick={() => move(1)}><Icon name="down" /></button
-          >
-        </span>
+        <RowMenu title={epic.title} items={menuItems} />
       {/if}
     </span>
   </div>

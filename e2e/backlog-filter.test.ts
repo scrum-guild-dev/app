@@ -4,7 +4,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { taskMove } from '../src/shared/operations/task/task-move.ts';
-import { createWorkspace, signIn, waitForResponses, watchViolations } from './helpers.ts';
+import { chooseRowAction, createWorkspace, rowMenuItem, signIn, waitForResponses, watchViolations } from './helpers.ts';
 import { routeOperation } from './operations.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
@@ -86,7 +86,7 @@ test('担当、エピック、検索で絞り、URL に残る。絞っている�
     '議事録をまとめる',
   ]);
   await expect(bar.getByRole('button', { name: '絞り込みを外す' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '上へ: 請求書を出す' })).toBeVisible();
+  await expect(rowMenuItem(page, '請求書を出す', '上へ')).toHaveCount(1);
   await expect(page.locator('.entry .grip').first()).toBeVisible();
   await expect(page.locator('.drag-note')).toBeVisible();
 
@@ -100,9 +100,9 @@ test('担当、エピック、検索で絞り、URL に残る。絞っている�
   await expect(page.getByRole('link', { name: '会員ポイント制度を公開する', exact: true })).toHaveCount(0);
   // 親のない完了の折りたたみは出さない。並べ替えは出さず、外すと並べ替えられると案内する。親を移すは残す
   await expect(page.getByText('上にあるものほど優先します。絞り込みを外すと並べ替えられます。')).toBeVisible();
-  await expect(page.getByRole('button', { name: '上へ: ポイント表示の API を作る' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '下へ: ポイント表示の API を作る' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '親を移す: ポイント表示の API を作る' })).toBeVisible();
+  await expect(rowMenuItem(page, 'ポイント表示の API を作る', '上へ')).toHaveCount(0);
+  await expect(rowMenuItem(page, 'ポイント表示の API を作る', '下へ')).toHaveCount(0);
+  await expect(rowMenuItem(page, 'ポイント表示の API を作る', '親を移す')).toHaveCount(1);
   // ドラッグも隣を使う並べ替えなので、つまみとその案内も出さない
   await expect(page.locator('.grip')).toHaveCount(0);
   await expect(page.locator('.drag-note')).toHaveCount(0);
@@ -120,7 +120,7 @@ test('担当、エピック、検索で絞り、URL に残る。絞っている�
   await expect(page).toHaveURL(/\/w\/[0-9a-f-]{36}$/);
   await expect(taskTitles(page)).toHaveCount(4);
   await expect(bar.getByRole('searchbox', { name: 'タイトルで探す' })).toBeFocused();
-  await expect(page.getByRole('button', { name: '上へ: 請求書を出す' })).toBeVisible();
+  await expect(rowMenuItem(page, '請求書を出す', '上へ')).toHaveCount(1);
 
   // 検索は入力が止まってから読み直す。英字の大文字と小文字は区別しない
   const search = bar.getByRole('searchbox', { name: 'タイトルで探す' });
@@ -243,7 +243,7 @@ test('絞っているときに、木に出ていないストーリーへ親を�
   await expect(page.getByRole('button', { name: '配下の無い目標', exact: true })).toHaveCount(0);
 
   // 親の候補には、木に出ていないストーリーも出る
-  await page.getByRole('button', { name: '親を移す: 自分のタスク' }).click();
+  await chooseRowAction(page, '自分のタスク', '親を移す');
   const dialog = page.getByRole('dialog', { name: '「自分のタスク」の親を移す' });
   await dialog.getByLabel('移す先').selectOption({ label: '配下の無い目標' });
   // 移す要求を止めておき、通った後の読み直し（フォーカスを失っていれば見出しへ移す）より前の状態を確かめる
@@ -253,7 +253,7 @@ test('絞っているときに、木に出ていないストーリーへ親を�
     await held;
     await call.passThrough();
   });
-  const opener = page.getByRole('button', { name: '親を移す: 自分のタスク' });
+  const opener = rowMenuItem(page, '自分のタスク', '親を移す');
   await dialog.getByRole('button', { name: '移す' }).click();
   await expect(dialog).toBeHidden();
   // 移した行は、木に出ていないストーリーの下へ移るので、読み直すまで画面から消え、ダイアログを開いた「親を移す」も無くなる。

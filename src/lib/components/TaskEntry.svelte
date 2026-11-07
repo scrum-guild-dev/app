@@ -11,6 +11,7 @@
   import DefinitionChip from './DefinitionChip.svelte';
   import DueChip from './DueChip.svelte';
   import Icon from './Icon.svelte';
+  import RowMenu, { type RowMenuItem } from './RowMenu.svelte';
 
   // kit.js の entry（台帳の1行）と doneControl。今あるのは、タイトル（`?task=<ID>` へのリンク）、期日の印、ポイント、担当、
   // 完了の操作と完了の印。リンクは詳細の引き出しを開く（/[slug]/w/[id] のレイアウトが `?task=<ID>` を見て置く）。
@@ -24,9 +25,9 @@
   // .tag で出す）を渡す。metaChip は期日の印とは別に添える橙の印（今週が期日の行の「期日は今日」）、metaText は注記（.props-note。持ち越しの日数）
   // 押したボタンは消えるので、完了の印にフォーカスを移せるよう focusMark() を出す。
   // canComplete が偽（閉じたワークスペース）の行は、完了の操作を出さない。pending の間は押しても無視する（aria-disabled）
-  // onMove を渡すと、「上へ」「下へ」（同じ親の中で1つ動かす）を出し、行の中で Alt と ↑ ↓ を押しても同じことをする。
+  // onMove を渡すと、行の「⋯」のメニューに「上へ」「下へ」（同じ親の中で1つ動かす）を出し、行の中で Alt と ↑ ↓ を押しても同じことをする。
   // 端で動かせない向き（canMoveUp、canMoveDown が偽）は、フォーカスを失わないよう disabled でなく aria-disabled にする。
-  // onMoveParent を渡すと「親を移す」も出す。完了にした行には出さない。絞り込み中は、画面が onMove を渡さず（並べ替えは隣を使うため）、
+  // onMoveParent を渡すと、メニューに「親を移す」も出す。完了にした行には出さない。絞り込み中は、画面が onMove を渡さず（並べ替えは隣を使うため）、
   // 「親を移す」だけを出す。
   // タイトルの下（.entry-meta）に、入っているスプリント（kit.js の sprintTag。暦のアイコンと名前、名前が無ければ期間）、
   // 振ったリポジトリ（kit.js の repoTag。git のアイコン）と、showCategory のとき（親のないタスク）だけ区分を出す。
@@ -114,11 +115,30 @@
     mark?.focus();
   }
 
-  // 親を移すと行は別の親の下に作り直されるので、画面が新しい行の「親を移す」へフォーカスを戻すのに使う
-  let moveParentButton = $state<HTMLButtonElement>();
+  // 完了の丸のほかの操作は、行の「⋯」（RowMenu）にまとめる。親を移すと行は別の親の下に作り直されるので、
+  // 画面が新しい行の「⋯」へフォーカスを戻せるよう focusMoveParent() を出す
+  let menu = $state<ReturnType<typeof RowMenu>>();
   export function focusMoveParent(): void {
-    moveParentButton?.focus();
+    menu?.focus();
   }
+  const menuItems = $derived<RowMenuItem[]>([
+    ...(movable
+      ? [
+          { key: 'up', label: t('moveUp'), icon: 'up' as const, disabled: !canMoveUp, onselect: () => move(-1) },
+          { key: 'down', label: t('moveDown'), icon: 'down' as const, disabled: !canMoveDown, onselect: () => move(1) },
+        ]
+      : []),
+    ...(parentMovable
+      ? [
+          {
+            key: 'swap',
+            label: t('moveParent'),
+            icon: 'swap' as const,
+            onselect: (trigger: HTMLButtonElement) => onMoveParent?.(task, trigger),
+          },
+        ]
+      : []),
+  ]);
 </script>
 
 <!-- キーは中のリンクとボタンから届く。行そのものはフォーカスを受けない -->
@@ -213,37 +233,8 @@
     {:else}
       <Avatar userId={task.assignee.id} name={task.assignee.name} />
     {/if}
-    {#if movable || parentMovable}
-      <span class="order-actions">
-        {#if movable}
-          <button
-            class="icon-btn"
-            type="button"
-            aria-label={t('moveUpLabel', { title: task.title })}
-            title={t('moveUp')}
-            aria-disabled={!canMoveUp}
-            onclick={() => move(-1)}><Icon name="up" /></button
-          >
-          <button
-            class="icon-btn"
-            type="button"
-            aria-label={t('moveDownLabel', { title: task.title })}
-            title={t('moveDown')}
-            aria-disabled={!canMoveDown}
-            onclick={() => move(1)}><Icon name="down" /></button
-          >
-        {/if}
-        {#if onMoveParent !== undefined}
-          <button
-            class="icon-btn"
-            type="button"
-            aria-label={t('moveParentLabel', { title: task.title })}
-            title={t('moveParent')}
-            bind:this={moveParentButton}
-            onclick={(event) => onMoveParent(task, event.currentTarget)}><Icon name="swap" /></button
-          >
-        {/if}
-      </span>
+    {#if menuItems.length > 0}
+      <RowMenu title={task.title} items={menuItems} bind:this={menu} />
     {/if}
     {#if done}
       <!-- tabindex="-1" は、完了にした後にフォーカスを置くため（キーボードの Tab 順には入らない） -->

@@ -1,4 +1,4 @@
-// 一本道: ストーリーを作る → 「＋タスク」でその下にタスクを作る → 完了にする → 「完了 / 全体」がその場で変わる（読み直しても同じ）。
+// 一本道: ストーリーを作る → 「起票」で親を選んでその下にタスクを作る → 完了にする → 「完了 / 全体」がその場で変わる（読み直しても同じ）。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。CSP の違反も確かめる
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
@@ -24,7 +24,7 @@ function storyGroup(page: Page, title: string) {
   return page.locator('.tree-group', { has: page.getByRole('button', { name: title, exact: true }) });
 }
 
-test('作ったワークスペース: ストーリーを作り、＋タスクでその下にタスクを作って完了にすると、「完了 / 全体」がその場で変わる', async ({
+test('作ったワークスペース: ストーリーを作り、親を選んでその下にタスクを作って完了にすると、「完了 / 全体」がその場で変わる', async ({
   page,
 }) => {
   const collect = await watchViolations(page);
@@ -50,15 +50,15 @@ test('作ったワークスペース: ストーリーを作り、＋タスクで
   await expect(group.locator('.tree-ratio')).toHaveText('完了 0 / 0 pt');
   await expect(group.getByText('タスクはまだありません')).toBeVisible();
 
-  // 行の「＋タスク」から、親を選んだ状態でタスクのダイアログが開く。行は閉じない
-  await group.getByRole('button', { name: 'タスクを足す: ポイント制度を公開する' }).click();
+  // 見出しの右の「起票」で、親のストーリーを選んで作る。行は閉じない
+  await page.getByRole('button', { name: '起票', exact: true }).click();
   const taskDialog = page.getByRole('dialog', { name: '起票' });
-  await expect(taskDialog.getByLabel('親のストーリー').locator('option:checked')).toHaveText('ポイント制度を公開する');
-  await expect(group.locator('.tree-children')).toBeVisible();
+  await taskDialog.getByLabel('親のストーリー').selectOption({ label: 'ポイント制度を公開する' });
   await taskDialog.getByLabel('タイトル').fill('付与のバッチを書く');
   await taskDialog.getByRole('radio', { name: '3', exact: true }).check();
   await taskDialog.getByRole('button', { name: '起票' }).click();
   await expect(taskDialog).toBeHidden();
+  await expect(group.locator('.tree-children')).toBeVisible();
   // トーストには親の題を添える
   await expect(
     page.getByRole('status').filter({ hasText: 'ストーリー「ポイント制度を公開する」の末尾に足しました' }),
@@ -86,9 +86,7 @@ test('作ったワークスペース: ストーリーを作り、＋タスクで
   expect(await collect()).toEqual([]);
 });
 
-test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち、題と「＋タスク」は行を開閉せずにダイアログを開く', async ({
-  page,
-}) => {
+test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち、題は行を開閉せずにダイアログを開く', async ({ page }) => {
   await createWorkspace(page, '木のチーム');
   await page.getByRole('button', { name: 'ストーリーを作る' }).click();
   const created = page.getByRole('dialog', { name: 'ストーリーを作る' });
@@ -99,7 +97,6 @@ test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち�
   const group = storyGroup(page, '請求の流れを整える');
   const body = group.locator('.tree-children');
   const caret = group.locator('button.tree-caret');
-  const addTask = group.getByRole('button', { name: 'タスクを足す: 請求の流れを整える' });
   const title = group.getByRole('button', { name: '請求の流れを整える', exact: true });
   await expect(caret).toHaveAttribute('aria-expanded', 'true');
   await expect(caret).toHaveAccessibleName('請求の流れを整えるを閉じる');
@@ -108,7 +105,6 @@ test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち�
   // 開くと中にフォーカスが入り、Esc で閉じたら、開いたボタンへフォーカスが戻る（close の event は遅れて届くので、
   // 戻るのを待ってから次の操作をする）
   const storyDialog = page.getByRole('dialog', { name: 'ストーリー' });
-  const taskDialog = page.getByRole('dialog', { name: '起票' });
 
   // 題を押すとダイアログが開く。行は開閉しない
   await expectModalFocus(page, {
@@ -119,12 +115,6 @@ test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち�
 
   // キーボード（Enter と Space）。行は開閉しない
   for (const key of ['Enter', ' ']) {
-    await expectModalFocus(page, {
-      opener: addTask,
-      modal: taskDialog,
-      press: key,
-      whileOpen: () => expect(caret).toHaveAttribute('aria-expanded', 'true'),
-    });
     await expectModalFocus(page, {
       opener: title,
       modal: storyDialog,
@@ -145,18 +135,6 @@ test('スクラムの言葉: 開閉は caret のボタンだけが受け持ち�
     await page.keyboard.press(key);
     await expect(body).toBeHidden();
   }
-
-  // 畳んだまま起票すると、親の行が開いて、足した行が見える
-  await addTask.click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill('請求書の雛形を作る');
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-  await expect(caret).toHaveAttribute('aria-expanded', 'true');
-  await expect(group.locator('.entry', { hasText: '請求書の雛形を作る' })).toBeVisible();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'ストーリー「請求の流れを整える」の末尾に足しました' }),
-  ).toBeVisible();
 });
 
 test('ストーリーを直すときは、開いたら1件を読み、変えた欄だけを送る。変えた欄が無ければ何も送らない。過ぎた期日は赤い印で出る', async ({
@@ -330,7 +308,7 @@ test('期日の印: 過ぎた（赤）、今日と今週（橙）、それ以外
   await expect(page.locator('.chip.is-danger')).toHaveCount(0);
 });
 
-test('完了したストーリーには「＋タスク」を出さず、期日の印の色も付けない。タスクの親の候補にも出ない', async ({
+test('完了したストーリーには「タスクを足す」の空の行を出さず、期日の印の色も付けない。タスクの親の候補にも出ない', async ({
   page,
 }) => {
   await rewriteOperation(page, backlogTree, { slug: 'aoba' }, (output) => ({
@@ -344,12 +322,12 @@ test('完了したストーリーには「＋タスク」を出さず、期日�
   await page.goto(SEED_CLIENT_WORKSPACE);
   const done = storyGroup(page, 'ポイントの付与と失効を管理画面で確かめられる');
   await expect(done.locator('.tree-ratio')).toBeVisible();
-  await expect(done.getByRole('button', { name: /タスクを足す/ })).toHaveCount(0);
+  await expect(done.getByRole('textbox', { name: /タスクを足す/ })).toHaveCount(0);
   await expect(done.locator('.tree-row .chip')).toHaveText('10/23');
   await expect(done.locator('.tree-row .chip.is-warn')).toHaveCount(0);
   // もう一方のストーリーには出る
   await expect(
-    storyGroup(page, '問い合わせの一次回答を早くする').getByRole('button', { name: /タスクを足す/ }),
+    storyGroup(page, '問い合わせの一次回答を早くする').getByRole('textbox', { name: /タスクを足す/ }),
   ).toBeVisible();
 
   await page.getByRole('button', { name: '起票' }).click();
@@ -378,11 +356,10 @@ test('親のストーリーが消えていたら、理由を出し、その場�
     stories: output.stories.filter((story) => !(gone && story.title === '問い合わせの一次回答を早くする')),
   }));
   await page.reload();
-  const addTask = storyGroup(page, '問い合わせの一次回答を早くする').getByRole('button', { name: /タスクを足す/ });
-  await expect(addTask).toBeVisible();
   await waitForSettled(page);
-  await addTask.click();
+  await page.getByRole('button', { name: '起票', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '起票' });
+  await dialog.getByLabel('親のストーリー').selectOption({ label: '問い合わせの一次回答を早くする' });
   await dialog.getByLabel('タイトル').fill('消えた親に足す');
   await dialog.getByRole('button', { name: '起票' }).click();
   await expect(dialog.getByText('このストーリーは見つかりません。親を選び直してください')).toBeVisible();
@@ -414,7 +391,7 @@ test('seed の社内ツール: ストーリーの行の合計と畳んだ件数�
   expect(order).toEqual(['tree-group', 'tree-group', '']);
 });
 
-test('閉じたワークスペースでは、作る操作と「＋タスク」を出さず、ストーリーのダイアログは readonly で開く', async ({
+test('閉じたワークスペースでは、作る操作と「タスクを足す」の空の行を出さず、ストーリーのダイアログは readonly で開く', async ({
   page,
 }) => {
   await rewriteOperation(page, workspaceInfo, { slug: 'aoba' }, (output) => ({
@@ -446,9 +423,7 @@ test('閉じたワークスペースでは、作る操作と「＋タスク」�
   );
 });
 
-test('狭い幅では、caret、題、「＋タスク」の押せる範囲が 44px 四方以上に広がる（見た目は変わらない）', async ({
-  page,
-}) => {
+test('狭い幅では、caret と題の押せる範囲が 44px 四方以上に広がる（見た目は変わらない）', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
   await page.goto(SEED_CLIENT_WORKSPACE);
   const group = storyGroup(page, '問い合わせの一次回答を早くする');
@@ -472,10 +447,8 @@ test('狭い幅では、caret、題、「＋タスク」の押せる範囲が 44
   }
   const caret = group.locator('button.tree-caret');
   const title = group.getByRole('button', { name: '問い合わせの一次回答を早くする', exact: true });
-  const addTask = group.getByRole('button', { name: /タスクを足す/ });
   expect(await reaches(caret, 16, 0)).toBe(true);
   expect(await reaches(title, 0, -18)).toBe(true);
-  expect(await reaches(addTask, 0, -18)).toBe(true);
   // 範囲を超えた点は当たらない
   expect(await reaches(title, 0, -60)).toBe(false);
 });
