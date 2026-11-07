@@ -277,37 +277,40 @@ const controlEdge: Record<string, string> = {
   medieval: 'rgb(127, 136, 144)',
   modern: 'rgb(70, 115, 159)',
 };
-for (const theme of Object.keys(controlEdge)) {
-  test(`操作部品の枠の色: ${theme}`, async ({ page }) => {
-    const files: Record<string, string> = {
-      'index.html': 'text/html',
-      'tokens.css': 'text/css',
-      'components.css': 'text/css',
-      'icons.js': 'text/javascript',
-      'art.js': 'text/javascript',
-      'sample-data.js': 'text/javascript',
-      'kit.js': 'text/javascript',
-    };
-    await page.route('**/__design-catalog/**', async (route) => {
-      const name = new URL(route.request().url()).pathname.split('/').pop()!;
-      const contentType = files[name];
-      if (!contentType) return route.fulfill({ status: 404, body: '' });
-      await route.fulfill({ contentType, body: readFileSync(new URL(`../design/${name}`, import.meta.url)) });
-    });
-    for (const host of ['fonts.googleapis.com', 'fonts.gstatic.com']) {
-      await page.route(`https://${host}/**`, (route) => route.fulfill({ body: '' }));
-    }
-    await page.goto('/__design-catalog/index.html');
-    await page.locator(`[data-pick-theme][value="${theme}"]`).check();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    for (const selector of [
-      '.input',
-      '.select',
-      '.search',
-      '.btn:not(.is-primary):not(.is-quiet):not(.is-danger):not(.is-google)',
-    ]) {
-      const control = page.locator(`#main ${selector}, main ${selector}, ${selector}`).first();
-      await expect(control).toHaveCSS('border-top-color', controlEdge[theme]);
-    }
+// カタログを開くのは1回にし、テーマはページを開いたまま切り替える（テーマごとに開き直さない）。どのテーマで落ちたかは test.step の名前で分かる
+test('操作部品の枠の色: 4つのテーマ', async ({ page }) => {
+  const files: Record<string, string> = {
+    'index.html': 'text/html',
+    'tokens.css': 'text/css',
+    'components.css': 'text/css',
+    'icons.js': 'text/javascript',
+    'art.js': 'text/javascript',
+    'sample-data.js': 'text/javascript',
+    'kit.js': 'text/javascript',
+  };
+  await page.route('**/__design-catalog/**', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').pop()!;
+    const contentType = files[name];
+    if (!contentType) return route.fulfill({ status: 404, body: '' });
+    await route.fulfill({ contentType, body: readFileSync(new URL(`../design/${name}`, import.meta.url)) });
   });
-}
+  for (const host of ['fonts.googleapis.com', 'fonts.gstatic.com']) {
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ body: '' }));
+  }
+  await page.goto('/__design-catalog/index.html');
+  for (const [theme, edge] of Object.entries(controlEdge)) {
+    await test.step(theme, async () => {
+      await page.locator(`[data-pick-theme][value="${theme}"]`).check();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      for (const selector of [
+        '.input',
+        '.select',
+        '.search',
+        '.btn:not(.is-primary):not(.is-quiet):not(.is-danger):not(.is-google)',
+      ]) {
+        const control = page.locator(`#main ${selector}, main ${selector}, ${selector}`).first();
+        await expect(control).toHaveCSS('border-top-color', edge);
+      }
+    });
+  }
+});
