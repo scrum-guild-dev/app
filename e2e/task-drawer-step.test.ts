@@ -3,22 +3,13 @@
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { addStoryRow, createWorkspace, expectFocusReturned, signIn, waitForResponses } from './helpers.ts';
+import { addStoryRow, addTaskRow, createWorkspace, expectFocusReturned, signIn, waitForResponses } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
-
-// 起票のダイアログから、タイトルだけでタスクを1件作る
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-}
 
 // 引き出し（かページ全体）の帯にある、開き方のボタン。押した時点で実行する
 function modeButton(scope: Page | Locator, name: string): Locator {
@@ -57,9 +48,9 @@ test('前後のボタンとキーで、開いたまま隣のタスクへ移る�
   page,
 }) => {
   await createWorkspace(page, '前後ワークスペース');
-  await addTask(page, '前後 一');
-  await addTask(page, '前後 二');
-  await addTask(page, '前後 三');
+  await addTaskRow(page, '前後 一');
+  await addTaskRow(page, '前後 二');
+  await addTaskRow(page, '前後 三');
   const drawer = await openDrawer(page, '前後 二');
   const historyLength = await page.evaluate(() => history.length);
 
@@ -103,9 +94,9 @@ test('前後のボタンとキーで、開いたまま隣のタスクへ移る�
 
 test('ボタンで移ると、押した向きのボタンにフォーカスが残り、移った先のタイトルが読み上げられる', async ({ page }) => {
   await createWorkspace(page, '読み上げワークスペース');
-  await addTask(page, '読み上げ 一');
-  await addTask(page, '読み上げ 二');
-  await addTask(page, '読み上げ 三');
+  await addTaskRow(page, '読み上げ 一');
+  await addTaskRow(page, '読み上げ 二');
+  await addTaskRow(page, '読み上げ 三');
   const drawer = await openDrawer(page, '読み上げ 一');
 
   // 次へ。置き直した引き出しは、閉じるボタンではなく押した向きのボタンにフォーカスを置く（Enter を押し続けても閉じない）
@@ -125,17 +116,10 @@ test('ボタンで移ると、押した向きのボタンにフォーカスが�
 test('順は開いた画面の見えている行。絞り込みで外れた行と、畳んだ枝の中の行は飛ばす', async ({ page }) => {
   await createWorkspace(page, '飛ばすワークスペース');
   await createStory(page, '畳む親');
-  for (const title of ['枝の一', '枝の二']) {
-    await page.getByRole('button', { name: '起票', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: '起票' });
-    await dialog.getByLabel('親のストーリー').selectOption({ label: '畳む親' });
-    await dialog.getByLabel('タイトル').fill(title);
-    await dialog.getByRole('button', { name: '起票' }).click();
-    await expect(dialog).toBeHidden();
-  }
-  await addTask(page, '検索 甲');
-  await addTask(page, '別件 乙');
-  await addTask(page, '検索 丙');
+  for (const title of ['枝の一', '枝の二']) await addTaskRow(page, title, '畳む親');
+  await addTaskRow(page, '検索 甲');
+  await addTaskRow(page, '別件 乙');
+  await addTaskRow(page, '検索 丙');
   const workspacePath = new URL(page.url()).pathname;
 
   // 木の順は、ストーリーの配下（枝の一、枝の二）、親なしの甲、乙、丙。ストーリーの行は数えない
@@ -171,8 +155,8 @@ test('書きかけがあるまま前後へ移ろうとすると確かめる。�
   page,
 }) => {
   await createWorkspace(page, '前後の確認ワークスペース');
-  await addTask(page, '確認 一');
-  await addTask(page, '確認 二');
+  await addTaskRow(page, '確認 一');
+  await addTaskRow(page, '確認 二');
   const drawer = await openDrawer(page, '確認 一');
   await drawer.getByRole('button', { name: /確認 一/ }).click();
   const input = drawer.getByRole('textbox', { name: 'タイトル' });
@@ -217,8 +201,8 @@ test('行を持たない画面（メンバー）とページ全体では前後�
   page,
 }) => {
   await createWorkspace(page, '前後の範囲ワークスペース');
-  await addTask(page, '範囲 一');
-  await addTask(page, '範囲 二');
+  await addTaskRow(page, '範囲 一');
+  await addTaskRow(page, '範囲 二');
   const taskId = await taskIdOf(page, '範囲 一');
   const workspacePath = new URL(page.url()).pathname;
 
@@ -249,9 +233,9 @@ test('行を持たない画面（メンバー）とページ全体では前後�
 
 test('ポイントの radio にフォーカスがあっても、[ ] で隣へ移れる', async ({ page }) => {
   await createWorkspace(page, 'radio 前後ワークスペース');
-  await addTask(page, '選ぶ 一');
-  await addTask(page, '選ぶ 二');
-  await addTask(page, '選ぶ 三');
+  await addTaskRow(page, '選ぶ 一');
+  await addTaskRow(page, '選ぶ 二');
+  await addTaskRow(page, '選ぶ 三');
   const drawer = await openDrawer(page, '選ぶ 二');
 
   // ポイントを選んだ直後は、フォーカスが radio にある
@@ -274,9 +258,9 @@ test('ボタン（クリックと Enter）で移ると、移った先でも同�
   page,
 }) => {
   await createWorkspace(page, '前後の焦点ワークスペース');
-  await addTask(page, '焦点 一');
-  await addTask(page, '焦点 二');
-  await addTask(page, '焦点 三');
+  await addTaskRow(page, '焦点 一');
+  await addTaskRow(page, '焦点 二');
+  await addTaskRow(page, '焦点 三');
   const first = await openDrawer(page, '焦点 一');
 
   // クリックで次へ移ると、移った先でも「次の」にフォーカスがあり、続けて Enter で押せる
@@ -306,8 +290,8 @@ test('ボタン（クリックと Enter）で移ると、移った先でも同�
 
 test('書きかけを捨てるかの確認を出している間は、] を押しても移らず、確認が残る', async ({ page }) => {
   await createWorkspace(page, '確認中の前後ワークスペース');
-  await addTask(page, '確認中 一');
-  await addTask(page, '確認中 二');
+  await addTaskRow(page, '確認中 一');
+  await addTaskRow(page, '確認中 二');
   const drawer = await openDrawer(page, '確認中 一');
   await drawer.getByRole('button', { name: /確認中 一/ }).click();
   await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
@@ -327,7 +311,7 @@ test('書きかけを捨てるかの確認を出している間は、] を押し
   await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
 });
 
-// 計画の画面でスプリントを作り、起票したタスクを入れる
+// 計画の画面でスプリントを作り、作ったタスクを入れる
 async function createSprint(page: Page, startOn: string, name: string): Promise<void> {
   await page.getByRole('button', { name: 'スプリントを作る' }).click();
   const dialog = page.getByRole('dialog', { name: 'スプリントを作る' });
@@ -351,7 +335,7 @@ async function putIntoSprint(page: Page, sprint: string, titles: string[]): Prom
 test('計画の画面では、スプリントをまたいで上から下の順に前後へ移る', async ({ page }) => {
   test.setTimeout(90_000);
   await createWorkspace(page, '計画の前後ワークスペース');
-  for (const title of ['計画 一', '計画 二', '計画 三']) await addTask(page, title);
+  for (const title of ['計画 一', '計画 二', '計画 三']) await addTaskRow(page, title);
   await page.getByRole('link', { name: '計画', exact: true }).click();
   await createSprint(page, '2099-03-01', '第1回');
   await createSprint(page, '2099-03-15', '第2回');
@@ -380,7 +364,7 @@ test('計画の画面では、スプリントをまたいで上から下の順�
 test('スプリントの画面では、列は左から右、列の中は上から下の順に前後へ移る', async ({ page }) => {
   test.setTimeout(90_000);
   await createWorkspace(page, '盤の前後ワークスペース');
-  for (const title of ['盤 一', '盤 二', '盤 三']) await addTask(page, title);
+  for (const title of ['盤 一', '盤 二', '盤 三']) await addTaskRow(page, title);
   await page.getByRole('link', { name: '計画' }).click();
   await createSprint(page, '2099-03-01', '第1回');
   await putIntoSprint(page, '第1回', ['盤 一', '盤 二', '盤 三']);

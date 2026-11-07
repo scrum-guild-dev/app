@@ -3,7 +3,7 @@
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者（リーダー）はミナト、一般はハルカ
 import type { Browser, Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
@@ -14,14 +14,6 @@ const DELETE_SENT = 20_000;
 // 木を変えないよう、タスクは足さずにコメントだけを足す（本文は実行ごとに変える）
 const SEED_TASK_URL = '/aoba/w/019a0000-0000-7000-8000-000000000401?task=019a0000-0000-7000-8000-000000000804';
 const SEED_TASK_TITLE = '問い合わせテンプレートを整える';
-
-async function addTask(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: '起票' }).click();
-  const dialog = page.getByRole('dialog', { name: '起票' });
-  await dialog.getByLabel('タイトル').fill(title);
-  await dialog.getByRole('button', { name: '起票' }).click();
-  await expect(dialog).toBeHidden();
-}
 
 async function openDrawer(page: Page, title: string): Promise<Locator> {
   await page.locator('.entry', { hasText: title }).getByRole('link', { name: title }).click();
@@ -61,7 +53,7 @@ test.describe('自分のコメント', () => {
   }) => {
     const collect = await watchViolations(page);
     await createWorkspace(page, 'コメントのワークスペース');
-    await addTask(page, '手順を確かめる');
+    await addTaskRow(page, '手順を確かめる');
     const drawer = await openDrawer(page, '手順を確かめる');
 
     // 初めはコメントのタブ。まだ無い
@@ -118,7 +110,7 @@ test.describe('自分のコメント', () => {
 
   test('書きかけのコメントは、タブを切り替えても残り、閉じようとすると捨てるかを確かめる', async ({ page }) => {
     await createWorkspace(page, '書きかけのコメントのワークスペース');
-    await addTask(page, '書きかけを残す');
+    await addTaskRow(page, '書きかけを残す');
     const drawer = await openDrawer(page, '書きかけを残す');
     const input = drawer.getByRole('textbox', { name: 'コメントを書く' });
     await input.fill('まだ送っていない文');
@@ -155,7 +147,7 @@ test.describe('自分のコメント', () => {
 
   test('一覧を読めるまでは、書く欄と件数を出さない。読めなければ「もう一度試す」で読み直す', async ({ page }) => {
     await createWorkspace(page, '読めないコメントのワークスペース');
-    await addTask(page, '読めないコメント');
+    await addTaskRow(page, '読めないコメント');
     await page.route('**/api/aoba/comment-list', (route) =>
       route.fulfill({ status: 500, json: { error: { code: 'internal', message: 'x' } } }),
     );
@@ -177,7 +169,7 @@ test.describe('自分のコメント', () => {
     page,
   }) => {
     await createWorkspace(page, '途中で閉じるワークスペース');
-    await addTask(page, '途中で閉じる依頼');
+    await addTaskRow(page, '途中で閉じる依頼');
     const drawer = await openDrawer(page, '途中で閉じる依頼');
     // 送ると 409 の workspace_closed で断られ、枠を読み直すと閉じている
     await page.route('**/api/aoba/comment-create', (route) =>
@@ -201,11 +193,7 @@ test.describe('自分のコメント', () => {
 
   test('スクラムの言葉: 同じ流れで、文言がスクラムの言葉になる', async ({ page }) => {
     await createWorkspace(page, 'コメントのチーム');
-    await page.getByRole('button', { name: '起票' }).click();
-    const dialog = page.getByRole('dialog', { name: '起票' });
-    await dialog.getByLabel('タイトル').fill('スクラムの言葉で話す');
-    await dialog.getByRole('button', { name: '起票' }).click();
-    await expect(dialog).toBeHidden();
+    await addTaskRow(page, 'スクラムの言葉で話す');
     const drawer = await openDrawer(page, 'スクラムの言葉で話す');
     await expect(drawer.getByRole('tab', { name: /^コメント/ })).toHaveText('コメント 0');
     await sendComment(drawer, 'スクラムの言葉で書いた文');
@@ -229,7 +217,7 @@ test.describe('自分のコメント', () => {
 
   test('送るのに失敗したら、文を欄に残して理由を出す', async ({ page }) => {
     await createWorkspace(page, '送れないワークスペース');
-    await addTask(page, '送れない依頼');
+    await addTaskRow(page, '送れない依頼');
     const drawer = await openDrawer(page, '送れない依頼');
     await page.route('**/api/aoba/comment-create', (route) =>
       route.fulfill({ status: 500, json: { error: { code: 'internal', message: 'x' } } }),
@@ -249,7 +237,7 @@ test.describe('自分のコメント', () => {
 
   test('新しい 50 件より前は、「前のコメントを読む」で一覧の上に足し、読み終えるとボタンを消す', async ({ page }) => {
     await createWorkspace(page, '前を足すワークスペース');
-    await addTask(page, '前を足す依頼');
+    await addTaskRow(page, '前を足す依頼');
     // 51 件を書くと回数の上限（10 分に 30 回）に当たるので、一覧の応答を作って返す。先頭は 50 件と続きの位置、続きは古い 1 件
     const at = (n: number) => new Date(Date.UTC(2026, 9, 1, 0, n)).toISOString();
     const id = (n: number) => `019a0000-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -293,7 +281,7 @@ test.describe('自分のコメント', () => {
 
   test('「前のコメントを読む」で、タスクが消えていたら（404）、引き出しを閉じる', async ({ page }) => {
     await createWorkspace(page, '前を読むワークスペース');
-    await addTask(page, '前を読む依頼');
+    await addTaskRow(page, '前を読む依頼');
     // 先頭の読みには続きがあるように見せ、続きの読みはタスクが消えたときの 404 にする
     await page.route('**/api/aoba/comment-list', async (route) => {
       const body = route.request().postDataJSON() as { before?: unknown };
@@ -315,7 +303,7 @@ test.describe('自分のコメント', () => {
 
   test('直している途中にワークスペースが終了したら、「保存」を出さず、書きかけを残す', async ({ page }) => {
     await createWorkspace(page, '直す途中で閉じるワークスペース');
-    await addTask(page, '直す途中で閉じる依頼');
+    await addTaskRow(page, '直す途中で閉じる依頼');
     const drawer = await openDrawer(page, '直す途中で閉じる依頼');
     const comment = await sendComment(drawer, '閉じる前に書いた文');
     await comment.getByRole('button', { name: '編集', exact: true }).click();
@@ -338,7 +326,7 @@ test.describe('自分のコメント', () => {
 
   test('終了したワークスペースでは、コメントを読めるが、書く欄と操作を出さない', async ({ page }) => {
     await createWorkspace(page, 'コメントを閉じるワークスペース');
-    await addTask(page, '閉じた後に読む');
+    await addTaskRow(page, '閉じた後に読む');
     let drawer = await openDrawer(page, '閉じた後に読む');
     await sendComment(drawer, '閉じる前に書いた文');
     await drawer.getByRole('button', { name: '閉じる' }).click();
@@ -431,7 +419,7 @@ test.describe('コメントの削除の取り消し', () => {
 
   test('「取り消す」を押すと元の位置に戻り、削除は送られない。読み直しても残る', async ({ page }) => {
     await createWorkspace(page, 'コメントの取り消しのワークスペース');
-    await addTask(page, '取り消しを確かめる');
+    await addTaskRow(page, '取り消しを確かめる');
     const drawer = await openDrawer(page, '取り消しを確かめる');
     const tab = drawer.getByRole('tab', { name: /^コメント/ });
     const first = await sendComment(drawer, '消して戻すコメント');
@@ -466,7 +454,7 @@ test.describe('コメントの削除の取り消し', () => {
 
   test('取り消さずに引き出しを閉じても、削除は送られる', async ({ page }) => {
     await createWorkspace(page, 'コメントを閉じて送るワークスペース');
-    await addTask(page, '閉じる前の削除を確かめる');
+    await addTaskRow(page, '閉じる前の削除を確かめる');
     const drawer = await openDrawer(page, '閉じる前の削除を確かめる');
     const comment = await sendComment(drawer, '閉じる前に消すコメント');
     await comment.getByRole('button', { name: '削除', exact: true }).click();
@@ -489,7 +477,7 @@ test.describe('コメントの削除の取り消し', () => {
     // 取り消せるトースト（10 秒）が消えるのを3回待つ
     test.setTimeout(90_000);
     await createWorkspace(page, 'コメントの削除が断られるワークスペース');
-    await addTask(page, '断られるのを確かめる');
+    await addTaskRow(page, '断られるのを確かめる');
     const drawer = await openDrawer(page, '断られるのを確かめる');
     const tab = drawer.getByRole('tab', { name: /^コメント/ });
     const comment = await sendComment(drawer, '断られるコメント');
