@@ -486,6 +486,8 @@ test.describe('コメントの削除の取り消し', () => {
 
   // 送るのが断られる理由ごとに、同じコメントで試す（コメントの作成には回数の上限があり、繰り返しで足りなくなるため、1本にまとめる）
   test('送るのが断られたら（500、409、403）、コメントが元に戻って理由が出る', async ({ page }) => {
+    // 取り消せるトースト（10 秒）が消えるのを3回待つ
+    test.setTimeout(90_000);
     await createWorkspace(page, 'コメントの削除が断られるワークスペース');
     await addTask(page, '断られるのを確かめる');
     const drawer = await openDrawer(page, '断られるのを確かめる');
