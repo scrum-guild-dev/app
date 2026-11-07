@@ -104,6 +104,7 @@ test('見本のバックログ: 「⋯」のメニューと、削除の取り消
   await drawer.locator('.row-menu-btn').click();
   await drawer.locator('[data-dialog="deleteStory"]').click();
   await expect(page.locator('#dialog .dialog-title')).toHaveText(/削除する/);
+  await expect(page.locator('#dialog .dialog-body')).toContainText(await storyRow.locator('a.tree-link').innerText());
   await page.locator('#dialog .btn.is-danger').click();
   await expect(drawer).toBeHidden();
 });
@@ -347,4 +348,33 @@ test('見本のバックログ: ?story=<ID> で、ストーリーの引き出し
   await expect(drawer.locator('#drawer-edit-title')).toHaveValue('問い合わせの一次回答を早くする');
   await expect(drawer.locator('[data-story-done]')).toHaveCount(1);
   expect(errors).toEqual([]);
+});
+
+test('見本のバックログ: ストーリーの引き出しの「親を移す」は、開いているストーリーの親を移す。不正な ?story= では開かない', async ({
+  page,
+}) => {
+  const errors = await openSample(page, 'backlog.html');
+  const links = page.locator('.tree-row.is-story a.tree-link');
+  const second = await links.nth(1).innerText();
+  await links.nth(1).click();
+  const drawer = page.locator('#drawer');
+  await drawer.locator('.row-menu-btn').click();
+  await drawer.locator('[data-dialog="moveStory"]').click();
+  await expect(page.locator('#dialog .dialog-title')).toContainText(second);
+  await page.locator('#dialog [data-close-dialog]').first().click();
+
+  // 存在しない ID と Object のプロパティ名では開かず、同時に付けた ?task= は開く
+  await page.goto('/__design-catalog/backlog.html?story=constructor');
+  await expect(page.locator('#drawer')).toBeHidden();
+  await page.goto('/__design-catalog/backlog.html?story=nope&task=t1');
+  await expect(page.locator('#drawer')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('見本のバックログ: 配下の未完了が残るストーリーは、完了にするを押しても完了にならない', async ({ page }) => {
+  await openSample(page, 'backlog.html');
+  await page.locator('.tree-row.is-story a.tree-link').first().click();
+  const drawer = page.locator('#drawer');
+  await drawer.locator('[data-story-done]').click({ force: true });
+  await expect(drawer.locator('.hanko')).toHaveCount(0);
 });

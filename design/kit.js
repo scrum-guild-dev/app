@@ -1167,8 +1167,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       return;
     }
     if (location.pathname.endsWith("/task.html")) { location.href = `backlog.html?task=${encodeURIComponent(id)}`; return; }
-    const kind = drawer.kind;
+    const kind = drawer.kind, shown = { canDelete: drawer.canDelete, factsMissing: drawer.factsMissing };
     closeDrawer(true); openDrawer(id, drawer.opener, false, null, kind);
+    // 見本の状態（削除できない人、木に載っていない）は、開き方を替えても持ち越す
+    if (drawer.id === id) { Object.assign(drawer, shown); renderDrawer(); }
   }
   // 画面の幅が 620px を越えたら、真ん中のボタンを出し入れする
   matchMedia("(max-width: 620px)").addEventListener("change", () => renderDrawer());
@@ -1364,11 +1366,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // ストーリーの引き出し（本番の StoryDrawer。枠はタスクと同じ Drawer）。バックログの木のストーリーの題（a.tree-link。?story=<ID>）から開く。
   // 帯は種類の印「ストーリー」（完了なら「完了」の印）、「⋯」（親を移す、削除。削除できない人には削除を出さず、理由を本文の下に出す）、前後、開き方（横と真ん中）、閉じる。
-  // 題、リンク、受け入れ基準、本文はいつも書ける欄で自動保存（タスクと同じ）。期日と区分は選んだら保存する。完了の帯は、配下の未完了のタスクが残るあいだと、
+  // 題、リンク、受け入れ基準、本文はいつも書ける欄で自動保存（タスクと同じ）。期日は選んだら保存する（区分の選択は見本では保存しない）。完了の帯は、配下の未完了のタスクが残るあいだと、
   // 親のエピックが完了か中止しているあいだ、完了にする・取り消すを aria-disabled にして理由を添える。コメントと履歴と感謝は無い
   const storyAcText = (st) => st.acMd ?? (st.ac || []).map((a) => `- ${a}`).join("\n");
   function storyMenuHtml(st) {
-    const items = [{ attr: `data-dialog="moveStory"`, label: "親を移す", icon: "swap" },
+    const items = [{ attr: `data-dialog="moveStory" data-story-id="${drawer.id}"`, label: "親を移す", icon: "swap" },
       ...(drawer.canDelete ? [{ attr: `data-dialog="deleteStory" data-tree-delete-id="${drawer.id}"`, label: `この${t("story")}を削除する`, icon: "trash", danger: true }] : [])];
     return drawerReadOnly() || !items.length ? "" : rowMenu(st.title, items);
   }
@@ -2198,8 +2200,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog>移す</button>`);
     },
     // ストーリーの親を移す（本番の MoveParentDialog。タスクの親を移すのと同じ部品）。移す先は親なしと、完了も中止もしていないエピック（今の親を除く）
-    moveStory: () => {
-      const st = D.stories.s1;
+    moveStory: (el) => {
+      const st = D.stories[el?.dataset?.storyId] || D.stories.s1;
       const others = Object.entries(D.epics).filter(([eid, e]) => eid !== st.epic && !e.cleared && !e.canceled);
       openDialog(`「${esc(st.title)}」の親を移す`,
         `<label class="field" for="d-move-story"><span class="field-label">移す先</span><select class="select" id="d-move-story" aria-describedby="d-move-story-hint"><option>親なし</option>${others.map(([, e]) => `<option>${esc(e.title)}</option>`).join("")}</select>
@@ -2934,8 +2936,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     applyTheme();
     redraw();
     const storyId = new URLSearchParams(location.search).get("story");
-    if (storyId && D.stories[storyId] && !location.pathname.endsWith("/task.html")) openDrawer(storyId, null, false, null, "story");
-    const taskId = storyId ? null : new URLSearchParams(location.search).get("task");
+    const openStory = storyId && Object.hasOwn(D.stories, storyId) && !location.pathname.endsWith("/task.html");
+    if (openStory) openDrawer(storyId, null, false, null, "story");
+    const taskId = openStory ? null : new URLSearchParams(location.search).get("task");
     if (taskId) {
       if (location.pathname.endsWith("/task.html")) {
         drawer.mode = "page";
