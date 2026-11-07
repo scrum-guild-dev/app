@@ -1352,21 +1352,23 @@
   // ---- 削除 ----
   // 消したことを知らせるトースト。「取り消す」を押すと task-restore を送り、木を読み直す。
   // 引き出しが閉じた後でも押せるよう、props と ID は消した時点の値を取っておく（this の状態は読まない）
-  function announceRemoved(): void {
-    const target = { slug, workspaceId, taskId, onchanged, onstale };
+  // 削除を送る前に取った値を渡す（props は応答を待つ間に、前後のタスクへ移る、閉じるで変わり、閉じた後は親の今の値を返す）
+  function announceRemoved(target: RestoreTarget): void {
     showToast(t('taskDeleted', { task: t('task') }), 'check', {
       label: t('taskRestoreAction'),
       run: () => void restoreRemoved(target),
     });
   }
 
-  async function restoreRemoved(target: {
+  type RestoreTarget = {
     slug: string;
     workspaceId: string;
     taskId: string;
     onchanged: () => void;
     onstale: () => void;
-  }): Promise<void> {
+  };
+
+  async function restoreRemoved(target: RestoreTarget): Promise<void> {
     const result = await callOperation(
       taskRestore,
       { workspace_id: target.workspaceId, task_id: target.taskId },
@@ -1388,11 +1390,9 @@
     } else if (result.status === 409) {
       const reason = taskRestoreConflictReasonOf(result.error?.details);
       showToast(
-        reason === 'parent_deleted'
-          ? t('taskRestoreParentDeleted', { story: t('story') })
-          : reason === 'parent_completed'
-            ? t('taskRestoreParentCompleted', { story: t('story'), done: t('done') })
-            : t('taskRestoreGone'),
+        reason === 'parent_completed'
+          ? t('taskRestoreParentCompleted', { story: t('story'), done: t('done') })
+          : t('taskRestoreGone'),
         'alert',
       );
       target.onchanged();
@@ -1406,12 +1406,14 @@
     if (task === null || deleting || asking) return;
     deleting = true;
     deleteError = null;
+    // 送っている間に前後のタスクへ移っても、取り消しは消したタスクに送る（props は await の後に変わりうる）
+    const removed: RestoreTarget = { slug, workspaceId, taskId, onchanged, onstale };
     try {
       const result = await callOperation(taskDelete, { workspace_id: workspaceId, task_id: taskId }, { slug });
       if (!alive) {
         // 削除の要求を送っている間に閉じられた。結果は黙って捨てず、通ったら木を読み直して知らせ、失敗は知らせる
         if (result.ok) {
-          announceRemoved();
+          announceRemoved(removed);
           onchanged();
         } else if (result.status === 404) {
           onchanged();
@@ -1423,7 +1425,7 @@
       if (result.ok) {
         // 消えたので、書きかけがあっても確かめずに閉じる
         leaving = true;
-        announceRemoved();
+        announceRemoved(removed);
         onremoved();
       } else if (result.status === 401) {
         onstale();

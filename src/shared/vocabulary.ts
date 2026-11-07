@@ -1710,12 +1710,10 @@ export const dictionary = defineDictionary({
   taskDeleteForbidden: '作った人と{leader}だけが削除できます',
   // 削除の取り消し（task-restore）。削除のトーストの「取り消す」から呼ぶ
   taskRestoreAction: '取り消す',
-  taskRestoreLabel: '{task}の削除を取り消す',
   taskRestored: '{task}を戻しました',
-  taskRestoreFailed: '取り消せませんでした。もう一度試してください。',
+  taskRestoreFailed: '取り消せませんでした',
   taskRestoreForbidden: '削除した人と、作った人と{leader}だけが取り消せます',
   taskRestoreGone: '取り消せませんでした。ほかの画面で変わったため、一覧を読み直します',
-  taskRestoreParentDeleted: '親の{story}が削除されているため、戻せませんでした',
   taskRestoreParentCompleted: '親の{story}が{done}しているため、戻せませんでした',
   // エピックとストーリーの削除（ダイアログの下のボタンと、配下の扱いを選ぶ確認。TreeDeleteDialog）。
   // 削除できる人、確認の本文と結び、送っている間、失敗の文はタスクの削除と同じ言葉を使う
