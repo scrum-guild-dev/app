@@ -17,12 +17,12 @@ CREATE TABLE connections (
   ),
   scope_mode TEXT NOT NULL DEFAULT 'include' CHECK (scope_mode IN ('include', 'exclude')),
   ignore_source_due INTEGER NOT NULL DEFAULT 0 CHECK (ignore_source_due IN (0, 1)),
-  settings_json TEXT NOT NULL DEFAULT '{}',
+  settings_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(settings_json)),
   credential_ciphertext TEXT,
   credential_key_version INTEGER,
   credential_last4 TEXT,
-  sync_state_json TEXT NOT NULL DEFAULT '{}',
-  reconcile_state_json TEXT NOT NULL DEFAULT '{}',
+  sync_state_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(sync_state_json)),
+  reconcile_state_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(reconcile_state_json)),
   last_success_at TEXT,
   last_reconciled_at TEXT,
   last_error_message TEXT,
@@ -32,7 +32,13 @@ CREATE TABLE connections (
   deleted_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  CHECK ((status = 'stopped') = (stopped_reason IS NOT NULL))
+  CHECK ((status = 'stopped') = (stopped_reason IS NOT NULL)),
+  -- 認証情報の3列は組で入り、削除したら全部消える（鍵の入れ替えは credential_key_version で選ぶ）
+  CHECK (
+    (credential_ciphertext IS NULL) = (credential_key_version IS NULL)
+    AND (credential_ciphertext IS NULL) = (credential_last4 IS NULL)
+  ),
+  CHECK (deleted_at IS NULL OR credential_ciphertext IS NULL)
 );
 
 CREATE INDEX connections_workspace ON connections (workspace_id) WHERE deleted_at IS NULL;
@@ -69,13 +75,15 @@ CREATE TABLE task_sources (
   source_container_id TEXT NOT NULL,
   source_container_name TEXT NOT NULL,
   source_status TEXT NOT NULL,
-  source_due_on TEXT,
+  source_due_on TEXT CHECK (source_due_on IS date(source_due_on)),
   source_updated_at TEXT NOT NULL,
   is_source_done INTEGER NOT NULL DEFAULT 0 CHECK (is_source_done IN (0, 1)),
   missing_since_at TEXT,
   last_seen_at TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  -- レビュアーの ID はレビュー依頼のときだけ入る（一意のキーで依頼をレビュアーごとに分けるため）
+  CHECK ((source_kind = 'review_request') = (reviewer_source_id <> ''))
 );
 
 CREATE UNIQUE INDEX task_sources_identity
@@ -85,7 +93,7 @@ CREATE INDEX task_sources_container ON task_sources (workspace_id, source_contai
 
 CREATE TABLE task_source_payloads (
   task_id TEXT NOT NULL PRIMARY KEY REFERENCES tasks (id),
-  payload_json TEXT NOT NULL,
+  payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
   is_truncated INTEGER NOT NULL DEFAULT 0 CHECK (is_truncated IN (0, 1)),
   updated_at TEXT NOT NULL
 );
