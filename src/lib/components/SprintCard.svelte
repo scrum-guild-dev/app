@@ -59,9 +59,10 @@
   const done = $derived(task.completed_at !== null);
   const movable = $derived(edges !== null);
   const column = $derived(t('column'));
-  // 末尾の危険色の項目。確認は挟まない（消したらトーストの「取り消す」で戻せる）。完了したカードにも出す（引き出しの削除と同じ条件）
+  // 末尾の危険色の項目。確認は挟まない（消したらトーストの「取り消す」で戻せる）。動かせるカード（完了していない）だけに出す
+  // （見本の kit.js の card と同じ。完了したカードは、消して取り消しても完了のポイントがそのスプリントに戻らないため）
   const deleteItems = $derived<RowMenuItem[]>(
-    ondelete !== undefined && task.can_delete
+    ondelete !== undefined && task.can_delete && movable
       ? [
           {
             key: 'delete',

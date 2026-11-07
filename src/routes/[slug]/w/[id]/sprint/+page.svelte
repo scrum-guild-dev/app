@@ -18,8 +18,8 @@
   import SprintGoalNotice from '../../../../../lib/components/SprintGoalNotice.svelte';
   import SprintCloseDialog from '../../../../../lib/components/SprintCloseDialog.svelte';
   import SprintOverdueNotice from '../../../../../lib/components/SprintOverdueNotice.svelte';
-  import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../../lib/focus-heading.ts';
-  import { removeFromList } from '../../../../../lib/task-removal.ts';
+  import { focusPageHeading } from '../../../../../lib/focus-heading.ts';
+  import { focusRestored, focusSkipped, removeFromList } from '../../../../../lib/task-removal.ts';
   import { MoveQueue } from '../../../../../lib/move-queue.ts';
   import { edgesOf, planCardMove, type MoveDirection, type MoveEdge } from '../../../../../lib/sprint-board.ts';
   import { SprintDnd } from '../../../../../lib/sprint-dnd.svelte.ts';
@@ -460,15 +460,17 @@
       taskId: task.id,
       title: task.title,
       keyboard,
+      fromSprint: true,
       reload,
       onstale: () => void invalidate('app:workspace'),
-      // 取り消したカードの題のリンクへ（ボードに無ければ見出しへ）。押したボタンにフォーカスがあったときだけ移す
+      // 取り消したタスクはスプリントには戻らずバックログにある。ボードに題のリンクが無いので見出しへ移す
+      // （押したボタンにフォーカスがあったときだけ）。トーストは画面をまたいで残るので、バックログの木も読み直す
       onrestored: async (restoredId, focus) => {
+        void invalidate('app:backlog-tree');
         await reload();
-        await tick();
-        if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
+        await focusRestored(restoredId, focus);
       },
-      onskipped: (near) => void tick().then(() => focusFirstTaskRow([near?.next ?? null, near?.prev ?? null])),
+      onskipped: focusSkipped,
     });
   }
 

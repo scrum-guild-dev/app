@@ -2,8 +2,9 @@ import { tick } from 'svelte';
 import { taskDelete, taskRestore, taskRestoreConflictReasonOf } from '../shared/operations/task/index.ts';
 import { callOperation } from './api.ts';
 import type { AdjacentTasks } from './drawer.svelte.ts';
-import { focusIsFree, focusPageHeading } from './focus-heading.ts';
+import { focusFirstTaskRow, focusIsFree, focusPageHeading } from './focus-heading.ts';
 import { focusToastAction, pauseToast, resumeToast, showToast, type ToastAction } from './toast.svelte.ts';
+import { visibleTaskIds } from './task-order.ts';
 import { t } from './vocabulary.svelte.ts';
 
 // タスクの削除と取り消し。引き出しの「この<タスク>を削除する」と、バックログの行とスプリントのカードの「⋯」が同じ文と同じフォーカスの扱いを使う。
@@ -21,7 +22,18 @@ export type RestoreTarget = {
   onstale: () => void;
   onrestored: ((taskId: string, focus: boolean) => Promise<void>) | undefined;
   onskipped: ((near: AdjacentTasks | null) => void) | undefined;
+  // スプリントのボードから消したとき真。取り消しはスプリントには戻さない（task-restore）ので、戻した文でバックログにあることを伝える
+  fromSprint?: boolean;
 };
+
+// 戻したことを知らせる文。外した参照があればそれを添え、ボードから消したときはバックログにあることを添える
+function restoredMessage(target: RestoreTarget, cleared: readonly string[] = []): string {
+  if (cleared.length > 0) return t('taskRestoredCleared', { task: t('task'), fields: cleared.join('、') });
+  if (target.fromSprint === true) {
+    return t('taskRestoredToBacklog', { task: t('task'), sprint: t('sprint'), backlog: t('backlog') });
+  }
+  return t('taskRestored', { task: t('task') });
+}
 
 // 消したことを知らせるトースト。「取り消す」を押すと task-restore を送り、木を読み直す
 export function announceRemoved(target: RestoreTarget): number {
@@ -48,12 +60,7 @@ export async function restoreRemoved(target: RestoreTarget, focused = false): Pr
   );
   if (result.ok) {
     const cleared = result.data.cleared.map((field) => t(field));
-    showToast(
-      cleared.length > 0
-        ? t('taskRestoredCleared', { task: t('task'), fields: cleared.join('、') })
-        : t('taskRestored', { task: t('task') }),
-      'check',
-    );
+    showToast(restoredMessage(target, cleared), 'check');
     if (target.onrestored === undefined) target.onchanged();
     else await target.onrestored(target.taskId, focused);
   } else if (result.status === 401) {
@@ -73,7 +80,7 @@ export async function restoreRemoved(target: RestoreTarget, focused = false): Pr
     const reason = taskRestoreConflictReasonOf(result.error?.details);
     if (reason === 'not_deleted') {
       // 前の要求は書けたが応答だけが落ちて出し直した、または別の画面が先に戻した。戻っているので、成功と同じに扱う
-      showToast(t('taskRestored', { task: t('task') }), 'check');
+      showToast(restoredMessage(target), 'check');
       if (target.onrestored === undefined) target.onchanged();
       else await target.onrestored(target.taskId, focused);
       return;
@@ -108,10 +115,12 @@ function keepFocus(focused: boolean): void {
 }
 
 // 画面に並んだ題のリンク（data-task-id）の順で、タスクの前後の行。端では null。画面に無ければ null
+// スプリントのボードでは、同じ列（.board-col）の中の前後にする（列をまたいで隣の列の先頭へ行かない）
 export function adjacentRowsOf(taskId: string): AdjacentTasks | null {
-  const ids = [...document.querySelectorAll<HTMLElement>('[data-task-id]')]
-    .map((element) => element.dataset.taskId)
-    .filter((id): id is string => id !== undefined);
+  const own = document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(taskId)}"]`);
+  const scope: ParentNode = own?.closest('.board-col') ?? document;
+  // 畳んだ枝の中の見えない行と、重複した行は外す（引き出しの前後の順と同じ。見えない行へはフォーカスを移せない）
+  const ids = visibleTaskIds(scope);
   const index = ids.indexOf(taskId);
   if (index < 0) return null;
   return { prev: ids[index - 1] ?? null, next: ids[index + 1] ?? null };
@@ -130,11 +139,26 @@ export type RemoveFromListArgs = {
   // 取り消した後（押したボタンにフォーカスがあったとき focus が真）と Esc で閉じた後のフォーカス
   onrestored: (taskId: string, focus: boolean) => Promise<void>;
   onskipped: (near: AdjacentTasks | null) => void;
+  // スプリントのボードから消すとき真（取り消しの文でバックログにあることを伝える）
+  fromSprint?: boolean;
 };
+
+// 送っている間のタスク。同じタスクを続けて選んでも、2回目は送らない（2回目は 404 の警告を出してしまうため）
+const removing = new Set<string>();
 
 // 行とカードの「⋯」から消す。確認は挟まない。通ったらトーストを出して一覧を読み直し、失敗は理由をトーストで知らせる。
 // 消した行は読み直しで無くなるので、フォーカスは行の前後（無ければ見出し）へ移す。キーボードのときは続けて「取り消す」へ移す
 export async function removeFromList(args: RemoveFromListArgs): Promise<void> {
+  if (removing.has(args.taskId)) return;
+  removing.add(args.taskId);
+  try {
+    await removeOnce(args);
+  } finally {
+    removing.delete(args.taskId);
+  }
+}
+
+async function removeOnce(args: RemoveFromListArgs): Promise<void> {
   // 行が消える前に、近い行を控える
   const near = adjacentRowsOf(args.taskId);
   const result = await callOperation(
@@ -153,6 +177,7 @@ export async function removeFromList(args: RemoveFromListArgs): Promise<void> {
       onstale: args.onstale,
       onrestored: args.onrestored,
       onskipped: args.onskipped,
+      fromSprint: args.fromSprint === true,
     });
     // キーボードで消したときは、木の読み直しを待つ間に10秒が尽きないよう、数えを止める（フォーカスが外れると数え直す）
     if (args.keyboard) pauseToast(toastId);
@@ -169,13 +194,17 @@ export async function removeFromList(args: RemoveFromListArgs): Promise<void> {
       resumeToast(toastId);
       return;
     }
-    focusPageHeading();
-    await focusToastAction(toastId);
+    // 見出しを経由しない（長い一覧の途中で消したとき、見出しへのフォーカスでページの先頭へスクロールしてしまうため）。
+    // 着かなかったときだけ、フォーカスが body に落ちないよう見出しへ置く
+    if (!(await focusToastAction(toastId)) && focusIsFree()) focusPageHeading();
   } else if (result.status === 401) {
     args.onstale();
   } else if (result.status === 404) {
     showToast(t('taskGone', { task: t('task') }), 'alert');
     await args.reload();
+    // 行が消えて、キーボードで押した「⋯」のフォーカスが失われる。待つ間に別の所へ移した人からは奪わない
+    await tick();
+    if (args.keyboard && focusIsFree()) focusPageHeading();
   } else if (result.status === 403) {
     showToast(t('taskDeleteForbidden', { leader: t('leader') }), 'alert');
     await args.reload();
@@ -189,4 +218,16 @@ export async function removeFromList(args: RemoveFromListArgs): Promise<void> {
   } else {
     showToast(t('taskDeleteFailed'), 'alert');
   }
+}
+
+// 「取り消す」で戻した後のフォーカス。木かボードを読み直したあと、押したボタンにフォーカスがあり、待つ間に利用者が別へ移っていなければ、
+// 戻したタスクの題のリンクへ（無ければ見出しへ）移す
+export async function focusRestored(restoredId: string, focus: boolean): Promise<void> {
+  await tick();
+  if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
+}
+
+// フォーカスがある「取り消す」を Esc で閉じた後のフォーカス。消した行の次の行、無ければ前の行、無ければ見出しへ移す
+export function focusSkipped(near: AdjacentTasks | null): void {
+  void tick().then(() => focusFirstTaskRow([near?.next ?? null, near?.prev ?? null]));
 }

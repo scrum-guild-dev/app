@@ -117,7 +117,8 @@
   const hasGrip = $derived(onMove !== undefined && dnd !== undefined);
   const parentMovable = $derived(onMoveParent !== undefined && !done);
   // 削除は、画面が onDelete を渡し（書き込めるとき）、サーバーが削除できると答えた行（can_delete。作った人とリーダー、取り込んでいない）だけ
-  const deletable = $derived(onDelete !== undefined && task.can_delete);
+  // 完了にした直後の行（読み直すまでその場に残る）には出さない
+  const deletable = $derived(onDelete !== undefined && task.can_delete && !done);
 
   // ---- 担当とポイントのチップ ----
   type PointsChoice = (typeof TASK_POINT_VALUES)[number] | null;

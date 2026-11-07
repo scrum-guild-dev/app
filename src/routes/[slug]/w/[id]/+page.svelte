@@ -36,8 +36,7 @@
   import { moveFailureMessage } from '../../../../lib/move-failure.ts';
   import { trackStoryOrder, trackTaskOrder } from '../../../../lib/task-order.ts';
   import { completedMessage } from '../../../../lib/sprint-label.ts';
-  import { focusFirstTaskRow, focusIsFree } from '../../../../lib/focus-heading.ts';
-  import { removeFromList } from '../../../../lib/task-removal.ts';
+  import { focusRestored, focusSkipped, removeFromList } from '../../../../lib/task-removal.ts';
   import { showToast } from '../../../../lib/toast.svelte.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import { epicCreate, epicMove } from '../../../../shared/operations/epic/index.ts';
@@ -482,10 +481,9 @@
       onstale: () => void invalidateAll(),
       onrestored: async (restoredId, focus) => {
         await reload();
-        await tick();
-        if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
+        await focusRestored(restoredId, focus);
       },
-      onskipped: (near) => void tick().then(() => focusFirstTaskRow([near?.next ?? null, near?.prev ?? null])),
+      onskipped: focusSkipped,
     });
   }
 

@@ -1726,6 +1726,7 @@ export const dictionary = defineDictionary({
   taskRestoreAction: '取り消す',
   taskRestoreActionLabel: '{action}: {title}',
   taskRestored: '{task}を戻しました',
+  taskRestoredToBacklog: '{task}を戻しました。{sprint}には戻らず、{backlog}にあります',
   taskRestoreFailed: '取り消せませんでした',
   taskRestoreRetry: '取り消せませんでした。通信を確かめて、もう一度試してください',
   taskRestoredCleared: '{task}を戻しました。{fields}は、削除の間に変わったため外しました',
