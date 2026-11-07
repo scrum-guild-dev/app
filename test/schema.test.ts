@@ -1416,3 +1416,101 @@ describe('組織ごとの認証日時の nullable CHECK', () => {
     }
   });
 });
+
+describe('connections と task_sources', () => {
+  async function setup() {
+    const { userId, workspaceId } = await workspace();
+    const connectionId = id();
+    await insertConnection({ connectionId, workspaceId, userId });
+    const taskId = id();
+    await run(
+      `INSERT INTO tasks (id, workspace_id, is_imported, tray, title, position, created_by, created_at, updated_at) VALUES (?, ?, 1, 'inbox', '取り込んだタスク', 'a0', ?, ?, ?)`,
+      taskId,
+      workspaceId,
+      userId,
+      AT,
+      AT,
+    );
+    return { userId, workspaceId, connectionId, taskId };
+  }
+
+  function insertConnection(c: {
+    connectionId: string;
+    workspaceId: string;
+    userId: string;
+    status?: string;
+    stoppedReason?: string | null;
+    scopeMode?: string;
+  }) {
+    return run(
+      `INSERT INTO connections (id, workspace_id, owner_user_id, provider, name, status, stopped_reason, scope_mode, created_at, updated_at) VALUES (?, ?, ?, 'github', '接続', ?, ?, ?, ?, ?)`,
+      c.connectionId,
+      c.workspaceId,
+      c.userId,
+      c.status ?? 'active',
+      c.stoppedReason ?? null,
+      c.scopeMode ?? 'include',
+      AT,
+      AT,
+    );
+  }
+
+  function insertSource(s: {
+    taskId: string;
+    workspaceId: string;
+    connectionId: string;
+    kind?: string;
+    sourceId?: string;
+    reviewer?: string;
+  }) {
+    return run(
+      `INSERT INTO task_sources (task_id, workspace_id, connection_id, provider, source_kind, source_id, reviewer_source_id, source_key, source_url, source_container_id, source_container_name, source_status, source_updated_at, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, 'github', ?, ?, ?, 'a/b#1', 'https://github.com/a/b/issues/1', '1', 'a/b', 'open', ?, ?, ?, ?)`,
+      s.taskId,
+      s.workspaceId,
+      s.connectionId,
+      s.kind ?? 'issue',
+      s.sourceId ?? 'node-1',
+      s.reviewer ?? '',
+      AT,
+      AT,
+      AT,
+      AT,
+    );
+  }
+
+  test('停止の理由は、停止のときだけ入る。状態と範囲の方式は決まった値だけ', async () => {
+    const { userId, workspaceId } = await setup();
+    const base = { workspaceId, userId };
+    await expect(
+      insertConnection({ ...base, connectionId: id(), status: 'stopped', stoppedReason: 'owner' }),
+    ).resolves.toBeTruthy();
+    await expect(insertConnection({ ...base, connectionId: id(), status: 'stopped' })).rejects.toThrow(/CHECK/);
+    await expect(insertConnection({ ...base, connectionId: id(), stoppedReason: 'owner' })).rejects.toThrow(/CHECK/);
+    await expect(insertConnection({ ...base, connectionId: id(), status: 'paused' })).rejects.toThrow(/CHECK/);
+    await expect(insertConnection({ ...base, connectionId: id(), scopeMode: 'all' })).rejects.toThrow(/CHECK/);
+  });
+
+  test('同じ項目は1件。レビュー依頼だけレビュアーごとに分かれる', async () => {
+    const { workspaceId, connectionId, taskId, userId } = await setup();
+    await expect(insertSource({ taskId, workspaceId, connectionId })).resolves.toBeTruthy();
+    const other = id();
+    await run(
+      `INSERT INTO tasks (id, workspace_id, is_imported, tray, title, position, created_by, created_at, updated_at) VALUES (?, ?, 1, 'inbox', '別のタスク', 'a1', ?, ?, ?)`,
+      other,
+      workspaceId,
+      userId,
+      AT,
+      AT,
+    );
+    await expect(insertSource({ taskId: other, workspaceId, connectionId })).rejects.toThrow(/UNIQUE/);
+    await expect(
+      insertSource({ taskId: other, workspaceId, connectionId, kind: 'review_request', reviewer: 'u1' }),
+    ).resolves.toBeTruthy();
+    await expect(insertSource({ taskId: id(), workspaceId, connectionId, sourceId: 'node-2' })).rejects.toThrow(
+      /FOREIGN KEY/,
+    );
+    await expect(
+      insertSource({ taskId: other, workspaceId, connectionId, kind: 'epic', sourceId: 'node-3' }),
+    ).rejects.toThrow(/CHECK/);
+  });
+});

@@ -17,6 +17,9 @@ import {
   createAccountLogin,
   createAttachment,
   createBoardColumn,
+  createConnection,
+  createConnectionScope,
+  createConnectionStatusMapping,
   createCategory,
   createChangeLog,
   createComment,
@@ -35,6 +38,8 @@ import {
   createStory,
   createTask,
   createTaskFieldValue,
+  createTaskSource,
+  createTaskSourcePayload,
   createThanks,
   createUser,
   createWorkspace,
@@ -92,6 +97,11 @@ async function fillOrganization(organization: Awaited<ReturnType<typeof createOr
   });
   await createSprintEntry(organization, ws, sprint.id, task.id, admin.id);
   await createTaskFieldValue(organization, task.id, field.id, member.id);
+  const connection = await createConnection(organization, ws, member.id);
+  await createConnectionScope(organization, connection.id);
+  await createConnectionStatusMapping(organization, connection.id, column.id);
+  await createTaskSource(organization, ws, task.id, connection.id);
+  await createTaskSourcePayload(organization, task.id);
   // 討伐隊は workspace_id を持たず、エピックを通して組織に結ぶ
   await createEpicPartyMember(organization, epic.id, member.id, { added_by: admin.id });
   await createThanks(organization, ws, task.id, admin.id, member.id);

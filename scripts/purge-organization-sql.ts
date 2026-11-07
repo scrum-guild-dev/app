@@ -18,7 +18,7 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // 組織で絞る条件の形。epic は workspace_id を持たず、エピックを通して組織に結ぶ表（epic_party_members）
-type Scope = 'organization' | 'workspace' | 'epic' | 'task';
+type Scope = 'organization' | 'workspace' | 'epic' | 'task' | 'connection';
 
 // 外部キーの子から順。xp_grants は自分の表を指す（reverses_grant_id）が、1文で組織の行をまとめて消すので、文の終わりの検査に当たらない
 const TABLES: readonly (readonly [table: string, scope: Scope])[] = [
@@ -31,6 +31,11 @@ const TABLES: readonly (readonly [table: string, scope: Scope])[] = [
   ['organization_holidays', 'organization'],
   ['sprint_entries', 'workspace'],
   ['task_field_values', 'task'],
+  ['task_source_payloads', 'task'],
+  ['task_sources', 'task'],
+  ['connection_status_mappings', 'connection'],
+  ['connection_scopes', 'connection'],
+  ['connections', 'workspace'],
   ['tasks', 'workspace'],
   ['stories', 'workspace'],
   ['epic_party_members', 'epic'],
@@ -59,6 +64,8 @@ function scopeOf(scope: Scope, id: string): string {
   if (scope === 'organization') return `organization_id = ${id}`;
   if (scope === 'workspace') return `workspace_id IN (${workspaces})`;
   if (scope === 'task') return `task_id IN (SELECT id FROM tasks WHERE workspace_id IN (${workspaces}))`;
+  if (scope === 'connection')
+    return `connection_id IN (SELECT id FROM connections WHERE workspace_id IN (${workspaces}))`;
   return `epic_id IN (SELECT id FROM epics WHERE workspace_id IN (${workspaces}))`;
 }
 

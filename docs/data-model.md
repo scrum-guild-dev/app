@@ -713,7 +713,7 @@
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
 | connection_id | TEXT | PK、FK connections | |
-| scope_kind | TEXT | PK | 範囲の種類（初版は `backlog_project`、`github_owner`、`github_repo`）。取り込み元の型が定義し、アプリが検証する |
+| scope_kind | TEXT | PK | 範囲の種類（初版は `backlog_project`、`github_repo`）。取り込み元の型が定義し、アプリが検証する |
 | source_id | TEXT | PK | 取り込み元の ID |
 | source_name | TEXT | NOT NULL | 選んだときの表示名 |
 
