@@ -35,6 +35,8 @@ export interface Shortcut {
   inModal?: boolean;
   // 押しっぱなしの繰り返しでも働くか（既定は働かない）
   repeat?: boolean;
+  // ヒント（⌘ を押し続けたときに角へ出すキー）を付ける要素。返さない（未定義、null）間は出さない。入力欄は包む枠を返す
+  hintAnchor?: () => HTMLElement | null | undefined;
 }
 
 interface Entry {
@@ -71,15 +73,21 @@ export class ShortcutRegistry {
     };
   }
 
+  // 今、そのキーを押せば働く状況か（文字を打つ場所、ダイアログ、enabled。振り分けとヒントが同じ判定を使う）
+  isAvailable(shortcut: Shortcut, target: EventTarget | null): boolean {
+    if (!shortcut.inTyping && isTypingTarget(target)) return false;
+    if (!shortcut.inModal && isDialogOpen()) return false;
+    if (shortcut.enabled && !shortcut.enabled()) return false;
+    return true;
+  }
+
   // keydown を振り分ける。働いたら true（preventDefault 済み）
   handle = (event: KeyEventLike & { preventDefault(): void }): boolean => {
     if (event.defaultPrevented || isComposingKey(event)) return false;
     const entry = this.#entries.find(({ parsed }) => matchesKeys(parsed, event));
     if (!entry) return false;
     const { shortcut } = entry;
-    if (!shortcut.inTyping && isTypingTarget(event.target)) return false;
-    if (!shortcut.inModal && isDialogOpen()) return false;
-    if (shortcut.enabled && !shortcut.enabled()) return false;
+    if (!this.isAvailable(shortcut, event.target)) return false;
     // 押しっぱなしの繰り返しは働かせない。Ctrl/⌘ 付きのキーだけは奪う（Ctrl+K の長押しで、ブラウザの標準の Ctrl+K が動かないように）
     if (event.repeat && !shortcut.repeat) {
       if (!entry.parsed.mod) return false;

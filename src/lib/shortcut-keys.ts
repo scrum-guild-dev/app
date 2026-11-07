@@ -51,6 +51,19 @@ export function ariaKeyshortcuts(keys: string): string {
   return mod ? `Control+${upper} Meta+${upper}` : key;
 }
 
+// ヒントに見せる文字（`Mod+K` は Mac が `⌘K`、ほかは `Ctrl K`。単キーはそのまま）
+export function hintText(keys: string, mac: boolean): string {
+  const { mod, key } = parseKeys(keys);
+  if (!mod) return key;
+  const upper = key.toUpperCase();
+  return mac ? `⌘${upper}` : `Ctrl ${upper}`;
+}
+
+// Mac 系か（⌘ を押し続けたときにヒントを出す。ほかは Ctrl）
+export function isMacPlatform(platform: string | undefined = globalThis.navigator?.platform): boolean {
+  return /Mac|iPhone|iPad/.test(platform ?? '');
+}
+
 // 日本語の変換中のキー。keyCode 229 は、isComposing が偽になる Safari の変換確定の直後も含む
 export function isComposingKey(event: Pick<KeyEventLike, 'isComposing' | 'keyCode'>): boolean {
   return event.isComposing || event.keyCode === 229;

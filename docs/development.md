@@ -154,7 +154,8 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 - 同じキーを同時に2つ登録すると、開発（`import.meta.env.DEV`）では例外にして、本番では後の登録を無視する（先の登録を壊さない）。`Mod+K` と `Mod+k` のように、書き方が違っても同じキーなら重なりとして数える。同時に置く部品が同じキーを使わないよう、`id` は部品ごとに決める。
 - ブラウザの標準のショートカット（⌘N、⌘T、⌘W など）は奪えないので割り当てない。新規作成のような単独の操作は、修飾キーなしの単キーにする。
 - Ctrl+K は、日本語の変換中は働かず、押しっぱなしでは欄へ移り直さず、ほかの処理が受けたキー（`defaultPrevented`）は奪わない。
-- テストは `src/lib/shortcut-keys.test.ts`（キーの書き方と判定）と `src/lib/shortcuts.svelte.test.ts`（登録、振り分け、衝突）。
+- ヒント（⌘ か Ctrl を約0.3秒押し続けた間だけ、角にキーを出す）は、登録から引く。ボタンに直に属性や `kbd` を書かない。出したい登録に `hintAnchor: () => 要素` を足す（入力欄は包む枠を返す。要素が無い間は出ない）。`src/routes/+layout.svelte` に置いた `ShortcutHints.svelte` が `window` で修飾キーを受け、状態は `src/lib/shortcut-hints.svelte.ts` が持つ。出すのは、今そのキーを押せば働くもの（`inTyping`、`inModal`、`enabled` を振り分けと同じ `isAvailable` で見る）だけで、`aria-disabled="true"` の要素には出さない。見た目だけなので `aria-hidden` で、キーの読み上げは今までどおり `aria-keyshortcuts`。決まりは `docs/design.md` の「ショートカットのヒント」。
+- テストは `src/lib/shortcut-keys.test.ts`（キーの書き方と判定）、`src/lib/shortcuts.svelte.test.ts`（登録、振り分け、衝突）、`src/lib/shortcut-hints.svelte.test.ts`（ヒントを出す条件と対象）。e2e は `e2e/shortcut-hint.test.ts`。
 
 ### 書体
 

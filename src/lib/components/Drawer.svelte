@@ -100,6 +100,7 @@
     label: () => t('drawerPrev', { task: word }),
     inModal: true,
     enabled: () => stepping && modalState.openCount === 0,
+    hintAnchor: () => drawerElement?.querySelector<HTMLElement>('[data-drawer-step="-1"]'),
     run: () => step(-1, 'key'),
   }));
   useShortcut(() => ({
@@ -108,6 +109,7 @@
     label: () => t('drawerNext', { task: word }),
     inModal: true,
     enabled: () => stepping && modalState.openCount === 0,
+    hintAnchor: () => drawerElement?.querySelector<HTMLElement>('[data-drawer-step="1"]'),
     run: () => step(1, 'key'),
   }));
 

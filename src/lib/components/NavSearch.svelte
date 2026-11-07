@@ -89,6 +89,7 @@
     keys: SEARCH_KEYS,
     label: () => t('navSearchLabel'),
     inTyping: true,
+    hintAnchor: () => root,
     run: () => {
       if (document.activeElement !== input)
         opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
