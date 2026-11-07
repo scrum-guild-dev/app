@@ -1647,6 +1647,10 @@ export const dictionary = defineDictionary({
   shortcutNewTask: '{task}を書く',
   // メニューの項目の説明（読み上げ）。{first} を押した次に {next} を押すと移る
   shortcutGoHint: 'ショートカット: {first} を押してから {next} を押す',
+  // ショートカットの一覧（? で開くダイアログ）。見出しの「この画面」は今の画面だけで効くキー、「どの画面でも」は全体で効くキー
+  shortcutHelp: 'ショートカットの一覧',
+  shortcutHelpScreen: 'この画面',
+  shortcutHelpGlobal: 'どの画面でも',
   drawerTab: '新しいタブ',
   drawerTabBlocked: '新しいタブを開けませんでした',
   // 上の帯の前後のボタン。{task} は一覧の前後に並ぶ行の呼び名。キーボードは [ と ]

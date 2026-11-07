@@ -1654,7 +1654,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       <div class="dialog-head"><h2 class="dialog-title" id="dialog-title">${title}</h2>
         <button class="pill" type="button" data-close-dialog aria-label="閉じる">${icon("x")}</button></div>
       <div class="dialog-body">${body}</div>
-      <div class="dialog-foot">${foot}</div></div>`;
+      ${foot ? `<div class="dialog-foot">${foot}</div>` : ""}</div>`;
     el.hidden = false;
     (el.querySelector("input, textarea, select, .btn.is-primary") || el.querySelector("[data-close-dialog]")).focus();
   }
@@ -2182,6 +2182,14 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
          <span class="field-hint">保存せずに閉じると、上げたファイルは 1 日で消えます。</span></div>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("backlog")}の末尾に足しました">${t("create")}</button>`),
     // 引き出しで書きかけの欄があるまま閉じる（か別のタスクへ移る）ときに、捨てるかを確かめる。安全な側（続ける）を主ボタンにする
+    // ショートカットの一覧（本番の ShortcutHelp）。? で開く。今の画面のキーを上に、どの画面でも効くキーをその下に並べる。足元の操作は無く、Esc か × で閉じる
+    shortcutHelp: () => {
+      const group = (title, rows) => `<section class="shortcut-group"><h3 class="shortcut-group-title">${title}</h3><dl class="shortcut-list">${rows.map(([name, key]) => `<div class="shortcut-row"><dt>${name}</dt><dd><kbd class="kbd">${key}</kbd></dd></div>`).join("")}</dl></section>`;
+      openDialog("ショートカットの一覧",
+        group("この画面", [[`${t("task")}を書く`, "c"]]) +
+        group("どの画面でも", [["画面とタスクを探す", keyHints.mac ? "⌘K" : "Ctrl K"], [`${t("sprint")}へ移る`, "g s"], [`${t("backlog")}へ移る`, "g b"], ["ショートカットの一覧", "?"]]),
+        "");
+    },
     discardDraft: () => {
       openDialog("書きかけを捨てますか",
         `<p>保存していない変更があります。捨てると元に戻せません。</p>`,
@@ -3599,6 +3607,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     keyHints.timer = setTimeout(() => keyHints.show(), keyHints.delay);
   });
   document.addEventListener("keyup", (ev) => { if (ev.key === keyHints.modKey()) keyHints.hide(); });
+  // ? で、ショートカットの一覧を開く。入力欄の中、日本語の変換中、ダイアログが開いている間は開かない（本番は登録の既定で振り分ける）
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "?" || ev.ctrlKey || ev.metaKey || ev.altKey || ev.isComposing || ev.keyCode === 229 || ev.defaultPrevented) return;
+    if (ev.target.closest?.("input, textarea, select, [contenteditable]") || !document.getElementById("dialog")?.hidden) return;
+    ev.preventDefault(); DIALOGS.shortcutHelp();
+  });
   window.addEventListener("blur", () => keyHints.hide());
   window.addEventListener("resize", () => keyHints.hide());
   document.addEventListener("scroll", () => keyHints.hide(), true);

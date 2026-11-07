@@ -98,6 +98,7 @@
       id: `go-${key}`,
       keys: GO_KEYS[key]!,
       label: () => t('shortcutGo', { screen: t(key) }),
+      global: true,
       enabled: () => {
         const href = goHref(key);
         return href !== null && href !== current;
