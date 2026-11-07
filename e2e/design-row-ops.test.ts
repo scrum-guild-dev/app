@@ -189,11 +189,11 @@ test('見本のスプリント: 先頭の列のカードのメニューが、盤
 
 test('見本のバックログ: 続けて消した2件を古い方から取り消しても、元の並びに戻る', async ({ page }) => {
   await openSample(page, 'backlog.html');
-  const titles = page.locator('.tree > div:last-child > .entry .entry-title');
+  const titles = page.locator('.tree > div:has(> .entry) > .entry .entry-title');
   const before = await titles.allTextContents();
   for (let i = 0; i < 2; i++) {
-    await page.locator('.tree > div:last-child > .entry').first().hover();
-    await page.locator('.tree > div:last-child > .entry .row-menu-btn').first().click();
+    await page.locator('.tree > div:has(> .entry) > .entry').first().hover();
+    await page.locator('.tree > div:has(> .entry) > .entry .row-menu-btn').first().click();
     await page.locator('.row-menu-list:not([hidden]) [data-task-delete]').click();
   }
   await page.locator('.toast-action').first().click();
@@ -277,7 +277,7 @@ test('見本のバックログ: 幅 390px で、チップの上端の外側 20px
 
 test('見本のバックログ: 下の行を先に、上の行を後に消し、古い方から取り消しても元の並びに戻る', async ({ page }) => {
   await openSample(page, 'backlog.html');
-  const rows = '.tree > div:last-child > .entry';
+  const rows = '.tree > div:has(> .entry) > .entry';
   const titles = page.locator(`${rows} .entry-title`);
   const before = await titles.allTextContents();
   // 2 行目、1 行目の順に消す

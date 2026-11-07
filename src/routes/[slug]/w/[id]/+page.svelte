@@ -630,6 +630,8 @@
       { workspace_id: workspace.id, title },
       { slug: page.params.slug ?? '' },
     );
+    // 送っている間に別のワークスペースへ移っていたら、成功も失敗も、古い応答で状態を触らない
+    if (sentFor !== page.params.id) return null;
     if (!result.ok) {
       if (result.status === 401) {
         await invalidateAll();
@@ -641,8 +643,6 @@
       }
       return t('epicCreateFailed');
     }
-    // 送っている間に別のワークスペースへ移っていたら、古い応答で状態を触らない
-    if (sentFor !== page.params.id) return null;
     const made = result.data.epic;
     if (filtering) {
       await saved('epic', made.id);
@@ -679,6 +679,8 @@
       { workspace_id: workspace.id, title, epic_id: epicId },
       { slug: page.params.slug ?? '' },
     );
+    // 送っている間に別のワークスペースへ移っていたら、成功も失敗も、古い応答で状態を触らない
+    if (sentFor !== page.params.id) return null;
     if (!result.ok) {
       if (result.status === 401) {
         await invalidateAll();
@@ -703,7 +705,6 @@
       }
       return t('storyCreateFailed');
     }
-    if (sentFor !== page.params.id) return null;
     const made = result.data.story;
     if (filtering) {
       await saved('story', made.id);

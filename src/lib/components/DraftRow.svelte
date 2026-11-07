@@ -75,28 +75,26 @@
   }
 </script>
 
-<div class="draft-wrap">
-  <div class="draft-row" data-draft-row>
-    <Icon name="plus" />
-    <label class="visually-hidden" for={inputId}>{name}</label>
-    <input
-      id={inputId}
-      bind:this={input}
-      bind:value
-      class="input"
-      type="text"
-      autocomplete="off"
-      enterkeyhint="done"
-      placeholder={t('draftPlaceholder', { label })}
-      readonly={sending}
-      aria-invalid={error !== null}
-      aria-describedby={error === null ? undefined : errorId}
-      oninput={() => (error = null)}
-      onkeydown={keydown}
-    />
-  </div>
-  <span class="visually-hidden" role="status">{sending ? t('treeAddSending') : ''}</span>
-  {#if error !== null}
-    <p class="field-error draft-error" id={errorId} role="alert">{error}</p>
-  {/if}
+<div class="draft-row" data-draft-row>
+  <Icon name="plus" />
+  <label class="visually-hidden" for={inputId}>{name}</label>
+  <input
+    id={inputId}
+    bind:this={input}
+    bind:value
+    class="input"
+    type="text"
+    autocomplete="off"
+    enterkeyhint="done"
+    placeholder={t('draftPlaceholder', { label })}
+    readonly={sending}
+    aria-invalid={error !== null}
+    aria-describedby={error === null ? undefined : errorId}
+    oninput={() => (error = null)}
+    onkeydown={keydown}
+  />
 </div>
+<span class="visually-hidden" role="status">{sending ? t('treeAddSending') : ''}</span>
+{#if error !== null}
+  <p class="field-error draft-error" id={errorId} role="alert">{error}</p>
+{/if}
