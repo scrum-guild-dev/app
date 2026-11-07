@@ -1014,6 +1014,16 @@ GitHub App も比べた。人が抜けても取り込みが止まらない、PAT
 - レート制限: ログインの開始（画面の移動だけ）と戻り先（state の Cookie が合い、DB の state の行を使い切れたものだけ）を、同じ IP（`CF-Connecting-IP`。無いリクエストは `unknown` の1つの枠。IPv4 はそのまま。IPv6 は、1人が /64 の中の無数のアドレスを使えるので、上位 64 ビット（/64）で数え、事業者の単位の /48 も、より緩い上限で数える。IPv4 を写した IPv6 は、16進と全部を書いた形も含めて IPv4 に直す。解釈できない値は `unknown` の枠）から10分に60回まで（`src/server/auth/rate-limit.ts` の `LOGIN_RATE_LIMIT`）。1回のログインで2回数えるので30人分。同じオフィスの15人のチームが一斉に入っても詰まらない値にした。IPv6 の /48 は10分に120回まで（`LOGIN_RATE_LIMIT_IPV6_SITE`）。開始だけは、全部の IP を合わせた全体の枠も10分に600回まで数える（`LOGIN_RATE_LIMIT_GLOBAL`。数える順と理由は `docs/data-model.md` の `rate_limits`）。どれかを超えたら `too_many`。どの枠も、上限に届いた後は行を書き換えずに断る。全体の枠で断った開始は、ログの `outcome` を `too_many_global` にする。戻りが超えたときは GitHub に問い合わせない。IP は `CF-Connecting-IP` を使うので、Cloudflare の Pseudo IPv4 を Overwrite で有効にしない（`docs/operations.md`）
 - ログアウト（操作 `logout`）: 今のセッションの行を消し、Cookie を消す。ほかの端末のセッションは残す
 
+### 取り込み元の型と GitHub の PAT（`src/server/import/`）
+
+置き場所は `src/server/import/`（人が差分を読む領域）。型は `source.ts`、取り込み元の一覧（種類から実装への表）を知るのは `index.ts` だけ。GitHub に固有の値（通信先、PAT の形、API の版）と処理は `github/` の外に出さず、取り込み元を足すときは型の実装と言葉の辞書のほかを変えない。取得と変換は後のタスクで足す。
+
+- 型（`ImportSource`）: 種類（`kind`）、範囲の種類（`scopeKind`。GitHub はリポジトリ）、固有の設定の検証 `parseSettings()`、認証情報の形の検査 `isCredentialShape()` と末尾4文字 `credentialLast4()`、認証情報の確かめ `verifyCredential()`（持ち主 `{kind, id, name}` を返す）、範囲の候補 `listScopeCandidates()`（`{id, name}` の一覧）。`fetcher` は呼ぶたびに渡す（`src/server/app.ts` の `fetcher` と同じ差し替え口）
+- 失敗は `ImportSourceError`（`failure` は `invalid_format`、`unauthorized`=401、`forbidden`=403 と 429、`unavailable`=5xx・届かない・3xx・想定と違う応答）で、4xx のうち 401 と 403・429 以外（404 など）は `unavailable`。レート制限（403・429）と権限の不足は `forbidden` に混ぜ、分けるのは再試行を作るタスクで足す。PAT の前後の空白は呼ぶ側が取る（形が合わず `invalid_format`）。メッセージは固定の文だけ。PAT、応答の本文、URL、例外の message を入れない。形が合わない認証情報は GitHub に問い合わせずに `invalid_format` で断る
+- GitHub の実装（`github/index.ts`）: fine-grained PAT（`github_pat_` + 英数字とアンダースコア22文字以上、全体で255文字まで。classic は受けない）。持ち主は `GET https://api.github.com/user`（`type` が `User` か `Organization`、`id` は正の整数を10進の文字列に、`login`）。候補は `GET https://api.github.com/user/repos?per_page=100&page=N` を100件未満の頁が来るまで送り（100頁まで。超えたら `unavailable`。期限は60秒で、各頁を始める前に判定するため、最悪は1回分の時間切れ（10秒）を足した時間。`Link` ヘッダーは見ず、満杯でない頁の後に続きは無いとみなす）、`id` で重複を除いて `{id, name: full_name}` にする。通信は `redirect: 'manual'` と10秒の時間切れで、`Authorization` 以外に PAT を出さない
+- 組織が持ち主の PAT では `GET /user` が PAT を作った人を返すため、持ち主を `organization` にできるか、候補が PAT で選んだリポジトリだけになるかは、本物の PAT で確かめる（#920）。確かめた結果でこの節を直す
+- 偽の API は `test/import/fake-github-pat.ts`（ログインの `test/auth/fake-github.ts` とは別）
+
 ## Google のログイン
 
 エンジニアでない人もチームに入るため、ログインの手段に Google を足す（2026-10-25 に決めた）。

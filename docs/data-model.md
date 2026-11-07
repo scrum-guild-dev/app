@@ -601,7 +601,7 @@
   - 完了の列は、足す、名前を直す、並べ替える、並べ替えの直前に指す対象に入らない。読む文も書く文も `is_done = 0` で絞るので、完了の列を指すと、無い列（別の組織、別のワークスペース、削除済みを含む）と同じ 404 になる。並べ替え（`column-move`）は `categories` の並べ替えと同じ決まり（`after_column_id`。`null` は先頭、省くと末尾、自分自身は 400 の `invalid_input`、同じ値の振り直しも同じ）で、完了の列は並びに入らない。並べ替えは `change_logs` に残さない。
   - 変更の履歴は `entity_type = 'workspace'`、`entity_id` はワークスペースの ID、`action = 'update'`（組織の変更の履歴の画面が出す `create`、`close`、`reopen` にしない）で、列の追加は `{"column": [null, {id, name}]}`、名前の変更は `{"column": [{id, name: 前}, {id, name: 後}]}`、削除は `{"column": [{id, name}, null]}`（タスクを移したときは `"target_column": [null, {id, name}]` も）。同じ `batch()` の中で、変えた文が行を書いたときだけ入れる（`previousStatementChanged`）。
   - 削除（`column-delete`）の入力は `column_id` と省ける `target_column_id`。完了の列は 409（`done_column`）、完了以外で最後の1つは 409（`last_column`）、移すタスクがあるのに `target_column_id` が無ければ 409（`target_required`）、移し先が削除する列自身か完了の列なら 409（`target_invalid`）、削除する列と移し先が無ければ（別の組織、別のワークスペース、削除済みを含む）404。移すのは、進行中と先のスプリント（削除していない `planned` と `active`）の、削除していない未完了のタスクで、移し先の列のそのスプリントでの末尾へ、元の列の中の順（`column_position`、`id`）を保って置く。終了したスプリントのカードは変えず、削除した列を指したまま残る（終了したスプリントの中身は変えない。終了したスプリントのカードを読む画面と操作は今無い。読むようになったら、削除した列も名前を出す）。移したタスクごとに `change_logs`（`entity_type = 'task'`、`action = 'update'`、`{"column": [{id, name}, {id, name}]}`。`task-column-move` と同じ形）を書く。書き方は「書き込みの単位」の「列の削除」。
-  - 取り込み元の状態から列への対応（`connection_status_mappings`）は表がまだ無いので、列の削除は触らない。表を使い始める #67 で、列の削除が対応を外してその状態を先頭の列に置く文を、同じ `batch()` に足す。
+  - 取り込み元の状態から列への対応（`connection_status_mappings`）は表を足した（#918）が、使い始めるのは #67 なので、列の削除は触らない。表を使い始める #67 で、列の削除が対応を外してその状態を先頭の列に置く文を、同じ `batch()` に足す。
 
 ### detail_fields
 
@@ -682,15 +682,15 @@
 | provider | TEXT | NOT NULL | 取り込み元の種類（初版は `backlog` と `github`）。値は取り込み元の型の一覧でアプリが検証する |
 | name | TEXT | NOT NULL | 本人が付けた表示名 |
 | status | TEXT | NOT NULL、`active`、`error`、`stopped` | |
-| stopped_reason | TEXT | `auth_failed`、`owner`、`leader`、`member_left`、`workspace_closed`、`user_disabled` | 停止の理由。`status = 'stopped'` のときだけ入る |
+| stopped_reason | TEXT | `auth_failed`、`owner`、`leader`、`member_left`、`workspace_closed`、`user_disabled` | 停止の理由。`status = 'stopped'` のときは必ず入り、ほかは空（`CHECK`） |
 | scope_mode | TEXT | NOT NULL、`include` か `exclude`、既定 `include` | 対象を挙げるか、除外を挙げるか |
 | ignore_source_due | INTEGER | NOT NULL、既定 0 | 取り込み元の期限を無視する |
-| settings_json | TEXT | NOT NULL、既定 `'{}'` | 取り込み元に固有の設定。Backlog のスペースのドメインとユーザー ID など。型が検証する |
+| settings_json | TEXT | NOT NULL、既定 `'{}'`、`json_valid` | 取り込み元に固有の設定。Backlog のスペースのドメインとユーザー ID、GitHub の PAT を発行したユーザーの ID（担当分の判定に使う「自分」）と PAT の持ち主（ユーザーか組織。範囲の候補を出す先）など。型が検証する |
 | credential_ciphertext | TEXT | | 暗号化した認証情報。退会で消す |
 | credential_key_version | INTEGER | | 暗号化に使った鍵の版 |
 | credential_last4 | TEXT | | 画面に出す末尾4文字 |
-| sync_state_json | TEXT | NOT NULL、既定 `'{}'` | 前回成功した時点と、上限で止めたときの続きの位置 |
-| reconcile_state_json | TEXT | NOT NULL、既定 `'{}'` | 1日1回の照合の続きの位置 |
+| sync_state_json | TEXT | NOT NULL、既定 `'{}'`、`json_valid` | 前回成功した時点と、上限で止めたときの続きの位置 |
+| reconcile_state_json | TEXT | NOT NULL、既定 `'{}'`、`json_valid` | 1日1回の照合の続きの位置 |
 | last_success_at | TEXT | | |
 | last_reconciled_at | TEXT | | |
 | last_error_message | TEXT | | |
@@ -700,6 +700,7 @@
 | deleted_at | TEXT | | |
 | created_at、updated_at | TEXT | NOT NULL | |
 
+- `CHECK`: `credential_ciphertext`、`credential_key_version`、`credential_last4` は3つとも空か3つとも入る。`deleted_at` が入っていれば認証情報は空。
 - 索引: `(workspace_id) WHERE deleted_at IS NULL`、`(owner_user_id)`。`owner_user_id` は外部キーの検査にも使うので、部分索引にしない。
 - 定期処理は `status IN ('active', 'error') AND deleted_at IS NULL` を `last_success_at` の古い順に処理する。
 - 削除は論理削除にする。取り込んだタスクが `task_sources.connection_id` で指すため。削除したら認証情報の列を消す。
@@ -713,7 +714,7 @@
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
 | connection_id | TEXT | PK、FK connections | |
-| scope_kind | TEXT | PK | 範囲の種類（初版は `backlog_project`、`github_owner`、`github_repo`）。取り込み元の型が定義し、アプリが検証する |
+| scope_kind | TEXT | PK | 範囲の種類（初版は `backlog_project`、`github_repo`）。取り込み元の型が定義し、アプリが検証する |
 | source_id | TEXT | PK | 取り込み元の ID |
 | source_name | TEXT | NOT NULL | 選んだときの表示名 |
 
@@ -729,7 +730,7 @@
 | source_status | TEXT | PK | 取り込み元の状態名 |
 | column_id | TEXT | NOT NULL、FK board_columns | 完了の列は選べない（アプリが検査） |
 
-列を削除したら、その列を指す行を消す。
+列を削除したら、その列を指す行を消す。索引: `(column_id)`（列の削除が対応を外す文と、外部キーの検査のため）。
 
 ## 計画と作業
 
@@ -945,13 +946,13 @@
 | provider | TEXT | NOT NULL | 取り込み元の種類。`connections.provider` と同じ値で、一意のキーに使う |
 | source_kind | TEXT | NOT NULL、`issue`、`pull_request`、`review_request` | 種別。取り込み元を問わず共通 |
 | source_id | TEXT | NOT NULL | 取り込み元の不変の ID |
-| reviewer_source_id | TEXT | NOT NULL、既定 `''` | レビュー依頼のレビュアーの取り込み元での ID。他の種別は空文字 |
+| reviewer_source_id | TEXT | NOT NULL、既定 `''` | レビュー依頼のレビュアーの取り込み元での ID。他の種別は空文字（`CHECK ((source_kind = 'review_request') = (reviewer_source_id <> ''))`） |
 | source_key | TEXT | NOT NULL | 課題キーや `owner/repo#12` など、取り込み元での表示用のキー。移動で変わるので検索と表示にだけ使う |
 | source_url | TEXT | NOT NULL | |
 | source_container_id | TEXT | NOT NULL | Backlog のプロジェクトや GitHub のリポジトリなど、取り込み元で項目が入る先の ID。絞り込みに使う |
 | source_container_name | TEXT | NOT NULL | |
 | source_status | TEXT | NOT NULL | 取り込み元での状態名 |
-| source_due_on | TEXT | | 取り込み元の期限 |
+| source_due_on | TEXT | `CHECK (source_due_on IS date(source_due_on))` | 取り込み元の期限（ワークスペースのタイムゾーンの日付に直して書く） |
 | source_updated_at | TEXT | NOT NULL | 差分の判定に使う |
 | is_source_done | INTEGER | NOT NULL、既定 0 | 「取り込み元で完了」の印 |
 | missing_since_at | TEXT | | 「取り込み元で見つからない」の印。入っていれば印あり |
@@ -969,7 +970,7 @@
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
 | task_id | TEXT | PK、FK tasks | |
-| payload_json | TEXT | NOT NULL | 本文とラベルを含む応答。大きすぎる分は切り詰める |
+| payload_json | TEXT | NOT NULL、`json_valid` | 本文とラベルを含む応答。大きすぎる分は、大きい項目を落として JSON として有効な形のまま切り詰める |
 | is_truncated | INTEGER | NOT NULL、既定 0 | |
 | updated_at | TEXT | NOT NULL | |
 
