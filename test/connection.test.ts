@@ -727,6 +727,7 @@ describe('connection-sync（今すぐ同期）', () => {
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe('workspace_closed');
     expect(ctx.github.calls).toHaveLength(calls);
+    expect((await lastManual(target, id)).last_manual_sync_at).toBeNull();
   });
 
   test('PAT が失効していると接続が停止になり、応答の接続に理由が出る。次に押すと 409 の connection_stopped', async () => {
@@ -772,9 +773,87 @@ describe('connection-sync（今すぐ同期）', () => {
     expect(ctx.github.calls).toHaveLength(calls);
   });
 
-  test('存在しない接続と削除済みの接続は 404', async () => {
+  test('5分の境目: 299秒前は 429、301秒前は 200', async () => {
     const ctx = setup();
     const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync9', 1);
+    const setAgo = async (seconds: number) => {
+      const db = orgDb(env, target.organization.verified);
+      await db.run(
+        db.statement((q) =>
+          q
+            .updateTable('connections')
+            .set({ last_manual_sync_at: new Date(Date.now() - seconds * 1000).toISOString() })
+            .where('id', '=', id),
+        ),
+      );
+    };
+    await setAgo(299);
+    expect((await sync(ctx, target, target.member, id)).status).toBe(429);
+    await setAgo(301);
+    expect((await sync(ctx, target, target.member, id)).status).toBe(200);
+  });
+
+  test('範囲を保存する前の同期は枠を使い切らず、保存した直後に押せる', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await registered(ctx, target, target.member, 'sync10');
+    const first = await sync(ctx, target, target.member, id);
+    expect(((await first.json()) as { result: string }).result).toBe('no_scope');
+    expect((await lastManual(target, id)).last_manual_sync_at).toBeNull();
+
+    expect((await save(ctx, target, target.member, id, ['1001'])).status).toBe(200);
+    ctx.github.addIssues(1001, [fakeIssue('aoba-dev/shop', 1, { assignees: ['aoba-dev'] })]);
+    const second = await sync(ctx, target, target.member, id);
+    expect(second.status).toBe(200);
+    expect(((await second.json()) as { imported: number }).imported).toBe(1);
+  });
+
+  test('止まっている接続は押す間隔にかかわらず 409 で、印は変わらない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync11');
+    const db = orgDb(env, target.organization.verified);
+    await db.run(
+      db.statement((q) =>
+        q.updateTable('connections').set({ status: 'stopped', stopped_reason: 'auth_failed' }).where('id', '=', id),
+      ),
+    );
+    const calls = ctx.github.calls.length;
+    const res = await sync(ctx, target, target.member, id);
+    expect(res.status).toBe(409);
+    expect(ctx.github.calls).toHaveLength(calls);
+    expect((await lastManual(target, id)).last_manual_sync_at).toBeNull();
+  });
+
+  test('存在しない・削除済み・別のワークスペース・別の組織の接続は 404 で、取り込み元にも問い合わせず印も付かない', async () => {
+    const ctx = setup();
+    const target = await createTarget();
+    const { id } = await ready(ctx, target, target.member, 'sync12');
+    const calls = ctx.github.calls.length;
     expect((await sync(ctx, target, target.member, crypto.randomUUID())).status).toBe(404);
+
+    // 別の組織の人が、自分の slug とワークスペースで、この接続の ID を渡す
+    const other = await createTarget();
+    expect((await sync(ctx, other, other.member, id)).status).toBe(404);
+
+    // 削除済み
+    const db = orgDb(env, target.organization.verified);
+    await db.run(
+      db.statement((q) =>
+        q
+          .updateTable('connections')
+          .set({
+            deleted_at: new Date().toISOString(),
+            credential_ciphertext: null,
+            credential_key_version: null,
+            credential_last4: null,
+          })
+          .where('id', '=', id),
+      ),
+    );
+    expect((await sync(ctx, target, target.member, id)).status).toBe(404);
+    expect(ctx.github.calls).toHaveLength(calls);
+    expect((await lastManual(target, id)).last_manual_sync_at).toBeNull();
   });
 });

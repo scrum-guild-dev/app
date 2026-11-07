@@ -93,7 +93,7 @@ describe('connectionSyncOutcome / connectionSyncFailure', () => {
       'connectionSyncStopped',
     );
     expect(connectionSyncFailure(failed(409, 'workspace_closed'))).toBe('connectionWorkspaceClosed');
-    expect(connectionSyncFailure(failed(403, 'forbidden'))).toBe('connectionScopeGone');
+    expect(connectionSyncFailure(failed(403, 'forbidden'))).toBe('connectionSyncGone');
     expect(connectionSyncFailure(failed(503, 'unavailable'))).toBe('connectionUnreachable');
     expect(connectionSyncFailure(failed(500, 'internal'))).toBe('connectionSyncFailed');
   });

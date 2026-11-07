@@ -9,6 +9,7 @@ import {
   connectionList,
   connectionScopeCandidates,
   connectionScopesSave,
+  connectionSync,
   type Connection,
 } from '../src/shared/operations/connection/index.ts';
 
@@ -155,4 +156,50 @@ test('登録すると同じ画面で範囲の候補が出て、選んで保存�
     .filter({ hasText: 'テスト用の GitHub' });
   await expect(row.locator('.tag')).toHaveText('aoba/admin-web');
   await expect(row).toContainText('••••abcd');
+});
+
+test('今すぐ同期は本人の接続にだけ出て、押すと届いた件数がトーストに出る。5分以内の再押しは断りが出る', async ({
+  page,
+}) => {
+  const scopes = [{ id: '2001', name: 'aoba/point-api' }];
+  const mine = created({ id: 'mine', name: 'ミナトの GitHub', scopes });
+  const others = created({
+    id: 'others',
+    name: 'ハルカの GitHub',
+    scopes,
+    owner_user_id: 'other',
+    owner_name: 'ハルカ',
+  });
+  const stopped = created({
+    id: 'stopped',
+    name: '止まった GitHub',
+    scopes,
+    status: 'stopped',
+    stopped_reason: 'auth_failed',
+  });
+  await routeOperation(page, connectionList, { slug: 'aoba' }, (call) =>
+    call.fulfill({ connections: [mine, others, stopped] }),
+  );
+  let calls = 0;
+  await routeOperation(page, connectionSync, { slug: 'aoba' }, async (call) => {
+    calls++;
+    expect(call.input.connection_id).toBe('mine');
+    if (calls === 1) await call.fulfill({ result: 'success', imported: 3, more: false, connection: mine });
+    else await call.fail(429, 'rate_limited');
+  });
+
+  await page.goto(`${WORKSPACE}/connections`);
+  const list = page.getByRole('list', { name: '接続の一覧' });
+  await expect(list.getByRole('button', { name: '今すぐ同期' })).toHaveCount(1);
+  await expect(list.getByRole('listitem').filter({ hasText: 'ハルカの GitHub' })).not.toContainText('今すぐ同期');
+  await expect(list.getByRole('listitem').filter({ hasText: '止まった GitHub' })).not.toContainText('今すぐ同期');
+  await expect(list.getByRole('listitem').filter({ hasText: '止まった GitHub' })).toContainText(
+    '認証情報を受け付けなかったため',
+  );
+
+  await list.getByRole('button', { name: '今すぐ同期' }).click();
+  await expect(page.getByText('3 件届きました')).toBeVisible();
+  await list.getByRole('button', { name: '今すぐ同期' }).click();
+  await expect(page.getByText('5分に1回までです')).toBeVisible();
+  expect(calls).toBe(2);
 });

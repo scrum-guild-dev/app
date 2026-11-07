@@ -244,7 +244,14 @@ async function ownConnection(db: OrganizationDb, actorUserId: string, workspaceI
   const row = await db.first(
     db.statement((q) =>
       liveConnections(q, workspaceId)
-        .select(['c.id', 'c.owner_user_id', 'c.provider', 'c.credential_ciphertext', 'c.credential_key_version'])
+        .select([
+          'c.id',
+          'c.owner_user_id',
+          'c.provider',
+          'c.credential_ciphertext',
+          'c.credential_key_version',
+          'c.last_manual_sync_at',
+        ])
         .where('c.id', '=', connectionId),
     ),
   );
@@ -428,15 +435,35 @@ export const connectionSyncOperation = implement(connectionSync, async ({ db, ac
     // 読んだ後に削除された接続は、存在しないときと同じ 404
     const current = await ownConnection(db, actorUserId, workspaceId, row.id);
     const state = await db.first(
-      db.statement((q) => q.selectFrom('connections').select('status').where('id', '=', current.id)),
+      db.statement((q) =>
+        q
+          .selectFrom('connections')
+          .select('status')
+          .where('id', '=', current.id)
+          .where('workspace_id', '=', workspaceId),
+      ),
     );
     if (state?.status === 'stopped') throw new ApiError(409, 'conflict', { reason: 'connection_stopped' });
     throw new ApiError(429, 'rate_limited');
   }
 
   const synced = await tools.syncConnection(workspaceId, row.id);
+  // 取り込み元に問い合わせなかった結果（範囲が空、止まっている、見つからない）は、5分の枠を使い切らせない。
+  // 自分が書いた印のままのときだけ前の値に戻す（取り込み元の不調は問い合わせたので、枠は使い切る）
+  if (synced.outcome === 'no_scope' || synced.outcome === 'stopped' || synced.outcome === 'not_found') {
+    await db.run(
+      db.statement((q) =>
+        q
+          .updateTable('connections')
+          .set({ last_manual_sync_at: row.last_manual_sync_at })
+          .where('id', '=', row.id)
+          .where('workspace_id', '=', workspaceId)
+          .where('last_manual_sync_at', '=', stamp),
+      ),
+    );
+  }
   if (synced.outcome === 'not_found') {
-    // 同期の最中に接続が削除された、またはワークスペースが閉じた
+    // 錠を取った後に、接続が削除された、持ち主が抜けた、ワークスペースが閉じた
     await throwIfClosed(db, workspaceId);
     throw new ApiError(404, 'not_found');
   }

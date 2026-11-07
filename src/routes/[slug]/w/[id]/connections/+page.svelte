@@ -274,6 +274,7 @@
                   class="btn is-sm"
                   type="button"
                   aria-disabled={syncingId !== null}
+                  aria-busy={syncingId === connection.id}
                   onclick={() => syncNow(connection)}
                   ><Icon name="refresh" />{syncingId === connection.id
                     ? t('connectionSyncing')
@@ -298,7 +299,7 @@
               <Icon name="alert" /><span
                 >{connection.stopped_reason === 'auth_failed'
                   ? t('connectionStoppedAuthFailed')
-                  : connection.stopped_reason}</span
+                  : t('connectionStoppedOther', { connection: t('connection') })}</span
               >
             </div>
           {/if}

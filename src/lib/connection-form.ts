@@ -80,7 +80,7 @@ export function connectionSyncFailure(result: FailedResult): DictionaryKey {
   if (result.error?.code === 'workspace_closed') return 'connectionWorkspaceClosed';
   if (result.status === 429) return 'connectionSyncRateLimited';
   if (result.status === 409) return 'connectionSyncStopped';
-  if (result.status === 403 || result.status === 404) return 'connectionScopeGone';
+  if (result.status === 403 || result.status === 404) return 'connectionSyncGone';
   if (result.status === 0 || result.status === 503) return 'connectionUnreachable';
   return 'connectionSyncFailed';
 }
