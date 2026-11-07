@@ -362,7 +362,7 @@ export function dependencyGraph(issues, n) {
   /** @type {Map<number | string, number>} */
   const rowOf = new Map();
   let rows = 0;
-  // 番号の節を先に、通り道を後ろに、それぞれの中は番号の順
+  // 平均が同じときの並び。番号の節を先に、通り道を後ろに、番号の節どうしは番号の順に置く
   const order = (/** @type {number | string} */ key) => (typeof key === 'number' ? key : Number.MAX_SAFE_INTEGER);
   for (let l = 0; l < layers; l += 1) {
     const inLayer = [...slotLayer.keys()].filter((key) => slotLayer.get(key) === l);
