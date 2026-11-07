@@ -175,7 +175,9 @@ test('リーダーはゴールを書いてスプリントを始め、2つ目は�
   await expect(completeNext).toHaveAttribute('aria-disabled', 'false');
   await expect(completeNext).toHaveAttribute('title', '完了の列へ（完了にする）');
   await expect(page.getByRole('button', { name: '次の列へ: C札' })).toHaveCount(0);
-  await expect(page.locator('#sprint-board-key-hint')).toContainText('完了の列の手前の列から次へ送ると、完了になります。');
+  await expect(page.locator('#sprint-board-key-hint')).toContainText(
+    '完了の列の手前の列から次へ送ると、完了になります。',
+  );
   await expect(page.getByRole('button', { name: '前の列へ: B札' })).toHaveAttribute('aria-disabled', 'false');
   await expect(page.getByRole('button', { name: '前の列へ: A札' })).toHaveAttribute('aria-disabled', 'false');
   await moved;
