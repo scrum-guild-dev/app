@@ -771,6 +771,8 @@ export async function dragTo(
   where: 'top' | 'bottom' | 'middle',
   beforeRelease?: () => Promise<void>,
 ): Promise<void> {
+  // 木が画面より長いと、つまみが画面の外に出る（boundingBox はスクロールしないので、外の座標では掴めない）
+  await handle.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
   const from = await handle.boundingBox();
   if (from === null) throw new Error('つまみが見えていない');
   const startX = from.x + from.width / 2;
@@ -780,6 +782,7 @@ export async function dragTo(
   await page.mouse.move(startX + 4, startY + 4, { steps: 3 });
   // 行き先の行は、つかんだ後に出るもの（親なしの段が空のときの落とし先）もあるので、つかんでから位置を測る
   await row.waitFor({ state: 'visible' });
+  await row.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
   const to = await row.boundingBox();
   if (to === null) throw new Error('行が見えていない');
   const endX = to.x + to.width / 2;
