@@ -417,9 +417,13 @@ describe('添付つきの保存は、直前の履歴にまとめない（履歴�
           .orderBy('id'),
       ),
     );
-    expect(logs.map((log) => JSON.parse(log.changes_json))).toEqual([
-      { body_md: ['保存前', '一回目'] },
-      { body_md: ['一回目', '二回目'], attachments: [null, [{ id: row.id }]] },
-    ]);
+    // 2回の保存が同じミリ秒に入ると並びが入れ替わりうるので、並びに頼らず内容で確かめる
+    expect(logs.map((log) => JSON.parse(log.changes_json))).toHaveLength(2);
+    expect(logs.map((log) => JSON.parse(log.changes_json))).toEqual(
+      expect.arrayContaining([
+        { body_md: ['保存前', '一回目'] },
+        { body_md: ['一回目', '二回目'], attachments: [null, [{ id: row.id }]] },
+      ]),
+    );
   });
 });

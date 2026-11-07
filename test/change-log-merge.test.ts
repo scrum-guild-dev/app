@@ -252,12 +252,21 @@ describe('readMergeTarget（履歴の最新の行を読む）', () => {
     expect(await read(after(1000))).toMatchObject({ id: row.id });
   });
 
-  test('最新の行は created_at の新しい順で選び、同じなら ID の大きい方', async () => {
+  test('最新の行は created_at の新しい順で選ぶ', async () => {
     const { log, read } = await setup();
     // ID は新しいが created_at が古い行と、ID は古いが created_at が新しい行
     await log({ id: uuidv7(WRITTEN_AT + 30_000), created_at: after(30_000).toISOString() });
     const newest = await log({ id: uuidv7(WRITTEN_AT), created_at: after(60_000).toISOString() });
     expect(await read(after(61_000))).toMatchObject({ id: newest.id });
+  });
+
+  test('created_at が同じなら、ID の大きい方を最新の行にする', async () => {
+    const { log, read } = await setup();
+    const sameAt = after(30_000).toISOString();
+    // 大きい ID を先に入れても、入れた順でなく ID で選ぶ
+    const larger = await log({ id: uuidv7(WRITTEN_AT + 1), created_at: sameAt });
+    await log({ id: uuidv7(WRITTEN_AT), created_at: sameAt });
+    expect(await read(after(31_000))).toMatchObject({ id: larger.id });
   });
 
   test('別の組織の履歴は読まない', async () => {
