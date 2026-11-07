@@ -592,6 +592,15 @@ export const pointers: Pointers = {
     workspace_id: target.workspace.id,
     task_id: (await createTask(target.organization, target.workspace.id, target.member.userId!)).id,
   }),
+  // 呼ぶたびに、一般のメンバーが作って削除したタスクを作る（戻せるのは作った人とリーダーなので、メンバーも通る。戻したタスクは続けて戻せない）
+  'task-restore': async (target) => ({
+    workspace_id: target.workspace.id,
+    task_id: (
+      await createTask(target.organization, target.workspace.id, target.member.userId!, {
+        deleted_at: '2026-10-21T00:00:00.000Z',
+      })
+    ).id,
+  }),
   // 本文のファイルは harness の post() が送る（body: 'binary'。入力はヘッダー X-Operation-Input）
   'attachment-upload': async (target) => ({ workspace_id: target.workspace.id, file_name: '画面の案.png' }),
   'comment-list': async (target) => ({

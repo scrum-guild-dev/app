@@ -147,18 +147,26 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
     whileOpen: () => expect(drawer.locator('.doc-box').getByRole('heading', { name: '手順' })).toBeVisible(),
   });
 
-  // 削除は確認を挟む。やめると残り、削除すると引き出しが閉じて、木から消える
+  // 削除は確認を挟まない。押した場で引き出しが閉じて、木から消え、「取り消す」付きのトーストが出る
   await row.getByRole('link', { name: '見積もりを送って確かめる' }).click();
   await drawer.getByRole('button', { name: 'このタスクを削除する' }).click();
-  const deleteConfirm = page.getByRole('dialog', { name: 'タスクを削除する' });
-  await deleteConfirm.getByRole('button', { name: 'やめる' }).click();
-  await expect(drawer).toBeVisible();
-  await drawer.getByRole('button', { name: 'このタスクを削除する' }).click();
-  await deleteConfirm.getByRole('button', { name: '削除する' }).click();
+  await expect(page.getByRole('dialog', { name: 'タスクを削除する' })).toHaveCount(0);
   await expect(drawer).toBeHidden();
-  await expect(page.getByRole('status').filter({ hasText: 'タスクを削除しました' })).toBeVisible();
+  const deletedToast = page.locator('.toasts:visible .toast', { hasText: 'タスクを削除しました' });
+  await expect(deletedToast).toBeVisible();
   await expect(page.locator('.entry', { hasText: '見積もりを送って確かめる' })).toHaveCount(0);
   await expect(page).not.toHaveURL(/\?task=/);
+
+  // 「取り消す」を押すと、元の場所（親のないタスクの並び）に戻る
+  await deletedToast.getByRole('button', { name: '取り消す' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'タスクを戻しました' })).toBeVisible();
+  await expect(page.locator('.entry', { hasText: '見積もりを送って確かめる' })).toHaveCount(1);
+
+  // 戻したタスクの変更の履歴に、削除と、削除を取り消した行が残る
+  await row.getByRole('link', { name: '見積もりを送って確かめる' }).click();
+  const history = await openHistory(drawer);
+  await expect(history.locator('.history > li').filter({ hasText: '削除を取り消した' })).toHaveCount(1);
+  await expect(history.locator('.history > li').filter({ hasText: '削除した' })).toHaveCount(1);
 
   expect(await collect()).toEqual([]);
 });

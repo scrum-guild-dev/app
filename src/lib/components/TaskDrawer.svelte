@@ -9,6 +9,8 @@
     taskHistory,
     taskReopen,
     taskReopenConflictReasonOf,
+    taskRestore,
+    taskRestoreConflictReasonOf,
     taskUpdate,
     type TaskDetail,
     type TaskFieldValue,
@@ -78,7 +80,8 @@
   // 帯の前後のボタンと `[` `]` で前後のタスクへ移るとき（開いた画面が順を渡したときだけ。adjacent）も、同じ確認を挟む。
   // 閉じた後に返った保存の応答も、通ったら木を読み直してトーストで知らせ、失敗はトーストで知らせる（saveFields）。
   // 引き出しが読み直すのは木（onchanged）かワークスペースの枠（onstale）だけで、組織の枠は読み直さない。
-  // 削除は確認のダイアログを挟む。消したら閉じ、トーストで知らせ、画面が木を読み直す（onremoved）。
+  // 削除は確認のダイアログを挟まない。消したら閉じ、「取り消す」付きのトーストで知らせ（押すと task-restore を送って木を読み直す）、
+  // 画面が木を読み直す（onremoved）。
   // 完了の帯の下に「コメント N」と「変更の履歴」のタブを置く（kit.js の drawerHtml）。初めはコメントのタブを選び、
   // タブの中身は外さずに隠す（書きかけのコメントを、タブを切り替えても保つ）。コメントは TaskComments が読み書きし、
   // 書きかけ（新しいコメントの欄の文字と、直している途中のコメント）を hasDraft に足す。
@@ -171,7 +174,6 @@
   let heading = $state<HTMLElement>();
   let retryButton = $state<HTMLButtonElement>();
   let discardDialog = $state<ReturnType<typeof ConfirmDialog>>();
-  let deleteDialog = $state<ReturnType<typeof ConfirmDialog>>();
 
   // 直している途中の欄ごとの書きかけ（保存の要求を送っている間も数える）
   const dirty = $state({ title: false, link: false, body: false, fields: false });
@@ -1348,17 +1350,60 @@
   }
 
   // ---- 削除 ----
-  async function remove(event: MouseEvent): Promise<void> {
-    if (task === null || deleting || asking) return;
-    const trigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-    asking = true;
-    let confirmed: boolean;
-    try {
-      confirmed = (await deleteDialog?.ask(trigger)) ?? false;
-    } finally {
-      asking = false;
+  // 消したことを知らせるトースト。「取り消す」を押すと task-restore を送り、木を読み直す。
+  // 引き出しが閉じた後でも押せるよう、props と ID は消した時点の値を取っておく（this の状態は読まない）
+  function announceRemoved(): void {
+    const target = { slug, workspaceId, taskId, onchanged, onstale };
+    showToast(t('taskDeleted', { task: t('task') }), 'check', {
+      label: t('taskRestoreAction'),
+      run: () => void restoreRemoved(target),
+    });
+  }
+
+  async function restoreRemoved(target: {
+    slug: string;
+    workspaceId: string;
+    taskId: string;
+    onchanged: () => void;
+    onstale: () => void;
+  }): Promise<void> {
+    const result = await callOperation(
+      taskRestore,
+      { workspace_id: target.workspaceId, task_id: target.taskId },
+      { slug: target.slug },
+    );
+    if (result.ok) {
+      showToast(t('taskRestored', { task: t('task') }), 'check');
+      target.onchanged();
+    } else if (result.status === 401) {
+      target.onstale();
+    } else if (result.status === 403) {
+      showToast(t('taskRestoreForbidden', { leader: t('leader') }), 'alert');
+    } else if (result.status === 404) {
+      showToast(t('taskRestoreGone'), 'alert');
+      target.onchanged();
+    } else if (result.status === 409 && result.error?.code === 'workspace_closed') {
+      showToast(t('workspaceClosedReadOnly', { workspace: t('workspace') }), 'alert');
+      target.onstale();
+    } else if (result.status === 409) {
+      const reason = taskRestoreConflictReasonOf(result.error?.details);
+      showToast(
+        reason === 'parent_deleted'
+          ? t('taskRestoreParentDeleted', { story: t('story') })
+          : reason === 'parent_completed'
+            ? t('taskRestoreParentCompleted', { story: t('story'), done: t('done') })
+            : t('taskRestoreGone'),
+        'alert',
+      );
+      target.onchanged();
+    } else {
+      showToast(t('taskRestoreFailed'), 'alert');
     }
-    if (!confirmed || !alive) return;
+  }
+
+  // 確認のダイアログは挟まない。消したらトーストの「取り消す」で戻せる
+  async function remove(): Promise<void> {
+    if (task === null || deleting || asking) return;
     deleting = true;
     deleteError = null;
     try {
@@ -1366,7 +1411,7 @@
       if (!alive) {
         // 削除の要求を送っている間に閉じられた。結果は黙って捨てず、通ったら木を読み直して知らせ、失敗は知らせる
         if (result.ok) {
-          showToast(t('taskDeleted', { task: t('task') }), 'check');
+          announceRemoved();
           onchanged();
         } else if (result.status === 404) {
           onchanged();
@@ -1378,7 +1423,7 @@
       if (result.ok) {
         // 消えたので、書きかけがあっても確かめずに閉じる
         leaving = true;
-        showToast(t('taskDeleted', { task: t('task') }), 'check');
+        announceRemoved();
         onremoved();
       } else if (result.status === 401) {
         onstale();
@@ -2034,7 +2079,7 @@
             class="btn is-sm is-quiet is-danger"
             type="button"
             aria-disabled={deleting}
-            onclick={(event) => void remove(event)}
+            onclick={() => void remove()}
           >
             <Icon name="trash" />{t('taskDelete', { task: t('task') })}
           </button>
@@ -2064,15 +2109,4 @@
   danger
 >
   <p>{t('discardText')}</p>
-</ConfirmDialog>
-
-<ConfirmDialog
-  bind:this={deleteDialog}
-  title={t('taskDeleteTitle', { task: t('task') })}
-  confirmLabel={t('taskDeleteConfirm')}
-  cancelLabel={t('taskDeleteCancel')}
-  danger
->
-  <p>{t('taskDeleteText', { title: task?.title ?? '' })}</p>
-  <p class="field-hint">{t('taskDeleteHint')}</p>
 </ConfirmDialog>

@@ -119,6 +119,7 @@ import {
 import { epicDeleteOperation, storyDeleteOperation } from './tree-delete.ts';
 import { backlogTreeOperation, taskCompleteOperation, taskCreateOperation, taskMoveOperation } from './task.ts';
 import { taskReopenOperation } from './task-reopen.ts';
+import { taskRestoreOperation } from './task-restore.ts';
 import {
   memberListOperation,
   workspaceCloseOperation,
@@ -229,6 +230,7 @@ const listedOperations: readonly ImplementedOperation[] = [
   taskAssignOperation,
   taskTodayMarkOperation,
   taskDeleteOperation,
+  taskRestoreOperation,
   taskMoveOperation,
   taskHistoryOperation,
   thanksSendOperation,

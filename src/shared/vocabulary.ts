@@ -1700,7 +1700,6 @@ export const dictionary = defineDictionary({
   // 削除
   taskDelete: 'この{task}を削除する',
   taskDeleteWho: '削除できるのは作った人と{leader}です。',
-  taskDeleteTitle: '{task}を削除する',
   taskDeleteText: '「{title}」を削除します。削除したものは画面から消え、この版では戻せません。',
   taskDeleteHint: '完了の記録と経験値は残ります。',
   taskDeleteConfirm: '削除する',
@@ -1709,6 +1708,15 @@ export const dictionary = defineDictionary({
   taskDeleted: '{task}を削除しました',
   taskDeleteFailed: '削除できませんでした。もう一度試してください。',
   taskDeleteForbidden: '作った人と{leader}だけが削除できます',
+  // 削除の取り消し（task-restore）。削除のトーストの「取り消す」から呼ぶ
+  taskRestoreAction: '取り消す',
+  taskRestoreLabel: '{task}の削除を取り消す',
+  taskRestored: '{task}を戻しました',
+  taskRestoreFailed: '取り消せませんでした。もう一度試してください。',
+  taskRestoreForbidden: '削除した人と、作った人と{leader}だけが取り消せます',
+  taskRestoreGone: '取り消せませんでした。ほかの画面で変わったため、一覧を読み直します',
+  taskRestoreParentDeleted: '親の{story}が削除されているため、戻せませんでした',
+  taskRestoreParentCompleted: '親の{story}が{done}しているため、戻せませんでした',
   // エピックとストーリーの削除（ダイアログの下のボタンと、配下の扱いを選ぶ確認。TreeDeleteDialog）。
   // 削除できる人、確認の本文と結び、送っている間、失敗の文はタスクの削除と同じ言葉を使う
   epicDelete: 'この{epic}を削除する',
@@ -1771,6 +1779,7 @@ export const dictionary = defineDictionary({
   historyUpdated: '変更した',
   historyCompleted: '{done}にした',
   historyDeleted: '削除した',
+  historyRestored: '削除を取り消した',
   historyReopened: '{done}を戻した',
   historyChange: '{before} → {after}',
   historyFieldEdited: '{field}を直した',
