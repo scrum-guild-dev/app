@@ -3,6 +3,7 @@ import { wikiOperations } from './wiki/index.ts';
 // 仮の操作はテストの中で定義し、ここに入れない
 import { attachmentOperations } from './attachment/index.ts';
 import { columnOperations } from './column/index.ts';
+import { connectionOperations } from './connection/index.ts';
 import type { AnyOperationDefinition } from './define.ts';
 import { definitionOperations } from './definition/index.ts';
 import { epicOperations } from './epic/index.ts';
@@ -27,6 +28,7 @@ export const operations: readonly AnyOperationDefinition[] = [
   ...workspaceOperations,
   ...definitionOperations,
   ...columnOperations,
+  ...connectionOperations,
   ...attachmentOperations,
   ...wikiOperations,
 ];

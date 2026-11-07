@@ -190,7 +190,7 @@ function lastStoryPosition(from: From, workspaceId: string) {
 // NULL を別々の値と数えて tasks_story を選び、全組織の親のないタスクを読む計画になるため（task.ts の backlogTasksUnder と同じ。
 // docs/data-model.md の「バックログの木」。test/backlog-filter.test.ts が実行計画で確かめる）。
 // unindexed は表の名前つきの列だけを受けるので、この表は別名を付けずに引く
-function lastTaskPosition(from: From, workspaceId: string, tray: 'backlog' | 'archive') {
+export function lastTaskPosition(from: From, workspaceId: string, tray: 'backlog' | 'archive') {
   const tasks = from
     .selectFrom('tasks')
     .select('tasks.position')

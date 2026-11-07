@@ -5,6 +5,7 @@ import type { IconName } from './icons.ts';
 // ワークスペースの経路（WorkspaceNavRoute）は、メニューの対象の ID があるときだけ出す（組織の画面も同じ）
 const workspaceRoutes = [
   '/[slug]/w/[id]',
+  '/[slug]/w/[id]/inbox',
   '/[slug]/w/[id]/members',
   '/[slug]/w/[id]/plan',
   '/[slug]/w/[id]/settings',
@@ -111,7 +112,7 @@ export const navSections: NavSection[] = [
     slot: 'workspace',
     inWorkspace: true,
     items: [
-      { icon: 'inbox', label: 'inbox', href: null },
+      { icon: 'inbox', label: 'inbox', href: '/[slug]/w/[id]/inbox' },
       { icon: 'board', label: 'backlog', href: '/[slug]/w/[id]' },
       { icon: 'columns', label: 'sprint', href: '/[slug]/w/[id]/sprint' },
       { icon: 'calendar', label: 'plan', href: '/[slug]/w/[id]/plan' },

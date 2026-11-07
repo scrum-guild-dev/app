@@ -19,6 +19,12 @@ import { thanksSendOperation, thanksRevokeOperation } from './thanks.ts';
 // 本番に登録する操作の一覧。定義は src/shared/operations/ に、処理はここに置く（docs/development.md の「操作の定義」）。
 // 仮の操作はテストの中で定義し、ここに入れない
 import type { ImplementedOperation } from './implement.ts';
+import {
+  connectionCreateOperation,
+  connectionListOperation,
+  connectionScopeCandidatesOperation,
+  connectionScopesSaveOperation,
+} from './connection.ts';
 import { attachmentDownloadOperation, attachmentUploadOperation } from './attachment.ts';
 import { operationListOperationFor } from './operation-list.ts';
 import { backlogCompletedTasksOperation } from './backlog-completed-tasks.ts';
@@ -108,6 +114,7 @@ import {
 } from './story.ts';
 import { taskAssignOperation, taskDeleteOperation, taskDetailOperation, taskUpdateOperation } from './task-edit.ts';
 import { taskFieldSetOperation } from './task-field.ts';
+import { inboxListOperation, inboxToBacklogOperation } from './inbox.ts';
 import { taskTodayMarkOperation } from './task-today-mark.ts';
 import { taskHistoryOperation } from './task-history.ts';
 import {
@@ -223,6 +230,8 @@ const listedOperations: readonly ImplementedOperation[] = [
   taskCreateOperation,
   backlogTreeOperation,
   backlogCompletedTasksOperation,
+  inboxListOperation,
+  inboxToBacklogOperation,
   taskCompleteOperation,
   taskReopenOperation,
   taskDetailOperation,
@@ -272,6 +281,10 @@ const listedOperations: readonly ImplementedOperation[] = [
   columnUpdateOperation,
   columnMoveOperation,
   columnDeleteOperation,
+  connectionListOperation,
+  connectionCreateOperation,
+  connectionScopeCandidatesOperation,
+  connectionScopesSaveOperation,
   invitationListOperation,
   invitationAcceptOperation,
   invitationDeclineOperation,

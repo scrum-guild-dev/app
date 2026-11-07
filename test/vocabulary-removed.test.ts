@@ -15,10 +15,10 @@ import { implementedOperations } from '../src/server/operations/index.ts';
 import { githubUser } from './auth/helpers.ts';
 import { createChangeLog, createOrganization, createWorkspace } from './factories.ts';
 import { credentialOf, inputFor, post, type Credential } from './operations/harness.ts';
-import { operatorGithub, pointers } from './operations/pointers.ts';
+import { operatorGithub, pointers, registryFetcher } from './operations/pointers.ts';
 import { createTarget, getOperator, withNewSession } from './operations/world.ts';
 
-const app = createApp(implementedOperations, { fetcher: operatorGithub.fetcher });
+const app = createApp(implementedOperations, { fetcher: registryFetcher });
 
 // 応答の JSON を再帰的にたどり、vocabulary という名前の項目の場所を集める
 function vocabularyPaths(value: unknown, path = '$'): string[] {

@@ -5,13 +5,17 @@
 import { env } from 'cloudflare:workers';
 import { PRIVACY_VERSION, TERMS_VERSION } from '../../src/lib/legal/versions.ts';
 import { commonDb, orgDb } from '../../src/server/db/index.ts';
+import { encryptCredential } from '../../src/server/crypto/credential.ts';
+import { uuidv7 } from '../../src/server/uuid.ts';
 import { createFakeGithub } from '../auth/fake-github.ts';
+import { createFakePatGithub, fakePat, fakeRepos } from '../import/fake-github-pat.ts';
 import { githubUser } from '../auth/helpers.ts';
 import {
   createAttachment,
   createBoardColumn,
   createCategory,
   createComment,
+  createConnection,
   createDetailField,
   createEpic,
   createEpicPartyMember,
@@ -24,6 +28,7 @@ import {
   createSprintEntry,
   createStory,
   createTask,
+  createTaskSource,
   createThanks,
   createUser,
   createWorkspace,
@@ -34,6 +39,31 @@ import { SUSPENDED_AT, type Person, type Target } from './world.ts';
 
 // 運用者の操作が問い合わせる GitHub。chunks.ts の defineProductionChunk が fetcher を createApp に渡す
 export const operatorGithub = createFakeGithub();
+
+// 接続の操作が問い合わせる、PAT で呼ぶ GitHub。PAT（Authorization が `Bearer github_pat_` で始まる呼び出し）だけをこちらに向け、
+// ほかはログインの偽物（operatorGithub）に向ける。chunks.ts の defineProductionChunk が registryFetcher を createApp に渡す
+export const patGithub = createFakePatGithub();
+export const registryFetcher: typeof fetch = (input, init) =>
+  (new Headers(init?.headers).get('authorization') ?? '').startsWith('Bearer github_pat_')
+    ? patGithub.fetcher(input, init)
+    : operatorGithub.fetcher(input, init);
+
+// 呼ぶ人（対象の組織の人でなければ管理者）が登録した接続を、対象のワークスペースに作る。認証情報は本物の暗号で暗号化して置く。
+// 偽の GitHub には、その PAT で候補になるリポジトリ 2 件（ID は 1000 と 1001）を持たせる
+async function connectionFor(target: Target, caller: Person) {
+  const owner = personOf(target, caller) ?? target.admin;
+  await ensureMembership(target, target.workspace.id, owner.userId!);
+  const pat = fakePat(crypto.randomUUID());
+  patGithub.addAccount(pat, { type: 'User', id: 7_000_001, login: 'guild-fake' }, fakeRepos(2));
+  const id = uuidv7();
+  const sealed = await encryptCredential(env, pat, id);
+  return createConnection(target.organization, target.workspace.id, owner.userId!, {
+    id,
+    credential_ciphertext: sealed.ciphertext,
+    credential_key_version: sealed.keyVersion,
+    credential_last4: pat.slice(-4),
+  });
+}
 
 // そのワークスペースに今の所属が無ければ、一般のメンバーとして作る
 async function ensureMembership(target: Target, workspaceId: string, userId: string): Promise<void> {
@@ -583,6 +613,17 @@ export const pointers: Pointers = {
     ).id,
     marked: true,
   }),
+  'inbox-list': async (target) => ({ workspace_id: target.workspace.id }),
+  // 呼ぶたびに、取り込み元に結んだ受信箱のタスクを作り、バックログへ入れる（入れたタスクは続けて入れられない）
+  'inbox-to-backlog': async (target) => {
+    const connection = await createConnection(target.organization, target.workspace.id, target.admin.userId!);
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      tray: 'inbox',
+      is_imported: 1,
+    });
+    await createTaskSource(target.organization, target.workspace.id, task.id, connection.id);
+    return { workspace_id: target.workspace.id, items: [{ task_id: task.id }] };
+  },
   'task-history': async (target) => ({
     workspace_id: target.workspace.id,
     task_id: (await createTask(target.organization, target.workspace.id, target.admin.userId!)).id,
@@ -792,6 +833,21 @@ export const pointers: Pointers = {
     repository_id: (
       await createRepository(target.organization, target.workspace.id, { name: `shop-api-${uniqueSuffix()}` })
     ).id,
+  }),
+  'connection-list': async (target) => ({ workspace_id: target.workspace.id }),
+  'connection-create': async (target) => {
+    const pat = fakePat(crypto.randomUUID());
+    patGithub.addAccount(pat, { type: 'User', id: 7_000_002, login: 'guild-fake' }, []);
+    return { workspace_id: target.workspace.id, provider: 'github', name: 'あおばの GitHub', credential: pat };
+  },
+  'connection-scope-candidates': async (target, caller) => ({
+    workspace_id: target.workspace.id,
+    connection_id: (await connectionFor(target, caller)).id,
+  }),
+  'connection-scopes-save': async (target, caller) => ({
+    workspace_id: target.workspace.id,
+    connection_id: (await connectionFor(target, caller)).id,
+    source_ids: ['1000'],
   }),
   'column-list': async (target) => ({ workspace_id: target.workspace.id }),
   // 名前は呼ぶたびに変える（同じ名前は 409 になるため）

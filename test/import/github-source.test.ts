@@ -442,7 +442,7 @@ describe('ランタイム: 種類の表と設定', () => {
   test('importSourceOf("github") は github の実装を返す', () => {
     const github = importSourceOf('github');
     expect(github.kind).toBe('github');
-    expect(github.scopeKind).toBe('repository');
+    expect(github.scopeKind).toBe('github_repo');
     expect(importSourceOf('github')).toBe(github);
   });
 

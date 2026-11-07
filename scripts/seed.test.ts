@@ -277,7 +277,7 @@ describe('pnpm db:seed', () => {
       });
       assert.deepEqual(invalid, [], 'fractional-indexing が受け付けない位置の値が無い');
 
-      // 受託開発チームの親なしのタスクは、未完了の4件の後に完了の6件が、作った順に並ぶ（#881 で位置を直す前と同じ順）
+      // 受託開発チームのバックログの親なしのタスク（受信箱のタスクは数えない）は、未完了の4件の後に完了の6件が、作った順に並ぶ（#881 で位置を直す前と同じ順）
       const rootTasks = spawnSync(
         wrangler,
         [
@@ -290,7 +290,7 @@ describe('pnpm db:seed', () => {
           '--json',
           '--command',
           "SELECT substr(id, -3) AS id, position FROM tasks WHERE workspace_id = '019a0000-0000-7000-8000-000000000401' " +
-            'AND story_id IS NULL AND deleted_at IS NULL ORDER BY position, id',
+            "AND tray = 'backlog' AND story_id IS NULL AND deleted_at IS NULL ORDER BY position, id",
         ],
         { cwd: root, env, encoding: 'utf8' },
       );
