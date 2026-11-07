@@ -2,7 +2,6 @@
 // 取り込み元への通信と認証情報の暗号化は、組織の道具（organization-tools.ts）だけを通す。処理は env も fetch も受け取らない。
 // 認証情報（平文、暗号文、鍵の版）は応答にもログにも出さない。出すのは末尾4文字だけ。
 // 接続の表（connections）は組織の ID を持たないので、確かめたワークスペースの ID（workspace.workspaceId）で絞る
-import { sql } from 'kysely';
 import { now } from '../../shared/clock.ts';
 import {
   CONNECTIONS_PER_MEMBER_MAX,
@@ -341,9 +340,18 @@ export const connectionScopesSaveOperation = implement(
                 eb.val(row.id).as('entity_id'),
                 eb.val('update').as('action'),
                 // 前の件数は履歴の文の中で数える（読んでから書くまでの並行する保存で食い違わない）
-                sql<string>`json_object('scopes_count', json_array((select count(*) from connection_scopes where connection_id = ${row.id}), cast(${chosen.length} as integer)))`.as(
-                  'changes_json',
-                ),
+                eb
+                  .fn<string>('json_object', [
+                    eb.val('scopes_count'),
+                    eb.fn('json_array', [
+                      eb
+                        .selectFrom('connection_scopes')
+                        .select((count) => count.fn.countAll<number>().as('n'))
+                        .where('connection_id', '=', row.id),
+                      eb.cast(eb.val(chosen.length), 'integer'),
+                    ]),
+                  ])
+                  .as('changes_json'),
                 eb.val(stamp).as('created_at'),
               ])
               .where(previousStatementChanged),
