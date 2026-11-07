@@ -103,7 +103,7 @@ Workers Builds が使えるのは、Builds が自分で作ったトークンだ�
 
 ### シークレット
 
-Worker のシークレットは、ダッシュボードの Worker の Settings → Variables and Secrets か `wrangler secret put` で入れる。ダッシュボードでは Type を `Secret` にする。`Variable` で入れると、Workers Builds の次のデプロイで、`wrangler.jsonc` の `vars` に無い名前として消える。消えても `/api/health` は 200 のままで、運用者がいない状態になるか、GitHub のログインが「いまログインを受け付けられません」になるだけなので、気づいたら `Secret` として入れ直す。どちらで入れても、保存するとその場で新しい版が本番に出る。値は git に入れず、手元の開発用の値は、本体の作業コピーで `.dev.vars.example` を `.dev.vars` に写して入れる。ワークツリーの `.dev.vars` は本体へのリンクなので、そこで写すと本体の値を上書きする（`docs/development.md` の「ワークツリーで作業する」）。
+Worker のシークレットは、ダッシュボードの Worker の Settings → Variables and Secrets か `wrangler secret put` で入れる。ダッシュボードでは Type を `Secret` にする。`Variable` で入れると、Workers Builds の次のデプロイで、`wrangler.jsonc` の `vars` に無い名前として消える。消えても `/api/health` は 200 のままで、運用者がいない状態になるか、GitHub のログインが「いまログインを受け付けられません」になるか、接続の認証情報の保存と読み出しが止まるだけなので、気づいたら `Secret` として入れ直す。どちらで入れても、保存するとその場で新しい版が本番に出る。値は git に入れず、手元の開発用の値は、本体の作業コピーで `.dev.vars.example` を `.dev.vars` に写して入れる。ワークツリーの `.dev.vars` は本体へのリンクなので、そこで写すと本体の値を上書きする（`docs/development.md` の「ワークツリーで作業する」）。
 
 | 名前 | 中身 |
 | --- | --- |
@@ -205,12 +205,13 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 {"1":"<base64 の32バイト>"}
 ```
 
-- 版は 1 以上の整数の文字列。暗号化には最大の版を使い、暗号文には使った版が付く。復号は暗号文の版の鍵を引くので、新旧の鍵を並べて置ける
+- 版は 1 以上の整数（9桁まで。JSON のキーは文字列で書く。DB の `credential_key_version` は INTEGER）。暗号化には最大の版を使い、暗号文には使った版が付く。復号は暗号文の版の鍵を引くので、新旧の鍵を並べて置ける
 - 鍵は 32 バイトの乱数を base64 にしたもの。作り方は `openssl rand -base64 32`
-- 本番は `wrangler secret put CONNECTION_CREDENTIAL_KEYS`（か、ダッシュボードの Worker の Settings → Variables and Secrets で Type を `Secret`）で入れ、入れた後に `/api/health` が 200 で返ることを確かめる。開発用は `.dev.vars.example` の値を `.dev.vars` に写す。開発用の値を本番に使わない
+- 本番は `wrangler secret put CONNECTION_CREDENTIAL_KEYS`（か、ダッシュボードの Worker の Settings → Variables and Secrets で Type を `Secret`）で入れる。`/api/health` は鍵を見ないので確かめにならず、鍵が使えるかは接続の認証情報を保存して初めて分かる（保存の操作ができたら、入れた後に保存を試す。それまでは `openssl rand -base64 32` で作った値を JSON の `<base64>` に入れたかを目で確かめる）。開発用は `.dev.vars.example` の値を `.dev.vars` に写す。開発用の値を本番に使わない
 - 無いか形が違うと、認証情報の保存と読み出しは固定の文のエラーで止まる。鍵も平文も暗号文も、エラーにもログにも出さない
-- 暗号文には接続の ID を認証データとして付けるので、別の接続の行へ写しても復号できない
-- 鍵は git、ログ、Issue、PR に書かない。失った鍵の暗号文は復号できないので、各自が認証情報を登録し直す。鍵の入れ替えは下の「鍵の入れ替え」
+- 暗号文は、`connection-credential:` に接続の ID を続けた文字列を認証データにするので、接続の ID を決めてから暗号化する。別の接続の行へ写しても復号できない
+- JSON に同じ版を2回書くと、後ろの鍵が黙って採られ、前の鍵で書いた暗号文が復号できなくなる。鍵を足すときは、必ず新しい版（今の最大より大きい整数）で足し、同じ版を書き換えない
+- 鍵は git、ログ、Issue、PR に書かない。失った鍵の暗号文は復号できないので、各自が認証情報を登録し直す。鍵の入れ替えの手順は、入れ替えの処理を作るときに「鍵の入れ替え」へ書く（未作成）
 
 ### ログインのレート制限が見る IP
 
@@ -569,7 +570,7 @@ Wiki の表を足した版以降は、コードを戻した場合も削除に使
 
 ## 鍵の入れ替え
 
-まだ書いていない。シークレットを持つ機能ができたら書く。
+鍵（`CONNECTION_CREDENTIAL_KEYS`）は入れてあるが、入れ替えの手順は、暗号文を書き直す処理を作るときに書く。
 
 ## 本番で壊れたとき
 
