@@ -1378,10 +1378,10 @@ dialog.dialog::backdrop { background: none; }
      （.entry-title）、完了の一覧の「さらに見る」と「もう一度試す」（.completed-status .btn.is-sm）、
      上の帯の小さな切り替え（.pill。引き出しの閉じるも。.pill は元から position: relative） */
   .tree-caret, .tree-row .btn.is-sm, .form-actions .btn.is-sm, .callout-actions .btn.is-sm, .toolbar-end .btn.is-sm,
-  .toolbar .btn.is-sm, .dropzone .btn.is-sm, .file-actions .btn.is-sm,
+  .toolbar .btn.is-sm, .dropzone .btn.is-sm, .file-actions .btn.is-sm, .conn-actions .btn.is-sm,
   .completed-status .btn.is-sm, a.entry-title, button.entry-title { position: relative; }
   .tree-caret::after, .tree-row .btn.is-sm::after, .form-actions .btn.is-sm::after, .callout-actions .btn.is-sm::after,
-  .toolbar-end .btn.is-sm::after, .toolbar .btn.is-sm::after, .dropzone .btn.is-sm::after, .file-actions .btn.is-sm::after,
+  .toolbar-end .btn.is-sm::after, .toolbar .btn.is-sm::after, .dropzone .btn.is-sm::after, .file-actions .btn.is-sm::after, .conn-actions .btn.is-sm::after,
   .completed-status .btn.is-sm::after, a.entry-title::after, button.entry-title::after, .pill::after {
     content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
   }
