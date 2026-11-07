@@ -89,6 +89,7 @@ Workers Builds が使えるのは、Builds が自分で作ったトークンだ�
 | Account（ucan-lab のアカウントだけ） | Workers Scripts: Edit、D1: Edit、Account Settings: Read |
 | User | User Details: Read、Memberships: Read |
 
+- 紹介サイトの Worker `scrum-guild-website` も、2026-11-07 につないだときに Builds が既存のこのトークンを選び、同じトークンでデプロイしている。紹介サイトの devDependencies も、本番の D1 と Worker を書き換えられるトークンのある環境で動く
 - 作られたときは、Workers AI、Queues、Containers、Secrets Store、R2、KV、AI Gateway などの編集と、全アカウントの全ゾーンの Email Routing Rules、Workers Routes、SSL and Certificates の編集まで、30 の権限を持っていた
 - マイグレーション（`d1 time-travel info`、`d1 migrations apply`）は D1: Edit で動く見込みで、最初のマイグレーションのデプロイで確かめる
 - 機能を足して権限が要るようになったら（Queues など）、そのときに足す。R2 の添付ファイルは権限を足さずにデプロイする見込みで、扱いは上の「R2」
