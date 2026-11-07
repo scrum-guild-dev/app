@@ -32,7 +32,7 @@ function conn(c) {
       <h2 class="conn-name">${esc(c.name)}</h2>
       <span class="state-badge ${cls}">${label}</span>
       <span class="conn-actions">
-        ${mine ? `<button class="btn is-sm" type="button" data-toast="同期を始めました。数分で届きます">${icon("refresh")}今すぐ同期</button><button class="btn is-sm is-quiet" type="button">編集</button>`
+        ${mine ? `<button class="btn is-sm" type="button" data-toast="3 件届きました">${icon("refresh")}今すぐ同期</button><button class="btn is-sm is-quiet" type="button">編集</button>`
           : `<button class="btn is-sm is-quiet" type="button">止める</button><button class="btn is-sm is-quiet is-danger" type="button">削除</button>`}
       </span>
     </div>

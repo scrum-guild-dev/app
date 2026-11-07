@@ -61,3 +61,26 @@ export function connectionScopeFailure(result: FailedResult): DictionaryKey {
   if (result.status === 0 || result.status === 503) return 'connectionUnreachable';
   return 'connectionScopeFailed';
 }
+
+// 「今すぐ同期」（connection-sync）の結果の文言。届いた件数、上限で止めたか、範囲が空、止まった、取り込み元の不調を振り分ける
+export function connectionSyncOutcome(data: {
+  result: 'success' | 'no_scope' | 'auth_failed' | 'error';
+  imported: number;
+  more: boolean;
+}): { key: DictionaryKey; icon: 'check' | 'alert' } {
+  if (data.result === 'no_scope') return { key: 'connectionSyncNoScope', icon: 'alert' };
+  if (data.result === 'auth_failed') return { key: 'connectionSyncAuthFailed', icon: 'alert' };
+  if (data.result === 'error') return { key: 'connectionSyncError', icon: 'alert' };
+  if (data.more) return { key: 'connectionSyncMore', icon: 'check' };
+  return { key: data.imported === 0 ? 'connectionSyncNone' : 'connectionSyncDone', icon: 'check' };
+}
+
+// 「今すぐ同期」が断られた理由。5分以内の再押しは 429、止まっている接続は 409（connection_stopped）
+export function connectionSyncFailure(result: FailedResult): DictionaryKey {
+  if (result.error?.code === 'workspace_closed') return 'connectionWorkspaceClosed';
+  if (result.status === 429) return 'connectionSyncRateLimited';
+  if (result.status === 409) return 'connectionSyncStopped';
+  if (result.status === 403 || result.status === 404) return 'connectionScopeGone';
+  if (result.status === 0 || result.status === 503) return 'connectionUnreachable';
+  return 'connectionSyncFailed';
+}

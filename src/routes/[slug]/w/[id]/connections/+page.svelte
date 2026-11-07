@@ -13,6 +13,8 @@
     CONNECTION_NAME_LIMIT,
     connectionCreateFailure,
     connectionScopeFailure,
+    connectionSyncFailure,
+    connectionSyncOutcome,
     validateConnectionCreate,
     type ConnectionFailure,
   } from '../../../../../lib/connection-form.ts';
@@ -25,6 +27,7 @@
     connectionCreate,
     connectionScopeCandidates,
     connectionScopesSave,
+    connectionSync,
     type Connection,
   } from '../../../../../shared/operations/connection/index.ts';
   import type { DictionaryKey } from '../../../../../shared/vocabulary.ts';
@@ -74,6 +77,8 @@
   let scopeFailure = $state<DictionaryKey | null>(null);
   let loadingCandidates = $state(false);
   let saving = $state(false);
+  // 同期中の接続の ID（同時に1つだけ）
+  let syncingId = $state<string | null>(null);
 
   const overLimit = $derived(chosen.length > CONNECTION_SCOPES_MAX);
 
@@ -182,6 +187,33 @@
     }
   }
 
+  async function syncNow(target: Connection): Promise<void> {
+    if (syncingId !== null || workspace === null || !canWrite) return;
+    syncingId = target.id;
+    try {
+      const result = await callOperation(
+        connectionSync,
+        { workspace_id: workspace.id, connection_id: target.id },
+        { slug },
+      );
+      if (!result.ok && unauthenticated(result)) return;
+      if (result.ok) {
+        const outcome = connectionSyncOutcome(result.data);
+        showToast(t(outcome.key, { count: result.data.imported, connection: t('connection') }), outcome.icon);
+      } else {
+        showToast(
+          t(connectionSyncFailure(result), { connection: t('connection'), workspace: t('workspace') }),
+          'alert',
+        );
+        if (result.error?.code === 'workspace_closed') await invalidate('app:workspace');
+      }
+      // 結果にかかわらず、最後に成功した日時と状態、理由を読み直す
+      await reload();
+    } finally {
+      syncingId = null;
+    }
+  }
+
   function closeScope(): void {
     choosing = null;
     candidates = null;
@@ -236,6 +268,18 @@
                   >{t('connectionChooseScope')}</button
                 >
               </span>
+            {:else if canWrite && mine && connection.status !== 'stopped' && connection.scopes.length > 0}
+              <span class="conn-actions">
+                <button
+                  class="btn is-sm"
+                  type="button"
+                  aria-disabled={syncingId !== null}
+                  onclick={() => syncNow(connection)}
+                  ><Icon name="refresh" />{syncingId === connection.id
+                    ? t('connectionSyncing')
+                    : t('connectionSyncNow')}</button
+                >
+              </span>
             {/if}
           </div>
           {#if connection.last_error_message}
@@ -251,7 +295,11 @@
           {/if}
           {#if connection.stopped_reason}
             <div class="callout is-danger">
-              <Icon name="alert" /><span>{connection.stopped_reason}</span>
+              <Icon name="alert" /><span
+                >{connection.stopped_reason === 'auth_failed'
+                  ? t('connectionStoppedAuthFailed')
+                  : connection.stopped_reason}</span
+              >
             </div>
           {/if}
           <dl class="facts">

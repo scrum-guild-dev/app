@@ -849,6 +849,10 @@ export const pointers: Pointers = {
     connection_id: (await connectionFor(target, caller)).id,
     source_ids: ['1000'],
   }),
+  'connection-sync': async (target, caller) => ({
+    workspace_id: target.workspace.id,
+    connection_id: (await connectionFor(target, caller)).id,
+  }),
   'column-list': async (target) => ({ workspace_id: target.workspace.id }),
   // 名前は呼ぶたびに変える（同じ名前は 409 になるため）
   'column-create': async (target) => ({ workspace_id: target.workspace.id, name: `検証 ${uniqueSuffix()}` }),

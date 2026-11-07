@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ApiResult } from './api.ts';
-import { connectionCreateFailure, connectionScopeFailure, validateConnectionCreate } from './connection-form.ts';
+import {
+  connectionCreateFailure,
+  connectionScopeFailure,
+  connectionSyncFailure,
+  connectionSyncOutcome,
+  validateConnectionCreate,
+} from './connection-form.ts';
 
 type Failed = Extract<ApiResult<unknown>, { ok: false }>;
 const failed = (status: number, code: string | null, details?: unknown): Failed => ({
@@ -64,5 +70,31 @@ describe('connectionScopeFailure', () => {
     expect(connectionScopeFailure(failed(400, 'invalid_input'))).toBe('connectionScopeInvalid');
     expect(connectionScopeFailure(failed(503, 'unavailable'))).toBe('connectionUnreachable');
     expect(connectionScopeFailure(failed(500, 'internal'))).toBe('connectionScopeFailed');
+  });
+});
+
+describe('connectionSyncOutcome / connectionSyncFailure', () => {
+  it('結果を文言に振り分ける', () => {
+    const base = { imported: 0, more: false };
+    expect(connectionSyncOutcome({ ...base, result: 'success', imported: 3 }).key).toBe('connectionSyncDone');
+    expect(connectionSyncOutcome({ ...base, result: 'success' }).key).toBe('connectionSyncNone');
+    expect(connectionSyncOutcome({ result: 'success', imported: 3, more: true }).key).toBe('connectionSyncMore');
+    expect(connectionSyncOutcome({ ...base, result: 'no_scope' }).key).toBe('connectionSyncNoScope');
+    expect(connectionSyncOutcome({ ...base, result: 'auth_failed' })).toEqual({
+      key: 'connectionSyncAuthFailed',
+      icon: 'alert',
+    });
+    expect(connectionSyncOutcome({ ...base, result: 'error' }).key).toBe('connectionSyncError');
+  });
+
+  it('断られた理由を振り分ける', () => {
+    expect(connectionSyncFailure(failed(429, 'rate_limited'))).toBe('connectionSyncRateLimited');
+    expect(connectionSyncFailure(failed(409, 'conflict', { reason: 'connection_stopped' }))).toBe(
+      'connectionSyncStopped',
+    );
+    expect(connectionSyncFailure(failed(409, 'workspace_closed'))).toBe('connectionWorkspaceClosed');
+    expect(connectionSyncFailure(failed(403, 'forbidden'))).toBe('connectionScopeGone');
+    expect(connectionSyncFailure(failed(503, 'unavailable'))).toBe('connectionUnreachable');
+    expect(connectionSyncFailure(failed(500, 'internal'))).toBe('connectionSyncFailed');
   });
 });

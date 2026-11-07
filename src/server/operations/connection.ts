@@ -5,10 +5,12 @@
 import { now } from '../../shared/clock.ts';
 import {
   CONNECTIONS_PER_MEMBER_MAX,
+  CONNECTION_MANUAL_SYNC_INTERVAL_SECONDS,
   connectionCreate,
   connectionList,
   connectionScopeCandidates,
   connectionScopesSave,
+  connectionSync,
   type Connection,
   type ConnectionCreateProblem,
 } from '../../shared/operations/connection/index.ts';
@@ -396,3 +398,54 @@ export const connectionScopesSaveOperation = implement(
     return { connection };
   },
 );
+
+// 「今すぐ同期」。5分に1回の制限は、接続の last_manual_sync_at を条件つきの1文で書いて取り、書けなければ断る
+// （同時に押しても、書けるのは1回だけ。書けた1回だけが同期を走らせる）。同期の仕組みの結果は 200 で返す
+export const connectionSyncOperation = implement(connectionSync, async ({ db, actor, tools, workspace, input }) => {
+  const actorUserId = actorUserIdOf(actor);
+  const workspaceId = workspace.workspaceId;
+  const row = await ownConnection(db, actorUserId, workspaceId, input.connection_id);
+
+  const at = now();
+  const stamp = at.toISOString();
+  const before = new Date(at.getTime() - CONNECTION_MANUAL_SYNC_INTERVAL_SECONDS * 1000).toISOString();
+  const claimed = await db.run(
+    db.statement((q) =>
+      q
+        .updateTable('connections')
+        .set({ last_manual_sync_at: stamp })
+        .where('id', '=', row.id)
+        .where('workspace_id', '=', workspaceId)
+        .where('owner_user_id', '=', actorUserId)
+        .where('deleted_at', 'is', null)
+        .where('status', '!=', 'stopped')
+        .where((eb) => eb.or([eb('last_manual_sync_at', 'is', null), eb('last_manual_sync_at', '<=', before)]))
+        .where((eb) => eb.exists(openWorkspace(q, db.organizationId, workspaceId))),
+    ),
+  );
+  if (claimed.changes === 0) {
+    await throwIfClosed(db, workspaceId);
+    // 読んだ後に削除された接続は、存在しないときと同じ 404
+    const current = await ownConnection(db, actorUserId, workspaceId, row.id);
+    const state = await db.first(
+      db.statement((q) => q.selectFrom('connections').select('status').where('id', '=', current.id)),
+    );
+    if (state?.status === 'stopped') throw new ApiError(409, 'conflict', { reason: 'connection_stopped' });
+    throw new ApiError(429, 'rate_limited');
+  }
+
+  const synced = await tools.syncConnection(workspaceId, row.id);
+  if (synced.outcome === 'not_found') {
+    // 同期の最中に接続が削除された、またはワークスペースが閉じた
+    await throwIfClosed(db, workspaceId);
+    throw new ApiError(404, 'not_found');
+  }
+  const [connection] = await readConnections(db, workspaceId, row.id);
+  if (connection === undefined) throw new ApiError(404, 'not_found');
+  if (synced.outcome === 'stopped') throw new ApiError(409, 'conflict', { reason: 'connection_stopped' });
+  if (synced.outcome === 'no_scope') return { result: 'no_scope' as const, imported: 0, more: false, connection };
+  if (synced.outcome === 'success') {
+    return { result: 'success' as const, imported: synced.imported, more: synced.more, connection };
+  }
+  return { result: synced.outcome, imported: synced.imported, more: false, connection };
+});
