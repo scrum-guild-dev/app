@@ -135,7 +135,7 @@ describe('完了条件: 頁と続きの位置', () => {
     const { items, nextCursor } = await source.fetchAssignedItems(PAT, params(), fake.fetcher);
     const ids = items.map((i) => i.externalId);
     expect(new Set(ids)).toEqual(new Set(many(count).map((i) => String(i.id))));
-    expect(ids.length - new Set(ids).size).toBe(Math.floor(count / 100));
+    expect(ids).toHaveLength(count); // 1回の返り値の中では、重なった境目の項目を除く
     expect(nextCursor).toBeNull();
   });
 
@@ -410,10 +410,27 @@ describe('応答の検証', () => {
     expect(error.failure).toBe('unavailable');
   });
 
+  test('URL の番号と応答の番号が食い違う応答は断る。URL は検証した部品から組み直す', async () => {
+    const fake = setup();
+    fake.addIssues(1001, [
+      { ...fakeIssue(REPO_A.name, 1, { number: 3 }), html_url: 'https://github.com/guild-fake/alpha/issues/4' },
+    ]);
+    const error = await failureOf(source.fetchAssignedItems(PAT, params(), fake.fetcher));
+    expect(error.failure).toBe('unavailable');
+    fake.addIssues(1001, [
+      { ...fakeIssue(REPO_A.name, 1, { number: 3 }), html_url: 'https://user:pw@github.com/guild-fake/alpha/issues/3' },
+    ]);
+    const { items } = await source.fetchAssignedItems(PAT, params(), fake.fetcher);
+    expect(items[0]?.url).toBe('https://github.com/guild-fake/alpha/issues/3');
+  });
+
   test('キーは応答の URL の今のリポジトリ名から作る（改名後も食い違わない）', async () => {
     const fake = setup();
     fake.addIssues(1001, [
-      { ...fakeIssue(REPO_A.name, 1), html_url: 'https://github.com/guild-fake/alpha-renamed/issues/9' },
+      {
+        ...fakeIssue(REPO_A.name, 1, { number: 9 }),
+        html_url: 'https://github.com/guild-fake/alpha-renamed/issues/9',
+      },
     ]);
     const { items } = await source.fetchAssignedItems(PAT, params(), fake.fetcher);
     expect(items[0]?.key).toBe('guild-fake/alpha-renamed#9');

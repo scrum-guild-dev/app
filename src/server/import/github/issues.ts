@@ -49,7 +49,8 @@ function isAssignedTo(item: Record<string, unknown>, login: string): boolean {
 
 // Issue の URL（https://github.com/owner/repo/issues/番号）から `owner/repo#番号` を作る。形が違えば null。
 // 改名や移動の後も、応答の URL が今の名前を指すので、キーは範囲の名前ではなく URL から作る
-function keyOfIssueUrl(url: string): string | null {
+// 保存する URL も、検証した部品から組み立て直す（userinfo や空白の混入を通さない）
+function partsOfIssueUrl(url: string): { key: string; url: string; number: string } | null {
   if (url.length > MAX_URL_LENGTH) return null;
   let parsed: URL;
   try {
@@ -62,7 +63,11 @@ function keyOfIssueUrl(url: string): string | null {
   }
   if (!ISSUE_URL_PATH.test(parsed.pathname)) return null;
   const [, owner, repo, , number] = parsed.pathname.split('/');
-  return `${owner}/${repo}#${number}`;
+  return {
+    key: `${owner}/${repo}#${number}`,
+    url: `https://github.com/${owner}/${repo}/issues/${number}`,
+    number: number!,
+  };
 }
 
 // null は、返さない項目（PR、閉じた Issue、担当が他人）
@@ -75,14 +80,16 @@ function convert(raw: unknown, scope: ScopeCandidate, login: string): ImportedIt
   if (!isAssignedTo(raw, login)) return null;
 
   const id = idOf(raw.id);
-  idOf(raw.number); // 番号は応答の URL から読む。形だけ確かめる
-  const { title, html_url: url } = raw;
+  const number = idOf(raw.number);
+  const { title, html_url: rawUrl } = raw;
   // 文字数はコードポイントで数える（絵文字など BMP 外の文字は String.length で2と数えられるため）
   if (typeof title !== 'string' || title.length === 0 || [...title].length > MAX_TITLE_LENGTH) {
     throw fail('unavailable');
   }
-  const key = typeof url === 'string' ? keyOfIssueUrl(url) : null;
-  if (typeof url !== 'string' || key === null) throw fail('unavailable');
+  const parts = typeof rawUrl === 'string' ? partsOfIssueUrl(rawUrl) : null;
+  // URL の番号と応答の番号が食い違う応答は断る
+  if (parts === null || parts.number !== number) throw fail('unavailable');
+  const { key, url } = parts;
 
   let dueAt: string | null = null;
   if (isRecord(raw.milestone) && raw.milestone.due_on !== null && raw.milestone.due_on !== undefined) {
@@ -147,13 +154,14 @@ export async function fetchAssignedIssues(
 ): Promise<FetchAssignedResult> {
   let { repo, page, since } = validate(params);
   const baseSince = params.since === null ? null : new Date(params.since).toISOString();
-  const items: ImportedItem[] = [];
+  // 境目の項目が重なるので、1回の返り値の中では externalId で除く（後に読んだ方を残す）
+  const found = new Map<string, ImportedItem>();
   let requests = 0;
   while (repo < params.scopes.length) {
     // 上限に達したら、次の要求の位置を返す
     if (requests >= params.maxRequests) {
       const anchor = since !== baseSince && since !== null ? since : '';
-      return { items, nextCursor: `${params.scopes[repo]!.id}:${page}:${anchor}` };
+      return { items: [...found.values()], nextCursor: `${params.scopes[repo]!.id}:${page}:${anchor}` };
     }
     const scope = params.scopes[repo]!;
     // 読んだ項目から決めた起点は、GitHub の since が境界を含むかを文書で確かめられないので、1秒戻して送る
@@ -165,7 +173,7 @@ export async function fetchAssignedIssues(
     if (!Array.isArray(body)) throw fail('unavailable');
     for (const raw of body as unknown[]) {
       const item = convert(raw, scope, params.assignee);
-      if (item !== null) items.push(item);
+      if (item !== null) found.set(item.externalId, item);
     }
     if (body.length < PAGE_SIZE) {
       repo++;
@@ -185,5 +193,5 @@ export async function fetchAssignedIssues(
       page = 1;
     }
   }
-  return { items, nextCursor: null };
+  return { items: [...found.values()], nextCursor: null };
 }
