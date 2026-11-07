@@ -624,6 +624,7 @@ export const dictionary = defineDictionary({
   // 木の空の行（題を打って Enter で作る）
   treeAddEpic: '{epic}を足す',
   treeAddStory: '{story}を足す',
+  treeAddStoryUnder: '{title}に{story}を足す',
   treeAddPlaceholder: '題を打って Enter',
   treeAddSending: '作っています',
   // 親の{epic}が完了か中止になっていた（読み直して、空の行を消す）

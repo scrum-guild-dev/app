@@ -5,11 +5,12 @@ import { describe, expect, test } from 'vitest';
 import { storyCreate, storyGet, storyUpdate } from '../src/shared/operations/story/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb, verifyWorkspace } from '../src/server/db/index.ts';
+import { envWithD1Hooks } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { storyUpdateOperation } from '../src/server/operations/story.ts';
 import { createCategory, createEpic, createStory } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
-import { createTarget, type Person, type Target } from './operations/world.ts';
+import { createTarget, testEnv, type Person, type Target } from './operations/world.ts';
 
 const app = createApp(implementedOperations);
 
@@ -219,6 +220,7 @@ describe('story-create', () => {
     expect((await rowOf(target, next.id))!.position > root.position).toBe(true);
     expect(JSON.parse((await logsOf(target, firstStory.id))[0]!.changes_json)).toEqual({
       title: [null, '一つ目'],
+      epic: [null, { id: epic.id, title: epic.title }],
     });
   });
 
@@ -258,6 +260,47 @@ describe('story-create', () => {
     expect(body.error.code).toBe('conflict');
     expect(body.error.details?.reason).toBe('parent_completed');
     expect(await storyCount(target)).toBe(0);
+  });
+
+  test.each([
+    ['クリア', { completed_at: '2026-10-21T00:00:00.000Z' }, 409],
+    ['中止', { canceled_at: '2026-10-21T00:00:00.000Z' }, 409],
+    ['削除', { deleted_at: '2026-10-21T00:00:00.000Z' }, 404],
+  ])(
+    '読んでから書くまでに親のエピックが%sされたら、何も書かず、読み直して %d を返す',
+    async (_name, change, status) => {
+      const target = await createTarget();
+      const epic = await createEpic(target.organization, target.workspace.id, target.admin.userId!);
+      let done = false;
+      const requestEnv = envWithD1Hooks(testEnv, {
+        afterQuery: async (sql) => {
+          // 親のエピックを読んだ直後に、別の要求がクリアか削除を通す
+          if (done || !sql.startsWith('select "epics"."id", "epics"."title"')) return;
+          done = true;
+          const db = orgDb(env, target.organization.verified);
+          await db.batch([db.statement((q) => q.updateTable('epics').set(change).where('id', '=', epic.id))]);
+        },
+      });
+      const res = await post(app, storyCreate, {
+        slug: target.slug,
+        token: target.member.token,
+        body: { workspace_id: target.workspace.id, title: 'x', epic_id: epic.id },
+        env: requestEnv,
+      });
+      expect(done).toBe(true);
+      expect(res.status).toBe(status);
+      expect(await storyCount(target)).toBe(0);
+    },
+  );
+
+  test('閉じたワークスペースでは、完了したエピックを指しても 409 の workspace_closed で断る', async () => {
+    const target = await createTarget({ closed: true });
+    const epic = await createEpic(target.organization, target.workspace.id, target.admin.userId!, {
+      completed_at: '2026-10-21T00:00:00.000Z',
+    });
+    const res = await create(target, { title: 'x', epic_id: epic.id }, target.admin);
+    expect(res.status).toBe(409);
+    expect(await errorCodeOf(res)).toBe('workspace_closed');
   });
 
   test('別の組織・別のワークスペース・削除済み・存在しないエピックは 404 で、何も書かない', async () => {

@@ -70,7 +70,7 @@
   // 起票したタスクは、読み直さずに親の配下（親なしなら一覧の末尾）に足し、親の「全体」のポイントにも足す。親の行が畳まれていれば開く。
   // 足した行は、読み直した木に入るか、作った後に始まった読み直しの木に無い（別の人の削除など）と外す。
   // ただし絞っているときは、末尾に足さずに木を読み直す（上の帯の段落）。
-  // エピックとストーリーを作った、直したときは、木を読み直す。
+  // ダイアログでエピックとストーリーを作った、直したときは、木を読み直す（空の行で作ったときは、読み直さずに木へ足す）。
   // 完了の操作を送っている最中の行（pendingIds、storyPending）は、読み直しでは捨てず、応答が来たら外す。
   // 見出しの下に、ワークスペースの完成の定義（枠の値。空なら出さない）を畳んで1つだけ置く
   let { data }: PageProps = $props();
@@ -169,16 +169,15 @@
             }),
           )
         : [];
-    const keepRow = (id: string, at: number, inLoaded: boolean) =>
+    const keepRow = (at: number, inLoaded: boolean) =>
       sameWorkspace &&
       !filtering &&
       keepAddedRow({ at }, { inLoadedTree: inLoaded, completed: false, treeLoaded: loaded !== null, loadedAt });
     addedEpics = untrack(() => addedEpics).filter((entry) =>
-      keepRow(entry.epic.id, entry.at, loaded?.epics.some((epic) => epic.id === entry.epic.id) ?? false),
+      keepRow(entry.at, loaded?.epics.some((epic) => epic.id === entry.epic.id) ?? false),
     );
     addedStories = untrack(() => addedStories).filter((entry) =>
       keepRow(
-        entry.story.id,
         entry.at,
         [...(loaded?.epics.flatMap((epic) => epic.stories) ?? []), ...(loaded?.stories ?? [])].some(
           (story) => story.id === entry.story.id,
@@ -624,7 +623,8 @@
   // 空の行でエピックを作る。作れたら読み直さずに木の末尾へ足す。絞っているときは木を読み直し、作ったものを知らせる。
   // 返すのは、空の行に出すエラーの文（成功は null）
   async function addEpicRow(title: string): Promise<string | null> {
-    if (workspace === null) return null;
+    if (workspace === null) return t('epicCreateFailed');
+    const sentFor = page.params.id;
     const result = await callOperation(
       epicCreate,
       { workspace_id: workspace.id, title },
@@ -641,6 +641,8 @@
       }
       return t('epicCreateFailed');
     }
+    // 送っている間に別のワークスペースへ移っていたら、古い応答で状態を触らない
+    if (sentFor !== page.params.id) return null;
     const made = result.data.epic;
     if (filtering) {
       await saved('epic', made.id);
@@ -670,7 +672,8 @@
 
   // 空の行でストーリーを作る。epicId が null なら親のないストーリー。作れたら読み直さずに配下の末尾へ足す
   async function addStoryRow(epicId: string | null, title: string): Promise<string | null> {
-    if (workspace === null) return null;
+    if (workspace === null) return t('storyCreateFailed');
+    const sentFor = page.params.id;
     const result = await callOperation(
       storyCreate,
       { workspace_id: workspace.id, title, epic_id: epicId },
@@ -686,16 +689,21 @@
         return t('workspaceClosedReadOnly', { workspace: t('workspace') });
       }
       if (epicId !== null && result.status === 409 && result.error?.code === 'conflict') {
-        // 親のエピックが完了か中止した。木を読み直して、空の行を消す
-        void invalidateAll();
-        return t('treeAddParentDone', { epic: t('epic'), done: t('done'), story: t('story') });
+        // 親のエピックが完了か中止した。木を読み直すと空の行ごと消えるので、知らせはトーストに出し、フォーカスは見出しへ移す
+        const message = t('treeAddParentDone', { epic: t('epic'), done: t('done'), story: t('story') });
+        showToast(message, 'alert');
+        await rowGone();
+        return message;
       }
       if (epicId !== null && result.status === 404) {
-        void invalidateAll();
-        return t('epicGone', { epic: t('epic') });
+        const message = t('epicGone', { epic: t('epic') });
+        showToast(message, 'alert');
+        await rowGone();
+        return message;
       }
       return t('storyCreateFailed');
     }
+    if (sentFor !== page.params.id) return null;
     const made = result.data.story;
     if (filtering) {
       await saved('story', made.id);
@@ -1267,6 +1275,7 @@
               <TreeAddRow
                 level="story"
                 label={t('treeAddStory', { story: t('story') })}
+                name={t('treeAddStoryUnder', { title: epic.title, story: t('story') })}
                 placeholder={t('treeAddPlaceholder')}
                 problem={(title) => rowTitleProblem('story', title)}
                 create={(title) => addStoryRow(epic.id, title)}

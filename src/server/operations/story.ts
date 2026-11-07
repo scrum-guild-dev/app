@@ -151,6 +151,8 @@ export const storyCreateOperation = implement(storyCreate, async ({ db, actor, w
   const parentId = input.epic_id;
   // 区分は親のないストーリーだけが持つ（エピックの下では引き継ぐ）
   if (parentId !== null && input.category_id !== null) throw categoryConflict('has_parent');
+  // 閉じたワークスペースは、親の状態より先に 409（workspace_closed）で断る
+  if (parentId !== null) await throwIfClosed(db, workspaceId);
   const parent = parentId === null ? null : await readParentEpic(db, workspaceId, parentId);
 
   // 区分は、同じワークスペースの削除していない区分だけ。読んで名前を履歴に残し、書く文にも同じ条件を入れる
@@ -166,6 +168,7 @@ export const storyCreateOperation = implement(storyCreate, async ({ db, actor, w
         .where('stories.epic_id', parentId === null ? 'is' : '=', parentId)
         .where('stories.deleted_at', 'is', null)
         .orderBy('stories.position', 'desc')
+        .orderBy('stories.id', 'desc')
         .limit(1),
     ),
   );
@@ -179,6 +182,8 @@ export const storyCreateOperation = implement(storyCreate, async ({ db, actor, w
     if (field !== 'title' && input[field] !== null) created[field] = [null, input[field]];
   }
   if (category !== null) created.category = [null, category];
+  // 親のエピックの下に作ったときは、親を履歴に残す（story-move の {"epic": [前, 後]} と同じ値の形）
+  if (parent !== null) created.epic = [null, { id: parent.id, title: parent.title }];
 
   const results = await db.batch([
     db.statement((q) =>
@@ -266,6 +271,8 @@ export const storyCreateOperation = implement(storyCreate, async ({ db, actor, w
   // 読んでから書くまでに、ワークスペースが閉じたか、区分が削除されたら何も入らない
   if ((results[0]?.changes ?? 0) === 0) {
     await throwIfClosed(db, workspaceId);
+    // 読んでから書くまでに親のエピックがクリア、中止、削除されたかを読み直して、404 か 409 を返す
+    if (parentId !== null) await readParentEpic(db, workspaceId, parentId);
     throw new ApiError(404, 'not_found');
   }
   return {

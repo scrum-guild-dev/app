@@ -49,9 +49,11 @@ test('エピックとストーリーを、木の空の行に題を打って Ente
   // 作れたら入力は空に戻り、続けて打てる
   await expect(epicInput).toHaveValue('');
   await expect(epicInput).toBeFocused();
+  // 行には何を作るかが見えるラベルで出ている
+  await expect(treeTail(page).first()).toContainText('エピックを足す');
 
   // そのエピックの末尾の「ストーリーを足す」。配下の末尾に入る
-  const underEpic = epic.getByRole('textbox', { name: 'ストーリーを足す' });
+  const underEpic = epic.getByRole('textbox', { name: '会員ポイント制度を公開するにストーリーを足す' });
   await underEpic.fill('残高を見せる');
   await underEpic.press('Enter');
   await expect(epic.getByRole('button', { name: '残高を見せる', exact: true })).toBeVisible();

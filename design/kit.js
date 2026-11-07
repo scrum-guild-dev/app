@@ -739,7 +739,23 @@
         blocked: finished,
         ...(opts.storyOpts ? opts.storyOpts(s, i) : {}),
         ...(opts.order ? { order: { first: i === 0, last: i === stories.length - 1, parent: true } } : {}) })).join("")}
-        ${stories.length ? "" : `<p class="tree-folded"${dropAttr(opts.tailMark || {})}>${t("story")}はまだありません</p>`}</div>
+        ${stories.length ? "" : `<p class="tree-folded"${dropAttr(opts.tailMark || {})}>${t("story")}はまだありません</p>`}
+        ${opts.add && !finished ? treeAdd("story", { under: e.title, id: `tree-add-${key}`, ...(opts.addError ? { error: opts.addError } : {}) }) : ""}</div>
+    </div>`;
+  }
+
+  // 木の空の行。題を打って Enter で作る。level は epic（木の最上段の字下げ）か story（エピックの配下）。
+  // 何を作る行かは見えるラベルで示す。opts.error があれば、行の下にエラーの文を出す（入力は aria-invalid）
+  function treeAdd(kind, opts = {}) {
+    const level = opts.level || "story";
+    const label = `${t(kind)}を足す`;
+    const name = opts.under ? `${opts.under}に${label}` : label;
+    const err = opts.error ? `<p class="tree-add-error" id="${opts.id || "tree-add"}-error" role="alert">${esc(opts.error)}</p>` : "";
+    return `<div class="tree-add is-${level}">
+      <span class="tree-add-mark" aria-hidden="true">${icon("plus")}</span>
+      <label class="tree-add-label" for="${opts.id || "tree-add"}">${label}</label>
+      <input class="tree-add-input" id="${opts.id || "tree-add"}" type="text" autocomplete="off" enterkeyhint="done" aria-label="${esc(name)}" placeholder="題を打って Enter"${opts.error ? ` aria-invalid="true" aria-describedby="${opts.id || "tree-add"}-error"` : ""}>
+      ${err}
     </div>`;
   }
 
@@ -3124,7 +3140,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
     avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, orderActions, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
-    card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
+    card, board, treeStory, treeEpic, treeAdd, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
