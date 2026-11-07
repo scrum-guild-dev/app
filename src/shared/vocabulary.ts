@@ -1643,7 +1643,13 @@ export const dictionary = defineDictionary({
   linkEdit: 'リンクを直す',
   editSave: '保存',
   editCancel: '取り消し',
-  editBody: '編集',
+  // 自動保存の欄で、保存できなかった書きかけをもう一度送る
+  editRetry: 'もう一度保存する',
+  // 描いた本文の横の、押せるボタンの読み上げの名前（押すと書く欄になる）
+  bodyEditLabel: '{field}を書く',
+  // 書き始めてからほかの人が先に同じ欄を直した。書いた分は欄に残る
+  taskFieldStale:
+    'ほかの人が先に直しました。今の内容は「{current}」です。書いた内容は残してあります。続けて書くと、書いた内容で上書きします。',
   bodyEmpty: 'まだ書かれていません。',
   bodyEditHint: 'Markdown で書けます。見出しは # が小見出しの大きさから始まります。',
   dueClear: 'クリア',

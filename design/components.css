@@ -1220,6 +1220,13 @@ label.pick-row:hover { background: var(--color-accent-soft); }
 .edit-form { display: grid; gap: var(--space-2); width: 100%; }
 .edit-form > .field { margin: 0; }
 .edit-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+/* 描いた本文や値そのものを押せば書ける面（.edit-surface）。触れたときに点線の罫を出し、文字の上は I ビームにする */
+.edit-surface { border: 1px dashed transparent; border-radius: var(--radius-1); cursor: text; }
+.edit-surface:hover { border-color: var(--color-line); }
+/* 保存の状態（保存しています、保存しました、保存できませんでした）。欄の名前の横に小さく出す。読み上げは別の role="status" が受け持つ */
+.save-state { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); color: var(--color-muted); }
+.save-state.is-saved { color: var(--color-ok); }
+.save-state.is-failed { color: var(--color-danger); }
 /* 欄の名前と、右端の操作（本文の「編集」） */
 .field-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }/* Markdown の本文（Markdown.svelte）。見出しの要素は引数の段で決まるので、大きさは Markdown の段のクラス（doc-h1 から doc-h6）で決める。
    引き出しの題（.drawer-title は --text-xl）より小さくし、h3 以下は本文と同じ大きさのまま、罫と字間で見分ける */
