@@ -135,7 +135,8 @@
 
   // 読み直したら（枠の読み直し、ワークスペースの切り替え）、木に入った足した行と、完了の印と、画面で動かした並びを捨てる
   // at は足した時刻（performance.now()）。木の loadedAt（読み直しを始めた時刻）がこれより後なら、その木は足した行を含むはず
-  let added = $state<{ task: BacklogTask; storyId: string | null; at: number }[]>([]);
+  // fromTree は、木にもとからあった行を完了にして写したもの（親の合計は、木が持つ分に含まれるので足さない）
+  let added = $state<{ task: BacklogTask; storyId: string | null; at: number; fromTree?: true }[]>([]);
   let addedFor: string | undefined;
   function inTree(loaded: typeof tree, id: string): boolean {
     if (loaded === null) return false;
@@ -409,12 +410,14 @@
     return hidden + storyRows(story).filter((task) => !completedIds.includes(task.id)).length;
   }
 
+  const fromTreeIds = $derived(new Set(added.filter((entry) => entry.fromTree).map((entry) => entry.task.id)));
+
   // 親の「全体」のポイント。足した行と、画面で移してきた行の分を足し、画面で外へ移した行の分を引く
   function pointsAllOf(story: BacklogStory): number {
     const rows = storyRows(story);
     const known = new Set(story.tasks.map((task) => task.id));
     const here = new Set(rows.map((task) => task.id));
-    const gained = rows.filter((task) => !known.has(task.id));
+    const gained = rows.filter((task) => !known.has(task.id) && !fromTreeIds.has(task.id));
     const lost = story.tasks.filter((task) => !here.has(task.id));
     const sum = (tasks: readonly BacklogTask[]) => tasks.reduce((total, task) => total + (task.points ?? 0), 0);
     return story.points_all + sum(gained) - sum(lost);
@@ -423,7 +426,11 @@
   // 完了にした行のポイントを、親の「完了」に足す。完了にした行は、読み直した一覧では未完了だった行か、足した行なので、
   // 読み直した「完了」の合計には入っていない
   function pointsDoneOf(story: BacklogStory): number {
-    const done = storyRows(story).filter((task) => completedIds.includes(task.id));
+    // 木に無い、もとから木にあった行は、完了を含む木が持つ「完了」の合計に入っているので足さない
+    const known = new Set(story.tasks.map((task) => task.id));
+    const done = storyRows(story).filter(
+      (task) => completedIds.includes(task.id) && (known.has(task.id) || !fromTreeIds.has(task.id)),
+    );
     return story.points_done + done.reduce((sum, task) => sum + (task.points ?? 0), 0);
   }
 
@@ -480,8 +487,12 @@
         completedIds = [...completedIds, task.id];
         completedAt[task.id] = performance.now();
         // 木にもとからあった行は、遅れて届く古い木に無くても残すため、足した行と同じ入れ物に写す（画面で足した行はすでにある）
-        if (!added.some((entry) => entry.task.id === task.id)) {
-          added = [...added, { task, storyId: taskPlaces[task.id]?.parentId ?? null, at: performance.now() }];
+        // 木から消えた行（親が引けない）は写さない。親なしの行として現れるため
+        if (taskPlaces[task.id] !== undefined && !added.some((entry) => entry.task.id === task.id)) {
+          added = [
+            ...added,
+            { task, storyId: taskPlaces[task.id]?.parentId ?? null, at: performance.now(), fromTree: true },
+          ];
         }
         // 別の画面で先に完了にされていたときは、同じ完了の印で示し、知らせる
         showToast(

@@ -163,15 +163,15 @@ test('木にもとからあるタスク: 完了の応答より前に始まった
   const row = page.locator('.entry', { hasText: '木にもとからある行' });
   await expect(row).toHaveCount(1);
 
-  // ポイントの保存のあとの読み直し（木を読む応答）を、完了より前に取ったまま止める
+  // ポイントの保存のあとの読み直し（木を読む要求）を、完了より前に出したまま止める
   let release!: () => void;
   const gate = new Promise<void>((resolve) => (release = resolve));
   let held = 0;
   await page.route('**/api/aoba/backlog-tree', async (route) => {
     if (held++ > 0) return route.continue();
-    const stale = await route.fetch();
+    // 要求は完了より前に出ているが、サーバーが答えるのは完了の後。木にタスクは無い（完了の応答より前に始まった読み直し）
     await gate;
-    await route.fulfill({ response: stale });
+    await route.fulfill({ response: await route.fetch() });
   });
   await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
   await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
@@ -180,9 +180,11 @@ test('木にもとからあるタスク: 完了の応答より前に始まった
   await row.getByRole('button', { name: /完了にする/ }).click();
   await expect(row.getByRole('img', { name: '木にもとからある行: 完了' })).toBeVisible();
 
-  // 完了を含まない古い木が届いても、印は付いたまま、行は一覧に残る
+  // 完了を含む木が、完了の応答より前に始まった読み直しとして届いても、印は付いたまま、行は一覧に残る
+  const delivered = page.waitForResponse((response) => response.url().endsWith('/api/aoba/backlog-tree'));
   release();
-  await page.waitForTimeout(300);
+  await delivered;
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(row).toHaveCount(1);
   await expect(row.getByRole('img', { name: '木にもとからある行: 完了' })).toBeVisible();
   await expect(page.locator('.tree-folded')).toHaveCount(0);
