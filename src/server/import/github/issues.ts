@@ -77,7 +77,10 @@ function convert(raw: unknown, scope: ScopeCandidate, login: string): ImportedIt
   const id = idOf(raw.id);
   idOf(raw.number); // 番号は応答の URL から読む。形だけ確かめる
   const { title, html_url: url } = raw;
-  if (typeof title !== 'string' || title.length === 0 || title.length > MAX_TITLE_LENGTH) throw fail('unavailable');
+  // 文字数はコードポイントで数える（絵文字など BMP 外の文字は String.length で2と数えられるため）
+  if (typeof title !== 'string' || title.length === 0 || [...title].length > MAX_TITLE_LENGTH) {
+    throw fail('unavailable');
+  }
   const key = typeof url === 'string' ? keyOfIssueUrl(url) : null;
   if (typeof url !== 'string' || key === null) throw fail('unavailable');
 

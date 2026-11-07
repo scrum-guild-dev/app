@@ -367,6 +367,16 @@ describe('応答の検証', () => {
     expect(error.failure).toBe('unavailable');
   });
 
+  test('題の上限は文字数（コードポイント）で数える', async () => {
+    const fake = setup();
+    fake.addIssues(1001, [fakeIssue(REPO_A.name, 1, { title: '😀'.repeat(256) })]);
+    const { items } = await source.fetchAssignedItems(PAT, params(), fake.fetcher);
+    expect(items).toHaveLength(1);
+    fake.addIssues(1001, [fakeIssue(REPO_A.name, 1, { title: '😀'.repeat(257) })]);
+    const error = await failureOf(source.fetchAssignedItems(PAT, params(), fake.fetcher));
+    expect(error.failure).toBe('unavailable');
+  });
+
   test('キーは応答の URL の今のリポジトリ名から作る（改名後も食い違わない）', async () => {
     const fake = setup();
     fake.addIssues(1001, [
