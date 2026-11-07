@@ -149,19 +149,16 @@
   // ---- ストーリーの引き出し ----
   // 絞り込みで木から外れても（検索中に題を直した直後など）前後のボタンが消えないよう、順に載っていた間の前後を覚えておく。
   // 別のストーリーを開き直したとき（URL から直接開いた、順に無い）は覚えがないので、ボタンを出さない
-  let lastAdjacent: { id: string; adjacent: { prev: string | null; next: string | null } } | null = null;
-  const storyAdjacent = $derived.by(() => {
-    if (storyId === null) {
-      lastAdjacent = null;
-      return null;
-    }
-    const found = adjacentTaskIds(storyOrder.ids, storyId);
-    if (found !== null) {
-      lastAdjacent = { id: storyId, adjacent: found };
-      return found;
-    }
-    return lastAdjacent?.id === storyId ? lastAdjacent.adjacent : null;
+  // 覚えた前後は $effect で更新する（$derived の中で書かない。閉じると読み手がいなくなり、$derived は再評価されないため）
+  let remembered = $state.raw<{ id: string; adjacent: { prev: string | null; next: string | null } } | null>(null);
+  const foundAdjacent = $derived(storyId === null ? null : adjacentTaskIds(storyOrder.ids, storyId));
+  $effect(() => {
+    if (storyId === null) remembered = null;
+    else if (foundAdjacent !== null) remembered = { id: storyId, adjacent: foundAdjacent };
   });
+  const storyAdjacent = $derived(
+    foundAdjacent ?? (storyId !== null && remembered?.id === storyId ? remembered.adjacent : null),
+  );
   // 期日の印の今日と週の始まり、親に選べるエピック。バックログの画面が読んだ木から取る
   const storyTree = $derived(storyTreeOf(page.data));
   const storyClock = $derived(storyTree === null ? null : { today: storyTree.today, weekStart: storyTree.week_start });
