@@ -372,6 +372,9 @@ describe('取り込みの同期', () => {
     ['暦に無い期日', { dueOn: '2026-02-30' }],
     ['見えない文字だけのキー', { key: '\u{200B}' }],
     ['見えない文字だけの状態', { status: '\u0000' }],
+    ['詰め物の文字だけの状態', { status: '\u3164' }],
+    ['点字の空白だけの入れ物の名前', { containerName: '\u2800' }],
+    ['空の入れ物の名前', { containerName: '' }],
   ])('%s の項目は飛ばし、ほかの項目は入れる', async (_name, overrides) => {
     const { workspace, connection, db } = await setup();
     const { source } = fakeSource({ '501': [{ items: [item(1), item(2, overrides)], next: null }] });
@@ -404,6 +407,25 @@ describe('取り込みの同期', () => {
     });
     const result = await syncConnection(env, db, workspace.id, connection.id, { source });
     expect(result).toEqual({ outcome: 'success', imported: 3, more: false });
+  });
+
+  test('ミリ秒なしの Z や UTC からのずれ付きの更新日時も受け、ミリ秒付きの UTC に直して保存する', async () => {
+    const { workspace, connection, db } = await setup();
+    const { source } = fakeSource({
+      '501': [
+        {
+          items: [item(1, { updatedAt: '2026-11-01T00:00:00Z' }), item(2, { updatedAt: '2026-11-01T09:00:00+09:00' })],
+          next: null,
+        },
+      ],
+    });
+    expect(await syncConnection(env, db, workspace.id, connection.id, { source })).toMatchObject({ imported: 2 });
+    const rows = await db.rows(
+      db.statement((q) =>
+        q.selectFrom('task_sources').select('source_updated_at').where('workspace_id', '=', workspace.id),
+      ),
+    );
+    expect(rows.map((r) => r.source_updated_at)).toEqual(['2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z']);
   });
 
   test('空に見えるタイトルはキーに替え、200字の切れ目の空白を残さない', async () => {

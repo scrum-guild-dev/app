@@ -119,9 +119,13 @@ function isWebUrl(value: string): boolean {
   }
 }
 
-function isIsoInstant(value: string): boolean {
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+
+// ISO 8601 の日時（ミリ秒なしの Z や UTC からのずれ付きも受ける）。受けた値は保存の前にミリ秒付きの UTC に直す
+function isoInstant(value: string): string | null {
+  if (!ISO_INSTANT.test(value)) return null;
   const time = Date.parse(value);
-  return !Number.isNaN(time) && new Date(time).toISOString() === value;
+  return Number.isNaN(time) ? null : new Date(time).toISOString();
 }
 
 function isDate(value: string): boolean {
@@ -149,14 +153,17 @@ function isValidItem(item: ImportItem): boolean {
     !isText(item.containerName) ||
     !isText(item.status) ||
     !isText(item.updatedAt) ||
-    !isIsoInstant(item.updatedAt) ||
+    isoInstant(item.updatedAt) === null ||
     typeof item.isDone !== 'boolean' ||
     (item.dueOn !== null && (typeof item.dueOn !== 'string' || !isDate(item.dueOn)))
   ) {
     return false;
   }
   // 見えない文字を除いて空になる欄は、表示に使えない
-  return [item.key, item.containerName, item.status].every((text) => stripHiddenCharacters(text).trim() !== '');
+  // 手で入れるタイトルと同じ判定（BLANK_CHARACTERS）で、空白や幅の無い文字だけの欄も飛ばす。sourceId はタイトルの最後の替えにも使う
+  return [item.key, item.containerName, item.status, item.sourceId].every(
+    (text) => stripHiddenCharacters(text).replace(BLANK_CHARACTERS, '') !== '',
+  );
 }
 
 type Scope = { id: string; name: string };
@@ -320,7 +327,7 @@ async function writePage(
     assigneeUserId: connection.owner_user_id,
     repositoryId: repositories.get(item.containerId) ?? null,
     position: positions[index]!,
-    title: importedTitle(item.title, item.key) || importedTitle(item.sourceId, '') || '(題なし)',
+    title: importedTitle(item.title, item.key) || importedTitle(item.sourceId, ''),
     kind: item.kind,
     sourceId: item.sourceId,
     reviewerSourceId: item.reviewerSourceId,
@@ -330,7 +337,7 @@ async function writePage(
     containerName: stripHiddenCharacters(item.containerName),
     status: stripHiddenCharacters(item.status),
     dueOn: item.dueOn,
-    updatedAt: item.updatedAt,
+    updatedAt: isoInstant(item.updatedAt)!,
   }));
   const results = await db.batch(tasks.flatMap((task) => importTaskStatements(db, task, at.toISOString())));
   // 2文ずつの組の先頭（tasks）が書いた数が、入れたタスクの数
