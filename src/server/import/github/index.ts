@@ -129,7 +129,7 @@ async function listScopeCandidates(credential: string, fetcher: typeof fetch): P
 
 export const githubImportSource: ImportSource = {
   kind: 'github',
-  scopeKind: 'repository',
+  scopeKind: 'github_repo',
   parseSettings(settings) {
     if (settings === undefined) return {};
     if (isRecord(settings) && Object.keys(settings).length === 0) return {};

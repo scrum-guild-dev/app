@@ -7,6 +7,14 @@
 // 当たらない呼び出しは処理の誤りなので、投げて 500 にする
 import { INVITE_PATH } from '../../shared/claim-token.ts';
 import type { InviteeResolver } from '../auth/login-method.ts';
+import { decryptCredential, encryptCredential, type EncryptedCredential } from '../crypto/credential.ts';
+import {
+  importSourceOf,
+  type CredentialOwner,
+  type ImportSource,
+  type ImportSourceKind,
+  type ScopeCandidate,
+} from '../import/index.ts';
 import {
   commonDb,
   readOrganizationRow,
@@ -39,6 +47,20 @@ export type OrganizationTools = {
   // 招待の (login_provider, login_subject) と突き合わせ、承諾で作る users の名前を決めるのに使う。
   // この道具だけは、承諾待ちの招待だけの人の操作からも使える。1回のリクエストで1回だけ引く
   myLogins(): Promise<readonly MyLogin[]>;
+  // 取り込み元の型に、取り込み元への通信（fetcher）を結んだもの。処理は env も fetch も受け取らず、確かめと候補の問い合わせはここだけを通る
+  importSource(kind: ImportSourceKind): BoundImportSource;
+  // 接続の認証情報の暗号化と復号（鍵は env のシークレット）。暗号文は接続の ID に結ぶ。平文と暗号文はエラーにもログにも出さない
+  sealCredential(plaintext: string, connectionId: string): Promise<EncryptedCredential>;
+  openCredential(stored: EncryptedCredential, connectionId: string): Promise<string>;
+};
+
+// 取り込み元の型のうち、登録と範囲の選択が使う部分。通信の口は結んであるので、呼ぶ側は渡さない
+export type BoundImportSource = Pick<
+  ImportSource,
+  'scopeKind' | 'parseSettings' | 'isCredentialShape' | 'credentialLast4'
+> & {
+  verifyCredential(credential: string): Promise<CredentialOwner>;
+  listScopeCandidates(credential: string): Promise<ScopeCandidate[]>;
 };
 
 // アカウントに結んだログイン。loginName はログインの手段の側の名前（GitHub のユーザー名など）
@@ -49,6 +71,7 @@ export function organizationTools(
   db: OrganizationDb,
   actor: OrganizationActor,
   inviteeResolver: (provider: string) => InviteeResolver | undefined,
+  importFetcher: typeof fetch,
 ): OrganizationTools {
   // 承諾待ちの招待だけの人は、組織の中を読む操作に通らない（register.ts の checkOrganizationPermission）。道具もその人には使わせない
   const member = <T>(use: () => T): T => {
@@ -67,6 +90,20 @@ export function organizationTools(
       }),
     avatarsOf: (userIds) => member(() => userAvatarsOf(env, db, userIds)),
     myLogins: () => (logins ??= readMyLogins(env, actor.accountId)),
+    importSource: (kind) =>
+      member(() => {
+        const source = importSourceOf(kind);
+        return {
+          scopeKind: source.scopeKind,
+          parseSettings: (settings) => source.parseSettings(settings),
+          isCredentialShape: (credential) => source.isCredentialShape(credential),
+          credentialLast4: (credential) => source.credentialLast4(credential),
+          verifyCredential: (credential) => source.verifyCredential(credential, importFetcher),
+          listScopeCandidates: (credential) => source.listScopeCandidates(credential, importFetcher),
+        };
+      }),
+    sealCredential: (plaintext, connectionId) => member(() => encryptCredential(env, plaintext, connectionId)),
+    openCredential: (stored, connectionId) => member(() => decryptCredential(env, stored, connectionId)),
   };
 }
 
