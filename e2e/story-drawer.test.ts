@@ -11,7 +11,7 @@ import { operationPath } from '../src/shared/operations/define.ts';
 import { categoryCreate } from '../src/shared/operations/definition/category.ts';
 import { storyGet } from '../src/shared/operations/story/story-get.ts';
 import { storyUpdate } from '../src/shared/operations/story/story-update.ts';
-import { createWorkspace, signIn, waitForResponses, watchViolations } from './helpers.ts';
+import { chooseRowAction, createWorkspace, signIn, waitForResponses, watchViolations } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
@@ -222,7 +222,8 @@ test('ほかの人が先に期日を直していたら、期日の保存は断�
     .getByRole('link', { name: '期日を先に直される', exact: true })
     .getAttribute('data-story-id'))!;
   const drawer = await openStory(page, '期日を先に直される');
-  const due = drawer.getByLabel('期日');
+  // 帯の「⋯」の名前にも題（期日を先に直される）が入るので、ラベルは完全一致で指す
+  const due = drawer.getByLabel('期日', { exact: true });
   await expect(due).toHaveValue('');
 
   // 開いた後に、ほかの人が期日を入れた形にする
@@ -269,11 +270,11 @@ test('引き出しから「完了にする」と「取り消す」ができる�
   await createWorkspace(page, '完了のワークスペース');
   await create(page, 'ストーリーを作る', '配下のあるストーリー');
   await create(page, 'ストーリーを作る', '配下のないストーリー');
-  await page.getByRole('button', { name: 'タスクを足す: 配下のあるストーリー' }).click();
-  const taskDialog = page.getByRole('dialog', { name: '起票' });
-  await taskDialog.getByLabel('タイトル').fill('残っているタスク');
-  await taskDialog.getByRole('button', { name: '起票' }).click();
-  await expect(taskDialog).toBeHidden();
+  // タスクは、配下の末尾の空の行で足す
+  const draft = page.getByRole('textbox', { name: 'タスクを足す: 配下のあるストーリー' });
+  await draft.fill('残っているタスク');
+  await draft.press('Enter');
+  await expect(page.locator('.entry-title', { hasText: '残っているタスク' })).toBeVisible();
 
   // 配下に未完了のタスクが残るあいだは、押しても何も起きず、理由が読み上げと一緒に出る
   const blocked = await openStory(page, '配下のあるストーリー');
@@ -442,7 +443,7 @@ test('親なしへ移した後は、区分の選択欄が読み込まれてい�
   await create(page, 'ストーリーを作る', '親なしへ戻るストーリー');
 
   // エピックの下へ移してから開く。親のあるストーリーは区分の選択肢を読まない
-  await page.getByRole('button', { name: '親を移す: 親なしへ戻るストーリー' }).click();
+  await chooseRowAction(page, '親なしへ戻るストーリー', '親を移す');
   const rowDialog = page.getByRole('dialog', { name: '「親なしへ戻るストーリー」の親を移す' });
   const rowMoved = waitForResponses(page, '/story-move');
   await rowDialog.getByRole('button', { name: '移す' }).click();

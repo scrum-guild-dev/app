@@ -949,8 +949,8 @@
   </h2>
 {/snippet}
 
-{#snippet textView(source: string | null)}
-  {#if source != null}
+{#snippet textView(source: string)}
+  {#if source !== ''}
     <Markdown {source} headingStart={3} />
   {:else}
     <div class="doc-box is-empty">{t('bodyEmpty')}</div>
@@ -959,7 +959,9 @@
 
 {#snippet textField(
   label: string,
-  value: string | null,
+  // 空は ''。AutoSaveEdit が外れる瞬間（onDestroy）にも読むので、その場で `?? ''` と式を組まず、呼ぶ側で整えて渡す
+  // （式を組むと $derived になり、破棄された後に読んで derived_inert の警告が出る）
+  value: string,
   problem: (raw: string) => string | null,
   save: (raw: string) => Promise<string | null>,
   ondirty: (dirty: boolean) => void,
@@ -968,7 +970,7 @@
   <div class="field">
     {#if canWrite}
       <AutoSaveEdit
-        value={value ?? ''}
+        {value}
         {label}
         multiline
         hint={t('bodyEditHint')}
@@ -1200,7 +1202,7 @@
 
     {@render textField(
       t('ac'),
-      story.acceptance_criteria_md,
+      story.acceptance_criteria_md ?? '',
       (raw) => textProblem(raw, t('ac')),
       saveAcceptance,
       (value) => (dirty.acceptance = value),
@@ -1208,7 +1210,7 @@
     )}
     {@render textField(
       t('fieldBody'),
-      story.body_md,
+      story.body_md ?? '',
       (raw) => textProblem(raw, t('fieldBody')),
       saveBody,
       (value) => (dirty.body = value),

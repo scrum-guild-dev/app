@@ -189,8 +189,9 @@ test('ストーリーの引き出しは、開いたら1件を読み、押せば�
   await expect.poll(() => updates.length).toBe(2);
   expect(Object.keys(updates[0] as object).sort()).toEqual(['expected', 'story_id', 'title', 'workspace_id']);
   expect(updates[0]).toMatchObject({ title: '新しいタイトル', expected: { title: '元のタイトル' } });
-  expect(Object.keys(updates[1] as object).sort()).toEqual(['due_on', 'story_id', 'workspace_id']);
-  expect(updates[1]).toMatchObject({ due_on: '2020-01-02' });
+  // 期日にも、書き始める前の値（期日なし）を添える
+  expect(Object.keys(updates[1] as object).sort()).toEqual(['due_on', 'expected', 'story_id', 'workspace_id']);
+  expect(updates[1]).toMatchObject({ due_on: '2020-01-02', expected: { due_on: null } });
 
   // 読み直された木で、色だけでなく文字とアイコンを添えた赤い印が出る。ほかの欄は残っている
   const group = storyGroup(page, '新しいタイトル');

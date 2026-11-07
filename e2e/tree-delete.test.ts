@@ -348,12 +348,10 @@ test('作った人でもリーダーでもないメンバーには、削除の�
   await epicDialog.getByRole('button', { name: 'やめる' }).click();
   await page.getByRole('link', { name: 'バックログへ戻る' }).click();
 
-  // ストーリーの引き出しでは、削除の項目を押せなくし、削除できる人を添える
+  // ストーリーの引き出しでは、「⋯」に削除の項目を置かず、本文の下に削除できる人を出す（タスクの引き出しと同じ）
   const storyDialog = await openStoryDrawer(page, '送料の割引にポイントを使える');
-  await storyMenuButton(storyDialog, '送料の割引にポイントを使える').click();
-  const deleteItem = storyDialog.getByRole('menuitem', { name: /このストーリーを削除する/ });
-  await expect(deleteItem).toHaveAttribute('aria-disabled', 'true');
-  await expect(deleteItem).toContainText('削除できるのは作った人とリーダーです。');
-  await deleteItem.click();
+  await expect(storyDialog.getByText('削除できるのは作った人とリーダーです。')).toBeVisible();
+  // 閉じたメニューの項目も DOM にあるので、見えるかどうかによらない指定で数える
+  await expect(storyDialog.locator('[role="menuitem"]', { hasText: '削除' })).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'ストーリーを削除する' })).toHaveCount(0);
 });
