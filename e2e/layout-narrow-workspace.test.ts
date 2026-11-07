@@ -90,6 +90,15 @@ test('受信箱が 390px で横にはみ出さず、押せる要素が 44px 四�
   });
 });
 
+test('接続が 390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({ page }) => {
+  await expectNarrowLayout(page, 'connections', async (w) => {
+    await page.goto(`${WORKSPACE}/connections`);
+    await expect(page.getByRole('heading', { level: 1, name: w('connection') })).toBeVisible();
+    await expect(page.getByRole('list', { name: `${w('connection')}の一覧` })).toBeVisible();
+    await expectWorkspaceWords(page, w);
+  });
+});
+
 test('メンバーが 390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({ page }) => {
   await expectNarrowLayout(page, 'members', async (w) => {
     await page.goto(`${WORKSPACE}/members`);
