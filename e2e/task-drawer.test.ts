@@ -93,26 +93,30 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
   await expect(row.getByRole('link', { name: '見積もりを送って確かめる' })).toBeVisible();
   await expect(drawer.getByRole('button', { name: /見積もりを送って確かめる/ })).toBeFocused();
 
-  // リンクは押すと入力欄になり、Esc で元に戻る
+  // 「保存」「取り消し」のボタンは無い。リンクは押すと入力欄になり、使えない値は欄を離れたときに理由を出して送らず、
+  // Esc で保存していない書きかけが元の値に戻る（引き出しは閉じない）
   await drawer.getByRole('button', { name: /リンクを足す/ }).click();
+  await expect(drawer.getByRole('button', { name: '保存', exact: true })).toHaveCount(0);
+  await expect(drawer.getByRole('button', { name: '取り消し', exact: true })).toHaveCount(0);
   await drawer.getByRole('textbox', { name: 'リンク' }).fill('ftp://example.com');
-  await drawer.getByRole('button', { name: '保存', exact: true }).click();
+  await drawer.getByRole('textbox', { name: 'リンク' }).blur();
   await expect(drawer.getByText('http か https で始まる URL を入れてください')).toBeVisible();
   await drawer.getByRole('textbox', { name: 'リンク' }).press('Escape');
-  await expect(drawer.getByRole('textbox', { name: 'リンク' })).toHaveCount(0);
+  await expect(drawer.getByRole('textbox', { name: 'リンク' })).toHaveValue('');
   await expect(drawer).toBeVisible();
-  await drawer.getByRole('button', { name: /リンクを足す/ }).click();
+  // 手を止めると保存され、「保存しました」が欄の横に出る
   await drawer.getByRole('textbox', { name: 'リンク' }).fill('https://example.com/spec');
-  await drawer.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(drawer.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
+  await drawer.getByRole('textbox', { name: 'リンク' }).blur();
   await expect(drawer.getByRole('link', { name: 'リンクを新しいタブで開く' })).toHaveAttribute(
     'href',
     'https://example.com/spec',
   );
 
-  // 本文は「編集」で書く欄に替わる。script を含む Markdown を保存すると、描かれた本文は文字で出て、スクリプトは動かない
-  await drawer.getByRole('button', { name: '編集' }).click();
+  // 本文は、描いた本文を押せば書く欄に替わる。script を含む Markdown は、欄を離れると保存され、描かれた本文は文字で出て、スクリプトは動かない
+  await drawer.getByRole('button', { name: '本文を書く' }).click();
   await drawer.getByRole('textbox', { name: '本文' }).fill(MARKDOWN);
-  await drawer.getByRole('button', { name: '保存', exact: true }).click();
+  await drawer.getByRole('textbox', { name: '本文' }).blur();
   const body = drawer.locator('.doc-box');
   await expect(body.getByRole('heading', { level: 3, name: '手順' })).toBeVisible();
   await expect(body.getByText('<script>window.__injected = true</script>')).toBeVisible();
@@ -122,13 +126,13 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
 
   // 書きかけのまま閉じると、捨てるかを確かめる。書き続けると引き出しは開いたまま
   await drawer.getByRole('button', { name: /見積もりを送って確かめる/ }).click();
-  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('書きかけのタイトル');
+  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await drawer.getByRole('button', { name: '閉じる' }).click();
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '書き続ける' }).click();
   await expect(confirm).toBeHidden();
-  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('書きかけのタイトル');
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
   // 捨てると、引き出しが閉じて、フォーカスが開いた行のリンクへ戻る。タイトルは元のまま
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await page.getByRole('dialog', { name: '書きかけを捨てますか' }).getByRole('button', { name: '捨てる' }).click();
@@ -401,7 +405,7 @@ test('終了したワークスペースは読み取り専用で開く（seed の
   await page.locator('.entry', { hasText: '読むだけ' }).getByRole('link', { name: '読むだけ' }).click();
   const drawer = page.getByRole('dialog', { name: '読むだけ' });
   await expect(drawer.getByText('終了したワークスペースのタスクは、読み取りだけできます')).toBeVisible();
-  await expect(drawer.getByRole('button', { name: '編集' })).toHaveCount(0);
+  await expect(drawer.getByRole('button', { name: '本文を書く' })).toHaveCount(0);
   await expect(drawer.getByRole('button', { name: /削除する/ })).toHaveCount(0);
   for (const radio of await drawer.getByRole('radio').all()) await expect(radio).toBeDisabled();
   // 担当は選択欄を出さず、アバターと名前だけ
@@ -560,7 +564,7 @@ test('2048 字に近い URL を保存しても、390px の引き出しが横に�
   const url = `https://example.com/${'a'.repeat(2000)}`;
   await drawer.getByRole('button', { name: /リンクを足す/ }).click();
   await drawer.getByRole('textbox', { name: 'リンク' }).fill(url);
-  await drawer.getByRole('button', { name: '保存', exact: true }).click();
+  await drawer.getByRole('textbox', { name: 'リンク' }).press('Enter');
   await expect(drawer.locator('.source-key')).toContainText('aaaaaaaa');
   // 引き出しの中身（本文の枠を含む）が、引き出しの幅に収まり、画面も横にスクロールしない
   const overflow = await page.evaluate(() => {
@@ -608,14 +612,14 @@ test('書きかけのまま戻るで別の画面へ移ろうとすると確か�
   const drawer = await openDrawer(page, '戻る前の確認');
   const drawerUrl = page.url();
   await drawer.getByRole('button', { name: /戻る前の確認/ }).click();
-  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('書きかけ');
+  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await page.goBack();
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '書き続ける' }).click();
   await expect(confirm).toBeHidden();
   await expect(page).toHaveURL(drawerUrl);
-  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('書きかけ');
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
   await page.goBack();
   await page.getByRole('dialog', { name: '書きかけを捨てますか' }).getByRole('button', { name: '捨てる' }).click();
   await expect(drawer).toBeHidden();
@@ -727,11 +731,11 @@ test('保存を409で断られたとき、送った欄に合う文を出す。�
   await expect(drawer.getByText('完了したタスクのポイントは直せません')).toHaveCount(0);
   await drawer.getByRole('button', { name: /断られる/ }).click();
   await drawer.getByRole('textbox', { name: 'タイトル' }).fill('同時に直された');
-  await drawer.getByRole('button', { name: '保存', exact: true }).click();
+  await drawer.getByRole('textbox', { name: 'タイトル' }).press('Enter');
   await expect(drawer.locator('.edit-form').getByText(raced, { exact: false })).toBeVisible();
   // 書きかけが残ったまま、枠の読み直しが 500 になっても、引き出しは消えない
   await unrouteUpdate();
-  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('書きかけが残る');
+  await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await failOperation(page, workspaceInfo, AOBA, 500, 'internal');
   // 組織の枠の 500 は、最後まで外さない。引き出しは組織の枠を読み直さない（要求も出ない）
   await failOperation(page, organizationInfo, AOBA, 500, 'internal');
@@ -745,7 +749,7 @@ test('保存を409で断られたとき、送った欄に合う文を出す。�
   await drawer.getByLabel('期日').fill('2099-12-31');
   await expect(page.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('書きかけが残る');
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
   expect(workspaceRequests).toEqual([]);
   expect(organizationRequests).toEqual([]);
   // 閉じたと分かったときは、ワークスペースの枠だけを読み直す。それが 500 でも、前の値を保って引き出しと書きかけを残す
@@ -755,7 +759,7 @@ test('保存を409で断られたとき、送った欄に合う文を出す。�
   await expect.poll(() => workspaceRequests.length).toBeGreaterThan(0);
   expect(organizationRequests).toEqual([]);
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('書きかけが残る');
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
 });
 
 // 行のリンクの `?task=<ID>` から、タスクの ID を取る
@@ -800,23 +804,27 @@ test('メンバーの画面で開いて閉じても、メンバーの画面に�
   await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
 });
 
-test('保存の要求を送っている間の入力は書きかけで、閉じようとすると確かめる。失敗しても入力が消えない', async ({
-  page,
-}) => {
+test('保存に失敗した書きかけがあるときだけ、閉じようとすると確かめる。失敗しても入力が消えない', async ({ page }) => {
   await createWorkspace(page, '送信中の書きかけワークスペース');
-  await addTask(page, '送信中に閉じる');
-  const drawer = await openDrawer(page, '送信中に閉じる');
-  await slowTaskUpdate(page, { status: 500, code: 'internal' });
-  await drawer.getByRole('button', { name: /送信中に閉じる/ }).click();
+  await addTask(page, '失敗で残る');
+  const drawer = await openDrawer(page, '失敗で残る');
+  const slow = await slowTaskUpdate(page, { status: 500, code: 'internal' });
+  await drawer.getByRole('button', { name: /失敗で残る/ }).click();
   await drawer.getByRole('textbox', { name: 'タイトル' }).fill('送っている最中のタイトル');
   await drawer.getByRole('textbox', { name: 'タイトル' }).press('Enter');
+  // 送っている間は、書きかけに数えない（閉じても待たずに送る）。失敗すると、入力と理由が残る
+  await expect(drawer.getByText('保存できませんでした').first()).toBeVisible();
+  await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('送っている最中のタイトル');
   await drawer.getByRole('button', { name: '閉じる' }).click();
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '書き続ける' }).click();
-  // 失敗しても、入力と理由が残る
-  await expect(drawer.getByText('保存できませんでした')).toBeVisible();
   await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('送っている最中のタイトル');
+  // 送れる書きかけは、確かめずに閉じる。保存に失敗した書きかけだけが確かめる
+  await slow.unroute();
+  await drawer.getByRole('button', { name: 'もう一度保存する' }).click();
+  await drawer.getByRole('button', { name: '閉じる' }).click();
+  await expect(drawer).toBeHidden();
 });
 
 test('期日で欄を離れた直後と、ポイントを選んだ直後に閉じても、結果は木に反映され、トーストで知らせる', async ({
@@ -995,9 +1003,9 @@ test('長い本文（順序付きリスト、チェックリスト、表）を�
 
   await page.locator('.entry', { hasText: '長い本文' }).getByRole('link', { name: '長い本文' }).click();
   const drawer = page.getByRole('dialog', { name: '長い本文' });
-  await drawer.getByRole('button', { name: '編集' }).click();
+  await drawer.getByRole('button', { name: '本文を書く' }).click();
   await drawer.getByRole('textbox', { name: '本文' }).fill(markdown);
-  await drawer.getByRole('button', { name: '保存', exact: true }).click();
+  await drawer.getByRole('textbox', { name: '本文' }).blur();
 
   const body = drawer.locator('.doc-box');
   await expect(body.locator('tbody tr')).toHaveCount(ROWS, { timeout: 30_000 });
