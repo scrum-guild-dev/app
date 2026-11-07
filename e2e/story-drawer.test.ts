@@ -285,7 +285,8 @@ test('引き出しから「完了にする」と「取り消す」ができる�
   await expect(complete).toHaveAttribute('aria-disabled', 'true');
   await expect(blocked.getByText('残り 1 件のタスク')).toBeVisible();
   await expect(complete).toHaveAccessibleDescription(/残り 1 件のタスク/);
-  await complete.click();
+  // aria-disabled のボタンは Playwright が「押せない」と待ち続けるので、force で押して、何も起きないことを確かめる
+  await complete.click({ force: true });
   await expect(blocked.getByRole('img', { name: '完了' })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(blocked).toBeHidden();

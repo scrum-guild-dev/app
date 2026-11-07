@@ -81,8 +81,8 @@
     onmode,
     adjacent,
     onstep,
-    slug,
-    workspaceId,
+    slug: slugProp,
+    workspaceId: workspaceIdProp,
     storyId,
     canWrite,
     facts,
@@ -123,6 +123,10 @@
   // この引き出しが開いたストーリーの ID。保存、完了、削除などの宛先は、props の storyId でなくこれを使う
   // （props は親の URL から読むので、引き出しが外れた後は null、前後へ移った後は次のストーリーの ID になる。枠が ID ごとに置き直すので、開いている間は変わらない）
   const openedId = untrack(() => storyId);
+  // slug と workspaceId も、開いたときの値を持つ。props は親の `page.params` などから読むので、引き出しが外れた後（戻るで閉じた直後の保存）に読むと、
+  // 破棄済みの $derived を読んで derived_inert の警告が出る。引き出しは ID が替わると置き直される（`{#key}`）ので、開いている間は替わらない
+  const slug = untrack(() => slugProp);
+  const workspaceId = untrack(() => workspaceIdProp);
 
   const ids = $props.id();
   const titleLabelId = `${ids}-title`;
