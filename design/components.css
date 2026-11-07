@@ -1684,6 +1684,7 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .chip-btn { font: inherit; font-size: var(--text-xs); cursor: pointer; position: relative; }
 .chip-btn:hover { border-color: var(--color-control-edge); }
 .chip-btn.is-unset { color: var(--color-muted); background: none; border-style: dashed; }
+.chip-btn[aria-disabled="true"] { cursor: default; border-style: solid; border-color: var(--color-line); }
 .chip-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 /* 長い名前の省略は中の文字（.chip-text）に持たせる。ボタン本体に overflow を付けると、::after で広げた押せる範囲が切られる */
 .chip-btn { max-width: 100%; }

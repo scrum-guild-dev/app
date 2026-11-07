@@ -113,6 +113,9 @@
   // 選んで、まだ保存して読み直し終えていない値（行に出す）。送っている間に選び直した分は、最後の値だけを残す
   let pointsPending = $state<{ value: PointsChoice } | null>(null);
   let assigneePending = $state<{ value: string } | null>(null);
+  // 最後に送って通った値。送っている間に元の値へ選び直したとき、読み直す前の task（古い値）と比べて「保存済み」と誤らないための基準
+  let confirmedPoints: PointsChoice | undefined;
+  let confirmedAssignee: string | undefined;
   let pointsSending = false;
   let assigneeSending = false;
   let gone = false;
@@ -189,7 +192,15 @@
       attrs?.onStale();
       return t('workspaceClosedReadOnly', { workspace: t('workspace') });
     }
-    if (result.status === 409) return donereason;
+    // 完了にされていたとき（サーバーの conflict は、完了のほか、競合で負けたときにも返る）だけ理由を言う
+    if (result.status === 409 && attrs !== undefined) {
+      const latest = await callOperation(
+        taskDetail,
+        { workspace_id: attrs.workspaceId, task_id: task.id },
+        { slug: attrs.slug },
+      );
+      return latest.ok && latest.data.task.completed_at !== null ? donereason : t('taskSaveRaced');
+    }
     return result.status === 400 ? t('taskBadRequest') : t('taskSaveFailed');
   }
 
@@ -205,8 +216,13 @@
     try {
       while (pointsPending !== null) {
         const choice = pointsPending.value;
-        if (choice === task.points) {
+        if (choice === (confirmedPoints !== undefined ? confirmedPoints : task.points)) {
           pointsPending = null;
+          // 先に通った値が残っている（選び直して元に戻した）ので、読み直して行を本当の値に合わせる
+          if (confirmedPoints !== undefined) {
+            confirmedPoints = undefined;
+            await attrs.onSaved();
+          }
           break;
         }
         const result = await callOperation(
@@ -215,10 +231,12 @@
           { slug: attrs.slug },
         );
         if (result.ok) {
-          // 選び直されていなければ、読み直した値が出るまで選んだ値を見せる
+          confirmedPoints = choice;
+          // 選び直されていなければ、読み直した値が出るまで選んだ値を見せる。選び直されていれば、次の周が最後の選択を送る
           if (pointsPending !== null && pointsPending.value === choice) {
             showToast(t('taskSaved'), 'check');
             await attrs.onSaved();
+            confirmedPoints = undefined;
             if (pointsPending !== null && pointsPending.value === choice) pointsPending = null;
           }
           continue;
@@ -228,6 +246,7 @@
             ? t('taskGone', { task: t('task') })
             : await explain(result, t('taskSaveConflict', { task: t('task'), done: t('done'), points: t('points') }));
         if (pointsPending === null || pointsPending.value === choice) pointsPending = null;
+        confirmedPoints = undefined;
         await rejected(message);
       }
     } finally {
@@ -246,8 +265,12 @@
     try {
       while (assigneePending !== null) {
         const choice = assigneePending.value;
-        if (choice === (task.assignee?.id ?? '')) {
+        if (choice === (confirmedAssignee !== undefined ? confirmedAssignee : (task.assignee?.id ?? ''))) {
           assigneePending = null;
+          if (confirmedAssignee !== undefined) {
+            confirmedAssignee = undefined;
+            await attrs.onSaved();
+          }
           break;
         }
         const result = await callOperation(
@@ -256,9 +279,11 @@
           { slug: attrs.slug },
         );
         if (result.ok) {
+          confirmedAssignee = choice;
           if (assigneePending !== null && assigneePending.value === choice) {
             showToast(t('taskSaved'), 'check');
             await attrs.onSaved();
+            confirmedAssignee = undefined;
             if (assigneePending !== null && assigneePending.value === choice) assigneePending = null;
           }
           continue;
@@ -284,6 +309,7 @@
           );
         }
         if (assigneePending === null || assigneePending.value === choice) assigneePending = null;
+        confirmedAssignee = undefined;
         await rejected(message);
       }
     } finally {

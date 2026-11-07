@@ -120,7 +120,7 @@ test('断られたら理由を出して元の値に戻す。完了にした行�
   const unroute = await failOperation(page, taskUpdate, { slug: 'aoba' }, 409, 'conflict');
   await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
   await page.getByRole('menuitemradio', { name: '2 pt', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: '直せません' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '同時に直した' })).toBeVisible();
   await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
   await unroute();
   // 断られた後の木の読み直しが終わってから押す（読み直しの途中で完了にすると、完了の印が読み直しに巻き込まれる）
@@ -146,4 +146,29 @@ test('担当のチップの選択の窓を開いた状態に axe の違反が無
   await expect(menu.getByRole('menuitemradio').nth(1)).toBeVisible();
   await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0);
   await expectNoA11yViolationsInThemes(page, 'backlog-attr-menu');
+});
+
+test('送っている間に元の値へ選び直しても、サーバーの値と行が食い違わない', async ({ page }) => {
+  await createWorkspace(page, '選び直しのワークスペース');
+  await addTask(page, '選び直す件');
+  const row = page.locator('.entry', { hasText: '選び直す件' });
+
+  // 応答を遅らせ、送っている間に「5 pt」から「未見積もり」へ選び直す
+  await page.route(/\/task-update/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.continue();
+  });
+  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
+  await page.getByRole('menuitemradio', { name: '5 pt', exact: true }).click();
+  await row.getByRole('button', { name: 'ポイント: 5 pt' }).click();
+  await page.getByRole('menuitemradio', { name: '未見積もり', exact: true }).click();
+  await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
+  await waitForSettled(page);
+  await page.unroute(/\/task-update/);
+
+  // 読み直しても未設定（サーバーに 5 が残っていない）
+  await page.reload();
+  await expect(
+    page.locator('.entry', { hasText: '選び直す件' }).getByRole('button', { name: 'ポイント: 未設定' }),
+  ).toBeVisible();
 });

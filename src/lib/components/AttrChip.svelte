@@ -98,6 +98,8 @@
 
   function onKeydown(event: KeyboardEvent): void {
     if (event.isComposing || event.keyCode === 229) return;
+    // Alt と ↑ ↓ は行の並べ替え（TaskEntry）のキー。メニューの操作に使わず、そのまま行へ通す
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     if (!open) {
       if (event.key === 'ArrowDown' && event.target === button) {
         event.preventDefault();
@@ -145,7 +147,13 @@
       if (event.target instanceof Node && list?.contains(event.target)) return;
       place();
     };
-    const close = (): void => hide(false);
+    // 幅が変わったときだけ閉じる（スマホのアドレスバーの出入りは高さだけが変わる。そのときは置き直す）
+    let width = window.innerWidth;
+    const close = (): void => {
+      if (window.innerWidth !== width) hide(false);
+      else place();
+      width = window.innerWidth;
+    };
     window.addEventListener('scroll', reposition, true);
     window.addEventListener('resize', close);
     return () => {
@@ -158,7 +166,15 @@
   $effect(() => {
     void options.length;
     void failedNote;
-    if (open) void tick().then(place);
+    if (!open) return;
+    void tick().then(() => {
+      place();
+      // 「もう一度試す」が消えるなどでフォーカスが落ちたら、選んでいる項目（無ければ先頭）へ戻す（Esc で閉じられるように）
+      if (open && list && !list.contains(document.activeElement)) {
+        const all = items();
+        (all.find((item) => item.getAttribute('aria-checked') === 'true') ?? all[0])?.focus();
+      }
+    });
   });
 </script>
 
@@ -208,6 +224,11 @@
           </button>
         </li>
       {/each}
+      {#if busy && retry === undefined}
+        <li role="none">
+          <span class="menu-item" role="menuitem" aria-disabled="true">{t('loading')}</span>
+        </li>
+      {/if}
       {#if retry !== undefined}
         <li role="none">
           <button
