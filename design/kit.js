@@ -722,6 +722,7 @@
     const tail = opts.tailMark || {};
     // 前後の線は配下を含めた塊（.tree-group）に、囲みは行に付ける
     const into = mark.drop === "into";
+    // 題の button.tree-link は旧い流れ。本番はリンク（a.tree-link。?story=<ID>）で引き出しを開く。見本は追従待ち
     return `<div class="tree-group${mark.state === "is-dragging" ? " is-dragging" : ""}"${into ? "" : dropAttr(mark)}>
       <div class="tree-row is-story ${solo ? "is-root" : ""}${opts.order ? " has-grip" : ""}${mark.state === "is-dropped" ? " is-dropped" : ""}"${into ? dropAttr(mark) : ""}>
         ${opts.order ? gripCell(false) : ""}${treeCaret(`tree-${key}`, st.title)}
@@ -2080,7 +2081,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
          <p class="props-note">${esc(D.sprints.sp14.goal)}</p>
          <div class="segmented" role="radiogroup"><label><input type="radio" name="d-goal" checked><span>達成した</span></label><label><input type="radio" name="d-goal"><span>達成していない</span></label></div></div>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${sprintLabel("sp14")} を終えました">終える</button>`),
-    // ストーリーの作成と変更は同じ欄。バックログの木の行から開く。タイトル以外は空でよい
+    // ストーリーの作成と変更は同じ欄。バックログの木の行から開く。タイトル以外は空でよい。
+    // 本番は、作るだけがダイアログで、直す（editStory、viewStory、editStoryNotOwner）は題のリンクで開く引き出し（自動保存。削除は引き出しの「⋯」）。見本は追従待ち
     createStory: () => storyDialog(`${t("story")}を作る`, null),
     editStory: () => storyDialog(t("story"), D.stories.s4),
     viewStory: () => storyDialog(t("story"), { ...D.stories.s4, link: "https://example.com/notes/42" }, true),

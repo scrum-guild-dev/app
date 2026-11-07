@@ -144,6 +144,7 @@ export function historyEntryView(entry: TaskHistoryEntry, timeZone: string, t: T
   // 完了と削除は、何をしたかだけを出す（日時と人は行の頭にある）
   if (entry.action === 'complete') return { ...base, summary: t('historyCompleted', { done: t('done') }), lines: [] };
   if (entry.action === 'delete') return { ...base, summary: t('historyDeleted'), lines: [] };
+  if (entry.action === 'restore') return { ...base, summary: t('historyRestored'), lines: [] };
   // 完了を戻した（task-reopen）。スプリントの中なら、戻した列だけを出す。前の列は完了の列で、名前を持たない（画面は辞書の「完了」を出す）
   if (entry.action === 'reopen') {
     const lines = entry.changes

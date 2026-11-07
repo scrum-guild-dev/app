@@ -1,7 +1,7 @@
 // エピックとストーリーの削除: ダイアログの下の「この<エピック>を削除する」から、配下の件数と配下の扱い（残す、まとめて削除する）を
 // 選ぶ確認を開き、削除したら木を読み直す。削除できない人には削除のボタンを出さない。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト、一般のユーザーはハルカ。CSP の違反も確かめる
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import {
   chooseRowAction,
@@ -34,6 +34,25 @@ async function create(page: Page, label: string, title: string): Promise<void> {
   await reloaded;
 }
 
+// 木の題のリンクでストーリーの引き出しを開く（読み込みが終わり、題が引き出しの名前になるまで待つ）
+async function openStoryDrawer(page: Page, title: string): Promise<Locator> {
+  await page.getByRole('link', { name: title, exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: title, exact: true });
+  await expect(drawer).toBeVisible();
+  return drawer;
+}
+
+// 引き出しの帯の「⋯」。削除はここから開く
+function storyMenuButton(drawer: Locator, title: string): Locator {
+  return drawer.getByRole('button', { name: `操作: ${title}`, exact: true });
+}
+
+// 「⋯」を開いて「この<ストーリー>を削除する」を押す。削除の確認が開く
+async function askDeleteStory(drawer: Locator, title: string): Promise<void> {
+  await storyMenuButton(drawer, title).click();
+  await drawer.getByRole('menuitem', { name: /このストーリーを削除する/ }).click();
+}
+
 async function addTask(page: Page, storyTitle: string, title: string, createLabel: string): Promise<void> {
   await page.getByRole('button', { name: createLabel, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: createLabel });
@@ -60,9 +79,9 @@ test('スクラムの言葉: エピックを配下を残して削除し、残っ
   const moved = waitForResponses(page, '/story-move');
   await moveDialog.getByRole('button', { name: '移す' }).click();
   await expect(moveDialog).toBeHidden();
-  await expect(
-    rowGroup(page, '会員証を作り直す').locator('.tree-children .tree-row.is-story button.tree-link'),
-  ).toHaveText(['カードの画面']);
+  await expect(rowGroup(page, '会員証を作り直す').locator('.tree-children .tree-row.is-story a.tree-link')).toHaveText([
+    'カードの画面',
+  ]);
   await addTask(page, 'カードの画面', 'バーコードを出す', '起票');
   await moved;
 
@@ -112,10 +131,9 @@ test('スクラムの言葉: エピックを配下を残して削除し、残っ
   await expect(story.locator('.tree-row.is-story')).toHaveClass(/is-root/);
   await expect(story.locator('.entry', { hasText: 'バーコードを出す' })).toHaveCount(1);
 
-  // ストーリーを配下ごと削除する
-  await page.getByRole('button', { name: 'カードの画面', exact: true }).click();
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリー', exact: true });
-  await storyDialog.getByRole('button', { name: 'このストーリーを削除する' }).click();
+  // ストーリーを配下ごと削除する。題のリンクで引き出しを開き、「⋯」のメニューから確認を開く
+  const storyDialog = await openStoryDrawer(page, 'カードの画面');
+  await askDeleteStory(storyDialog, 'カードの画面');
   const storyConfirm = page.getByRole('dialog', { name: 'ストーリーを削除する' });
   await expect(
     storyConfirm.getByText('タスク 1 件を削除します。取り込んだタスクは削除せず、アーカイブへ移します'),
@@ -124,7 +142,8 @@ test('スクラムの言葉: エピックを配下を残して削除し、残っ
   await storyConfirm.getByRole('button', { name: '削除する' }).click();
   await expect(storyDialog).toBeHidden();
   await expect(page.getByRole('status').filter({ hasText: 'ストーリーを削除しました' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'カードの画面', exact: true })).toHaveCount(0);
+  await expect(page).not.toHaveURL(/\?story=/);
+  await expect(page.getByRole('link', { name: 'カードの画面', exact: true })).toHaveCount(0);
   await expect(page.locator('.entry', { hasText: 'バーコードを出す' })).toHaveCount(0);
 
   // 読み直しても同じ
@@ -178,9 +197,7 @@ test('確認は開いたときに件数とまとめて削除できるかを読�
   await addTask(page, '問い合わせの窓口', '返信の型を作る', '起票');
   await page.waitForLoadState('networkidle');
 
-  await page.getByRole('button', { name: '問い合わせの窓口', exact: true }).click();
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリー', exact: true });
-  await expect(storyDialog.getByLabel('タイトル')).toHaveValue('問い合わせの窓口');
+  const storyDialog = await openStoryDrawer(page, '問い合わせの窓口');
 
   // ダイアログを開いた後に、別の画面で他の人のタスクが2件足された形にする（確認を開いたときの読み直しの応答を書き換える）。
   // 応答を待たせて、読んでいる間は削除を押せないことも確かめる
@@ -192,7 +209,7 @@ test('確認は開いたときに件数とまとめて削除できるかを読�
     await held;
     await route.fulfill({ response, json: { ...body, can_delete_children: false, children: { tasks: 3 } } });
   });
-  await storyDialog.getByRole('button', { name: 'このストーリーを削除する' }).click();
+  await askDeleteStory(storyDialog, '問い合わせの窓口');
   const confirm = page.getByRole('dialog', { name: 'ストーリーを削除する' });
   const submit = confirm.getByRole('button', { name: '削除する' });
   await expect(submit).toHaveAttribute('aria-disabled', 'true');
@@ -229,9 +246,7 @@ test('確認を開いた後の読み直しで配下が無くなったら、選�
   await addTask(page, '請求書の発行', '宛名を直す', '起票');
   await page.waitForLoadState('networkidle');
 
-  await page.getByRole('button', { name: '請求書の発行', exact: true }).click();
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリー', exact: true });
-  await expect(storyDialog.getByLabel('タイトル')).toHaveValue('請求書の発行');
+  const storyDialog = await openStoryDrawer(page, '請求書の発行');
 
   // 別の画面で配下のタスクが外された形にする。応答を待たせて、選択肢にフォーカスが置かれてから差し替える
   let release: () => void = () => {};
@@ -242,7 +257,7 @@ test('確認を開いた後の読み直しで配下が無くなったら、選�
     await held;
     await route.fulfill({ response, json: { ...body, children: { tasks: 0 } } });
   });
-  await storyDialog.getByRole('button', { name: 'このストーリーを削除する' }).click();
+  await askDeleteStory(storyDialog, '請求書の発行');
   const confirm = page.getByRole('dialog', { name: 'ストーリーを削除する' });
   await expect(confirm.getByRole('radio', { name: /配下を親なしで残す/ })).toBeFocused();
   release();
@@ -262,10 +277,8 @@ test('読み直しで削除できなくなったら主ボタンを押せなく�
   await create(page, 'ストーリーを作る', '在庫の通知');
   await page.waitForLoadState('networkidle');
 
-  await page.getByRole('button', { name: '在庫の通知', exact: true }).click();
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリー', exact: true });
-  await expect(storyDialog.getByLabel('タイトル')).toHaveValue('在庫の通知');
-  const deleteStory = storyDialog.getByRole('button', { name: 'このストーリーを削除する' });
+  const storyDialog = await openStoryDrawer(page, '在庫の通知');
+  const menu = storyMenuButton(storyDialog, '在庫の通知');
   const confirm = page.getByRole('dialog', { name: 'ストーリーを削除する' });
 
   // 別の画面でリーダーから外された形にする。主ボタンは押せず、押しても送らない
@@ -279,7 +292,7 @@ test('読み直しで削除できなくなったら主ボタンを押せなく�
     const body = (await response.json()) as Record<string, unknown>;
     await route.fulfill({ response, json: { ...body, can_delete: false } });
   });
-  await deleteStory.click();
+  await askDeleteStory(storyDialog, '在庫の通知');
   const submit = confirm.getByRole('button', { name: '削除する' });
   await expect(confirm.getByRole('alert')).toHaveText('作った人とリーダーだけが削除できます');
   await expect(submit).toHaveAttribute('aria-disabled', 'true');
@@ -300,7 +313,7 @@ test('読み直しで削除できなくなったら主ボタンを押せなく�
     await route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'not found' } } });
     answered();
   });
-  await deleteStory.click();
+  await askDeleteStory(storyDialog, '在庫の通知');
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: 'やめる' }).click();
   await expect(confirm).toBeHidden();
@@ -308,7 +321,7 @@ test('読み直しで削除できなくなったら主ボタンを押せなく�
   await done;
   await page.waitForLoadState('networkidle');
   await expect(storyDialog).toBeVisible();
-  await expectFocusReturned(page, deleteStory);
+  await expectFocusReturned(page, menu);
   await page.unroute('**/story-get');
   await page.unroute('**/story-delete');
 });
@@ -335,9 +348,10 @@ test('作った人でもリーダーでもないメンバーには、削除の�
   await epicDialog.getByRole('button', { name: 'やめる' }).click();
   await page.getByRole('link', { name: 'バックログへ戻る' }).click();
 
-  await page.getByRole('button', { name: '送料の割引にポイントを使える', exact: true }).click();
-  const storyDialog = page.getByRole('dialog', { name: 'ストーリー', exact: true });
-  await expect(storyDialog.getByLabel('タイトル')).toHaveValue('送料の割引にポイントを使える');
-  await expect(storyDialog.getByRole('button', { name: /を削除する/ })).toHaveCount(0);
+  // ストーリーの引き出しでは、「⋯」に削除の項目を置かず、本文の下に削除できる人を出す（タスクの引き出しと同じ）
+  const storyDialog = await openStoryDrawer(page, '送料の割引にポイントを使える');
   await expect(storyDialog.getByText('削除できるのは作った人とリーダーです。')).toBeVisible();
+  // 閉じたメニューの項目も DOM にあるので、見えるかどうかによらない指定で数える
+  await expect(storyDialog.locator('[role="menuitem"]', { hasText: '削除' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'ストーリーを削除する' })).toHaveCount(0);
 });

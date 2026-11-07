@@ -75,6 +75,28 @@ export function releaseTaskOrder(owner: symbol): void {
   orderIds = [];
 }
 
+// ストーリーの引き出しの「前へ」「次へ」で移る順。バックログの木が、今見えているストーリーの行の ID を画面の上から下の順に置く
+// （task-order.ts の trackStoryOrder）。タスクの順とは別に持つ。持ち主の扱いはタスクの順と同じ
+let storyOrderIds = $state.raw<readonly string[]>([]);
+let storyOrderOwner: symbol | null = null;
+
+export const storyOrder = {
+  get ids(): readonly string[] {
+    return storyOrderIds;
+  },
+};
+
+export function provideStoryOrder(owner: symbol, ids: readonly string[]): void {
+  storyOrderOwner = owner;
+  storyOrderIds = ids;
+}
+
+export function releaseStoryOrder(owner: symbol): void {
+  if (storyOrderOwner !== owner) return;
+  storyOrderOwner = null;
+  storyOrderIds = [];
+}
+
 // 帯の前後のボタン（クリックと Enter）で移ったときだけ、移った先の読み込みの後に、押したのと同じ向きのボタンへフォーカスを戻す。
 // 引き出しは移るたびに置き直されるので、向きを次の引き出しへ渡す。`[` `]` のキーで移ったときは渡さない（見出しへ移る）。
 // 移れなかったとき（移動が取り消された）に残さないよう、移る側が clear する

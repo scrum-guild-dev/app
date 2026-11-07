@@ -9,6 +9,8 @@
     describedby?: string;
     // 端で動かせないなど。フォーカスを失わないよう disabled でなく aria-disabled にし、押しても何もしない
     disabled?: boolean;
+    // 削除など、戻せない操作。文字を危険の色（.is-danger）にする
+    danger?: boolean;
     // 押した項目。trigger は「⋯」のボタン（ダイアログを閉じたときのフォーカスの戻り先）
     onselect: (trigger: HTMLButtonElement) => void;
   }
@@ -171,6 +173,7 @@
       <li role="none">
         <button
           class="menu-item"
+          class:is-danger={item.danger === true}
           type="button"
           role="menuitem"
           aria-disabled={item.disabled === true}

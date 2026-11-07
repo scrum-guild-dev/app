@@ -137,6 +137,14 @@ describe('historyEntryView', () => {
     expect(historyEntryView(entry({ action: 'complete' }), 'UTC', t).lines).toEqual([]);
   });
 
+  test('削除の取り消しは、取り消したことだけを出す', () => {
+    const changes = [{ field: 'deleted_at', before: '2026-10-26T01:02:00.000Z', after: null }];
+    expect(historyEntryView(entry({ action: 'restore', changes }), 'UTC', t)).toMatchObject({
+      summary: '削除を取り消した',
+      lines: [],
+    });
+  });
+
   test('完了を戻したら、戻したことと、スプリントの中なら完了の列から戻した列を出す', () => {
     const changes = [
       { field: 'completed_at', before: '2026-10-25T15:05:00.000Z', after: null },
