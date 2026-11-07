@@ -98,8 +98,9 @@ test('ポイントのチップで選ぶと、親のストーリーの集計に�
   await storyDialog.getByLabel('タイトル').fill('会員の画面');
   await storyDialog.getByRole('button', { name: '作る' }).click();
   await expect(storyDialog).toBeHidden();
-  await page.getByRole('button', { name: /を足す: 会員の画面$/ }).click();
+  await page.getByRole('button', { name: '起票', exact: true }).click();
   const taskDialog = page.getByRole('dialog', { name: '起票' });
+  await taskDialog.getByLabel('親のストーリー').selectOption({ label: '会員の画面' });
   await taskDialog.getByLabel('タイトル').fill('一覧を出す');
   await taskDialog.getByRole('button', { name: '起票' }).click();
   await expect(taskDialog).toBeHidden();
