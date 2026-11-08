@@ -46,8 +46,20 @@
   <title>{t('pageTitle', { page: title, app: t('appName') })}</title>
 </svelte:head>
 
+{#snippet exit()}
+  {#if cameFromApp}
+    <button class="btn is-sm is-quiet" type="button" onclick={() => history.back()}>{t('legalBack')}</button>
+  {:else}
+    <a class="btn is-sm is-quiet" href={resolve('/')}>{t('legalOpenApp', { app: t('appName') })}</a>
+  {/if}
+{/snippet}
+
 <Gate reading>
   <GateSheet brand {title}>
+    <!-- 長い本文の途中からも出口へ戻れるよう、元の画面へ戻る操作を本文の上にも置く（下の行と同じ操作。他の文書へのリンクは下だけ） -->
+    <div class="form-actions" role="group" aria-label={t('legalExitLabel')}>
+      {@render exit()}
+    </div>
     <p>{t('legalRevised', { date: doc.version })}</p>
     {#if blocks}
       <MarkdownBlocks {blocks} headingStart={2} />
@@ -60,11 +72,7 @@
       {:else}
         <a class="btn is-sm" href={resolve('/terms')} data-sveltekit-replacestate>{t('termsTitle')}</a>
       {/if}
-      {#if cameFromApp}
-        <button class="btn is-sm is-quiet" type="button" onclick={() => history.back()}>{t('legalBack')}</button>
-      {:else}
-        <a class="btn is-sm is-quiet" href={resolve('/')}>{t('legalOpenApp', { app: t('appName') })}</a>
-      {/if}
+      {@render exit()}
     </div>
   </GateSheet>
 </Gate>

@@ -178,3 +178,21 @@ test('/login と /invite も、リンクを足した後に幅 390px で横には
     expect(await findTargetSizeViolations(page)).toEqual([]);
   }
 });
+
+test('/terms の先頭近くにも、元の画面へ戻る操作がある（直に開いた人は / へのリンク、アプリの中から来た人は戻るボタン）', async ({
+  page,
+}) => {
+  await page.goto('/terms');
+  const top = page.getByRole('group', { name: '元の画面へ' });
+  await expect(top.getByRole('link', { name: 'Scrum Guild を開く' })).toBeVisible();
+  const box = await top.boundingBox();
+  expect(box && box.y).toBeLessThan(400);
+
+  await page.goto('/login?return_to=%2Faoba');
+  await page
+    .getByRole('group', { name: '利用規約とプライバシーポリシー' })
+    .getByRole('link', { name: '利用規約' })
+    .click();
+  await page.getByRole('group', { name: '元の画面へ' }).getByRole('button', { name: '前の画面に戻る' }).click();
+  await expect(page).toHaveURL(/\/login\?return_to=%2Faoba$/);
+});

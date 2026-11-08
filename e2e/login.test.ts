@@ -215,3 +215,27 @@ test.describe('seed のセッション', () => {
     expect(res.status()).toBe(403);
   });
 });
+
+test('?error=denied の警告は 3 行以内で、会員登録のボタンを含み、GitHub のボタンが 390px の最初の画面に入る', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 667 });
+  await page.goto('/login?error=denied');
+  const alert = page.getByRole('alert');
+  await expect(alert.getByRole('link', { name: '会員登録から始める' })).toHaveAttribute('href', '/signup');
+  // 文の行数（ボタンの行を除く）。行の高さで割る
+  const lines = await alert.locator('span').evaluate((el) => {
+    const style = getComputedStyle(el);
+    return Math.round(el.getBoundingClientRect().height / parseFloat(style.lineHeight));
+  });
+  expect(lines).toBeLessThanOrEqual(3);
+  const box = await page.getByRole('link', { name: 'GitHub でログイン' }).boundingBox();
+  expect(box && box.y + box.height).toBeLessThanOrEqual(667);
+  // 確かめる手段の案内はボタンの下
+  await expect(page.getByText('招待された手段（GitHub か Google）と')).toBeVisible();
+});
+
+test('リード文に、初めての人の行き先がある', async ({ page }) => {
+  await page.goto('/login');
+  await expect(page.getByText('初めての人は、下の会員登録から始められます。')).toBeVisible();
+});

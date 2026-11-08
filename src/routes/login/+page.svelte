@@ -84,7 +84,15 @@
   <GateSheet brand title={t('loginTitle')}>
     <!-- ?error= の理由。組織の再ログイン案内は、パスワードの入力エラーと一緒にも出す -->
     {#if errorKey && (!formError || errorKey === 'loginErrorOrganizationReauthRequired')}
-      <div class="callout is-warn" role="alert"><Icon name="alert" /><span>{t(errorKey, words)}</span></div>
+      <div class="callout is-warn" role="alert">
+        <Icon name="alert" /><span>{t(errorKey, words)}</span>
+        {#if errorKey === 'loginErrorDenied'}
+          <!-- 入れる組織も招待も無い人の行き先。戻り先は引き継がない（下の会員登録の入口と同じ） -->
+          <div class="callout-actions">
+            <a class="btn is-sm" href={resolve('/signup')}>{t('loginErrorDeniedSignup')}</a>
+          </div>
+        {/if}
+      </div>
     {:else if loggedOut && !formError}
       <div class="callout is-info"><Icon name="shield" /><span>{t('loggedOut')}</span></div>
     {/if}
@@ -138,11 +146,14 @@
         </button>
       </form>
     {/if}
+    {#if errorKey === 'loginErrorDenied' && !formError}
+      <p class="gate-note">{t('loginErrorDeniedHint', words)}</p>
+    {/if}
     <p class="gate-note">{t('loginNote', words)}</p>
     <!-- 会員登録の画面へ。戻り先は引き継がない（組織の画面から来た人は、登録した後に入れない組織の画面でなく `/` に着く）。
          ログインのボタンはアカウントを作らないので、作りたい人はここから -->
     <div class="form-actions">
-      <a class="btn is-sm is-quiet" href={resolve('/signup')}>{t('loginSignupLink')}</a>
+      <a class="btn is-sm" href={resolve('/signup')}>{t('loginSignupLink')}</a>
     </div>
     <LegalLinks />
   </GateSheet>
