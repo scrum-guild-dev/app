@@ -46,12 +46,12 @@
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1); /* 少し行き過ぎて戻る。ショートカットのヒントが角から出る */
 
-  /* ---- 書体の候補 ---- */
-  --family-gothic: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
-  --family-mincho: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
-  --family-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --family-tech: "Chakra Petch", "IBM Plex Mono", ui-monospace, sans-serif;
-  --family-tech-gothic: "Chakra Petch", "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;  /* 英数字は Chakra Petch、かなと漢字はゴシック */
+  /* ---- 書体（全テーマ共通） ---- */
+  --family-gothic: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  --family-mincho: var(--family-gothic);
+  --family-mono: var(--family-gothic);
+  --family-tech: var(--family-gothic);
+  --family-tech-gothic: var(--family-gothic);
 }
 
 /* ===== シンプル（ライト）。data-theme がないときもこれ =====
