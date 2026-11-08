@@ -91,11 +91,20 @@ test('URL を直接開いて木の読み込みが遅いとき、300ms 後に読�
   const boot = page.locator('#boot-loading');
   await expect(boot).toBeVisible();
   await expect(boot.locator('.boot-wait')).toHaveText('読み込んでいます');
-  await expect(boot.locator('.boot-skeleton')).toBeVisible();
+  // 行き先が組織の枠なので、紙ではなく枠の形の骨組みを出す。左のメニューの幅と上の帯の高さは描いた後と同じ
+  await expect(boot.locator('.boot-frame')).toBeVisible();
+  await expect(boot.locator('.boot-skeleton')).toBeHidden();
+  const bootBinding = await boot.locator('.boot-binding').boundingBox();
+  const bootTopbar = await boot.locator('.boot-topbar').boundingBox();
 
   release();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(boot).toHaveCount(0);
+  const binding = await page.locator('.binding').boundingBox();
+  const topbar = await page.locator('.topbar').boundingBox();
+  expect(bootBinding?.width).toBe(binding?.width);
+  expect(bootTopbar?.x).toBe(topbar?.x);
+  expect(bootTopbar?.height).toBe(topbar?.height);
 });
 
 test('15 秒たっても描けないときは、読み込み中の文を失敗の文と再読み込みのリンクに替える', async ({
@@ -115,6 +124,6 @@ test('15 秒たっても描けないときは、読み込み中の文を失敗�
   await expect(boot.getByText('読み込めませんでした')).toBeHidden();
   await expect(boot.getByText('読み込めませんでした')).toBeVisible({ timeout: 20_000 });
   await expect(boot.getByText('読み込んでいます')).toBeHidden();
-  await expect(boot.locator('.boot-skeleton')).toBeHidden();
+  await expect(boot.locator('.boot-frame')).toBeHidden();
   await expect(boot.getByRole('link', { name: 'もう一度試す' })).toBeVisible();
 });
