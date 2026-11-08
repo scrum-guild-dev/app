@@ -2156,7 +2156,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .onboarding-disclosure b { color: var(--color-fg); font-weight: 700; }
 .onboarding-content { display: grid; gap: var(--space-8); min-width: 0; }
 .onboarding-heading { display: grid; gap: var(--space-4); }
-.onboarding-heading h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.4; font-weight: 700; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.onboarding-heading :is(h1, h2) { font-size: clamp(26px, 4vw, 36px); line-height: 1.4; font-weight: 700; letter-spacing: -.03em; overflow-wrap: anywhere; }
 .onboarding-heading h1:focus { outline: none; }
 .onboarding-eyebrow { font-size: var(--text-xs); color: var(--color-muted); }
 .onboarding-lead { color: var(--color-muted); line-height: 1.8; }

@@ -64,6 +64,8 @@
   onboardingProfileFailed: "プロフィールを保存できませんでした。入力を残したまま、もう一度試せます。",
   onboardingSaving: "保存しています",
   onboardingProfileSaved: "作成済みの個人用URLです。あとから変更できません。プロフィールは保存済みです。",
+  onboardingPersonalUrlSaved: "作成済みの個人用URLです。あとから変更できません。",
+  onboardingBlockedTitle: "利用開始を再開できません",
   onboardingPersonalUrlLiveHint: "自分だけで使う場所のURLです。半角の英小文字・数字・ハイフンで2〜40文字。あとから変更できません。",
   onboardingTeamUnavailable: "このチームの利用開始を再開できません。組織の選択に戻り、権限とワークスペースを確認してください。",
   onboardingWorkspaceFailed: "チームは作成済みですが、招待先のワークスペースを作れませんでした。もう一度試してください。",
