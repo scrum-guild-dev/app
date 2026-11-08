@@ -297,11 +297,13 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await expect(page.getByRole('heading', { level: 1, name: '読み込んでいます' })).toBeVisible();
     await expect(page).toHaveTitle('読み込んでいます - Scrum Guild');
     await expect(page.locator('[role="status"].visually-hidden').first()).toHaveText('読み込んでいます');
-    // 行き先が組織の枠なので、骨組みは紙ではなく枠の形で、左のメニューの幅と上の帯の高さは読み込んだ後と同じ
-    await expect(page.locator('.skeleton-frame')).toBeVisible();
+    // 行き先が組織の枠なので、骨組みは紙ではなく枠の形で、左のメニューの幅と上の帯の高さは読み込んだ後と同じ。
+    // 本文は今日やることの組み（本文と右の脇の2列）で、脇の列の位置も読み込んだ後と同じ
+    await expect(page.locator('.skeleton-frame')).toHaveAttribute('data-shape', 'aside');
     await expect(page.locator('.gate')).toHaveCount(0);
     const loadingBinding = await page.locator('.binding').boundingBox();
     const loadingTopbar = await page.locator('.topbar').boundingBox();
+    const loadingSide = await page.locator('.layout-side').boundingBox();
     await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
     await expect(page.locator('.skeleton-frame')).toHaveCount(0);
     const loadedBinding = await page.locator('.binding').boundingBox();
@@ -309,6 +311,9 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     expect(loadingBinding?.width).toBe(loadedBinding?.width);
     expect(loadingTopbar?.x).toBe(loadedTopbar?.x);
     expect(loadingTopbar?.height).toBe(loadedTopbar?.height);
+    const loadedSide = await page.locator('.layout-side').boundingBox();
+    expect(loadingSide?.x).toBe(loadedSide?.x);
+    expect(loadingSide?.width).toBe(loadedSide?.width);
   });
 
   test('読み込み中の表示は、移り始めてから 300ms たつまで出さない', async ({ page }) => {

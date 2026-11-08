@@ -66,20 +66,24 @@
 #boot-loading .boot-skeleton i:nth-child(3) {
   height: 2.5em;
 }
-/* 行き先が組織の枠のとき（static/boot-shape.js が html に data-boot="frame" を付ける）は、紙ではなく枠の形の骨組みを画面いっぱいに出す。
+/* 行き先が組織の枠のとき（static/boot-shape.js が html に data-boot="<形>" を付ける）は、紙ではなく枠の形の骨組みを画面いっぱいに出す。
    左のメニューの幅（240px、畳んだ列は 64px）、上の帯の高さ（60px）、本文の余白は design/components.css の .app、.binding、.topbar、
-   .content と同じにし、読み込んだ後に画面の大きさと位置が動かないようにする。760px 以下は、ロゴと組織の切り替えとメニューの項目の横並びの帯の下に上の帯を置く */
+   .content と同じにし、本文は行き先の画面の組み（形は src/lib/loading-shape.ts と同じ。2列は .layout-aside の 320px、.layout-wiki、
+   .setting の 260px、.board の 232px の列、.lanes の3列。どれも 1080px 以下で1列）に近づける。デザインシステムの LoadingSheet の
+   .skeleton-frame と同じ並びにして、移る間と最初の読み込みで同じ形を見せる。
+   760px 以下は、ロゴと組織の切り替えとメニューの項目の横並びの帯の下に上の帯を置く */
 #boot-loading .boot-frame {
   display: none;
 }
-html[data-boot='frame'] #boot-loading .boot-skeleton {
+html[data-boot] #boot-loading .boot-skeleton {
   display: none;
 }
-html[data-boot='frame'] #boot-loading .boot-frame {
+html[data-boot] #boot-loading .boot-frame {
   position: absolute;
   inset: 0;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
+  overflow: hidden;
   animation: boot-wait-hide 0s linear 15s forwards;
 }
 #boot-loading .boot-frame :where(b) {
@@ -97,6 +101,9 @@ html[data-boot='frame'] #boot-loading .boot-frame {
   background: #d6d6da;
   animation: boot-pulse 1.4s ease-in-out infinite;
 }
+#boot-loading .boot-frame .is-short {
+  width: 70%;
+}
 #boot-loading .boot-binding {
   background: #f2f2f3;
   border-right: 1px solid #d6d6da;
@@ -108,7 +115,7 @@ html[data-boot='frame'] #boot-loading .boot-frame {
 #boot-loading .boot-corner {
   justify-content: center;
   height: 60px;
-  margin-inline: -16px;
+  margin: 0 -16px 4px;
   padding-inline: 24px;
   border-bottom: 1px solid #d6d6da;
 }
@@ -116,12 +123,14 @@ html[data-boot='frame'] #boot-loading .boot-frame {
   width: 132px;
   height: 36px;
 }
-#boot-loading .boot-binding > i:nth-child(2) {
+#boot-loading .boot-binding > .is-org {
   height: 60px;
   margin-inline: 0;
 }
-#boot-loading .boot-binding > i:nth-child(odd) {
-  width: 60%;
+#boot-loading .boot-binding > .is-group-label {
+  width: 5rem;
+  height: 0.75em;
+  margin-top: 8px;
 }
 #boot-loading .boot-sheet {
   gap: 0;
@@ -134,37 +143,144 @@ html[data-boot='frame'] #boot-loading .boot-frame {
   border-bottom: 1px solid #d6d6da;
   gap: 8px;
 }
-#boot-loading .boot-topbar i:nth-child(1) {
+#boot-loading .boot-topbar .is-crumb {
   flex: 0 1 12rem;
   min-width: 4rem;
   margin-right: auto;
 }
-#boot-loading .boot-topbar i:nth-child(2) {
+#boot-loading .boot-topbar .is-search {
   flex: 0 1 18rem;
   min-width: 9rem;
   height: 36px;
 }
-#boot-loading .boot-topbar i:nth-child(3) {
+#boot-loading .boot-topbar .is-account {
   width: 7rem;
   height: 28px;
 }
 #boot-loading .boot-content {
   padding: 8px 32px 40px;
-  gap: 12px;
+  gap: 32px;
 }
-#boot-loading .boot-content i:nth-child(1) {
+#boot-loading .boot-head {
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #d6d6da;
+}
+#boot-loading .boot-head-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+#boot-loading .boot-frame .is-eyebrow {
   width: 8rem;
 }
-#boot-loading .boot-content i:nth-child(2) {
-  height: 1.6em;
+#boot-loading .boot-frame .is-title {
+  flex: 0 1 20rem;
   width: min(20rem, 60%);
-  margin-bottom: 20px;
+  height: 1.8em;
 }
-#boot-loading .boot-content i:nth-child(n + 3) {
-  height: 2.5em;
+#boot-loading .boot-frame .is-stats {
+  width: min(18rem, 80%);
+}
+#boot-loading .boot-frame .is-heading {
+  width: 10rem;
+  max-width: 100%;
+  height: 1.4em;
+}
+#boot-loading .boot-frame .is-button {
+  width: 7rem;
+  height: 32px;
+}
+#boot-loading .boot-frame .is-input {
+  height: 32px;
+}
+#boot-loading .boot-frame .is-item {
+  height: 40px;
+}
+#boot-loading .boot-frame .is-card {
+  height: 96px;
+}
+#boot-loading .boot-frame .is-panel {
+  height: 280px;
+}
+#boot-loading .boot-frame .is-chart {
+  height: 200px;
+}
+#boot-loading .boot-frame .is-lane {
+  height: 180px;
+}
+#boot-loading .boot-frame .is-label {
+  width: 5rem;
+}
+#boot-loading .boot-frame .is-value {
+  flex: 0 1 14rem;
+  height: 28px;
+}
+#boot-loading .boot-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+#boot-loading .boot-row.is-end {
+  justify-content: flex-end;
+}
+#boot-loading .boot-row .is-input {
+  flex: 1 1 16rem;
+}
+#boot-loading .boot-row .is-select {
+  flex: 0 1 7rem;
+  height: 32px;
+}
+#boot-loading .boot-cols {
+  display: grid;
+  gap: 32px;
+  align-items: start;
+}
+#boot-loading .boot-cols.is-aside {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+#boot-loading .boot-cols.is-wiki {
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+}
+#boot-loading .boot-cols.is-setting {
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 24px;
+  padding-block: 24px;
+}
+#boot-loading .boot-cols.is-lanes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+#boot-loading .boot-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(232px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+#boot-loading .boot-col {
+  gap: 8px;
+  padding: 12px;
+  background: #f2f2f3;
+  border: 1px solid #d6d6da;
+  border-radius: 4px;
+}
+@media (max-width: 1080px) {
+  #boot-loading .boot-cols.is-aside,
+  #boot-loading .boot-cols.is-wiki,
+  #boot-loading .boot-cols.is-setting,
+  #boot-loading .boot-cols.is-lanes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #boot-loading .boot-cols.is-setting {
+    gap: 12px;
+  }
+  #boot-loading .boot-cols.is-wiki {
+    gap: 20px;
+  }
 }
 @media (min-width: 761px) and (hover: hover) {
-  html[data-boot='frame'][data-boot-nav='collapsed'] #boot-loading .boot-frame {
+  html[data-boot][data-boot-nav='collapsed'] #boot-loading .boot-frame {
     grid-template-columns: 64px minmax(0, 1fr);
   }
   html[data-boot-nav='collapsed'] #boot-loading .boot-binding {
@@ -182,9 +298,12 @@ html[data-boot='frame'] #boot-loading .boot-frame {
     height: 32px;
     margin-inline: 0;
   }
+  html[data-boot-nav='collapsed'] #boot-loading .boot-binding > .is-group-label {
+    display: none;
+  }
 }
 @media (max-width: 760px) {
-  html[data-boot='frame'] #boot-loading .boot-frame {
+  html[data-boot] #boot-loading .boot-frame {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 1fr;
   }
@@ -207,13 +326,17 @@ html[data-boot='frame'] #boot-loading .boot-frame {
     width: 168px;
     height: 60px;
   }
-  #boot-loading .boot-binding > i:nth-child(2) {
+  /* 組織の切り替えを1段にし、メニューの項目（最初の3つ）を横並びにする。ワークスペースの区切りより後は出さない */
+  #boot-loading .boot-binding > .is-org {
     flex: 1 1 100%;
-    width: auto;
   }
-  #boot-loading .boot-binding > i:nth-child(n + 3) {
+  #boot-loading .boot-binding > i:not(.is-org) {
     width: 6rem;
     margin: 14px 4px;
+  }
+  #boot-loading .boot-binding > .is-group-label,
+  #boot-loading .boot-binding > .is-group-label ~ i {
+    display: none;
   }
   #boot-loading .boot-topbar {
     flex-wrap: wrap;
@@ -221,10 +344,10 @@ html[data-boot='frame'] #boot-loading .boot-frame {
     min-height: 60px;
     padding: 5px 16px;
   }
-  #boot-loading .boot-topbar i:nth-child(3) {
+  #boot-loading .boot-topbar .is-account {
     margin-block: 8px;
   }
-  #boot-loading .boot-topbar i:nth-child(2) {
+  #boot-loading .boot-topbar .is-search {
     flex: 1 1 100%;
     order: 3;
     height: 44px;
@@ -273,12 +396,15 @@ html[data-boot='frame'] #boot-loading .boot-frame {
   #boot-loading .boot-frame i {
     background: #37373d;
   }
-  #boot-loading .boot-binding {
+  #boot-loading .boot-binding,
+  #boot-loading .boot-col {
     background: #0e0e10;
   }
   #boot-loading .boot-binding,
   #boot-loading .boot-corner,
-  #boot-loading .boot-topbar {
+  #boot-loading .boot-topbar,
+  #boot-loading .boot-head,
+  #boot-loading .boot-col {
     border-color: #37373d;
   }
 }
@@ -296,10 +422,10 @@ html[data-theme='simple_light'] #boot-loading .boot-skeleton i {
 html[data-theme='simple_light'] #boot-loading .boot-frame i {
   background: #d6d6da;
 }
-html[data-theme='simple_light'] #boot-loading .boot-binding {
+html[data-theme='simple_light'] #boot-loading :is(.boot-binding, .boot-col) {
   background: #f2f2f3;
 }
-html[data-theme='simple_light'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar) {
+html[data-theme='simple_light'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
   border-color: #d6d6da;
 }
 html[data-theme='simple_dark'] #boot-loading {
@@ -316,9 +442,9 @@ html[data-theme='simple_dark'] #boot-loading .boot-skeleton i {
 html[data-theme='simple_dark'] #boot-loading .boot-frame i {
   background: #37373d;
 }
-html[data-theme='simple_dark'] #boot-loading .boot-binding {
+html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-col) {
   background: #0e0e10;
 }
-html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar) {
+html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
   border-color: #37373d;
 }

@@ -1679,25 +1679,50 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 .skeleton-line.is-short { width: 70%; }
 .skeleton-line.is-block { height: 2.5em; }
 @keyframes skeleton-pulse { 50% { opacity: .45; } }
-/* 組織の枠へ移る間の骨組み（LoadingSheet の frame）。枠と同じ部品（.app、.binding、.topbar、.content、.page-head）の中に帯を置き、
-   左のメニューの幅、上の帯の高さ、本文の余白を読み込んだ後と同じにする（読み込み後に画面の大きさと位置が動かない）。
-   帯の大きさは、組織の切り替え、パンくず、検索の欄、アカウントのボタンのおおよその大きさに合わせる */
+/* 組織の枠へ移る間の骨組み（LoadingSheet の shape）。枠と同じ部品（.app、.binding、.topbar、.content、.page-head）の中に帯を置き、
+   左のメニューの幅、上の帯の高さ、本文の余白を読み込んだ後と同じにする。本文は行き先の画面の組み（data-shape）に近い形にし、
+   2列や節は本物と同じ部品（.layout-aside、.layout-wiki、.settings、.board、.lanes）に任せて、畳む幅も本物と揃える。
+   帯の大きさは、組織の切り替え、メニューの項目、パンくず、検索の欄、アカウントのボタン、行、カードのおおよその大きさに合わせる */
 .skeleton-frame .skeleton-line.is-org { height: 60px; }
 .skeleton-frame .skeleton-nav { gap: var(--space-4); padding-inline: var(--space-2); }
+.skeleton-frame .skeleton-nav .skeleton-line.is-org { margin-inline: calc(-1 * var(--space-2)); }
+.skeleton-frame .skeleton-line.is-group-label { width: 5rem; height: .75em; margin-top: var(--space-2); }
 .skeleton-frame .topbar > .skeleton-line { flex: none; }
 .skeleton-frame .topbar > .skeleton-line.is-crumb { flex: 0 1 12rem; min-width: 4rem; margin-right: auto; }
 .skeleton-frame .topbar > .skeleton-line.is-search { flex: 0 1 18rem; min-width: 9rem; height: 36px; }
 .skeleton-frame .topbar > .skeleton-line.is-account { width: 7rem; height: 28px; }
 .skeleton-frame .skeleton-line.is-eyebrow { width: 8rem; }
-.skeleton-frame .page-head .skeleton-line.is-title { width: min(20rem, 60%); }
+.skeleton-frame .skeleton-line.is-title { height: 1.8em; width: min(20rem, 60%); }
+.skeleton-frame .page-head-row { align-items: center; }
+.skeleton-frame .page-head-row > .skeleton-line.is-title { flex: 0 1 20rem; }
+.skeleton-frame .skeleton-line.is-stats { width: min(18rem, 80%); }
+.skeleton-frame .skeleton-line.is-heading { height: 1.4em; width: 10rem; max-width: 100%; }
+.skeleton-frame .skeleton-line.is-button { flex: none; width: 7rem; height: 32px; }
+.skeleton-frame .skeleton-line.is-input { height: 32px; }
+.skeleton-frame .skeleton-line.is-item { height: 40px; }
+.skeleton-frame .skeleton-line.is-card { height: 96px; }
+.skeleton-frame .skeleton-line.is-panel { height: 280px; }
+.skeleton-frame .skeleton-line.is-chart { height: 200px; }
+.skeleton-frame .skeleton-line.is-lane { height: 180px; }
+.skeleton-frame .skeleton-line.is-label { flex: none; width: 5rem; }
+.skeleton-frame .skeleton-line.is-value { flex: 0 1 14rem; height: 28px; }
+.skeleton-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); min-width: 0; }
+.skeleton-row.is-end { justify-content: flex-end; }
+.skeleton-row > .skeleton-line.is-input { flex: 1 1 16rem; }
+.skeleton-row > .skeleton-line.is-select { flex: 0 1 7rem; height: 32px; }
+.skeleton-frame .skeleton-body .skeleton { gap: var(--space-4); }
+.skeleton-frame .board-col.skeleton { gap: var(--space-2); }
 @media (min-width: 761px) and (hover: hover) {
-  /* 畳んだ列（64px）では、組織と項目の帯をアイコンの大きさの四角にする */
+  /* 畳んだ列（64px）では、組織と項目の帯をアイコンの大きさの四角にし、区切りの見出しは出さない */
   .app.skeleton-frame[data-nav-collapsed="true"] .binding-body .skeleton-line { width: 32px; height: 32px; margin-inline: auto; }
+  .app.skeleton-frame[data-nav-collapsed="true"] .binding-body .skeleton-line.is-group-label { display: none; }
   .app.skeleton-frame[data-nav-collapsed="true"] .skeleton-nav { padding-inline: 0; }
 }
 @media (max-width: 760px) {
-  /* 狭い幅の枠は、ロゴと組織の切り替えとメニューの項目の横並びの行を1つの帯に並べる。検索の欄は上の帯の2段目に全幅で置く */
+  /* 狭い幅の枠は、ロゴと組織の切り替えとメニューの項目の横並びの行を1つの帯に並べる（ワークスペースの区切りは出さない）。
+     検索の欄は上の帯の2段目に全幅で置く */
   .skeleton-frame .skeleton-nav { display: flex; flex: 1 1 100%; align-items: center; gap: var(--space-4); min-height: 44px; overflow: hidden; }
+  .skeleton-frame .skeleton-nav.is-group { display: none; }
   .skeleton-frame .skeleton-nav .skeleton-line { flex: none; width: 6rem; }
   .skeleton-frame .skeleton-line.is-org { flex: 1 1 12rem; }
   /* アカウントのボタンは指で押す高さ（44px）になるので、帯の外の余白で同じ高さを取る */
