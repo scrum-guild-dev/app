@@ -130,12 +130,63 @@ test('バックログのタスクの行が 390px で今より低く、チップ�
   }
 });
 
+// ストーリーの行（題のリンクと右端の段）と、受信箱の行（選ぶ欄、題、右端）の 390px の並び（#999）。
+// 題の広げた押せる範囲が右端のボタンの範囲に重ならないことと、受信箱の選ぶ欄が題と同じ段に並ぶことを確かめる
+test('ストーリーの行の題と右端のボタンの押せる範囲が重ならず、受信箱の行は選ぶ欄と題が同じ段に並ぶ', async ({
+  page,
+}) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(WORKSPACE);
+  await expect(page.getByRole('link', { name: 'ポイント付与のバッチを作る', exact: true })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const boxesOf = (selector: string) =>
+    page.locator(selector).evaluateAll((rows) =>
+      rows.map((row) =>
+        [...row.querySelectorAll<HTMLElement>('a.tree-link, .tree-end button')]
+          .filter((el) => el.getClientRects().length > 0)
+          .map((el) => {
+            const rect = el.getBoundingClientRect();
+            const after = getComputedStyle(el, '::after');
+            const w = Math.max(rect.width, parseFloat(after.width) || 0);
+            const h = Math.max(rect.height, parseFloat(after.height) || 0);
+            return { y: rect.y + rect.height / 2 - h / 2, h, x: rect.x + rect.width / 2 - w / 2, w };
+          }),
+      ),
+    );
+  for (const theme of LAYOUT_THEMES) {
+    await applyTheme(page, theme);
+    const rows = await boxesOf('.tree-row.is-story');
+    expect(rows.length).toBeGreaterThan(0);
+    for (const boxes of rows) {
+      for (const [i, a] of boxes.entries()) {
+        for (const b of boxes.slice(i + 1)) {
+          const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+          const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+          expect(overlapX > 0.5 && overlapY > 0.5, `${theme}: ストーリー行の押せる範囲が重なる`).toBe(false);
+        }
+      }
+    }
+  }
+  await page.goto(`${WORKSPACE}/inbox`);
+  const row = page.locator('.entry:has(.row-check)').first();
+  if ((await row.count()) > 0) {
+    const [check, main] = await Promise.all([
+      row.locator('.row-check').boundingBox(),
+      row.locator('.entry-main').boundingBox(),
+    ]);
+    // 選ぶ欄は題の左の列で、題の上の別の段にならない
+    expect(check!.y).toBeLessThan(main!.y + main!.height);
+    expect(check!.x + check!.width).toBeLessThanOrEqual(main!.x + 1);
+  }
+});
+
 test('スプリントの列の「タスクを足す」の欄の案内が、390px でも切れずに読める', async ({ page }) => {
   await page.setViewportSize(NARROW_VIEWPORT);
   await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
   await page.goto(`${WORKSPACE}/sprint`);
   const input = page.locator('.board-col .draft-row .input').first();
   await expect(input).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
   await expect(input).toHaveAttribute('placeholder', 'タスクを足す');
   // 案内の文字の幅が、欄の中身の幅（余白を除く）に収まる
   const fits = await input.evaluate((el: HTMLInputElement) => {
