@@ -988,6 +988,12 @@ button.tree-folded[aria-expanded="true"] .ico { transform: rotate(90deg); }
 @container (max-width: 640px) {
   .entry { grid-template-columns: var(--grip-col, ) 32px minmax(0, 1fr); }
   .entry-end { grid-column: -2; flex-wrap: wrap; }
+  /* 「今日やる」の太陽（.sun）の無いバックログの木（.tree）の行は、空の 32px の列を持たず、題とチップに幅を返す（受信箱の選ぶ欄と「今日やること」の一覧は、行の左端を揃えるので列を残す）（390px で 44px 広がり、題の下の印が 1 行に収まる） */
+  .tree .entry:not(:has(> .sun)) { grid-template-columns: var(--grip-col, ) minmax(0, 1fr); }
+  .tree .entry > span[aria-hidden="true"]:not(.grip):empty { display: none; }
+  /* 印の行（.entry-meta、押せない）が題とチップの段の間にあれば、段の間は詰める（題と段の押せる範囲は印の行が分ける）。
+     印の行が無いときだけ、題の下へ広げた範囲（約 11px）がチップの段に重ならない間を残す */
+  .entry:has(.entry-meta) { row-gap: 2px; }
 }
 /* ストーリーの行の右端（「完了 / 全体」、＋タスク、残りの件数、完了にする、並べ替えと親を移す）は、タスクの行より長い（450px 前後）。
    一覧の幅が 800px 以下なら、題の下へ折り返す */
@@ -1196,6 +1202,15 @@ label.pick-row:hover { background: var(--color-accent-soft); }
 }
 .drawer-top { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .drawer-tools { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-2); }
+/* 閉じるは .drawer-top の直接の子で、DOM では最後（広い幅の見た目と Tab の順が同じ）。tools が空（狭い幅のストーリーなど）のときは tools を畳み、閉じるを右端に寄せる */
+.drawer-tools:not(:has(*)) { display: none; }
+.drawer-top:has(> .drawer-tools:not(:has(*))) > .drawer-close { margin-left: auto; }
+/* 狭い幅は、閉じるを order で 1 段目の右端に置き、前後と開き方の組は 2 段目に左から置く。閉じるが 2 段目に落ちて探さないように。
+   見た目の順と Tab の順は食い違う（Tab は前後、開き方、閉じる）。開いたときのフォーカスは閉じるにあるので、この食い違いを許す */
+@media (max-width: 620px) {
+  .drawer-top > .drawer-close { order: 1; margin-left: auto; }
+  .drawer-top > .drawer-tools { order: 2; flex-basis: 100%; margin-left: 0; justify-content: flex-start; }
+}
 /* 開き方は押した時点で実行するボタンの組（.pill）。選んでいる形は aria-pressed で示し、色に加えて太字にする */
 .drawer-mode { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); }
 .drawer-mode .pill { white-space: nowrap; }
@@ -1366,7 +1381,8 @@ dialog.dialog::backdrop { background: none; }
 .segmented label { position: relative; }
 .segmented input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
 .segmented span { display: block; padding: 6px 14px; font-size: var(--text-sm); color: var(--color-muted); overflow-wrap: anywhere; }
-.segmented label + label span { border-left: 1px solid var(--color-line); }
+/* 区切りは各選択肢の右と下の線（box-shadow なので大きさも押す範囲も変えない）。外枠の overflow で最後の列と行の線を隠すので、折り返しても全部に同じ区切りが付く（左の線だと 2 行目の先頭に残る） */
+.segmented span { box-shadow: 1px 0 0 var(--color-line), 0 1px 0 var(--color-line); }
 .segmented input:checked + span { background: var(--color-accent); color: var(--color-on-accent); font-weight: 700; }
 .segmented input:focus-visible + span { outline: 2px solid var(--color-accent); outline-offset: -3px; }
 .segmented input:disabled { cursor: not-allowed; }
@@ -1425,12 +1441,14 @@ dialog.dialog::backdrop { background: none; }
   .drawer .tab { min-height: 44px; }
   /* 開き方と前後のボタンと閉じるボタンは、隣と押せる範囲が重ならないよう、見た目ごと 44px 四方にする */
   .drawer-steps .pill, .drawer-mode .pill, .drawer-close { min-width: 44px; min-height: 44px; justify-content: center; }
-  /* 木の行の右端が折り返したとき、上の段の「＋タスク」の広げた分が、下の段の 44px のボタンに重ならないよう段の間を空ける */
-  /* --space-3 では、上の段の「＋タスク」と下の段の「完了にする」の広げた範囲が重なる（e2e/layout-narrow-workspace.test.ts で確かめた） */
-  .tree-end { row-gap: var(--space-5); }
-  /* 右端が題の下へ折り返したとき、題の広げた範囲（下へ約 10px）と、右端の1段目の「＋タスク」の広げた範囲（上へ約 10px）が
-     重ならないよう、題と右端の間も空ける。--space-2 では重なる。字の高さは書体で変わるので、--space-5 より1段広く取る */
-  .tree-row { row-gap: var(--space-6); }
+  .tree-end { row-gap: 0; }
+  /* ボタンだけの段（ratio も note も無い段）も 44px にする。広げた範囲が次の段に重ならない */
+  .tree-row .tree-end .btn.is-sm { margin-block: 8px; }
+  /* 右端の段は、どの段も 44px の高さにする（「完了 / 全体」と残りの件数の文字を 44px の箱に入れ、ボタンは段の中央に置く）。
+     段が 44px なので、段の間に余白が要らず、ボタンの広げた範囲も隣の段に重ならない。題の広げた範囲（下へ約 11px）は、
+     段の上の余白（約 8px）と題の下の間（--space-3。ボタンの広げた範囲も上へ約 8px 出るので、11.5 + 8 を 8 + 12 が超える）に収まる（e2e/layout-narrow-workspace.test.ts で確かめる） */
+  .tree-ratio, .tree-note { display: inline-flex; align-items: center; min-height: 44px; }
+  .tree-row { row-gap: var(--space-3); }
   /* 表の名前の列のリンク（組織の管理のワークスペースの名前）は、2行に折り返しても 44px の高さの1つの箱にする */
   .table .is-name a { display: inline-flex; align-items: center; min-height: 44px; }
   /* コメントの見出しの「編集」「削除」は、広げた分（上下に約 9px）が本文の1行目のリンクに重ならないよう、見出しの下を空ける */
@@ -1751,7 +1769,13 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 @media (max-width: 760px), (pointer: coarse) {
   .row-menu-btn { opacity: 1; width: 44px; height: 44px; }
   .chip-btn::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
-  .chip-btn { margin-block: 10px; }
+  /* 見た目の縦の余白は持たない。::after の 44px が隣の段に重ならないよう、折り返す段の間（row-gap）だけで空ける。
+     チップの段は「⋯」（44px）と同じ段なので、1段のときは 44px の高さに収まり、折り返した 2 段目は、チップの高さ（約 22px。書体で変わる）に 24px を足して 44px 以上の間隔になる */
+  .entry-end, .card-foot { row-gap: 18px; }
+  .entry-end:has(.chip-btn), .card-foot:has(.chip-btn) { row-gap: 24px; }
+  /* 印の行が無い行は、題の広げた範囲（下へ約 11px）とチップの広げた範囲（上へ約 11px）が重ならない間（22px 以上）を、題とチップの段の間に取る */
+  .entry:not(:has(.entry-meta)):has(.chip-btn) { row-gap: 22px; }
+  .card-foot:has(.chip-btn) { margin-top: 4px; }
 }
 /* 書きっぱなしの欄（.is-inline）。静止時は破線の罫で書ける欄と示し、押すと実線の入力欄になる。引き出しのタイトル、リンク、本文に使う */
 .input.is-inline, .textarea.is-inline { background: transparent; border-color: var(--color-control-edge); border-style: dashed; }
@@ -2145,3 +2169,40 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 
 /* 行のチップの窓（期日の日付の入力と「クリア」）。メニューと同じ枠 `.row-menu-list` の中に縦に並べる。「クリア」は枠の `.menu-item` を使う */
 .attr-panel { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3); }
+
+/* ===== 利用開始のフロー =====
+   枠より余白でまとまりを示す。画面・見本の両方で使い、他の gate の配置は変えない。 */
+.onboarding { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; padding: var(--space-6) max(var(--space-6), env(safe-area-inset-right, 0px)) max(var(--space-6), env(safe-area-inset-bottom, 0px)) max(var(--space-6), env(safe-area-inset-left, 0px)); }
+.onboarding-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: 100%; max-width: 1120px; margin-inline: auto; }
+.onboarding-header .brand-art { width: 168px; }
+.onboarding-stage { width: min(520px, 100%); margin: auto; padding-block: var(--space-10); }
+.onboarding-disclosure { display: grid; gap: var(--space-2); padding-bottom: var(--space-8); font-size: var(--text-xs); color: var(--color-muted); }
+.onboarding-disclosure b { color: var(--color-fg); font-weight: 700; }
+.onboarding-content { display: grid; gap: var(--space-8); min-width: 0; }
+.onboarding-heading { display: grid; gap: var(--space-4); }
+.onboarding-heading :is(h1, h2) { font-size: clamp(26px, 4vw, 36px); line-height: 1.4; font-weight: 700; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.onboarding-heading h1:focus { outline: none; }
+.onboarding-eyebrow { font-size: var(--text-xs); color: var(--color-muted); }
+.onboarding-lead { color: var(--color-muted); line-height: 1.8; }
+.onboarding-fields { display: grid; gap: var(--space-6); min-width: 0; }
+.onboarding .input { min-height: 48px; border-radius: 12px; width: 100%; min-width: 0; padding: var(--space-3) var(--space-4); }
+.onboarding textarea.input { resize: vertical; }
+.onboarding .btn { min-height: 48px; border-radius: var(--radius-full); padding: var(--space-3) var(--space-5); white-space: normal; text-align: center; overflow-wrap: anywhere; }
+.onboarding .btn.is-google { border-radius: var(--radius-full); }
+.onboarding-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding-top: var(--space-3); }
+.onboarding-url { display: grid; grid-template-columns: fit-content(50%) minmax(0, 1fr); align-items: center; border: 1px solid var(--color-control-edge); border-radius: 12px; min-width: 0; }
+.onboarding-url > span { min-width: 0; padding: var(--space-3) 0 var(--space-3) var(--space-4); overflow-wrap: anywhere; color: var(--color-muted); font-size: var(--text-xs); }
+.onboarding-url .input { border: 0; background: transparent; }
+.onboarding-profile { display: flex; align-items: center; gap: var(--space-3); }
+.onboarding-avatar { display: grid; place-items: center; width: 48px; height: 48px; flex: none; border: 1px solid var(--color-line); border-radius: 50%; color: var(--color-muted); background: var(--color-surface); }
+.onboarding-notice { min-height: 1.5em; color: var(--color-muted); font-size: var(--text-sm); }
+.onboarding-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: min(520px, 100%); margin-inline: auto; }
+.onboarding-progress { display: flex; gap: var(--space-3); list-style: none; padding: 0; margin: 0; }
+.onboarding-dot { display: block; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--color-muted); }
+.onboarding-progress [aria-current="step"] .onboarding-dot { width: 24px; background: var(--color-fg); }
+@media (max-width: 480px) {
+  .onboarding { padding-inline: max(var(--space-5), env(safe-area-inset-left, 0px)) max(var(--space-5), env(safe-area-inset-right, 0px)); }
+  .onboarding-header { flex-wrap: wrap; gap: var(--space-2); }
+  .onboarding-header .btn { font-size: var(--text-xs); padding-inline: var(--space-3); }
+  .onboarding-stage { padding-block: var(--space-8); }
+}

@@ -16,8 +16,10 @@ import { workspaceDodUpdate } from './workspace-dod-update.ts';
 import { workspaceLeaderCandidates } from './workspace-leader-candidates.ts';
 import { workspaceList } from './workspace-list.ts';
 import { workspaceReopen } from './workspace-reopen.ts';
+import { onboardingWorkspacePrepare } from './onboarding-workspace-prepare.ts';
 
 export {
+  onboardingWorkspacePrepare,
   invitationAccept,
   invitationCreate,
   invitationDecline,
@@ -37,6 +39,7 @@ export {
 };
 
 export const workspaceOperations: readonly AnyOperationDefinition[] = [
+  onboardingWorkspacePrepare,
   workspaceCreate,
   workspaceList,
   workspaceLeaderCandidates,
