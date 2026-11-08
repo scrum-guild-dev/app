@@ -218,6 +218,8 @@
       announced = '';
       return;
     }
+    // いったん空にしてから入れる（失敗が続いて同じ文になっても、読み上げが黙らないように）
+    announced = '';
     const frame = requestAnimationFrame(() => {
       announced = next;
     });
