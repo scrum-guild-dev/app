@@ -342,7 +342,7 @@
                       message: connection.last_error_message,
                       at: formatLocalDateTime(connection.last_error_at),
                       count: connection.consecutive_failures,
-                    })}{connection.status === 'error' ? t('connectionNextError', { who }) : ''}</span
+                    })}{connection.status === 'error' ? ' ' + t('connectionNextError', { who }) : ''}</span
               >
             </div>
           {/if}

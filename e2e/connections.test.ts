@@ -268,6 +268,14 @@ test('止まっている接続は、止まった事実と次の手（誰に伝�
           last_error_message: '認証に失敗しました',
         }),
         created({
+          id: 'error-counted',
+          name: '続けて失敗している接続',
+          status: 'error',
+          last_error_message: '応答が遅れています',
+          last_error_at: '2026-11-07T01:00:00.000Z',
+          consecutive_failures: 3,
+        }),
+        created({
           id: 'error-theirs',
           name: '不調の接続',
           status: 'error',
@@ -292,7 +300,11 @@ test('止まっている接続は、止まった事実と次の手（誰に伝�
     '認証に失敗したので止めました。登録したハルカかリーダーに、止まっていることを伝えてください。',
   );
   await expect(page.locator('[data-connection-id="error-theirs"] .callout.is-warn')).toHaveText(
-    '応答が遅れています失敗が続くようなら、登録したハルカかリーダーに伝えてください。',
+    '応答が遅れています 失敗が続くようなら、登録したハルカかリーダーに伝えてください。',
+  );
+  // 日時と回数つきの経路（本番のエラーの行はほぼこちら）にも次の手が付く
+  await expect(page.locator('[data-connection-id="error-counted"] .callout.is-warn')).toHaveText(
+    /^応答が遅れています（\d{4}-\d{2}-\d{2} \d{2}:\d{2}、3 回続けて失敗） 失敗が続くようなら、リーダーに伝えてください。$/,
   );
   await expect(page.locator('[data-connection-id="stopped-null"] .callout.is-danger')).toHaveText(
     '止まっています。リーダーに、止まっていることを伝えてください。',
