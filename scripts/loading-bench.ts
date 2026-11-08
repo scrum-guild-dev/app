@@ -13,7 +13,7 @@ import { loadingFixtureSql } from './loading-fixture.ts';
 import { screens, type Reading } from './loading-screens.ts';
 import { comparison, percentile, trialTiming } from './loading-stats.ts';
 import { sessionInserts } from './seed.ts';
-import { parallelRead } from './loading-order.ts';
+import { readTrial } from './loading-trial.ts';
 
 function option(name: string, fallback: number, max: number): number {
   const index = process.argv.indexOf(name);
@@ -97,9 +97,16 @@ async function call(reading: Reading, operator: boolean) {
   });
   const body: unknown = await response.json();
   const ms = performance.now() - started;
-  if (!response.ok || !definition.output.safeParse(body).success)
-    throw new Error(`${reading.name}: HTTP ${response.status} または応答の形が不正`);
-  return { ms, finishedAt: started + ms, secondary: reading.secondary };
+  return {
+    ms,
+    finishedAt: started + ms,
+    secondary: reading.secondary,
+    body,
+    validate: (body: unknown) => {
+      if (!response.ok || !definition.output.safeParse(body).success)
+        throw new Error(`${reading.name}: HTTP ${response.status} または応答の形が不正`);
+    },
+  };
 }
 try {
   console.log(`使い捨て D1: ${dir}（終了時に削除）`);
@@ -154,12 +161,8 @@ try {
     const orderTrials = [];
     for (const reverse of [false, true]) {
       const label = reverse ? '逆順' : '正順';
-      const read = async () => {
-        const started = performance.now();
-        const first = await parallelRead(screen.operations, reverse, (op) => call(op, screen.operator ?? false));
-        const after = await parallelRead(screen.after ?? [], reverse, (op) => call(op, screen.operator ?? false));
-        return [...first, ...after].map((o) => ({ ...o, completedMs: o.finishedAt - started }));
-      };
+      const read = () =>
+        readTrial(screen.operations, screen.after ?? [], reverse, (op) => call(op, screen.operator ?? false));
       await read();
       await read();
       const samples = [];
