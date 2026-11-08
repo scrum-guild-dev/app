@@ -228,10 +228,11 @@ test.describe('届いた招待（ハルカ）', () => {
 
     const rows = page.locator('.callout.is-info[data-invitation-row]');
     await expect(rows).toHaveCount(2);
-    await expect(rows.first()).toContainText(
-      'あおば開発のリンさんから「保守チーム」への招待が届いています（一般、2026-10-19）。',
-    );
-    await expect(rows.last()).toContainText('「改善チーム」への招待が届いています（リーダー、2026-10-19）。');
+    // 招待の画面（/<slug>/invitations）と同じ形の文
+    await expect(rows.first()).toContainText('保守チーム');
+    await expect(rows.first()).toContainText('あおば開発のリンさんから、一般として招かれました（10/19）');
+    await expect(rows.last()).toContainText('改善チーム');
+    await expect(rows.last()).toContainText('あおば開発のリンさんから、リーダーとして招かれました（10/19）');
     await accountButton(page).click();
     await expect(profileItem(page).locator('.account-menu-badge')).toHaveText('招待 2');
     await accountButton(page).click();

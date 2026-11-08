@@ -32,7 +32,7 @@ function render() {
       <div class="choice-list">
         ${D.organizations.map((k) => `<a class="choice" href="today.html">
           <div><b>${esc(k.name)}</b><span class="mono">scrum-guild.dev/${esc(k.slug)}/</span><span>${t("workspace")} ${k.wss}・最後に入った日 ${esc(k.lastSeen)}</span></div>
-          ${k.admin ? `<span class="chip">${t("admin")}</span>` : ""}${emblem(k.level, true)}</a>`).join("")}
+          ${k.admin ? `<span class="chip">${t("admin")}</span>` : ""}${emblem(k.level, true)}${icon("chevron")}</a>`).join("")}
       </div>
       <p class="gate-note">あとから、メニューの上の${t("organization")}の切り替えで選び直せます。</p>
       <div class="form-actions"><button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button><button class="btn is-sm" type="button" data-dialog="createPersonalOrganization">自分用を作る</button></div>
@@ -43,10 +43,23 @@ function render() {
       <div class="choice-list">
       ${[...new Set(D.receivedInvites.map((i) => i.organization))].map((name) => `<a class="choice" href="login.html"><div>
         <b>${esc(name)}</b>
-        <span>承諾待ちの招待があります</span></div>
+        <span>承諾待ちの招待があります</span></div>${icon("chevron")}
       </a>`).join("")}
       </div>
       <p class="gate-note">すべての${t("organization")}に届いた招待を、${t("organization")}ごとに1件にまとめて出します。押すと、その${t("organization")}の招待の画面（見本は login.html の「届いた招待」）で承諾か辞退を選べます。</p>
+    </section>
+    <section class="gate-sheet">
+      <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
+      <h1 class="gate-title">${t("organization")}を選ぶ</h1>
+      <p>まだ入れる${t("organization")}がありません。届いた招待から${t("organization")}を選び、承諾すると入れます。</p>
+      <h2 class="dialog-title">届いた招待</h2>
+      <div class="choice-list">
+        <a class="choice" href="login.html"><div><b>ひばり工房</b><span>承諾待ちの招待があります</span></div>${icon("chevron")}</a>
+      </div>
+      <p class="gate-note">すべての${t("organization")}に届いた招待を、${t("organization")}ごとに1件にまとめて出します。押すと、その${t("organization")}の招待の画面で承諾か辞退を選べます。</p>
+      <div class="form-actions"><button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button><button class="btn is-sm" type="button" data-dialog="createPersonalOrganization">自分用を作る</button></div>
+      <div class="form-actions"><button class="btn is-sm is-quiet" type="button" data-toast="見本のため、ログアウトしません">${t("logout")}</button></div>
+      <p class="gate-note">招待だけがある人（入れる${t("organization")}が無い人）は、押す先の招待を最初に出し、「${t("organization")}を作る」は下の静かな大きさ（is-sm）にする。</p>
     </section>
     <section class="gate-sheet">
       <h2 class="dialog-title">入れる${t("organization")}が無い人</h2>
@@ -61,8 +74,8 @@ function render() {
     <section class="gate-sheet">
       <h2 class="dialog-title">自分用の${t("organization")}を持つ人</h2>
       <div class="choice-list">
-        <a class="choice" href="today.html"><div><b>${t("personalOrganizationName")}</b><span class="mono">scrum-guild.dev/mio-solo/</span></div></a>
-        ${D.organizations.map((k) => `<a class="choice" href="today.html"><div><b>${esc(k.name)}</b><span class="mono">scrum-guild.dev/${esc(k.slug)}/</span></div></a>`).join("")}
+        <a class="choice" href="today.html"><div><b>${t("personalOrganizationName")}</b><span class="mono">scrum-guild.dev/mio-solo/</span></div>${icon("chevron")}</a>
+        ${D.organizations.map((k) => `<a class="choice" href="today.html"><div><b>${esc(k.name)}</b><span class="mono">scrum-guild.dev/${esc(k.slug)}/</span></div>${icon("chevron")}</a>`).join("")}
       </div>
       <div class="form-actions"><button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button></div>
       <p class="gate-note">自分用の${t("organization")}（1アカウントに1つ）は、名前の代わりに「自分用」と出して、チーム用の${t("organization")}と並べて選べるようにする。持つ人には「自分用を作る」を出さない（入れる${t("organization")}にも停止している${t("organization")}にも、自分用が無い人にだけ出す）。どちらの一覧にも出ない自分用を持つ人（その${t("organization")}で無効にされた人など）には出し、押すと 409 の <code>personal_limit</code> で断って、ダイアログが伝える。</p>

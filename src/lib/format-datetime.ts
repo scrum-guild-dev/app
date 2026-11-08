@@ -26,3 +26,9 @@ export function formatTrialStopDateTime(endsOn: string, timeZone?: string): stri
   date.setUTCDate(date.getUTCDate() + 1);
   return formatDateTime(date.toISOString(), timeZone);
 }
+
+// 日付だけの文字列（YYYY-MM-DD）を「月/日」で出す（0 埋めしない。例 2026-10-19 は 10/19）。読めない値は受け取った文字列のまま返す
+export function formatMonthDay(date: string): string {
+  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(date);
+  return match ? `${Number(match[1])}/${Number(match[2])}` : date;
+}
