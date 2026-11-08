@@ -240,6 +240,8 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   await page.goto(`${WORKSPACE}?story=${STORY_ID}`);
   const story = page.getByRole('dialog');
   await expect(story.getByRole('heading', { level: 2 })).toBeFocused();
+  // 前後のボタンは、バックログが木を読んで順を置いてから出る。見出しのフォーカスだけでは数える時点に間に合わない
+  await expect(story.locator('.drawer-steps')).toBeVisible();
   await expectDrawerToolsApart(page, story, 2);
   // ページ全体で開いたタスク
   await page.goto(`${WORKSPACE}/tasks/${TASK_ID}`);
