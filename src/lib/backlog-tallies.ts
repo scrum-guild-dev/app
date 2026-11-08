@@ -1,6 +1,23 @@
 import type { BacklogTask } from '../shared/operations/task/backlog-tree.ts';
 import { completionSettled } from './added-rows.ts';
 
+// 同じ時刻の読み込みも区別する。起票より後に要求した木だけが、その起票を必ず含む。
+let readVersion = 0;
+export function startBacklogRead(): number {
+  return ++readVersion;
+}
+export function backlogReadVersion(): number {
+  return readVersion;
+}
+export type PendingBacklogTask = { task: BacklogTask; afterRead: number };
+export function pendingBacklogTasks(
+  added: readonly PendingBacklogTask[],
+  loadedRead: number,
+  treeLoaded: boolean,
+): PendingBacklogTask[] {
+  return added.filter((entry) => !treeLoaded || loadedRead <= entry.afterRead);
+}
+
 export type SavedBacklogPoints = Record<string, { value: BacklogTask['points']; at: number }>;
 
 // 応答より後に読み始めた木だけが保存を含む。同時刻や失敗した読み込みでは補正を残す。

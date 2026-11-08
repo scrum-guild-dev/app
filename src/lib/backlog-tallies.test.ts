@@ -1,6 +1,12 @@
 import { expect, test } from 'vitest';
 import type { BacklogTask } from '../shared/operations/task/backlog-tree.ts';
-import { backlogTallies, pendingBacklogPoints } from './backlog-tallies.ts';
+import {
+  backlogTallies,
+  pendingBacklogPoints,
+  pendingBacklogTasks,
+  startBacklogRead,
+  backlogReadVersion,
+} from './backlog-tallies.ts';
 
 const row = (id: string, changes: Partial<BacklogTask> = {}): BacklogTask => ({
   id,
@@ -16,6 +22,16 @@ const row = (id: string, changes: Partial<BacklogTask> = {}): BacklogTask => ({
   ...changes,
 });
 const counts = { open_count: 100, unfilled_count: 50, unestimated_count: 20, unscheduled_count: 30 };
+
+test('起票前の木では集計用の追加分を残し、起票後に要求した木が成功したときだけ外す', () => {
+  const oldRead = startBacklogRead();
+  const added = [{ task: row('hidden'), afterRead: backlogReadVersion() }];
+  expect(pendingBacklogTasks(added, oldRead, true)).toEqual(added);
+  const newRead = startBacklogRead();
+  expect(newRead).toBeGreaterThan(oldRead);
+  expect(pendingBacklogTasks(added, newRead, false)).toEqual(added);
+  expect(pendingBacklogTasks(added, newRead, true)).toEqual([]);
+});
 
 test('同時刻の古い木と失敗した読み込みでは保存した見積もりを残し、後に読んだ木で捨てる', () => {
   const changes = { task: { value: 5 as const, at: 100 } };

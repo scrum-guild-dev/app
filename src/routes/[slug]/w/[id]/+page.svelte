@@ -39,7 +39,14 @@
     treeStories,
   } from '../../../../lib/added-rows.ts';
   import { MoveQueue } from '../../../../lib/move-queue.ts';
-  import { backlogTallies, pendingBacklogPoints, type SavedBacklogPoints } from '../../../../lib/backlog-tallies.ts';
+  import {
+    backlogTallies,
+    pendingBacklogPoints,
+    pendingBacklogTasks,
+    backlogReadVersion,
+    type SavedBacklogPoints,
+    type PendingBacklogTask,
+  } from '../../../../lib/backlog-tallies.ts';
   import { completionFailureMessage } from '../../../../lib/story-completion.ts';
   import { moveFailureMessage } from '../../../../lib/move-failure.ts';
   import { trackStoryOrder, trackTaskOrder } from '../../../../lib/task-order.ts';
@@ -159,7 +166,7 @@
   // fromTree は、木にもとからあった行を完了にして写したもの（親の合計は、木が持つ分に含まれるので足さない）
   let added = $state<{ task: BacklogTask; storyId: string | null; at: number; fromTree?: true }[]>([]);
   // 絞り込み中の起票は木へ直接出さず、全体の件数だけに足す。次の読み直しが起票を含めば捨てる。
-  let tallyAdded = $state<{ task: BacklogTask; at: number }[]>([]);
+  let tallyAdded = $state<PendingBacklogTask[]>([]);
   let addedFor: string | undefined;
   // 前の読み込みで要求した絞り込み（読み込みに失敗した読み直しも含む）。絞り込みの条件が替わったときだけ、印と行を持ち越さない（carriesOver）
   let loadedFilter: typeof filter | undefined;
@@ -230,7 +237,13 @@
     const keepRow = (at: number, inLoaded: boolean) =>
       carry &&
       keepAddedRow({ at }, { inLoadedTree: inLoaded, completed: false, treeLoaded: loaded !== null, loadedAt });
-    tallyAdded = untrack(() => tallyAdded).filter((entry) => keepRow(entry.at, inTree(loaded, entry.task.id)));
+    tallyAdded = sameWorkspace
+      ? pendingBacklogTasks(
+          untrack(() => tallyAdded),
+          data.readVersion,
+          loaded !== null,
+        )
+      : [];
     const loadedStoryIds = (loaded === null ? [] : treeStories(loaded)).map((story) => story.id);
     // 画面で足したストーリーのうち、この回で残すもの。孤立の判定にも、捨てるものを含めない
     const keptStories = untrack(() => addedStories).filter((entry) =>
@@ -687,16 +700,13 @@
   async function created(task: BacklogTask, storyId: string | null): Promise<void> {
     // 絞っているときは、足した行が絞り込みに当たるかを画面では決めないので、木を読み直す
     if (filtering) {
-      tallyAdded = [...tallyAdded, { task, at: performance.now() }];
+      tallyAdded = [...tallyAdded, { task, afterRead: backlogReadVersion() }];
       const parent = storyId === null ? undefined : openStories.find((story) => story.id === storyId);
       const message =
         parent === undefined
           ? t('taskCreated', { backlog: t('backlog') })
           : t('taskCreatedUnder', { story: t('story'), title: parent.title });
       await invalidate('app:backlog-tree');
-      // この起票後に要求した読み直しが成功すれば、全体の件数は既に起票を含む。
-      // 絞り込みで行が無い場合、同時刻の loadedAt だけでは含まれたと判断できないため、ここでも補正を外す。
-      if (data.tree !== null) tallyAdded = tallyAdded.filter((entry) => entry.task.id !== task.id);
       if ((await revealOrNotice('task', task.id, message)) && storyId !== null) expandStory(storyId);
       return;
     }
