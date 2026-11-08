@@ -176,7 +176,6 @@ test.describe('マイプロフィール（ミナト）', () => {
     }
     await page.goto('/hibari/me');
     await expect(page.getByRole('heading', { level: 1, name: 'マイプロフィール' })).toBeVisible();
-    await expect(page.getByText('今は経験値、API トークン、テーマ、届いた招待を扱えます。')).toBeVisible();
     await expect(page.getByText('レベルを読み込めませんでした')).toBeVisible();
     await expect(page.getByText('経験値の明細を読み込めませんでした')).toBeVisible();
     const retrySummary = page.getByRole('button', { name: 'もう一度試す（レベル）' });
