@@ -1423,6 +1423,9 @@
     }
   }
 
+  // ページ全体は画面に h1 が無いので、題を h1 にする。引き出し（横と真ん中）は重なる面の題なので h2 のまま。見た目は .drawer-title で同じ
+  const titleTag = $derived(mode === 'page' ? 'h1' : 'h2');
+
   const status = $derived(
     loadState === 'loading'
       ? t('loading')
@@ -1438,7 +1441,7 @@
 
 {#snippet titleView(begin: ((event: Event) => void) | null)}
   <!-- tabindex="-1" は、開いたときに見出しへフォーカスを置くため（キーボードの Tab 順には入らない） -->
-  <h2 class="drawer-title" tabindex="-1" bind:this={heading}>
+  <svelte:element this={titleTag} class="drawer-title" tabindex="-1" bind:this={heading}>
     {#if begin !== null}
       <button class="edit-trigger" type="button" onclick={begin}>
         <span id={titleLabelId}>{task?.title}</span>
@@ -1448,7 +1451,7 @@
     {:else}
       <span id={titleLabelId}>{task?.title}</span>
     {/if}
-  </h2>
+  </svelte:element>
 {/snippet}
 
 {#snippet bodyView()}
@@ -1482,10 +1485,14 @@
 
   {#if loadState === 'loading'}
     <!-- 読み上げは下の role="status" が伝えるので、見える文字だけにする -->
-    <h2 class="drawer-title" tabindex="-1" bind:this={heading}><span id={titleLabelId}>{t('task')}</span></h2>
+    <svelte:element this={titleTag} class="drawer-title" tabindex="-1" bind:this={heading}
+      ><span id={titleLabelId}>{t('task')}</span></svelte:element
+    >
     <p class="field-hint" aria-hidden="true">{t('loading')}</p>
   {:else if loadState === 'failed'}
-    <h2 class="drawer-title" tabindex="-1" bind:this={heading}><span id={titleLabelId}>{t('task')}</span></h2>
+    <svelte:element this={titleTag} class="drawer-title" tabindex="-1" bind:this={heading}
+      ><span id={titleLabelId}>{t('task')}</span></svelte:element
+    >
     <div class="callout is-danger" role="alert">
       <Icon name="alert" /><span>{t('taskDrawerLoadFailed', { task: t('task') })}</span>
     </div>

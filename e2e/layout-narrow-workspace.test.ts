@@ -187,18 +187,20 @@ async function expectDrawerToolsApart(
   await page.waitForLoadState('networkidle');
   for (const theme of LAYOUT_THEMES) {
     await applyTheme(page, theme);
-    const boxes = await drawer.locator('.drawer-tools button:visible').evaluateAll((buttons) =>
-      buttons.map((button) => {
-        const rect = button.getBoundingClientRect();
-        return {
-          close: button.classList.contains('drawer-close'),
-          x: rect.x,
-          y: rect.y,
-          w: rect.width,
-          h: rect.height,
-        };
-      }),
-    );
+    const boxes = await drawer
+      .locator('.drawer-tools button:visible, .drawer-top > .drawer-close')
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const rect = button.getBoundingClientRect();
+          return {
+            close: button.classList.contains('drawer-close'),
+            x: rect.x,
+            y: rect.y,
+            w: rect.width,
+            h: rect.height,
+          };
+        }),
+      );
     // 前後と開き方と閉じるは、どれも見た目ごと 44px 四方
     for (const box of boxes) {
       expect(box.w, `${theme}: 右端のボタンの幅`).toBeGreaterThanOrEqual(44);
@@ -219,6 +221,22 @@ async function expectDrawerToolsApart(
         closeBox!.y + closeBox!.h <= other.y;
       expect(apart, `${theme}: 閉じるボタンと隣のボタンの箱が交わる`).toBe(true);
     }
+    // 閉じるは帯の 1 段目（先頭の印と同じ段）の右端に残る（前後と開き方が 2 段目に落ちても、閉じるを探さない）
+    const rows = await drawer.evaluate((root) => {
+      const close = root.querySelector('.drawer-close')!.getBoundingClientRect();
+      const first = root.querySelector('.drawer-top > :first-child')!.getBoundingClientRect();
+      const top = root.querySelector('.drawer-top')!.getBoundingClientRect();
+      return {
+        closeTop: close.top,
+        closeRight: close.right,
+        firstTop: first.top,
+        topRight: top.right,
+        topHeight: top.height,
+      };
+    });
+    expect(Math.abs(rows.closeTop - rows.firstTop), `${theme}: 閉じるが 1 段目に無い`).toBeLessThanOrEqual(30);
+    expect(rows.topRight - rows.closeRight, `${theme}: 閉じるが右端に無い`).toBeLessThanOrEqual(2);
+    expect(rows.topHeight, `${theme}: 帯が高すぎる`).toBeLessThan(110);
     expect(await findTargetSizeViolations(page), theme).toEqual([]);
     // 測っている間に、画面の読み直しで DB のテーマに戻っていない
     expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(theme);
@@ -236,6 +254,15 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   await expect(task.getByRole('heading', { level: 2 })).toBeFocused();
   await expect(task.locator('.drawer-steps')).toBeVisible();
   await expectDrawerToolsApart(page, task, 5);
+  // ポイントの選択は折り返しても、どの選択肢にも右と下の区切りが付き、左の線は残らない
+  const borders = await task.locator('.segmented[aria-labelledby] label span').evaluateAll((spans) =>
+    spans.map((span) => {
+      const style = getComputedStyle(span);
+      return { left: style.borderLeftWidth, right: style.borderRightWidth };
+    }),
+  );
+  expect(borders.length).toBeGreaterThan(1);
+  for (const border of borders) expect(border).toEqual({ left: '0px', right: '1px' });
   // ストーリーの引き出し
   await page.goto(`${WORKSPACE}?story=${STORY_ID}`);
   const story = page.getByRole('dialog');
@@ -246,6 +273,8 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   // ページ全体で開いたタスク
   await page.goto(`${WORKSPACE}/tasks/${TASK_ID}`);
   const whole = page.locator('.drawer.is-page');
-  await expect(whole.getByRole('heading', { level: 2 })).toBeVisible();
+  // ページ全体は画面に h1 が無いので、題を h1 にする（引き出しの h2 のまま読み上げが h2 から始まらない）
+  await expect(whole.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expectDrawerToolsApart(page, whole, 3);
 });

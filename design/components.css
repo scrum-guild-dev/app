@@ -1196,6 +1196,15 @@ label.pick-row:hover { background: var(--color-accent-soft); }
 }
 .drawer-top { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .drawer-tools { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-2); }
+/* 閉じるは .drawer-top の直接の子。tools が空（狭い幅のストーリーなど）のときは tools を畳み、閉じるを右端に寄せる */
+.drawer-tools:not(:has(*)) { display: none; }
+.drawer-top > .drawer-close { margin-left: auto; }
+.drawer-tools ~ .drawer-close { margin-left: 0; }
+/* 狭い幅は、閉じるを 1 段目の右端に固定し（order）、前後と開き方の組は 2 段目に左から置く。閉じるが 2 段目に落ちて探さないように */
+@media (max-width: 620px) {
+  .drawer-top > .drawer-close { order: 1; margin-left: auto; }
+  .drawer-top > .drawer-tools { order: 2; flex-basis: 100%; margin-left: 0; justify-content: flex-start; }
+}
 /* 開き方は押した時点で実行するボタンの組（.pill）。選んでいる形は aria-pressed で示し、色に加えて太字にする */
 .drawer-mode { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); }
 .drawer-mode .pill { white-space: nowrap; }
@@ -1363,10 +1372,11 @@ dialog.dialog::backdrop { background: none; }
 
 /* ===== 選ぶ部品（並んだ選択肢、スイッチ、曜日） ===== */
 .segmented { justify-self: start; max-width: 100%; flex-wrap: wrap; display: inline-flex; border: 1px solid var(--color-line); border-radius: var(--radius-1); background: var(--color-surface); overflow: hidden; }
-.segmented label { position: relative; }
+.segmented label { position: relative; margin: 0 -1px -1px 0; }
 .segmented input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
 .segmented span { display: block; padding: 6px 14px; font-size: var(--text-sm); color: var(--color-muted); overflow-wrap: anywhere; }
-.segmented label + label span { border-left: 1px solid var(--color-line); }
+/* 区切りは各選択肢の右と下の線。外枠の overflow で最後の列と行の線を隠すので、折り返しても全部に同じ区切りが付く（左の線だと 2 行目の先頭に残る） */
+.segmented span { border-right: 1px solid var(--color-line); border-bottom: 1px solid var(--color-line); }
 .segmented input:checked + span { background: var(--color-accent); color: var(--color-on-accent); font-weight: 700; }
 .segmented input:focus-visible + span { outline: 2px solid var(--color-accent); outline-offset: -3px; }
 .segmented input:disabled { cursor: not-allowed; }

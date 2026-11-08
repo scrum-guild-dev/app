@@ -1296,8 +1296,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${x.src ? `<span class="source-key">${esc(x.src.key)}</span><span class="chip">取り込み元: ${esc(x.src.status)}</span>` : ""}
         <span class="drawer-tools">
           ${drawerStepButtons()}${drawerModeButtons()}
-          <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
         </span>
+        <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
       </div>
       ${drawerReadOnly() ? `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の${t("task")}は、読み取りだけできます</span></div>` : ""}
       ${drawerTitleHtml(x)}
@@ -1412,8 +1412,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${storyMenuHtml(st)}
         <span class="drawer-tools">
           ${drawerStepButtons()}${drawerModeButtons()}
-          <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
         </span>
+        <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
       </div>
       ${ro ? `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の${t("story")}は、読み取りだけできます</span></div>` : ""}
       ${drawerTitleHtml(st)}
@@ -1431,7 +1431,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 引き出しの見本の状態。読み込み中と、読めなかったとき（もう一度試す）は、見出しと文だけ
   function drawerStateHtml() {
-    const top = `<div class="drawer-top">${isStoryDrawer() ? `<span class="chip">${icon("check")}${t("story")}</span>` : ""}<span class="drawer-tools">${drawerStepButtons()}${drawerModeButtons()}<button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></span></div>
+    const top = `<div class="drawer-top">${isStoryDrawer() ? `<span class="chip">${icon("check")}${t("story")}</span>` : ""}<span class="drawer-tools">${drawerStepButtons()}${drawerModeButtons()}</span><button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></div>
       <h2 class="drawer-title"><span id="drawer-title">${drawerNoun()}</span></h2>`;
     if (drawer.view === "loading") return `${top}<p class="field-hint">読み込んでいます</p>`;
     return `${top}<div class="callout is-danger" role="alert">${icon("alert")}<span>この${drawerNoun()}を読み込めませんでした。もう一度試してください。</span></div>
