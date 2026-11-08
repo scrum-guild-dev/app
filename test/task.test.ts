@@ -733,7 +733,7 @@ describe('task-complete', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { task_id: string; completed_at: string; xp_granted: number };
     expect(body.task_id).toBe(task.id);
-    expect(body.xp_granted).toBe(XP_TASK_CREATED + XP_TASK_COMPLETED);
+    expect(body.xp_granted).toBe(XP_TASK_COMPLETED);
 
     const records = await recordsOf(target, task.id);
     expect(records.task).toMatchObject({ completed_at: body.completed_at, completed_by: target.member.userId });
@@ -800,6 +800,14 @@ describe('task-complete', () => {
     expect(records.logs).toHaveLength(1);
   });
 
+  test('起票と完了が本人なら両方の経験値だけを返す', async () => {
+    const target = await createTarget();
+    const task = await createTask(target.organization, target.workspace.id, target.member.userId!, { points: 1 });
+    const response = await complete(target, target.member, task.id);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ xp_granted: XP_TASK_CREATED + XP_TASK_COMPLETED });
+  });
+
   test('担当のいるタスクの完了の経験値は担当者へ、起票の経験値は作った人へ付く', async () => {
     const target = await createTarget();
     // 作った人（メンバー）、担当（リーダー）、完了にした人（所属していない管理者）が全員違う
@@ -807,7 +815,9 @@ describe('task-complete', () => {
       points: 1,
       assignee_user_id: target.leader.userId,
     });
-    expect((await complete(target, target.admin, task.id)).status).toBe(200);
+    const response = await complete(target, target.admin, task.id);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ xp_granted: 0 });
 
     const records = await recordsOf(target, task.id);
     expect(records.completions[0]).toMatchObject({

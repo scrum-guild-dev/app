@@ -360,6 +360,7 @@ test('太陽のボタンで印を付けると今日やると決めたものに�
 test('完了にすると今日の完了に移って静止でなく判を押す動き付きの印が出て、「戻す」で元の区分に戻る', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const task = row('終わらせる', { today_on: TODAY });
   const calls = await routeTodayState(page, [task]);
   await page.goto('/aoba');
@@ -367,6 +368,11 @@ test('完了にすると今日の完了に移って静止でなく判を押す�
   await page.getByRole('button', { name: '完了にする: 終わらせる' }).click();
   const done = region(page, '今日の完了').locator('.entry', { hasText: '終わらせる' });
   await expect(page.getByRole('status').filter({ hasText: '+40 XP' })).toBeVisible();
+  const toastText = page.getByRole('status').filter({ hasText: '+40 XP' }).locator('span');
+  await expect(toastText).toHaveCSS('white-space', 'pre-line');
+  const toastBox = await toastText.boundingBox();
+  expect(toastBox).not.toBeNull();
+  expect(toastBox!.x + toastBox!.width).toBeLessThanOrEqual(390);
   await expect(done).toBeVisible();
   await expect(done.locator('.hanko')).toHaveClass(/\bis-new\b/);
   await expect(done.locator('.hanko')).toBeFocused();

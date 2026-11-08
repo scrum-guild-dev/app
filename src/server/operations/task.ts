@@ -1208,7 +1208,7 @@ export const taskCompleteOperation = implement(taskComplete, async ({ db, actor,
     const thanks = await readTaskThanks(db, workspaceId, taskId);
     const at = now();
     const week = weekRangeIn(timezone, weekStart, at);
-    const { statements, taskIndex } = completeStatements(db, {
+    const { statements, taskIndex, experienceIndex } = completeStatements(db, {
       organizationId,
       workspaceId,
       taskId,
@@ -1227,7 +1227,7 @@ export const taskCompleteOperation = implement(taskComplete, async ({ db, actor,
         task_id: taskId,
         completed_at: at.toISOString(),
         left_sprint: placement.kind === 'planned',
-        xp_granted: Number(results.at(-1)?.rows[0]?.xp_granted ?? 0),
+        xp_granted: Number(results[experienceIndex]?.rows[0]?.xp_granted ?? 0),
       };
     }
     // 先に読んだ値ではなく、書いた結果で決める。読んでから書くまでに閉じたなら 409 の workspace_closed、
@@ -1641,16 +1641,22 @@ function completeStatements(db: OrganizationDb, context: CompleteContext) {
         ]
       : []),
   ];
-  // 同じ batch 内で今回の完了に紐づく実際の付与を合計する。受取人や上限の判定を二重に実装しない。
+  // 同じ batch 内で今回の完了で本人に付いた分だけを合計する。受取人や上限の判定を二重に実装しない。
+  // 更新が負けた要求には固有の completionId の付与が無いため、SUM は 0 になる。
   const experience = db.statement((q) =>
     q
       .selectFrom('xp_grants')
       .select((eb) => eb.fn.coalesce(eb.fn.sum<number>('amount'), eb.val(0)).as('xp_granted'))
       .where('workspace_id', '=', workspaceId)
       .where('task_id', '=', taskId)
-      .where('completion_id', '=', completionId),
+      .where('completion_id', '=', completionId)
+      .where('user_id', '=', userId),
   );
-  return { statements: [...statements, experience] as const, taskIndex: closeEntry.length };
+  return {
+    statements: [...statements, experience] as const,
+    taskIndex: closeEntry.length,
+    experienceIndex: statements.length,
+  };
 }
 
 // 移す先の並び（親の配下か、親のないタスク）から、移すタスクを除いたもの。完了したタスクも並びに残っているので含める

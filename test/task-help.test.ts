@@ -145,13 +145,22 @@ async function completeThanked(
 
 test('完了の応答は今回の手助けを含む実際の付与の合計で、前回の付与を含まない', async () => {
   const target = await createTarget();
-  const { task } = await thankedTask(target, [target.leader]);
+  const { task } = await thankedTask(target, [target.member], target.leader);
   for (let attempt = 0; attempt < 2; attempt++) {
     const response = await call(target, taskComplete, task.id, WEDNESDAY);
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ xp_granted: XP_HELP });
     await reopen(target, task.id, WEDNESDAY);
   }
+});
+
+test('他人への手助けの経験値を完了した人の応答へ含めない', async () => {
+  const target = await createTarget();
+  const { task } = await thankedTask(target, [target.leader]);
+  const response = await call(target, taskComplete, task.id, WEDNESDAY);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ xp_granted: 0 });
+  expect(await grantsOf(target, task.id)).toHaveLength(1);
 });
 
 describe('手助けの付与（task-complete）', () => {

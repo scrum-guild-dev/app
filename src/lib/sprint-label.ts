@@ -34,7 +34,7 @@ export function sprintLabelWithPeriod(sprint: SprintNaming, t: Translate): strin
 export function completedMessage(leftSprint: boolean, xpGranted: number, t: Translate): string {
   const done = t('taskCompleted', { task: t('task'), done: t('done') });
   const message = leftSprint ? `${done}。${t('taskLeftPlannedSprint', { sprint: t('sprint') })}` : done;
-  return xpGranted > 0 ? `${message}\n${t('taskCompletedXp', { amount: xpGranted })}` : message;
+  return xpGranted > 0 ? `${message}\n${t('taskCompletedXp', { amount: xpGranted, unit: t('xpUnit') })}` : message;
 }
 
 // 名前だけ（行の印に出す。「<スプリント>」の語は印の種類として読み上げに添える）。名前が無ければ期間
