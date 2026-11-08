@@ -265,20 +265,19 @@ test('動かしを送っている最中にカードを消しても、動かし�
   await page.getByRole('article', { name: '動かすカード', exact: true }).press('Alt+ArrowRight');
   await expect(titlesIn('作業中')).toHaveText(['動かすカード']);
 
+  // 読み直し（sprint-board）の回数を数える。削除を送る前に張る
+  let boardReads = 0;
+  const unrouteBoard = await routeOperation(page, sprintBoard, AOBA, async (call) => {
+    boardReads++;
+    await call.passThrough();
+  });
   await chooseRowAction(page, '消すカード', DELETE);
   await expect(page.locator('.toasts:visible .toast', { hasText: '「消すカード」を削除しました' })).toBeVisible();
   // 動かしが届くまで読み直さない。動かしたカードは作業中のまま、未着手には戻らない
-  // 読み直し（sprint-board）が走っていないことを、止めている間、一定の間確かめる
-  const boardReads: string[] = [];
-  const unrouteBoard = await routeOperation(page, sprintBoard, AOBA, async (call) => {
-    boardReads.push('read');
-    await call.passThrough();
-  });
-  await page.waitForTimeout(1000);
-  expect(boardReads).toHaveLength(0);
+  expect(boardReads).toBe(0);
   await expect(titlesIn('未着手')).not.toContainText(['動かすカード']);
   release();
-  await expect.poll(() => boardReads.length).toBeGreaterThan(0);
+  await expect.poll(() => boardReads).toBeGreaterThan(0);
   await unrouteBoard();
   await expect(titlesIn('作業中')).toHaveText(['動かすカード']);
   await expect(titlesIn('未着手')).toHaveCount(0);

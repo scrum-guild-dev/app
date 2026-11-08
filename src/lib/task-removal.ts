@@ -210,7 +210,13 @@ async function removeOnce(args: RemoveFromListArgs): Promise<void> {
     if (args.keyboard) pauseToast(toastId);
     // 引き出しを閉じるのに失敗しても（行を消した後の読み直しには関わらない）黙って続ける
     const drawerPath = urlWithoutOpenTask(location.href, args.taskId);
-    if (drawerPath !== null) await args.closeDrawer?.(drawerPath)?.catch(() => {});
+    if (drawerPath !== null) {
+      try {
+        await args.closeDrawer?.(drawerPath);
+      } catch {
+        // 閉じられなくても、消した後の読み直しとフォーカスの扱いは続ける
+      }
+    }
     const reloaded = await settled(async () => {
       await args.reload();
       await tick();

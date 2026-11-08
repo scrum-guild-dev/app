@@ -148,6 +148,20 @@ describe('removeFromList', () => {
     expect(closeDrawer).not.toHaveBeenCalled();
   });
 
+  test('引き出しを閉じる関数が同期に throw しても、読み直しへ進み、キーボードの数えを戻せる', async () => {
+    mocks.callOperation.mockResolvedValue({ ok: true, data: null });
+    vi.stubGlobal('location', { href: 'http://localhost/aoba/w/w1?task=t1' });
+    const a = args({
+      keyboard: true,
+      closeDrawer: () => {
+        throw new Error('sync');
+      },
+    });
+    await expect(removeFromList(a)).resolves.toBeUndefined();
+    expect(a.reload).toHaveBeenCalledTimes(1);
+    expect(mocks.focusToastAction).toHaveBeenCalledWith(7);
+  });
+
   test('404 で読み直しが失敗しても reject せず、キーボードなら見出しへフォーカスを置く', async () => {
     mocks.callOperation.mockResolvedValue(failure(404, 'not_found'));
     const reload = vi.fn(async () => {
@@ -289,14 +303,28 @@ describe('restoreRemoved', () => {
     expect(toastMessages()).toEqual(['taskRestored', 'taskListReloadFailed']);
   });
 
-  test('409 の not_deleted（もう戻っている）も、戻せたのと同じに扱い、読み直しの失敗は投げない', async () => {
+  test('理由の無い 409 は onchanged だけで、onrestored は呼ばない', async () => {
     mocks.callOperation.mockResolvedValue(failure(409, 'conflict'));
-    const onrestored = vi.fn(async () => {
-      throw new Error('network');
-    });
-    // details.reason が無いので not_deleted ではなく、通常の 409 の分岐（onchanged）になる
+    const onrestored = vi.fn(async () => {});
     const t1 = target(onrestored);
     await expect(restoreRemoved(t1)).resolves.toBeUndefined();
     expect(t1.onchanged).toHaveBeenCalledTimes(1);
+    expect(onrestored).not.toHaveBeenCalled();
+  });
+
+  test('409 の not_deleted（もう戻っている）は、戻せたのと同じに扱い、読み直しの失敗は投げない', async () => {
+    mocks.callOperation.mockResolvedValue({
+      ok: false,
+      status: 409,
+      error: { code: 'conflict', message: '', details: { reason: 'not_deleted' } },
+    });
+    const onrestored = vi.fn(async () => {
+      throw new Error('network');
+    });
+    const t1 = target(onrestored);
+    await expect(restoreRemoved(t1, true)).resolves.toBeUndefined();
+    expect(onrestored).toHaveBeenCalledWith('t1', true);
+    expect(t1.onchanged).not.toHaveBeenCalled();
+    expect(toastMessages()).toEqual(['taskRestored', 'taskListReloadFailed']);
   });
 });
