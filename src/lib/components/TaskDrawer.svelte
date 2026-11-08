@@ -3,6 +3,7 @@
   import { beforeNavigate, goto, invalidate } from '$app/navigation';
   import {
     taskTodayMark,
+    taskTodayMarkConflictReasonOf,
     taskAssign,
     taskComplete,
     taskDelete,
@@ -211,13 +212,28 @@
         onchanged();
         await invalidate('app:today');
       } else {
-        showToast(t('todayMarkFailed'), 'alert');
         if (result.status === 409 || result.status === 404) {
           if (taskId === requestedTaskId) await refresh(true);
           onchanged();
           await invalidate('app:today');
           if (result.error?.code === 'workspace_closed') onstale();
         }
+        // 削除済みなら gone() が知らせる。競合では、読み直した状態と断られた理由を伝える。
+        if (!taskGone) {
+          const reason = taskTodayMarkConflictReasonOf(result.error?.details);
+          const message =
+            result.error?.code === 'workspace_closed'
+              ? t('workspaceClosedReadOnly', { workspace: t('workspace') })
+              : reason === 'not_assignee'
+                ? t('todayMarkNotAssignee', { assignee: t('assignee') })
+                : reason === 'completed'
+                  ? t('todayMarkDone', { task: t('task'), done: t('done') })
+                  : result.status === 404 && !inBacklog
+                    ? t('todayMarkBacklogOnly', { inbox: t('inbox'), archive: t('archive') })
+                    : t('todayMarkFailed');
+          showToast(message, 'alert');
+        }
+        if (result.status === 401) onstale();
       }
     } finally {
       marking = false;
