@@ -2,7 +2,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { isBenchHealth, trackServer } from './loading-server.ts';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { SEED_OPERATOR_LOGIN_ID, SEED_SESSIONS } from '../seed/sessions.ts';
@@ -12,6 +12,8 @@ import { isOutsideOperation } from '../src/shared/operations/define.ts';
 import { loadingFixtureSql } from './loading-fixture.ts';
 import { screens, type Reading } from './loading-screens.ts';
 import { comparison, percentile, trialTiming } from './loading-stats.ts';
+import { sessionInserts } from './seed.ts';
+import { parallelRead } from './loading-order.ts';
 
 function option(name: string, fallback: number, max: number): number {
   const index = process.argv.indexOf(name);
@@ -97,14 +99,12 @@ async function call(reading: Reading, operator: boolean) {
   const ms = performance.now() - started;
   if (!response.ok || !definition.output.safeParse(body).success)
     throw new Error(`${reading.name}: HTTP ${response.status} または応答の形が不正`);
-  return { ms, secondary: reading.secondary };
+  return { ms, finishedAt: started + ms, secondary: reading.secondary };
 }
 try {
   console.log(`使い捨て D1: ${dir}（終了時に削除）`);
   command(['d1', 'migrations', 'apply', 'DB']);
   // 空の D1 なので既存行の削除は不要。seed の固定行と期限付きセッションを入れる。
-  const { readFileSync } = await import('node:fs');
-  const { sessionInserts } = await import('./seed.ts');
   const file = path.join(dir, 'fixture.sql');
   writeFileSync(
     file,
@@ -140,7 +140,9 @@ try {
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  console.log(`Node ${process.version}、各画面 warmup 2 回 + ${runs} 回。時間は API 往復 ms。分位点は nearest-rank。`);
+  console.log(
+    `Node ${process.version}、各画面・発行順ごと warmup 2 回 + ${runs} 回（正順・逆順）。時間は API 往復 ms。分位点は nearest-rank。`,
+  );
   console.log('| load | 操作（主/従） | p50 ms | p95 ms |');
   console.log('| --- | --- | ---: | ---: |');
   for (const screen of screens) {
@@ -149,41 +151,45 @@ try {
       continue;
     }
     const operations = [...screen.operations, ...(screen.after ?? [])];
-    const read = async () => {
-      const first = await Promise.all(screen.operations.map((op) => call(op, screen.operator ?? false)));
-      const offset = Math.max(...first.map((o) => o.ms));
-      const after = await Promise.all((screen.after ?? []).map((op) => call(op, screen.operator ?? false)));
-      return [
-        ...first.map((o) => ({ ...o, completedMs: o.ms })),
-        ...after.map((o) => ({ ...o, completedMs: offset + o.ms })),
-      ];
-    };
-    await read();
-    await read();
-    const samples = [];
-    for (let i = 0; i < runs; i++) samples.push(await read());
-    for (const [index, op] of operations.entries()) {
-      const values = samples.map((sample) => sample[index]!.ms);
+    const orderTrials = [];
+    for (const reverse of [false, true]) {
+      const label = reverse ? '逆順' : '正順';
+      const read = async () => {
+        const started = performance.now();
+        const first = await parallelRead(screen.operations, reverse, (op) => call(op, screen.operator ?? false));
+        const after = await parallelRead(screen.after ?? [], reverse, (op) => call(op, screen.operator ?? false));
+        return [...first, ...after].map((o) => ({ ...o, completedMs: o.finishedAt - started }));
+      };
+      await read();
+      await read();
+      const samples = [];
+      for (let i = 0; i < runs; i++) samples.push(await read());
+      for (const [index, op] of operations.entries()) {
+        const values = samples.map((sample) => sample[index]!.ms);
+        console.log(
+          `| ${screen.route} | ${label}: ${op.name}（${op.secondary ? '従' : '主'}） | ${percentile(values, 0.5).toFixed(2)} | ${percentile(values, 0.95).toFixed(2)} |`,
+        );
+      }
+      const trials = samples.map((sample) =>
+        trialTiming(sample.map((o) => ({ ms: o.completedMs, secondary: o.secondary }))),
+      );
+      orderTrials.push(trials);
+      const result = comparison(trials);
       console.log(
-        `| ${screen.route} | ${op.name}（${op.secondary ? '従' : '主'}） | ${percentile(values, 0.5).toFixed(2)} | ${percentile(values, 0.95).toFixed(2)} |`,
+        `| ${screen.route} | ${label}: 合計（各試行の最終完了） | ${percentile(
+          trials.map((t) => t.total),
+          0.5,
+        ).toFixed(2)} | ${percentile(
+          trials.map((t) => t.total),
+          0.95,
+        ).toFixed(2)} |`,
+      );
+      console.log(
+        `| ${screen.route} | ${label}: 短縮見込み | ${result.p50Saving.toFixed(2)} | ${result.p95Saving.toFixed(2)} |`,
       );
     }
-    const trials = samples.map((sample) =>
-      trialTiming(sample.map((o) => ({ ms: o.completedMs, secondary: o.secondary }))),
-    );
-    const result = comparison(trials);
-    console.log(
-      `| ${screen.route} | 合計（各試行の最長） | ${percentile(
-        trials.map((t) => t.total),
-        0.5,
-      ).toFixed(2)} | ${percentile(
-        trials.map((t) => t.total),
-        0.95,
-      ).toFixed(2)} |`,
-    );
-    console.log(
-      `| ${screen.route} | 後回しの短縮見込み: ${result.candidate ? '候補' : 'なし'} | ${result.p50Saving.toFixed(2)} | ${result.p95Saving.toFixed(2)} |`,
-    );
+    const candidate = comparison(orderTrials[0]!, orderTrials[1]!).candidate;
+    console.log(`| ${screen.route} | 後回しの判定（両順）: ${candidate ? '候補' : 'なし'} | — | — |`);
     if (screen.note) console.log(`\n${screen.route}: ${screen.note}\n`);
   }
 } finally {

@@ -18,7 +18,10 @@ export function trialTiming(operations: readonly Timing[]) {
   const secondary = Math.max(0, ...operations.filter((o) => o.secondary).map((o) => o.ms));
   return { primary: main, secondary, total: Math.max(main, secondary), saving: Math.max(0, secondary - main) };
 }
-export function comparison(trials: readonly ReturnType<typeof trialTiming>[]) {
+export function comparison(
+  trials: readonly ReturnType<typeof trialTiming>[],
+  reverseTrials: readonly ReturnType<typeof trialTiming>[] = trials,
+) {
   const p50Saving = percentile(
     trials.map((t) => t.saving),
     0.5,
@@ -27,5 +30,10 @@ export function comparison(trials: readonly ReturnType<typeof trialTiming>[]) {
     trials.map((t) => t.saving),
     0.95,
   );
-  return { p50Saving, p95Saving, candidate: p50Saving > 0 };
+  // 発行順を逆にしても従が主より遅い場合だけ候補とする。
+  const reverseP50 = percentile(
+    reverseTrials.map((t) => t.saving),
+    0.5,
+  );
+  return { p50Saving, p95Saving, candidate: p50Saving > 0 && reverseP50 > 0 };
 }

@@ -63,3 +63,20 @@ test('分位点の差ではなく、対応する試行ごとの短縮で判定�
   assert.deepEqual(comparison(trials), { p50Saving: 9, p95Saving: 18, candidate: true });
   assert.equal(comparison([trialTiming([{ ms: 10, secondary: false }])]).candidate, false);
 });
+
+test('主が先の順だけで差が出ても、逆順で差が消えれば候補にしない', () => {
+  const mainFirst = [
+    trialTiming([
+      { ms: 10, secondary: false },
+      { ms: 20, secondary: true },
+    ]),
+  ];
+  const secondaryFirst = [
+    trialTiming([
+      { ms: 20, secondary: false },
+      { ms: 10, secondary: true },
+    ]),
+  ];
+  assert.equal(comparison(mainFirst, secondaryFirst).candidate, false);
+  assert.equal(comparison(mainFirst, mainFirst).candidate, true);
+});
