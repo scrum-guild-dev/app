@@ -5,6 +5,7 @@
 // 所属を外れた、競合）理由を出して元の値に戻す。送っている間に選び直したときは、応答を保留して解放し、順序を固定して確かめる。
 // 高さだけが変わる resize（スマホのアドレスバー）ではメニューを閉じず、幅が変わると閉じる。
 // 最後に、選択の窓を開いた状態を4つの見た目で axe にかける。
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { memberList } from '../src/shared/operations/workspace/member-list.ts';
 import { backlogTree } from '../src/shared/operations/task/backlog-tree.ts';
@@ -28,17 +29,42 @@ function nextFrameHeight(): Promise<number> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve(window.innerHeight)));
 }
 
-// 木の中の、題が title のタスクのポイントを書き換える（古い木を返すため）
-function withPoints<T>(tree: T, title: string, points: number | null): T {
+// 木の中の、題が title のタスクの欄を書き換える（古い木を返すため）
+function withTask<T>(tree: T, title: string, patch: { points?: null; assignee?: null }): T {
   const walk = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(walk);
     if (value === null || typeof value !== 'object') return value;
     const entries = Object.entries(value).map(([key, item]) => [key, walk(item)] as const);
     const object = Object.fromEntries(entries) as Record<string, unknown>;
-    if (object.title === title && 'points' in object && 'assignee' in object) object.points = points;
+    if (object.title === title && 'points' in object && 'assignee' in object) Object.assign(object, patch);
     return object;
   };
   return walk(tree) as T;
+}
+
+// 次の木の読み直しを1本だけ保留し、解放したら、題が title のタスクを patch で古い値に戻した木を返す。読み直しが別の読み直しに
+// 置き換えられ、task が古いまま返ったときと同じ形。後の読み直しは、SvelteKit が新しい読み直しに置き換えて取り消すことがあるので、
+// 流すのが取り消し後になった失敗は捨てる
+async function holdStaleTree(
+  page: Page,
+  title: string,
+  patch: { points?: null; assignee?: null },
+): Promise<{ reading: Promise<void>; release: () => void; unroute: () => Promise<void> }> {
+  const held = gate();
+  let arrived!: () => void;
+  const reading = new Promise<void>((resolve) => (arrived = resolve));
+  let first = true;
+  const unroute = await routeOperation(page, backlogTree, { slug: 'aoba' }, async (call) => {
+    if (!first) {
+      await call.passThrough().catch(() => {});
+      return;
+    }
+    first = false;
+    arrived();
+    await held.wait;
+    await call.fulfill(withTask(await call.fetch(), title, patch));
+  });
+  return { reading, release: held.release, unroute };
 }
 
 // 応答を保留する門。release() まで、通した操作は本物の API へ流れない
@@ -213,32 +239,17 @@ test('保存が通った後の読み直しの間に元の値へ選び直すと�
   // 足した後の読み直しが終わってから、木の読み直しを保留する
   await waitForSettled(page);
 
-  // 5 が通った後の木の読み直しを保留し、その間に「未見積もり」へ選び直す。読み直しは、別の読み直しに置き換えられたときと同じく、
-  // この行を古い値（未設定）のまま返す。行の task と比べると「保存済み」と誤るので、通った値（5）と比べて送り直す必要がある
-  const held = gate();
-  let arrived!: () => void;
-  const reading = new Promise<void>((resolve) => (arrived = resolve));
-  let first = true;
-  const unroute = await routeOperation(page, backlogTree, { slug: 'aoba' }, async (call) => {
-    // 書き換えるのは最初の読み直しだけ。後の読み直しは、SvelteKit が新しい読み直しに置き換えて取り消すことがあるので、
-    // 流すのが取り消し後になった失敗は捨てる
-    if (!first) {
-      await call.passThrough().catch(() => {});
-      return;
-    }
-    first = false;
-    arrived();
-    await held.wait;
-    await call.fulfill(withPoints(await call.fetch(), '読み直しの間に選ぶ件', null));
-  });
+  // 5 が通った後の木の読み直しを保留し、その間に「未見積もり」へ選び直す。読み直しはこの行を古い値（未設定）のまま返す。
+  // 行の task と比べると「保存済み」と誤るので、通った値（5）と比べて送り直す必要がある
+  const { reading, release, unroute } = await holdStaleTree(page, '読み直しの間に選ぶ件', { points: null });
   const sent = waitForResponses(page, '/task-update', 2);
   await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
   await page.getByRole('menuitemradio', { name: '5 pt', exact: true }).click();
   await reading;
   await row.getByRole('button', { name: 'ポイント: 5 pt' }).click();
   await page.getByRole('menuitemradio', { name: '未見積もり', exact: true }).click();
-  held.release();
-  // 読み直した木（5）が届いても、未見積もりを送り直す
+  release();
+  // 古い木（未設定）が届いても、未見積もりを送り直す
   await sent;
   await waitForSettled(page);
   await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
@@ -247,6 +258,37 @@ test('保存が通った後の読み直しの間に元の値へ選び直すと�
   await page.reload();
   await expect(
     page.locator('.entry', { hasText: '読み直しの間に選ぶ件' }).getByRole('button', { name: 'ポイント: 未設定' }),
+  ).toBeVisible();
+});
+
+test('担当の保存が通った後の読み直しの間に「担当なし」へ選び直すと、読み直しが古い木を返しても送り直す', async ({
+  page,
+}) => {
+  await createWorkspace(page, '担当の読み直しの間のワークスペース');
+  await addTaskRow(page, '担当を読み直しの間に選ぶ件');
+  const row = page.locator('.entry', { hasText: '担当を読み直しの間に選ぶ件' });
+  await waitForSettled(page);
+
+  // 人が通った後の木の読み直しを保留し、その間に「担当なし」へ選び直す。読み直しはこの行を古い値（担当なし）のまま返す
+  const { reading, release, unroute } = await holdStaleTree(page, '担当を読み直しの間に選ぶ件', { assignee: null });
+  const sent = waitForResponses(page, '/task-assign', 2);
+  await row.getByRole('button', { name: '担当: 未設定' }).click();
+  const people = page.getByRole('menu', { name: '担当を選ぶ' });
+  const member = people.getByRole('menuitemradio').nth(1);
+  const name = (await member.innerText()).trim();
+  await member.click();
+  await reading;
+  await row.getByRole('button', { name: `担当: ${name}` }).click();
+  await people.getByRole('menuitemradio', { name: '担当なし', exact: true }).click();
+  release();
+  await sent;
+  await waitForSettled(page);
+  await expect(row.getByRole('button', { name: '担当: 未設定' })).toBeVisible();
+  await unroute();
+
+  await page.reload();
+  await expect(
+    page.locator('.entry', { hasText: '担当を読み直しの間に選ぶ件' }).getByRole('button', { name: '担当: 未設定' }),
   ).toBeVisible();
 });
 
