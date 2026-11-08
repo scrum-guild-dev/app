@@ -8,6 +8,7 @@ import {
 import { word } from '../src/shared/vocabulary.ts';
 import { expect, test } from './fixtures.ts';
 import {
+  applyTheme,
   expectFocusReturned,
   findA11yViolations,
   findOverflowViolations,
@@ -402,7 +403,7 @@ test('利用開始の保存する画面は390px・4テーマで表示と操作�
   for (let stage = 0; stage < 4; stage++) {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
-      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      await applyTheme(page, theme);
       expect(await findOverflowViolations(page)).toEqual([]);
       expect(await findTargetSizeViolations(page)).toEqual([]);
       expect(await findA11yViolations(page)).toEqual([]);
