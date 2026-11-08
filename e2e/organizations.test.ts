@@ -318,7 +318,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
       (window as unknown as { __seen: typeof seen }).__seen = seen;
       document.addEventListener('click', () => (seen.clickedAt ??= performance.now()), true);
       new MutationObserver(() => {
-        if (seen.shownAt === null && document.body.innerText.includes('しばらくお待ちください')) {
+        if (seen.shownAt === null && document.querySelector('.skeleton') !== null) {
           seen.shownAt = performance.now();
         }
       }).observe(document.body, { childList: true, subtree: true, characterData: true });

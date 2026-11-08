@@ -26,3 +26,18 @@ export function formatTrialStopDateTime(endsOn: string, timeZone?: string): stri
   date.setUTCDate(date.getUTCDate() + 1);
   return formatDateTime(date.toISOString(), timeZone);
 }
+
+// 今日やることの見出しの上に出す今日の日付（「2026年10月20日（火）」。見本の todayLabel と同じ形）。
+// 画面はワークスペースをまたぐので、ワークスペースのタイムゾーンではなく、ブラウザのタイムゾーンの今日を出す
+// （docs/design.md の今日やることの画面）。timeZone を渡すと、そのタイムゾーンで出す（テスト用）
+export function formatTodayLabel(now: Date, timeZone?: string): string {
+  const parts = new Intl.DateTimeFormat('ja-JP', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+    ...(timeZone === undefined ? {} : { timeZone }),
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes): string => parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}年${part('month')}月${part('day')}日（${part('weekday')}）`;
+}

@@ -1669,6 +1669,16 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 .empty > .art { max-width: 100%; opacity: .8; }
 .empty b { color: var(--color-fg); }
 
+/* ===== スケルトン（読み込み中の骨組み） =====
+   文字だけの「読み込んでいます」の代わりに、読み込んだ後の形に近い灰色の帯を置く。帯は装飾なので aria-hidden にし、
+   読み上げは role="status" の領域に文字で伝える。動きは明暗の往復だけで、動きを減らす設定では上の規則で止まり、静かな帯のままになる */
+.skeleton { display: grid; gap: var(--space-3); }
+.skeleton-line { display: block; height: 1em; border-radius: var(--radius-1); background: var(--color-line); animation: skeleton-pulse 1.4s ease-in-out infinite; }
+.skeleton-line.is-title { height: 1.6em; width: 55%; }
+.skeleton-line.is-short { width: 70%; }
+.skeleton-line.is-block { height: 2.5em; }
+@keyframes skeleton-pulse { 50% { opacity: .45; } }
+
 /* ===== ログインの画面（枠の外） ===== */
 .gate { min-height: 100vh; display: grid; place-items: center; padding-block: var(--space-8);
   padding-left: max(var(--space-4), env(safe-area-inset-left, 0px)); padding-right: max(var(--space-4), env(safe-area-inset-right, 0px)); }

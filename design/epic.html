@@ -19,7 +19,7 @@
 <script>
 "use strict";
 // エピック（レイド）の詳細
-const { D, t, icon, esc, pageHead, avatarOf, emblem, tier, dueChip, progress, book, storyPts, raidNotice, attachments, filesOf } = SQ;
+const { D, t, icon, esc, section, emptyState, pageHead, avatarOf, emblem, tier, dueChip, progress, book, storyPts, raidNotice, attachments, filesOf } = SQ;
 const ID = "e1";
 
 SQ.mount("epic", () => {
@@ -47,13 +47,13 @@ SQ.mount("epic", () => {
             ${e.link ? `<div><span class="source-key is-wrap">${icon("link")} ${esc(e.link)}</span> <a class="btn is-sm" href="#" aria-label="リンクを新しいタブで開く">開く</a></div>` : ""}</div>
           <div class="field"><span class="field-label">${icon("clip")} 添付ファイル ${filesOf(ID).length || ""}</span>${attachments(ID)}</div>
         </section>
-        ${stories.map((s) => {
+        ${section("epic-stories", `配下の${t("story")}`, stories.length, stories.length ? `${stories.map((s) => {
           const st = D.stories[s];
           const sp = storyPts(s);
           const list = SQ.tasksWhere((x) => x.story === s);
           const openTasks = list.filter((x) => !x.doneAt).length;
           return `<section class="story-block" aria-labelledby="st-${s}">
-            <div class="story-head"><span class="kind is-story">${icon("check")}</span><h2 class="story-title" id="st-${s}">${esc(st.title)}</h2>${progress(sp.done, sp.all)}</div>
+            <div class="story-head"><span class="kind is-story">${icon("check")}</span><h3 class="story-title" id="st-${s}">${esc(st.title)}</h3>${progress(sp.done, sp.all)}</div>
             ${st.body ? `<div class="raid-body">${st.body.map((b) => `<p>${esc(b)}</p>`).join("")}</div>` : ""}
             <div class="ac-box"><b>${t("ac")}</b><ul>${st.ac.map((a) => `<li>${esc(a)}</li>`).join("")}</ul></div>
             ${attachments(s, { button: true })}
@@ -62,7 +62,7 @@ SQ.mount("epic", () => {
               ? `<span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span><span>${t("done")} ${esc(st.doneAt)}</span><button class="link-btn" type="button" data-toast="完了を取り消しました。完了の経験値も取り消します">取り消す</button>`
               : `<button class="btn is-sm" type="button" ${openTasks ? "disabled" : ""}>${icon("check")}${t("story")}を${t("complete")}</button>${openTasks ? `<span class="action-note">配下の${t("task")}がすべて${t("done")}すると押せます（残り ${openTasks} 件）</span>` : ""}`}</div>
           </section>`;
-        }).join("")}
+        }).join("")}` : emptyState("flag", `${t("story")}はまだありません`))}
       </div>
       <aside class="layout-side is-static">
         <section class="panel">

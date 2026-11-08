@@ -20,19 +20,19 @@
 "use strict";
 // メンバー: ロール、配分、招待
 const { D, t, icon, esc, pageHead, avatarOf, emblem, user, loginTarget } = SQ;
-const fmt = (d) => d.replaceAll("-", "/");
 
 SQ.mount("members", () => {
   const now = D.members.filter((m) => !m.left);
-  const rows = D.members.map((m) => {
+  // 離脱した人の行は出さない（本番の member-list は所属している人だけを返し、列は参加日だけ）
+  const rows = now.map((m) => {
     const u = user(m.who);
     const allocOptions = `<option ${m.alloc == null ? "selected" : ""}>未設定</option>` + Array.from({ length: 21 }, (_, i) => i * 5).map((v) => `<option ${m.alloc === v ? "selected" : ""}>${v}%</option>`).join("");
     return `<tr>
       <td class="is-name"><span class="person">${avatarOf(m.who)}${esc(u.name)}${emblem(u.level, true)}</span></td>
-      <td data-label="ロール">${m.left ? `<span class="props-note">離脱済み</span>` : `<select class="select" aria-label="${esc(u.name)}のロール"><option ${m.role === "leader" ? "selected" : ""}>${t("leader")}</option><option ${m.role === "member" ? "selected" : ""}>一般</option></select>`}</td>
-      <td class="is-num" data-label="所属">${fmt(m.joined)}${m.left ? `〜${fmt(m.left)}` : ""}</td>
-      <td data-label="配分（11月）">${m.left ? "—" : `<select class="select" aria-label="${esc(u.name)}の11月の配分">${allocOptions}</select>`}</td>
-      <td class="is-actions">${m.left ? "" : m.who === D.me ? `<button class="btn is-sm is-quiet" type="button">抜ける</button>` : `<button class="btn is-sm is-quiet is-danger" type="button">外す</button>`}</td>
+      <td data-label="ロール"><select class="select" aria-label="${esc(u.name)}のロール"><option ${m.role === "leader" ? "selected" : ""}>${t("leader")}</option><option ${m.role === "member" ? "selected" : ""}>一般</option></select></td>
+      <td class="mono" data-label="参加日">${m.joined}</td>
+      <td data-label="配分（11月）"><select class="select" aria-label="${esc(u.name)}の11月の配分">${allocOptions}</select></td>
+      <td class="is-actions">${m.who === D.me ? `<button class="btn is-sm is-quiet" type="button">抜ける</button>` : `<button class="btn is-sm is-quiet is-danger" type="button">外す</button>`}</td>
     </tr>`;
   }).join("");
   return `
@@ -40,30 +40,48 @@ SQ.mount("members", () => {
       ["", "users", "所属", now.length],
       ["", "", t("leader"), now.filter((m) => m.role === "leader").length],
       ["is-warn", "", "11月の配分が未設定", now.filter((m) => m.alloc == null).length],
-      ["", "mail", "招待中", D.invitations.length],
+      ["", "mail", "招待中", D.invitations.filter((i) => !i.expired).length],
     ])}
     <section class="section"><div class="section-head"><h2 class="section-title">所属している人</h2><span class="section-hint">配分は11月の値。他の${t("workspace")}の配分は見えません</span></div>
-      <div class="table-wrap"><table class="table is-stacked"><thead><tr><th class="is-name">名前</th><th>ロール</th><th class="is-num">所属</th><th>配分（11月）</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="table-wrap"><table class="table is-stacked"><thead><tr><th class="is-name">名前</th><th>ロール</th><th>参加日</th><th>配分（11月）</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="action-note">外すと、その人の未完了の${t("task")}は担当なしに戻り、${t("party")}からも外れます。完了の記録と経験値は残ります。</p>
     </section>
     <section class="section"><div class="section-head"><h2 class="section-title">招待する</h2><span class="section-hint">${t("organization")}の人数 ${D.seats.used} / ${D.seats.limit} 人</span></div>
       <div class="panel">
         <div class="form-row">
           ${loginTarget("login")}
-          <div class="field"><span class="field-label">ロール</span><div class="segmented" role="radiogroup"><label><input type="radio" name="role" checked><span>一般</span></label><label><input type="radio" name="role"><span>${t("leader")}</span></label></div></div>
+          <div class="field"><span class="field-label" id="invite-role-label">ロール</span><div class="segmented" role="radiogroup" aria-labelledby="invite-role-label"><label><input type="radio" name="role" checked><span>一般</span></label><label><input type="radio" name="role"><span>${t("leader")}</span></label></div></div>
           <button class="btn is-primary" type="button" data-invite-link="login" data-invite-done="招待しました" data-invite-kind="workspace">${icon("mail")}招待する</button>
         </div>
         <span class="field-hint">Scrum Guild は招待をメールで送りません。Google の招待は、招待したときに出る招待の URL（14日で切れます）を本人に伝えてください。GitHub の招待は、次の${t("organization")}の URL を伝えてください。 <span class="mono wrap-anywhere">https://scrum-guild.dev/${esc(D.organization)}/</span></span>
-        ${D.invitations.map((i) => `<div class="load-foot" style="padding-top:var(--space-3);border-top:1px solid var(--color-rule)"><span><span class="mono">${esc(i.login)}</span>（${i.via === "google" ? "Google" : "GitHub"}）・${i.role === "member" ? "一般" : t("leader")}・${esc(user(i.by).name)}が ${esc(i.at)} に招待${i.expires ? `・${esc(i.expires)} まで` : ""}</span><button class="btn is-sm is-quiet" type="button" data-toast="招待を取り消しました">取り消す</button></div>`).join("")}
       </div>
       <div class="panel">
-        <div class="callout is-warn">${icon("alert")}<span>${t("organization")}の人数が上限（${D.seats.limit} 人）に達しているため、招待できません。上限を上げるには${t("admin")}に相談してください。</span></div>
-        <div class="form-row">
-          ${loginTarget("login-full", { disabled: true })}
-          <button class="btn is-primary" type="button" disabled>${icon("mail")}招待する</button>
+        <div class="callout is-warn">${icon("alert")}<span>${t("organization")}の人数が上限（${D.seats.limit} 人）に達しているため、新しい人は招待できません。すでに${t("organization")}にいる人は招待できます。上限を上げるには${t("admin")}に相談してください。</span></div>
+        <div class="form-row is-start">
+          ${loginTarget("login-full", { hints: { github: "GitHub のユーザー ID に解決します。「確かめる」を押して、招待する人を見て確かめてから招待します。" }, action: `<button class="btn" type="button" data-toast="見本のため、確かめません">確かめる</button>` })}
         </div>
-        <p class="props-note">人数が上限に達したときの表示の見本です。人数は${t("admin")}と、いずれかの${t("workspace")}に所属しているか招待されている人を数えます。</p>
+        <div class="callout is-info">${icon("shield")}<span>この人を招待します。アバター、ユーザー名、表示名が、招待したい人のものか確かめてください。ユーザー名は 1 字違いでも別の人に当たります。</span></div>
+        <div class="choice is-static">
+          ${SQ.avatar("ツ", 60, { lg: true })}
+          <div><b class="mono">tsubasa-dev</b><span>ツバサ</span><span>GitHub のユーザー ID 48120937</span></div>
+        </div>
+        <p class="props-note" id="invite-limit-note">この人はまだ${t("organization")}の人数に数えられていないため、上限に達している間は招待できません。</p>
+        <div class="form-row">
+          <div class="field"><span class="field-label" id="invite-full-role-label">ロール</span><div class="segmented" role="radiogroup" aria-labelledby="invite-full-role-label"><label><input type="radio" name="role-full" checked><span>一般</span></label><label><input type="radio" name="role-full"><span>${t("leader")}</span></label></div></div>
+          <button class="btn is-primary" type="button" disabled aria-describedby="invite-limit-note">${icon("mail")}招待する</button>
+        </div>
+        <p class="props-note">人数が上限に達したときの表示の見本です。手段、ユーザー名、「確かめる」は押せるままです（すでに${t("organization")}にいる人は、上限でも招待できるため）。まだ人数に数えられていない人を確かめた後だけ、「招待する」を押せません。Google は、メールアドレスだけでは数えられているかを前もって知れないので押せるままにし、断られたら上限の枠を出します。人数は${t("admin")}と、いずれかの${t("workspace")}に所属しているか招待されている人を数えます。</p>
       </div>
+    </section>
+    <section class="section" aria-labelledby="members-invitations"><div class="section-head"><h2 class="section-title" id="members-invitations">承諾待ちの招待</h2><span class="section-hint">${t("leader")}と${t("admin")}にだけ見えます</span></div>
+      ${D.invitations.length ? `<div class="table-wrap"><table class="table" aria-label="承諾待ちの招待の一覧"><thead><tr><th>名前</th><th>手段</th><th>ロール</th><th>招待した日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead><tbody>${D.invitations.map((i) => `<tr>
+        <td class="mono is-wrap">${esc(i.login)}</td>
+        <td>${i.via === "google" ? "Google" : "GitHub"} ${i.expired ? `<span class="chip is-danger">期限切れ</span>` : i.expires ? `<span class="props-note">${esc(i.expires)} まで</span>` : ""}</td>
+        <td>${i.role === "member" ? "一般" : t("leader")}</td>
+        <td class="mono">${esc(i.at)}</td>
+        <td class="is-actions"><button class="btn is-sm is-quiet" type="button" aria-label="${esc(i.login)} への招待を取り消す" data-toast="招待を取り消しました">取り消す</button></td>
+      </tr>`).join("")}</tbody></table></div>`
+      : SQ.emptyState("mail", "承諾待ちの招待はありません", "招待した人が承諾するまで、ここに並びます。")}
     </section>
     <section class="section"><div class="section-head"><h2 class="section-title">招待する（自分用の${t("organization")}）</h2></div>
       <div class="callout is-info">${icon("shield")}<span>自分用の${t("organization")}は自分だけで使うため、人を招待できません。</span></div>
