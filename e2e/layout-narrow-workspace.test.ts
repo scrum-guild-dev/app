@@ -176,9 +176,15 @@ test('終了したワークスペースのエピックの画面は、「戻る�
 
 // 引き出しの上の帯の右端（前後、開き方、閉じる）。閉じるは見た目ごと 44px 四方で、隣のボタンと箱が交わらない（#994）。
 // 押せる範囲の汎用の検査は、::after で広げた範囲が隣に重なっても、上に描かれた方に当たれば通るので、箱の大きさと交わりを直接確かめる
-async function expectDrawerToolsApart(page: Page, drawer: ReturnType<Page['locator']>): Promise<void> {
+async function expectDrawerToolsApart(
+  page: Page,
+  drawer: ReturnType<Page['locator']>,
+  minNeighbors: number,
+): Promise<void> {
   const close = drawer.locator('.drawer-close');
   await expect(close).toBeVisible();
+  // 組織の読み込みでテーマが DB の値に戻らないよう、要求が止んでから当てる
+  await page.waitForLoadState('networkidle');
   for (const theme of LAYOUT_THEMES) {
     await applyTheme(page, theme);
     const boxes = await drawer.locator('.drawer-tools button:visible').evaluateAll((buttons) =>
@@ -193,11 +199,17 @@ async function expectDrawerToolsApart(page: Page, drawer: ReturnType<Page['locat
         };
       }),
     );
+    // 前後と開き方と閉じるは、どれも見た目ごと 44px 四方
+    for (const box of boxes) {
+      expect(box.w, `${theme}: 右端のボタンの幅`).toBeGreaterThanOrEqual(44);
+      expect(box.h, `${theme}: 右端のボタンの高さ`).toBeGreaterThanOrEqual(44);
+    }
     const closeBox = boxes.find((box) => box.close);
     expect(closeBox, `${theme}: 閉じるボタンが無い`).toBeDefined();
-    expect(closeBox!.w, `${theme}: 閉じるボタンの幅`).toBeGreaterThanOrEqual(44);
-    expect(closeBox!.h, `${theme}: 閉じるボタンの高さ`).toBeGreaterThanOrEqual(44);
-    for (const other of boxes.filter((box) => !box.close)) {
+    // 隣のボタンの無い引き出し（ストーリー）は、交わりを確かめる相手が無く、大きさだけが効く
+    const neighbors = boxes.filter((box) => !box.close);
+    expect(neighbors.length, `${theme}: 閉じるボタンの隣のボタンの数`).toBeGreaterThanOrEqual(minNeighbors);
+    for (const other of neighbors) {
       const apart =
         other.x + other.w <= closeBox!.x ||
         closeBox!.x + closeBox!.w <= other.x ||
@@ -205,8 +217,10 @@ async function expectDrawerToolsApart(page: Page, drawer: ReturnType<Page['locat
         closeBox!.y + closeBox!.h <= other.y;
       expect(apart, `${theme}: 閉じるボタンと隣のボタンの箱が交わる`).toBe(true);
     }
+    expect(await findTargetSizeViolations(page), theme).toEqual([]);
+    // 測っている間に、画面の読み直しで DB のテーマに戻っていない
+    expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(theme);
   }
-  expect(await findTargetSizeViolations(page)).toEqual([]);
 }
 
 test('タスクの引き出し（前後のボタンつき）、ストーリーの引き出し、ページ全体の閉じるボタンが、390px で見た目ごと 44px 四方になり隣と交わらない', async ({
@@ -219,16 +233,15 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   const task = page.getByRole('dialog', { name: 'ポイント付与のバッチを作る' });
   await expect(task.getByRole('heading', { level: 2 })).toBeFocused();
   await expect(task.locator('.drawer-steps')).toBeVisible();
-  await expectDrawerToolsApart(page, task);
+  await expectDrawerToolsApart(page, task, 2);
   // ストーリーの引き出し
   await page.goto(`${WORKSPACE}?story=${STORY_ID}`);
   const story = page.getByRole('dialog');
   await expect(story.getByRole('heading', { level: 2 })).toBeFocused();
-  await expectDrawerToolsApart(page, story);
+  await expectDrawerToolsApart(page, story, 0);
   // ページ全体で開いたタスク
   await page.goto(`${WORKSPACE}/tasks/${TASK_ID}`);
   const whole = page.locator('.drawer.is-page');
   await expect(whole.getByRole('heading', { level: 2 })).toBeVisible();
-  await page.waitForLoadState('networkidle');
-  await expectDrawerToolsApart(page, whole);
+  await expectDrawerToolsApart(page, whole, 0);
 });
