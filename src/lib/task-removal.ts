@@ -5,6 +5,7 @@ import type { AdjacentTasks } from './drawer.svelte.ts';
 import { focusFirstTaskRow, focusIsFree, focusPageHeading } from './focus-heading.ts';
 import { focusToastAction, pauseToast, resumeToast, showToast, type ToastAction } from './toast.svelte.ts';
 import { visibleTaskIds } from './task-order.ts';
+import type { ReloadFailure } from './task-reload-failure.svelte.ts';
 import { t } from './vocabulary.svelte.ts';
 
 // タスクの削除と取り消し。引き出しの「この<タスク>を削除する」と、バックログの行とスプリントのカードの「⋯」が同じ文と同じフォーカスの扱いを使う。
@@ -28,32 +29,26 @@ export type RestoreTarget = {
   onreloadfailed?: (failure: ReloadFailure) => void;
 };
 
-// 読み直しの失敗の印に添える、何が済んだか。deleted は消した後、restored は戻した後、stale は断られた後の読み直し（何も変えていない）
-export type ReloadFailure = 'deleted' | 'restored' | 'stale';
-
 // 読み直しや、読み直しを含む後始末が失敗しても、捨てた Promise の未処理の reject にしない。成功なら true。
-// 失敗は、onfailed を渡せばそれに任せ（画面が印を残す。トーストは消えるので、大事なことをトーストだけで伝えない）、
+// 失敗は、onfailed を渡せばそれに任せ（画面が何が済んだかの印を残す。task-reload-failure.svelte.ts）、
 // 渡さなければトーストで知らせる（引き出しの削除の取り消しなど、印を置く画面が無いとき）
-export async function settled(
-  run: () => Promise<void>,
-  onfailed?: (failure: ReloadFailure) => void,
-  failure: ReloadFailure = 'stale',
-): Promise<boolean> {
+export async function settled(run: () => Promise<void>, onfailed?: () => void): Promise<boolean> {
   try {
     await run();
     return true;
   } catch {
     if (onfailed === undefined) showToast(t('taskListReloadFailed'), 'alert');
-    else onfailed(failure);
+    else onfailed();
     return false;
   }
 }
 
-// 読み直しの失敗の印の文。消した、戻したことが済んでいると分かる形にする
-export function reloadFailureMessage(failure: ReloadFailure): string {
-  if (failure === 'deleted') return t('taskDeletedReloadFailed', { task: t('task') });
-  if (failure === 'restored') return t('taskRestoredReloadFailed', { task: t('task') });
-  return t('taskListStaleReloadFailed');
+// 読み直しの失敗を、何が済んだかを添えて画面へ渡す口。渡されていなければ undefined（settled がトーストで知らせる）
+function reporter(
+  onreloadfailed: ((failure: ReloadFailure) => void) | undefined,
+  failure: ReloadFailure,
+): (() => void) | undefined {
+  return onreloadfailed === undefined ? undefined : () => onreloadfailed(failure);
 }
 
 // 戻したことを知らせる文。外した参照があればそれを添え、ボードから消したときはバックログにあることを添える
@@ -88,8 +83,7 @@ async function afterRestored(target: RestoreTarget, focused: boolean): Promise<v
   else
     await settled(
       () => target.onrestored?.(target.taskId, focused) ?? Promise.resolve(),
-      target.onreloadfailed,
-      'restored',
+      reporter(target.onreloadfailed, 'restored'),
     );
 }
 
@@ -226,7 +220,7 @@ async function removeOnce(args: RemoveFromListArgs): Promise<void> {
       taskId: args.taskId,
       title: args.title,
       near,
-      onchanged: () => void settled(args.reload, args.onreloadfailed),
+      onchanged: () => void settled(args.reload, reporter(args.onreloadfailed, 'stale')),
       onstale: args.onstale,
       onrestored: args.onrestored,
       onskipped: args.onskipped,
@@ -244,18 +238,15 @@ async function removeOnce(args: RemoveFromListArgs): Promise<void> {
         // 閉じられなくても、消した後の読み直しとフォーカスの扱いは続ける
       }
     }
-    const reloaded = await settled(
+    await settled(
       async () => {
         await args.reload();
         await tick();
       },
-      args.onreloadfailed,
-      'deleted',
+      reporter(args.onreloadfailed, 'deleted'),
     );
-    if (!reloaded) {
-      if (args.keyboard) resumeToast(toastId);
-      return;
-    }
+    // 読み直しが失敗しても（画面は読み込みの失敗に替わり、行の「⋯」は消える）、フォーカスの扱いは通ったときと同じにする
+    // （キーボードの人が「取り消す」を取り逃さないように。着かなければ見出しへ）
     if (!args.keyboard) return;
     // 待つ間に別の所へフォーカスを移した人からは奪わない（数えは戻す）
     if (!focusIsFree()) {
@@ -269,20 +260,20 @@ async function removeOnce(args: RemoveFromListArgs): Promise<void> {
     args.onstale();
   } else if (result.status === 404) {
     showToast(t('taskGone', { task: t('task') }), 'alert');
-    const reloaded = await settled(args.reload, args.onreloadfailed);
+    const reloaded = await settled(args.reload, reporter(args.onreloadfailed, 'stale'));
     // 行が消えて、キーボードで押した「⋯」のフォーカスが失われる。待つ間に別の所へ移した人からは奪わない（読み直しが失敗しても、フォーカスは body に落ちる）
     if (reloaded) await tick();
     if (args.keyboard && focusIsFree()) focusPageHeading();
   } else if (result.status === 403) {
     showToast(t('taskDeleteForbidden', { leader: t('leader') }), 'alert');
-    await settled(args.reload, args.onreloadfailed);
+    await settled(args.reload, reporter(args.onreloadfailed, 'stale'));
   } else if (result.status === 409 && result.error?.code === 'workspace_closed') {
     showToast(t('workspaceClosedReadOnly', { workspace: t('workspace') }), 'alert');
     args.onstale();
   } else if (result.status === 409) {
     // 取り込んだタスクは削除できない
     showToast(t('taskImportedNoDelete', { task: t('task'), archive: t('archive') }), 'alert');
-    await settled(args.reload, args.onreloadfailed);
+    await settled(args.reload, reporter(args.onreloadfailed, 'stale'));
   } else {
     showToast(t('taskDeleteFailed'), 'alert');
   }

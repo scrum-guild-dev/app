@@ -11,7 +11,6 @@
   import EmptyState from '../../../../lib/components/EmptyState.svelte';
   import Icon from '../../../../lib/components/Icon.svelte';
   import LoadFailed from '../../../../lib/components/LoadFailed.svelte';
-  import TaskReloadNotice from '../../../../lib/components/TaskReloadNotice.svelte';
   import Markdown from '../../../../lib/components/Markdown.svelte';
   import MoveParentDialog from '../../../../lib/components/MoveParentDialog.svelte';
   import PageHead from '../../../../lib/components/PageHead.svelte';
@@ -44,13 +43,13 @@
   import { moveFailureMessage } from '../../../../lib/move-failure.ts';
   import { trackStoryOrder, trackTaskOrder } from '../../../../lib/task-order.ts';
   import { completedMessage } from '../../../../lib/sprint-label.ts';
+  import { focusRestored, focusSkipped, removeFromList } from '../../../../lib/task-removal.ts';
   import {
-    focusRestored,
-    focusSkipped,
-    reloadFailureMessage,
-    removeFromList,
-    type ReloadFailure,
-  } from '../../../../lib/task-removal.ts';
+    clearReloadFailure,
+    markReloadFailed,
+    reloadFailureNote,
+    throwIfListFailed,
+  } from '../../../../lib/task-reload-failure.svelte.ts';
   import { showToast } from '../../../../lib/toast.svelte.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import { epicCreate, epicMove } from '../../../../shared/operations/epic/index.ts';
@@ -94,12 +93,10 @@
 
   const workspace = $derived(data.workspace);
   const tree = $derived(data.tree);
-  // 行の「⋯」から消した（戻した）後の読み直しの失敗（#979）。失敗した時点の木を持ち、木が替わった（どの経路でも読み直せた）ら印を外す。
-  // 木が読めなくなった（null）ときは、読み込みの失敗の画面に何が済んだかを添える。一覧が前のまま残ったときは、見出しの下に印と「もう一度試す」を出す
-  let reloadFailure = $state.raw<{ failure: ReloadFailure; tree: typeof tree } | null>(null);
-  const reloadNotice = $derived(
-    reloadFailure !== null && reloadFailure.tree === tree ? reloadFailureMessage(reloadFailure.failure) : null,
-  );
+  // 行の「⋯」から消した（戻した）後の読み直しの失敗の印（#979。task-reload-failure.svelte.ts）。木が読めたら下ろす
+  $effect(() => {
+    if (tree !== null) untrack(clearReloadFailure);
+  });
   // 木を読んだときの絞り込み（URL の問い合わせ）。絞っている間は並べ替え（上へ、下へ、Alt と ↑ ↓）を出さない
   const filter = $derived(data.filter);
   const filtering = $derived(isFiltering(filter));
@@ -523,10 +520,9 @@
     const reload = async (): Promise<void> => {
       await moves.whenIdle();
       await invalidate('app:backlog-tree');
-      // 木が読めなかった（通信、5xx）ときは、load が tree を null にする。読み直しの失敗として扱う（何が済んだかを画面に残す）
-      await tick();
-      if (data.tree === null) throw new Error('backlog-tree');
+      await throwIfListFailed(() => page.data);
     };
+    const workspaceId = workspace.id;
     await removeFromList({
       slug: page.params.slug ?? '',
       workspaceId: workspace.id,
@@ -542,22 +538,8 @@
         await focusRestored(restoredId, focus);
       },
       onskipped: focusSkipped,
-      onreloadfailed: (failure) => {
-        reloadFailure = { failure, tree: data.tree };
-      },
+      onreloadfailed: (failure) => markReloadFailed(failure, workspaceId),
     });
-  }
-
-  // 印の「もう一度試す」。読み直せたら true（木が替わり、印が外れる）
-  async function retryReload(): Promise<boolean> {
-    try {
-      await moves.whenIdle();
-      await invalidate('app:backlog-tree');
-      await tick();
-      return data.tree !== null && reloadNotice === null;
-    } catch {
-      return false;
-    }
   }
 
   async function complete(task: BacklogTask): Promise<void> {
@@ -1332,7 +1314,7 @@
   <LoadFailed
     inShell
     extra={filtering ? clearOnFailure : undefined}
-    note={reloadFailure?.failure === 'stale' ? undefined : (reloadNotice ?? undefined)}
+    note={reloadFailureNote(workspace.id) ?? undefined}
   />
 {:else if workspace && tree}
   <!-- チーム全体の経験値は、読めたときだけ見出しの中に出す（読めなくても画面は開く） -->
@@ -1346,7 +1328,6 @@
     tallies={[{ tone: 'warn', icon: 'pen', label: t('unfilledChip', { detail: t('detail') }), count: unfilledCount }]}
     meta={data.teamTotal === null ? undefined : teamExperience}
   ></PageHead>
-  {#if reloadNotice !== null}<TaskReloadNotice message={reloadNotice} onretry={retryReload} />{/if}
 
   <!-- 完成の定義（components.css の .dod）。木の上に1つだけ畳んで置き、行ごとには繰り返さない。空なら出さない。
        本文は開くまで描かない（長い定義の変換と描画を、開かない人に払わせない） -->

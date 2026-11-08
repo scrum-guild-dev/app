@@ -7,7 +7,9 @@
 // あおば開発の管理者ミナトで、ワークスペースを作って行を足して使う（seed の行を消さない）
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
+import { backlogTree } from '../src/shared/operations/task/index.ts';
 import { addEpicRow, addStoryRow, addTaskRow, createWorkspace, rowMenuToggle, signIn } from './helpers.ts';
+import { failOperation } from './operations.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
@@ -81,4 +83,30 @@ test('エピックの引き出しを開いたまま、背後の配下のタス�
   await expect(page).toHaveURL(/[?&]epic_id=[0-9a-f-]{36}/);
 
   await expectRowMenuUnreachable(page, drawer, 'エピックの孫タスク');
+});
+
+// 引き出しを開いている間に、背後の一覧が作り直される（木の読み込みの失敗で読み込みの失敗の画面に替わり、戻ると木を作り直す）。
+// 後から差し込まれた要素にも inert が付き、背後の「もう一度試す」と作り直した行の「⋯」へキーボードで着けない（反証 QA の筋書き）
+test('引き出しを開いたまま背後の一覧が作り直されても、新しい要素に inert が付き、行の「⋯」へ着けない（#977）', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await createWorkspace(page, '引き出しの背後の作り直し');
+  await addTaskRow(page, '作り直される行');
+  await page.getByRole('link', { name: '作り直される行', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '作り直される行' });
+  await expect(drawer).toBeVisible();
+
+  // 欄を保存すると木を読み直す。木だけを失敗させ、背後を読み込みの失敗の画面に替える
+  const unroute = await failOperation(page, backlogTree, { slug: 'aoba' }, 500, 'internal');
+  await drawer.getByLabel('期日').fill('2099-12-31');
+  const retry = page.getByRole('button', { name: 'もう一度試す', exact: true });
+  await expect(retry).toHaveCount(1);
+  expect(await retry.evaluate((element) => element.closest('[inert]') !== null)).toBe(true);
+
+  // 木を戻して、もう一度保存して読み直す。作り直した行の「⋯」にも届かない
+  await unroute();
+  await drawer.getByLabel('期日').fill('');
+  await expect(rowMenuToggle(page, '作り直される行')).toHaveCount(1);
+  await expectRowMenuUnreachable(page, drawer, '作り直される行');
 });

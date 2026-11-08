@@ -48,7 +48,7 @@
 {#if inShell}
   <PageHead title={t('loadFailedTitle')} />
   {#if note !== undefined}
-    <div class="callout is-warn" data-task-reload-notice><Icon name="alert" /><span role="alert">{note}</span></div>
+    <div class="callout is-warn" data-task-reload-note><Icon name="alert" /><span role="alert">{note}</span></div>
   {/if}
   <EmptyState icon="alert" title={t('loadFailedText')} {actions} />
 {:else}

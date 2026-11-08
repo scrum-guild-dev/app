@@ -292,10 +292,11 @@ test('消した後の読み直しが失敗すると、トーストが消えた�
   test.setTimeout(60_000);
   await createWorkspace(page, '行の削除の読み直し');
   await addTaskRow(page, '読み直しに落ちる行');
+  await addTaskRow(page, '後で開く行');
   const unroute = await failOperation(page, backlogTree, AOBA, 500, 'internal');
   await chooseRowAction(page, '読み直しに落ちる行', DELETE);
 
-  const notice = page.locator('[data-task-reload-notice]');
+  const notice = page.locator('[data-task-reload-note]');
   await expect(notice).toHaveText('タスクは削除しましたが、画面を読み直せませんでした。もう一度試してください。');
   await expect(notice.getByRole('alert')).toBeVisible();
   const retry = page.getByRole('button', { name: 'もう一度試す', exact: true });
@@ -314,6 +315,35 @@ test('消した後の読み直しが失敗すると、トーストが消えた�
   await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
   await expect(notice).toHaveCount(0);
   await expect(page.getByRole('link', { name: '読み直しに落ちる行', exact: true })).toHaveCount(0);
+
+  // 読めた後に、削除と関係ない読み直し（引き出しで欄を保存した後）が失敗しても、「削除しましたが」は出ない
+  await page.getByRole('link', { name: '後で開く行', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '後で開く行' });
+  await expect(drawer).toBeVisible();
+  const unrouteAgain = await failOperation(page, backlogTree, AOBA, 500, 'internal');
+  await drawer.getByLabel('期日').fill('2099-12-31');
+  await expect(page.getByRole('heading', { level: 1, name: '読み込めませんでした' })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  await unrouteAgain();
+});
+
+test('「取り消す」で戻した後の読み直しが失敗すると、「戻しましたが」の印が残る', async ({ page }) => {
+  await createWorkspace(page, '行の取り消しの読み直し');
+  await addTaskRow(page, '戻して落ちる行');
+  await chooseRowAction(page, '戻して落ちる行', DELETE);
+  const undo = page.getByRole('button', { name: '取り消す: 戻して落ちる行' });
+  await expect(undo).toBeVisible();
+  await expect(page.getByRole('link', { name: '戻して落ちる行', exact: true })).toHaveCount(0);
+
+  const unroute = await failOperation(page, backlogTree, AOBA, 500, 'internal');
+  await undo.click();
+  const notice = page.locator('[data-task-reload-note]');
+  await expect(notice).toHaveText('タスクは戻しましたが、画面を読み直せませんでした。もう一度試してください。');
+
+  await unroute();
+  await page.getByRole('button', { name: 'もう一度試す', exact: true }).click();
+  await expect(notice).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '戻して落ちる行', exact: true })).toBeVisible();
 });
 
 test('スプリントのカードを消した後のボードの読み直しが失敗しても、「削除しましたが」の印と「もう一度試す」が残る', async ({
@@ -325,10 +355,11 @@ test('スプリントのカードを消した後のボードの読み直しが�
   const unroute = await failOperation(page, sprintBoard, AOBA, 500, 'internal');
   await chooseRowAction(page, '読み直しに落ちるカード', DELETE);
 
-  const notice = page.locator('[data-task-reload-notice]');
+  const notice = page.locator('[data-task-reload-note]');
   await expect(notice).toHaveText('タスクは削除しましたが、画面を読み直せませんでした。もう一度試してください。');
   const retry = page.getByRole('button', { name: 'もう一度試す', exact: true });
   await expect(retry).toBeVisible();
+  await expectNoA11yViolationsInThemes(page, 'sprint');
 
   await unroute();
   await retry.click();

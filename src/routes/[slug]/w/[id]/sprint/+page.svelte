@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { useShortcut } from '../../../../../lib/shortcuts.svelte.ts';
   import { ariaKeyshortcuts, NEW_TASK_KEY } from '../../../../../lib/shortcut-keys.ts';
   import { goto, invalidate, invalidateAll } from '$app/navigation';
@@ -10,7 +10,6 @@
   import EmptyState from '../../../../../lib/components/EmptyState.svelte';
   import Icon from '../../../../../lib/components/Icon.svelte';
   import LoadFailed from '../../../../../lib/components/LoadFailed.svelte';
-  import TaskReloadNotice from '../../../../../lib/components/TaskReloadNotice.svelte';
   import Markdown from '../../../../../lib/components/Markdown.svelte';
   import PageHead from '../../../../../lib/components/PageHead.svelte';
   import SprintCard from '../../../../../lib/components/SprintCard.svelte';
@@ -20,13 +19,13 @@
   import SprintCloseDialog from '../../../../../lib/components/SprintCloseDialog.svelte';
   import SprintOverdueNotice from '../../../../../lib/components/SprintOverdueNotice.svelte';
   import { focusPageHeading } from '../../../../../lib/focus-heading.ts';
+  import { focusRestored, focusSkipped, removeFromList } from '../../../../../lib/task-removal.ts';
   import {
-    focusRestored,
-    focusSkipped,
-    reloadFailureMessage,
-    removeFromList,
-    type ReloadFailure,
-  } from '../../../../../lib/task-removal.ts';
+    clearReloadFailure,
+    markReloadFailed,
+    reloadFailureNote,
+    throwIfListFailed,
+  } from '../../../../../lib/task-reload-failure.svelte.ts';
   import { MoveQueue } from '../../../../../lib/move-queue.ts';
   import { edgesOf, planCardMove, type MoveDirection, type MoveEdge } from '../../../../../lib/sprint-board.ts';
   import { SprintDnd } from '../../../../../lib/sprint-dnd.svelte.ts';
@@ -78,12 +77,10 @@
 
   const workspace = $derived(data.workspace);
   const board = $derived(data.board);
-  // カードの「⋯」から消した（戻した）後の読み直しの失敗（#979）。バックログの画面と同じく、失敗した時点のボードを持ち、
-  // ボードが替わった（どの経路でも読み直せた）ら印を外す。読めなくなった（null）ときは、読み込みの失敗の画面に何が済んだかを添える
-  let reloadFailure = $state.raw<{ failure: ReloadFailure; board: typeof board } | null>(null);
-  const reloadNotice = $derived(
-    reloadFailure !== null && reloadFailure.board === board ? reloadFailureMessage(reloadFailure.failure) : null,
-  );
+  // カードの「⋯」から消した（戻した）後の読み直しの失敗の印（#979。task-reload-failure.svelte.ts）。ボードが読めたら下ろす
+  $effect(() => {
+    if (board !== null) untrack(clearReloadFailure);
+  });
   const slug = $derived(page.params.slug ?? '');
   const isAdmin = $derived(data.organization?.me.is_admin === true);
   const isLeader = $derived(workspace !== null && (workspace.role === 'leader' || isAdmin));
@@ -468,9 +465,7 @@
       } finally {
         local = null;
       }
-      // ボードが読めなかった（通信、5xx）ときは、load が board を null にする。読み直しの失敗として扱う
-      await tick();
-      if (data.board === null) throw new Error('sprint-board');
+      await throwIfListFailed(() => page.data);
     };
     await removeFromList({
       slug,
@@ -492,31 +487,12 @@
         } finally {
           local = null;
         }
-        await tick();
-        if (data.board === null) throw new Error('sprint-board');
+        await throwIfListFailed(() => page.data);
         await focusRestored(restoredId, focus);
       },
       onskipped: focusSkipped,
-      onreloadfailed: (failure) => {
-        reloadFailure = { failure, board: data.board };
-      },
+      onreloadfailed: (failure) => markReloadFailed(failure, workspaceId),
     });
-  }
-
-  // 印の「もう一度試す」。読み直せたら true（ボードが替わり、印が外れる）
-  async function retryReload(): Promise<boolean> {
-    try {
-      await moves.whenIdle();
-      try {
-        await invalidate('app:sprint-board');
-      } finally {
-        local = null;
-      }
-      await tick();
-      return data.board !== null && reloadNotice === null;
-    } catch {
-      return false;
-    }
   }
 
   // 戻す。戻せたら true。followed が真のとき（ドラッグで別の列へ落とすとき）は、通ってもトーストを出さず、読み直さず、
@@ -665,7 +641,7 @@
 </svelte:head>
 
 {#if workspace && board === null}
-  <LoadFailed inShell note={reloadFailure?.failure === 'stale' ? undefined : (reloadNotice ?? undefined)} />
+  <LoadFailed inShell note={reloadFailureNote(workspace.id) ?? undefined} />
 {:else if workspace && board !== null}
   <!-- 読み上げの領域。常に置き、文字だけを替える -->
   <div class="visually-hidden" role="status">
@@ -676,7 +652,6 @@
 
   {#if sprint === null || progress === null}
     <PageHead title={t('sprint')} eyebrow={workspace.name} focusable />
-    {#if reloadNotice !== null}<TaskReloadNotice message={reloadNotice} onretry={retryReload} />{/if}
     <EmptyState
       icon="columns"
       art="notice"
@@ -719,7 +694,6 @@
         {/if}
       {/snippet}
     </PageHead>
-    {#if reloadNotice !== null}<TaskReloadNotice message={reloadNotice} onretry={retryReload} />{/if}
     {#if sprint.extended_days > 0}<p class="action-note">{t('sprintExtended', { days: sprint.extended_days })}</p>{/if}
     {#if overdue}
       <SprintOverdueNotice {sprint} canClose={canLead} onclose={openClose} />
