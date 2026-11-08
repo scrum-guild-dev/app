@@ -82,6 +82,10 @@ test.describe('招待だけが届いた人（ヒナタ）', () => {
       await expect(page.getByRole('heading', { level: 2, name: '届いた招待' })).toBeVisible();
       const link = page.getByRole('link', { name: /ひばり工房/ });
       await expect(link).toContainText('承諾待ちの招待があります');
+      // 押せる行は右端に印があり、招待は組織を作る入口より前に並ぶ
+      await expect(link.locator('svg.ico')).toHaveCount(1);
+      const createAction = page.getByRole('button', { name: '組織を作る' });
+      expect((await link.boundingBox())!.y).toBeLessThan((await createAction.boundingBox())!.y);
       await link.click();
 
       await expect(page).toHaveURL(/\/hibari\/invitations$/);
@@ -92,7 +96,7 @@ test.describe('招待だけが届いた人（ヒナタ）', () => {
       const row = page.locator('.choice.is-static');
       await expect(row).toHaveCount(1);
       await expect(row.locator('b')).toHaveText('デザイン相談室');
-      await expect(row).toContainText('ひばり工房・リンさんから・一般・2026-10-19');
+      await expect(row).toContainText('ひばり工房のリンさんから、一般として招かれました（10/19）');
 
       await page.getByRole('button', { name: 'デザイン相談室への招待を承諾する' }).click();
       await expect(page).toHaveURL(new RegExp(`/hibari/w/${DESIGN_WORKSPACE_ID}$`));
@@ -134,7 +138,7 @@ test.describe('招待だけが届いた人（ヒナタ）', () => {
       page.getByText('ひばり工房から届いた招待です。承諾すると、そのワークスペースに入れます。'),
     ).toBeVisible();
     const rows = page.locator('.choice.is-static');
-    await expect(rows.nth(0)).toContainText('ひばり工房・リンさんから・リーダー・2026-10-19');
+    await expect(rows.nth(0)).toContainText('ひばり工房のリンさんから、リーダーとして招かれました（10/19）');
     await expect(rows.nth(1)).toContainText('このワークスペースは終了しているため、承諾できません。辞退はできます。');
     await expect(page.getByRole('button', { name: '旧サイト改修への招待を承諾する' })).toBeDisabled();
     await expect(page.getByRole('button', { name: '旧サイト改修への招待を辞退する' })).toBeEnabled();

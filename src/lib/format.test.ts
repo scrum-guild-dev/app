@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatCount, formatUtcDate, quotaSize } from './format.ts';
+import { formatCount, formatMonthDay, formatUtcDate, quotaSize } from './format.ts';
 
 describe('quotaSize', () => {
   test('1 GB 以上は、1024³ バイトを 1 GB として、小数は1桁まで出す', () => {
@@ -34,5 +34,17 @@ describe('formatUtcDate', () => {
 
   test('読めない値は元のまま返す', () => {
     expect(formatUtcDate('not a date')).toBe('not a date');
+  });
+});
+
+describe('formatMonthDay', () => {
+  test('YYYY-MM-DD を月/日で出し、0 埋めしない', () => {
+    expect(formatMonthDay('2026-10-19')).toBe('10/19');
+    expect(formatMonthDay('2026-01-05')).toBe('1/5');
+  });
+
+  test('読めない値は受け取った文字列のまま返す', () => {
+    expect(formatMonthDay('10/19')).toBe('10/19');
+    expect(formatMonthDay('')).toBe('');
   });
 });

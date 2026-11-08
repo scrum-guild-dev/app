@@ -4,6 +4,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { callOperation } from '../api.ts';
+  import { formatMonthDay } from '../format.ts';
   import { invitationErrorText, invitationRoleLabel } from '../invitation-text.ts';
   import { isUnauthenticated, loginUrl } from '../login-redirect.ts';
   import { applyInvitedOrganization } from '../organization.svelte.ts';
@@ -148,11 +149,11 @@
             <div>
               <b>{invitation.workspace_name}</b>
               <span>
-                {t('invitationInboxMeta', {
+                {t('invitationLine', {
                   organization: list.organization.name,
                   inviter: invitation.invited_by_name,
                   role: roleLabel(invitation.role),
-                  date: invitation.invited_on,
+                  date: formatMonthDay(invitation.invited_on),
                 })}
               </span>
               {#if invitation.closed}

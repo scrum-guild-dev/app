@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import EmptyState from '../lib/components/EmptyState.svelte';
+  import Icon from '../lib/components/Icon.svelte';
   import CreateMyOrganizationDialog from '../lib/components/CreateMyOrganizationDialog.svelte';
   import Gate from '../lib/components/Gate.svelte';
   import GateSheet from '../lib/components/GateSheet.svelte';
@@ -14,6 +15,8 @@
 
   // 組織の選択。入れる組織が2つ以上の人と、届いた招待がある人に出す（1つだけで招待も無い人は +page.ts が組織へ移す）。
   // 届いた招待は組織ごとに1件で、押すとその組織の招待の画面（/<slug>/invitations）へ移り、そこで承諾か辞退を選ぶ。
+  // 入れる組織が無く招待だけがある人には、押す先の招待を最初に出し、組織を作る入口はその下の静かな大きさにする（押せる行の右端には chevron を置く）。
+  // 入れる組織もある人には、これまでどおり組織の一覧を先に出し、招待は次の紙に出す。
   // 入れる組織も招待も無い人には「入れる組織がありません」と招待を待つ案内を出す（ログインできるので、ここに来る）。
   // 停止した組織だけがある人には、招待を待つ案内の代わりに、下の停止した組織の紙を指す文を出す。
   // 停止していなければ入れた組織が停止しているときは、その名前と、運用者に問い合わせることを別の紙に出す（入れないのでリンクにしない）。
@@ -49,6 +52,21 @@
   {/if}
 {/snippet}
 
+<!-- 届いた招待の行。組織ごとに1件で、押すとその組織の招待の画面へ移る -->
+{#snippet invitationList()}
+  <div class="choice-list">
+    {#each data.invitations as invitation (invitation.slug)}
+      <a class="choice" href={resolve('/[slug]/invitations', { slug: invitation.slug })}>
+        <div>
+          <b>{invitation.organization_name}</b>
+          <span>{t('invitationPending')}</span>
+        </div>
+        <Icon name="chevron" />
+      </a>
+    {/each}
+  </div>
+{/snippet}
+
 <svelte:head>
   <title>{t('pageTitle', { page: t('organizationChooseTitle'), app: t('appName') })}</title>
 </svelte:head>
@@ -67,12 +85,16 @@
                 <b>{organizationLabel(organization)}</b>
                 <span class="mono">{page.url.host}/{organization.slug}/</span>
               </div>
+              <Icon name="chevron" />
             </a>
           {/each}
         </div>
         <p class="gate-note">{t('organizationChooseNote')}</p>
       {:else if data.invitations.length > 0}
-        <EmptyState icon="shield" title={t('noOrganizationInvitedTitle')} text={t('noOrganizationInvitedText')} />
+        <p>{t('organizationChooseInvitedLead')}</p>
+        <h2 class="dialog-title">{t('invitationsHeading')}</h2>
+        {@render invitationList()}
+        <p class="gate-note">{t('invitationsNote')}</p>
       {:else if data.suspended.length > 0}
         <EmptyState
           icon="shield"
@@ -100,18 +122,9 @@
         <LogoutButton />
       </div>
     </GateSheet>
-    {#if data.invitations.length > 0}
+    {#if data.invitations.length > 0 && data.organizations.length > 0}
       <GateSheet title={t('invitationsHeading')}>
-        <div class="choice-list">
-          {#each data.invitations as invitation (invitation.slug)}
-            <a class="choice" href={resolve('/[slug]/invitations', { slug: invitation.slug })}>
-              <div>
-                <b>{invitation.organization_name}</b>
-                <span>{t('invitationPending')}</span>
-              </div>
-            </a>
-          {/each}
-        </div>
+        {@render invitationList()}
         <p class="gate-note">{t('invitationsNote')}</p>
       </GateSheet>
     {/if}
