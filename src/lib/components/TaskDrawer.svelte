@@ -785,7 +785,7 @@
         };
         inBacklog = result.data.in_backlog;
         clock = { today: result.data.today, weekStart: result.data.week_start };
-        if (canWrite && task.completed_at === null && candidates === null) void loadCandidates();
+        if (canWrite && task?.completed_at === null && candidates === null) void loadCandidates();
         void loadHistory();
       }
       return result.data.task;
