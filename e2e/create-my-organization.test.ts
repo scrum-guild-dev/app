@@ -1,6 +1,10 @@
 // 組織の無い会員が、組織を作ってその組織へ移る流れ。手元では実行せず、CI の e2e で確かめる。
 import type { Page } from '@playwright/test';
-import { createPersonalOrganization, myOrganizations } from '../src/shared/operations/organization/index.ts';
+import {
+  createMyOrganization,
+  createPersonalOrganization,
+  myOrganizations,
+} from '../src/shared/operations/organization/index.ts';
 import { word } from '../src/shared/vocabulary.ts';
 import { expect, test } from './fixtures.ts';
 import {
@@ -13,8 +17,12 @@ import {
 } from './helpers.ts';
 import { executeLocalD1, removeCreatedOrganizations } from './local-d1.ts';
 import { SEED_SESSIONS } from '../seed/sessions.ts';
+import { operationPath } from '../src/shared/operations/define.ts';
+import { workspaceList } from '../src/shared/operations/workspace/workspace-list.ts';
+import { workspaceClose } from '../src/shared/operations/workspace/workspace-close.ts';
+import { invitationCreate } from '../src/shared/operations/workspace/invitation-create.ts';
 import { accountProfileSave } from '../src/shared/operations/session/onboarding.ts';
-import { failOperation, rewriteOperation } from './operations.ts';
+import { failOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 // 作った組織は API に消す操作が無く、お試し中の組織は1アカウントに1つまでなので、テストの前と後に seed の状態（組織の無い会員）へ戻す
 // （e2e/local-d1.ts）。繰り返し（--repeat-each）でも毎回組織の無い状態から始める。この会員を使うテストはこのファイルにまとめる
@@ -362,7 +370,9 @@ test('チーム利用は自分用の保存後に選び、組織・ワークス�
   await expect(page).toHaveURL(/\/auth\/setup\?team=setup-team/);
   await page.getByLabel('招待するGoogleアカウントのメールアドレス').fill('setup-new@example.com');
   await page.getByRole('button', { name: '招待リンクを作成', exact: true }).click();
-  await expect(page.getByLabel('setup-new@example.com', { exact: true })).toHaveValue(/\/invite#[A-Za-z0-9_-]{43}/);
+  await expect(page.getByRole('textbox', { name: 'setup-new@example.com', exact: true })).toHaveValue(
+    /\/invite#[A-Za-z0-9_-]{43}/,
+  );
   await expect(page.getByText('メールは送信しません。', { exact: false })).toBeVisible();
   await page.getByRole('link', { name: 'チームで使い始める', exact: true }).click();
   await expect(page).toHaveURL(/\/setup-team\/w\/[^/]+$/);
@@ -407,4 +417,131 @@ test('利用開始の保存する画面は390px・4テーマで表示と操作�
     }
     if (stage < 3) await page.getByRole('button', { name: actions[stage], exact: true }).click();
   }
+});
+
+test('チーム作成の応答だけを失っても、作成済みの同じチームで招待へ進む', async ({ context, baseURL, page }) => {
+  await signIn(context, baseURL, 'createOrg');
+  let creations = 0;
+  await routeOperation(page, createMyOrganization, async (call) => {
+    creations++;
+    await call.fetch();
+    await call.abort();
+  });
+  await page.goto('/auth/setup');
+  await page.getByLabel('表示する名前').fill('導入 ユイ');
+  await page.getByLabel('個人用のURL', { exact: true }).fill('setup-lost-own');
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await page.getByRole('button', { name: 'チームを作って招待する', exact: true }).click();
+  await page.getByLabel('組織の名前', { exact: true }).fill('導入の工房');
+  await page.getByLabel('チーム用のURL', { exact: true }).fill('setup-lost-team');
+  await page.getByRole('button', { name: '組織を作って進む', exact: true }).click();
+  await expect(page.getByLabel('招待するGoogleアカウントのメールアドレス')).toBeVisible();
+  await expect(page).toHaveURL(/team=setup-lost-team/);
+  await page.reload();
+  await expect(page.getByLabel('招待するGoogleアカウントのメールアドレス')).toBeVisible();
+  expect(creations).toBe(1);
+});
+
+test('招待の部分失敗は宛先ごとに読み上げられ、成功URLを保って再試行・コピーできる', async ({
+  context,
+  baseURL,
+  page,
+}) => {
+  const email = 'a'.repeat(64) + '@example.com';
+  await signIn(context, baseURL, 'createOrg');
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/auth/setup');
+  await page.getByLabel('個人用のURL', { exact: true }).fill('setup-invite-own');
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await page.getByRole('button', { name: 'チームを作って招待する', exact: true }).click();
+  await page.getByLabel('組織の名前', { exact: true }).fill('招待の工房');
+  await page.getByLabel('チーム用のURL', { exact: true }).fill('setup-invite-team');
+  await page.getByRole('button', { name: '組織を作って進む', exact: true }).click();
+  const counts = { good: 0, retry: 0 };
+  const stopFailing = await routeOperation(page, invitationCreate, { slug: 'setup-invite-team' }, async (call) => {
+    if (call.input.provider === 'google' && call.input.email === 'retry@example.com') {
+      counts.retry++;
+      await call.fail(503, 'unavailable');
+    } else {
+      counts.good++;
+      await call.passThrough();
+    }
+  });
+  await page.getByLabel('招待するGoogleアカウントのメールアドレス').fill(`${email},retry@example.com`);
+  await page.getByRole('button', { name: '招待リンクを作成', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'retry@example.com', exact: true })).toContainText(
+    word('onboardingInvitationFailed'),
+  );
+  const good = page.getByRole('textbox', { name: email, exact: true });
+  await expect(good).toHaveValue(/\/invite#/);
+  const url = await good.inputValue();
+  expect(await findA11yViolations(page)).toEqual([]);
+  await page.getByRole('button', { name: `${word('onboardingCopyLink')} ${email}`, exact: true }).click();
+  await expect(page.locator('.onboarding-notice[role="status"]')).toContainText(word('onboardingCopied', { email }));
+  await expect(page.locator('.onboarding-notice[role="status"]')).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
+  await page.getByRole('button', { name: `${word('onboardingCopyLink')} ${email}`, exact: true }).click();
+  await expect(page.locator('.onboarding-notice[role="status"]')).toContainText(word('onboardingCopied', { email }));
+  expect(await findOverflowViolations(page)).toEqual([]);
+  await stopFailing();
+  await page.getByRole('button', { name: '招待リンクを作成', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'retry@example.com', exact: true })).toHaveValue(/\/invite#/);
+  await expect(good).toHaveValue(url);
+  expect(counts).toEqual({ good: 1, retry: 1 });
+});
+
+test('閉じたワークスペースしかないチームの再開は招待へ進まず、組織へ戻れる', async ({ context, baseURL, page }) => {
+  await signIn(context, baseURL, 'createOrg');
+  await page.goto('/auth/setup');
+  await page.getByLabel('個人用のURL', { exact: true }).fill('setup-closed-own');
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await page.getByRole('button', { name: 'チームを作って招待する', exact: true }).click();
+  await page.getByLabel('組織の名前', { exact: true }).fill('再開の工房');
+  await page.getByLabel('チーム用のURL', { exact: true }).fill('setup-closed-team');
+  await page.getByRole('button', { name: '組織を作って進む', exact: true }).click();
+  await expect(page.getByLabel('招待するGoogleアカウントのメールアドレス')).toBeVisible();
+  const response = await page.request.post(operationPath(workspaceList, 'setup-closed-team'), {
+    headers: { Origin: new URL(baseURL!).origin },
+    data: {},
+  });
+  expect(response.status()).toBe(200);
+  const { workspaces } = await response.json();
+  expect(workspaces).toHaveLength(1);
+  const closed = await page.request.post(operationPath(workspaceClose, 'setup-closed-team'), {
+    headers: { Origin: new URL(baseURL!).origin },
+    data: { workspace_id: workspaces[0].id },
+  });
+  expect(closed.status()).toBe(200);
+  await page.reload();
+  await expect(page.getByRole('alert')).toContainText(word('onboardingTeamUnavailable'));
+  await expect(page.getByLabel('招待するGoogleアカウントのメールアドレス')).toHaveCount(0);
+  expect(await findA11yViolations(page)).toEqual([]);
+  await page.getByRole('link', { name: word('onboardingOpenTeam') }).click();
+  await expect(page).toHaveURL(/\/setup-closed-team$/);
+});
+
+test('作成前からある管理対象のチームを、失敗した新規作成の回復先にしない', async ({ context, baseURL, page }) => {
+  await signIn(context, baseURL, 'createOrg');
+  const created = await page.request.post(operationPath(createMyOrganization), {
+    headers: { Origin: new URL(baseURL!).origin },
+    data: { slug: 'setup-existing-team', name: '既存の工房' },
+  });
+  expect(created.status()).toBe(200);
+  await page.goto('/auth/setup');
+  await page.getByLabel('個人用のURL', { exact: true }).fill('setup-existing-own');
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await page.getByRole('button', { name: 'チームを作って招待する', exact: true }).click();
+  await page.getByLabel('組織の名前', { exact: true }).fill('既存の工房');
+  await page.getByLabel('チーム用のURL', { exact: true }).fill('setup-existing-team');
+  await page.getByRole('button', { name: '組織を作って進む', exact: true }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page).not.toHaveURL(/team=setup-existing-team/);
+  await expect(page.getByLabel('招待するGoogleアカウントのメールアドレス')).toHaveCount(0);
+  const listed = await page.request.post(operationPath(workspaceList, 'setup-existing-team'), {
+    headers: { Origin: new URL(baseURL!).origin },
+    data: {},
+  });
+  expect(listed.status()).toBe(200);
+  expect((await listed.json()).workspaces).toEqual([]);
 });

@@ -24,8 +24,9 @@
     createMyOrganization,
     createPersonalOrganization,
     organizationInfo,
+    myOrganizations,
   } from '../../shared/operations/organization/index.ts';
-  import { workspaceCreate } from '../../shared/operations/workspace/workspace-create.ts';
+  import { onboardingWorkspacePrepare } from '../../shared/operations/workspace/index.ts';
   import { invitationCreate } from '../../shared/operations/workspace/invitation-create.ts';
   import type { OutputOf } from '../../shared/operations/define.ts';
   import type { DictionaryKey } from '../../shared/vocabulary.ts';
@@ -182,14 +183,38 @@
     }
     busy = true;
     error = undefined;
+    // 既存の管理対象の組織を、今回作成できたチームと取り違えない。
+    const before = await callOperation(myOrganizations, {});
+    if (!alive || authFailure(before)) return;
+    if (!before.ok) {
+      await fail('createMyOrganizationFailed');
+      return;
+    }
     const result = await callOperation(createMyOrganization, { slug: teamSlug.trim(), name: teamName.trim() });
     if (!alive || authFailure(result)) return;
     if (!result.ok) {
-      await fail(createMyOrganizationFailure(result).key);
-      return;
+      // 書き込み後に応答だけを失ったときは、本人に見える同じチームを確認して再開する。
+      const current = await callOperation(myOrganizations, {});
+      if (!alive || authFailure(current)) return;
+      const recovered = current.ok
+        ? current.data.organizations.find(
+            (org) =>
+              org.kind === 'team' &&
+              org.slug === teamSlug.trim() &&
+              org.name === teamName.trim() &&
+              !before.data.organizations.some((previous) => previous.slug === org.slug),
+          )
+        : undefined;
+      if (!recovered) {
+        await fail(createMyOrganizationFailure(result).key);
+        return;
+      }
+      teamSlug = recovered.slug;
+      teamName = recovered.name;
+    } else {
+      teamSlug = result.data.slug;
+      teamName = result.data.name;
     }
-    teamSlug = result.data.slug;
-    teamName = result.data.name;
     teamCreated = true;
     // 組織作成後の再読み込みでも、同じ組織のワークスペース・招待から再開する。
     const params = new SvelteURLSearchParams({ team: teamSlug });
@@ -208,28 +233,17 @@
       return;
     }
     teamName = org.data.organization.name;
-    const existing = org.data.workspaces.find((workspace) => workspace.role === 'leader');
-    if (existing) workspaceId = existing.id;
-    else if (org.data.organization.has_workspaces) {
-      await fail('onboardingTeamUnavailable');
+    const workspace = await callOperation(
+      onboardingWorkspacePrepare,
+      { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
+      { slug },
+    );
+    if (!alive || authFailure(workspace)) return;
+    if (!workspace.ok) {
+      await fail(workspace.status === 409 ? 'onboardingTeamUnavailable' : 'onboardingWorkspaceFailed');
       return;
-    } else {
-      const workspace = await callOperation(
-        workspaceCreate,
-        {
-          name: t('onboardingDefaultWorkspace'),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-          leader_user_id: org.data.me.id,
-        },
-        { slug },
-      );
-      if (!alive || authFailure(workspace)) return;
-      if (!workspace.ok) {
-        await fail('onboardingWorkspaceFailed');
-        return;
-      }
-      workspaceId = workspace.data.workspace_id;
     }
+    workspaceId = workspace.data.workspace_id;
     busy = false;
     await move(4);
   }
@@ -267,6 +281,8 @@
   async function copyLink(email: string, url: string) {
     try {
       await navigator.clipboard.writeText(url);
+      copied = '';
+      await tick();
       copied = email;
     } catch {
       await fail('onboardingCopyFailed');
@@ -301,7 +317,7 @@
         <div class="callout is-warn"><Icon name="alert" /><span>{t('onboardingPersonalUnavailable')}</span></div>
         <a class="btn" href={resolve('/')}>{t('onboardingReturnOrganizations')}</a>
       {:else}
-        {#if error}<div class="callout is-warn" role="alert" tabindex="-1" bind:this={errorBox}>
+        {#if error}<div class="callout is-warn" id="setup-error" role="alert" tabindex="-1" bind:this={errorBox}>
             <Icon name="alert" /><span>{t(error, words)}</span>
           </div>{/if}
         {#if step === 1}
@@ -314,13 +330,14 @@
                 autocomplete="name"
                 maxlength="200"
                 readonly={busy || profileSaved}
-                aria-describedby={error ? 'setup-profile-error' : undefined}
+                aria-describedby={error ? 'setup-error' : undefined}
               />
             </div>
             <div class="field">
               <label class="field-label" for="setup-title-input">{t('onboardingJob')}</label><input
                 class="input"
                 id="setup-title-input"
+                aria-describedby={error ? 'setup-error' : undefined}
                 bind:value={title}
                 autocomplete="organization-title"
                 maxlength="200"
@@ -338,14 +355,13 @@
                   spellcheck="false"
                   autocomplete="off"
                   readonly={busy || personal !== null}
-                  aria-describedby="setup-personal-hint"
+                  aria-describedby={error ? 'setup-personal-hint setup-error' : 'setup-personal-hint'}
                 />
               </div>
               <p class="field-hint" id="setup-personal-hint">
                 {t(personal === null ? 'onboardingPersonalUrlLiveHint' : 'onboardingProfileSaved')}
               </p>
             </div>
-            {#if error}<p class="visually-hidden" id="setup-profile-error">{t(error, words)}</p>{/if}
             <div class="onboarding-actions">
               <button class="btn is-primary" type="submit" aria-disabled={busy}
                 >{t(busy ? 'onboardingSaving' : 'onboardingContinue')}</button
@@ -376,6 +392,7 @@
               <label class="field-label" for="setup-team-name">{t('onboardingOrganizationName', words)}</label><input
                 class="input"
                 id="setup-team-name"
+                aria-describedby={error ? 'setup-error' : undefined}
                 bind:value={teamName}
                 maxlength="100"
                 autocomplete="organization"
@@ -388,6 +405,7 @@
                 <span aria-hidden="true">{page.url.host}/</span><input
                   class="input"
                   id="setup-team-slug"
+                  aria-describedby={error ? 'setup-team-hint setup-error' : 'setup-team-hint'}
                   bind:value={teamSlug}
                   maxlength="40"
                   spellcheck="false"
@@ -395,7 +413,7 @@
                   readonly={busy || teamCreated}
                 />
               </div>
-              <p class="field-hint">{t('createMyOrganizationSlugHint')}</p>
+              <p class="field-hint" id="setup-team-hint">{t('createMyOrganizationSlugHint')}</p>
             </div>
             <p class="field-hint">{t('onboardingTeamCreateNote', words)}</p>
             <div class="onboarding-actions">
@@ -414,7 +432,7 @@
                 rows="3"
                 maxlength="6000"
                 readonly={busy}
-                aria-describedby="setup-invitation-hint"></textarea>
+                aria-describedby={error ? 'setup-invitation-hint setup-error' : 'setup-invitation-hint'}></textarea>
               <p class="field-hint" id="setup-invitation-hint">{t('onboardingInviteLiveNote')}</p>
             </div>
             <div class="onboarding-actions">
@@ -424,17 +442,21 @@
             </div>
           </form>
           {#if links.length > 0}<div class="onboarding-fields">
-              {#each links as row (row.email)}<div class="field">
-                  <label class="field-label" for={`invite-${links.indexOf(row)}`}>{row.email}</label>
-                  {#if row.url !== null}<input
-                      class="input"
-                      id={`invite-${links.indexOf(row)}`}
-                      value={row.url}
-                      readonly
-                    /><button class="btn" type="button" onclick={() => copyLink(row.email, row.url!)}
-                      >{t('onboardingCopyLink')}</button
+              {#each links as row (row.email)}<div
+                  class="field"
+                  role={row.url === null ? 'group' : undefined}
+                  aria-label={row.url === null ? row.email : undefined}
+                >
+                  {#if row.url !== null}<label class="field-label" for={`invite-${links.indexOf(row)}`}
+                      >{row.email}</label
+                    ><input class="input" id={`invite-${links.indexOf(row)}`} value={row.url} readonly /><button
+                      class="btn"
+                      type="button"
+                      aria-label={`${t('onboardingCopyLink')} ${row.email}`}
+                      onclick={() => copyLink(row.email, row.url!)}>{t('onboardingCopyLink')}</button
                     >
-                  {:else}<p id={`invite-${links.indexOf(row)}`} class="field-hint">
+                  {:else}<p class="field-label">{row.email}</p>
+                    <p class="field-hint">
                       {t(row.failed ? 'onboardingInvitationFailed' : 'onboardingSaving')}
                     </p>{/if}
                 </div>{/each}
@@ -447,11 +469,14 @@
             >
           </div>
         {/if}
+        {#if error && teamCreated}<a class="btn is-quiet" href={resolve('/[slug]', { slug: teamSlug })}
+            >{t('onboardingOpenTeam')}</a
+          >{/if}
         {#if step > 1 && !busy}<button class="btn is-quiet" type="button" onclick={() => move(step - 1)}
             >{t('onboardingBack')}</button
           >{/if}
       {/if}
-      <p class="visually-hidden" role="status">
+      <p class="onboarding-notice wrap-anywhere" role="status">
         {busy ? t('onboardingSaving') : copied ? t('onboardingCopied', { email: copied }) : ''}
       </p>
     </section>

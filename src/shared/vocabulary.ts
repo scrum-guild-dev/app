@@ -27,6 +27,7 @@ export const dictionary = defineDictionary({
   onboardingEmailsInvalid: 'Googleでログインするメールアドレスを、カンマか改行で区切って1〜20件入力してください。',
   onboardingInvitationsFailed:
     '一部の招待を作成できませんでした。作成済みのリンクは残しています。入力を確認してもう一度試してください。',
+  onboardingOpenTeam: 'チームの組織を開く',
   onboardingCopyFailed: 'コピーできませんでした。表示されたURLを選択してコピーしてください。',
   onboardingPersonalUnavailable: '作成済みの自分用の組織に入れません。組織の選択画面で状態を確認してください。',
   onboardingReturnOrganizations: '組織の選択に戻る',

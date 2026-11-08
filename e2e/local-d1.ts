@@ -223,13 +223,17 @@ export async function removeE2eSeedTasks(): Promise<void> {
   ]);
 }
 
-// seed のセッションのアカウントが「組織を作る」で作った組織を、その users と change_logs ごと消す。お試し中の組織は1アカウントに1つまでで、
-// slug も一意なので、作った組織が残ると繰り返し（--repeat-each）の2回目から作れない。作った直後の組織が持つのは users と change_logs だけ
-// （ほかの表の行は無い）。外部キーの向きに合わせ、変更の履歴、users、組織の順に消す。どの文も作ったアカウントで絞った組織だけを対象にする
+// seed のアカウントが作った組織と、導入時の初期ワークスペース・招待を消す。
+// お試しとslugの重複を繰り返しへ持ち越さない。外部キーの子から消し、作成者で絞った組織だけを対象にする。
 export async function removeCreatedOrganizations(who: keyof typeof SEED_SESSIONS): Promise<void> {
   const created = `SELECT id FROM organizations WHERE created_by_account_id = '${SEED_SESSIONS[who].accountId}'`;
+  const workspaces = `SELECT id FROM workspaces WHERE organization_id IN (${created})`;
   await executeLocalD1([
     `DELETE FROM change_logs WHERE organization_id IN (${created});`,
+    ...['invitations', 'memberships', 'workspace_point_rates', 'board_columns', 'detail_fields'].map(
+      (table) => `DELETE FROM ${table} WHERE workspace_id IN (${workspaces});`,
+    ),
+    `DELETE FROM workspaces WHERE organization_id IN (${created});`,
     `DELETE FROM users WHERE organization_id IN (${created});`,
     `DELETE FROM organizations WHERE created_by_account_id = '${SEED_SESSIONS[who].accountId}';`,
   ]);

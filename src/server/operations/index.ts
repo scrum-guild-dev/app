@@ -60,6 +60,7 @@ import {
 import { organizationSettingsUpdateOperation } from './organization-settings.ts';
 import { logoutOperation, meOperation } from './session.ts';
 import { accountProfileSaveOperation, onboardingStatusOperation } from './onboarding.ts';
+import { onboardingWorkspacePrepareOperation } from './onboarding-workspace.ts';
 import { consentRecordOperation, consentStatusOperation } from './consent.ts';
 import { credentialsRevokeAllOperation } from './credentials.ts';
 import { tokenCreateOperation, tokenListOperation, tokenRevokeOperation } from './token.ts';
@@ -188,6 +189,7 @@ const listedOperations: readonly ImplementedOperation[] = [
   logoutOperation,
   accountProfileSaveOperation,
   onboardingStatusOperation,
+  onboardingWorkspacePrepareOperation,
   consentStatusOperation,
   consentRecordOperation,
   tokenCreateOperation,
