@@ -395,6 +395,11 @@ export const dictionary = defineDictionary({
   carryDays: '{days}日前に印を付けた',
   // 今日やるの印（太陽のボタン。task-today-mark）。押された状態で付いていることを示し、読み上げの名前は題を添える
   todayMark: '今日やる',
+  drawerParent: '親',
+  taskParentNone: 'なし',
+  todayMarkBacklogOnly: '{inbox}と{archive}では今日やるの印を付け外しできません',
+  todayMarkOwnOnly: '自分が担当する{task}だけ今日やるの印を付け外しできます',
+  todayMarkCompleted: '{done}した{task}の今日やるの印は付け外しできません',
   todayMarkLabel: '{mark}: {title}',
   todayMarked: '今日やると決めました',
   todayUnmarked: '今日やるの印を外しました',
@@ -402,6 +407,8 @@ export const dictionary = defineDictionary({
   todayMarkNotAssignee: '{assignee}が替わったため、今日やるの印を付け外しできませんでした。一覧を読み直します',
   todayMarkDone: 'この{task}は{done}になっているため、印を付け外しできません。一覧を読み直します',
   todayMarkFailed: '今日やるの印を変えられませんでした。もう一度試してください。',
+  todayMarkRefreshFailed:
+    '今日やるの印は保存しましたが、最新の詳細を読み込めませんでした。もう一度読み込んでください。',
   sprintInProgress: '進行中のスプリント',
 
   // 今日やることの空の状態（管理者）。{workspace} と {member} は、辞書の言葉を画面が渡す。
