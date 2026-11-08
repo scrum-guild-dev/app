@@ -222,7 +222,7 @@ test('?error=denied の警告は 3 行以内で、会員登録のボタンを含
   const alert = page.getByRole('alert');
   await expect(alert.getByRole('link', { name: '会員登録から始める' })).toHaveAttribute('href', '/signup');
   // 文の行数（ボタンの行を除く）。行の高さで割る
-  const lines = await alert.locator('span').evaluate((el) => {
+  const lines = await alert.locator(':scope > span').evaluate((el) => {
     const style = getComputedStyle(el);
     const lineHeight = parseFloat(style.lineHeight);
     if (Number.isNaN(lineHeight)) throw new Error('line-height が数値でない');
@@ -233,9 +233,13 @@ test('?error=denied の警告は 3 行以内で、会員登録のボタンを含
   expect(box && box.y + box.height).toBeLessThanOrEqual(667);
   // 確かめる手段の案内はボタンの下
   await expect(alert.getByText('招待された手段')).toHaveCount(0);
+  // 注記は警告の説明として結ぶ（警告の文には混ぜない）
+  await expect(alert).toHaveAccessibleDescription(/招待された手段/);
   const hint = page.getByText('招待された手段（GitHub か Google）と');
   await expect(hint).toBeVisible();
+  const googleBox = await page.getByRole('link', { name: 'Google でログイン' }).boundingBox();
   const hintBox = await hint.boundingBox();
+  expect(hintBox && googleBox && hintBox.y).toBeGreaterThan((googleBox?.y ?? 0) + (googleBox?.height ?? 0));
   expect(hintBox && box && hintBox.y).toBeGreaterThan((box?.y ?? 0) + (box?.height ?? 0));
 });
 
