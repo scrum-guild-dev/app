@@ -148,6 +148,12 @@ export const backlogTree = defineOperation({
     // 決まった欄が未記入の、完了していないタスクの件数。絞り込みに関わらず、ワークスペースの全体で数える
     // （バックログの見出しの集計）
     unfilled_count: z.number().int(),
+    // 組織・ワークスペース内の、削除していない未完了のバックログのタスク全体。絞り込みに左右されない
+    open_count: z.number().int(),
+    // points が null のもの（0 ポイントは見積もり済み）
+    unestimated_count: z.number().int(),
+    // 同じワークスペースの削除していないスプリントに入っていないもの
+    unscheduled_count: z.number().int(),
     choices: backlogChoicesSchema,
   }),
 });

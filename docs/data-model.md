@@ -1,6 +1,6 @@
 # Scrum Guild データモデル
 
-状態: 確定。要件定義（`requirements.md`）を D1（SQLite）のテーブルに落としたもの。最初のマイグレーション（`migrations/0001_create_initial_tables.sql`）で、共通の6表と、一本道に要る組織の中の16表を作った。`organization_holidays` は `migrations/0004_add_organization_holidays.sql` で、`comments` は `migrations/0006_add_comments.sql` で、`sprint_entries` と `completions.previous_column_id` は `migrations/0008_add_sprint_entries.sql` で、`epic_party_members` と `thanks` は `migrations/0009_add_epic_party_members_and_thanks.sql` で、共通の表の `password_credentials` は `migrations/0010_add_password_credentials.sql`、`api_tokens` は `migrations/0012_add_api_tokens.sql`、`account_consents` は `migrations/0013_add_account_consents.sql` で足した（共通の表は9表になった）。残りの表は、使う機能の Issue でマイグレーションを足して作る
+状態: 確定。要件定義（`requirements.md`）を D1（SQLite）のテーブルに落としたもの。最初のマイグレーション（`migrations/0001_create_initial_tables.sql`）で、共通の6表と、一本道に要る組織の中の16表を作った。`organization_holidays` は `migrations/0004_add_organization_holidays.sql` で、`comments` は `migrations/0006_add_comments.sql` で、`sprint_entries` と `completions.previous_column_id` は `migrations/0008_add_sprint_entries.sql` で、`epic_party_members` と `thanks` は `migrations/0009_add_epic_party_members_and_thanks.sql` で、共通の表の `password_credentials` は `migrations/0010_add_password_credentials.sql`、`api_tokens` は `migrations/0012_add_api_tokens.sql`、`account_consents` は `migrations/0013_add_account_consents.sql` で足した（ここまでで共通の表は9表になった）。`account_profiles` は `migrations/0023_add_account_profiles.sql` で足した（共通の表は10表）。残りの表は、使う機能の Issue でマイグレーションを足して作る
 
 ## 決まりごと
 
@@ -27,7 +27,7 @@
 
 | まとまり | テーブル |
 | --- | --- |
-| アカウント | `accounts`、`account_logins`、`password_credentials`、`sessions`、`api_tokens`、`account_consents`、`oauth_states`、`rate_limits` |
+| アカウント | `accounts`、`account_profiles`、`account_logins`、`password_credentials`、`sessions`、`api_tokens`、`account_consents`、`oauth_states`、`rate_limits` |
 | 組織 | `organizations`、`users`、`organization_holidays` |
 | ユーザーの稼働 | `user_capacity_settings`、`user_monthly_overrides`、`user_time_off` |
 | ワークスペース | `workspaces`、`workspace_point_rates`、`workspace_holidays`、`memberships`、`invitations`、`allocations` |
@@ -57,7 +57,7 @@
 
 | 区分 | テーブル | 置き場所 |
 | --- | --- | --- |
-| 共通 | `accounts`、`account_logins`、`password_credentials`、`sessions`、`api_tokens`、`account_consents`、`oauth_states`、`rate_limits`、`organizations` | 共通の DB に1つだけ |
+| 共通 | `accounts`、`account_profiles`、`account_logins`、`password_credentials`、`sessions`、`api_tokens`、`account_consents`、`oauth_states`、`rate_limits`、`organizations` | 共通の DB に1つだけ |
 | 組織の中 | それ以外のすべて | 組織が置かれた DB |
 
 添付ファイルの中身は D1 ではなく R2 に置く。`wrangler.jsonc` の binding は `ATTACHMENTS`、本番のバケット名は `scrum-guild-attachments`。R2 のキーの先頭は組織の ID なので、D1 を分けても R2 は分けずに済む。
@@ -311,7 +311,7 @@
 - 無効にされた人への承諾待ちの招待は数えないので、無効の間に招待し直した招待は、有効に戻す（`user-enable`。「書き込みの単位」のユーザーの有効化）と、その人が新しく数えられる。有効化は書く前に、有効に戻す本人のログイン（`login_provider`、`login_subject`）への承諾待ちの招待のうち、無効にした日時以後に作ったもの（開いたワークスペース、同じ組織。`hasSeatInvitationOfLogin`。期限は見ない。本人のログインに結ばれた行は claim の列が空で、期限の過ぎた Google の招待はメールアドレスで待つ行にしか無く当たらない）があるかを見て、あれば `adding` を 1（無効の人は今は数えられていないので常に 1。同じ人への招待が複数でも 1）、無ければ 0 とする。無効にする前に作った招待は、有効化の同じ `batch()` が取り消して人数に加わらないので、無効の間に本人が結んで承諾待ちで残っていても数えない。`adding` が 1 で、今の人数 `used`（`seatHoldersOf`）に足した `used + adding` が `member_limit` を超えるときだけ、何も書かずに 409（`member_limit_reached`、`details` は `{ used, limit, adding }`）で断る。無効の間に作った招待は、断っても取り消さずに残す。ちょうど上限に達する有効化は通す。`adding` が 0 の有効化（招待が無い、無効にする前に作った招待だけ、閉じたワークスペースへの招待だけ、メールアドレスで待つ Google の招待だけ（結ばれるまで本人のログインに当たらない）、別の組織の招待だけ）は、段階を下げて人数が上限を超えている組織でも通す（このときは人数も数えない）。断られた管理者は、上限を見直す（運用者に頼む）か、ほかのユーザーを無効にして人数を減らすか、リーダーにその人への招待を取り消してもらうと、同じ人を有効に戻せる。数えてから書くまでの間に同時に増えた分は、招待、開き直しと同じく認める（`adding` の人数は文の条件に入れない）。超える量は、同時に送った有効化と招待の人数までで、データは壊れない。
 - 人数を数える関数は `src/server/db/seats.ts` の1つ（`seatHoldersIn`）に置く。組織の ID の束を受け、組織ごとの数える人（1人の見分け方 `personKey` の集合）を返す。どの文も `organization_id IN (...)` で組織に絞り、組織の ID は束縛の上限で区切る。招待の上限の検査と member-list の `seats` は、確かめた組織の入口だけを受ける `seatHoldersOf` から1つの組織で呼び、運用者の組織の一覧（`users` の節の、運用者の組織の一覧の集計の箇条書き）は組織をまたぐ入口ごとに組織の ID の束で呼ぶ。数え方は同じなので、同じ組織なら同じ数になる。
 - 解約した組織は、`purge_on` を過ぎたら運用の手順でこの組織の行をすべて消し、R2 の `<organization_id>/` で始まるファイルも消す。再開したら `suspended_at` と `purge_on` を空に戻し、お試しの期限 `trial_ends_on` も空にする。`purge_on` は、解約で停止した日時の UTC の日付の30日後（`YYYY-MM-DD`）。停止中に解約へ切り替えたときは、切り替えた日時の UTC の日付の30日後。`purge_on` が今日（UTC の日付）より前の組織は、再開も一時的な停止への切り替えもできない（409 の `purge_due`。消す SQL のガードと同じ境目で、予定日の当日まではできる。「書き込みの単位」の組織の停止と再開）。運用者の組織の一覧は、この組織に `purge_due` を真で返す。
-- 消す手順は `docs/operations.md` の「解約した組織のデータを消す」。消す SQL は `scripts/purge-organization.ts` が1行に1文で書き出し（組み立ては `scripts/purge-organization-sql.ts`）、運用者が1文ずつ流して、組織の中のすべての表と最後に `organizations` の行を、外部キーの子から順に消す。どの文も、その組織が解約で停止していて `purge_on` を過ぎている（`purge_on < date('now')`、UTC の日付）ことを条件にするので、一時的な停止と予定日の当日までの組織では何も消えない。共通の表のうち `accounts`、`account_logins`、`password_credentials`、`sessions`、`api_tokens`、`oauth_states`、`rate_limits` は消さない（アカウントをどうするかは #407。セッションと API トークンは、入れる組織を失ったことでは消えず、期限切れ、ログアウト、本人の取り消しでだけ消える）。この SQL は条件の確かめに共通の表の `organizations` を組織の中の表の文から引く（「データベースの分け方」の例外で、DB が1つの今だけ使える）。組織ごとに DB を分けるときは、確かめを共通の DB で先に行う形に直す。
+- 消す手順は `docs/operations.md` の「解約した組織のデータを消す」。消す SQL は `scripts/purge-organization.ts` が1行に1文で書き出し（組み立ては `scripts/purge-organization-sql.ts`）、運用者が1文ずつ流して、組織の中のすべての表と最後に `organizations` の行を、外部キーの子から順に消す。どの文も、その組織が解約で停止していて `purge_on` を過ぎている（`purge_on < date('now')`、UTC の日付）ことを条件にするので、一時的な停止と予定日の当日までの組織では何も消えない。共通の表のうち `accounts`、`account_profiles`、`account_logins`、`password_credentials`、`sessions`、`api_tokens`、`oauth_states`、`rate_limits` は消さない（アカウントをどうするかは #407。セッションと API トークンは、入れる組織を失ったことでは消えず、期限切れ、ログアウト、本人の取り消しでだけ消える）。この SQL は条件の確かめに共通の表の `organizations` を組織の中の表の文から引く（「データベースの分け方」の例外で、DB が1つの今だけ使える）。組織ごとに DB を分けるときは、確かめを共通の DB で先に行う形に直す。
 
 ### users
 
@@ -921,9 +921,12 @@
     | 最悪の形・検索 | 386 | 387 | 719 |
 
     「全部書いてある」は、判定が10件の欄を最後まで引く最も重い形（未完了の全タスクに全部の欄の値を入れた）。現実の形（未完了 5,000）は 403 ms で、目安の 500 ms に収まる。最悪の形（未完了 50,000）の絞らない読み取りは、変更前から目安を超えていて（この環境で 1,204 ms）、判定で約 800 ms 増える（未完了のタスクごとの判定と、全体の件数の1文が、それぞれ 5 万行を引くため）。分けて読む形は、上のとおり未完了が数万件に積もる使い方が出てから決め、そのとき判定も読み分ける。
+    見出しの3集計を追加した後の測定（2026-11-08、クラウドのローカル D1、`pnpm bench:backlog --runs 3`。上の未記入判定の表と違い、測るワークスペースに決まった欄も値も無い形）では、絞らない場合の中央値／最大は、未完了5千件で126／128 ms、未完了5万件で435／446 ms。8通りの読み方を両方の形で確認し、索引は追加しない。環境と欄の有無が違うため、上の1,204 msなどの値と直接比較しない。
+
 - バックログの絞り込み（`backlog-tree` の入力。決まりは `docs/requirements.md` の「絞り込みと検索」）。担当（`assignee_user_id`。ID、`'me'`（呼んだ人）、null（担当なし））、区分（`category_id`。引き継ぎを解いた区分の ID か null）、リポジトリ（`repository_id`）、エピック（`epic_id`。null は親のないストーリーと親のないタスクだけ）、タイトルの検索（`query`）で、どれも省けば絞らない。絞るのはタスクの2つの文（ストーリーの配下と親のないタスク）の `WHERE` で、区分は `CASE`（親のないストーリーは自身、エピックの下ならエピック）と、生きている区分の `EXISTS` で決める。リポジトリは結んだ生きている行で決める。どれもワークスペースで絞った行の中で当てるので、別のワークスペースや別の組織の ID は何にも当たらない（404 にはしない）。エピックとストーリーは絞らずに全部読み（ポイントの合計を全体の値で返すため）、検索しているときだけ、題が語をそろえて含むかの印（`title_hit`）を足して、どの親を残すかを Worker で決める。検索は語ごとに `instr(lower(title), lower(語)) > 0` を `AND` でつなぐ（`titleContainsAll`。`lower` は英字だけを小文字にするので、英字の大文字と小文字は区別せず、全角と半角はそろえない。`%`、`_`、`\` も普通の文字として探す）。ストーリーの配下のタスクは、タスク、ストーリー、親のエピック（`EXISTS`）のどれかの題がすべての語を含めば当たる。`LIKE` を使わないのは、D1 が `LIKE` の型を 50 バイトまでしか受けず、全角で 16 字を超える語を探せないため。検索の文字は前後の空白を除いて 100 字まで、語は 5 つまで。
 - 絞り込みの選択肢（`backlog-tree` の `choices`）。担当（`assignees`）は、組織で絞った `users` のうち、そのワークスペースに今所属していて担当にできる人（`current` が真。`activeMemberName` と同じ条件）と、未完了のバックログのタスクの担当に残っている人（`tasks_assignee_user` で引く）を、今所属している人を先に名前の順で返す。エピック（`epics`）は、絞って木から消えたものも選べるよう、削除していないエピックを全部返す（`finished` は完了か中止したもの。ストーリーの親に選べない）。絞っているときだけ、完了していないストーリー（`stories`。`id`、`title`、`epic_id`、引き継ぎを解いた `category`）も木の順で返し、起票と親を移すダイアログの親の候補にする（木から消えたストーリーも親に選べるように。絞っていなければ null で、画面は木から作る）。区分とリポジトリは `category-repository-list` で読む。どれも木と同じ `batch()` で読む（ストーリーとエピックは木の文の行から作る）。
 - `backlog-tree` が返すもの。最上段は「エピック」「親のないストーリー」「親のない未完了のタスク」の3段で、それぞれ `position`（同じ値なら `id`）の順に並べる。エピックは、完了と中止したものも含めて削除していないものを返し、`id`、`title`、`due_on`、`link_url`、`completed_at`、`canceled_at`（長い `body_md` は載せない）、配下の削除していないストーリー（`position` の順。完了したものも含め、形は親のないストーリーと同じ）、配下のポイントの合計（`points_done` と `points_all`。配下のストーリーの合計）を付ける。ストーリーには `id`、`title`、`due_on`、`link_url`、`completed_at`（長い `acceptance_criteria_md` と `body_md` は載せない）、配下の未完了のタスク、配下の完了したタスクの件数（`completed_task_count`）と未完了のタスクの件数（`open_task_count`。絞って出していない行も数え、画面が完了にできるかを決める）、配下のポイントの合計（`points_done` は完了したタスク、`points_all` は削除していないタスク全部。未見積もりは 0）を付ける。絞っても、件数とポイントの合計は、そのストーリーとエピックの全体の値を返す。タスクの行には `id`、`title`、`points`、`due_on`、担当、リポジトリ（`{ id, name }` か null）、入っているスプリント（`sprint`。同じワークスペースの削除していないスプリントの `{ id, name, start_on, end_on }` か null。画面は名前、無ければ期間を出す）、決まった欄が未記入か（`unfilled`。行は完了していないタスクだけなので、削除していない欄に値の行が無いものがあれば真。`task_field_values` の項）、削除できるか（`can_delete`。`task-detail` と同じ判定で、作った人かリーダー（管理者を含む）で、取り込んでいないタスクなら真）を付ける。ワークスペース全体の未記入の件数（`unfilled_count`。完了していないバックログのタスクのうち未記入のもの）は、絞り込みに関わらず、木と同じ `batch()` の1文で数えて返す。スプリントに入ったタスクも木から外さない。エピック、ストーリー、タスクの行には、引き継ぎを解いた区分（`category`。エピック、ストーリー、タスク自身の順に最初に入っているもので、`{ id, name }` か null）を付ける。区分とリポジトリは、同じワークスペースの削除していないものだけを結ぶ。親のない完了したタスクは件数だけ返し、絞っているときは返さない（`completed_count` が null）。ワークスペースのタイムゾーンでの今日の日付（`today`）と週の始まり（`week_start`）も返し、期日の印（過ぎた、今日、今週、それ以外）はこの2つと `src/shared/due.ts` で決める。組織とワークスペースで絞り、ストーリー側もワークスペースで絞る。
+- バックログの見出しの3集計（`backlog-tree`）。組織とワークスペース内の `tray = 'backlog'`、未完了、削除していないタスク全体の件数を `open_count`、ポイントが null の件数（0 は見積もり済み）を `unestimated_count`、同じワークスペースの削除していないスプリントに入っていない件数を `unscheduled_count` で返す。絞り込みを適用せず、木と同じ `batch()` の追加の1文で集計し、`tasks_workspace_tray` の索引を使う。
 - タスクの親は、同じワークスペースの削除していないストーリー。作るとき（`task-create` の `story_id`）に無ければ 404、完了していれば（`stories.completed_at` が空でない）409（`conflict`）で、`position` はそのストーリーの配下の末尾。作るときはリポジトリ（`repository_id`）と、親のないときだけ区分（`category_id`。親と一緒に送ると 409 の `has_parent`）も受け、作ったときの履歴に `category`、`repository`（`[null, {id, name}]`）を残し、入れ先を付けたときは `sprint`（同じ形。名前は読んだときの名前で、名前の無いスプリントは期間）も残す。
 - 並べ替えと親の移動（`task-move`）。入力は動かすタスク、移す先の親（`story_id`。null は親なし）、直前の行（`after_task_id`。null は先頭、ID はその行の直後、省くと末尾）。画面の「親を移す」は直前の行を送らず、移す先の末尾に置く。
   - 移す先の並びは、親の配下（親なしなら親のないタスク）の削除していないバックログのタスクを、完了したものも含めて `position, id` の順に並べ、移すタスクを除いたもの。直前の行とその次の行の間の値（`generateKeyBetween`）を振る。先頭なら最初の行の前、末尾なら最後の行の後。
@@ -1638,3 +1641,15 @@ SQL では粗く絞り、区分に入るかの厳密な判定はワークスペ�
 - 件数の上限は設けない。ロールの読み取りの所属は自分の今の所属だけで、手順の文は、どれも「行が1つあるか」を `LIMIT 1` で引く（`DISTINCT` は使わない）。リーダーのバックログやスプリントの文は、リーダーのワークスペースを起点に結合して最初の1行で止まるので、タスクが5万件あっても全件を読まない。
 - 出力は `role`（`member`、`leader`、`admin`、null）と `steps`（`key`、`done`、`optional`、`workspace`（ID と名前、または null））。画面の文言は `src/shared/vocabulary.ts` の辞書にある。
 
+
+## アカウントのプロフィール（#1021）
+
+共通の表 `account_profiles` を追加する。`account_id` は `accounts.id` を参照する主キー（`ON DELETE` は付けず、物理削除はアプリが子から順に行う）。`name` は表示する名前（前後の空白を除いて1〜100字）、`title` は肩書き（空か100字まで）、`created_at` と `updated_at` はUTCのISO日時。プロフィールはログイン手段の名前と分け、OAuthの再ログインで上書きしない。自分のCookieのセッションからだけ読み書きする。組織の中の表と結合せず、同じbatchにも混ぜない。
+
+プロフィール保存後に自分用の組織を既存の操作で作る。途中で失敗してもプロフィールは残り、作成を再試行できる。再読み込み時は保存済みプロフィールと作成済み自分用を読んで再開する。新しく作る組織の最初の管理者には保存した名前を使う。既存組織のユーザー名は変更しない。
+
+追加のみの広げる変更で、既存行の移し替えはない。旧版はこの表を使わず、新しい表がある状態でも動く。
+
+### 導入時の最初のワークスペース
+
+`onboarding-workspace-prepare` は、開いた自分のリーダー所属があれば再利用する。作る場合は `workspaces` のINSERTに同じ組織のワークスペースがまだ無い条件と現在の管理者の条件を付け、初期行はその要求のワークスペースIDが作られた場合だけ、同じbatchで書く。並行要求の片方が先に作った場合は、その開いたリーダー所属を読み直して同じIDを返す。既存があるが利用できる先が無ければ、閉じたものの復活や別のワークスペースの追加をせず409で断る。

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scrum Guild 利用開始のプレビュー</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+</head>
+<body>
+<div id="preview"></div>
+<script src="icons.js"></script>
+<script src="art.js"></script>
+<script src="sample-data.js"></script>
+<script src="kit.js"></script>
+<script>
+"use strict";
+const { t, esc, icon } = SQ;
+const words = { organization: t('organization') };
+let withTeam = false;
+let titles = [];
+let leads = [];
+const values = {};
+let step = 0;
+let notice = '';
+function text(key, params = words) { return esc(t(key).replace(/\{(\w+)\}/g, (match, name) => Object.hasOwn(params, name) ? String(params[name]) : match)); }
+function button(key, primary = false, action = 'next') { return `<button class="btn ${primary ? 'is-primary' : 'is-quiet'}" type="button" data-action="${action}">${text(key)}</button>`; }
+function field(id, key, placeholder) { return `<div class="field"><label class="field-label" for="${id}">${text(key)}</label><input class="input" id="${id}" value="${esc(values[id] || '')}" placeholder="${esc(placeholder)}" maxlength="100"></div>`; }
+function actions(primary, skip = true) { return `<div class="onboarding-actions">${skip ? button('onboardingSkip') : ''}${button(primary, true)}</div>`; }
+function render(focus = false) {
+  titles = ['onboardingAccount', 'onboardingProfile', 'onboardingInviteChoice', ...(withTeam ? ['onboardingOrganization', 'onboardingInvite'] : [])];
+  leads = ['onboardingAccountLead', 'onboardingProfileLead', 'onboardingInviteChoiceLead', ...(withTeam ? ['onboardingOrganizationLead', 'onboardingInviteLead'] : [])];
+  let body = '';
+  if (step === 0) body = `<div class="onboarding-fields"><button class="btn is-wide is-google" type="button" data-action="next">${SQ.googleMark}${text('onboardingGoogle')}</button><button class="btn is-wide" type="button" data-action="next">${icon('git')}${text('onboardingGithubAccount')}</button><p class="field-hint">${text('onboardingAuthNote')}</p></div>`;
+  if (step === 1) body = `<div class="onboarding-fields"><div class="field"><label class="field-label" for="name">${text('onboardingName')}</label><div class="onboarding-profile"><span class="onboarding-avatar" aria-hidden="true">${icon('users')}</span><input class="input" id="name" value="${esc(values.name || '')}" placeholder="${text('onboardingNameExample')}" maxlength="100"></div></div>${field('job', 'onboardingJob', t('onboardingJobExample'))}<p class="field-hint">${text('onboardingProfileNote')}</p><div class="field"><label class="field-label" for="personal-slug">${text('onboardingPersonalUrl')}</label><div class="onboarding-url"><span aria-hidden="true">scrum-guild /</span><input class="input" id="personal-slug" value="${esc(values['personal-slug'] || '')}" placeholder="yui" maxlength="63" spellcheck="false" aria-describedby="personal-url-hint"></div><p class="field-hint" id="personal-url-hint">${text('onboardingPersonalUrlHint')}</p></div>${actions('onboardingContinue', false)}</div>`;
+  if (step === 2) body = `<div class="onboarding-fields"><p>${text('onboardingInviteChoiceNote')}</p><div class="onboarding-actions"><a class="btn is-quiet" href="index.html">${text('onboardingNoTeam')}</a>${button('onboardingAddTeam', true, 'team')}</div></div>`;
+  if (step === 3) body = `<div class="onboarding-fields">${field('organization', 'onboardingOrganizationName', t('onboardingOrganizationExample'))}<div class="field"><label class="field-label" for="slug">${text('onboardingTeamUrl')}</label><div class="onboarding-url"><span aria-hidden="true">scrum-guild /</span><input class="input" id="slug" value="${esc(values.slug || '')}" placeholder="hibari" maxlength="63" aria-describedby="url-hint"></div><p class="field-hint" id="url-hint">${text('onboardingUrlHint')}</p></div><p class="field-hint">${text('onboardingOrganizationNote')}</p>${actions('onboardingCreatePreview', false)}</div>`;
+  if (step === 4) body = `<div class="onboarding-fields"><div class="field"><label class="field-label" for="invitations">${text('onboardingInviteLabel')}</label><textarea class="input" id="invitations" rows="3" maxlength="2000" placeholder="yui@example.com, ren@example.com" aria-describedby="invite-hint">${esc(values.invitations || '')}</textarea><p class="field-hint" id="invite-hint">${text('onboardingInviteNote')}</p></div>${button('onboardingLinkPreview', false, 'link')}<div class="onboarding-actions"><a class="btn is-quiet" href="index.html">${text('onboardingSkipFinish')}</a><a class="btn is-primary" href="index.html">${text('onboardingFinish')}</a></div></div>`;
+  document.getElementById('preview').innerHTML = `<main class="onboarding"><header class="onboarding-header"><div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div><a class="btn is-quiet" href="index.html">${text('onboardingExit')}</a></header><div class="onboarding-stage"><aside class="onboarding-disclosure" aria-label="${text('onboardingPreview')}"><b>${text('onboardingPreview')}</b><p>${text('onboardingDisclosure')}</p></aside><section class="onboarding-content" aria-labelledby="onboarding-title"><div class="onboarding-heading"><p class="onboarding-eyebrow">${text('onboardingStep', { current: step + 1, total: titles.length })}</p><h1 id="onboarding-title" tabindex="-1">${text(titles[step])}</h1><p class="onboarding-lead">${text(leads[step])}</p></div>${body}<p class="onboarding-notice" role="status">${esc(notice)}</p></section></div><footer class="onboarding-footer"><button class="btn is-quiet" type="button" aria-disabled="${step === 0}" data-action="back">${text('onboardingBack')}</button><ol class="onboarding-progress" aria-label="${text('onboardingProgress')}">${titles.map((title, i) => `<li ${i === step ? 'aria-current="step"' : ''}><span class="onboarding-dot" aria-hidden="true"></span><span class="visually-hidden">${text('onboardingStep', { current: i + 1, total: titles.length })} ${text(title)}</span></li>`).join('')}</ol></footer></main>`;
+  if (focus) { document.getElementById('onboarding-title').focus(); window.scrollTo(0, 0); }
+}
+document.addEventListener('input', event => {
+  if (event.target.matches('input, textarea')) values[event.target.id] = event.target.value;
+});
+document.addEventListener('click', event => {
+  const action = event.target.closest('[data-action]')?.dataset.action;
+  if (!action) return;
+  if (action === 'back' && step === 0) return;
+  if (action === 'team') { withTeam = true; step = 3; notice = ''; render(true); return; }
+  if (action === 'link') {
+    notice = t('onboardingLinkNote');
+    document.querySelector('.onboarding-notice').textContent = notice;
+    return;
+  }
+  step = Math.max(0, Math.min(titles.length - 1, step + (action === 'back' ? -1 : 1)));
+  notice = '';
+  render(true);
+});
+SQ.applyTheme();
+render();
+</script>
+</body>
+</html>
