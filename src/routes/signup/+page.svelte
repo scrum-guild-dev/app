@@ -44,6 +44,7 @@
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- 経路は resolve() で解決し、引き継ぐ return_to のクエリだけを足している -->
       <a class="btn is-sm is-quiet" href={`${resolve('/login')}${loginQuery}`}>{t('signupLoginLink')}</a>
     </div>
+    <a class="btn is-sm is-quiet" href={resolve('/signup/preview')}>{t('onboardingOpen')}</a>
     <LegalLinks />
   </GateSheet>
 </Gate>

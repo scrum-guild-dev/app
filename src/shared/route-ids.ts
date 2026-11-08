@@ -25,5 +25,6 @@ export const ROUTE_IDS: readonly string[] = [
   '/operator',
   '/privacy',
   '/signup',
+  '/signup/preview',
   '/terms',
 ];
