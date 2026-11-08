@@ -419,10 +419,10 @@
     ];
   }
   // 空の行（.draft-row）。題だけを打って Enter で足す。kind は root（親なし）、story（ストーリーの下）、col（スプリントの列）
-  function draftRow(kind, key, label) {
+  function draftRow(kind, key, label, placeholder) {
     const id = `draft-${kind}-${key}`;
     return `<div class="draft-row" data-draft-row>${icon("plus")}<label class="visually-hidden" for="${id}">${esc(label)}</label>` +
-      `<input class="input" id="${id}" data-draft="${kind}:${key}" placeholder="${esc(label)}（題を打って Enter）" autocomplete="off" enterkeyhint="done"></div>`;
+      `<input class="input" id="${id}" data-draft="${kind}:${key}" placeholder="${esc(placeholder ?? `${label}（題を打って Enter）`)}" autocomplete="off" enterkeyhint="done"></div>`;
   }
   // 属性のチップ。タスクの属性（pts か who）を、行のチップを押して後から決める。値がなければ薄い破線の形（未設定）。
   // 押すと値の一覧（行の「⋯」と同じメニュー）が開き、選ぶと見本の中で保存する
@@ -650,7 +650,7 @@
         <div class="board-col-head">${c.done ? icon("check") : ""}<span class="board-col-name">${c.done ? t("done") : esc(c.name)}</span><span class="board-col-n">${items.length}</span><span class="board-col-pts">${sumPts(items)} pt</span></div>
         ${c.done && D.definitionOfDone.length ? `<details class="dod"><summary>${t("dod")}</summary>${dodDoc()}</details>` : ""}
         ${items.map((x, i) => card(x, c.done ? undefined : orderOf(i), { mark: opts.cardMarks && opts.cardMarks(x, i, c), grab: opts.grab ? opts.grab(x) : !x.doneAt, key: opts.key })).join("") || `<p class="board-empty">なし</p>`}
-        ${opts.draft && !c.done ? draftRow("col", c.id, `${t("task")}を足す: ${c.name}`) : ""}
+        ${opts.draft && !c.done ? draftRow("col", c.id, `${t("task")}を足す: ${c.name}`, `${t("task")}を足す`) : ""}
       </section>`;
     }).join("")}</div></div>`;
   }
