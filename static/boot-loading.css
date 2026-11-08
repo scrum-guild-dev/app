@@ -31,8 +31,50 @@
   visibility: hidden;
   animation: boot-failed-show 0s linear 15s forwards;
 }
+/* 待つ文は読み上げのためだけに置き（見えない）、見えるのは骨組み（LoadingSheet と同じ、紙に灰色の帯）。どちらも 15 秒で隠す */
 #boot-loading .boot-wait {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
   animation: boot-wait-hide 0s linear 15s forwards;
+}
+#boot-loading .boot-skeleton {
+  display: grid;
+  gap: 12px;
+  box-sizing: border-box;
+  width: min(440px, calc(100% - 32px));
+  padding: 32px 24px;
+  background: #ffffff;
+  border: 1px solid #d6d6da;
+  border-radius: 4px;
+  animation: boot-wait-hide 0s linear 15s forwards;
+}
+#boot-loading .boot-skeleton i {
+  display: block;
+  height: 1em;
+  border-radius: 4px;
+  background: #d6d6da;
+  animation: boot-pulse 1.4s ease-in-out infinite;
+}
+#boot-loading .boot-skeleton i:nth-child(1) {
+  height: 1.6em;
+  width: 55%;
+}
+#boot-loading .boot-skeleton i:nth-child(3) {
+  height: 2.5em;
+}
+@keyframes boot-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #boot-loading .boot-skeleton i {
+    animation: none;
+  }
 }
 @keyframes boot-failed-show {
   to {
@@ -53,12 +95,33 @@
     background: #121214;
     color: #a2a2ab;
   }
+  #boot-loading .boot-skeleton {
+    background: #1a1a1d;
+    border-color: #37373d;
+  }
+  #boot-loading .boot-skeleton i {
+    background: #37373d;
+  }
 }
 html[data-theme='simple_light'] #boot-loading {
   background: #f7f7f8;
   color: #5c5f66;
 }
+html[data-theme='simple_light'] #boot-loading .boot-skeleton {
+  background: #ffffff;
+  border-color: #d6d6da;
+}
+html[data-theme='simple_light'] #boot-loading .boot-skeleton i {
+  background: #d6d6da;
+}
 html[data-theme='simple_dark'] #boot-loading {
   background: #121214;
   color: #a2a2ab;
+}
+html[data-theme='simple_dark'] #boot-loading .boot-skeleton {
+  background: #1a1a1d;
+  border-color: #37373d;
+}
+html[data-theme='simple_dark'] #boot-loading .boot-skeleton i {
+  background: #37373d;
 }
