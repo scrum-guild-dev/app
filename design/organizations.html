@@ -22,23 +22,9 @@
 "use strict";
 
 // 組織の選択: 入れる組織が2つ以上の人に、ログインの直後に出す。メニューの組織の切り替えからも来る
-const { D, t, icon, esc, emblem } = SQ;
-function render() {
-  document.getElementById("gate").innerHTML = `<div class="gate"><div class="gate-stack">
-    <section class="gate-sheet">
-      <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
-      <h1 class="gate-title">${t("organization")}を選ぶ</h1>
-      <p>入れる${t("organization")}が ${D.organizations.length} つあります。名前、レベル、経験値、稼働の設定は${t("organization")}ごとに別です。</p>
-      <div class="choice-list">
-        ${D.organizations.map((k) => `<a class="choice" href="today.html">
-          <div><b>${esc(k.name)}</b><span class="mono">scrum-guild.dev/${esc(k.slug)}/</span><span>${t("workspace")} ${k.wss}・最後に入った日 ${esc(k.lastSeen)}</span></div>
-          ${k.admin ? `<span class="chip">${t("admin")}</span>` : ""}${emblem(k.level, true)}</a>`).join("")}
-      </div>
-      <p class="gate-note">あとから、メニューの上の${t("organization")}の切り替えで選び直せます。</p>
-      <div class="form-actions"><button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button><button class="btn is-sm" type="button" data-dialog="createPersonalOrganization">自分用を作る</button></div>
-      <div class="form-actions"><button class="btn is-sm is-quiet" type="button" data-toast="見本のため、ログアウトしません">${t("logout")}</button></div>
-    </section>
-    <section class="gate-sheet">
+const { D, t, esc } = SQ;
+// 届いた招待の紙。承諾待ちの招待がある人に出す。入れる組織の分も含め、組織ごとに1件
+const invitationsSheet = () => `<section class="gate-sheet">
       <h2 class="dialog-title">届いた招待</h2>
       <div class="choice-list">
       ${[...new Set(D.receivedInvites.map((i) => i.organization))].map((name) => `<a class="choice" href="login.html"><div>
@@ -46,8 +32,31 @@ function render() {
         <span>承諾待ちの招待があります</span></div>
       </a>`).join("")}
       </div>
-      <p class="gate-note">すべての${t("organization")}に届いた招待を、${t("organization")}ごとに1件にまとめて出します。押すと、その${t("organization")}の招待の画面（見本は login.html の「届いた招待」）で承諾か辞退を選べます。</p>
+      <p class="gate-note">すべての${t("organization")}に届いた招待を、${t("organization")}ごとにまとめて出します。押すと、承諾するか辞退するかを選べます。見本は、その${t("organization")}の招待の画面（login.html の「届いた招待」）。</p>
+    </section>`;
+// 停止している組織の紙。停止していなければ入れた組織があるときだけ、組織の選択の紙（届いた招待の紙があればその次）に出す。押せない行にする
+const suspendedSheet = () => `<section class="gate-sheet">
+      <h2 class="dialog-title">停止している${t("organization")}</h2>
+      <div class="choice-list">
+        ${D.suspendedOrganizations.map((k) => `<div class="choice is-static"><div><b>${esc(k.name)}</b><span>停止しています</span></div></div>`).join("")}
+      </div>
+      <p class="gate-note">停止している${t("organization")}には、停止している間は入れません。再開については、運用者に問い合わせてください。</p>
+    </section>`;
+const createActions = (primary) => `<button class="btn ${primary ? "is-primary" : "is-sm"}" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button><button class="btn is-sm" type="button" data-dialog="createPersonalOrganization">自分用を作る</button>`;
+function render() {
+  document.getElementById("gate").innerHTML = `<div class="gate"><div class="gate-stack">
+    <section class="gate-sheet">
+      <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
+      <h1 class="gate-title">${t("organization")}を選ぶ</h1>
+      <p>入れる${t("organization")}が ${D.organizations.length} つあります。名前や稼働の設定は${t("organization")}ごとに別です。</p>
+      <div class="choice-list">
+        ${D.organizations.map((k) => `<a class="choice" href="today.html"><div><b>${esc(k.name)}</b><span class="mono">scrum-guild.dev/${esc(k.slug)}/</span></div></a>`).join("")}
+      </div>
+      <p class="gate-note">あとから、画面の左上（狭い幅では上の帯）の${t("organization")}の切り替えで選び直せます。</p>
+      <div class="form-actions"><button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button><button class="btn is-sm" type="button" data-dialog="createPersonalOrganization">自分用を作る</button></div>
+      <div class="form-actions"><button class="btn is-sm is-quiet" type="button" data-toast="見本のため、ログアウトしません">${t("logout")}</button></div>
     </section>
+    ${invitationsSheet()}
     <section class="gate-sheet">
       <h2 class="dialog-title">入れる${t("organization")}が無い人</h2>
       ${SQ.emptyState("shield", `入れる${t("organization")}がありません`, `${t("admin")}から招待が届くと、ここに出ます。自分で${t("organization")}を作って、30日間のお試しで始めることもできます。自分だけで使う「${t("personalOrganizationName")}」を作ることもできます。`,`<button class="btn is-primary" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button><button class="btn is-sm" type="button" data-dialog="createPersonalOrganization">自分用を作る</button>`)}
@@ -57,6 +66,33 @@ function render() {
       <h2 class="dialog-title">停止している${t("organization")}だけがある人</h2>
       ${SQ.emptyState("shield", `入れる${t("organization")}がありません`, `停止している${t("organization")}があります。下の「停止している${t("organization")}」を見てください。`, `<button class="btn is-sm" type="button" data-dialog="createMyOrganization">${t("organization")}を作る</button><button class="btn is-sm" type="button" data-dialog="createPersonalOrganization">自分用を作る</button>`)}
       <p class="gate-note">再開を待つ道があるので、「${t("organization")}を作る」は主ボタンにせず、一覧の下と同じ is-sm にそろえる。</p>
+    </section>
+    <section class="gate-sheet">
+      <h2 class="dialog-title">招待だけが届いている人</h2>
+      ${SQ.emptyState("shield", "まだ入れる" + t("organization") + "がありません", `下の届いた招待から${t("organization")}を選び、招待を承諾すると入れます。`)}
+      <div class="form-actions">${createActions(false)}</div>
+      <div class="form-actions"><button class="btn is-sm is-quiet" type="button" data-toast="見本のため、ログアウトしません">${t("logout")}</button></div>
+      <p class="gate-note">入れる${t("organization")}が無く、届いた招待だけがある人。空の状態は招待を待てとは書かず、下の紙から選んで承諾すると入れることを伝える。「${t("organization")}を作る」は一覧と同じ is-sm にそろえる。</p>
+    </section>
+    ${invitationsSheet()}
+    <section class="gate-sheet">
+      <h2 class="dialog-title">入れる${t("organization")}と停止している${t("organization")}がある人</h2>
+      <div class="choice-list">
+        ${D.organizations.map((k) => `<a class="choice" href="today.html"><div><b>${esc(k.name)}</b><span class="mono">scrum-guild.dev/${esc(k.slug)}/</span></div></a>`).join("")}
+      </div>
+      <div class="form-actions">${createActions(false)}</div>
+      <div class="form-actions"><button class="btn is-sm is-quiet" type="button" data-toast="見本のため、ログアウトしません">${t("logout")}</button></div>
+      <p class="gate-note">停止している${t("organization")}は入れる${t("organization")}の一覧に並べず、リンクにしない。組織の選択の紙の次（届いた招待の紙があればその次）に、別の紙で出す。</p>
+    </section>
+    ${suspendedSheet()}
+    <section class="gate-sheet">
+      <h2 class="dialog-title">運用者</h2>
+      <div class="choice-list">
+        ${D.organizations.map((k) => `<a class="choice" href="today.html"><div><b>${esc(k.name)}</b><span class="mono">scrum-guild.dev/${esc(k.slug)}/</span></div></a>`).join("")}
+      </div>
+      <div class="form-actions">${createActions(false)}</div>
+      <div class="form-actions"><a class="btn is-sm" href="operator.html">運用の画面へ</a><button class="btn is-sm is-quiet" type="button" data-toast="見本のため、ログアウトしません">${t("logout")}</button></div>
+      <p class="gate-note">運用者には、ログアウトの隣に「運用の画面へ」を出す（運用者でない人には出さない）。</p>
     </section>
     <section class="gate-sheet">
       <h2 class="dialog-title">自分用の${t("organization")}を持つ人</h2>

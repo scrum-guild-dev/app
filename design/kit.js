@@ -793,7 +793,7 @@
       <span class="notice-label">${t("sprintGoal")}</span>
       <p class="notice-title is-goal">${esc(s.goal)}</p>
       <div class="notice-meta">${opts.showWs !== false ? `<span>${esc(D.workspaces[s.ws].name)}</span>` : ""}<span>${sprintLabel(id)}</span>${s.name ? `<span class="mono">${md(s.start)}〜${md(s.end)}</span>` : ""}<span>残り ${s.days - s.dayIndex} 日</span></div>
-      <div class="day-ticks" role="img" aria-label="${s.days} 日のうち ${s.dayIndex + 1} 日目">${ticks}</div>
+      <div class="day-ticks" role="img" aria-label="${s.days} 日のうち ${Math.min(s.dayIndex + 1, s.days)} 日目">${ticks}</div>
     </article>`;
   }
   // レイドの貼り紙（一覧や計画の中で使う小さな形）

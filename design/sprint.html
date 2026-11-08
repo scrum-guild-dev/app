@@ -21,6 +21,22 @@
 // スプリント: 進行中のスプリントの列とカード
 const { D, t, icon, pageHead, sprintNotice, board, capacityRows, sumPts } = SQ;
 
+// ?overdue は、最終日を過ぎた進行中のスプリントの状態。ふだんの見本の最終日（10/26）の前に今日があるので、期間を1週間前へずらして今日が最終日より後になる形にする。
+// 本番は SprintOverdueNotice.svelte で、進行中で、ワークスペースの今日が最終日より後のときに出す（スプリントの画面と計画の画面）
+const overdue = new URLSearchParams(location.search).has("overdue");
+if (overdue && D.sprints.sp14) Object.assign(D.sprints.sp14, { start: "2026-10-06", end: "2026-10-19", dayIndex: D.sprints.sp14.days });
+
+// 最終日を過ぎた知らせ。終える人（リーダーと管理者）には「終える」を添えて終了のダイアログを開き、ほかの人には終えるのがリーダーだと伝える
+function overdueNotice(id) {
+  const label = SQ.sprintLabel(id);
+  const end = SQ.md(D.sprints[id].end);
+  const canClose = SQ.user(D.me).role === "leader";
+  return `<div class="callout is-warn">${icon("alert")}<span>${canClose
+    ? `${label}は最終日（${end}）を過ぎています。終わらなかった${t("task")}の行き先を決めて、終えてください。`
+    : `${label}は最終日（${end}）を過ぎています。終えるのは${t("leader")}です。`}</span>${canClose
+    ? `<div class="callout-actions"><button class="btn is-sm" type="button" data-dialog="sprintEnd" aria-label="終える: ${label}">終える</button></div>` : ""}</div>`;
+}
+
 SQ.mount("sprint", () => {
   const s = D.sprints.sp14;
   if (!s) {
@@ -42,12 +58,13 @@ SQ.mount("sprint", () => {
     <button class="btn" type="button" data-dialog="sprintExtend">延長する</button>
     <button class="btn" type="button" data-dialog="sprintEnd">終える</button>`;
   return `
-    ${pageHead(`${SQ.md(s.start)}〜${SQ.md(s.end)}・${s.days} 日のうち ${s.dayIndex + 1} 日目`, SQ.sprintLabel("sp14"), [
+    ${pageHead(`${SQ.md(s.start)}〜${SQ.md(s.end)}・${s.days} 日のうち ${Math.min(s.dayIndex + 1, s.days)} 日目`, SQ.sprintLabel("sp14"), [
       ["", "check", `${t("done")}（pt）`, done],
       ["", "", "合計（pt）", all],
       ["", "clock", "残り（日）", s.days - s.dayIndex],
     ], actions)}
     ${s.extended ? `<p class="action-note">延長 ${s.extended} 日</p>` : ""}
+    ${overdue ? overdueNotice("sp14") : ""}
     ${sprintNotice("sp14", { showWs: false })}
     ${board("sp14", { draft: true })}
     <p class="action-note" id="board-key-hint">カードは別の${t("column")}へドラッグして移せます。キーボードでは、カードを選んで Alt と ← → で隣の${t("column")}、Alt と ↑ ↓ で${t("column")}の中を動かせます。カードの「⋯」のメニューでも同じです。</p>
