@@ -4,7 +4,7 @@
 // 作った人とリーダー以外には出ない（API の can_delete が偽の行）。幅 390px で項目の押せる範囲が足りる。
 // 引き出しの削除は task-delete-undo.test.ts。あおば開発の管理者ミナトで、ワークスペースを作ってタスクを足して使う（seed の行を消さない）
 import type { Page } from '@playwright/test';
-import { sprintBoard } from '../src/shared/operations/sprint/index.ts';
+import { sprintBoard, taskColumnMove } from '../src/shared/operations/sprint/index.ts';
 import { backlogTree, taskDelete } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
 import {
@@ -15,9 +15,10 @@ import {
   createWorkspace,
   rowMenuItem,
   rowMenuToggle,
+  expectNoA11yViolationsInThemes,
   signIn,
 } from './helpers.ts';
-import { failOperation, rewriteOperation } from './operations.ts';
+import { failOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 const AOBA = { slug: 'aoba' };
 const DELETE = 'このタスクを削除する';
@@ -214,4 +215,71 @@ test('幅 390px で、削除の項目の押せる範囲が足りている', asyn
   expect(box).not.toBeNull();
   expect(box!.height).toBeGreaterThanOrEqual(TARGET_SIZE);
   expect(box!.width).toBeGreaterThanOrEqual(TARGET_SIZE);
+});
+
+test('「⋯」の削除の項目の上に区切りの罫線があり、4つのテーマで axe の違反が出ない', async ({ page }) => {
+  await createWorkspace(page, '行の削除の区切り');
+  await addTaskRow(page, '区切りの行');
+  await rowMenuToggle(page, '区切りの行').click();
+  const items = page.getByRole('menu', { name: '操作: 区切りの行', exact: true }).getByRole('menuitem');
+  await expect(items.last()).toHaveText(DELETE);
+  // 項目の li の上辺に罫線（--color-rule）。先頭の項目には引かない
+  const separators = await items.evaluateAll((buttons) =>
+    buttons.map((button) => getComputedStyle(button.closest('li')!).borderTopWidth),
+  );
+  expect(separators.at(-1)).toBe('1px');
+  expect(separators[0]).toBe('0px');
+  await expectNoA11yViolationsInThemes(page, 'backlog');
+});
+
+test('引き出しを開いている間は、背後の行の「⋯」を押せない（開いたまま同じ行から消す操作は起きない）', async ({
+  page,
+}) => {
+  await createWorkspace(page, '行の削除の引き出し');
+  await addTaskRow(page, '開いたまま消す行');
+  await page.getByRole('link', { name: '開いたまま消す行', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '開いたまま消す行' });
+  await expect(drawer).toBeVisible();
+
+  // 引き出しは aria-modal のダイアログで、背後の行へのポインターを受け止める。消すのは引き出しの「このタスクを削除する」から
+  await expect(rowMenuToggle(page, '開いたまま消す行').click({ trial: true, timeout: 2000 })).rejects.toThrow(
+    'intercepts pointer events',
+  );
+  await expect(drawer).toBeVisible();
+});
+
+test('動かしを送っている最中にカードを消しても、動かしたカードは元の列に見えない', async ({ page }) => {
+  test.setTimeout(90_000);
+  await createWorkspace(page, `動かし中の削除 ${test.info().repeatEachIndex}-${test.info().retry}`);
+  await startSprintWithCards(page, ['動かすカード', '消すカード']);
+  const titlesIn = (name: string) =>
+    page.locator('.board-col', { has: page.locator('.board-col-name', { hasText: name }) }).locator('.card-title');
+
+  // 動かしの応答を止める。止めている間にもう1枚を消し、止めを外す
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const unroute = await routeOperation(page, taskColumnMove, AOBA, async (call) => {
+    await gate;
+    await call.passThrough();
+  });
+  await page.getByRole('article', { name: '動かすカード', exact: true }).press('Alt+ArrowRight');
+  await expect(titlesIn('作業中')).toHaveText(['動かすカード']);
+
+  // 読み直し（sprint-board）の回数を数える。削除を送る前に張る
+  let boardReads = 0;
+  const unrouteBoard = await routeOperation(page, sprintBoard, AOBA, async (call) => {
+    boardReads++;
+    await call.passThrough();
+  });
+  await chooseRowAction(page, '消すカード', DELETE);
+  await expect(page.locator('.toasts:visible .toast', { hasText: '「消すカード」を削除しました' })).toBeVisible();
+  // 動かしが届くまで読み直さない。動かしたカードは作業中のまま、未着手には戻らない
+  expect(boardReads).toBe(0);
+  await expect(titlesIn('未着手')).not.toContainText(['動かすカード']);
+  release();
+  await expect.poll(() => boardReads).toBeGreaterThan(0);
+  await unrouteBoard();
+  await expect(titlesIn('作業中')).toHaveText(['動かすカード']);
+  await expect(titlesIn('未着手')).toHaveCount(0);
+  await unroute();
 });
