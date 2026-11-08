@@ -688,7 +688,8 @@
       savedVersion++;
       if (alive && task !== null) {
         const saved = result.data.task;
-        const merged: TaskDetail = { ...task, completed_at: saved.completed_at, can_delete: saved.can_delete };
+        // この保存で書いた欄だけを反映する。応答を待つ間の完了・取り消しを古い値で戻さない。
+        const merged: TaskDetail = { ...task };
         for (const key of Object.keys(fields) as (keyof Fields)[]) {
           if (key === 'repository_id') merged.repository = saved.repository;
           else if (key === 'category_id') merged.category = saved.category;
@@ -788,11 +789,10 @@
         return null;
       }
       if (alive && taskId === requestedTaskId) {
-        // 読み取り開始後に保存した欄を、古い応答の属性や決まった欄で戻さない。
-        if (requestedSavedVersion === savedVersion) {
-          task = result.data.task;
-          fields = result.data.fields;
-        }
+        // 途中で保存が通ったら、その後の値を取り直す。古い欄を戻さず、完了状態や権限も取りこぼさない。
+        if (requestedSavedVersion !== savedVersion) return refresh(closeIfGone);
+        task = result.data.task;
+        fields = result.data.fields;
         taskContext = {
           column: result.data.column,
           story: result.data.story,

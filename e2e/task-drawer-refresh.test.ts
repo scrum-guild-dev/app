@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.ts';
-import { addTaskRow, createWorkspace, signIn, waitForSettled } from './helpers.ts';
+import { addTaskRow, createWorkspace, signIn, waitForResponses, waitForSettled } from './helpers.ts';
 import { failOperation, rewriteOperation, routeOperation } from './operations.ts';
 import { categoryRepositoryList } from '../src/shared/operations/definition/index.ts';
 import { taskDetail, taskUpdate } from '../src/shared/operations/task/index.ts';
@@ -98,6 +98,11 @@ test('担当変更後の遅い読み直しがポイントの保存を戻さな�
     await call.fulfill(output);
   });
   const points = drawer.getByRole('radio', { name: '5', exact: true });
+  const refreshed = page.waitForResponse(
+    async (response) =>
+      response.url().endsWith('/task-detail') && response.ok() && (await response.json()).task.points === 5,
+  );
+  void refreshed.catch(() => {});
   try {
     await assignee.selectOption({ label: '担当なし' });
     await expect.poll(() => captured).toBe(true);
@@ -110,6 +115,65 @@ test('担当変更後の遅い読み直しがポイントの保存を戻さな�
   } finally {
     release();
   }
+  await (await refreshed).finished();
   await waitForSettled(page);
   await expect(points).toBeChecked();
+});
+
+test('本文の保存が完了後の読み直しと重なっても、完了の表示と戻す操作を保つ', async ({ page }) => {
+  await createWorkspace(page, '本文と完了の競合');
+  await addTaskRow(page, '完了と本文を両方保存');
+  await page.getByRole('link', { name: '完了と本文を両方保存', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '完了と本文を両方保存' });
+  await expect(drawer.getByRole('button', { name: '本文を書く', exact: true })).toBeVisible();
+  let updateCaptured = false;
+  let detailCaptured = false;
+  let releaseUpdate!: () => void;
+  let releaseDetail!: () => void;
+  const updateGate = new Promise<void>((resolve) => {
+    releaseUpdate = resolve;
+  });
+  const detailGate = new Promise<void>((resolve) => {
+    releaseDetail = resolve;
+  });
+  await routeOperation(page, taskUpdate, { slug: 'aoba' }, async (call) => {
+    const output = await call.fetch();
+    updateCaptured = true;
+    await updateGate;
+    await call.fulfill(output);
+  });
+  let first = true;
+  await routeOperation(page, taskDetail, { slug: 'aoba' }, async (call) => {
+    const delay = first;
+    first = false;
+    const output = await call.fetch();
+    if (delay) {
+      detailCaptured = true;
+      await detailGate;
+    }
+    await call.fulfill(output);
+  });
+  try {
+    await drawer.getByRole('button', { name: '本文を書く', exact: true }).click();
+    const body = drawer.getByRole('textbox', { name: '本文', exact: true });
+    await body.fill('保存した本文を保つ');
+    await body.blur();
+    await expect.poll(() => updateCaptured).toBe(true);
+    await drawer.getByRole('button', { name: '完了にする', exact: true }).click();
+    await expect.poll(() => detailCaptured).toBe(true);
+    releaseUpdate();
+    await expect(drawer.getByText('保存した本文を保つ', { exact: true })).toBeVisible();
+  } finally {
+    releaseUpdate();
+    releaseDetail();
+  }
+  const reopen = drawer.getByRole('button', { name: '完了を戻す: 完了と本文を両方保存', exact: true });
+  await expect(reopen).toBeVisible();
+  await expect(drawer.getByRole('radio', { name: '5', exact: true })).toBeDisabled();
+  const reopened = waitForResponses(page, '/task-detail');
+  await reopen.click();
+  await (await reopened).finished();
+  await expect(drawer.getByRole('button', { name: '完了にする', exact: true })).toBeVisible();
+  await expect(drawer.getByText('保存した本文を保つ', { exact: true })).toBeVisible();
+  await waitForSettled(page);
 });
