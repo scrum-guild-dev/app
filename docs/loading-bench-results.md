@@ -1,201 +1,415 @@
 # 画面の読み込みの計測結果（#1042）
 
-2026-11-09（日本時間）、基準コミット `06e69b6`、Node 26.13.0 / pnpm 12.12.0 / Wrangler 4.153.0。`pnpm bench:loading` を同じコードで2回実行した。各 load は温め2回、計測20回。全体テスト・build・lint が終わってから順に実行し、検査と重ねていない。共通枠を含む各 load の API 待ちを別々に測った値で、ブラウザの表示時間ではない。方法とデータ量は [開発手順](development.md#画面の読み込みを測る) を参照。
+2026-11-09（日本時間）。API は `06e69b6` を基準とし、計測側は発行順の反転（`c9ed0d8`）、プロセス終了（`6f16633`）、履歴の追加（`07324df`）を反映した。Node 26.13.0 / pnpm 12.12.0 / Wrangler 4.153.0。`pnpm bench:loading` を2回実行し、各 load・発行順で温め2回と計測20回（正順20回・逆順20回）を行った。他の build・テストとは重ねていない。
 
-両回とも全 API が成功し、出力スキーマの検査も通った。別々の一時 D1 は終了後に削除され、計測ポート9742は閉じた。開始前後の既存 `.wrangler/state` 19ファイルの SHA-256 とファイル一覧はすべて一致した（作業ワークツリーには既存 D1 なし）。本番は使っていない。
+## 再計測による結論の更新
 
-## 後回しの候補
+初版 `fd4cbf1` は主を先・従を後の固定順で発行し、完了履歴・経験値・終了スプリントが少ないデータで測っていた。ローカル D1 の直列処理・発行順による待ちが混ざるため、「5か所が候補」という初回の結論を撤回する。
 
-値は試行ごとの「従の最終完了 − 主の最終完了」の正の部分の分位点（ms）。両回とも p50 が正の load は次の5つ。共通の枠の招待は招待ありの分岐を強制し、seed の一覧を読む。通常の招待なしの枠では短縮候補にならなかった。
+今回は正順・逆順それぞれの短縮見込みの p50 が**どちらも正**の load だけを候補にした。2回とも該当したのは「招待ありの組織枠」だけだった。今日・バックログ・計画・エピックは、順序を反転すると p50 の差が消え、この計測からは後回しの実装を勧めない。
 
-| load | 1回目 p50 / p95 | 2回目 p50 / p95 | 判定 |
-| --- | ---: | ---: | --- |
-| `/[slug]/+layout（招待あり）` | 11.73 / 15.07 | 14.06 / 17.41 | 両回で候補 |
-| `/[slug]` | 17.05 / 23.58 | 19.95 / 35.80 | 両回で候補 |
-| `/[slug]/w/[id]` | 12.90 / 16.58 | 16.03 / 21.09 | 両回で候補 |
-| `/[slug]/w/[id]/plan` | 12.10 / 15.30 | 13.13 / 18.64 | 両回で候補 |
-| `/[slug]/w/[id]/epics/[epicId]` | 9.29 / 10.17 | 9.05 / 10.46 | 両回で候補 |
+| load | 1回目 正順 p50/p95 | 1回目 逆順 p50/p95 | 2回目 正順 p50/p95 | 2回目 逆順 p50/p95 | 判定 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `/[slug]/+layout（招待あり）` | 12.44 / 14.82 | 11.96 / 16.55 | 12.37 / 20.77 | 11.40 / 15.32 | 両回・両順で候補 |
+| `/[slug]` | 17.52 / 23.16 | 0.00 / 0.00 | 20.04 / 24.34 | 0.00 / 0.00 | 候補外 |
+| `/[slug]/w/[id]` | 19.73 / 28.41 | 0.00 / 0.00 | 15.45 / 21.43 | 0.00 / 0.00 | 候補外 |
+| `/[slug]/w/[id]/plan` | 15.36 / 21.21 | 0.00 / 0.00 | 14.65 / 21.03 | 0.00 / 0.00 | 候補外 |
+| `/[slug]/w/[id]/epics/[epicId]` | 9.21 / 10.73 | 0.00 / 0.00 | 9.35 / 13.38 | 0.00 / 0.00 | 候補外 |
 
-そのほかの load は短縮見込みの p50 が0だった。10〜20ms程度の差を含むローカルでの候補であり、本番の体感差や実装後の改善量は未確認。逐次で待つ招待の追加分と、並列の従が主より遅いケースを分けて考える。後回しの方式と優先順位は後続 Issue で決め、実装後に同じ条件で再測定する。
+単位は ms。短縮見込みは各試行の `max(0, 従の最終完了 − 主の最終完了)` の分位点で、本番の表示時間や実装後の改善量を保証しない。招待ありの行は、招待件数を並列群の後に逐次で読む分岐を強制している。招待なしの枠は候補外だった。管理のページは親の権限確認だけなので操作なし。
 
-並行する #1018 は今日の `experience-summary` を外すため、マージ後には今日の操作表を更新して再測定する。この表の数字を更新後の今日の判断にそのまま使わない。#1052 の health 変更を見込み、計測設定には公開の固定の暗号鍵を渡しているが、マージ後の組み合わせは未検証。
+追加データはタスク5,000件・エピック10件・ストーリー100件、進行中のスプリントと未完了30件、終了スプリント3件、直近7日の完了履歴約4,000件・経験値約3,200件、コメント5,000件、組織とワークスペースの Wiki 各100ページ。実マイグレーションと seed に fixture を適用し、履歴の対応・集計・外部キーをテストした。接続や受信箱などは seed の量なので、全操作の実運用条件や最悪条件を網羅しない。
 
-後続5件を親 #827 の下に登録した: [#1054](https://github.com/scrum-guild-dev/app/issues/1054)、[#1055](https://github.com/scrum-guild-dev/app/issues/1055)、[#1056](https://github.com/scrum-guild-dev/app/issues/1056)、[#1057](https://github.com/scrum-guild-dev/app/issues/1057)、[#1058](https://github.com/scrum-guild-dev/app/issues/1058)。[登録内容の控え](loading-bench-followups.md) に対象と受け入れ条件を残した。
+両回とも全 API が成功し、出力スキーマの検査も通った。一時 D1 を削除し、ポート9742が閉じたことを確認。前後の既存 D1 19ファイルの一覧・SHA-256 は一致した。ブラウザの描画や初回の画面全体は測っていない。方法・主従の意味と限界は [開発手順](development.md#画面の読み込みを測る) を参照。
+
+## 後続 Issue
+
+親 #827 の下に登録済みの [#1054](https://github.com/scrum-guild-dev/app/issues/1054)（招待件数）が今回も候補。[#1055](https://github.com/scrum-guild-dev/app/issues/1055)（今日）、[#1056](https://github.com/scrum-guild-dev/app/issues/1056)（バックログ）、[#1057](https://github.com/scrum-guild-dev/app/issues/1057)（計画）、[#1058](https://github.com/scrum-guild-dev/app/issues/1058)（エピック）は、初回の根拠を撤回したことを各 Issue に追記し、実装を勧めない。Issue の現在の状態と今後の判断は GitHub を正とし、本文の写しは文書に持たない。
+
+#1018 の後は今日の操作表を更新して再測定する。#1052 の health 用に公開固定の計測用暗号鍵を渡すが、マージ後の組み合わせは未検証。
 
 ## 1回目の全結果
 
 | load | 操作（主/従） | p50 ms | p95 ms |
 | --- | --- | ---: | ---: |
-| / | my-organizations（主） | 17.22 | 20.02 |
-| / | 合計（各試行の最長） | 17.22 | 20.02 |
-| / | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /auth/setup | onboarding-status（主） | 12.35 | 18.00 |
-| /auth/setup | me（主） | 18.21 | 25.65 |
-| /auth/setup | 合計（各試行の最長） | 18.21 | 25.65 |
-| /auth/setup | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /operator | list-organizations（主） | 14.56 | 16.61 |
-| /operator | 合計（各試行の最長） | 14.56 | 16.61 |
-| /operator | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/+layout | organization（主） | 13.82 | 17.80 |
-| /[slug]/+layout | my-organizations（主） | 33.16 | 37.12 |
-| /[slug]/+layout | token-notice（従） | 33.04 | 37.22 |
-| /[slug]/+layout | 合計（各試行の最長） | 33.16 | 37.22 |
-| /[slug]/+layout | 後回しの短縮見込み: なし | 0.00 | 0.09 |
-| /[slug]/+layout（招待あり） | organization（主） | 12.47 | 14.86 |
-| /[slug]/+layout（招待あり） | my-organizations（主） | 29.61 | 37.57 |
-| /[slug]/+layout（招待あり） | token-notice（従） | 29.41 | 37.86 |
-| /[slug]/+layout（招待あり） | invitation-list（従） | 11.73 | 15.07 |
-| /[slug]/+layout（招待あり） | 合計（各試行の最長） | 41.15 | 50.51 |
-| /[slug]/+layout（招待あり） | 後回しの短縮見込み: 候補 | 11.73 | 15.07 |
-| /[slug] | today（主） | 13.12 | 33.69 |
-| /[slug] | experience-summary（従） | 31.60 | 35.30 |
-| /[slug] | first-steps（従） | 31.70 | 35.46 |
-| /[slug] | 合計（各試行の最長） | 31.88 | 35.46 |
-| /[slug] | 後回しの短縮見込み: 候補 | 17.05 | 23.58 |
+| / | 正順: my-organizations（主） | 16.49 | 21.11 |
+| / | 正順: 合計（各試行の最終完了） | 16.50 | 21.15 |
+| / | 正順: 短縮見込み | 0.00 | 0.00 |
+| / | 逆順: my-organizations（主） | 16.29 | 24.20 |
+| / | 逆順: 合計（各試行の最終完了） | 16.29 | 24.21 |
+| / | 逆順: 短縮見込み | 0.00 | 0.00 |
+| / | 後回しの判定（両順）: なし | — | — |
+| /auth/setup | 正順: onboarding-status（主） | 11.10 | 21.75 |
+| /auth/setup | 正順: me（主） | 16.64 | 26.54 |
+| /auth/setup | 正順: 合計（各試行の最終完了） | 16.93 | 27.06 |
+| /auth/setup | 正順: 短縮見込み | 0.00 | 0.00 |
+| /auth/setup | 逆順: onboarding-status（主） | 18.16 | 22.29 |
+| /auth/setup | 逆順: me（主） | 9.61 | 21.34 |
+| /auth/setup | 逆順: 合計（各試行の最終完了） | 18.45 | 22.62 |
+| /auth/setup | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /auth/setup | 後回しの判定（両順）: なし | — | — |
+| /operator | 正順: list-organizations（主） | 17.00 | 20.96 |
+| /operator | 正順: 合計（各試行の最終完了） | 17.04 | 20.97 |
+| /operator | 正順: 短縮見込み | 0.00 | 0.00 |
+| /operator | 逆順: list-organizations（主） | 17.08 | 25.87 |
+| /operator | 逆順: 合計（各試行の最終完了） | 17.08 | 25.88 |
+| /operator | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /operator | 後回しの判定（両順）: なし | — | — |
+| /[slug]/+layout | 正順: organization（主） | 13.27 | 18.54 |
+| /[slug]/+layout | 正順: my-organizations（主） | 29.32 | 35.50 |
+| /[slug]/+layout | 正順: token-notice（従） | 29.26 | 35.31 |
+| /[slug]/+layout | 正順: 合計（各試行の最終完了） | 29.63 | 35.87 |
+| /[slug]/+layout | 正順: 短縮見込み | 0.08 | 0.13 |
+| /[slug]/+layout | 逆順: organization（主） | 33.32 | 44.88 |
+| /[slug]/+layout | 逆順: my-organizations（主） | 33.75 | 44.76 |
+| /[slug]/+layout | 逆順: token-notice（従） | 10.14 | 18.05 |
+| /[slug]/+layout | 逆順: 合計（各試行の最終完了） | 34.00 | 45.29 |
+| /[slug]/+layout | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/+layout | 後回しの判定（両順）: なし | — | — |
+| /[slug]/+layout（招待あり） | 正順: organization（主） | 13.37 | 30.46 |
+| /[slug]/+layout（招待あり） | 正順: my-organizations（主） | 29.86 | 34.36 |
+| /[slug]/+layout（招待あり） | 正順: token-notice（従） | 30.11 | 34.36 |
+| /[slug]/+layout（招待あり） | 正順: invitation-list（従） | 12.26 | 14.55 |
+| /[slug]/+layout（招待あり） | 正順: 合計（各試行の最終完了） | 43.13 | 47.51 |
+| /[slug]/+layout（招待あり） | 正順: 短縮見込み | 12.44 | 14.82 |
+| /[slug]/+layout（招待あり） | 逆順: organization（主） | 29.82 | 37.67 |
+| /[slug]/+layout（招待あり） | 逆順: my-organizations（主） | 29.61 | 37.66 |
+| /[slug]/+layout（招待あり） | 逆順: token-notice（従） | 9.32 | 30.51 |
+| /[slug]/+layout（招待あり） | 逆順: invitation-list（従） | 11.89 | 16.46 |
+| /[slug]/+layout（招待あり） | 逆順: 合計（各試行の最終完了） | 42.55 | 51.26 |
+| /[slug]/+layout（招待あり） | 逆順: 短縮見込み | 11.96 | 16.55 |
+| /[slug]/+layout（招待あり） | 後回しの判定（両順）: 候補 | — | — |
+| /[slug] | 正順: today（主） | 21.92 | 37.14 |
+| /[slug] | 正順: experience-summary（従） | 39.33 | 48.55 |
+| /[slug] | 正順: first-steps（従） | 39.18 | 48.76 |
+| /[slug] | 正順: 合計（各試行の最終完了） | 39.53 | 50.17 |
+| /[slug] | 正順: 短縮見込み | 17.52 | 23.16 |
+| /[slug] | 逆順: today（主） | 37.56 | 43.98 |
+| /[slug] | 逆順: experience-summary（従） | 36.70 | 43.42 |
+| /[slug] | 逆順: first-steps（従） | 12.33 | 15.00 |
+| /[slug] | 逆順: 合計（各試行の最終完了） | 37.86 | 44.25 |
+| /[slug] | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug] | 後回しの判定（両順）: なし | — | — |
 | /[slug]/admin | 操作なし | — | — |
-| /[slug]/invitations | invitation-list（主） | 11.33 | 12.84 |
-| /[slug]/invitations | 合計（各試行の最長） | 11.33 | 12.84 |
-| /[slug]/invitations | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/me | experience-summary（主） | 13.22 | 36.76 |
-| /[slug]/me | experience-grants（主） | 39.76 | 49.54 |
-| /[slug]/me | token-list（主） | 40.33 | 49.17 |
-| /[slug]/me | invitation-list（主） | 40.35 | 49.81 |
-| /[slug]/me | me（主） | 40.29 | 49.67 |
-| /[slug]/me | 合計（各試行の最長） | 40.70 | 49.81 |
-| /[slug]/me | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/+layout | workspace（主） | 10.84 | 13.80 |
-| /[slug]/w/[id]/+layout | 合計（各試行の最長） | 10.84 | 13.80 |
-| /[slug]/w/[id]/+layout | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id] | backlog-tree（主） | 38.90 | 52.83 |
-| /[slug]/w/[id] | category-repository-list（従） | 50.76 | 58.25 |
-| /[slug]/w/[id] | experience-team-total（従） | 50.60 | 58.51 |
-| /[slug]/w/[id] | 合計（各試行の最長） | 51.55 | 58.51 |
-| /[slug]/w/[id] | 後回しの短縮見込み: 候補 | 12.90 | 16.58 |
-| /[slug]/w/[id]/plan | sprint-list（主） | 17.94 | 29.28 |
-| /[slug]/w/[id]/plan | plan-summary（従） | 27.48 | 30.82 |
-| /[slug]/w/[id]/plan | 合計（各試行の最長） | 27.48 | 30.82 |
-| /[slug]/w/[id]/plan | 後回しの短縮見込み: 候補 | 12.10 | 15.30 |
-| /[slug]/w/[id]/sprint | sprint-board（主） | 13.53 | 15.90 |
-| /[slug]/w/[id]/sprint | 合計（各試行の最長） | 13.53 | 15.90 |
-| /[slug]/w/[id]/sprint | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/settings | category-repository-list（主） | 11.14 | 12.95 |
-| /[slug]/w/[id]/settings | column-list（主） | 28.68 | 31.55 |
-| /[slug]/w/[id]/settings | detail-field-list（主） | 28.74 | 31.06 |
-| /[slug]/w/[id]/settings | 合計（各試行の最長） | 28.74 | 31.55 |
-| /[slug]/w/[id]/settings | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/members | member-list（主） | 17.04 | 23.20 |
-| /[slug]/w/[id]/members | 合計（各試行の最長） | 17.04 | 23.20 |
-| /[slug]/w/[id]/members | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/inbox | inbox-list（主） | 14.89 | 29.11 |
-| /[slug]/w/[id]/inbox | 合計（各試行の最長） | 14.89 | 29.11 |
-| /[slug]/w/[id]/inbox | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/connections | connection-list（主） | 11.24 | 12.28 |
-| /[slug]/w/[id]/connections | 合計（各試行の最長） | 11.24 | 12.28 |
-| /[slug]/w/[id]/connections | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/epics/[epicId] | epic-detail（主） | 13.16 | 17.64 |
-| /[slug]/w/[id]/epics/[epicId] | category-repository-list（従） | 22.44 | 25.78 |
-| /[slug]/w/[id]/epics/[epicId] | 合計（各試行の最長） | 22.44 | 25.78 |
-| /[slug]/w/[id]/epics/[epicId] | 後回しの短縮見込み: 候補 | 9.29 | 10.17 |
-| /[slug]/wiki | org-wiki-tree（主） | 11.32 | 19.28 |
-| /[slug]/wiki | 合計（各試行の最長） | 11.32 | 19.28 |
-| /[slug]/wiki | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/wiki/[pageId] | org-wiki-tree（主） | 11.88 | 16.11 |
-| /[slug]/wiki/[pageId] | org-wiki-page（主） | 20.69 | 25.51 |
-| /[slug]/wiki/[pageId] | 合計（各試行の最長） | 20.69 | 25.51 |
-| /[slug]/wiki/[pageId] | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/wiki | workspace-wiki-tree（主） | 12.68 | 21.43 |
-| /[slug]/w/[id]/wiki | 合計（各試行の最長） | 12.68 | 21.43 |
-| /[slug]/w/[id]/wiki | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/wiki/[pageId] | workspace-wiki-tree（主） | 12.65 | 20.45 |
-| /[slug]/w/[id]/wiki/[pageId] | workspace-wiki-page（主） | 22.08 | 27.49 |
-| /[slug]/w/[id]/wiki/[pageId] | 合計（各試行の最長） | 22.08 | 27.49 |
-| /[slug]/w/[id]/wiki/[pageId] | 後回しの短縮見込み: なし | 0.00 | 0.00 |
+| /[slug]/invitations | 正順: invitation-list（主） | 11.06 | 14.21 |
+| /[slug]/invitations | 正順: 合計（各試行の最終完了） | 11.08 | 14.23 |
+| /[slug]/invitations | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/invitations | 逆順: invitation-list（主） | 12.08 | 14.56 |
+| /[slug]/invitations | 逆順: 合計（各試行の最終完了） | 12.11 | 14.64 |
+| /[slug]/invitations | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/invitations | 後回しの判定（両順）: なし | — | — |
+| /[slug]/me | 正順: experience-summary（主） | 14.66 | 20.98 |
+| /[slug]/me | 正順: experience-grants（主） | 45.07 | 53.09 |
+| /[slug]/me | 正順: token-list（主） | 45.12 | 52.97 |
+| /[slug]/me | 正順: invitation-list（主） | 44.77 | 53.11 |
+| /[slug]/me | 正順: me（主） | 44.67 | 52.81 |
+| /[slug]/me | 正順: 合計（各試行の最終完了） | 45.37 | 53.37 |
+| /[slug]/me | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/me | 逆順: experience-summary（主） | 41.04 | 51.74 |
+| /[slug]/me | 逆順: experience-grants（主） | 40.72 | 51.66 |
+| /[slug]/me | 逆順: token-list（主） | 40.66 | 51.56 |
+| /[slug]/me | 逆順: invitation-list（主） | 41.13 | 51.70 |
+| /[slug]/me | 逆順: me（主） | 8.02 | 16.86 |
+| /[slug]/me | 逆順: 合計（各試行の最終完了） | 41.53 | 52.14 |
+| /[slug]/me | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/me | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/+layout | 正順: workspace（主） | 11.84 | 16.84 |
+| /[slug]/w/[id]/+layout | 正順: 合計（各試行の最終完了） | 11.88 | 16.88 |
+| /[slug]/w/[id]/+layout | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/+layout | 逆順: workspace（主） | 11.29 | 18.62 |
+| /[slug]/w/[id]/+layout | 逆順: 合計（各試行の最終完了） | 11.33 | 18.65 |
+| /[slug]/w/[id]/+layout | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/+layout | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id] | 正順: backlog-tree（主） | 39.67 | 57.30 |
+| /[slug]/w/[id] | 正順: category-repository-list（従） | 57.63 | 69.39 |
+| /[slug]/w/[id] | 正順: experience-team-total（従） | 57.69 | 69.19 |
+| /[slug]/w/[id] | 正順: 合計（各試行の最終完了） | 59.73 | 69.71 |
+| /[slug]/w/[id] | 正順: 短縮見込み | 19.73 | 28.41 |
+| /[slug]/w/[id] | 逆順: backlog-tree（主） | 53.91 | 67.23 |
+| /[slug]/w/[id] | 逆順: category-repository-list（従） | 52.38 | 65.43 |
+| /[slug]/w/[id] | 逆順: experience-team-total（従） | 14.74 | 52.27 |
+| /[slug]/w/[id] | 逆順: 合計（各試行の最終完了） | 54.21 | 67.54 |
+| /[slug]/w/[id] | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id] | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/plan | 正順: sprint-list（主） | 14.82 | 26.00 |
+| /[slug]/w/[id]/plan | 正順: plan-summary（従） | 30.72 | 35.80 |
+| /[slug]/w/[id]/plan | 正順: 合計（各試行の最終完了） | 30.95 | 36.02 |
+| /[slug]/w/[id]/plan | 正順: 短縮見込み | 15.36 | 21.21 |
+| /[slug]/w/[id]/plan | 逆順: sprint-list（主） | 32.51 | 36.29 |
+| /[slug]/w/[id]/plan | 逆順: plan-summary（従） | 19.08 | 24.26 |
+| /[slug]/w/[id]/plan | 逆順: 合計（各試行の最終完了） | 32.82 | 36.49 |
+| /[slug]/w/[id]/plan | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/plan | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/sprint | 正順: sprint-board（主） | 13.63 | 15.46 |
+| /[slug]/w/[id]/sprint | 正順: 合計（各試行の最終完了） | 13.65 | 15.48 |
+| /[slug]/w/[id]/sprint | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/sprint | 逆順: sprint-board（主） | 14.59 | 19.37 |
+| /[slug]/w/[id]/sprint | 逆順: 合計（各試行の最終完了） | 14.62 | 19.39 |
+| /[slug]/w/[id]/sprint | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/sprint | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/settings | 正順: category-repository-list（主） | 11.70 | 25.01 |
+| /[slug]/w/[id]/settings | 正順: column-list（主） | 29.31 | 46.11 |
+| /[slug]/w/[id]/settings | 正順: detail-field-list（主） | 29.29 | 46.00 |
+| /[slug]/w/[id]/settings | 正順: 合計（各試行の最終完了） | 29.65 | 46.30 |
+| /[slug]/w/[id]/settings | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/settings | 逆順: category-repository-list（主） | 30.17 | 38.22 |
+| /[slug]/w/[id]/settings | 逆順: column-list（主） | 30.07 | 38.19 |
+| /[slug]/w/[id]/settings | 逆順: detail-field-list（主） | 11.83 | 20.63 |
+| /[slug]/w/[id]/settings | 逆順: 合計（各試行の最終完了） | 30.46 | 38.47 |
+| /[slug]/w/[id]/settings | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/settings | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/members | 正順: member-list（主） | 16.46 | 19.78 |
+| /[slug]/w/[id]/members | 正順: 合計（各試行の最終完了） | 16.49 | 19.81 |
+| /[slug]/w/[id]/members | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/members | 逆順: member-list（主） | 16.86 | 18.03 |
+| /[slug]/w/[id]/members | 逆順: 合計（各試行の最終完了） | 16.94 | 18.07 |
+| /[slug]/w/[id]/members | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/members | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/inbox | 正順: inbox-list（主） | 13.74 | 15.97 |
+| /[slug]/w/[id]/inbox | 正順: 合計（各試行の最終完了） | 13.77 | 15.99 |
+| /[slug]/w/[id]/inbox | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/inbox | 逆順: inbox-list（主） | 14.85 | 23.36 |
+| /[slug]/w/[id]/inbox | 逆順: 合計（各試行の最終完了） | 14.95 | 23.39 |
+| /[slug]/w/[id]/inbox | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/inbox | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/connections | 正順: connection-list（主） | 11.78 | 14.27 |
+| /[slug]/w/[id]/connections | 正順: 合計（各試行の最終完了） | 11.82 | 14.30 |
+| /[slug]/w/[id]/connections | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/connections | 逆順: connection-list（主） | 11.06 | 16.82 |
+| /[slug]/w/[id]/connections | 逆順: 合計（各試行の最終完了） | 11.07 | 16.86 |
+| /[slug]/w/[id]/connections | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/connections | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/epics/[epicId] | 正順: epic-detail（主） | 12.89 | 16.41 |
+| /[slug]/w/[id]/epics/[epicId] | 正順: category-repository-list（従） | 21.96 | 27.45 |
+| /[slug]/w/[id]/epics/[epicId] | 正順: 合計（各試行の最終完了） | 22.15 | 28.02 |
+| /[slug]/w/[id]/epics/[epicId] | 正順: 短縮見込み | 9.21 | 10.73 |
+| /[slug]/w/[id]/epics/[epicId] | 逆順: epic-detail（主） | 22.63 | 25.99 |
+| /[slug]/w/[id]/epics/[epicId] | 逆順: category-repository-list（従） | 11.64 | 13.19 |
+| /[slug]/w/[id]/epics/[epicId] | 逆順: 合計（各試行の最終完了） | 22.83 | 26.19 |
+| /[slug]/w/[id]/epics/[epicId] | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/epics/[epicId] | 後回しの判定（両順）: なし | — | — |
+| /[slug]/wiki | 正順: org-wiki-tree（主） | 10.09 | 13.35 |
+| /[slug]/wiki | 正順: 合計（各試行の最終完了） | 10.12 | 13.38 |
+| /[slug]/wiki | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/wiki | 逆順: org-wiki-tree（主） | 10.20 | 11.24 |
+| /[slug]/wiki | 逆順: 合計（各試行の最終完了） | 10.23 | 11.27 |
+| /[slug]/wiki | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/wiki | 後回しの判定（両順）: なし | — | — |
+| /[slug]/wiki/[pageId] | 正順: org-wiki-tree（主） | 10.35 | 14.43 |
+| /[slug]/wiki/[pageId] | 正順: org-wiki-page（主） | 19.22 | 23.90 |
+| /[slug]/wiki/[pageId] | 正順: 合計（各試行の最終完了） | 19.41 | 24.06 |
+| /[slug]/wiki/[pageId] | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/wiki/[pageId] | 逆順: org-wiki-tree（主） | 19.95 | 25.48 |
+| /[slug]/wiki/[pageId] | 逆順: org-wiki-page（主） | 10.68 | 14.03 |
+| /[slug]/wiki/[pageId] | 逆順: 合計（各試行の最終完了） | 20.13 | 25.66 |
+| /[slug]/wiki/[pageId] | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/wiki/[pageId] | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/wiki | 正順: workspace-wiki-tree（主） | 13.66 | 17.30 |
+| /[slug]/w/[id]/wiki | 正順: 合計（各試行の最終完了） | 13.71 | 17.34 |
+| /[slug]/w/[id]/wiki | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/wiki | 逆順: workspace-wiki-tree（主） | 13.86 | 17.24 |
+| /[slug]/w/[id]/wiki | 逆順: 合計（各試行の最終完了） | 13.89 | 17.28 |
+| /[slug]/w/[id]/wiki | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/wiki | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/wiki/[pageId] | 正順: workspace-wiki-tree（主） | 11.48 | 14.42 |
+| /[slug]/w/[id]/wiki/[pageId] | 正順: workspace-wiki-page（主） | 21.04 | 26.05 |
+| /[slug]/w/[id]/wiki/[pageId] | 正順: 合計（各試行の最終完了） | 21.24 | 26.24 |
+| /[slug]/w/[id]/wiki/[pageId] | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/wiki/[pageId] | 逆順: workspace-wiki-tree（主） | 20.71 | 23.45 |
+| /[slug]/w/[id]/wiki/[pageId] | 逆順: workspace-wiki-page（主） | 11.20 | 13.79 |
+| /[slug]/w/[id]/wiki/[pageId] | 逆順: 合計（各試行の最終完了） | 20.92 | 23.77 |
+| /[slug]/w/[id]/wiki/[pageId] | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/wiki/[pageId] | 後回しの判定（両順）: なし | — | — |
 
 ## 2回目の全結果
 
 | load | 操作（主/従） | p50 ms | p95 ms |
 | --- | --- | ---: | ---: |
-| / | my-organizations（主） | 17.15 | 22.02 |
-| / | 合計（各試行の最長） | 17.15 | 22.02 |
-| / | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /auth/setup | onboarding-status（主） | 10.70 | 15.70 |
-| /auth/setup | me（主） | 16.17 | 21.40 |
-| /auth/setup | 合計（各試行の最長） | 16.17 | 21.40 |
-| /auth/setup | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /operator | list-organizations（主） | 14.75 | 16.50 |
-| /operator | 合計（各試行の最長） | 14.75 | 16.50 |
-| /operator | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/+layout | organization（主） | 14.08 | 23.36 |
-| /[slug]/+layout | my-organizations（主） | 32.78 | 40.59 |
-| /[slug]/+layout | token-notice（従） | 32.51 | 40.33 |
-| /[slug]/+layout | 合計（各試行の最長） | 32.78 | 40.59 |
-| /[slug]/+layout | 後回しの短縮見込み: なし | 0.00 | 0.02 |
-| /[slug]/+layout（招待あり） | organization（主） | 15.08 | 30.35 |
-| /[slug]/+layout（招待あり） | my-organizations（主） | 33.64 | 56.11 |
-| /[slug]/+layout（招待あり） | token-notice（従） | 33.93 | 55.83 |
-| /[slug]/+layout（招待あり） | invitation-list（従） | 14.03 | 16.80 |
-| /[slug]/+layout（招待あり） | 合計（各試行の最長） | 50.07 | 73.53 |
-| /[slug]/+layout（招待あり） | 後回しの短縮見込み: 候補 | 14.06 | 17.41 |
-| /[slug] | today（主） | 17.94 | 21.68 |
-| /[slug] | experience-summary（従） | 37.92 | 54.81 |
-| /[slug] | first-steps（従） | 37.58 | 54.84 |
-| /[slug] | 合計（各試行の最長） | 37.92 | 54.84 |
-| /[slug] | 後回しの短縮見込み: 候補 | 19.95 | 35.80 |
+| / | 正順: my-organizations（主） | 14.16 | 16.14 |
+| / | 正順: 合計（各試行の最終完了） | 14.18 | 16.15 |
+| / | 正順: 短縮見込み | 0.00 | 0.00 |
+| / | 逆順: my-organizations（主） | 13.11 | 18.50 |
+| / | 逆順: 合計（各試行の最終完了） | 13.12 | 18.51 |
+| / | 逆順: 短縮見込み | 0.00 | 0.00 |
+| / | 後回しの判定（両順）: なし | — | — |
+| /auth/setup | 正順: onboarding-status（主） | 8.70 | 14.40 |
+| /auth/setup | 正順: me（主） | 13.52 | 15.58 |
+| /auth/setup | 正順: 合計（各試行の最終完了） | 13.69 | 15.97 |
+| /auth/setup | 正順: 短縮見込み | 0.00 | 0.00 |
+| /auth/setup | 逆順: onboarding-status（主） | 13.85 | 16.24 |
+| /auth/setup | 逆順: me（主） | 7.43 | 9.64 |
+| /auth/setup | 逆順: 合計（各試行の最終完了） | 14.11 | 16.51 |
+| /auth/setup | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /auth/setup | 後回しの判定（両順）: なし | — | — |
+| /operator | 正順: list-organizations（主） | 13.81 | 19.37 |
+| /operator | 正順: 合計（各試行の最終完了） | 13.82 | 19.38 |
+| /operator | 正順: 短縮見込み | 0.00 | 0.00 |
+| /operator | 逆順: list-organizations（主） | 12.80 | 17.38 |
+| /operator | 逆順: 合計（各試行の最終完了） | 12.80 | 17.38 |
+| /operator | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /operator | 後回しの判定（両順）: なし | — | — |
+| /[slug]/+layout | 正順: organization（主） | 13.11 | 15.91 |
+| /[slug]/+layout | 正順: my-organizations（主） | 27.67 | 31.32 |
+| /[slug]/+layout | 正順: token-notice（従） | 27.61 | 31.30 |
+| /[slug]/+layout | 正順: 合計（各試行の最終完了） | 28.01 | 31.71 |
+| /[slug]/+layout | 正順: 短縮見込み | 0.00 | 0.23 |
+| /[slug]/+layout | 逆順: organization（主） | 30.15 | 36.71 |
+| /[slug]/+layout | 逆順: my-organizations（主） | 30.76 | 36.90 |
+| /[slug]/+layout | 逆順: token-notice（従） | 8.88 | 12.53 |
+| /[slug]/+layout | 逆順: 合計（各試行の最終完了） | 31.43 | 37.30 |
+| /[slug]/+layout | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/+layout | 後回しの判定（両順）: なし | — | — |
+| /[slug]/+layout（招待あり） | 正順: organization（主） | 13.27 | 19.36 |
+| /[slug]/+layout（招待あり） | 正順: my-organizations（主） | 30.90 | 37.44 |
+| /[slug]/+layout（招待あり） | 正順: token-notice（従） | 30.72 | 37.27 |
+| /[slug]/+layout（招待あり） | 正順: invitation-list（従） | 12.27 | 20.67 |
+| /[slug]/+layout（招待あり） | 正順: 合計（各試行の最終完了） | 44.49 | 53.42 |
+| /[slug]/+layout（招待あり） | 正順: 短縮見込み | 12.37 | 20.77 |
+| /[slug]/+layout（招待あり） | 逆順: organization（主） | 29.83 | 35.05 |
+| /[slug]/+layout（招待あり） | 逆順: my-organizations（主） | 29.82 | 35.04 |
+| /[slug]/+layout（招待あり） | 逆順: token-notice（従） | 8.86 | 12.83 |
+| /[slug]/+layout（招待あり） | 逆順: invitation-list（従） | 11.32 | 15.24 |
+| /[slug]/+layout（招待あり） | 逆順: 合計（各試行の最終完了） | 42.13 | 49.67 |
+| /[slug]/+layout（招待あり） | 逆順: 短縮見込み | 11.40 | 15.32 |
+| /[slug]/+layout（招待あり） | 後回しの判定（両順）: 候補 | — | — |
+| /[slug] | 正順: today（主） | 19.88 | 25.81 |
+| /[slug] | 正順: experience-summary（従） | 39.73 | 46.85 |
+| /[slug] | 正順: first-steps（従） | 39.80 | 46.84 |
+| /[slug] | 正順: 合計（各試行の最終完了） | 40.10 | 47.24 |
+| /[slug] | 正順: 短縮見込み | 20.04 | 24.34 |
+| /[slug] | 逆順: today（主） | 37.18 | 43.85 |
+| /[slug] | 逆順: experience-summary（従） | 36.67 | 43.30 |
+| /[slug] | 逆順: first-steps（従） | 12.66 | 15.66 |
+| /[slug] | 逆順: 合計（各試行の最終完了） | 37.50 | 44.12 |
+| /[slug] | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug] | 後回しの判定（両順）: なし | — | — |
 | /[slug]/admin | 操作なし | — | — |
-| /[slug]/invitations | invitation-list（主） | 12.72 | 14.19 |
-| /[slug]/invitations | 合計（各試行の最長） | 12.72 | 14.19 |
-| /[slug]/invitations | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/me | experience-summary（主） | 13.32 | 16.11 |
-| /[slug]/me | experience-grants（主） | 42.55 | 49.09 |
-| /[slug]/me | token-list（主） | 42.37 | 49.13 |
-| /[slug]/me | invitation-list（主） | 42.37 | 49.03 |
-| /[slug]/me | me（主） | 42.14 | 49.07 |
-| /[slug]/me | 合計（各試行の最長） | 42.55 | 49.13 |
-| /[slug]/me | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/+layout | workspace（主） | 11.36 | 15.80 |
-| /[slug]/w/[id]/+layout | 合計（各試行の最長） | 11.36 | 15.80 |
-| /[slug]/w/[id]/+layout | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id] | backlog-tree（主） | 39.11 | 55.62 |
-| /[slug]/w/[id] | category-repository-list（従） | 57.66 | 63.98 |
-| /[slug]/w/[id] | experience-team-total（従） | 57.37 | 63.99 |
-| /[slug]/w/[id] | 合計（各試行の最長） | 57.77 | 63.99 |
-| /[slug]/w/[id] | 後回しの短縮見込み: 候補 | 16.03 | 21.09 |
-| /[slug]/w/[id]/plan | sprint-list（主） | 15.24 | 21.25 |
-| /[slug]/w/[id]/plan | plan-summary（従） | 30.23 | 34.38 |
-| /[slug]/w/[id]/plan | 合計（各試行の最長） | 30.23 | 34.38 |
-| /[slug]/w/[id]/plan | 後回しの短縮見込み: 候補 | 13.13 | 18.64 |
-| /[slug]/w/[id]/sprint | sprint-board（主） | 14.36 | 15.99 |
-| /[slug]/w/[id]/sprint | 合計（各試行の最長） | 14.36 | 15.99 |
-| /[slug]/w/[id]/sprint | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/settings | category-repository-list（主） | 13.21 | 23.30 |
-| /[slug]/w/[id]/settings | column-list（主） | 33.27 | 49.65 |
-| /[slug]/w/[id]/settings | detail-field-list（主） | 33.27 | 49.53 |
-| /[slug]/w/[id]/settings | 合計（各試行の最長） | 33.27 | 49.65 |
-| /[slug]/w/[id]/settings | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/members | member-list（主） | 16.23 | 21.39 |
-| /[slug]/w/[id]/members | 合計（各試行の最長） | 16.23 | 21.39 |
-| /[slug]/w/[id]/members | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/inbox | inbox-list（主） | 15.30 | 28.02 |
-| /[slug]/w/[id]/inbox | 合計（各試行の最長） | 15.30 | 28.02 |
-| /[slug]/w/[id]/inbox | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/connections | connection-list（主） | 12.25 | 14.44 |
-| /[slug]/w/[id]/connections | 合計（各試行の最長） | 12.25 | 14.44 |
-| /[slug]/w/[id]/connections | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/epics/[epicId] | epic-detail（主） | 13.14 | 21.78 |
-| /[slug]/w/[id]/epics/[epicId] | category-repository-list（従） | 22.36 | 31.23 |
-| /[slug]/w/[id]/epics/[epicId] | 合計（各試行の最長） | 22.36 | 31.23 |
-| /[slug]/w/[id]/epics/[epicId] | 後回しの短縮見込み: 候補 | 9.05 | 10.46 |
-| /[slug]/wiki | org-wiki-tree（主） | 10.76 | 18.80 |
-| /[slug]/wiki | 合計（各試行の最長） | 10.76 | 18.80 |
-| /[slug]/wiki | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/wiki/[pageId] | org-wiki-tree（主） | 11.47 | 18.81 |
-| /[slug]/wiki/[pageId] | org-wiki-page（主） | 19.31 | 24.53 |
-| /[slug]/wiki/[pageId] | 合計（各試行の最長） | 19.31 | 24.53 |
-| /[slug]/wiki/[pageId] | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/wiki | workspace-wiki-tree（主） | 12.32 | 16.83 |
-| /[slug]/w/[id]/wiki | 合計（各試行の最長） | 12.32 | 16.83 |
-| /[slug]/w/[id]/wiki | 後回しの短縮見込み: なし | 0.00 | 0.00 |
-| /[slug]/w/[id]/wiki/[pageId] | workspace-wiki-tree（主） | 12.08 | 18.56 |
-| /[slug]/w/[id]/wiki/[pageId] | workspace-wiki-page（主） | 21.75 | 30.95 |
-| /[slug]/w/[id]/wiki/[pageId] | 合計（各試行の最長） | 21.75 | 30.95 |
-| /[slug]/w/[id]/wiki/[pageId] | 後回しの短縮見込み: なし | 0.00 | 0.00 |
+| /[slug]/invitations | 正順: invitation-list（主） | 10.60 | 22.32 |
+| /[slug]/invitations | 正順: 合計（各試行の最終完了） | 10.62 | 22.34 |
+| /[slug]/invitations | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/invitations | 逆順: invitation-list（主） | 10.30 | 12.80 |
+| /[slug]/invitations | 逆順: 合計（各試行の最終完了） | 10.33 | 12.82 |
+| /[slug]/invitations | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/invitations | 後回しの判定（両順）: なし | — | — |
+| /[slug]/me | 正順: experience-summary（主） | 13.02 | 24.18 |
+| /[slug]/me | 正順: experience-grants（主） | 35.39 | 43.71 |
+| /[slug]/me | 正順: token-list（主） | 37.73 | 45.03 |
+| /[slug]/me | 正順: invitation-list（主） | 37.91 | 45.03 |
+| /[slug]/me | 正順: me（主） | 37.58 | 44.86 |
+| /[slug]/me | 正順: 合計（各試行の最終完了） | 38.22 | 45.29 |
+| /[slug]/me | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/me | 逆順: experience-summary（主） | 37.60 | 45.14 |
+| /[slug]/me | 逆順: experience-grants（主） | 37.35 | 43.11 |
+| /[slug]/me | 逆順: token-list（主） | 36.80 | 42.83 |
+| /[slug]/me | 逆順: invitation-list（主） | 36.84 | 43.09 |
+| /[slug]/me | 逆順: me（主） | 7.10 | 36.47 |
+| /[slug]/me | 逆順: 合計（各試行の最終完了） | 37.95 | 45.40 |
+| /[slug]/me | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/me | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/+layout | 正順: workspace（主） | 10.05 | 10.70 |
+| /[slug]/w/[id]/+layout | 正順: 合計（各試行の最終完了） | 10.08 | 10.72 |
+| /[slug]/w/[id]/+layout | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/+layout | 逆順: workspace（主） | 10.37 | 14.43 |
+| /[slug]/w/[id]/+layout | 逆順: 合計（各試行の最終完了） | 10.40 | 14.46 |
+| /[slug]/w/[id]/+layout | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/+layout | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id] | 正順: backlog-tree（主） | 34.38 | 41.35 |
+| /[slug]/w/[id] | 正順: category-repository-list（従） | 50.22 | 56.82 |
+| /[slug]/w/[id] | 正順: experience-team-total（従） | 50.21 | 56.83 |
+| /[slug]/w/[id] | 正順: 合計（各試行の最終完了） | 50.52 | 57.10 |
+| /[slug]/w/[id] | 正順: 短縮見込み | 15.45 | 21.43 |
+| /[slug]/w/[id] | 逆順: backlog-tree（主） | 52.46 | 65.14 |
+| /[slug]/w/[id] | 逆順: category-repository-list（従） | 50.66 | 63.36 |
+| /[slug]/w/[id] | 逆順: experience-team-total（従） | 13.79 | 47.84 |
+| /[slug]/w/[id] | 逆順: 合計（各試行の最終完了） | 52.77 | 65.50 |
+| /[slug]/w/[id] | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id] | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/plan | 正順: sprint-list（主） | 13.90 | 16.21 |
+| /[slug]/w/[id]/plan | 正順: plan-summary（従） | 28.85 | 34.57 |
+| /[slug]/w/[id]/plan | 正順: 合計（各試行の最終完了） | 29.04 | 34.78 |
+| /[slug]/w/[id]/plan | 正順: 短縮見込み | 14.65 | 21.03 |
+| /[slug]/w/[id]/plan | 逆順: sprint-list（主） | 28.36 | 30.58 |
+| /[slug]/w/[id]/plan | 逆順: plan-summary（従） | 16.33 | 18.77 |
+| /[slug]/w/[id]/plan | 逆順: 合計（各試行の最終完了） | 28.60 | 30.78 |
+| /[slug]/w/[id]/plan | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/plan | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/sprint | 正順: sprint-board（主） | 14.64 | 18.74 |
+| /[slug]/w/[id]/sprint | 正順: 合計（各試行の最終完了） | 14.67 | 18.77 |
+| /[slug]/w/[id]/sprint | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/sprint | 逆順: sprint-board（主） | 14.79 | 16.51 |
+| /[slug]/w/[id]/sprint | 逆順: 合計（各試行の最終完了） | 14.81 | 16.54 |
+| /[slug]/w/[id]/sprint | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/sprint | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/settings | 正順: category-repository-list（主） | 12.41 | 17.29 |
+| /[slug]/w/[id]/settings | 正順: column-list（主） | 30.65 | 44.24 |
+| /[slug]/w/[id]/settings | 正順: detail-field-list（主） | 30.69 | 44.12 |
+| /[slug]/w/[id]/settings | 正順: 合計（各試行の最終完了） | 30.99 | 44.43 |
+| /[slug]/w/[id]/settings | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/settings | 逆順: category-repository-list（主） | 31.43 | 39.69 |
+| /[slug]/w/[id]/settings | 逆順: column-list（主） | 31.55 | 39.59 |
+| /[slug]/w/[id]/settings | 逆順: detail-field-list（主） | 12.41 | 19.81 |
+| /[slug]/w/[id]/settings | 逆順: 合計（各試行の最終完了） | 31.74 | 39.97 |
+| /[slug]/w/[id]/settings | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/settings | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/members | 正順: member-list（主） | 16.21 | 27.17 |
+| /[slug]/w/[id]/members | 正順: 合計（各試行の最終完了） | 16.24 | 27.21 |
+| /[slug]/w/[id]/members | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/members | 逆順: member-list（主） | 15.58 | 17.24 |
+| /[slug]/w/[id]/members | 逆順: 合計（各試行の最終完了） | 15.63 | 17.27 |
+| /[slug]/w/[id]/members | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/members | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/inbox | 正順: inbox-list（主） | 13.43 | 14.60 |
+| /[slug]/w/[id]/inbox | 正順: 合計（各試行の最終完了） | 13.46 | 14.62 |
+| /[slug]/w/[id]/inbox | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/inbox | 逆順: inbox-list（主） | 13.81 | 21.40 |
+| /[slug]/w/[id]/inbox | 逆順: 合計（各試行の最終完了） | 13.83 | 21.42 |
+| /[slug]/w/[id]/inbox | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/inbox | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/connections | 正順: connection-list（主） | 10.89 | 12.30 |
+| /[slug]/w/[id]/connections | 正順: 合計（各試行の最終完了） | 10.92 | 12.34 |
+| /[slug]/w/[id]/connections | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/connections | 逆順: connection-list（主） | 10.76 | 12.46 |
+| /[slug]/w/[id]/connections | 逆順: 合計（各試行の最終完了） | 10.81 | 12.50 |
+| /[slug]/w/[id]/connections | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/connections | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/epics/[epicId] | 正順: epic-detail（主） | 13.56 | 22.90 |
+| /[slug]/w/[id]/epics/[epicId] | 正順: category-repository-list（従） | 22.88 | 35.52 |
+| /[slug]/w/[id]/epics/[epicId] | 正順: 合計（各試行の最終完了） | 23.12 | 35.74 |
+| /[slug]/w/[id]/epics/[epicId] | 正順: 短縮見込み | 9.35 | 13.38 |
+| /[slug]/w/[id]/epics/[epicId] | 逆順: epic-detail（主） | 22.79 | 28.81 |
+| /[slug]/w/[id]/epics/[epicId] | 逆順: category-repository-list（従） | 12.17 | 17.11 |
+| /[slug]/w/[id]/epics/[epicId] | 逆順: 合計（各試行の最終完了） | 22.97 | 29.03 |
+| /[slug]/w/[id]/epics/[epicId] | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/epics/[epicId] | 後回しの判定（両順）: なし | — | — |
+| /[slug]/wiki | 正順: org-wiki-tree（主） | 10.52 | 11.87 |
+| /[slug]/wiki | 正順: 合計（各試行の最終完了） | 10.54 | 11.90 |
+| /[slug]/wiki | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/wiki | 逆順: org-wiki-tree（主） | 9.85 | 10.96 |
+| /[slug]/wiki | 逆順: 合計（各試行の最終完了） | 9.87 | 10.99 |
+| /[slug]/wiki | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/wiki | 後回しの判定（両順）: なし | — | — |
+| /[slug]/wiki/[pageId] | 正順: org-wiki-tree（主） | 10.09 | 12.95 |
+| /[slug]/wiki/[pageId] | 正順: org-wiki-page（主） | 18.17 | 23.04 |
+| /[slug]/wiki/[pageId] | 正順: 合計（各試行の最終完了） | 18.35 | 23.21 |
+| /[slug]/wiki/[pageId] | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/wiki/[pageId] | 逆順: org-wiki-tree（主） | 18.14 | 20.29 |
+| /[slug]/wiki/[pageId] | 逆順: org-wiki-page（主） | 9.58 | 12.63 |
+| /[slug]/wiki/[pageId] | 逆順: 合計（各試行の最終完了） | 18.29 | 20.52 |
+| /[slug]/wiki/[pageId] | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/wiki/[pageId] | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/wiki | 正順: workspace-wiki-tree（主） | 11.51 | 13.37 |
+| /[slug]/w/[id]/wiki | 正順: 合計（各試行の最終完了） | 11.54 | 13.44 |
+| /[slug]/w/[id]/wiki | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/wiki | 逆順: workspace-wiki-tree（主） | 11.51 | 13.28 |
+| /[slug]/w/[id]/wiki | 逆順: 合計（各試行の最終完了） | 11.53 | 13.31 |
+| /[slug]/w/[id]/wiki | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/wiki | 後回しの判定（両順）: なし | — | — |
+| /[slug]/w/[id]/wiki/[pageId] | 正順: workspace-wiki-tree（主） | 14.52 | 29.33 |
+| /[slug]/w/[id]/wiki/[pageId] | 正順: workspace-wiki-page（主） | 25.64 | 53.45 |
+| /[slug]/w/[id]/wiki/[pageId] | 正順: 合計（各試行の最終完了） | 25.89 | 53.70 |
+| /[slug]/w/[id]/wiki/[pageId] | 正順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/wiki/[pageId] | 逆順: workspace-wiki-tree（主） | 21.79 | 31.94 |
+| /[slug]/w/[id]/wiki/[pageId] | 逆順: workspace-wiki-page（主） | 11.51 | 19.79 |
+| /[slug]/w/[id]/wiki/[pageId] | 逆順: 合計（各試行の最終完了） | 21.96 | 32.18 |
+| /[slug]/w/[id]/wiki/[pageId] | 逆順: 短縮見込み | 0.00 | 0.00 |
+| /[slug]/w/[id]/wiki/[pageId] | 後回しの判定（両順）: なし | — | — |
