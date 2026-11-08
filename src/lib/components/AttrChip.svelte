@@ -63,6 +63,10 @@
   let tried = $state(false);
   let announced = $state('');
   const failedAgain = $derived(tried && !retrying && retry !== undefined);
+  // 読み直しが成功して「もう一度試す」が外れたら戻す（後の別の失敗を、押していないのに「まだ」と言わない）
+  $effect(() => {
+    if (retry === undefined) tried = false;
+  });
   const retryText = $derived(
     retrying ? t('retrying') : failedAgain ? `${t('retryFailed')}。${t('retry')}` : t('retry'),
   );
@@ -199,8 +203,12 @@
     // 幅が変わったときだけ閉じる（スマホのアドレスバーの出入りは高さだけが変わる。そのときは置き直す）
     let width = window.innerWidth;
     const close = (): void => {
-      if (window.innerWidth !== width) hide(list?.contains(document.activeElement) === true);
-      else place();
+      if (window.innerWidth !== width) {
+        // 窓を外してからフォーカスを戻す（外す前に戻すと、日付の欄の blur が打ちかけの日付を保存する）
+        const inside = list?.contains(document.activeElement) === true;
+        hide(false);
+        if (inside) void tick().then(() => button?.focus());
+      } else place();
       width = window.innerWidth;
     };
     window.addEventListener('scroll', reposition, true);

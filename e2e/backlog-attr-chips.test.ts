@@ -555,5 +555,16 @@ test('担当の候補を読んでいる間と読めなかったときに、常�
     menu.getByRole('menuitem', { name: '担当の候補を読み込めませんでした。まだ読み込めませんでした。もう一度試す' }),
   ).toBeVisible();
   await expectNoA11yViolationsInThemes(page, 'backlog-attr-menu');
+
+  // 閉じて開き直したら、押していないので「まだ」は出さない
+  await page.keyboard.press('Escape');
+  await row.getByRole('button', { name: '担当: 未設定' }).click();
+  await expect(status).toHaveText('担当の候補を読み込めませんでした');
+  await expect(retry).toBeVisible();
+
+  // 読めるようになって押すと、候補が戻り、領域は空になる
   await unFail();
+  await retry.click();
+  await expect(menu.getByRole('menuitemradio').nth(1)).toBeVisible();
+  await expect(status).toHaveText('');
 });
