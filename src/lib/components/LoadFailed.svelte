@@ -5,6 +5,7 @@
   import EmptyState from './EmptyState.svelte';
   import Gate from './Gate.svelte';
   import GateSheet from './GateSheet.svelte';
+  import Icon from './Icon.svelte';
   import PageHead from './PageHead.svelte';
 
   // 読み込みに失敗した画面（通信の失敗、5xx、見つからない以外の 404 と 403）。見つからない画面とは分ける。
@@ -13,7 +14,9 @@
   // 読み直しが終わっても、この画面が残っていれば、また失敗したということ（成功すれば画面ごと入れ替わる）。
   // inShell は組織の枠の中（左のメニューを残す）で出すとき。既定は枠の外の画面。
   // extra は「もう一度試す」の横に添える操作（バックログの、絞っているときの「絞り込みを外す」）
-  let { inShell = false, extra }: { inShell?: boolean; extra?: Snippet } = $props();
+  // note は、読み込めなくなる前に済んだ操作の知らせ（行の「⋯」から消した後の読み直しが失敗したときの「<タスク>は削除しましたが…」）。
+  // 見出しの下に .callout.is-warn で出す（失敗の知らせは role="alert" の span。「もう一度試す」は下の空の状態の1つだけ）
+  let { inShell = false, extra, note }: { inShell?: boolean; extra?: Snippet; note?: string } = $props();
 
   let state = $state<'idle' | 'retrying' | 'failedAgain'>('idle');
 
@@ -44,6 +47,12 @@
 
 {#if inShell}
   <PageHead title={t('loadFailedTitle')} />
+  {#if note !== undefined}
+    <!-- data-task-reload-note は task-reload-failure.svelte.ts の RELOAD_NOTE_ATTRIBUTE と同じ名前（描いたかをこの属性で確かめる） -->
+    <div class="callout is-warn" data-task-reload-note>
+      <Icon name="alert" /><span role="alert">{note}</span>
+    </div>
+  {/if}
   <EmptyState icon="alert" title={t('loadFailedText')} {actions} />
 {:else}
   <Gate>

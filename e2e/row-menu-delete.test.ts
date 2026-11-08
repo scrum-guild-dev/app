@@ -283,3 +283,136 @@ test('動かしを送っている最中にカードを消しても、動かし�
   await expect(titlesIn('未着手')).toHaveCount(0);
   await unroute();
 });
+
+// #979: 消した後の読み直し（backlog-tree、sprint-board）だけが失敗したとき。load が一覧を null にして画面は読み込みの失敗に替わる。
+// 一時のトーストだけで伝えず、見出しの下に何が済んだか（削除はできている）を残し、「もう一度試す」で読み直せたら消える
+test('消した後の読み直しが失敗すると、トーストが消えた後も「削除しましたが」の印と「もう一度試す」が残り、読み直せると消える', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await createWorkspace(page, '行の削除の読み直し');
+  await addTaskRow(page, '読み直しに落ちる行');
+  await addTaskRow(page, '後で開く行');
+  const unroute = await failOperation(page, backlogTree, AOBA, 500, 'internal');
+  await chooseRowAction(page, '読み直しに落ちる行', DELETE);
+
+  const notice = page.locator('[data-task-reload-note]');
+  await expect(notice).toHaveText('タスクは削除しましたが、画面を読み直せませんでした。もう一度試してください。');
+  await expect(notice.getByRole('alert')).toBeVisible();
+  const retry = page.getByRole('button', { name: 'もう一度試す', exact: true });
+  await expect(retry).toBeVisible();
+  // トースト（10 秒）が消えた後も、印は残る
+  await expect(page.locator('.toasts:visible .toast', { hasText: '「読み直しに落ちる行」を削除しました' })).toHaveCount(
+    0,
+    { timeout: 20_000 },
+  );
+  await expect(notice).toBeVisible();
+  await expect(retry).toBeVisible();
+  await expectNoA11yViolationsInThemes(page, 'backlog');
+
+  await unroute();
+  await retry.click();
+  await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '読み直しに落ちる行', exact: true })).toHaveCount(0);
+
+  // 読めた後に、削除と関係ない読み直し（引き出しで欄を保存した後）が失敗しても、「削除しましたが」は出ない
+  await page.getByRole('link', { name: '後で開く行', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '後で開く行' });
+  await expect(drawer).toBeVisible();
+  const unrouteAgain = await failOperation(page, backlogTree, AOBA, 500, 'internal');
+  await drawer.getByLabel('期日').fill('2099-12-31');
+  await expect(page.getByRole('heading', { level: 1, name: '読み込めませんでした' })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  await unrouteAgain();
+});
+
+test('「取り消す」で戻した後の読み直しが失敗すると、「戻しましたが」の印が残る', async ({ page }) => {
+  await createWorkspace(page, '行の取り消しの読み直し');
+  await addTaskRow(page, '戻して落ちる行');
+  await chooseRowAction(page, '戻して落ちる行', DELETE);
+  const undo = page.getByRole('button', { name: '取り消す: 戻して落ちる行' });
+  await expect(undo).toBeVisible();
+  await expect(page.getByRole('link', { name: '戻して落ちる行', exact: true })).toHaveCount(0);
+
+  const unroute = await failOperation(page, backlogTree, AOBA, 500, 'internal');
+  await undo.click();
+  const notice = page.locator('[data-task-reload-note]');
+  await expect(notice).toHaveText('タスクは戻しましたが、画面を読み直せませんでした。もう一度試してください。');
+
+  await unroute();
+  await page.getByRole('button', { name: 'もう一度試す', exact: true }).click();
+  await expect(notice).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '戻して落ちる行', exact: true })).toBeVisible();
+});
+
+test('スプリントのカードを消した後のボードの読み直しが失敗しても「削除しましたが」と「もう一度試す」が残り、読めた後の関係ない失敗には出ない', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await createWorkspace(page, `カードの削除の読み直し ${test.info().repeatEachIndex}-${test.info().retry}`);
+  await startSprintWithCards(page, ['読み直しに落ちるカード', '残るカード']);
+  const unroute = await failOperation(page, sprintBoard, AOBA, 500, 'internal');
+  await chooseRowAction(page, '読み直しに落ちるカード', DELETE);
+
+  const notice = page.locator('[data-task-reload-note]');
+  await expect(notice).toHaveText('タスクは削除しましたが、画面を読み直せませんでした。もう一度試してください。');
+  const retry = page.getByRole('button', { name: 'もう一度試す', exact: true });
+  await expect(retry).toBeVisible();
+  await expectNoA11yViolationsInThemes(page, 'sprint');
+
+  await unroute();
+  await retry.click();
+  await expect(page.getByRole('heading', { level: 1, name: 'スプリント 第9回' })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '残るカード', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '読み直しに落ちるカード', exact: true })).toHaveCount(0);
+
+  // 読めた後に、削除と関係ない読み直し（引き出しで欄を保存した後）が失敗しても、「削除しましたが」は出ない
+  await page.getByRole('link', { name: '残るカード', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '残るカード' });
+  await expect(drawer).toBeVisible();
+  const unrouteAgain = await failOperation(page, sprintBoard, AOBA, 500, 'internal');
+  await drawer.getByLabel('期日').fill('2099-12-31');
+  await expect(page.getByRole('heading', { level: 1, name: '読み込めませんでした' })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  await unrouteAgain();
+});
+
+test('引き出しの「このタスクを削除する」の後の読み直しが失敗しても、「削除しましたが」の印が残る', async ({ page }) => {
+  await createWorkspace(page, '引き出しの削除の読み直し');
+  await addTaskRow(page, '引き出しで消す行');
+  await page.getByRole('link', { name: '引き出しで消す行', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '引き出しで消す行' });
+  await expect(drawer).toBeVisible();
+  const unroute = await failOperation(page, backlogTree, AOBA, 500, 'internal');
+  await drawer.getByRole('button', { name: 'このタスクを削除する' }).click();
+  await expect(drawer).toBeHidden();
+  const notice = page.locator('[data-task-reload-note]');
+  await expect(notice).toHaveText('タスクは削除しましたが、画面を読み直せませんでした。もう一度試してください。');
+  // 木が読めないまま、トーストの「取り消す」で戻す。戻したことが済んでいると印を替える
+  await page.getByRole('button', { name: '取り消す: 引き出しで消す行' }).click();
+  await expect(notice).toHaveText('タスクは戻しましたが、画面を読み直せませんでした。もう一度試してください。');
+  await unroute();
+  await page.getByRole('button', { name: 'もう一度試す', exact: true }).click();
+  await expect(notice).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '引き出しで消す行', exact: true })).toBeVisible();
+});
+
+test('引き出しの削除が 404（先に消えていた）で、その後の読み直しが失敗しても、「削除しましたが」は出さない', async ({
+  page,
+}) => {
+  await createWorkspace(page, '引き出しの削除の 404');
+  await addTaskRow(page, '先に消えていた行');
+  await page.getByRole('link', { name: '先に消えていた行', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '先に消えていた行' });
+  await expect(drawer).toBeVisible();
+  await failOperation(page, taskDelete, AOBA, 404, 'not_found');
+  await failOperation(page, backlogTree, AOBA, 500, 'internal');
+  await drawer.getByRole('button', { name: 'このタスクを削除する' }).click();
+  await expect(drawer).toBeHidden();
+  // 何も消していないので、断られた後と同じ文にする
+  await expect(page.locator('[data-task-reload-note]')).toHaveText(
+    '画面を読み直せませんでした。もう一度試してください。',
+  );
+});

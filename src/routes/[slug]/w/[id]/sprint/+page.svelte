@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { useShortcut } from '../../../../../lib/shortcuts.svelte.ts';
   import { ariaKeyshortcuts, NEW_TASK_KEY } from '../../../../../lib/shortcut-keys.ts';
   import { goto, invalidate, invalidateAll } from '$app/navigation';
@@ -20,6 +20,12 @@
   import SprintOverdueNotice from '../../../../../lib/components/SprintOverdueNotice.svelte';
   import { focusPageHeading } from '../../../../../lib/focus-heading.ts';
   import { focusRestored, focusSkipped, removeFromList } from '../../../../../lib/task-removal.ts';
+  import {
+    clearReloadFailure,
+    markReloadFailed,
+    reloadFailureNote,
+    throwIfListFailed,
+  } from '../../../../../lib/task-reload-failure.svelte.ts';
   import { MoveQueue } from '../../../../../lib/move-queue.ts';
   import { edgesOf, planCardMove, type MoveDirection, type MoveEdge } from '../../../../../lib/sprint-board.ts';
   import { SprintDnd } from '../../../../../lib/sprint-dnd.svelte.ts';
@@ -71,6 +77,10 @@
 
   const workspace = $derived(data.workspace);
   const board = $derived(data.board);
+  // カードの「⋯」から消した（戻した）後の読み直しの失敗の印（#979。task-reload-failure.svelte.ts）。ボードが読めたら下ろす
+  $effect(() => {
+    if (board !== null) untrack(clearReloadFailure);
+  });
   const slug = $derived(page.params.slug ?? '');
   const isAdmin = $derived(data.organization?.me.is_admin === true);
   const isLeader = $derived(workspace !== null && (workspace.role === 'leader' || isAdmin));
@@ -455,6 +465,7 @@
       } finally {
         local = null;
       }
+      await throwIfListFailed(() => page.data);
     };
     await removeFromList({
       slug,
@@ -476,9 +487,11 @@
         } finally {
           local = null;
         }
+        await throwIfListFailed(() => page.data);
         await focusRestored(restoredId, focus);
       },
       onskipped: focusSkipped,
+      onreloadfailed: (failure) => markReloadFailed(failure, workspaceId),
     });
   }
 
@@ -628,7 +641,7 @@
 </svelte:head>
 
 {#if workspace && board === null}
-  <LoadFailed inShell />
+  <LoadFailed inShell note={reloadFailureNote(workspace.id) ?? undefined} />
 {:else if workspace && board !== null}
   <!-- 読み上げの領域。常に置き、文字だけを替える -->
   <div class="visually-hidden" role="status">
