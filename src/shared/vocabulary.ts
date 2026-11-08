@@ -11,6 +11,42 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 }
 
 export const dictionary = defineDictionary({
+  onboardingStart: '利用開始の設定',
+  onboardingProfileInvalid:
+    '表示する名前は1〜100文字、肩書きは100文字以内で入力してください。改行や制御文字は使えません。',
+  onboardingProfileFailed: 'プロフィールを保存できませんでした。入力を残したまま、もう一度試せます。',
+  onboardingSaving: '保存しています',
+  onboardingProfileSaved: '作成済みの個人用URLです。あとから変更できません。プロフィールは保存済みです。',
+  onboardingPersonalUrlLiveHint:
+    '自分だけで使う場所のURLです。半角の英小文字・数字・ハイフンで2〜40文字。あとから変更できません。',
+  onboardingTeamUnavailable:
+    'このチームの利用開始を再開できません。組織の選択に戻り、権限とワークスペースを確認してください。',
+  onboardingWorkspaceFailed:
+    'チームは作成済みですが、招待先のワークスペースを作れませんでした。もう一度試してください。',
+  onboardingDefaultWorkspace: 'チームのタスク',
+  onboardingEmailsInvalid: 'Googleでログインするメールアドレスを、カンマか改行で区切って1〜20件入力してください。',
+  onboardingInvitationsFailed:
+    '一部の招待を作成できませんでした。作成済みのリンクは残しています。入力を確認してもう一度試してください。',
+  onboardingCopyFailed: 'コピーできませんでした。表示されたURLを選択してコピーしてください。',
+  onboardingPersonalUnavailable: '作成済みの自分用の組織に入れません。組織の選択画面で状態を確認してください。',
+  onboardingReturnOrganizations: '組織の選択に戻る',
+  onboardingInviteChoiceLiveNote:
+    '個人用はこのまま使い始められます。チームで使う場合は、組織と招待先のワークスペースを作ります。チーム利用はあとからでも始められます。',
+  onboardingStartPersonal: '個人用で使い始める',
+  onboardingTeamCreateNote:
+    'チームの{organization}は30日間のお試しで作成します。招待先として「チームのタスク」というワークスペースも作ります。',
+  onboardingCreateTeam: '組織を作って進む',
+  onboardingInviteLiveLead: 'Googleアカウントで参加するメンバーの招待リンクを作りましょう。',
+  onboardingGoogleEmails: '招待するGoogleアカウントのメールアドレス',
+  onboardingInviteLiveNote:
+    'カンマか改行で区切って20件まで。メールは送信しません。作成したURLを本人に共有してください。再発行すると同じ宛先の古いURLは使えなくなります。',
+  onboardingCreateInvites: '招待リンクを作成',
+  onboardingCopyLink: '招待リンクをコピー',
+  onboardingInviteSecrets:
+    'このページを離れると、作成した招待URLは再表示できません。本人に共有するまで、このページを開いたままにしてください。',
+  onboardingInvitationFailed: '招待を作成できませんでした。',
+  onboardingCopied: '{email} の招待リンクをコピーしました。',
+  onboardingStartTeam: 'チームで使い始める',
   onboardingInviteChoice: 'チームメイトを招待',
   onboardingPersonalUrl: '個人用のURL',
   onboardingPersonalUrlHint:
@@ -1248,11 +1284,11 @@ export const dictionary = defineDictionary({
   // 失敗の理由（?error=）はログインの画面に戻して出すので、この画面には出し口を持たない
   signupTitle: '会員登録',
   signupLead:
-    'GitHub か Google のアカウントで、アカウントを作ります。アカウントだけ作った人は無料で、招待されて入る人も無料です。自分の{organization}を作った場合は、30日間お試しで使い始められます。',
+    'GitHub か Google のアカウントで始められます。個人用は無料で、チームの{organization}は30日間お試しで使えます。',
   signupWithGithub: 'GitHub で会員登録',
   signupWithGoogle: 'Google で会員登録',
   signupNote:
-    'GitHub と Google は本人確認だけに使います。会員登録のあとに、自分の{organization}を作るか、招待を待つかを選べます。',
+    'GitHub と Google は本人確認だけに使います。利用規約への同意のあと、プロフィールと個人用のURLを設定します。チーム利用は、その次に選べます。',
   signupLoginLink: 'アカウントがある人はログイン',
 
   // メンバーの画面（ワークスペースの画面）。{leader} {member} {admin} は、辞書の言葉を画面が渡す。

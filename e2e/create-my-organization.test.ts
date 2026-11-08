@@ -3,17 +3,28 @@ import type { Page } from '@playwright/test';
 import { createPersonalOrganization, myOrganizations } from '../src/shared/operations/organization/index.ts';
 import { word } from '../src/shared/vocabulary.ts';
 import { expect, test } from './fixtures.ts';
-import { expectFocusReturned, findA11yViolations, signIn } from './helpers.ts';
-import { removeCreatedOrganizations } from './local-d1.ts';
+import {
+  expectFocusReturned,
+  findA11yViolations,
+  findOverflowViolations,
+  findTargetSizeViolations,
+  NARROW_VIEWPORT,
+  signIn,
+} from './helpers.ts';
+import { executeLocalD1, removeCreatedOrganizations } from './local-d1.ts';
+import { SEED_SESSIONS } from '../seed/sessions.ts';
+import { accountProfileSave } from '../src/shared/operations/session/onboarding.ts';
 import { failOperation, rewriteOperation } from './operations.ts';
 
 // 作った組織は API に消す操作が無く、お試し中の組織は1アカウントに1つまでなので、テストの前と後に seed の状態（組織の無い会員）へ戻す
 // （e2e/local-d1.ts）。繰り返し（--repeat-each）でも毎回組織の無い状態から始める。この会員を使うテストはこのファイルにまとめる
 test.beforeEach(async () => {
   await removeCreatedOrganizations('createOrg');
+  await executeLocalD1([`DELETE FROM account_profiles WHERE account_id = '${SEED_SESSIONS.createOrg.accountId}';`]);
 });
 test.afterEach(async () => {
   await removeCreatedOrganizations('createOrg');
+  await executeLocalD1([`DELETE FROM account_profiles WHERE account_id = '${SEED_SESSIONS.createOrg.accountId}';`]);
 });
 
 async function openDialog(page: Page) {
@@ -296,4 +307,104 @@ test.describe('組織の選択の「自分用を作る」の出し分け', () =>
       dialog.getByRole('link', { name: word('createMyOrganizationTrialLimitLink', { organization: '組織' }) }),
     ).toBeVisible();
   });
+});
+
+// createOrgの会員を共有するので、このファイルにまとめる。プロフィールと作成組織は前後で戻す。
+test('登録後の設定でプロフィールと自分用を保存し、再読み込み後に重ねて作らず個人用へ進む', async ({
+  context,
+  baseURL,
+  page,
+}) => {
+  await signIn(context, baseURL, 'createOrg');
+  let creations = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/create-personal-organization') creations++;
+  });
+  await page.goto('/auth/setup');
+  await page.getByLabel('表示する名前').fill('導入 ユイ');
+  await page.getByLabel('役割・肩書き（任意）').fill('エンジニア');
+  await page.getByLabel('個人用のURL', { exact: true }).fill('setup-solo');
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('チームメイトを招待');
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('チームメイトを招待');
+  await page.getByRole('button', { name: '戻る', exact: true }).click();
+  await expect(page.getByLabel('個人用のURL', { exact: true })).toHaveValue('setup-solo');
+  await expect(page.getByLabel('個人用のURL', { exact: true })).toHaveAttribute('readonly');
+  await expect(page.getByLabel('表示する名前')).toHaveValue('導入 ユイ');
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await page.getByRole('link', { name: '個人用で使い始める', exact: true }).click();
+  await expect(page).toHaveURL(/\/setup-solo$/);
+  const response = await page.request.post('/api/setup-solo/organization', {
+    headers: { Origin: new URL(baseURL!).origin },
+    data: {},
+  });
+  expect(response.status()).toBe(200);
+  expect((await response.json()).me.name).toBe('導入 ユイ');
+  expect(creations).toBe(1);
+});
+
+test('チーム利用は自分用の保存後に選び、組織・ワークスペース・本物の招待リンクを作る', async ({
+  context,
+  baseURL,
+  page,
+}) => {
+  await signIn(context, baseURL, 'createOrg');
+  await page.goto('/auth/setup');
+  await page.getByLabel('表示する名前').fill('導入 ユイ');
+  await page.getByLabel('個人用のURL', { exact: true }).fill('setup-own');
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await page.getByRole('button', { name: 'チームを作って招待する', exact: true }).click();
+  await page.getByLabel('組織の名前', { exact: true }).fill('導入の工房');
+  await page.getByLabel('チーム用のURL', { exact: true }).fill('setup-team');
+  await page.getByRole('button', { name: '組織を作って進む', exact: true }).click();
+  await expect(page.getByLabel('招待するGoogleアカウントのメールアドレス')).toBeVisible();
+  await expect(page).toHaveURL(/\/auth\/setup\?team=setup-team/);
+  await page.getByLabel('招待するGoogleアカウントのメールアドレス').fill('setup-new@example.com');
+  await page.getByRole('button', { name: '招待リンクを作成', exact: true }).click();
+  await expect(page.getByLabel('setup-new@example.com', { exact: true })).toHaveValue(/\/invite#[A-Za-z0-9_-]{43}/);
+  await expect(page.getByText('メールは送信しません。', { exact: false })).toBeVisible();
+  await page.getByRole('link', { name: 'チームで使い始める', exact: true }).click();
+  await expect(page).toHaveURL(/\/setup-team\/w\/[^/]+$/);
+  await expect(page.locator('.app')).toBeVisible();
+});
+
+test('プロフィール保存に失敗しても入力を保持し、自分用は作らず再試行できる', async ({ context, baseURL, page }) => {
+  await signIn(context, baseURL, 'createOrg');
+  await page.goto('/auth/setup');
+  await page.getByLabel('表示する名前').fill('導入 ユイ');
+  await page.getByLabel('個人用のURL', { exact: true }).fill('setup-retry');
+  const stopFailing = await failOperation(page, accountProfileSave, 503, 'unavailable');
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('プロフィールを保存できませんでした');
+  await expect(page.getByLabel('個人用のURL', { exact: true })).toHaveValue('setup-retry');
+  await stopFailing();
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('チームメイトを招待');
+});
+
+test('利用開始の保存する画面は390px・4テーマで表示と操作対象に問題がない', async ({ context, baseURL, page }) => {
+  test.setTimeout(90_000);
+  await signIn(context, baseURL, 'createOrg');
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto('/auth/setup');
+  const actions = ['次へ', 'チームを作って招待する', '組織を作って進む'];
+  for (let stage = 0; stage < 4; stage++) {
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      expect(await findOverflowViolations(page)).toEqual([]);
+      expect(await findTargetSizeViolations(page)).toEqual([]);
+      expect(await findA11yViolations(page)).toEqual([]);
+    }
+    if (stage === 0) {
+      await page.getByLabel('表示する名前').fill('導入 ユイ');
+      await page.getByLabel('個人用のURL', { exact: true }).fill('setup-visual-own');
+    }
+    if (stage === 2) {
+      await page.getByLabel('組織の名前', { exact: true }).fill('導入の工房');
+      await page.getByLabel('チーム用のURL', { exact: true }).fill('setup-visual-team');
+    }
+    if (stage < 3) await page.getByRole('button', { name: actions[stage], exact: true }).click();
+  }
 });

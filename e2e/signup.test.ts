@@ -49,7 +49,7 @@ test('ボタンの href は、登録の印（signup=1）と return_to を付け�
     const url = new URL(href, 'http://localhost');
     expect(url.pathname).toBe(`/api/auth/${provider}/start`);
     expect(url.searchParams.get('signup')).toBe('1');
-    expect(url.searchParams.get('return_to')).toBe('/');
+    expect(url.searchParams.get('return_to')).toBe('/auth/setup');
   }
 });
 
@@ -58,13 +58,13 @@ test('return_to は自分のサイトのパスだけを開始の URL に渡す',
   for (const locator of [page.locator(githubStart), page.locator(googleStart)]) {
     const url = new URL((await locator.getAttribute('href')) ?? '', 'http://localhost');
     expect(url.searchParams.get('signup')).toBe('1');
-    expect(url.searchParams.get('return_to')).toBe('/aoba/board?tab=1');
+    expect(url.searchParams.get('return_to')).toBe('/auth/setup?return_to=%2Faoba%2Fboard%3Ftab%3D1');
   }
 
   for (const bad of ['https%3A%2F%2Fevil.example%2F', '%2F%2Fevil.example', '%2F%5Cevil.example', '%2Fapi%2Fhealth']) {
     await page.goto(`/signup?return_to=${bad}`);
     const url = new URL((await page.locator(githubStart).getAttribute('href')) ?? '', 'http://localhost');
-    expect(url.searchParams.get('return_to')).toBe('/');
+    expect(url.searchParams.get('return_to')).toBe('/auth/setup');
   }
 });
 

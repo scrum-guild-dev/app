@@ -3,12 +3,21 @@ import { shortTextProblem } from '../../text-rules.ts';
 import { defineOperation } from '../define.ts';
 
 export const accountProfileSchema = z.object({
-  name: z.string().trim().superRefine((value, ctx) => {
-    if (shortTextProblem(value, 100) !== null) ctx.addIssue({ code: 'custom', message: '表示する名前が使えない' });
-  }),
-  title: z.string().trim().superRefine((value, ctx) => {
-    if (value !== '' && shortTextProblem(value, 100) !== null) ctx.addIssue({ code: 'custom', message: '肩書きが使えない' });
-  }),
+  name: z
+    .string()
+    .trim()
+    .refine((value) => value.isWellFormed())
+    .superRefine((value, ctx) => {
+      if (shortTextProblem(value, 100) !== null) ctx.addIssue({ code: 'custom', message: '表示する名前が使えない' });
+    }),
+  title: z
+    .string()
+    .trim()
+    .refine((value) => value.isWellFormed())
+    .superRefine((value, ctx) => {
+      if (value !== '' && shortTextProblem(value, 100) !== null)
+        ctx.addIssue({ code: 'custom', message: '肩書きが使えない' });
+    }),
 });
 
 export const accountProfileSave = defineOperation({

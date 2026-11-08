@@ -367,6 +367,7 @@ export const pointers: Pointers = {
   },
   // 自分用は1アカウントに1つ（部分 UNIQUE 索引）なので、同じ運用者が一覧の検査で何度も成功させられるよう、
   // 呼ぶ前にその人が作った組織の作成者を外す（NULL は索引で重ならない）。slug は呼ぶたびに別の値にする
+  'account-profile-save': { noReference: { name: '分離の検査の名前', title: '' } },
   'create-personal-organization': async (_target, caller) => {
     const db = commonDb(env);
     await db.run(

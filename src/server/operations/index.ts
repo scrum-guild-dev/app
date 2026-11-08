@@ -59,6 +59,7 @@ import {
 } from './organization-holiday.ts';
 import { organizationSettingsUpdateOperation } from './organization-settings.ts';
 import { logoutOperation, meOperation } from './session.ts';
+import { accountProfileSaveOperation, onboardingStatusOperation } from './onboarding.ts';
 import { consentRecordOperation, consentStatusOperation } from './consent.ts';
 import { credentialsRevokeAllOperation } from './credentials.ts';
 import { tokenCreateOperation, tokenListOperation, tokenRevokeOperation } from './token.ts';
@@ -185,6 +186,8 @@ const listedOperations: readonly ImplementedOperation[] = [
   userEnableOperation,
   meOperation,
   logoutOperation,
+  accountProfileSaveOperation,
+  onboardingStatusOperation,
   consentStatusOperation,
   consentRecordOperation,
   tokenCreateOperation,

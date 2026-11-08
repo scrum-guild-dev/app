@@ -5,6 +5,7 @@ import { createPersonalOrganization } from '../../shared/operations/organization
 import { ApiError } from '../errors.ts';
 import { abandon, writeFirstAdmin } from './create-my-organization.ts';
 import { implement } from './implement.ts';
+import { readAccountProfile } from './onboarding.ts';
 import { invalid } from './operator-nominee.ts';
 
 // 順は create-my-organization と同じ（docs/data-model.md の「書き込みの単位」）:
@@ -37,6 +38,7 @@ export const createPersonalOrganizationOperation = implement(
     );
     if (login === undefined) throw new Error('組織を作るアカウントのログインが無い');
 
+    const profile = await readAccountProfile(db, accountId);
     const createdAt = now();
     const name = PERSONAL_ORGANIZATION_NAME;
     const created = await account.createPersonalOrganization({ slug: input.slug, name, now: createdAt });
@@ -44,7 +46,11 @@ export const createPersonalOrganizationOperation = implement(
     if (created === 'personal_limit') throw new ApiError(409, 'conflict', { reason: 'personal_limit' });
 
     try {
-      await writeFirstAdmin(created, { slug: input.slug, name, createdAt, kind: 'personal' }, { accountId, login });
+      await writeFirstAdmin(
+        created,
+        { slug: input.slug, name, createdAt, kind: 'personal' },
+        { accountId, login, name: profile?.name },
+      );
     } catch (err) {
       await abandon(account, created.organizationId, createPersonalOrganization.name);
       throw err;

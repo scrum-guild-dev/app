@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scrum Guild 会員登録の見本</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+</head>
+<body>
+<div id="signup"></div>
+<script src="icons.js"></script>
+<script src="art.js"></script>
+<script src="sample-data.js"></script>
+<script src="kit.js"></script>
+<script>
+"use strict";
+const { t, esc, icon } = SQ;
+const text = key => esc(t(key).replaceAll('{organization}', t('organization')));
+document.getElementById('signup').innerHTML = `<main class="onboarding"><header class="onboarding-header"><div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div></header><div class="onboarding-stage"><section class="onboarding-content" aria-labelledby="signup-title"><div class="onboarding-heading"><h1 id="signup-title">${text('signupTitle')}</h1></div><p>${text('signupLead')}</p><a class="btn is-wide" href="onboarding.html">${icon('git')}${text('signupWithGithub')}</a><a class="btn is-wide is-google" href="onboarding.html">${SQ.googleMark}${text('signupWithGoogle')}</a><p class="gate-note">${text('signupNote')}</p><div class="form-actions"><a class="btn is-sm is-quiet" href="login.html">${text('signupLoginLink')}</a></div><a class="btn is-sm is-quiet" href="onboarding.html">${text('onboardingOpen')}</a><div class="form-actions" role="group" aria-label="利用規約とプライバシーポリシー"><a class="btn is-sm is-quiet" href="login.html">${text('termsTitle')}</a><a class="btn is-sm is-quiet" href="login.html">${text('privacyTitle')}</a></div><p class="field-hint">会員登録の見本です。認証のボタンは、登録・保存を行わない利用開始のプレビューへ進みます。</p><a class="btn is-quiet" href="index.html">カタログへ戻る</a></section></div></main>`;
+SQ.applyTheme();
+</script>
+</body>
+</html>

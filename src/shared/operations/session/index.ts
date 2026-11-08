@@ -8,6 +8,7 @@ import { tokenNotice, tokenNoticeSeen } from './token-notice.ts';
 import { credentialsRevokeAll } from './credentials.ts';
 import { operationList } from './operation-list.ts';
 import { consentRecord, consentStatus } from './consent.ts';
+import { accountProfileSave, onboardingStatus } from './onboarding.ts';
 
 export const me = defineOperation({
   name: 'me',
@@ -45,10 +46,13 @@ export { tokenNotice, tokenNoticeSeen } from './token-notice.ts';
 export { credentialsRevokeAll } from './credentials.ts';
 
 export { operationList } from './operation-list.ts';
+export { accountProfileSave, onboardingStatus } from './onboarding.ts';
 
 export const sessionOperations: readonly AnyOperationDefinition[] = [
   me,
   logout,
+  accountProfileSave,
+  onboardingStatus,
   consentStatus,
   consentRecord,
   tokenCreate,

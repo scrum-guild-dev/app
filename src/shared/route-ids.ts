@@ -19,6 +19,7 @@ export const ROUTE_IDS: readonly string[] = [
   '/[slug]/w/[id]/tasks/[taskId]',
   '/[slug]/w/[id]/wiki',
   '/[slug]/w/[id]/wiki/[pageId]',
+  '/auth/setup',
   '/consent',
   '/invite',
   '/login',
