@@ -132,8 +132,8 @@
     onstale: () => void;
     // タスクが消えた（削除した、見つからない）。画面が閉じて、木を読み直す。キーボードで削除したときだけ、消した知らせのトーストの
     // ID を渡す（画面が、木を読み直してフォーカスを見出しへ移した後に、そのトーストの「取り消す」へフォーカスを移すため。
-    // 消えて閉じたときと、マウスで削除したときは null）
-    onremoved: (toastId: number | null) => void;
+    // 消えて閉じたときと、マウスで削除したときは null）。cause は、このセッションで削除した（deleted）か、先に消えていた（gone。404）か
+    onremoved: (toastId: number | null, cause: 'deleted' | 'gone') => void;
     // 「取り消す」で戻した。画面が木を読み直す。focus が真なら（押したボタンにフォーカスがあったとき）、戻したタスクの題のリンクへ
     // （無ければ見出しへ）フォーカスを移す。渡さなければ onchanged で読み直すだけ（ページ全体など）
     onrestored?: (taskId: string, focus: boolean) => Promise<void>;
@@ -501,7 +501,7 @@
     leaving = true;
     taskGone = true;
     showToast(t('taskGone', { task: t('task') }), 'alert');
-    onremoved(null);
+    onremoved(null, 'gone');
   }
 
   // 閉じる操作。書きかけがあれば、捨てるかを確かめる
@@ -1401,7 +1401,7 @@
         // キーボードで消したときは、木の読み直しを待つ間に10秒が尽きないよう、フォーカスが着く前から数えを止める
         // （フォーカスが外れると数え直す）。着かなければ、画面側が移した後の focusout で数え直す
         if (keyboard) pauseToast(toastId);
-        onremoved(keyboard ? toastId : null);
+        onremoved(keyboard ? toastId : null, 'deleted');
       } else if (result.status === 401) {
         onstale();
       } else if (result.status === 404) {

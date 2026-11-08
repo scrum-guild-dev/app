@@ -9,7 +9,7 @@ import { t } from './vocabulary.svelte.ts';
 // どの画面でも一覧が読めたら下ろす。別のワークスペースの読み込みの失敗には出さない。
 // 印を出す画面が無い（読み直し自体が投げて、一覧が前のまま残った）ときは、トーストで知らせて印を下ろす
 
-// 印を描いた要素の属性（LoadFailed が付ける）。描かれたかをこの属性で確かめる
+// 印を描いた要素の属性（LoadFailed.svelte が同じ名前を静的に付ける）。描かれたかをこの属性で確かめる
 export const RELOAD_NOTE_ATTRIBUTE = 'data-task-reload-note';
 
 // 何が済んだか。deleted は消した後、restored は戻した後、stale は断られた後の読み直し（何も変えていない）
@@ -57,6 +57,12 @@ export function clearReloadFailure(): void {
 // 見るのは今の画面（呼び出し側が渡す $app/state の page.data）で、読み直しを頼んだ画面ではない（トーストの「取り消す」は画面をまたいで押せる）
 export function listFailedIn(pageData: Record<string, unknown>): boolean {
   return ('tree' in pageData && pageData.tree === null) || ('board' in pageData && pageData.board === null);
+}
+
+// 読み直した後に呼ぶ（投げない形。引き出しの削除と取り消しの後）。今の画面の一覧が読めなかったら印を付け、読めたら下ろす
+export function settleListReload(pageData: Record<string, unknown>, failure: ReloadFailure, workspaceId: string): void {
+  if (listFailedIn(pageData)) markReloadFailed(failure, workspaceId);
+  else clearReloadFailure();
 }
 
 // 読み直した後に呼ぶ。今の画面の一覧が読めなかったら投げ（settled が印を付ける）、読めた（一覧の無い画面を含む）なら印を下ろす

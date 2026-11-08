@@ -10,6 +10,7 @@ vi.mock('./toast.svelte.ts', () => ({ showToast: mocks.showToast }));
 vi.mock('./vocabulary.svelte.ts', () => ({ t: (key: string) => key }));
 
 import {
+  settleListReload,
   listFailedIn,
   clearReloadFailure,
   markReloadFailed,
@@ -91,6 +92,13 @@ describe('throwIfListFailed', () => {
     // 一覧の無い画面（メンバーなど）で「取り消す」を押して戻せた
     mocks.page.data = { members: [] };
     await throwIfListFailed(() => mocks.page.data);
+    expect(reloadFailureNote('w1')).toBeNull();
+  });
+
+  test('settleListReload は、読めなければ印を付け、読めたら下ろす（引き出しの削除と取り消しの後）', () => {
+    settleListReload({ tree: null }, 'deleted', 'w1');
+    expect(reloadFailureNote('w1')).toBe('taskDeletedReloadFailed');
+    settleListReload({ tree: {} }, 'restored', 'w1');
     expect(reloadFailureNote('w1')).toBeNull();
   });
 

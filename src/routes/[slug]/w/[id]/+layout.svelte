@@ -26,7 +26,7 @@
   import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../lib/focus-heading.ts';
   import { formatLocalDate } from '../../../../lib/format.ts';
   import { focusToastAction, resumeToast } from '../../../../lib/toast.svelte.ts';
-  import { listFailedIn, markReloadFailed } from '../../../../lib/task-reload-failure.svelte.ts';
+  import { settleListReload } from '../../../../lib/task-reload-failure.svelte.ts';
   import { epicFinishedOf, parentChoicesOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import type { LayoutData } from './$types';
@@ -143,14 +143,17 @@
   // タスクが消えた（削除した、見つからない）。閉じて、木を読み直し、フォーカスを見出しへ移す（戻る先の行が無いため）
   // toastId は、キーボードで削除したときの「取り消す」のトースト。見出しへ移した後に、そのボタンへフォーカスを移す
   // （10秒で消えるのをキーボードだけの人が取り逃さないため。フォーカスがある間はトーストが消えない）
-  async function removed(toastId: number | null): Promise<void> {
+  // cause が gone（先に消えていた 404）のときは、このセッションは何も消していないので、読み直しの失敗の印は stale にする
+  async function removed(toastId: number | null, cause: 'deleted' | 'gone'): Promise<void> {
     focusAfterReload = true;
+    // 待つ間に別のワークスペースへ移っても、印は消したワークスペースに付ける
+    const workspaceId = workspace?.id ?? null;
     try {
       await withoutTask();
       await invalidate('app:backlog-tree');
       await tick();
-      // 木が読めなかった（画面が読み込みの失敗に替わる）ときは、消したことは済んでいると画面に残す（行の「⋯」と同じ。#979）
-      if (workspace !== null && listFailedIn(page.data)) markReloadFailed('deleted', workspace.id);
+      // 木が読めなかった（画面が読み込みの失敗に替わる）ときは、消したことは済んでいると画面に残す。読めたら印を下ろす（行の「⋯」と同じ。#979）
+      if (workspaceId !== null) settleListReload(page.data, cause === 'deleted' ? 'deleted' : 'stale', workspaceId);
     } catch (error) {
       // 読み直しが落ちても、止めておいた数えを戻す（戻さないとトーストが消えなくなる）
       if (toastId !== null) resumeToast(toastId);
@@ -168,9 +171,10 @@
   // 「取り消す」で戻した。木を読み直し、押したボタンにフォーカスがあり、待つ間に利用者が別へ移っていなければ、
   // 戻したタスクの題のリンクへ（無ければ見出しへ）移す
   async function restored(restoredId: string, focus: boolean): Promise<void> {
+    const workspaceId = workspace?.id ?? null;
     await invalidate('app:backlog-tree');
     await tick();
-    if (workspace !== null && listFailedIn(page.data)) markReloadFailed('restored', workspace.id);
+    if (workspaceId !== null) settleListReload(page.data, 'restored', workspaceId);
     if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
   }
 
@@ -344,7 +348,7 @@
         onclose={() => void withoutTask()}
         onchanged={() => void invalidate('app:backlog-tree')}
         onstale={() => void invalidate('app:workspace')}
-        onremoved={(toastId) => void removed(toastId)}
+        onremoved={(toastId, cause) => void removed(toastId, cause)}
         onrestored={restored}
         onskipped={skipped}
       />

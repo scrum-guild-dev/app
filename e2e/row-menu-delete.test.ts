@@ -346,7 +346,7 @@ test('「取り消す」で戻した後の読み直しが失敗すると、「�
   await expect(page.getByRole('link', { name: '戻して落ちる行', exact: true })).toBeVisible();
 });
 
-test('スプリントのカードを消した後のボードの読み直しが失敗しても、「削除しましたが」の印と「もう一度試す」が残る', async ({
+test('スプリントのカードを消した後のボードの読み直しが失敗しても「削除しましたが」と「もう一度試す」が残り、読めた後の関係ない失敗には出ない', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -390,8 +390,29 @@ test('引き出しの「このタスクを削除する」の後の読み直し�
   await expect(drawer).toBeHidden();
   const notice = page.locator('[data-task-reload-note]');
   await expect(notice).toHaveText('タスクは削除しましたが、画面を読み直せませんでした。もう一度試してください。');
+  // 木が読めないまま、トーストの「取り消す」で戻す。戻したことが済んでいると印を替える
+  await page.getByRole('button', { name: '取り消す: 引き出しで消す行' }).click();
+  await expect(notice).toHaveText('タスクは戻しましたが、画面を読み直せませんでした。もう一度試してください。');
   await unroute();
   await page.getByRole('button', { name: 'もう一度試す', exact: true }).click();
   await expect(notice).toHaveCount(0);
-  await expect(page.getByRole('link', { name: '引き出しで消す行', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '引き出しで消す行', exact: true })).toBeVisible();
+});
+
+test('引き出しの削除が 404（先に消えていた）で、その後の読み直しが失敗しても、「削除しましたが」は出さない', async ({
+  page,
+}) => {
+  await createWorkspace(page, '引き出しの削除の 404');
+  await addTaskRow(page, '先に消えていた行');
+  await page.getByRole('link', { name: '先に消えていた行', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '先に消えていた行' });
+  await expect(drawer).toBeVisible();
+  await failOperation(page, taskDelete, AOBA, 404, 'not_found');
+  await failOperation(page, backlogTree, AOBA, 500, 'internal');
+  await drawer.getByRole('button', { name: 'このタスクを削除する' }).click();
+  await expect(drawer).toBeHidden();
+  // 何も消していないので、断られた後と同じ文にする
+  await expect(page.locator('[data-task-reload-note]')).toHaveText(
+    '画面を読み直せませんでした。もう一度試してください。',
+  );
 });
