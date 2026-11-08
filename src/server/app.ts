@@ -131,7 +131,26 @@ export function createApp(
     }
     const version = c.env.APP_VERSION || 'dev';
     if (!hasCredentialKeys(c.env)) {
-      return c.json({ status: 'unavailable', database: 'ok', credentialKeys: 'unavailable', version }, 503);
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          code: 'unavailable',
+          requestId: c.get('requestId'),
+          method: c.req.method,
+          route: routePath(c),
+          error: 'CredentialKeysError',
+        }),
+      );
+      return c.json(
+        {
+          ...errorBody('unavailable', 'credential keys unavailable'),
+          status: 'unavailable',
+          database: 'ok',
+          credentialKeys: 'unavailable',
+          version,
+        },
+        503,
+      );
     }
     const body: Health = { status: 'ok', database: 'ok', credentialKeys: 'ok', version };
     return c.json(body);

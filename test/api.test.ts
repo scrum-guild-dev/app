@@ -31,15 +31,30 @@ describe('API', () => {
     '/api/health は不備のある鍵を公開せず 503 にする (%s)',
     async (raw) => {
       const broken = { ...env, CONNECTION_CREDENTIAL_KEYS: raw } as unknown as Env;
-      const res = await createApp().request('/api/health', {}, broken);
-      expect(res.status).toBe(503);
-      expect(await res.json()).toEqual({
-        status: 'unavailable',
-        database: 'ok',
-        credentialKeys: 'unavailable',
-        version: 'dev',
-      });
-      expectApiHeaders(res);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const res = await createApp().request('/api/health', {}, broken);
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({
+          status: 'unavailable',
+          database: 'ok',
+          credentialKeys: 'unavailable',
+          version: 'dev',
+          error: { code: 'unavailable', message: 'credential keys unavailable' },
+        });
+        expectApiHeaders(res);
+        expect(error).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(error.mock.calls[0]![0] as string)).toMatchObject({
+          level: 'error',
+          code: 'unavailable',
+          method: 'GET',
+          route: '/api/health',
+          error: 'CredentialKeysError',
+        });
+        if (raw) expect(error.mock.calls.flat().join('\n')).not.toContain(raw);
+      } finally {
+        error.mockRestore();
+      }
     },
   );
 

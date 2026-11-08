@@ -608,9 +608,18 @@ describe('versionFromHealth', () => {
     }
     await assert.rejects(
       versionFromHealth(
-        json({ status: 'unavailable', database: 'ok', credentialKeys: 'unavailable', version: SHA }, 503),
+        json(
+          {
+            status: 'unavailable',
+            database: 'ok',
+            credentialKeys: 'unavailable',
+            version: SHA,
+            error: { code: 'unavailable', message: 'credential keys unavailable' },
+          },
+          503,
+        ),
       ),
-      /HTTP 503/,
+      /HTTP 503（unavailable）/,
     );
   });
 
