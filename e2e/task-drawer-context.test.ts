@@ -42,6 +42,7 @@ test('列と親を表示し、今日やるの印を付け外す', async ({ page 
   await expect(sun).toHaveAttribute('aria-disabled', 'false');
   await sun.click();
   await expect(sun).toHaveAttribute('aria-pressed', 'false');
+  await waitForSettled(page);
 });
 
 test('完了したタスクは理由を添えて今日やるを無効にする', async ({ page }) => {
@@ -126,6 +127,7 @@ test('今日やるの遅い応答で担当変更後の印を戻さない', async
   await assignee.selectOption({ label: 'ミナト' });
   await expect(sun).toHaveAttribute('aria-disabled', 'false');
   await expect(sun).toHaveAttribute('aria-pressed', 'false');
+  await waitForSettled(page);
 });
 
 for (const width of [390, 1280]) {
@@ -185,4 +187,5 @@ test('古い詳細の応答で担当変更後の印を戻さない', async ({ pa
   await assignee.selectOption({ label: 'ミナト' });
   await expect(sun).toHaveAttribute('aria-disabled', 'false');
   await expect(sun).toHaveAttribute('aria-pressed', 'false');
+  await waitForSettled(page);
 });

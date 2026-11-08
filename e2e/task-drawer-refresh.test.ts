@@ -67,6 +67,7 @@ test('印の保存後に詳細が読めなくても押された状態を保ち�
   await unroute();
   await sun.click();
   await expect(sun).toHaveAttribute('aria-pressed', 'false');
+  await waitForSettled(page);
 });
 
 test('担当変更後の遅い読み直しがポイントの保存を戻さない', async ({ page }) => {
