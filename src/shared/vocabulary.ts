@@ -282,7 +282,6 @@ export const dictionary = defineDictionary({
   // 読み直しに失敗したときの、もう一度試すボタンの横の知らせ
   retryFailed: 'まだ読み込めませんでした',
   loading: '読み込んでいます',
-  loadingText: 'しばらくお待ちください。',
 
   // メニューの項目と見出し。ワークスペースの外の画面は organization
   pageToday: '今日やること',

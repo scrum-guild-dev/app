@@ -91,6 +91,7 @@ test('URL を直接開いて木の読み込みが遅いとき、300ms 後に読�
   const boot = page.locator('#boot-loading');
   await expect(boot).toBeVisible();
   await expect(boot.locator('.boot-wait')).toHaveText('読み込んでいます');
+  await expect(boot.locator('.boot-skeleton')).toBeVisible();
 
   release();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -114,5 +115,6 @@ test('15 秒たっても描けないときは、読み込み中の文を失敗�
   await expect(boot.getByText('読み込めませんでした')).toBeHidden();
   await expect(boot.getByText('読み込めませんでした')).toBeVisible({ timeout: 20_000 });
   await expect(boot.getByText('読み込んでいます')).toBeHidden();
+  await expect(boot.locator('.boot-skeleton')).toBeHidden();
   await expect(boot.getByRole('link', { name: 'もう一度試す' })).toBeVisible();
 });
