@@ -31,7 +31,7 @@ h1, h2, h3 { text-wrap: balance; }
 /* 区切りのない長い文字列（版の SHA、ID、URL）を、狭い幅でも途中で折る */
 .wrap-anywhere { overflow-wrap: anywhere; }
 /* 途中で折ると読めなくなる短い値（改定日の「改定日: 2026-10-31」など）を、行に収まるなら割らずに次の行へ送る。
-   nowrap にしないのは、文字の拡大や 320px で行より長くなったときに、はみ出さず中で折るため。長い文字列には使わない */
+   nowrap にしないのは、文字の拡大や 320px で行より長くなったときに、はみ出さず中で折るため。区切りのない長い文字列には使わず .wrap-anywhere にする */
 .keep-together { display: inline-block; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

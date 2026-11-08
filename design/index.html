@@ -243,7 +243,7 @@ const SECTIONS = [
       <div class="type-row"><span class="cat-name">.keep-together</span><span>利用規約が改められました <span class="mono keep-together">改定日: 2026-10-31</span></span></div>
       <div class="type-row"><span class="cat-name">--font-stat</span><span class="xp-num">1,240<small>XP</small></span></div>
     </div>`,
-    ["見出しの書体（--font-display）は画面と節の見出し、貼り紙と引き出しの題、列の名前だけ。本文やボタンには使わない。シンプルはゴシック、中世風は明朝、現代風は Chakra Petch とゴシック。", "キー、日付、ポイントは mono、レベルと経験値と積載量の数字は stat。数字が縦に並ぶ所は等幅の数字にする。", "版（40文字のコミットの SHA）、ID、URL のように、区切りがなく長くなる文字列には wrap-anywhere を足す。狭い幅でも、横にはみ出さずに途中で折る。表のセルなど折らない所では付けない。"])],
+    ["見出しの書体（--font-display）は画面と節の見出し、貼り紙と引き出しの題、列の名前だけ。本文やボタンには使わない。シンプルはゴシック、中世風は明朝、現代風は Chakra Petch とゴシック。", "キー、日付、ポイントは mono、レベルと経験値と積載量の数字は stat。数字が縦に並ぶ所は等幅の数字にする。", "版（40文字のコミットの SHA）、ID、URL のように、区切りがなく長くなる文字列には wrap-anywhere を足す。狭い幅でも、横にはみ出さずに途中で折る。表のセルなど折らない所では付けない。", "途中で折ると読めなくなる短い値（改定日の「改定日: 2026-10-31」など）には keep-together を足す。行に収まるなら割らずに次の行へ送り、文字の拡大や狭い幅で行より長くなったときだけ中で折る（はみ出さない）。区切りのない長い文字列には使わず、wrap-anywhere にする。"])],
   ["space", "余白と形", () => block("space", "余白と形", "余白は 4px 刻み。角、区切りの線、影はテーマで変わる。",
     `<div class="two"><div class="field">${[1, 2, 3, 4, 5, 6, 8, 10].map((n) => `<div class="space-row"><span class="cat-name" style="width:80px">--space-${n}</span><i style="width:var(--space-${n})"></i></div>`).join("")}</div>
      <div class="field">
