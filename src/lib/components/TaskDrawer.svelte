@@ -1456,7 +1456,7 @@
 
 {#snippet bodyView()}
   {#if task?.body_md != null}
-    <Markdown source={task.body_md} headingStart={3} />
+    <Markdown source={task.body_md} headingStart={mode === 'page' ? 2 : 3} />
   {:else}
     <div class="doc-box is-empty">{t('bodyEmpty')}</div>
   {/if}
