@@ -56,6 +56,8 @@
     slug: string;
     workspaceId: string;
     onSaved: () => Promise<void> | void;
+    // 見出しの件数へ、保存できたポイントを読み直す前に反映する
+    onPointsSaved?: (task: BacklogTask, points: BacklogTask['points']) => void;
     onStale: () => void;
     definitions: { categories: readonly DefinitionRef[]; repositories: readonly DefinitionRef[] } | null;
   };
@@ -274,6 +276,7 @@
           { slug: attrs.slug },
         );
         if (result.ok) {
+          attrs.onPointsSaved?.(task, choice);
           // 選び直されていなければ、読み直した値が出るまで選んだ値を見せる
           if (pointsPending !== null && pointsPending.value === choice) {
             showToast(t('taskSaved'), 'check');
