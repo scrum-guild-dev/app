@@ -407,6 +407,8 @@ export const dictionary = defineDictionary({
   todayMarkNotAssignee: '{assignee}が替わったため、今日やるの印を付け外しできませんでした。一覧を読み直します',
   todayMarkDone: 'この{task}は{done}になっているため、印を付け外しできません。一覧を読み直します',
   todayMarkFailed: '今日やるの印を変えられませんでした。もう一度試してください。',
+  todayMarkRefreshFailed:
+    '今日やるの印は保存しましたが、最新の詳細を読み込めませんでした。もう一度読み込んでください。',
   sprintInProgress: '進行中のスプリント',
   // 今日やることの右の列（経験値とレベル）の読み上げの名前
   myRecord: '自分の記録',

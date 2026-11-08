@@ -50,3 +50,21 @@ test('後発の詳細を待った保存でも、存在するタスクを消え�
   await expect(drawer).toBeVisible();
   await expect(drawer.getByText('選んだリポジトリは削除されています。選び直してください')).toBeVisible();
 });
+
+test('印の保存後に詳細が読めなくても押された状態を保ち、次のクリックで外す', async ({ page }) => {
+  await createWorkspace(page, '印の保存と読み直し');
+  await addTaskRow(page, '保存済みの印');
+  await page.getByRole('link', { name: '保存済みの印', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '保存済みの印' });
+  await drawer.getByRole('combobox', { name: '担当', exact: true }).selectOption({ label: 'ミナト' });
+  const sun = drawer.getByRole('button', { name: '今日やる: 保存済みの印', exact: true });
+  await expect(sun).toHaveAttribute('aria-disabled', 'false');
+  const unroute = await failOperation(page, taskDetail, { slug: 'aoba' }, 500, 'internal');
+  await sun.click();
+  await waitForSettled(page);
+  await expect(sun).toHaveAttribute('aria-pressed', 'true');
+  await expect(sun).toHaveAttribute('aria-disabled', 'false');
+  await unroute();
+  await sun.click();
+  await expect(sun).toHaveAttribute('aria-pressed', 'false');
+});

@@ -184,6 +184,7 @@
     today_on: null,
   });
   let marking = $state(false);
+  let assigneeVersion = 0;
   let refreshVersion = 0;
   let latestRefresh: Promise<TaskDetail | null> | null = null;
   const todayReasonId = `${ids}-today-reason`;
@@ -191,6 +192,7 @@
   async function toggleToday() {
     if (marking || todayDisabledReason !== null || task === null) return;
     const requestedTaskId = taskId;
+    const requestedAssigneeVersion = assigneeVersion;
     marking = true;
     try {
       const result = await callOperation(
@@ -199,8 +201,12 @@
         { slug },
       );
       if (result.ok) {
-        // 応答を待つ間の担当変更で印が消えた場合も、現在の値を表示する。
-        if (taskId === requestedTaskId) await refresh(true);
+        // 保存済みの印は直ちに反映する。ただし、その間に担当変更が成功して印を消した応答より前へ戻さない。
+        if (alive && taskId === requestedTaskId) {
+          if (requestedAssigneeVersion === assigneeVersion)
+            taskContext = { ...taskContext, today_on: result.data.today_on };
+          if ((await refresh(true)) === null && !taskGone) showToast(t('todayMarkRefreshFailed'), 'alert');
+        }
         onchanged();
         await invalidate('app:today');
       } else {
@@ -921,6 +927,10 @@
     if (result.ok) {
       if (alive && task !== null) {
         const saved = result.data.task;
+        if (saved.assignee?.id !== task.assignee?.id) {
+          assigneeVersion++;
+          taskContext = { ...taskContext, today_on: null };
+        }
         task = {
           ...task,
           assignee: saved.assignee,
