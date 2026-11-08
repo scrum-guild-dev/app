@@ -314,6 +314,30 @@ export function runPreflight(
   }
 }
 
+// Playwright の依存か Chromium が無い環境では e2e を省き、PR の CI で確かめる（docs/development.md）。
+export const PLAYWRIGHT_UNAVAILABLE_EXIT = 3;
+
+type Launcher = { chromium: { launch(): Promise<{ close(): Promise<void> }> } };
+
+export async function playwrightUnavailableReason(
+  load: () => Launcher | Promise<Launcher> = () => import('@playwright/test'),
+): Promise<string | undefined> {
+  let playwright: Launcher;
+  try {
+    playwright = await load();
+  } catch (error) {
+    return `@playwright/test を読み込めない: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`;
+  }
+  try {
+    // 実行ファイルの有無だけでは headless の別の版や共有ライブラリの不足を見落とすため、実際に起動する。
+    const browser = await playwright.chromium.launch();
+    await browser.close();
+    return undefined;
+  } catch (error) {
+    return `Chromium を起動できない: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`;
+  }
+}
+
 const USAGE =
   '使い方: pnpm e2e:preflight [base-ref] [--files <e2e/*.test.ts…> --reason <理由> | --all --reason <理由>] | --verify <result.json> [base-ref] [同じ対象指定]（base-ref は --files より前に指定する）';
 
@@ -353,6 +377,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     verifyPreflight(result, base, process.cwd(), options);
     console.log('[e2e:preflight] 記録と現在のコード・対象が一致する（全件成功は scope: all のみ）');
   } else {
+    const unavailable = await playwrightUnavailableReason();
+    if (unavailable !== undefined) {
+      console.error(`[e2e:preflight] Playwright が使えないため e2e を省く（${unavailable}）。`);
+      console.error(
+        '[e2e:preflight] 結果は記録しない。PR を作り、本文に未実施の理由を書いて、CI の e2e・e2e-dev・e2e-repeat で確かめる',
+      );
+      process.exit(PLAYWRIGHT_UNAVAILABLE_EXIT);
+    }
     runPreflight(base, options);
   }
 }

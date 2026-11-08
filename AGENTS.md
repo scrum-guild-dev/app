@@ -40,7 +40,7 @@ Codex 用の入口は `.agents/skills/`。`add-operation`、`d1-migration`、`pr
 
 - wrangler の本番の操作（`deploy`、`versions deploy`、`rollback`）と、`--remote` を付けた `wrangler d1` を打たない。wrangler の設定に remote の binding を足さない
 - `.dev.vars` と `.env`、ホームの `~/.wrangler` と `~/.config/.wrangler` を読まず、書き込まない
-- ローカルのセッションは e2e を走らせない。クラウドでは PR 作成前に `pnpm e2e:preflight [base-ref] --files … --reason …` を通す（`docs/development.md` の「クラウドで PR 前に e2e を確かめる」）。対象の通常・開発・関連する繰り返しを確認する。全件は CI に任せ、必要時だけ `--all --reason …` で明示する。必要なテストを差分に足し、PR の CI も通す
+- ローカルのセッションは e2e を走らせない。クラウドでは PR 作成前に `pnpm e2e:preflight [base-ref] --files … --reason …` を通す（`docs/development.md` の「クラウドで PR 前に e2e を確かめる」）。対象の通常・開発・関連する繰り返しを確認する。全件は CI に任せ、必要時だけ `--all --reason …` で明示する。Playwright が無い環境（`e2e:preflight` が終了コード 3 で止まる）では e2e を省いて PR を作り、本文に未実施の理由を書いて CI で担保する。必要なテストを差分に足し、PR の CI も通す
 - `pkill` を使わない。自分で起動したプロセスだけを、その PID や実行セッションで止める
 - 自動整形は走らない。変更したファイルだけをプロジェクトの Prettier 設定で整形し、`.prettierignore` に従う。無関係の差分を含む作業コピー全体へ `pnpm format` を掛けない
 - 終わる前に、コミット済みの差分、未コミットの差分、新規ファイルを確かめ、変更に合う `CLAUDE.md` の検査を走らせる。実施できなかった検査と独立レビューは、通ったものと分けて報告する

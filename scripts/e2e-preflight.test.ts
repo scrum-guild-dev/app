@@ -13,7 +13,14 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { inputFingerprint, parsePreflightArgs, preflightPlan, runPreflight, verifyPreflight } from './e2e-preflight.ts';
+import {
+  inputFingerprint,
+  parsePreflightArgs,
+  playwrightUnavailableReason,
+  preflightPlan,
+  runPreflight,
+  verifyPreflight,
+} from './e2e-preflight.ts';
 
 function fixture(t: { after(fn: () => void): void }): string {
   const cwd = mkdtempSync(join(tmpdir(), 'e2e-preflight-'));
@@ -642,4 +649,44 @@ test('同じ内容でも実行時HEADを含まない履歴とbaseの移動を拒
   assert.throws(() => verifyPreflight(result, 'base', cwd, options), /祖先/);
   assert.equal(spawnSync('git', ['branch', '-f', 'base', 'HEAD'], { cwd }).status, 0);
   assert.throws(() => verifyPreflight(result, 'base', cwd, options));
+});
+
+test('Playwright の依存か Chromium が無いときは省く理由を返し、起動できれば何も返さない', async () => {
+  const missing = await playwrightUnavailableReason(() => {
+    throw new Error("Cannot find module '@playwright/test'\nRequire stack: x");
+  });
+  assert.equal(missing, "@playwright/test を読み込めない: Cannot find module '@playwright/test'");
+  const noBrowser = await playwrightUnavailableReason(() => ({
+    chromium: {
+      launch: () => Promise.reject(new Error("Executable doesn't exist at /x/chrome\n details")),
+    },
+  }));
+  assert.equal(noBrowser, "Chromium を起動できない: Executable doesn't exist at /x/chrome");
+  let closed = false;
+  const ok = await playwrightUnavailableReason(() => ({
+    chromium: {
+      launch: () =>
+        Promise.resolve({
+          close: () => {
+            closed = true;
+            return Promise.resolve();
+          },
+        }),
+    },
+  }));
+  assert.equal(ok, undefined);
+  assert.equal(closed, true);
+});
+
+test('CLI は Playwright が使えないとき検査も記録もせず、省く終了コードで止まる', (t) => {
+  const cwd = fixture(t);
+  const result = spawnSync(process.execPath, [new URL('./e2e-preflight.ts', import.meta.url).pathname, 'base'], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: join(cwd, 'no-browsers') },
+  });
+  assert.equal(result.status, 3, result.stderr);
+  assert.match(result.stderr, /Playwright が使えないため e2e を省く（Chromium を起動できない/);
+  assert.match(result.stderr, /CI の e2e・e2e-dev・e2e-repeat で確かめる/);
+  assert.equal(existsSync(join(cwd, '.e2e-preflight')), false);
 });
