@@ -36,6 +36,7 @@
     keepAddedRow,
     orphanedFromTree,
     parentStoryIds,
+    treeStories,
   } from '../../../../lib/added-rows.ts';
   import { MoveQueue } from '../../../../lib/move-queue.ts';
   import { completionFailureMessage } from '../../../../lib/story-completion.ts';
@@ -151,7 +152,7 @@
   let loadedFilter: typeof filter | undefined;
   function inTree(loaded: typeof tree, id: string): boolean {
     if (loaded === null) return false;
-    const stories = [...loaded.epics.flatMap((epic) => epic.stories), ...loaded.stories];
+    const stories = treeStories(loaded);
     return (
       loaded.tasks.some((task) => task.id === id) || stories.some((story) => story.tasks.some((row) => row.id === id))
     );
@@ -208,9 +209,7 @@
     const keepRow = (at: number, inLoaded: boolean) =>
       carry &&
       keepAddedRow({ at }, { inLoadedTree: inLoaded, completed: false, treeLoaded: loaded !== null, loadedAt });
-    const loadedStoryIds = [...(loaded?.epics.flatMap((epic) => epic.stories) ?? []), ...(loaded?.stories ?? [])].map(
-      (story) => story.id,
-    );
+    const loadedStoryIds = (loaded === null ? [] : treeStories(loaded)).map((story) => story.id);
     // 画面で足したストーリーのうち、この回で残すもの。孤立の判定にも、捨てるものを含めない
     const keptStories = untrack(() => addedStories).filter((entry) =>
       keepRow(entry.at, loadedStoryIds.includes(entry.story.id)),
@@ -507,7 +506,11 @@
   // 取り消した後は戻した行の題のリンクへ、Esc で閉じたときは消した行の次の行（無ければ前の行、無ければ見出し）へ移す
   async function removeTask(task: BacklogTask, keyboard: boolean): Promise<void> {
     if (workspace === null || !canWrite) return;
-    const reload = (): Promise<void> => invalidate('app:backlog-tree');
+    // 送っている並べ替えと親の移動が終わってから読み直す（先に読み直すと、まだ送っていない移動が捨てられ、並びが一時的に戻る）
+    const reload = async (): Promise<void> => {
+      await moves.whenIdle();
+      await invalidate('app:backlog-tree');
+    };
     await removeFromList({
       slug: page.params.slug ?? '',
       workspaceId: workspace.id,
@@ -515,6 +518,8 @@
       title: task.title,
       keyboard,
       reload,
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路から task などの問い合わせを外しただけ
+      closeDrawer: (path) => goto(path, { replace: true, reset: false }),
       onstale: () => void invalidateAll(),
       onrestored: async (restoredId, focus) => {
         await reload();
@@ -635,7 +640,7 @@
   function treeHas(kind: 'task' | 'story' | 'epic', id: string): boolean {
     const loaded = data.tree;
     if (loaded === null) return true;
-    const stories = [...loaded.epics.flatMap((epic) => epic.stories), ...loaded.stories];
+    const stories = treeStories(loaded);
     if (kind === 'epic') return loaded.epics.some((epic) => epic.id === id);
     if (kind === 'story') return stories.some((story) => story.id === id);
     return (

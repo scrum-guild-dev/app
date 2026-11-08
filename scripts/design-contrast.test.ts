@@ -161,6 +161,7 @@ describe('操作部品の枠の色のコントラスト', () => {
       '.btn',
       '.pill',
       '.search',
+      '.nav-search',
       ':is(.org-menu-button, .ws-menu-button)',
       '.input, .select, .textarea',
     ];

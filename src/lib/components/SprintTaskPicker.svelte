@@ -10,6 +10,7 @@
   } from '../../shared/operations/sprint/index.ts';
   import { backlogTree } from '../../shared/operations/task/index.ts';
   import type { BacklogTask } from '../../shared/operations/task/backlog-tree.ts';
+  import { treeStories } from '../added-rows.ts';
   import { callOperation } from '../api.ts';
   import { sprintLabel } from '../sprint-label.ts';
   import { showToast } from '../toast.svelte.ts';
@@ -97,9 +98,7 @@
     loadFailed = false;
     // このスプリントに入っていない未完了のタスクだけ。木の順（エピックの下のストーリー、親のないストーリー、親のないタスク）
     const outside = (tasks: readonly BacklogTask[]) => tasks.filter((task) => task.sprint?.id !== target.id);
-    const stories = [...result.data.epics.flatMap((epic) => epic.stories), ...result.data.stories].filter(
-      (story) => story.completed_at === null,
-    );
+    const stories = treeStories(result.data).filter((story) => story.completed_at === null);
     groups = [
       ...stories.map((story) => ({ id: story.id, title: story.title, tasks: outside(story.tasks) })),
       { id: null, title: t('sprintTaskAddRootTasks', { task: t('task') }), tasks: outside(result.data.tasks) },

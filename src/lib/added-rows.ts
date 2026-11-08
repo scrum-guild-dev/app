@@ -31,6 +31,11 @@ export function carriesOver(previous: BacklogFilter | undefined, next: BacklogFi
   return sameWorkspace && previous !== undefined && sameFilter(previous, next);
 }
 
+// 読み直した木にあるストーリー（エピックの下と、エピックの無いもの）。「木にあるストーリー」の定義はここだけに置く
+export function treeStories<S>(loaded: { epics: readonly { stories: readonly S[] }[]; stories: readonly S[] }): S[] {
+  return [...loaded.epics.flatMap((epic) => epic.stories), ...loaded.stories];
+}
+
 // 孤立の判定の親になるストーリーの ID。読み直した木のストーリーと、この回で残す画面で足したストーリー（読み直した木に入るまで描かれる親）
 export function parentStoryIds(loaded: readonly string[], keptAdded: readonly string[]): Set<string> {
   return new Set([...loaded, ...keptAdded]);

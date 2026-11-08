@@ -358,3 +358,45 @@ test('見本のカタログ: 「ストーリーを直す（引き出し）」の
   await expect(section.locator('.cat-drawer')).toHaveCount(before);
   expect(errors).toEqual([]);
 });
+
+test('見本の削除の確認: クリア済みのエピックを配下を残して削除すると断られ、確認は閉じない', async ({ page }) => {
+  const files: Record<string, string> = {
+    'index.html': 'text/html',
+    'tokens.css': 'text/css',
+    'components.css': 'text/css',
+    'icons.js': 'text/javascript',
+    'art.js': 'text/javascript',
+    'sample-data.js': 'text/javascript',
+    'kit.js': 'text/javascript',
+  };
+  await page.route('**/__design-catalog/**', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').pop()!;
+    const contentType = files[name];
+    if (!contentType) return route.fulfill({ status: 404, body: '' });
+    await route.fulfill({ contentType, body: readFileSync(new URL(`../design/${name}`, import.meta.url)) });
+  });
+  for (const host of ['fonts.googleapis.com', 'fonts.gstatic.com']) {
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ body: '' }));
+  }
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/__design-catalog/index.html');
+  const dialog = page.locator('#dialog');
+
+  // まとめて削除できる人: 残す（既定）で押すと断られ、確認は開いたまま。「まとめて削除する」に替えると閉じる
+  await page.locator('[data-dialog="deleteEpicCleared"]').click();
+  await dialog.locator('.btn.is-danger').click();
+  await expect(dialog.getByRole('alert')).toContainText('「配下もまとめて削除する」を選ぶか、先に');
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('配下もまとめて削除する').check();
+  await dialog.locator('.btn.is-danger').click();
+  await expect(dialog).toBeHidden();
+
+  // まとめて削除できない人: 選べず、押すと依頼主かリーダーに頼む文が出る
+  await page.locator('[data-dialog="deleteEpicClearedLeaderOnly"]').click();
+  await expect(dialog.getByLabel('配下もまとめて削除する')).toBeDisabled();
+  await dialog.locator('.btn.is-danger').click();
+  await expect(dialog.getByRole('alert')).toContainText('に、エピックの完了を取り消してもらってください');
+  await expect(dialog).toBeVisible();
+  expect(errors).toEqual([]);
+});

@@ -1778,6 +1778,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
     const x = { id: `n${++draftSeq}`, ws: "wa", title, story: kind === "story" ? key : null, sprint: kind === "col" ? "sp14" : null, col: kind === "col" ? key : null, who: null, pts: null, creator: D.me, unfilled: true };
     D.tasks.push(x);
+    // redraw() は値のある空の行を控えて戻すので、足した題が戻らないよう、描き直す前にこの欄だけ空にする
+    input.value = "";
     redrawAll();
     document.getElementById(input.id)?.focus();
     toast(`${icon("check")}${t("task")}を足しました: ${esc(title)}`);
@@ -1986,6 +1988,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // エピックとストーリーの削除の確認（本番の TreeDeleteDialog）。kind は "epic" か "story"。
   // opts.empty は配下の無い形（選択肢を出さない）、opts.leaderOnly は「まとめて削除する」を選べない形（リーダーでない人で、他の人の作った配下がある）。
+  // opts.cleared はクリア済みで配下のあるエピックの形（配下なしの opts.empty とは組み合わせない。見本の e1 は未完了だが、クリア済みのつもりで見る）。「配下を親なしで残す」のまま「削除する」を押すと 409 の epic_finished で断られ、
+  // 理由を確認の中の role="alert" に出して確認は閉じない（まとめて削除できない人には、依頼主かリーダーに完了の取り消しを頼む文を出す）。「まとめて削除する」を選べば削除できる。
   // 見本は1枠のダイアログなので、元のエピックのダイアログを置き換えて開く。ストーリーは引き出しの「⋯」から、引き出しの上に開く。
   // 本番は元のダイアログの上に重ねて開き、開いたときに get を読み直して件数と可否を差し替える
   function treeDeleteDialog(kind, id, opts = {}) {
@@ -2010,8 +2014,20 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
            </div>${opts.leaderOnly ? `<span class="field-hint" id="d-del-leader">配下に他の人が作ったものがあるため、まとめて削除できるのは${t("leader")}だけです。</span>` : ""}</div>`
          : `<p class="field-hint">配下の${t(kind === "epic" ? "story" : "task")}はありません。</p>`}
        <p class="field-hint">完了の記録と経験値は残ります。</p>`,
-      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog${kind === "story" ? ` data-close-story-drawer="${id}"` : ""} data-toast="${t(kind)}を削除しました">削除する</button>`);
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button>${opts.cleared
+        ? `<button class="btn is-danger" type="button" data-delete-cleared>削除する</button>`
+        : `<button class="btn is-danger" type="button" data-close-dialog${kind === "story" ? ` data-close-story-drawer="${id}"` : ""} data-toast="${t(kind)}を削除しました">削除する</button>`}`);
     document.querySelector(".dialog-sheet").classList.add("is-danger");
+  }
+  // クリア済みのエピックを配下を残して削除しようとして断られた形（本番の TreeDeleteDialog の 409 epic_finished）。確認は閉じず、理由を role="alert" に出す
+  function treeDeleteClearedRefused(el) {
+    const body = el.closest("#dialog").querySelector(".dialog-body");
+    const all = body.querySelectorAll("input[name=d-del]")[1];
+    if (all && all.checked) { closeDialog(); toast(`${icon("check")}${t("epic")}を削除しました`); return; }
+    body.querySelector("[data-delete-refused]")?.remove();
+    body.insertAdjacentHTML("beforeend", `<div class="callout is-danger" role="alert" data-delete-refused>${icon("alert")}<span>${all && !all.disabled
+      ? `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先に${t("epic")}の${t("done")}を取り消してください。`
+      : `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。${t("requester")}か${t("leader")}に、${t("epic")}の${t("done")}を取り消してもらってください。`}</span></div>`);
   }
   // エピックの作成と変更のダイアログ（本番の EpicDialog）。欄はストーリーのダイアログから受け入れ基準を除いたもの。
   // バックログの見出しの「エピックを作る」と、木のエピックの行の題から開く。依頼主、クリア報酬、討伐隊はエピックの画面（#65）で直す。
@@ -2218,6 +2234,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     // 配下の件数と、配下の扱い（既定は残す）を選ばせる。配下が無ければ選ばせず、その旨だけを出す。長いタイトルは折り返す
     deleteEpic: (el) => treeDeleteDialog("epic", el?.dataset?.treeDeleteId || "e1"),
     deleteStory: (el) => treeDeleteDialog("story", el?.dataset?.treeDeleteId || "s4"),
+    deleteEpicCleared: () => treeDeleteDialog("epic", "e1", { cleared: true }),
+    deleteEpicClearedLeaderOnly: () => treeDeleteDialog("epic", "e1", { cleared: true, leaderOnly: true }),
     deleteStoryEmpty: () => treeDeleteDialog("story", "s4", { empty: true }),
     deleteStoryLeaderOnly: () => treeDeleteDialog("story", "s4", { leaderOnly: true }),
     cancelEpic: () => openDialog(`${t("epic")}を中止する`,
@@ -3171,6 +3189,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
     if ((el = hit("data-drawer-mode"))) { changeDrawerMode(el.dataset.drawerMode); return; }
     if ((el = hit("data-drawer-step"))) { stepDrawer(Number(el.dataset.drawerStep), false, true); return; }
+    if ((el = hit("data-delete-cleared"))) { treeDeleteClearedRefused(el); return; }
     if (hit("data-discard-draft")) {
       const next = pendingDrawer;
       closeDialog();
