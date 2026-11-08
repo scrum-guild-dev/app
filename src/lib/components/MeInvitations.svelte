@@ -8,7 +8,7 @@
   import { invitationAccept, invitationDecline, invitationList } from '../../shared/operations/workspace/index.ts';
   import { callOperation } from '../api.ts';
   import { focusPageHeading } from '../focus-heading.ts';
-  import { formatMonthDay } from '../format-datetime.ts';
+  import { formatMonthDay } from '../format.ts';
   import { invitationErrorText, invitationRoleLabel } from '../invitation-text.ts';
   import { isUnauthenticated, loginUrl } from '../login-redirect.ts';
   import { showToast } from '../toast.svelte.ts';
@@ -153,7 +153,7 @@
           role: invitationRoleLabel(invitation.role),
           date: formatMonthDay(invitation.invited_on),
         })}
-        {#if invitation.closed}{t('invitationInboxClosed', { workspace: t('workspace') })}{/if}
+        {#if invitation.closed}<br />{t('invitationInboxClosed', { workspace: t('workspace') })}{/if}
       </span>
       <div class="callout-actions">
         <!-- 送っている間は、読み上げの名前も見える文言と同じにする -->

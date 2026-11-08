@@ -138,7 +138,7 @@ test.describe('招待だけが届いた人（ヒナタ）', () => {
       page.getByText('ひばり工房から届いた招待です。承諾すると、そのワークスペースに入れます。'),
     ).toBeVisible();
     const rows = page.locator('.choice.is-static');
-    await expect(rows.nth(0)).toContainText('ひばり工房・リンさんから・リーダー・2026-10-19');
+    await expect(rows.nth(0)).toContainText('ひばり工房のリンさんから、リーダーとして招かれました（10/19）');
     await expect(rows.nth(1)).toContainText('このワークスペースは終了しているため、承諾できません。辞退はできます。');
     await expect(page.getByRole('button', { name: '旧サイト改修への招待を承諾する' })).toBeDisabled();
     await expect(page.getByRole('button', { name: '旧サイト改修への招待を辞退する' })).toBeEnabled();

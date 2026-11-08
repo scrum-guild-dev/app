@@ -794,6 +794,9 @@ test.describe('すべてのワークスペースから外れた人（ツバサ�
     await expect(page.getByText('管理者から招待が届くと、ここに出ます。')).toHaveCount(0);
     // 停止した組織へは入れないので、組織の画面へのリンクにしない
     await expect(page.getByRole('link', { name: /かもめ社/ })).toHaveCount(0);
+    // 押せない行には、押せる行の印（chevron）を置かない
+    await expect(page.locator('.choice.is-static')).toHaveCount(1);
+    await expect(page.locator('.choice.is-static svg.ico')).toHaveCount(0);
     expect(await findA11yViolations(page)).toEqual([]);
     expect(await collect()).toEqual([]);
   });

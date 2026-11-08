@@ -4,7 +4,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { callOperation } from '../api.ts';
-  import { formatMonthDay } from '../format-datetime.ts';
+  import { formatMonthDay } from '../format.ts';
   import { invitationErrorText, invitationRoleLabel } from '../invitation-text.ts';
   import { isUnauthenticated, loginUrl } from '../login-redirect.ts';
   import { applyInvitedOrganization } from '../organization.svelte.ts';
