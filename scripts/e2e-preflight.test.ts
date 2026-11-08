@@ -651,42 +651,97 @@ test('同じ内容でも実行時HEADを含まない履歴とbaseの移動を拒
   assert.throws(() => verifyPreflight(result, 'base', cwd, options));
 });
 
-test('Playwright の依存か Chromium が無いときは省く理由を返し、起動できれば何も返さない', async () => {
-  const missing = await playwrightUnavailableReason(() => {
-    throw new Error("Cannot find module '@playwright/test'\nRequire stack: x");
+const missingModule = () => {
+  throw Object.assign(new Error("Cannot find package '@playwright/test' imported from x\nstack"), {
+    code: 'ERR_MODULE_NOT_FOUND',
   });
-  assert.equal(missing, "@playwright/test を読み込めない: Cannot find module '@playwright/test'");
-  const noBrowser = await playwrightUnavailableReason(() => ({
-    chromium: {
-      launch: () => Promise.reject(new Error("Executable doesn't exist at /x/chrome\n details")),
-    },
-  }));
-  assert.equal(noBrowser, "Chromium を起動できない: Executable doesn't exist at /x/chrome");
+};
+const launcher = (launch: () => Promise<{ close(): Promise<void> }>) => () => ({ chromium: { launch } });
+
+test('Playwright が入っていないときだけ省く理由を返し、起動できれば何も返さない', async () => {
+  assert.equal(
+    await playwrightUnavailableReason(missingModule),
+    "@playwright/test が入っていない: Cannot find package '@playwright/test' imported from x",
+  );
+  assert.equal(
+    await playwrightUnavailableReason(
+      launcher(() => Promise.reject(new Error("browserType.launch: Executable doesn't exist at /x/chrome\n details"))),
+    ),
+    "Chromium が入っていない: browserType.launch: Executable doesn't exist at /x/chrome",
+  );
   let closed = false;
-  const ok = await playwrightUnavailableReason(() => ({
-    chromium: {
-      launch: () =>
-        Promise.resolve({
-          close: () => {
-            closed = true;
-            return Promise.resolve();
-          },
-        }),
-    },
-  }));
+  const ok = await playwrightUnavailableReason(
+    launcher(() =>
+      Promise.resolve({
+        close: () => {
+          closed = true;
+          return Promise.resolve();
+        },
+      }),
+    ),
+  );
   assert.equal(ok, undefined);
   assert.equal(closed, true);
 });
 
-test('CLI は Playwright が使えないとき検査も記録もせず、省く終了コードで止まる', (t) => {
-  const cwd = fixture(t);
-  const result = spawnSync(process.execPath, [new URL('./e2e-preflight.ts', import.meta.url).pathname, 'base'], {
+test('入っているのに壊れている・不安定な失敗は省く理由にせず投げる', async () => {
+  await assert.rejects(
+    playwrightUnavailableReason(() => {
+      throw new SyntaxError('Unexpected token');
+    }),
+    /Unexpected token/,
+  );
+  await assert.rejects(
+    playwrightUnavailableReason(() => {
+      throw Object.assign(new Error("Cannot find package 'playwright-core'"), { code: 'ERR_MODULE_NOT_FOUND' });
+    }),
+    /playwright-core/,
+  );
+  await assert.rejects(
+    playwrightUnavailableReason(launcher(() => Promise.reject(new Error('Timeout 30000ms exceeded')))),
+    /Timeout/,
+  );
+  await assert.rejects(
+    playwrightUnavailableReason(
+      launcher(() => Promise.resolve({ close: () => Promise.reject(new Error('close boom')) })),
+    ),
+    /close boom/,
+  );
+});
+
+const cli = (cwd: string, args: string[], browsers?: string) =>
+  spawnSync(process.execPath, [new URL('./e2e-preflight.ts', import.meta.url).pathname, ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: join(cwd, 'no-browsers') },
+    env: { ...process.env, ...(browsers ? { PLAYWRIGHT_BROWSERS_PATH: browsers } : {}) },
   });
+
+test('CLI は Chromium が無いとき検査も記録もせず、対象を示して省く終了コードで止まる', (t) => {
+  const cwd = fixture(t);
+  const result = cli(cwd, ['base'], join(cwd, 'no-browsers'));
   assert.equal(result.status, 3, result.stderr);
-  assert.match(result.stderr, /Playwright が使えないため e2e を省く（Chromium を起動できない/);
+  assert.match(result.stderr, /Playwright が入っていないため e2e を省く（Chromium が入っていない/);
+  assert.match(result.stderr, /確かめるつもりだった対象: \["e2e\/new\.test\.ts"\]/);
   assert.match(result.stderr, /CI の e2e・e2e-dev・e2e-repeat で確かめる/);
   assert.equal(existsSync(join(cwd, '.e2e-preflight')), false);
+});
+
+test('CLI は Chromium が無くても、base と対象の誤りを省く終了コードに変えない', (t) => {
+  const cwd = fixture(t);
+  const browsers = join(cwd, 'no-browsers');
+  for (const args of [['nosuch'], ['base', '--files', 'e2e/other.test.ts', '--reason', '関連']]) {
+    const result = cli(cwd, args, browsers);
+    assert.notEqual(result.status, 0);
+    assert.notEqual(result.status, 3, `${args.join(' ')}: ${result.stderr}`);
+  }
+});
+
+test('CLI は文書のみなら Chromium が無くても省略記録を作る', (t) => {
+  const cwd = fixture(t);
+  rmSync(join(cwd, 'e2e'), { recursive: true });
+  mkdirSync(join(cwd, 'docs'));
+  writeFileSync(join(cwd, 'docs/a.md'), 'documentation');
+  const result = cli(cwd, ['base'], join(cwd, 'no-browsers'));
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /docs-only/);
 });
