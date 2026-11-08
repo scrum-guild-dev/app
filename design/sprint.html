@@ -24,7 +24,11 @@ const { D, t, icon, pageHead, sprintNotice, board, capacityRows, sumPts } = SQ;
 // ?overdue は、最終日を過ぎた進行中のスプリントの状態。ふだんの見本の最終日（10/26）の前に今日があるので、期間を1週間前へずらして今日が最終日より後になる形にする。
 // 本番は SprintOverdueNotice.svelte で、進行中で、ワークスペースの今日が最終日より後のときに出す（スプリントの画面と計画の画面）
 const overdue = new URLSearchParams(location.search).has("overdue");
-if (overdue && D.sprints.sp14) Object.assign(D.sprints.sp14, { start: "2026-10-06", end: "2026-10-19", dayIndex: D.sprints.sp14.days });
+if (overdue && D.sprints.sp14) {
+  // 延長の注記と次のスプリントの期間も、ずらした期間に合わせる
+  Object.assign(D.sprints.sp14, { start: "2026-10-06", end: "2026-10-19", dayIndex: D.sprints.sp14.days, extended: 0 });
+  if (D.sprints.sp15) Object.assign(D.sprints.sp15, { start: "2026-10-20", end: "2026-11-02" });
+}
 
 // 最終日を過ぎた知らせ。終える人（リーダーと管理者）には「終える」を添えて終了のダイアログを開き、ほかの人には終えるのがリーダーだと伝える
 function overdueNotice(id) {
@@ -56,7 +60,7 @@ SQ.mount("sprint", () => {
   const done = sumPts(list.filter((x) => x.doneAt)), all = sumPts(list);
   const actions = `<button class="btn" type="button" data-dialog="sprintEditActive">名前と${t("sprintGoal")}を変更</button>
     <button class="btn" type="button" data-dialog="sprintExtend">延長する</button>
-    <button class="btn" type="button" data-dialog="sprintEnd">終える</button>`;
+    <button class="btn" type="button" data-dialog="sprintEnd" aria-label="終える: ${SQ.sprintLabel("sp14")}">終える</button>`;
   return `
     ${pageHead(`${SQ.md(s.start)}〜${SQ.md(s.end)}・${s.days} 日のうち ${Math.min(s.dayIndex + 1, s.days)} 日目`, SQ.sprintLabel("sp14"), [
       ["", "check", `${t("done")}（pt）`, done],

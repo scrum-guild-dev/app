@@ -260,8 +260,7 @@ function topHtml() {
     <div class="section-head"><h2 class="section-title" id="wiki-main-title" tabindex="-1">最上段のページ</h2><span class="section-count">${top.length} 件</span></div>
     ${top.length ? `<ul class="wiki-tree panel">${top.map((p) => `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"><span>${esc(p.title)}</span><span class="props-note">${kids(p.id).length ? `子のページ ${kids(p.id).length} 件・` : ""}${esc(user(p.by).name)}が ${fmt(p.at)} に保存</span></a></li>`).join("")}</ul>
       <p class="props-note">左の木からページを選ぶと、ここに開きます。</p>`
-      : emptyState("file", "ページはまだありません", "手順書や決まりを、最初のページとして書きましょう。.md がすでにあるときは、まとめて上げられます。",
-        `<button class="btn is-primary" type="button" data-wiki="new-root">${icon("plus")}ページを足す</button><button class="btn" type="button" data-wiki="upload">${icon("upload")}${t("wikiUpload")}</button>`)}</section>`;
+      : emptyState("file", "ページはまだありません", "ページを足して、チームの手順や決まりを残せます。")}</section>`;
 }
 function notFoundHtml() {
   return `<section class="section" aria-labelledby="wiki-main-title">
@@ -409,14 +408,13 @@ function statesHtml() {
         <div class="field"><label class="field-label" for="wk-deep">親のページ</label><select class="select" id="wk-deep" aria-describedby="wk-deep-hint">
           <option>最上段（親なし）</option><option>${esc(cur.title)}</option><option disabled>深さ 10 段のページ（10 段を超えるため選べません）</option></select>
           ${parentHint("wk-deep-hint", 1)}</div>`)}
-      ${panel("ページがまだないとき", emptyState("file", "ページはまだありません", "手順書や決まりを、最初のページとして書きましょう。.md がすでにあるときは、まとめて上げられます。",
-          `<button class="btn is-primary" type="button" data-toast="見本のため、足しません">${icon("plus")}ページを足す</button><button class="btn" type="button" data-wiki="upload">${icon("upload")}${t("wikiUpload")}</button>`))}
+      ${panel("ページがまだないとき", emptyState("file", "ページはまだありません", "ページを足して、チームの手順や決まりを残せます。"))}
     </div></section>`;
 }
 
 function render() {
   const head = pageHead(store.name, "Wiki", [],
-    `<button class="btn" type="button" data-wiki="upload">${icon("upload")}${t("wikiUpload")}</button><button class="btn is-primary" type="button" data-wiki="new-root">${icon("plus")}ページを足す</button>`,
+    `<button class="btn" type="button" data-wiki="upload">${t("wikiUpload")}</button><button class="btn is-primary" type="button" data-wiki="new-root">ページを足す</button>`,
     `<p class="props-note">${isOrg ? `${t("organization")}の Wiki。${t("organization")}のユーザーの全員が見て、全員が書けます。` : `${t("workspace")}の Wiki。メンバー全員（${t("admin")}を含む）が見て、全員が書けます。`}</p>`);
   // リンクの説明（新しいタブで開く）。本文のリンクの aria-describedby が指す、画面で1つだけの隠した文
   return `${head}<span id="wiki-newtab" hidden>${t("markdownNewTab")}</span><div class="layout-wiki">${sideHtml()}<div class="wiki-main" id="wiki-main">${mainHtml()}</div></div>${statesHtml()}`;

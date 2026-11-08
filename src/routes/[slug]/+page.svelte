@@ -43,6 +43,12 @@
   const firstWorkspace = $derived(data.organization?.workspaces[0] ?? null);
   // today の読み込みの失敗（data.today が null）は、空の一覧と区別して失敗の画面を出す
   const sections = $derived(todaySections(data.today?.tasks ?? []));
+  // 見出しの上の今日の日付。読み直す（data.today が替わる）たびに今の時刻から取り直し、日をまたいで開いたままでも、
+  // 区分を組み直すのと同じ契機で新しい日にする
+  const todayLabel = $derived.by(() => {
+    void data.today;
+    return formatTodayLabel(new Date());
+  });
   const tallies = $derived<Tally[]>([
     { icon: 'sun', label: t('sectionToday'), count: sections.today.length },
     { tone: 'danger', icon: 'alert', label: t('overdue'), count: sections.overdue.length },
@@ -370,7 +376,7 @@
   <LoadFailed inShell />
 {:else}
   <!-- 見出しの上に、ブラウザのタイムゾーンの今日の日付を出す。区分の判定はワークスペースのタイムゾーンの今日で、時差のある所から開くと1日ずれうる -->
-  <PageHead eyebrow={formatTodayLabel(new Date())} title={t('pageToday')} {tallies} focusable />
+  <PageHead eyebrow={todayLabel} title={t('pageToday')} {tallies} focusable />
   {#if data.experience}
     <div class="layout-aside">
       <div class="layout-main">{@render main()}</div>

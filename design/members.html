@@ -50,7 +50,7 @@ SQ.mount("members", () => {
       <div class="panel">
         <div class="form-row">
           ${loginTarget("login")}
-          <div class="field"><span class="field-label">ロール</span><div class="segmented" role="radiogroup"><label><input type="radio" name="role" checked><span>一般</span></label><label><input type="radio" name="role"><span>${t("leader")}</span></label></div></div>
+          <div class="field"><span class="field-label" id="invite-role-label">ロール</span><div class="segmented" role="radiogroup" aria-labelledby="invite-role-label"><label><input type="radio" name="role" checked><span>一般</span></label><label><input type="radio" name="role"><span>${t("leader")}</span></label></div></div>
           <button class="btn is-primary" type="button" data-invite-link="login" data-invite-done="招待しました" data-invite-kind="workspace">${icon("mail")}招待する</button>
         </div>
         <span class="field-hint">Scrum Guild は招待をメールで送りません。Google の招待は、招待したときに出る招待の URL（14日で切れます）を本人に伝えてください。GitHub の招待は、次の${t("organization")}の URL を伝えてください。 <span class="mono wrap-anywhere">https://scrum-guild.dev/${esc(D.organization)}/</span></span>
@@ -67,7 +67,7 @@ SQ.mount("members", () => {
         </div>
         <p class="props-note" id="invite-limit-note">この人はまだ${t("organization")}の人数に数えられていないため、上限に達している間は招待できません。</p>
         <div class="form-row">
-          <div class="field"><span class="field-label">ロール</span><div class="segmented" role="radiogroup"><label><input type="radio" name="role-full" checked><span>一般</span></label><label><input type="radio" name="role-full"><span>${t("leader")}</span></label></div></div>
+          <div class="field"><span class="field-label" id="invite-full-role-label">ロール</span><div class="segmented" role="radiogroup" aria-labelledby="invite-full-role-label"><label><input type="radio" name="role-full" checked><span>一般</span></label><label><input type="radio" name="role-full"><span>${t("leader")}</span></label></div></div>
           <button class="btn is-primary" type="button" disabled aria-describedby="invite-limit-note">${icon("mail")}招待する</button>
         </div>
         <p class="props-note">人数が上限に達したときの表示の見本です。手段、ユーザー名、「確かめる」は押せるままです（すでに${t("organization")}にいる人は、上限でも招待できるため）。まだ人数に数えられていない人を確かめた後だけ、「招待する」を押せません。Google は、メールアドレスだけでは数えられているかを前もって知れないので押せるままにし、断られたら上限の枠を出します。人数は${t("admin")}と、いずれかの${t("workspace")}に所属しているか招待されている人を数えます。</p>

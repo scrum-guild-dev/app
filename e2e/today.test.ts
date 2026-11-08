@@ -98,16 +98,32 @@ test('区分は期日切れ、今日やると決めたもの、今週が期日�
 });
 
 test.describe('見出しの上の今日の日付', () => {
-  // ブラウザのタイムゾーンの今日を出す。UTC ではまだ 11-03 の時刻でも、東京では 11-04（水）
+  // ブラウザのタイムゾーンの今日を出す。UTC ではまだ 11-03 の時刻でも、東京では 11-04（水）。
+  // 行が持つワークスペースの今日（today）は 11-03 にして、行の今日でなくブラウザの今日を出すことを確かめる
   test.use({ timezoneId: 'Asia/Tokyo' });
 
   test('見出しの上に、ブラウザのタイムゾーンの今日の日付が曜日つきで出る', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-11-03T16:00:00Z'));
-    await mockOperation(page, today, { slug: 'aoba' }, { tasks: ALL_SECTIONS, sprint_goals: [] });
+    const tasks = [row('ワークスペースではまだ前の日', { today: '2026-11-03' })];
+    await mockOperation(page, today, { slug: 'aoba' }, { tasks, sprint_goals: [] });
     await page.goto('/aoba');
 
     await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
     await expect(page.locator('.page-head .page-eyebrow')).toHaveText('2026年11月4日（水）');
+  });
+
+  test('日をまたいで開いたままでも、読み直すと見出しの上の日付が新しい日になる', async ({ page }) => {
+    // 東京の 11-03 23:50 に開き、11-04 00:10 に印を付けて読み直す
+    await page.clock.setFixedTime(new Date('2026-11-03T14:50:00Z'));
+    await routeTodayState(page, [row('あとでやる', { due_on: '2026-11-06' })]);
+    await page.goto('/aoba');
+    const eyebrow = page.locator('.page-head .page-eyebrow');
+    await expect(eyebrow).toHaveText('2026年11月3日（火）');
+
+    await page.clock.setFixedTime(new Date('2026-11-03T15:10:00Z'));
+    await page.getByRole('button', { name: '今日やる: あとでやる' }).click();
+    await expect(region(page, '今日やると決めたもの').locator('.entry-title')).toHaveText(['あとでやる']);
+    await expect(eyebrow).toHaveText('2026年11月4日（水）');
   });
 });
 
