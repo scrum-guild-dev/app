@@ -302,7 +302,7 @@ describe('運用者の操作はトークンから一律 403', () => {
 });
 
 describe('cookieOnly の logout', () => {
-  test('定義が cookieOnly を持ち、cookieOnly を持つ本番の操作は logout、同意、トークンの操作', () => {
+  test('logout が cookieOnly を持ち、本番の Cookie 専用操作の一覧が定義と一致する', () => {
     expect((logout as { cookieOnly?: true }).cookieOnly).toBe(true);
     expect(
       operations
@@ -310,11 +310,13 @@ describe('cookieOnly の logout', () => {
         .map((definition) => definition.name)
         .sort(),
     ).toEqual([
+      'account-profile-save',
       'consent-record',
       'create-my-organization',
       'create-personal-organization',
       'credentials-revoke-all',
       'logout',
+      'onboarding-status',
       'token-create',
       'token-list',
       'token-notice',

@@ -52,6 +52,7 @@ import {
 const KEPT_COMMON_TABLES = [
   'accounts',
   'account_logins',
+  'account_profiles',
   'sessions',
   'api_tokens',
   'oauth_states',

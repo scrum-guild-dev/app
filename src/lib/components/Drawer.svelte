@@ -208,16 +208,16 @@
           {/each}
         </span>
       {/if}
-      <button
-        class="pill drawer-close"
-        type="button"
-        aria-label={t('close')}
-        bind:this={closeButton}
-        onclick={onrequestclose}
-      >
-        <Icon name="x" />
-      </button>
     </span>
+    <button
+      class="pill drawer-close"
+      type="button"
+      aria-label={t('close')}
+      bind:this={closeButton}
+      onclick={onrequestclose}
+    >
+      <Icon name="x" />
+    </button>
   </div>
   {@render children()}
 </div>

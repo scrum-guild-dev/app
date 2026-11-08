@@ -1,4 +1,4 @@
-// 35表の列。migrations/ の全マイグレーションを当てた後の写しで、列名は DB と同じスネークケースのまま持つ。
+// 表の列。migrations/ の全マイグレーションを当てた後の写しで、列名は DB と同じスネークケースのまま持つ。
 // 共通の表と組織の中の表の区分は docs/data-model.md の「共通の表と組織の中の表」。表を足すときは、
 // マイグレーションと同じ PR でここに足す（足し忘れと列のずれは test/table-columns.test.ts が落とす）
 import {
@@ -14,6 +14,7 @@ import {
 
 export const commonTableColumns = {
   accounts: { id: text, last_login_at: textOrNull, created_at: text, updated_at: text },
+  account_profiles: { account_id: text, name: text, title: text, created_at: text, updated_at: text },
   account_logins: {
     login_provider: text,
     login_subject: text,

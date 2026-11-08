@@ -60,7 +60,7 @@ test('スプリントの各列の末尾の空の行に題を打って Enter で�
   await expect(page.locator('.action-note', { hasText: '空の行に題を打って Enter を押すと' })).toBeVisible();
 
   const todoInput = page.getByRole('textbox', { name: 'タスクを足す: 未着手' });
-  await expect(todoInput).toHaveAttribute('placeholder', 'タスクを足す（題を打って Enter）');
+  await expect(todoInput).toHaveAttribute('placeholder', 'タスクを足す');
 
   // 空のまま Enter では作らない。201 字の題は理由を出して作らない
   await todoInput.press('Enter');

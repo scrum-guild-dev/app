@@ -11,6 +11,91 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 }
 
 export const dictionary = defineDictionary({
+  onboardingBlockedTitle: '利用開始を再開できません',
+  onboardingStart: '利用開始の設定',
+  onboardingProfileInvalid:
+    '表示する名前は1〜100文字、肩書きは100文字以内で入力してください。改行や制御文字は使えません。',
+  onboardingProfileFailed: 'プロフィールを保存できませんでした。入力を残したまま、もう一度試せます。',
+  onboardingSaving: '保存しています',
+  onboardingPersonalUrlSaved: '作成済みの個人用URLです。あとから変更できません。',
+  onboardingProfileSaved: '作成済みの個人用URLです。あとから変更できません。プロフィールは保存済みです。',
+  onboardingPersonalUrlLiveHint:
+    '自分だけで使う場所のURLです。半角の英小文字・数字・ハイフンで2〜40文字。あとから変更できません。',
+  onboardingTeamUnavailable:
+    'このチームの利用開始を再開できません。組織の選択に戻り、権限とワークスペースを確認してください。',
+  onboardingWorkspaceFailed:
+    'チームは作成済みですが、招待先のワークスペースを作れませんでした。もう一度試してください。',
+  onboardingEmailsInvalid: 'Googleでログインするメールアドレスを、カンマか改行で区切って1〜20件入力してください。',
+  onboardingInvitationsFailed:
+    '一部の招待を作成できませんでした。作成済みのリンクは残しています。入力を確認してもう一度試してください。',
+  onboardingOpenTeam: 'チームの組織を開く',
+  onboardingCopyFailed: 'コピーできませんでした。表示されたURLを選択してコピーしてください。',
+  onboardingPersonalUnavailable: '作成済みの自分用の組織に入れません。組織の選択画面で状態を確認してください。',
+  onboardingReturnOrganizations: '組織の選択に戻る',
+  onboardingInviteChoiceLiveNote:
+    '個人用はこのまま使い始められます。チームで使う場合は、組織と招待先のワークスペースを作ります。チーム利用はあとからでも始められます。',
+  onboardingStartPersonal: '個人用で使い始める',
+  onboardingTeamCreateNote:
+    'チームの{organization}は30日間のお試しで作成します。招待先として「チームのタスク」というワークスペースも作ります。',
+  onboardingCreateTeam: '組織を作って進む',
+  onboardingInviteLiveLead: 'Googleアカウントで参加するメンバーの招待リンクを作りましょう。',
+  onboardingGoogleEmails: '招待するGoogleアカウントのメールアドレス',
+  onboardingInviteLiveNote:
+    'カンマか改行で区切って20件まで。メールは送信しません。作成したURLを本人に共有してください。再発行すると同じ宛先の古いURLは使えなくなります。',
+  onboardingCreateInvites: '招待リンクを作成',
+  onboardingCopyLink: '招待リンクをコピー',
+  onboardingInviteSecrets:
+    'このページを離れると、作成した招待URLは再表示できません。本人に共有するまで、このページを開いたままにしてください。',
+  onboardingInvitationFailed: '招待を作成できませんでした。',
+  onboardingCopied: '{email} の招待リンクをコピーしました。',
+  onboardingStartTeam: 'チームで使い始める',
+  onboardingInviteChoice: 'チームメイトを招待',
+  onboardingPersonalUrl: '個人用のURL',
+  onboardingPersonalUrlHint:
+    '自分用の場所のURLです。チーム利用の有無にかかわらず使います。この見本では作成されません。',
+  onboardingTeamUrl: 'チーム用のURL',
+  onboardingInviteChoiceLead: '個人用の準備ができました。チームメイトも招待しますか？',
+  onboardingInviteChoiceNote:
+    'チームで使う場合は、チームの組織を作ってメンバーを招待します。チーム利用はあとからでも始められます。',
+  onboardingNoTeam: '今は招待せずに見本を終える',
+  onboardingAddTeam: 'チームを作って招待する',
+  onboardingPreview: '利用開始のプレビュー',
+  onboardingOpen: '利用開始の流れを見る（プレビュー）',
+  onboardingDisclosure: '操作できるデザインの見本です。入力は保存されず、登録・送信・外部接続は行われません。',
+  onboardingExit: 'プレビューを閉じる',
+  onboardingStep: '{total} ステップ中 {current}',
+  onboardingAccount: 'Scrum Guild をはじめる',
+  onboardingAccountLead: 'チームの仕事を、一歩ずつ前へ。まずはアカウントを選びましょう。',
+  onboardingOrganization: '{organization}を作成',
+  onboardingOrganizationLead: 'チームが集まる場所に、名前を付けましょう。',
+  onboardingProfile: 'プロフィールを設定',
+  onboardingProfileLead: '表示する名前を決めましょう。',
+  onboardingInvite: 'チームメイトを招待',
+  onboardingInviteLead: '一緒に仕事を進める仲間を迎えましょう。',
+  onboardingGoogle: 'Google で続ける（見本）',
+  onboardingGithubAccount: 'GitHub で続ける（見本）',
+  onboardingAuthNote: 'このボタンは次の見本に進みます。外部サービスでのログインは始まりません。',
+  onboardingOrganizationName: '{organization}の名前',
+  onboardingOrganizationExample: 'ひばり工房',
+  onboardingUrlHint: 'URL の表示例です。このアドレスは作成されません。',
+  onboardingOrganizationNote:
+    '本登録では、{organization}を作ると30日間のお試しが始まります。この見本では作成も課金も行いません。',
+  onboardingCreatePreview: '作成後の画面を見る',
+  onboardingName: '表示する名前',
+  onboardingNameExample: 'ユイ',
+  onboardingJob: '役割・肩書き（任意）',
+  onboardingJobExample: 'ソフトウェアエンジニア',
+  onboardingProfileNote: '名前と肩書きの入力例です。画像の変更とプロフィールの保存は行いません。',
+  onboardingContinue: '次へ',
+  onboardingSkip: 'スキップ',
+  onboardingInviteLabel: 'メールアドレス',
+  onboardingInviteNote: '複数の宛先をカンマで区切る入力例です。招待メールは送信されません。',
+  onboardingLinkPreview: '招待リンクの案内を見る',
+  onboardingLinkNote: '見本のため招待リンクは発行・コピーされません。実際の招待は正式な登録後に行います。',
+  onboardingSkipFinish: 'スキップして会員登録へ',
+  onboardingFinish: '見本を終えて会員登録へ',
+  onboardingBack: '戻る',
+  onboardingProgress: '利用開始のステップ',
   historyAttachmentsAdded: '添付ファイルを追加した',
   attachmentImageMissing: 'ファイルが見つかりません',
   attachmentMissing: '添付ファイルが見つかりません。本文を残したまま、ファイルをもう一度追加してください。',
@@ -1208,11 +1293,11 @@ export const dictionary = defineDictionary({
   // 失敗の理由（?error=）はログインの画面に戻して出すので、この画面には出し口を持たない
   signupTitle: '会員登録',
   signupLead:
-    'GitHub か Google のアカウントで、アカウントを作ります。アカウントだけ作った人は無料で、招待されて入る人も無料です。自分の{organization}を作った場合は、30日間お試しで使い始められます。',
+    'GitHub か Google のアカウントで始められます。個人用は無料で、チームの{organization}は30日間お試しで使えます。',
   signupWithGithub: 'GitHub で会員登録',
   signupWithGoogle: 'Google で会員登録',
   signupNote:
-    'GitHub と Google は本人確認だけに使います。会員登録のあとに、自分の{organization}を作るか、招待を待つかを選べます。',
+    'GitHub と Google は本人確認だけに使います。利用規約への同意のあと、プロフィールと個人用のURLを設定します。チーム利用は、その次に選べます。',
   signupLoginLink: 'アカウントがある人はログイン',
 
   // メンバーの画面（ワークスペースの画面）。{leader} {member} {admin} は、辞書の言葉を画面が渡す。
@@ -2084,6 +2169,8 @@ export const dictionary = defineDictionary({
   sprintBoardRegion: '{sprint}の{column}とカード',
   sprintBoardColumnEmpty: 'なし',
   sprintBoardAddTask: '{task}を足す',
+  // 列の中の欄の案内。列は狭く（4列の 1280px と 390px で）、「（題を打って Enter）」まで入らないので、短く言い切る。Enter の案内は列の下の注（sprintBoardDraftHint）に任せる
+  sprintBoardAddTaskPlaceholder: '{task}を足す',
   sprintBoardAddTaskIn: '{task}を足す: {column}',
   sprintBoardTaskAdded: '「{title}」を{column}に足しました',
   sprintBoardAddGone: 'この{sprint}か{column}が見つかりません。{task}は作られていません。一覧を読み直します',

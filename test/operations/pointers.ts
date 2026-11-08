@@ -218,6 +218,26 @@ export const pointers: Pointers = {
   today: { noReference: {} },
   'first-steps': { noReference: {} },
   // 最初のリーダーに、対象の組織の管理者を指す。別の組織の管理者を指すと 404
+  'onboarding-workspace-prepare': {
+    noReference: { timezone: 'Asia/Tokyo' },
+    // 入力は行を指さないが、再利用できる管理者自身のリーダー所属を準備する。
+    // closed用のfixtureでもotherWorkspaceは開いている。
+    prepare: async (target) => {
+      const db = orgDb(env, target.organization.verified);
+      const existing = await db.first(
+        db.statement((q) =>
+          q
+            .selectFrom('memberships')
+            .select('id')
+            .where('workspace_id', '=', target.otherWorkspace.id)
+            .where('user_id', '=', target.admin.userId!)
+            .where('left_at', 'is', null),
+        ),
+      );
+      if (!existing)
+        await createMembership(target.organization, target.otherWorkspace.id, target.admin.userId!, { role: 'leader' });
+    },
+  },
   'workspace-create': async (target) => ({
     name: '保守チーム',
     timezone: 'Asia/Tokyo',
@@ -367,6 +387,7 @@ export const pointers: Pointers = {
   },
   // 自分用は1アカウントに1つ（部分 UNIQUE 索引）なので、同じ運用者が一覧の検査で何度も成功させられるよう、
   // 呼ぶ前にその人が作った組織の作成者を外す（NULL は索引で重ならない）。slug は呼ぶたびに別の値にする
+  'account-profile-save': { noReference: { name: '分離の検査の名前', title: '' } },
   'create-personal-organization': async (_target, caller) => {
     const db = commonDb(env);
     await db.run(
