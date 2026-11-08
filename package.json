@@ -24,6 +24,7 @@
     "e2e:preflight": "node scripts/e2e-preflight.ts",
     "db:migrate:fresh": "node scripts/migrate-fresh.ts",
     "db:seed": "node scripts/db-seed.ts",
+    "bench:loading": "node scripts/loading-bench.ts",
     "bench:backlog": "node scripts/prepare.ts && node scripts/backlog-bench.ts"
   },
   "dependencies": {
