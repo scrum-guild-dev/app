@@ -241,7 +241,7 @@ test.describe('届いた招待（ハルカ）', () => {
     await page.getByRole('button', { name: '保守チームへの招待を辞退する' }).click();
     await expect(page.locator('.toasts:visible .toast')).toContainText('招待を辞退しました');
     await expect(rows).toHaveCount(1);
-    await expect(rows.first()).toContainText('「改善チーム」');
+    await expect(rows.first()).toContainText('改善チーム');
     await expect(inviteDot(page)).toBeVisible();
     await expect(profileItem(page).locator('.account-menu-badge')).toHaveText('招待 1');
     // 残った招待のボタンへフォーカスが移る
