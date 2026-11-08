@@ -234,11 +234,11 @@
     !canWrite
       ? t('workspaceClosedReadOnly', { workspace: t('workspace') })
       : !inBacklog
-        ? t('todayMarkBacklogOnly')
+        ? t('todayMarkBacklogOnly', { inbox: t('inbox'), archive: t('archive') })
         : task?.completed_at != null
-          ? t('todayMarkCompleted')
+          ? t('todayMarkCompleted', { done: t('done'), task: t('task') })
           : currentUserId === null || task?.assignee?.id !== currentUserId
-            ? t('todayMarkOwnOnly')
+            ? t('todayMarkOwnOnly', { task: t('task') })
             : null,
   );
   let heading = $state<HTMLElement>();
