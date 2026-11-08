@@ -2169,3 +2169,40 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 
 /* 行のチップの窓（期日の日付の入力と「クリア」）。メニューと同じ枠 `.row-menu-list` の中に縦に並べる。「クリア」は枠の `.menu-item` を使う */
 .attr-panel { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3); }
+
+/* ===== 利用開始のフロー =====
+   枠より余白でまとまりを示す。画面・見本の両方で使い、他の gate の配置は変えない。 */
+.onboarding { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; padding: var(--space-6) max(var(--space-6), env(safe-area-inset-right, 0px)) max(var(--space-6), env(safe-area-inset-bottom, 0px)) max(var(--space-6), env(safe-area-inset-left, 0px)); }
+.onboarding-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: 100%; max-width: 1120px; margin-inline: auto; }
+.onboarding-header .brand-art { width: 168px; }
+.onboarding-stage { width: min(520px, 100%); margin: auto; padding-block: var(--space-10); }
+.onboarding-disclosure { display: grid; gap: var(--space-2); padding-bottom: var(--space-8); font-size: var(--text-xs); color: var(--color-muted); }
+.onboarding-disclosure b { color: var(--color-fg); font-weight: 700; }
+.onboarding-content { display: grid; gap: var(--space-8); min-width: 0; }
+.onboarding-heading { display: grid; gap: var(--space-4); }
+.onboarding-heading :is(h1, h2) { font-size: clamp(26px, 4vw, 36px); line-height: 1.4; font-weight: 700; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.onboarding-heading h1:focus { outline: none; }
+.onboarding-eyebrow { font-size: var(--text-xs); color: var(--color-muted); }
+.onboarding-lead { color: var(--color-muted); line-height: 1.8; }
+.onboarding-fields { display: grid; gap: var(--space-6); min-width: 0; }
+.onboarding .input { min-height: 48px; border-radius: 12px; width: 100%; min-width: 0; padding: var(--space-3) var(--space-4); }
+.onboarding textarea.input { resize: vertical; }
+.onboarding .btn { min-height: 48px; border-radius: var(--radius-full); padding: var(--space-3) var(--space-5); white-space: normal; text-align: center; overflow-wrap: anywhere; }
+.onboarding .btn.is-google { border-radius: var(--radius-full); }
+.onboarding-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding-top: var(--space-3); }
+.onboarding-url { display: grid; grid-template-columns: fit-content(50%) minmax(0, 1fr); align-items: center; border: 1px solid var(--color-control-edge); border-radius: 12px; min-width: 0; }
+.onboarding-url > span { min-width: 0; padding: var(--space-3) 0 var(--space-3) var(--space-4); overflow-wrap: anywhere; color: var(--color-muted); font-size: var(--text-xs); }
+.onboarding-url .input { border: 0; background: transparent; }
+.onboarding-profile { display: flex; align-items: center; gap: var(--space-3); }
+.onboarding-avatar { display: grid; place-items: center; width: 48px; height: 48px; flex: none; border: 1px solid var(--color-line); border-radius: 50%; color: var(--color-muted); background: var(--color-surface); }
+.onboarding-notice { min-height: 1.5em; color: var(--color-muted); font-size: var(--text-sm); }
+.onboarding-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: min(520px, 100%); margin-inline: auto; }
+.onboarding-progress { display: flex; gap: var(--space-3); list-style: none; padding: 0; margin: 0; }
+.onboarding-dot { display: block; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--color-muted); }
+.onboarding-progress [aria-current="step"] .onboarding-dot { width: 24px; background: var(--color-fg); }
+@media (max-width: 480px) {
+  .onboarding { padding-inline: max(var(--space-5), env(safe-area-inset-left, 0px)) max(var(--space-5), env(safe-area-inset-right, 0px)); }
+  .onboarding-header { flex-wrap: wrap; gap: var(--space-2); }
+  .onboarding-header .btn { font-size: var(--text-xs); padding-inline: var(--space-3); }
+  .onboarding-stage { padding-block: var(--space-8); }
+}

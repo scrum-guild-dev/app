@@ -1676,3 +1676,50 @@ describe('connections と task_sources', () => {
     ).rejects.toThrow(/FOREIGN KEY/);
   });
 });
+
+describe('アカウントのプロフィール', () => {
+  async function profileAccount() {
+    const accountId = id();
+    await run('INSERT INTO accounts (id, created_at, updated_at) VALUES (?, ?, ?)', accountId, AT, AT);
+    return accountId;
+  }
+  const insertProfile = (accountId: string, name = 'ユイ', title = '', at = AT) =>
+    run(
+      'INSERT INTO account_profiles (account_id, name, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      accountId,
+      name,
+      title,
+      at,
+      at,
+    );
+
+  test('1アカウントに1行で、名前と肩書きは100コードポイントまで', async () => {
+    const accountId = await profileAccount();
+    await insertProfile(accountId, '🌸'.repeat(100), '🌸'.repeat(100));
+    await expect(insertProfile(accountId)).rejects.toThrow(/UNIQUE/);
+  });
+  test.each([
+    ['', ''],
+    ['名'.repeat(101), ''],
+    ['ユイ', '名'.repeat(101)],
+    ['ユ\u0000イ', ''],
+    ['ユイ', '\u0000'],
+  ])('名前と肩書きの長さやNULをDBでも断る（%j）', async (name, title) => {
+    await expect(insertProfile(await profileAccount(), name, title)).rejects.toThrow(/CHECK/);
+  });
+  test('日時はUTCミリ秒形式だけを受け付ける', async () => {
+    await expect(insertProfile(await profileAccount(), 'ユイ', '', '2026-11-08')).rejects.toThrow(/CHECK/);
+  });
+  test('存在しないアカウントには書けず、プロフィールを先に消さなければアカウントを消せない', async () => {
+    await expect(insertProfile(id())).rejects.toThrow(/FOREIGN KEY/);
+    const accountId = await profileAccount();
+    await insertProfile(accountId);
+    await expect(run('DELETE FROM accounts WHERE id = ?', accountId)).rejects.toThrow(/FOREIGN KEY/);
+    await run('DELETE FROM account_profiles WHERE account_id = ?', accountId);
+    await run('DELETE FROM accounts WHERE id = ?', accountId);
+    const row = await env.DB.prepare('SELECT account_id FROM account_profiles WHERE account_id = ?')
+      .bind(accountId)
+      .first();
+    expect(row).toBeNull();
+  });
+});

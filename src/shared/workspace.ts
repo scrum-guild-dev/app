@@ -26,6 +26,7 @@ export const workspaceNameSchema = z
 export const DEFAULT_HOURS_PER_POINT = 4;
 // 0 が日曜。1 は月曜
 export const DEFAULT_WEEK_START = 1;
+export const DEFAULT_ONBOARDING_WORKSPACE_NAME = 'チームのタスク';
 
 // 作るときにスクラムの言葉で名前を付け、保存する。
 // 完了の列は name を空にして保存し、名前は辞書の done から出す
