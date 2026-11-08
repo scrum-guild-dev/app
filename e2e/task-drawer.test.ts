@@ -180,7 +180,7 @@ test('完了したタスクのポイントは直せず、理由を添える。�
   await drawer.getByRole('radio', { name: '3', exact: true }).check();
   await expect(row.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
   await drawer.getByRole('button', { name: '完了にする', exact: true }).click();
-  await expect(drawer.getByRole('status').filter({ hasText: 'タスクを完了にしました' })).toContainText('+40 XP');
+  await expect(page.getByRole('status').filter({ hasText: 'タスクを完了にしました' })).toContainText('+40 XP');
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(row.getByRole('img', { name: '済んだ依頼: 完了' })).toBeVisible();
   await row.getByRole('link', { name: '済んだ依頼' }).click();
