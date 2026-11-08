@@ -9,6 +9,7 @@
   import LevelPanel from '../../lib/components/LevelPanel.svelte';
   import LoadFailed from '../../lib/components/LoadFailed.svelte';
   import PageHead, { type Tally } from '../../lib/components/PageHead.svelte';
+  import { formatTodayLabel } from '../../lib/format-datetime.ts';
   import Section from '../../lib/components/Section.svelte';
   import SprintGoalNotice from '../../lib/components/SprintGoalNotice.svelte';
   import TaskEntry from '../../lib/components/TaskEntry.svelte';
@@ -368,7 +369,8 @@
 {#if data.today === null}
   <LoadFailed inShell />
 {:else}
-  <PageHead title={t('pageToday')} {tallies} focusable />
+  <!-- 見出しの上に、ブラウザのタイムゾーンの今日の日付を出す。区分の判定はワークスペースのタイムゾーンの今日で、時差のある所から開くと1日ずれうる -->
+  <PageHead eyebrow={formatTodayLabel(new Date())} title={t('pageToday')} {tallies} focusable />
   {#if data.experience}
     <div class="layout-aside">
       <div class="layout-main">{@render main()}</div>

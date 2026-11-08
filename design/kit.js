@@ -2859,10 +2859,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   let page = null;
   function redraw() {
     if (!page) return;
-    document.getElementById("org-menu-slot").innerHTML = page.operator ? "" : orgMenuHtml();
-    document.getElementById("account-menu-slot").innerHTML = accountMenuHtml();
-    document.getElementById("breadcrumb-slot").innerHTML = breadcrumbHtml();
-    document.getElementById("app-nav").innerHTML = navHtml(page.current, page.operator ? OPERATOR_PAGES : PAGES);
+    if (!page.operator) {
+      document.getElementById("org-menu-slot").innerHTML = orgMenuHtml();
+      document.getElementById("account-menu-slot").innerHTML = accountMenuHtml();
+      document.getElementById("breadcrumb-slot").innerHTML = breadcrumbHtml();
+      document.getElementById("app-nav").innerHTML = navHtml(page.current, PAGES);
+    }
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
     document.getElementById("content").innerHTML = page.render();
@@ -2913,9 +2915,19 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     return crumbs;
   }
   // 画面の見本を組み立てる。render は中身の HTML を返す関数。
-  // opts.operator なら運用者の画面の枠にする（組織のメニュー、通知、レベルを出さない）
+  // opts.operator なら運用者の画面の枠にする。本番の /operator と同じく、左のメニューと上の帯を置かず、
+  // 幅の広い紙（.gate.is-wide）1枚に組む。render は紙の中身を返す
   function mount(current, render, opts = {}) {
     page = { current, render, operator: !!opts.operator };
+    if (page.operator) {
+      document.getElementById("app").innerHTML = `
+    <div class="gate is-wide"><div class="gate-stack"><main class="gate-sheet" id="content"></main></div></div>
+    <div class="dialog" id="dialog" hidden></div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>`;
+      applyTheme();
+      redraw();
+      return;
+    }
     const who = page.operator
       ? `<span id="account-menu-slot"></span>`
       : `${first ? `<button class="pill" type="button" aria-label="通知 0件">${icon("bell")}</button>`

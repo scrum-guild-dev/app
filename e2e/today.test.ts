@@ -97,6 +97,20 @@ test('区分は期日切れ、今日やると決めたもの、今週が期日�
   await expect(region(page, '今週が期日').locator('.section-count')).toHaveText('2 件');
 });
 
+test.describe('見出しの上の今日の日付', () => {
+  // ブラウザのタイムゾーンの今日を出す。UTC ではまだ 11-03 の時刻でも、東京では 11-04（水）
+  test.use({ timezoneId: 'Asia/Tokyo' });
+
+  test('見出しの上に、ブラウザのタイムゾーンの今日の日付が曜日つきで出る', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-11-03T16:00:00Z'));
+    await mockOperation(page, today, { slug: 'aoba' }, { tasks: ALL_SECTIONS, sprint_goals: [] });
+    await page.goto('/aoba');
+
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+    await expect(page.locator('.page-head .page-eyebrow')).toHaveText('2026年11月4日（水）');
+  });
+});
+
 test('区分の中は期日の早い順で、今日やると決めたものは持ち越しが先頭。印と完了の操作は未完了の行にだけ出る', async ({
   page,
 }) => {

@@ -38,6 +38,8 @@ test('接続が無いワークスペースでは、接続の登録へ誘う空�
   await page.goto(`${HIBARI_TOOLS}/inbox`);
   await expect(page.getByRole('heading', { level: 1, name: '受信箱' })).toBeVisible();
   await expect(page.getByText('接続がまだありません')).toBeVisible();
+  // 見本と同じく、アイコンの代わりに線画（notice）を置く
+  await expect(page.locator('.empty', { hasText: '接続がまだありません' }).locator('svg.art')).toHaveCount(1);
   await expect(page.getByRole('list', { name: '受信箱のタスク' })).toHaveCount(0);
 });
 
