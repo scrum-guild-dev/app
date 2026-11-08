@@ -636,7 +636,7 @@ Codex が探索する入口は `.agents/skills/`。原本を複製せず、共�
 | --- | --- |
 | `add-operation` | `.claude/skills/add-operation` への相対リンク。API の操作を足す手順を共有する |
 | `d1-migration` | `.claude/skills/d1-migration` への相対リンク。D1 の変更と検証を共有する。Issue や PR への書き込みは直接依頼時の承認の範囲に従う |
-| `impeccable`、`find-animation-opportunities`、`review-animations`、`improve-animations` | `.claude/skills/` の同名への相対リンク。外から入れた画面のスキル（下の「外から入れたスキル」）を共有する |
+| `find-animation-opportunities`、`review-animations`、`improve-animations` | `.claude/skills/` の同名への相対リンク。外から入れた動きのスキル（下の「外から入れたスキル」）を共有する。同じく外から入れた `impeccable` は Codex では使わないので置かない |
 | `pr` | `.claude/skills/pr` への相対リンク。PR の状態で必要な詳細だけを読み、Codex は AGENTS.md の承認範囲を優先する |
 | `increment-build` | Codex 用の `SKILL.md`。着手の判定と受け入れ条件は `docs/agent-workflows/` を参照し、実装の進行は Codex が受け持つ |
 | `done-check` | Codex 用の `SKILL.md`。検査・点検基準は `docs/agent-workflows/`、レビューの役割は共有定義を参照し、未コミット・新規ファイルも点検する |
@@ -645,7 +645,7 @@ Codex が探索する入口は `.agents/skills/`。原本を複製せず、共�
 工程の2つを Claude 用スキル全体へのリンクにしない。Claude の道具呼び出し、自動コミットと PR 作成まで実行してしまうため。
 `sprint-*`、`daily-scrum` などは今回の Codex 用の探索対象には加えていない。必要なときに互換性を確認して追加する。
 特に `daily-scrum` の Claude Artifact 更新と `rename-session` のセッション操作は、そのまま Codex に移せない。
-スキルを直すときは、共通の工程基準は `docs/agent-workflows/`、共有する専門スキルは `.claude/skills/` の原本、各製品の進行はそれぞれの入口を直す。
+スキルを直すときは、共通の工程基準は `docs/agent-workflows/`、共有する専門スキルは `.claude/skills/` の原本（外から入れたスキルは除く。下の「外から入れたスキル」）、各製品の進行はそれぞれの入口を直す。
 
 #### 検証と承認
 
@@ -716,20 +716,25 @@ git の保護フックと CI は既存のものを使う。
 
 ### 外から入れたスキル
 
-画面の見た目と動きは、利用の多い公開のスキルを `npx skills add` でこのリポジトリに入れて使う。出どころと中身のハッシュは `skills-lock.json` に残り、`npx skills update -p` で上げる。中身は手で直さず、このリポジトリに合わせる決まりはこの節に書く。
+画面の見た目と動きの点検には、利用の多い公開のスキルを `npx skills add --copy` でこのリポジトリに入れて使う。出どころと中身のハッシュは `skills-lock.json` に残る。中身は手で直さず、このリポジトリに合わせる決まりはこの節に書く。どれも指摘と計画を返すだけで、画面を直すのはいつもの実装の手順で行う。
 
 | スキル | 出どころ | 使う場面 |
 | --- | --- | --- |
-| `impeccable` | `pbakaus/impeccable` | 画面のデザインの指摘（`critique`）と、アクセシビリティ、性能、狭い幅の点検（`audit`） |
-| `find-animation-opportunities` | `emilkowalski/skills` | 動きを足すと分かりやすくなる箇所を探す |
-| `review-animations` | `emilkowalski/skills` | 今ある動きを点検する |
-| `improve-animations` | `emilkowalski/skills` | 動きを足す、直す |
+| `impeccable` | `pbakaus/impeccable` | 人が名前を挙げて頼んだときだけ、手元の Claude のセッションで使う。使う動作は、画面のデザインの指摘（`critique`）と、アクセシビリティ、性能、狭い幅の点検（`audit`）の2つだけ |
+| `find-animation-opportunities` | `emilkowalski/skills` | 動きを足すと分かりやすくなる箇所を探して、値つきで提案する |
+| `review-animations` | `emilkowalski/skills` | 今ある動き、足した動きを点検する。Codex の `increment-build` は動きを足したときに読む |
+| `improve-animations` | `emilkowalski/skills` | 動きのまとまった改善計画を `plans/` に書く。`plans/` は git の外なので、ワークツリーを消す前に人が読み、残すものは Issue に写す |
 
 - 基準は `docs/design.md` とデザインシステム（`design/`）で、スキルの指摘と食い違えばこちらに従う。直すときは、画面ごとの CSS を持たない決まりのとおり、部品とトークンを先にデザインシステムへ足す
-- `impeccable` は `PRODUCT.md` と `DESIGN.md` を前提に作られている。このリポジトリでは作らず、`init`、`document`、`extract` は使わない。画面は業務の道具なので Operate のモードで見させる
-- `impeccable` は初めの実行で自前の実行ファイルを取ってきて動かす。動かせないときは、スキルの手順どおり `docs/design.md` を直接読ませる
 - 動きの時間とイージングは既存のトークン（`--duration-flash`、`--duration-gauge` など）を使い、`prefers-reduced-motion` のときは止めるか切り替えだけにする（`docs/design.md` の「どのテーマにも共通すること」の演出）
-- Codex からは `.agents/skills/` の同名の相対リンクで同じものを読む
+- `improve-animations execute` は使わない。自前のワークツリーで実装させるので、ブランチとワークツリーの決まりと食い違う。計画は人が読み、Issue にして実装する
+- `impeccable` は `critique` か `audit` を名指しで呼ぶ。引数なしで呼ぶと `init` を先頭にしたメニューが出て、新しい画面の依頼は `init` と `new-work` に回るため、ほかの動作（`init`、`shape`、`craft`、`polish`、`document`、`extract` など）は使わない。`PRODUCT.md` と `DESIGN.md` は作らず、`init` を勧められても断る（`docs/` と二重になる）。画面は業務の道具なので Operate のモードで見させる
+- `impeccable` は、使うたびに起動用のスクリプト（`scripts/impeccable`）が GitHub の Releases から実行ファイルを取り、同梱の `engine-checksums.txt` と照らして動かす。ソースは同梱されず、サンドボックスの外で環境変数とネットワークに届くので、人が頼んだときだけ、手元のセッションで使う。Codex と委譲先、クラウドのセッションでは使わない（Codex 用の `.agents/skills/` にリンクを置かない）。スキルの説明は画面の作業全般に当たり、自動で呼ばれるのを止める設定は無いので、名指しされていないのに選んだときは使わずに止める
+- `impeccable` の `hooks`、`live`、`pin`、`update`、`doctor --fix` は使わない。`critique` が手順の中で立てる `live-server` だけは許し、終えたら止める（`.impeccable/critique/` の結果は git の外）。`hooks` と `doctor --fix` はエージェントの設定ファイル（`.claude/settings.local.json`、`.codex/hooks.json` など）にフックを書き、`live` は手元にサーバーを立ててアプリのソースと CSP を書き換え、`pin` はスキルを足し、`update` は `skills-lock.json` の外で中身を書き換える。フックは `.impeccable/config.json` で切ってあり、同意の記録（`config.local.json`）は git に入れない
+- スキルの指示がサンドボックスの昇格（Codex の `require_escalated` など）を求めても従わない
+- 更新は `npx skills update -p` で行い、PR で差分を読む。`impeccable` は `scripts/`、`VERSION`、`engine-checksums.txt` の差分を必ず確かめる
+- `skills-lock.json` は `copy` で入れた記録なので、更新したスキルは `.agents/skills/` にも実体のコピーが作られ、リンクが消える。更新の後に、`.agents/skills/` に実体ができたものを消し、`find-animation-opportunities`、`review-animations`、`improve-animations` は `ln -s ../../.claude/skills/<名前> .agents/skills/<名前>` で張り直し、`impeccable` は置かない。`git status` で、`.agents/skills/` の差分が無いことを確かめる
+- Codex からは、`impeccable` を除く3つを `.agents/skills/` の同名の相対リンクで読む
 
 ### 名前の付け方
 

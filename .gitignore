@@ -25,3 +25,13 @@ playwright-report/
 worker-configuration.d.ts
 # daily-scrum が毎回作る開発ボードのデータ（scripts/progress-data.ts）
 .claude/skills/daily-scrum/page/data.json
+
+# 外から入れたスキルが書くもの（docs/development.md の「外から入れたスキル」）。
+# impeccable はフックを止めた config.json だけを入れ、同意の記録（config.local.json）と live の作業物は入れない
+/.impeccable/*
+!/.impeccable/config.json
+# 照合されずに実行される同梱のエンジンを、差分から入れさせない
+.claude/skills/*/scripts/bin/
+# improve-animations が書く動きの改善計画
+/plans/
+/animation-plans/

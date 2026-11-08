@@ -28,7 +28,7 @@ Issue が無い直接依頼では、会話から目的、完了条件、変え�
 依存が必要なら、そのワークツリーで `pnpm install --frozen-lockfile` を行う。
 
 [共通の受け入れ条件](../../../docs/agent-workflows/acceptance.md) を読み、触る範囲に合うものを適用する。
-API の追加は `add-operation`、マイグレーションは `d1-migration`、画面は `docs/design.md` を基準に作る。見た目の点検は `impeccable` の `critique` と `audit`、動きは `improve-animations` の `SKILL.md` を必要なときだけ読む。
+API の追加は `add-operation`、マイグレーションは `d1-migration`、画面は `docs/design.md` を基準に作り、動きを足したら `review-animations` の `SKILL.md` で点検する。
 通常はこのセッションが実装する。分離して任せることで速くなる独立した作業だけ Codex のサブエージェントに委譲し、担当範囲と受け入れ条件を渡す。小変更は引き継ぎを挟まない。
 
 守る仕組み、認証・認可、Workers のランタイムの変更では、[書き手を分ける手順](../../../docs/agent-workflows/test-first.md) を読む。Codex のサブエージェントでテスト・実装・崩す役を分け、コミット未承認ならテストを作業ツリー外に保存する方法を使う。途中の差分を破棄しない。

@@ -1,0 +1,6 @@
+{
+  "hook": {
+    "enabled": false
+  },
+  "stalenessCheck": false
+}
