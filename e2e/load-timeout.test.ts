@@ -35,20 +35,22 @@ test('移った先の読み取りが 10 秒返らなければ、読み込めな�
   await page.getByRole('link', { name: 'スプリント', exact: true }).click();
   await expect.poll(() => calls).toBe(1);
 
-  // 上限の手前では、まだ失敗を出さない
-  await page.clock.runFor(READ_TIMEOUT_MS - 1_000);
+  // 上限の半ばでは、まだ失敗を出さない（時計は実時間でも進むので、上限の直前では見ない。下限は src/lib/api.test.ts が確かめる）
+  await page.clock.runFor(READ_TIMEOUT_MS / 2);
   const failed = page.getByRole('heading', { level: 1, name: '読み込めませんでした' });
   await expect(failed).toHaveCount(0);
 
-  await page.clock.runFor(1_500);
+  await page.clock.runFor(READ_TIMEOUT_MS / 2 + 500);
   await expect(failed).toBeVisible();
   await expect(page).toHaveURL(`${WORKSPACE}/sprint`);
   // 組織の枠（左のメニュー）は残る
   await expect(page.getByRole('link', { name: 'スプリント', exact: true })).toBeVisible();
 
+  // もう一度試すと、本物の API へ流した 2 回目の読み取りで、スプリントの画面が出る
   await page.getByRole('button', { name: 'もう一度試す' }).click();
+  await expect.poll(() => calls).toBe(2);
+  await expect(page.getByRole('heading', { level: 1, name: 'スプリント' })).toBeVisible();
   await expect(failed).toHaveCount(0);
-  expect(calls).toBe(2);
   release();
 });
 
@@ -87,5 +89,7 @@ test('組織の選択から移って組織の読み取りが 10 秒返らなけ�
   await page.clock.runFor(READ_TIMEOUT_MS);
   await expect(page.getByRole('heading', { level: 1, name: '読み込めませんでした' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: '読み込んでいます' })).toHaveCount(0);
+  // 読み上げの領域も「読み込んでいます」のまま残らない
+  await expect(page.locator('[role="status"].visually-hidden').first()).not.toHaveText('読み込んでいます');
   release();
 });

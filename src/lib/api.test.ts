@@ -3,7 +3,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { z } from 'zod';
 import { READ_TIMEOUT_MS, callOperation } from './api.ts';
+import { connectionScopeCandidates } from '../shared/operations/connection/connection-scope-candidates.ts';
 import { defineOperation } from '../shared/operations/define.ts';
+import { inviteeResolve } from '../shared/operations/workspace/invitee-resolve.ts';
 
 const readOperation = defineOperation({
   name: 'timeout-read',
@@ -137,6 +139,18 @@ describe('書き込みは打ち切らない', () => {
   });
 });
 
+// 外（GitHub）に問い合わせる読み取りは、サーバーが自分の上限で 503 を返すまで画面が待つ。
+// 画面が先に切ると、GitHub に届かないのに「サーバーに届かない」と出るため
+describe('外に問い合わせる読み取りの上限', () => {
+  test('リポジトリの候補は、サーバーの締め切り（60 秒）と 1 回分の問い合わせ（10 秒）より長く待つ', () => {
+    expect(connectionScopeCandidates.clientTimeoutMs).toBeGreaterThan(60_000 + 10_000);
+  });
+
+  test('招待する人の確認は、サーバーの GitHub への問い合わせの上限（10 秒）より長く待つ', () => {
+    expect(inviteeResolve.clientTimeoutMs).toBeGreaterThan(10_000);
+  });
+});
+
 describe('定義の上限の欄', () => {
   test('write の操作には付けられない', () => {
     expect(() =>
@@ -146,6 +160,20 @@ describe('定義の上限の欄', () => {
         mode: 'write',
         permission: 'organization',
         clientTimeoutMs: 30_000,
+        input: z.object({}),
+        output: z.object({}),
+      }),
+    ).toThrow(/clientTimeoutMs/);
+  });
+
+  test('setTimeout が受け付ける最大（2^31 - 1 ミリ秒）を超える値は付けられない（超えると即座に切れるため）', () => {
+    expect(() =>
+      defineOperation({
+        name: 'timeout-overflow',
+        description: '上限がタイマーの最大を超える',
+        mode: 'read',
+        permission: 'organization',
+        clientTimeoutMs: 2_147_483_648,
         input: z.object({}),
         output: z.object({}),
       }),

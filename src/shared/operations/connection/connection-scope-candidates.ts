@@ -12,9 +12,10 @@ export const connectionScopeCandidates = defineOperation({
   permission: 'member',
   workspace: true,
   rateLimit: { max: 20, windowSeconds: 300 },
-  // サーバーは取り込み元への 1 回の問い合わせに 10 秒の上限を掛け、候補を読むときは何回か問い合わせうる。
-  // 画面の既定（10 秒）では正常な応答も切れるので、長く待つ
-  clientTimeoutMs: 30_000,
+  // サーバーは候補の頁を順に引き、60 秒の締め切りに 1 回分の問い合わせの上限（10 秒）を足した約 70 秒まで掛かりうる
+  // （src/server/import/github/index.ts の LIST_DEADLINE_MS）。画面が先に切るとサーバーの 503 を待たずに「届かない」と出るので、
+  // それより長く待つ
+  clientTimeoutMs: 80_000,
   input: connectionIdInput,
   output: z.object({ candidates: z.array(z.object({ id: z.string(), name: z.string() })) }),
 });

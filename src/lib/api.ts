@@ -43,7 +43,7 @@ export async function callOperation<D extends AnyOperationDefinition>(
   const slug = options !== undefined && 'slug' in options ? options.slug : undefined;
   const limit = timeoutFor(definition);
   const controller = limit === null ? null : new AbortController();
-  const timer = limit === null ? undefined : setTimeout(() => controller?.abort(), limit);
+  const timer = controller === null || limit === null ? undefined : setTimeout(() => controller.abort(), limit);
   let res: Response;
   let body: unknown;
   try {

@@ -29,6 +29,9 @@ type PermissionsIn<Scope extends string> = {
 
 export const permissions = Object.keys(permissionScopes) as Permission[];
 
+// setTimeout が受け付ける最大の待ち時間（符号付き 32 ビット）。超えると即座に発火し、長く待つつもりの読み取りがすぐ切れる
+const MAX_TIMER_MS = 2_147_483_647;
+
 // URL の最後の1区分になるので、英小文字と数字をハイフンでつないだ1語に限る
 const OPERATION_NAME_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
@@ -136,9 +139,14 @@ export function assertOperationDefinition(definition: AnyOperationDefinition): v
   }
   if (
     definition.clientTimeoutMs !== undefined &&
-    (definition.mode !== 'read' || !Number.isInteger(definition.clientTimeoutMs) || definition.clientTimeoutMs <= 0)
+    (definition.mode !== 'read' ||
+      !Number.isInteger(definition.clientTimeoutMs) ||
+      definition.clientTimeoutMs <= 0 ||
+      definition.clientTimeoutMs > MAX_TIMER_MS)
   ) {
-    throw new Error(`操作 ${name} の clientTimeoutMs は、read の操作に正の整数（ミリ秒）だけ付けられる`);
+    throw new Error(
+      `操作 ${name} の clientTimeoutMs は、read の操作に ${MAX_TIMER_MS} 以下の正の整数（ミリ秒）だけ付けられる`,
+    );
   }
   if (definition.rateLimit && definition.weightedRateLimit)
     throw new Error(`操作 ${name} は回数の上限を二重に持てない`);
