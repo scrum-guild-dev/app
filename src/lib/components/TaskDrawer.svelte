@@ -1,7 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { beforeNavigate, goto } from '$app/navigation';
+  import { beforeNavigate, goto, invalidate } from '$app/navigation';
   import {
+    taskTodayMark,
     taskAssign,
     taskComplete,
     taskDelete,
@@ -14,6 +15,7 @@
     type TaskFieldValue,
     type TaskHistoryEntry,
   } from '../../shared/operations/task/index.ts';
+  import type { OutputOf } from '../../shared/operations/define.ts';
   import { memberList } from '../../shared/operations/workspace/index.ts';
   import { categoryRepositoryList, type DefinitionRef } from '../../shared/operations/definition/index.ts';
   import {
@@ -43,6 +45,7 @@
   import { pauseToast, showToast } from '../toast.svelte.ts';
   import { announceRemoved, type RestoreTarget } from '../task-removal.ts';
   import { t } from '../vocabulary.svelte.ts';
+  import TodayMarkButton from './TodayMarkButton.svelte';
   import Avatar from './Avatar.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Drawer from './Drawer.svelte';
@@ -174,12 +177,62 @@
 
   let loadState = $state<'loading' | 'ready' | 'failed'>('loading');
   let task = $state<TaskDetail | null>(null);
+  let taskContext = $state<Pick<OutputOf<typeof taskDetail>, 'column' | 'story' | 'epic' | 'today_on'>>({
+    column: null,
+    story: null,
+    epic: null,
+    today_on: null,
+  });
+  let marking = $state(false);
+  let refreshVersion = 0;
+  const todayReasonId = `${ids}-today-reason`;
+
+  async function toggleToday() {
+    if (marking || todayDisabledReason !== null || task === null) return;
+    const requestedTaskId = taskId;
+    marking = true;
+    try {
+      const result = await callOperation(
+        taskTodayMark,
+        { workspace_id: workspaceId, task_id: requestedTaskId, marked: taskContext.today_on === null },
+        { slug },
+      );
+      if (result.ok) {
+        // 応答を待つ間の担当変更で印が消えた場合も、現在の値を表示する。
+        if (taskId === requestedTaskId) await refresh(true);
+        onchanged();
+        await invalidate('app:today');
+      } else {
+        showToast(t('todayMarkFailed'), 'alert');
+        if (result.status === 409 || result.status === 404) {
+          if (taskId === requestedTaskId) await refresh(true);
+          onchanged();
+          await invalidate('app:today');
+          if (result.error?.code === 'workspace_closed') onstale();
+        }
+      }
+    } finally {
+      marking = false;
+    }
+  }
+
   // 期日の印を決める、ワークスペースの今日と週の始まり（task-detail の値。ブラウザの時計に頼らない）
   let clock = $state<{ today: string; weekStart: number } | null>(null);
   // 削除していない決まった欄と値（task-detail の fields。書かれていなければ value_md が null）
   let fields = $state<TaskFieldValue[]>([]);
   // バックログのタスクか。受信箱とアーカイブのタスクには、欄ごとの「未記入」の印を出さない（木の行と件数と同じ範囲）
   let inBacklog = $state(false);
+  const todayDisabledReason = $derived(
+    !canWrite
+      ? t('workspaceClosedReadOnly', { workspace: t('workspace') })
+      : !inBacklog
+        ? t('todayMarkBacklogOnly')
+        : task?.completed_at != null
+          ? t('todayMarkCompleted')
+          : currentUserId === null || task?.assignee?.id !== currentUserId
+            ? t('todayMarkOwnOnly')
+            : null,
+  );
   let heading = $state<HTMLElement>();
   let retryButton = $state<HTMLButtonElement>();
   let discardDialog = $state<ReturnType<typeof ConfirmDialog>>();
@@ -452,6 +505,12 @@
     if (!alive || mine !== loadVersion) return;
     if (result.ok) {
       task = result.data.task;
+      taskContext = {
+        column: result.data.column,
+        story: result.data.story,
+        epic: result.data.epic,
+        today_on: result.data.today_on,
+      };
       fields = result.data.fields;
       inBacklog = result.data.in_backlog;
       clock = { today: result.data.today, weekStart: result.data.week_start };
@@ -691,11 +750,24 @@
   }
 
   // 今の値を読み直す。読めなければ今の表示のまま（null）
-  async function refresh(): Promise<TaskDetail | null> {
+  async function refresh(closeIfGone = false): Promise<TaskDetail | null> {
+    const requestedVersion = ++refreshVersion;
+    const requestedTaskId = taskId;
     const result = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: taskId }, { slug });
-    if (!result.ok) return null;
-    if (alive) {
+    // 後から始めた読み取りがあれば、その応答を待ち、古い値で担当や印を戻さない。
+    if (requestedVersion !== refreshVersion) return null;
+    if (!result.ok) {
+      if (closeIfGone && result.status === 404 && alive && taskId === requestedTaskId) gone();
+      return null;
+    }
+    if (alive && taskId === requestedTaskId) {
       task = result.data.task;
+      taskContext = {
+        column: result.data.column,
+        story: result.data.story,
+        epic: result.data.epic,
+        today_on: result.data.today_on,
+      };
       fields = result.data.fields;
       inBacklog = result.data.in_backlog;
       clock = { today: result.data.today, weekStart: result.data.week_start };
@@ -735,6 +807,12 @@
     if (!latest.ok) return false;
     if (alive) {
       task = latest.data.task;
+      taskContext = {
+        column: latest.data.column,
+        story: latest.data.story,
+        epic: latest.data.epic,
+        today_on: latest.data.today_on,
+      };
       fields = latest.data.fields;
       inBacklog = latest.data.in_backlog;
     }
@@ -846,7 +924,7 @@
           can_delete: saved.can_delete,
           can_send_thanks: saved.can_send_thanks,
         };
-        void loadHistory();
+        await refresh();
       }
       showToast(t('taskSaved'), 'check');
       onchanged();
@@ -870,6 +948,12 @@
       } else {
         if (alive) {
           task = latest.data.task;
+          taskContext = {
+            column: latest.data.column,
+            story: latest.data.story,
+            epic: latest.data.epic,
+            today_on: latest.data.today_on,
+          };
           clock = { today: latest.data.today, weekStart: latest.data.week_start };
           void loadCandidates();
         }
@@ -1522,6 +1606,14 @@
 
     <dl class="props">
       <div>
+        <dt>{t('column')}</dt>
+        <dd>
+          {#if taskContext.column}<span class="status-dot is-wrap"
+              >{taskContext.column.is_done ? t('done') : taskContext.column.name}</span
+            >{:else}—{/if}
+        </dd>
+      </div>
+      <div>
         <dt>
           {#if assigneeEditable}<label for={assigneeId}>{t('assignee')}</label>{:else}{t('assignee')}{/if}
         </dt>
@@ -1668,6 +1760,14 @@
           {#if dueError !== null}
             <span class="field-error" id={dueErrorId} role="alert"><Icon name="alert" />{dueError}</span>
           {/if}
+        </dd>
+      </div>
+      <div>
+        <dt>{t('drawerParent')}</dt>
+        <dd>
+          {#if taskContext.story}<Icon name="flag" />
+            {taskContext.story.title}{#if taskContext.epic}<span class="props-note">{taskContext.epic.title}</span
+              >{/if}{:else}{t('taskParentNone')}{/if}
         </dd>
       </div>
       <div>
@@ -1821,6 +1921,21 @@
           </dd>
         </div>
       {/if}
+      <div>
+        <dt>{t('todayMark')}</dt>
+        <dd>
+          <TodayMarkButton
+            title={task.title}
+            marked={taskContext.today_on !== null}
+            disabled={marking || todayDisabledReason !== null}
+            describedby={todayDisabledReason === null ? undefined : todayReasonId}
+            onclick={toggleToday}
+          />
+          {#if taskContext.today_on !== null}<span>{t('todayMark')}</span>{/if}
+          {#if todayDisabledReason !== null}<span class="props-note" id={todayReasonId}>{todayDisabledReason}</span
+            >{/if}
+        </dd>
+      </div>
     </dl>
 
     <!-- 決まった欄（ワークスペースで定義した欄ごと）。本文の前に置く -->

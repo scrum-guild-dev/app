@@ -310,6 +310,11 @@ export const dictionary = defineDictionary({
   carryDays: '{days}日前に印を付けた',
   // 今日やるの印（太陽のボタン。task-today-mark）。押された状態で付いていることを示し、読み上げの名前は題を添える
   todayMark: '今日やる',
+  drawerParent: '親',
+  taskParentNone: 'なし',
+  todayMarkBacklogOnly: '受信箱とアーカイブでは今日やるの印を付け外しできません',
+  todayMarkOwnOnly: '自分が担当するタスクだけ今日やるの印を付け外しできます',
+  todayMarkCompleted: '完了したタスクの今日やるの印は付け外しできません',
   todayMarkLabel: '{mark}: {title}',
   todayMarked: '今日やると決めました',
   todayUnmarked: '今日やるの印を外しました',
