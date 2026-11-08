@@ -44,7 +44,7 @@
         class="toast"
         class:is-failure={isFailureToast(toast)}
         role="status"
-        out:toastOut
+        out:toastOut|global
         data-toast-id={toast.id}
         onkeydown={(event) => {
           if (event.key === 'Escape' && escapeToast(toast.id)) event.stopPropagation();
@@ -76,7 +76,7 @@
         >
       </div>
     {:else}
-      <div class="toast" class:is-failure={isFailureToast(toast)} role="status" out:toastOut>
+      <div class="toast" class:is-failure={isFailureToast(toast)} role="status" out:toastOut|global>
         {#if toast.icon}<Icon name={toast.icon} />{/if}<span>{toast.message}</span>
       </div>
     {/if}

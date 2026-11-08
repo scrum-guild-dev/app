@@ -31,11 +31,7 @@ const row: TodayTask = {
   sprint: null,
 };
 
-test('失敗のトーストは左に縦線が付き、成功の倍の 8 秒ほど出て、消えるときは下へ抜けてから外れる', async ({
-  page,
-  context,
-  baseURL,
-}) => {
+test('失敗のトーストは左に縦線が付き、成功の倍の 8 秒ほど出る', async ({ page, context, baseURL }) => {
   await signIn(context, baseURL, 'member');
   await page.clock.install();
   await routeOperation(page, today, { slug: 'aoba' }, (call) =>
