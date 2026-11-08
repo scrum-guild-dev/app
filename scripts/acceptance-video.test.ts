@@ -425,7 +425,7 @@ describe('gallery.mjs', () => {
     assert.match(html, /動画が無いので、ここでは判定しない/);
   });
 
-  test('SKILL.md の開く前の確かめのコマンドは、判定の版で 1、デモの版で 0 を数える', () => {
+  test('SKILL.md の開く前の確かめのコマンドは、判定の版で 1、判定の無い版で 0 を数える', () => {
     // 手順書の文字列をそのまま grep に渡す。手順書とテストで数え方が分かれないようにするため
     const skill = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
     const commands = [...skill.matchAll(/`grep -c '([^']+)' <置き場所>\/index\.html`/g)];
