@@ -250,7 +250,10 @@ test('担当を引き出しで選ぶと、木の行にアバターが出る。�
   const created = page.locator('.entry', { hasText: '担当つきの依頼' });
   await expect(created.getByRole('button', { name: '担当: 未設定' })).toBeVisible();
   await created.getByRole('button', { name: '担当: 未設定' }).click();
+  // 行の担当は先に表示される。引き出しで読み直す前に、保存の応答を待つ。
+  const assignedFromRow = waitForResponses(page, '/task-assign');
   await page.getByRole('menu', { name: '担当を選ぶ' }).getByRole('menuitemradio', { name: 'ミナト' }).click();
+  await assignedFromRow;
   await expect(created.getByRole('button', { name: '担当: ミナト' })).toBeVisible();
   // 引き出しを開くと、選んだ担当が出る
   await created.getByRole('link', { name: '担当つきの依頼' }).click();
