@@ -212,7 +212,7 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
   ```sh
   openssl rand -base64 32 | node -e 'let s=""; process.stdin.on("data", c => s += c); process.stdin.on("end", () => console.log(JSON.stringify({"1":s.trim()})))'
   ```
-- 本番は `wrangler secret put CONNECTION_CREDENTIAL_KEYS`（か、ダッシュボードの Worker の Settings → Variables and Secrets で Type を `Secret`）で入れる。`/api/health` は暗号化と同じ規則で鍵の形を検査し、不備があれば HTTP 503 と `credentialKeys: "unavailable"` を返す。正しければ `credentialKeys: "ok"` を返す。鍵の数、版、値は返さない。煙のテストは不備のある版を失敗にして前の版へ戻す。既存の暗号文を復号できるかまでは検査しない。開発用は `.dev.vars.example` の値を `.dev.vars` に写す。開発用の値を本番に使わない
+- 本番は `wrangler secret put CONNECTION_CREDENTIAL_KEYS`（か、ダッシュボードの Worker の Settings → Variables and Secrets で Type を `Secret`）で入れる。`/api/health` は暗号化と同じ規則で鍵の形を検査し、不備があれば HTTP 503 と `credentialKeys: "unavailable"` を返す。正しければ `credentialKeys: "ok"` を返す。鍵の数、版、値は返さない。煙のテストは不備のある版を失敗にして前の版へ戻す。既存の暗号文を復号できるか、公開済みの開発用・テスト用の鍵でないかは検査しない。health の ok は形式の検査結果なので、本番へ入れる前に、開発用・テスト用の値を使っていないことを別に確かめる。開発用は `.dev.vars.example` の値を `.dev.vars` に写す。開発用の値を本番に使わない
 - 無いか形が違うと、認証情報の保存と読み出しは固定の文のエラーで止まる。鍵も平文も暗号文も、エラーにもログにも出さない
 - 暗号文は、`connection-credential:` に接続の ID を続けた文字列を認証データにするので、接続の ID を決めてから暗号化する。別の接続の行へ写しても復号できない
 - JSON に同じ版を2回書くと、後ろの鍵が黙って採られ、前の鍵で書いた暗号文が復号できなくなる。鍵を足すときは、必ず新しい版（今の最大より大きい整数）で足し、同じ版を書き換えない
