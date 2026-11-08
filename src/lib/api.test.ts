@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { READ_TIMEOUT_MS, callOperation } from './api.ts';
 import { connectionScopeCandidates } from '../shared/operations/connection/connection-scope-candidates.ts';
 import { defineOperation } from '../shared/operations/define.ts';
+import { resolveGithubUser } from '../shared/operations/operator/resolve-github-user.ts';
 import { inviteeResolve } from '../shared/operations/workspace/invitee-resolve.ts';
 
 const readOperation = defineOperation({
@@ -146,8 +147,11 @@ describe('外に問い合わせる読み取りの上限', () => {
     expect(connectionScopeCandidates.clientTimeoutMs).toBeGreaterThan(60_000 + 10_000);
   });
 
-  test('招待する人の確認は、サーバーの GitHub への問い合わせの上限（10 秒）より長く待つ', () => {
-    expect(inviteeResolve.clientTimeoutMs).toBeGreaterThan(10_000);
+  test.each([
+    ['招待する人の確認', inviteeResolve],
+    ['運用者の GitHub ユーザーの確認', resolveGithubUser],
+  ])('%sは、サーバーの GitHub への問い合わせの上限（10 秒）より長く待つ', (_label, definition) => {
+    expect(definition.clientTimeoutMs).toBeGreaterThan(10_000);
   });
 });
 
