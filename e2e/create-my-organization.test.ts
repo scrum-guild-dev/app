@@ -401,6 +401,20 @@ test('利用開始の保存する画面は390px・4テーマで表示と操作�
   await page.goto('/auth/setup');
   const actions = ['次へ', 'チームを作って招待する', '組織を作って進む'];
   for (let stage = 0; stage < 4; stage++) {
+    if (stage === 0 || stage === 2) {
+      await page
+        .locator('.onboarding-url > span')
+        .first()
+        .evaluate((element) => {
+          element.textContent = 'long-onboarding-host-for-display-layout-check.example.invalid/';
+        });
+      expect(
+        await page
+          .locator('.onboarding-url .input')
+          .first()
+          .evaluate((element) => element.getBoundingClientRect().width),
+      ).toBeGreaterThan(130);
+    }
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
       await applyTheme(page, theme);
