@@ -44,7 +44,7 @@ test('失敗のトーストは左に縦線が付き、成功の倍の 8 秒ほ�
     (window as unknown as { __played: typeof played }).__played = played;
     const animate = Element.prototype.animate;
     Element.prototype.animate = function (keyframes, options) {
-      if (this.classList.contains('toast') && Array.isArray(keyframes)) {
+      if (this.classList.contains('toast-leaving') && Array.isArray(keyframes)) {
         for (const frame of keyframes) played.push({ opacity: (frame as Keyframe).opacity });
       }
       return animate.call(this, keyframes, options);
