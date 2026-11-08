@@ -58,6 +58,15 @@ test.describe('一般', () => {
     expect(panelBox!.y).toBeLessThan(sectionBox!.y);
   });
 
+  test('マイプロフィールにまだ無い欄を案内する末尾の一言とリンクは出ない', async ({ page }) => {
+    await mockOperation(page, firstSteps, { slug: 'aoba' }, { role: 'member', steps: MEMBER_STEPS });
+    await page.goto('/aoba');
+
+    await expect(panel(page)).toBeVisible();
+    await expect(panel(page).locator('.panel-note')).toHaveCount(0);
+    await expect(panel(page).getByRole('link', { name: 'マイプロフィール' })).toHaveCount(0);
+  });
+
   test('未完の必須の手順に主ボタンが付き、押すとバックログへ移る', async ({ page }) => {
     await mockOperation(page, firstSteps, { slug: 'aoba' }, { role: 'member', steps: MEMBER_STEPS });
     await page.goto('/aoba');

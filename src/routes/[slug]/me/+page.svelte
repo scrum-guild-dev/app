@@ -222,11 +222,10 @@
 <!-- 届いた招待（この組織のワークスペースへの承諾待ち）。招待が無ければ何も出さない -->
 <MeInvitations {slug} list={data.invitations} />
 
-<!-- 本文（テーマの節と、まだ無い節の知らせ）と横のレベルの面。API トークンと経験値の明細は表を持つので、この下に画面の幅いっぱいに出す
+<!-- 本文（テーマの節など）と横のレベルの面。API トークンと経験値の明細は表を持つので、この下に画面の幅いっぱいに出す
      （5列の表を横の面と並べると、PC の幅でも押しつぶされるため。.setting は見出しの列も取るので使わず、どちらも Section で出す） -->
 <div class="layout-aside">
   <div class="layout-main">
-    <p class="action-note">{t('meOtherSettingsNote')}</p>
     {#if data.organization}
       <div class="settings">
         <MeThemeSetting
