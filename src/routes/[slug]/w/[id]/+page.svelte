@@ -240,7 +240,7 @@
     tallyAdded = sameWorkspace
       ? pendingBacklogTasks(
           untrack(() => tallyAdded),
-          data.readVersion,
+          untrack(() => data.readVersion),
           loaded !== null,
         )
       : [];
