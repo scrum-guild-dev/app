@@ -37,8 +37,9 @@ test(
     child.stdout.once('data', data => {console.log(data.toString().trim()); process.exit(0)});`;
     const child = spawn(process.execPath, ['-e', code], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
     const server = trackServer(child, true);
+    const exited = once(child, 'exit');
     const port = Number((await once(child.stdout!, 'data'))[0].toString().trim());
-    await once(child, 'exit');
+    await exited;
     assert.equal((await fetch(`http://127.0.0.1:${port}`)).status, 200);
     try {
       await server.stop();
