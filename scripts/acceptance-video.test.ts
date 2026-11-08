@@ -228,6 +228,27 @@ describe('record.mjs --check', () => {
     rejected({ steps: [{ actions: [{ pause: 10_001 }] }] }, /pause は 0 から 10000/);
   });
 
+  test('press と hold の値の誤りは断る', () => {
+    rejected({ steps: [{ actions: [{ press: '' }] }] }, /press はキーの名前/);
+    rejected({ steps: [{ actions: [{ press: { css: 'a' } }] }] }, /press はキーの名前/);
+    rejected({ steps: [{ actions: [{ hold: 'Meta' }] }] }, /hold には ms/);
+    rejected({ steps: [{ actions: [{ hold: 'Meta', ms: 10_001 }] }] }, /hold には ms/);
+    rejected({ steps: [{ actions: [{ press: '?', on: { css: '' } }] }] }, /actions\[0\]\.on: css は空でない文字列/);
+    rejected({ steps: [{ actions: [{ press: '?', ms: 100 }] }] }, /ms は使えない/);
+  });
+
+  test('press と hold は通り、hold の ms を見積もりに足す', () => {
+    const base = { steps: [{ actions: [{ hold: 'Meta', ms: 0 }] }] };
+    const held = { steps: [{ actions: [{ hold: 'Meta', ms: 3000 }] }] };
+    const a = check(base);
+    const b = check(held);
+    assert.equal(a.status, 0, a.stderr);
+    assert.equal(b.status, 0, b.stderr);
+    // 見積もりは小数 1 桁に丸めて出るので、差は 0.1 秒の幅で見る
+    assert.ok(Math.abs(seconds(b.stdout) - seconds(a.stdout) - 3) <= 0.1 + 1e-9);
+    assert.equal(check({ steps: [{ actions: [{ press: '?' }] }] }).status, 0);
+  });
+
   test('入れ子の within の誤りも場所を添えて断る', () => {
     rejected(
       { steps: [{ mark: { css: 'a', within: { role: 'region' } } }] },
@@ -1109,6 +1130,18 @@ console.log(JSON.stringify({ items, ran, results, lines: results.map(p.describeI
       items.map((i) => `${i.step}:${i.kind}`),
       ['1:goto', '1:wait', '2:mark', '2:click', '2:wait', '3:fill', '3:select', '4:goto', '4:wait'],
     );
+  });
+
+  test('press と hold も項目になり、on の要素を spec にして、報告の 1 行に出る', () => {
+    const keys = {
+      steps: [{ caption: '開く', actions: [{ press: '?' }, { hold: 'Meta', ms: 1500, on: { css: 'main' } }] }],
+    };
+    const { items, lines } = probe(keys);
+    assert.deepEqual(
+      items.map((i) => `${i.step}:${i.kind}`),
+      ['1:press', '1:hold'],
+    );
+    assert.deepEqual(lines, ['press "?"', 'hold "Meta" on css=main']);
   });
 
   test('全部見つかれば、click や fill も含めて全項目を実行する', () => {

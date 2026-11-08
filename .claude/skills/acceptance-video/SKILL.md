@@ -66,6 +66,10 @@ gh api repos/{owner}/{repo}/issues/<番号> --jq '{state, author: .user.login, t
 | `fill` | `{ "fill": <要素>, "text": "入れる文" }` |
 | `wait` | `{ "wait": <要素>, "state": "visible" }`（`hidden`、`attached`、`detached` も可。既定は `visible`） |
 | `pause` | `{ "pause": 1000 }`（ミリ秒） |
+| `press` | `{ "press": "?" }`（キーを押して離す。`Meta+K` のような組み合わせも可。要素を指すときは `"on": <要素>` を足すと、そこへフォーカスしてから押す） |
+| `hold` | `{ "hold": "Meta", "ms": 1500 }`（キーを押し続け、`ms` ミリ秒たってから離す。`on` は `press` と同じ。押し続けている間だけ出る画面を映す） |
+
+`press` と `hold` の値はキーの名前（要素ではない）。字幕と待ちの決まりは、キー操作でも他の操作と同じ（`press` と `hold` は見える操作に数え、`hold` の `ms` は見積もりに足す）。
 
 要素は `css`、`role`（と `name`）、`label` のどれか1つで指し、`within`（囲む要素）、`nth`、`exact` を足せる。`exact` は `role` の `name` と `label` に効き、録画でも試しでも完全一致で探す（書かなければ部分一致）。
 
@@ -99,7 +103,7 @@ curl -s -m 3 -o /dev/null -w '%{http_code}' http://localhost:<ポート>/api/hea
 
 録画の操作は seed の行を書き換える（報酬の変更など）。毎回 `pnpm db:seed` から始める。出力のディレクトリは、スクラッチパッドの下に置く（ワークツリーの中に置かない）。
 
-録画の前に、手順書を録画せずに最後まで通して、要素の指し方が実画面に在るかを試す。録画で失敗すると、30 秒待って落ち、撮り直しや動画の欠けになるため。試しは `click`、`fill`、`select`、`check` も実行し（`pause`、`read`、`hold` の待ちは省く）、seed の行を書き換えるので、終わったら `pnpm db:seed` で戻してから録画する。
+録画の前に、手順書を録画せずに最後まで通して、要素の指し方が実画面に在るかを試す。録画で失敗すると、30 秒待って落ち、撮り直しや動画の欠けになるため。試しは `click`、`fill`、`select`、`check`、`press`、`hold` も実行し（`pause`、`read`、`hold` の場面の待ちと、操作の `hold` の `ms` は省く。`hold` は押してすぐ離す）、seed の行を書き換えるので、終わったら `pnpm db:seed` で戻してから録画する。
 
 ```bash
 pnpm db:seed

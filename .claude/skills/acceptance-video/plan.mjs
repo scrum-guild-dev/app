@@ -17,8 +17,10 @@ export const ESTIMATE_LIMIT_SECONDS = 28;
 // 字幕の帯は 1280px 幅で、32px の文字が収まるのは約 38 文字
 export const MAX_CAPTION_CHARS = 38;
 
-const VERBS = ['goto', 'click', 'check', 'select', 'fill', 'wait', 'pause'];
-const ACTION_EXTRA_KEYS = { select: ['label'], fill: ['text'], wait: ['state'] };
+const VERBS = ['goto', 'click', 'check', 'select', 'fill', 'wait', 'pause', 'press', 'hold'];
+// press と hold の値はキーの名前で、要素でない。要素を指すときは on に書き、そこへフォーカスしてから押す
+const KEY_VERBS = ['press', 'hold'];
+const ACTION_EXTRA_KEYS = { select: ['label'], fill: ['text'], wait: ['state'], press: ['on'], hold: ['ms', 'on'] };
 const WAIT_STATES = ['visible', 'hidden', 'attached', 'detached'];
 const PLAN_KEYS = ['who', 'screen', 'steps'];
 const STEP_KEYS = ['caption', 'read', 'hold', 'mark', 'actions'];
@@ -60,6 +62,12 @@ function actionProblems(action, where) {
     if (typeof action.goto !== 'string' || !action.goto.startsWith('/')) problems.push(`${where}: goto は / で始まるパス`);
   } else if (verb === 'pause') {
     if (!isWait(action.pause)) problems.push(`${where}: pause は 0 から ${MAX_WAIT_MS} のミリ秒`);
+  } else if (KEY_VERBS.includes(verb)) {
+    if (!isText(action[verb])) problems.push(`${where}: ${verb} はキーの名前（a、?、Enter、Meta+K など。空でない文字列）`);
+    if (action.on !== undefined) problems.push(...locatorProblems(action.on, `${where}.on`));
+    if (verb === 'hold' && !isWait(action.ms)) {
+      problems.push(`${where}: hold には ms（押し続ける時間）も 0 から ${MAX_WAIT_MS} のミリ秒で指定する`);
+    }
   } else {
     problems.push(...locatorProblems(action[verb], `${where}.${verb}`));
     if (verb === 'select' && !isText(action.label)) problems.push(`${where}: select には label（選ぶ項目の表示）も指定する`);
@@ -158,8 +166,8 @@ export function describeLocator(spec) {
 
 /**
  * 録画せずに通す項目を、録画と同じ順に並べる。場面は 1 から数える。待ち（pause、read、hold）は含めない。
- * 各項目は { step, kind: goto|mark|click|check|select|fill|wait, action?, spec?, path? }。
- * mark の spec は枠で示す要素、それ以外は action に手順書の操作がそのまま入る。
+ * 各項目は { step, kind: goto|mark|click|check|select|fill|wait|press|hold, action?, spec?, path? }。
+ * mark の spec は枠で示す要素、それ以外は action に手順書の操作がそのまま入る。press と hold の spec は on の要素（無ければ undefined）。
  */
 export function probePlan(plan) {
   const items = [];
@@ -169,9 +177,8 @@ export function probePlan(plan) {
     for (const action of step.actions ?? []) {
       const kind = VERBS.find((verb) => action[verb] !== undefined);
       if (kind === 'pause') continue;
-      items.push(
-        kind === 'goto' ? { step: n, kind, path: action.goto } : { step: n, kind, action, spec: action[kind] },
-      );
+      const spec = KEY_VERBS.includes(kind) ? action.on : action[kind];
+      items.push(kind === 'goto' ? { step: n, kind, path: action.goto } : { step: n, kind, action, spec });
     }
   });
   return items;
@@ -183,6 +190,10 @@ export function describeItem(item) {
   // 手順書のキーと、報告での名前。select の label は指し方の label と紛れるので option と書く
   const extra = { wait: ['state', 'state'], select: ['label', 'option'], fill: ['text', 'text'] }[item.kind];
   const value = extra && item.action[extra[0]] !== undefined ? ` ${extra[1]}=${JSON.stringify(item.action[extra[0]])}` : '';
+  if (KEY_VERBS.includes(item.kind)) {
+    const on = item.spec ? ` on ${describeLocator(item.spec)}` : '';
+    return `${item.kind} ${JSON.stringify(item.action[item.kind])}${on}`;
+  }
   return `${item.kind} ${describeLocator(item.spec)}${value}`;
 }
 
@@ -251,6 +262,7 @@ export function estimateSeconds(plan) {
         ms += OPERATION_MS;
         if (pausesAfter(actions, i)) ms += PAUSE_MS;
         if (action.pause !== undefined) ms += action.pause;
+        if (action.hold !== undefined) ms += action.ms;
       });
       ms += step.hold ?? HOLD_MS;
     } else {
