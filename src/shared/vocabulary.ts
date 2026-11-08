@@ -16,6 +16,7 @@ export const dictionary = defineDictionary({
     '表示する名前は1〜100文字、肩書きは100文字以内で入力してください。改行や制御文字は使えません。',
   onboardingProfileFailed: 'プロフィールを保存できませんでした。入力を残したまま、もう一度試せます。',
   onboardingSaving: '保存しています',
+  onboardingPersonalUrlSaved: '作成済みの個人用URLです。あとから変更できません。',
   onboardingProfileSaved: '作成済みの個人用URLです。あとから変更できません。プロフィールは保存済みです。',
   onboardingPersonalUrlLiveHint:
     '自分だけで使う場所のURLです。半角の英小文字・数字・ハイフンで2〜40文字。あとから変更できません。',

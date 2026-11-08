@@ -22,7 +22,7 @@ import { operationPath } from '../src/shared/operations/define.ts';
 import { workspaceList } from '../src/shared/operations/workspace/workspace-list.ts';
 import { workspaceClose } from '../src/shared/operations/workspace/workspace-close.ts';
 import { invitationCreate } from '../src/shared/operations/workspace/invitation-create.ts';
-import { accountProfileSave } from '../src/shared/operations/session/onboarding.ts';
+import { accountProfileSave, onboardingStatus } from '../src/shared/operations/session/onboarding.ts';
 import { failOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 // 作った組織は API に消す操作が無く、お試し中の組織は1アカウントに1つまでなので、テストの前と後に seed の状態（組織の無い会員）へ戻す
@@ -545,4 +545,40 @@ test('作成前からある管理対象のチームを、失敗した新規作�
   });
   expect(listed.status()).toBe(200);
   expect((await listed.json()).workspaces).toEqual([]);
+});
+
+test('個人用だけ作成済みなら未保存のプロフィールを案内し、100文字の絵文字も保存できる', async ({
+  context,
+  baseURL,
+  page,
+}) => {
+  await signIn(context, baseURL, 'createOrg');
+  let creations = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === operationPath(createPersonalOrganization)) creations++;
+  });
+  const created = await page.request.post(operationPath(createPersonalOrganization), {
+    headers: { Origin: new URL(baseURL!).origin },
+    data: { slug: 'setup-prior-own' },
+  });
+  expect(created.status()).toBe(200);
+  await page.goto('/auth/setup');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(word('onboardingProfile'));
+  await expect(page.getByLabel('個人用のURL', { exact: true })).toHaveAttribute('readonly');
+  await expect(page.locator('#setup-personal-hint')).toHaveText('作成済みの個人用URLです。あとから変更できません。');
+  await expect(page.getByText('プロフィールは保存済みです。', { exact: false })).toHaveCount(0);
+  const name = '🙂'.repeat(100);
+  await page.getByLabel('表示する名前').fill(name);
+  await page.getByLabel('役割・肩書き（任意）').fill(name);
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(word('onboardingInviteChoice'));
+  const status = await page.request.post(operationPath(onboardingStatus), {
+    headers: { Origin: new URL(baseURL!).origin },
+    data: {},
+  });
+  expect(status.status()).toBe(200);
+  const saved = await status.json();
+  expect(saved.profile).toEqual({ name, title: name });
+  expect(saved.personal.slug).toBe('setup-prior-own');
+  expect(creations).toBe(0); // APIRequestContextで先に作った1件の後、画面は作成を送っていない。
 });

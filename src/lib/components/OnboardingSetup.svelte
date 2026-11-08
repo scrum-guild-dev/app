@@ -359,7 +359,13 @@
                 />
               </div>
               <p class="field-hint" id="setup-personal-hint">
-                {t(personal === null ? 'onboardingPersonalUrlLiveHint' : 'onboardingProfileSaved')}
+                {t(
+                  personal === null
+                    ? 'onboardingPersonalUrlLiveHint'
+                    : profileSaved
+                      ? 'onboardingProfileSaved'
+                      : 'onboardingPersonalUrlSaved',
+                )}
               </p>
             </div>
             <div class="onboarding-actions">
