@@ -47,11 +47,10 @@
   --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1); /* 少し行き過ぎて戻る。ショートカットのヒントが角から出る */
 
   /* ---- 書体の候補 ---- */
-  --family-gothic: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
+  /* Guild Mono JP は PlemolJP を web 向けに分けたもの（fonts/guild-mono-jp.css）。届かないときは端末の書体で読める */
+  --family-gothic: "Guild Mono JP", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
   --family-mincho: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
-  --family-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --family-tech: "Chakra Petch", "IBM Plex Mono", ui-monospace, sans-serif;
-  --family-tech-gothic: "Chakra Petch", "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;  /* 英数字は Chakra Petch、かなと漢字はゴシック */
+  --family-mono: "Guild Mono JP", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
 /* ===== シンプル（ライト）。data-theme がないときもこれ =====
@@ -211,7 +210,6 @@
   --color-tier-large: #6b6500;
 
   --font-display: var(--family-mincho);
-  --font-stat: var(--family-tech);
   --weight-display: 900;
 
   --radius-1: 2px;              /* 帳簿の角。ほぼ角張らせる */
@@ -254,8 +252,6 @@
   --color-tier-medium: #a3afbd;
   --color-tier-large: #ecc9b0;  /* 紫に寄せた淡い金。色相が銅に近づくので、銅より淡く、銀より明るくして明るさで分ける */
 
-  --font-display: var(--family-tech-gothic);
-  --font-stat: var(--family-tech);
   --weight-display: 700;
 
   --radius-1: 2px;

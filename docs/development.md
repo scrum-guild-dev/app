@@ -165,14 +165,17 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 
 ### 書体
 
-- 書体は `@fontsource` の4つのパッケージ（`biz-udpgothic`、`zen-old-mincho`、`ibm-plex-mono`、`chakra-petch`）から、`src/routes/+layout.svelte` が使う太さだけを import する。太さは見本（`design/today.html`）の Google Fonts の URL と同じ（BIZ UDPGothic 400 と 700、Zen Old Mincho 700 と 900、IBM Plex Mono 400 と 500、Chakra Petch 500、600、700）。
-- Google Fonts は使わない。利用者の IP を外へ出さず、CSP に外の先を足さない。書体のファイルは build が `build/_app/immutable/assets/` に書き出し、自分の Worker から配る。
+- 本文などの書体 Guild Mono JP は、PlemolJP v3.1.0（無印。https://github.com/yuru7/PlemolJP の Releases の zip）の Regular と Bold を、`scripts/guild-mono-jp.py` が woff2 に変えて文字の範囲で分けたもの。`design/fonts/guild-mono-jp.css`（`@font-face`）と `design/fonts/guild-mono-jp/`（woff2 と `OFL.txt`）に置き、アプリは `src/routes/+layout.svelte` が CSS を import し、見本は各ページが `<link>` で読む。見本の Worker は `design/` だけを配るので、見本とアプリが同じファイルを読めるよう `design/` に置く。
+- PlemolJP は SIL Open Font License 1.1 で、「PlemolJP」が予約フォント名（Reserved Font Name）。形式の変換と分割は OFL の改変版にあたり予約名を名乗れないので、書体の中の名前（name の表）と CSS の `font-family` を Guild Mono JP にする。著作権とライセンスは、woff2 の name の表（ID 0、13、14）と `design/fonts/guild-mono-jp/OFL.txt` に残す。
+- 作り直すときは、PlemolJP の zip から `PlemolJP/PlemolJP-Regular.ttf` と `PlemolJP-Bold.ttf` を取り出し、fontTools と brotli を入れた Python（`pip install fonttools brotli`）で `python3 -I scripts/guild-mono-jp.py <TTF のフォルダ> node_modules/@fontsource/biz-udpgothic/400.css design/fonts` を走らせる。範囲の区切りは `@fontsource/biz-udpgothic` の CSS（Google Fonts の日本語の区切り、124）を借り、どこにも入らない PlemolJP の文字（ギリシャ文字の一部、Nerd Fonts の記号など）は最後の1ファイルにまとめる。全角の空白（U+3000）は、PlemolJP がコードの中で見つけるために点線の四角で描くので外し、端末の書体の空白で組ませる（ラベルと値の間の全角の空白が四角に見えた）。太さごとに125ファイル、約2.3MB で、ブラウザは画面の文字が入るファイルだけを読む。`@font-face` の CSS は2つの太さで約200KB（gzip で約62KB）。
+- 中世風の見出しの Zen Old Mincho は `@fontsource/zen-old-mincho` から、`src/routes/+layout.svelte` が使う太さ（700 と 900）だけを import する。見本は Google Fonts の URL で同じ太さを読む。`biz-udpgothic`、`ibm-plex-mono`、`chakra-petch` のパッケージは画面では読まず、区切りの借り元と `scripts/fontsource-woff2.test.ts` のために残す。
+- アプリは Google Fonts を使わない。利用者の IP を外へ出さず、CSP に外の先を足さない。書体のファイルは build が `build/_app/immutable/assets/` に書き出し、自分の Worker から配る。
 - パッケージは `devDependencies` に置く。書体のファイルは build のときに CSS から拾って `build/` に書き出すだけで、Worker の実行時には要らない。
-- 日本語の書体は文字の範囲ごとに約120のファイルに分かれ（`unicode-range`）、ブラウザは使う文字のファイルだけを読む。build の出力は woff2 が514ファイル、`build/` 全体で約530ファイル、約13MB になる（Workers Static Assets の上限は20,000ファイル）。
+- 日本語の書体は文字の範囲ごとにファイルに分かれ（`unicode-range`）、ブラウザは使う文字のファイルだけを読む。build の出力は woff2 が494ファイル（Guild Mono JP 250、Zen Old Mincho 244）、`build/` 全体で約640ファイル、約14MB になる（Workers Static Assets の上限は20,000ファイル）。
 - `@fontsource` の CSS は woff2 と woff の両方を `src` に書くが、woff は使われない。woff を `build/` に出さないため、`scripts/fontsource-woff2.ts` の Vite プラグインが、CSS を Vite に渡す前に woff の指定を外す（実際の CSS での確認は `scripts/fontsource-woff2.test.ts`）。
-- 書体の CSS は1本にまとまり、約440KB（gzip で約136KB）。`index.html` の `<link rel="stylesheet">` から読むので描画を止めるが、この大きさと止まることは受け入れた。理由は2つ。1つは、日本語の書体を文字の範囲で分けて読む以上、範囲の一覧（`unicode-range`）を CSS に持つ構造が避けられないこと（Google Fonts の CSS も同じ構造）。もう1つは、ファイル名にハッシュが入って `immutable` でキャッシュされ、2回目からの読み込みが軽いこと。
+- 書体の CSS は、tokens と部品の CSS と1本にまとまり、全体で約490KB（gzip で約147KB）。`index.html` の `<link rel="stylesheet">` から読むので描画を止めるが、この大きさと止まることは受け入れた。理由は2つ。1つは、日本語の書体を文字の範囲で分けて読む以上、範囲の一覧（`unicode-range`）を CSS に持つ構造が避けられないこと（Google Fonts の CSS も同じ構造）。もう1つは、ファイル名にハッシュが入って `immutable` でキャッシュされ、2回目からの読み込みが軽いこと。
 - Vite は小さいファイルを `data:` の URI にして CSS へ埋め込むが、CSP の `font-src`（`default-src 'self'`）は `data:` を通さない。`vite.config.ts` の `build.assetsInlineLimit` を 0 にして、すべてファイルとして出す。
-- 太さを足すときは、見本の Google Fonts の URL も同じ PR で直す。
+- 太さを足すときは、Guild Mono JP は `scripts/guild-mono-jp.py` の `WEIGHTS` に足して作り直し、Zen Old Mincho は見本の Google Fonts の URL も同じ PR で直す。Guild Mono JP は 400 と 700 だけを持つので、500 は 400、600 は 700 で出る（`font-weight` の照合の規則）。
 
 ### テーマの先当て
 

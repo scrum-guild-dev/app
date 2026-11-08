@@ -463,7 +463,7 @@ test.describe('組織が2つの人（ミナト）', () => {
   });
 });
 
-// 書体は @fontsource を自分の Worker から配る。外への通信が無く、本来の書体が読み込まれる
+// 書体は Guild Mono JP（design/fonts）と @fontsource を自分の Worker から配る。外への通信が無く、本来の書体が読み込まれる
 test('書体を自分のオリジンから読み込み、外へ通信しない', async ({ page, baseURL }) => {
   const collect = await watchViolations(page);
   const origins = new Set<string>();
@@ -478,7 +478,14 @@ test('書体を自分のオリジンから読み込み、外へ通信しない',
 
   expect([...origins]).toEqual([new URL(baseURL ?? '').origin]);
   expect(fonts.length).toBeGreaterThan(0);
-  expect(await page.evaluate(() => document.fonts.check('700 16px "BIZ UDPGothic"'))).toBe(true);
+  // 本文の 400 と見出しの 700 の両方が届き、日本語の見出しの文字の範囲まで読み込み済みになる
+  expect(fonts.some((url) => url.includes('guild-mono-jp-400-'))).toBe(true);
+  expect(fonts.some((url) => url.includes('guild-mono-jp-700-'))).toBe(true);
+  expect(
+    await page.evaluate(() =>
+      ['400', '700'].every((weight) => document.fonts.check(`${weight} 16px "Guild Mono JP"`, '今日やること')),
+    ),
+  ).toBe(true);
   expect(await collect()).toEqual([]);
 });
 
