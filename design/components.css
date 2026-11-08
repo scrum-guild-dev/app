@@ -878,9 +878,7 @@ a.brand { color: inherit; text-decoration: none; }
 .callout-actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-left: auto; }
 /* レーンの中の囲みは幅が狭い（3 列で約 280px）。操作は本文の下の 1 行に置き、本文を広く取る */
 .lane .callout { padding: var(--space-3); }
-@media (min-width: 1081px) {
-  .lane .callout-actions { flex-basis: 100%; margin-left: 0; }
-}
+.lane .callout-actions { flex-basis: 100%; margin-left: 0; }
 /* 囲みの中のリンクは、本文と同じ色に下線を引く（既定のリンクの青は、ダークと現代風の地で読めない） */
 .callout a { color: inherit; text-decoration: underline; text-underline-offset: 0.2em; }
 .callout a.btn { text-decoration: none; }
@@ -1325,6 +1323,8 @@ a.notice-title.notice-link:hover { text-decoration: underline; text-underline-of
 
 @media (max-width: 1080px) {
   .lanes { grid-template-columns: minmax(0, 1fr); }
+  /* 1 列ではレーンが広いので、囲みの操作は通常の囲みと同じ（本文の右）に戻す。畳む幅と同じ max-width で分け、小数の幅の隙間を作らない */
+  .lane .callout-actions { flex-basis: auto; margin-left: auto; }
 }
 @media (max-width: 760px) {
   .drawer, .drawer.is-page { padding-left: max(var(--space-4), env(safe-area-inset-left, 0px)); padding-right: max(var(--space-4), env(safe-area-inset-right, 0px)); }
