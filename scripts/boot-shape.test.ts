@@ -4,7 +4,13 @@ import { join, relative } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
-import { loadingShape, loadingShapeHasActions, loadingShapes, type LoadingShape } from '../src/lib/loading-shape.ts';
+import {
+  loadingShape,
+  loadingShapeCounts,
+  loadingShapeHasActions,
+  loadingShapes,
+  type LoadingShape,
+} from '../src/lib/loading-shape.ts';
 
 const script = readFileSync(new URL('../static/boot-shape.js', import.meta.url), 'utf8');
 const routesDir = fileURLToPath(new URL('../src/routes', import.meta.url));
@@ -88,16 +94,18 @@ describe('最初の読み込みの骨組みの形（static/boot-shape.js）', ()
       wiki: '/[slug]/w/[id]/wiki',
       task: '/[slug]/w/[id]/tasks/[taskId]',
     };
-    // LoadingSheet.svelte の形ごとの帯の数。見出しの右のボタン（plan と wiki）も is-button に数える
+    // 帯の数は src/lib/loading-shape.ts の loadingShapeCounts（LoadingSheet が並べる数）から決める。
+    // 形ごとの固定の帯（見出し、カード、脇の欄など）は LoadingSheet.svelte の並びと同じ数を書く。見出しの右のボタン（plan と wiki）も is-button に数える
+    const c = loadingShapeCounts;
     const expected: Record<LoadingShape, Record<string, number>> = {
       aside: { 'is-heading': 2, 'is-card': 2, 'is-panel': 1 },
-      tree: { 'is-input': 1, 'is-select': 4, 'is-item': 8 },
-      board: { 'boot-col': 4, 'is-card': 8 },
-      plan: { 'is-chart': 1, 'is-lane': 3, 'is-button': 1 },
-      list: { 'is-heading': 1, 'is-item': 6 },
-      settings: { 'is-setting': 3, 'is-card': 3 },
+      tree: { 'is-input': 1, 'is-select': c.treeSelects, 'is-item': c.treeRows },
+      board: { 'boot-col': c.boardColumns, 'is-card': c.boardColumns * 2 },
+      plan: { 'is-chart': 1, 'is-lane': c.planLanes, 'is-button': 1 },
+      list: { 'is-heading': 1, 'is-item': c.listRows },
+      settings: { 'is-setting': c.settingSections, 'is-card': c.settingSections },
       wiki: { 'is-input': 1, 'is-panel': 1, 'is-button': 2 },
-      task: { 'is-button': 4, 'is-label': 6, 'is-value': 6, 'is-card': 2 },
+      task: { 'is-button': c.taskButtons, 'is-label': c.taskFields, 'is-value': c.taskFields, 'is-card': 2 },
     };
     const count = (html: string, name: string) =>
       [...html.matchAll(/class="([^"]*)"/g)].filter((match) => match[1].split(' ').includes(name)).length;
@@ -123,7 +131,11 @@ describe('最初の読み込みの骨組みの形（static/boot-shape.js）', ()
         for (const name of match[1].split(' ')) names.add(name);
       }
     }
-    for (const name of names) assert.ok(css.includes(`.${name}`), `.${name} が static/boot-loading.css に無い`);
+    // コメントを除き、クラス名の境界まで見る（.is-item が .is-items やコメントの文字に当たらないように）
+    const rules = css.replaceAll(/\/\*[\s\S]*?\*\//g, '');
+    for (const name of names) {
+      assert.match(rules, new RegExp(`\\.${name}(?![\\w-])`), `.${name} が static/boot-loading.css に無い`);
+    }
   });
 
   test('URL の区切りは文字に直して比べ、直せない URL は紙の形のまま', () => {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { t } from '../vocabulary.svelte.ts';
   import { navState } from '../nav-collapse.svelte.ts';
-  import { loadingShapeHasActions, type LoadingShape } from '../loading-shape.ts';
+  import { loadingShapeCounts, loadingShapeHasActions, type LoadingShape } from '../loading-shape.ts';
   import BrandMark from './BrandMark.svelte';
   import Gate from './Gate.svelte';
   import GateSheet from './GateSheet.svelte';
@@ -76,14 +76,15 @@
             <div class="skeleton">
               <div class="skeleton-row">
                 <span class="skeleton-line is-input"></span>
-                {#each { length: 4 }, i (i)}<span class="skeleton-line is-select"></span>{/each}
+                {#each { length: loadingShapeCounts.treeSelects }, i (i)}<span class="skeleton-line is-select"
+                  ></span>{/each}
               </div>
-              {#each { length: 8 }, i (i)}<span class="skeleton-line is-item"></span>{/each}
+              {#each { length: loadingShapeCounts.treeRows }, i (i)}<span class="skeleton-line is-item"></span>{/each}
             </div>
           {:else if shape === 'board'}
             <div class="board-wrap">
               <div class="board">
-                {#each { length: 4 }, i (i)}
+                {#each { length: loadingShapeCounts.boardColumns }, i (i)}
                   <div class="board-col skeleton">
                     <span class="skeleton-line is-short"></span>
                     <span class="skeleton-line is-card"></span>
@@ -96,12 +97,13 @@
             <div class="skeleton">
               <span class="skeleton-line is-chart"></span>
               <div class="lanes">
-                {#each { length: 3 }, i (i)}<span class="skeleton-line is-lane"></span>{/each}
+                {#each { length: loadingShapeCounts.planLanes }, i (i)}<span class="skeleton-line is-lane"
+                  ></span>{/each}
               </div>
             </div>
           {:else if shape === 'settings'}
             <div class="settings">
-              {#each { length: 3 }, i (i)}
+              {#each { length: loadingShapeCounts.settingSections }, i (i)}
                 <div class="setting">
                   <div class="skeleton">
                     <span class="skeleton-line is-heading"></span>
@@ -124,10 +126,11 @@
           {:else if shape === 'task'}
             <div class="skeleton">
               <div class="skeleton-row is-end">
-                {#each { length: 4 }, i (i)}<span class="skeleton-line is-button"></span>{/each}
+                {#each { length: loadingShapeCounts.taskButtons }, i (i)}<span class="skeleton-line is-button"
+                  ></span>{/each}
               </div>
               <span class="skeleton-line is-title"></span>
-              {#each { length: 6 }, i (i)}
+              {#each { length: loadingShapeCounts.taskFields }, i (i)}
                 <div class="skeleton-row">
                   <span class="skeleton-line is-label"></span>
                   <span class="skeleton-line is-value"></span>
@@ -139,7 +142,7 @@
           {:else}
             <div class="skeleton">
               <span class="skeleton-line is-heading"></span>
-              {#each { length: 6 }, i (i)}<span class="skeleton-line is-item"></span>{/each}
+              {#each { length: loadingShapeCounts.listRows }, i (i)}<span class="skeleton-line is-item"></span>{/each}
             </div>
           {/if}
         </div>

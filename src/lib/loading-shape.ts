@@ -37,3 +37,16 @@ export function loadingShape(routeId: string | null | undefined): LoadingShape |
 export function loadingShapeHasActions(shape: LoadingShape): boolean {
   return shape === 'plan' || shape === 'wiki';
 }
+
+// 形ごとの帯の数。LoadingSheet がこの数で並べ、最初の読み込みの static/boot-shape.js は同じ数を写す
+// （import できないので、scripts/boot-shape.test.ts がこの値と突き合わせる）
+export const loadingShapeCounts = {
+  treeSelects: 4,
+  treeRows: 8,
+  boardColumns: 4,
+  planLanes: 3,
+  settingSections: 3,
+  taskButtons: 4,
+  taskFields: 6,
+  listRows: 6,
+} as const;

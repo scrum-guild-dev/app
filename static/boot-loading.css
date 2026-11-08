@@ -298,7 +298,9 @@ html[data-boot] #boot-loading .boot-frame {
 }
 /* 強制色では地の色が消えるので、帯を縁で残す */
 @media (forced-colors: active) {
-  #boot-loading .boot-frame i {
+  #boot-loading .boot-frame i,
+  #boot-loading .boot-skeleton i {
+    box-sizing: border-box;
     border: 1px solid CanvasText;
   }
 }
