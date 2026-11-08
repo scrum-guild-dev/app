@@ -109,4 +109,12 @@ test('引き出しを開いたまま背後の一覧が作り直されても、�
   await drawer.getByLabel('期日').fill('');
   await expect(rowMenuToggle(page, '作り直される行')).toHaveCount(1);
   await expectRowMenuUnreachable(page, drawer, '作り直される行');
+
+  // 閉じると、後から付けた inert も外れ、作り直した行の「⋯」を押せる
+  await drawer.getByRole('button', { name: '閉じる', exact: true }).click();
+  await expect(drawer).toBeHidden();
+  const toggle = rowMenuToggle(page, '作り直される行');
+  expect(await toggle.evaluate((element) => element.closest('[inert]') !== null)).toBe(false);
+  await toggle.click();
+  await expect(page.getByRole('menu', { name: '操作: 作り直される行', exact: true })).toBeVisible();
 });

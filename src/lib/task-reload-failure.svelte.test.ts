@@ -10,6 +10,7 @@ vi.mock('./toast.svelte.ts', () => ({ showToast: mocks.showToast }));
 vi.mock('./vocabulary.svelte.ts', () => ({ t: (key: string) => key }));
 
 import {
+  listFailedIn,
   clearReloadFailure,
   markReloadFailed,
   reloadFailureMessage,
@@ -80,5 +81,23 @@ describe('throwIfListFailed', () => {
     await expect(throwIfListFailed(() => mocks.page.data)).resolves.toBeUndefined();
     mocks.page.data = { workspace: {} };
     await expect(throwIfListFailed(() => mocks.page.data)).resolves.toBeUndefined();
+  });
+
+  test('読めた（一覧の無い画面を含む）ら印を下ろし、読めなければ印を残す', async () => {
+    markReloadFailed('deleted', 'w1');
+    mocks.page.data = { tree: null };
+    await expect(throwIfListFailed(() => mocks.page.data)).rejects.toThrow();
+    expect(reloadFailureNote('w1')).toBe('taskDeletedReloadFailed');
+    // 一覧の無い画面（メンバーなど）で「取り消す」を押して戻せた
+    mocks.page.data = { members: [] };
+    await throwIfListFailed(() => mocks.page.data);
+    expect(reloadFailureNote('w1')).toBeNull();
+  });
+
+  test('listFailedIn は木かボードが null のときだけ真', () => {
+    expect(listFailedIn({ tree: null })).toBe(true);
+    expect(listFailedIn({ board: null })).toBe(true);
+    expect(listFailedIn({ tree: {} })).toBe(false);
+    expect(listFailedIn({})).toBe(false);
   });
 });

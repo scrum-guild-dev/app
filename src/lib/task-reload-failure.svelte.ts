@@ -9,6 +9,9 @@ import { t } from './vocabulary.svelte.ts';
 // どの画面でも一覧が読めたら下ろす。別のワークスペースの読み込みの失敗には出さない。
 // 印を出す画面が無い（読み直し自体が投げて、一覧が前のまま残った）ときは、トーストで知らせて印を下ろす
 
+// 印を描いた要素の属性（LoadFailed が付ける）。描かれたかをこの属性で確かめる
+export const RELOAD_NOTE_ATTRIBUTE = 'data-task-reload-note';
+
 // 何が済んだか。deleted は消した後、restored は戻した後、stale は断られた後の読み直し（何も変えていない）
 export type ReloadFailure = 'deleted' | 'restored' | 'stale';
 
@@ -37,7 +40,7 @@ export function markReloadFailed(failure: ReloadFailure, workspaceId: string): v
     current.workspaceId = workspaceId;
   }
   void tick().then(() => {
-    if (current.failure === null || document.querySelector('[data-task-reload-note]') !== null) return;
+    if (current.failure === null || document.querySelector(`[${RELOAD_NOTE_ATTRIBUTE}]`) !== null) return;
     clearReloadFailure();
     showToast(t('taskListReloadFailed'), 'alert');
   });
@@ -49,13 +52,17 @@ export function clearReloadFailure(): void {
   current.workspaceId = null;
 }
 
-// 読み直した後、今開いている画面の一覧（バックログの木、スプリントのボード）が読めなかったら投げる。
-// load は通信と 5xx の失敗で一覧を null にし、invalidate 自体は失敗しないので、ここで読み直しの失敗に替える。
+// 今開いている画面の一覧（バックログの木、スプリントのボード）が読めなかったか。
+// load は通信と 5xx の失敗で一覧を null にし、invalidate 自体は失敗しないので、これで読み直しの失敗を見分ける。
 // 見るのは今の画面（呼び出し側が渡す $app/state の page.data）で、読み直しを頼んだ画面ではない（トーストの「取り消す」は画面をまたいで押せる）
-export async function throwIfListFailed(current: () => Record<string, unknown>): Promise<void> {
+export function listFailedIn(pageData: Record<string, unknown>): boolean {
+  return ('tree' in pageData && pageData.tree === null) || ('board' in pageData && pageData.board === null);
+}
+
+// 読み直した後に呼ぶ。今の画面の一覧が読めなかったら投げ（settled が印を付ける）、読めた（一覧の無い画面を含む）なら印を下ろす
+// （一覧の無い画面で「取り消す」を押して戻せたとき、先の「削除しましたが」を残さない）
+export async function throwIfListFailed(pageData: () => Record<string, unknown>): Promise<void> {
   await tick();
-  const data = current();
-  if (('tree' in data && data.tree === null) || ('board' in data && data.board === null)) {
-    throw new Error('list');
-  }
+  if (listFailedIn(pageData())) throw new Error('list');
+  clearReloadFailure();
 }

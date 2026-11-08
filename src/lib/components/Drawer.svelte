@@ -131,7 +131,12 @@
     if (!modal || drawerElement === undefined) return;
     return inertOutside(
       drawerElement,
-      (sibling) => sibling === scrimElement || sibling.tagName === 'DIALOG' || sibling.classList.contains('toasts'),
+      // SvelteKit の遷移の読み上げ（#svelte-announcer。aria-live）も残す（引き出しを開いた後に作られると、前後へ移ったときの読み上げが届かない）
+      (sibling) =>
+        sibling === scrimElement ||
+        sibling.tagName === 'DIALOG' ||
+        sibling.classList.contains('toasts') ||
+        sibling.id === 'svelte-announcer',
     );
   });
 </script>

@@ -26,6 +26,7 @@
   import { focusFirstTaskRow, focusIsFree, focusPageHeading } from '../../../../lib/focus-heading.ts';
   import { formatLocalDate } from '../../../../lib/format.ts';
   import { focusToastAction, resumeToast } from '../../../../lib/toast.svelte.ts';
+  import { listFailedIn, markReloadFailed } from '../../../../lib/task-reload-failure.svelte.ts';
   import { epicFinishedOf, parentChoicesOf, storyTreeOf } from '../../../../lib/story-drawer.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import type { LayoutData } from './$types';
@@ -148,6 +149,8 @@
       await withoutTask();
       await invalidate('app:backlog-tree');
       await tick();
+      // 木が読めなかった（画面が読み込みの失敗に替わる）ときは、消したことは済んでいると画面に残す（行の「⋯」と同じ。#979）
+      if (workspace !== null && listFailedIn(page.data)) markReloadFailed('deleted', workspace.id);
     } catch (error) {
       // 読み直しが落ちても、止めておいた数えを戻す（戻さないとトーストが消えなくなる）
       if (toastId !== null) resumeToast(toastId);
@@ -167,6 +170,7 @@
   async function restored(restoredId: string, focus: boolean): Promise<void> {
     await invalidate('app:backlog-tree');
     await tick();
+    if (workspace !== null && listFailedIn(page.data)) markReloadFailed('restored', workspace.id);
     if (focus && focusIsFree()) focusFirstTaskRow([restoredId]);
   }
 
