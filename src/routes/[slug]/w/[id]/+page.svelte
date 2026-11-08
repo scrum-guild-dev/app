@@ -506,7 +506,11 @@
   // 取り消した後は戻した行の題のリンクへ、Esc で閉じたときは消した行の次の行（無ければ前の行、無ければ見出し）へ移す
   async function removeTask(task: BacklogTask, keyboard: boolean): Promise<void> {
     if (workspace === null || !canWrite) return;
-    const reload = (): Promise<void> => invalidate('app:backlog-tree');
+    // 送っている並べ替えと親の移動が終わってから読み直す（先に読み直すと、まだ送っていない移動が捨てられ、並びが一時的に戻る）
+    const reload = async (): Promise<void> => {
+      await moves.whenIdle();
+      await invalidate('app:backlog-tree');
+    };
     await removeFromList({
       slug: page.params.slug ?? '',
       workspaceId: workspace.id,
@@ -514,6 +518,8 @@
       title: task.title,
       keyboard,
       reload,
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- 今の画面の経路から task などの問い合わせを外しただけ
+      closeDrawer: (path) => goto(path, { replace: true, reset: false }),
       onstale: () => void invalidateAll(),
       onrestored: async (restoredId, focus) => {
         await reload();

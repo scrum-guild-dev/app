@@ -62,6 +62,12 @@ export class MoveQueue<R extends { ok: boolean }> {
     return this.#tail;
   }
 
+  // 今積んである操作がすべて終わるまで待つ。世代も数えも触らない（待つだけの操作を send() で積むと、読み直しと重なったときに
+  // 捨てた操作として数えられ、誤った「捨てた」の知らせが出るため）
+  whenIdle(): Promise<void> {
+    return this.#tail;
+  }
+
   // 列が空になったときに、送っている間の読み直しがあれば、もう一度読み直して捨てた操作を知らせる
   // 読み直しの無いまま discard() で捨てた分は数え直す（読み直しに失敗したときは、画面が失敗を知らせている）
   async #settle(): Promise<void> {

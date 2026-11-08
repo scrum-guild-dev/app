@@ -235,3 +235,31 @@ describe('MoveQueue', () => {
     expect(dropped).not.toHaveBeenCalled();
   });
 });
+
+describe('MoveQueue の whenIdle', () => {
+  test('積んだ操作がすべて終わるまで待つ。待つ間に読み直されても、捨てた操作として数えず、知らせない', async () => {
+    const { queue, reload, dropped } = setup();
+    const first = deferred();
+    void queue.send(
+      () => first.promise,
+      async () => {},
+    );
+    await started();
+    let idle = false;
+    const waiting = queue.whenIdle().then(() => (idle = true));
+    await started();
+    queue.reloaded();
+    expect(idle).toBe(false);
+    first.resolve({ ok: true, name: 'a' });
+    await waiting;
+    expect(idle).toBe(true);
+    // 読み直しは送っている間のものとして1回だけ。待つだけの呼び出しは捨てた操作に数えない
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(dropped).not.toHaveBeenCalled();
+  });
+
+  test('操作が無ければ、すぐ終わる', async () => {
+    const { queue } = setup();
+    await queue.whenIdle();
+  });
+});
