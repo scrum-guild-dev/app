@@ -63,7 +63,14 @@ function actionProblems(action, where) {
   } else if (verb === 'pause') {
     if (!isWait(action.pause)) problems.push(`${where}: pause は 0 から ${MAX_WAIT_MS} のミリ秒`);
   } else if (KEY_VERBS.includes(verb)) {
-    if (!isText(action[verb])) problems.push(`${where}: ${verb} はキーの名前（a、?、Enter、Meta+K など。空でない文字列）`);
+    // スペースキーは " " なので、trim せず長さで見る
+    const key = action[verb];
+    if (typeof key !== 'string' || key.length === 0) {
+      problems.push(`${where}: ${verb} はキーの名前（a、?、Enter、Space など。空でない文字列）`);
+    } else if (verb === 'hold' && key !== '+' && key.includes('+')) {
+      // keyboard.down は単一のキーだけを受ける（組み合わせは press）
+      problems.push(`${where}: hold は単一のキーの名前（組み合わせの ${key} は press に書く）`);
+    }
     if (action.on !== undefined) problems.push(...locatorProblems(action.on, `${where}.on`));
     if (verb === 'hold' && !isWait(action.ms)) {
       problems.push(`${where}: hold には ms（押し続ける時間）も 0 から ${MAX_WAIT_MS} のミリ秒で指定する`);
@@ -220,6 +227,8 @@ export function isUnreachable(results) {
 /** 失敗の理由。1 行目に、指し方が違うのか、在るのに操作できないのかを分ける行を足す */
 export function probeDetail(message) {
   const [first, ...rest] = String(message).split('\n');
+  // キー名の誤りは、要素が見つからないのと紛れないよう分ける
+  if (/Unknown key/.test(first)) return `キー名が不正: ${first}`;
   const reasons = [...new Set(rest.map((line) => line.trim().replace(/^-\s*/, '')).filter((line) => BLOCKED_REASON.test(line)))];
   return [first, ...reasons.slice(0, 2)].join(' / ');
 }

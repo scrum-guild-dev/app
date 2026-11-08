@@ -235,6 +235,12 @@ describe('record.mjs --check', () => {
     rejected({ steps: [{ actions: [{ hold: 'Meta', ms: 10_001 }] }] }, /hold には ms/);
     rejected({ steps: [{ actions: [{ press: '?', on: { css: '' } }] }] }, /actions\[0\]\.on: css は空でない文字列/);
     rejected({ steps: [{ actions: [{ press: '?', ms: 100 }] }] }, /ms は使えない/);
+    rejected({ steps: [{ actions: [{ hold: 'Meta+K', ms: 100 }] }] }, /hold は単一のキーの名前/);
+    // 組み合わせは press に書ける。+ そのものと空白（スペースキー）はキーの名前
+    for (const ok of [{ press: 'Meta+K' }, { press: ' ' }, { hold: '+', ms: 100 }, { hold: ' ', ms: 100 }]) {
+      const result = check({ steps: [{ actions: [ok] }] });
+      assert.equal(result.status, 0, result.stderr);
+    }
   });
 
   test('press と hold は通り、hold の ms を見積もりに足す', () => {
@@ -1231,6 +1237,8 @@ try {
     <div id="hide" style="display:none">隠れている</div>
     <select id="s"><option value="1">A</option><option value="2">B</option></select>
     <input id="t"><input id="c" type="checkbox">
+    <script>window.log = [];</script>
+    <input id="k" onkeydown="window.log.push('d:' + event.key)" onkeyup="window.log.push('u:' + event.key)">
     <label>延ばす日数 <input id="n"></label>
     <label>確認する日数 <input id="m"></label>\`);
   const pageExec = p.probeExec(page, base);
@@ -1254,10 +1262,14 @@ try {
     gotoOk: { kind: 'goto', path: '/ok' },
     gotoMissing: { kind: 'goto', path: '/missing' },
     unknown: { kind: 'swim', spec: spec('on') },
+    pressOn: { kind: 'press', spec: spec('k'), action: { press: '?' } },
+    holdShift: { kind: 'hold', action: { hold: 'Shift' } },
+    pressBadKey: { kind: 'press', action: { press: 'NotAKey' } },
+    pressMissingOn: { kind: 'press', spec: spec('nope'), action: { press: 'a' } },
   };
   const outcome = {};
   // 失敗するものは 5 秒待つので、最初に同時に走らせる。成功するものは、その後に順に実行して状態を確かめる
-  const failing = ['clickDisabled', 'selectZ', 'waitVisibleHidden', 'labelPartialExact', 'gotoMissing', 'unknown'];
+  const failing = ['clickDisabled', 'selectZ', 'waitVisibleHidden', 'labelPartialExact', 'gotoMissing', 'unknown', 'pressBadKey', 'pressMissingOn'];
   // 失敗の理由は、一覧に出る probeDetail を通した形で見る（Playwright の本物の Call log で確かめる）
   await Promise.all(failing.map(async (k) => {
     try { await exec(items[k]); outcome[k] = 'ok'; } catch (err) { outcome[k] = 'ng: ' + plan.probeDetail(err.message); }
@@ -1265,7 +1277,7 @@ try {
   for (const k of Object.keys(items).filter((k) => !failing.includes(k))) {
     try { await exec(items[k]); outcome[k] = 'ok'; } catch (err) { outcome[k] = 'ng: ' + err.message; }
   }
-  const state = await page.evaluate(() => ({ title: document.title, select: document.querySelector('#s').value, text: document.querySelector('#t').value, checked: document.querySelector('#c').checked, days: document.querySelector('#n').value, confirm: document.querySelector('#m').value }));
+  const state = await page.evaluate(() => ({ title: document.title, select: document.querySelector('#s').value, text: document.querySelector('#t').value, checked: document.querySelector('#c').checked, days: document.querySelector('#n').value, confirm: document.querySelector('#m').value, log: window.log, active: document.activeElement.id }));
   console.log(JSON.stringify({ outcome, state }));
 } finally {
   await browser.close();
@@ -1277,12 +1289,31 @@ try {
         outcome: Record<string, string>;
         state: Record<string, unknown>;
       };
-      const oks = ['markHidden', 'clickOn', 'selectB', 'fill', 'check', 'waitHiddenAbsent', 'gotoOk'];
+      const oks = [
+        'markHidden',
+        'clickOn',
+        'pressOn',
+        'holdShift',
+        'selectB',
+        'fill',
+        'check',
+        'waitHiddenAbsent',
+        'gotoOk',
+      ];
       for (const ok of [...oks, 'labelExact', 'labelPartial']) {
         assert.equal(outcome[ok], 'ok', `${ok}: ${outcome[ok]}`);
       }
       // 録画と同じ操作を実際にしている（取り違えると、状態が変わらない）。label の exact は部分一致を断つ
-      assert.deepEqual(state, { title: 'clicked', select: '2', text: '3', checked: true, days: '1', confirm: '2' });
+      assert.deepEqual(state, {
+        title: 'clicked',
+        select: '2',
+        text: '3',
+        checked: true,
+        days: '1',
+        confirm: '2',
+        log: ['d:?', 'u:?', 'd:Shift', 'u:Shift'],
+        active: 'k',
+      });
       for (const ng of ['clickDisabled', 'selectZ', 'waitVisibleHidden', 'labelPartialExact'])
         assert.match(outcome[ng], /^ng: .*Timeout/, ng);
       assert.match(outcome.clickDisabled, /not enabled/);
@@ -1290,6 +1321,9 @@ try {
       assert.match(outcome.waitVisibleHidden, /resolved to hidden/);
       assert.match(outcome.gotoMissing, /HTTP 404/);
       assert.match(outcome.unknown, /知らない操作: swim/);
+      // press は on へフォーカスしてから押し、hold は down のあとに up する（state.log）。キー名の誤りは分けて出る
+      assert.match(outcome.pressBadKey, /^ng: キー名が不正/);
+      assert.match(outcome.pressMissingOn, /^ng: .*Timeout/);
     },
   );
 
