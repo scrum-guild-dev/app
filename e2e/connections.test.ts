@@ -259,6 +259,14 @@ test('止まっている接続は、止まった事実と次の手（誰に伝�
           owner_user_id: 'other',
           owner_name: 'ハルカ',
         }),
+        created({ id: 'stopped-null', name: '理由の無い停止', status: 'stopped', stopped_reason: null }),
+        created({
+          id: 'stopped-with-error',
+          name: '失敗して止まった接続',
+          status: 'stopped',
+          stopped_reason: 'auth_failed',
+          last_error_message: '認証に失敗しました',
+        }),
         created({
           id: 'error-theirs',
           name: '不調の接続',
@@ -274,17 +282,24 @@ test('止まっている接続は、止まった事実と次の手（誰に伝�
   const auth = page.locator('[data-connection-id="stopped-auth"]');
   await expect(auth.locator('.state-badge')).toHaveText('停止');
   await expect(auth.locator('.callout.is-danger')).toHaveText(
-    '認証に失敗したので止めました。 リーダーに、止まっていることを伝えてください。',
+    '認証に失敗したので止めました。リーダーに、止まっていることを伝えてください。',
   );
   const other = page.locator('[data-connection-id="stopped-other"]');
   await expect(other.locator('.callout.is-danger')).toHaveText(
-    '止まっています。 リーダーに、止まっていることを伝えてください。',
+    '止まっています。リーダーに、止まっていることを伝えてください。',
   );
   await expect(page.locator('[data-connection-id="stopped-theirs"] .callout.is-danger')).toHaveText(
-    '認証に失敗したので止めました。 登録したハルカかリーダーに、止まっていることを伝えてください。',
+    '認証に失敗したので止めました。登録したハルカかリーダーに、止まっていることを伝えてください。',
   );
   await expect(page.locator('[data-connection-id="error-theirs"] .callout.is-warn')).toHaveText(
-    '応答が遅れています 続けて失敗するときは、登録したハルカかリーダーに伝えてください。',
+    '応答が遅れています失敗が続くようなら、登録したハルカかリーダーに伝えてください。',
+  );
+  await expect(page.locator('[data-connection-id="stopped-null"] .callout.is-danger')).toHaveText(
+    '止まっています。リーダーに、止まっていることを伝えてください。',
+  );
+  // 止まった行では、エラーの警告に「失敗が続くようなら」を足さない
+  await expect(page.locator('[data-connection-id="stopped-with-error"] .callout.is-warn')).toHaveText(
+    '認証に失敗しました',
   );
   await expect(page.getByText('再開')).toHaveCount(0);
 });
@@ -335,7 +350,7 @@ test('今すぐ同期は本人の接続にだけ出て、押すと届いた件�
   await expect(list.getByRole('listitem').filter({ hasText: 'ハルカの GitHub' })).not.toContainText('今すぐ同期');
   await expect(list.getByRole('listitem').filter({ hasText: '止まった GitHub' })).not.toContainText('今すぐ同期');
   await expect(list.getByRole('listitem').filter({ hasText: '止まった GitHub' })).toContainText(
-    '認証に失敗したので止めました。 リーダーに、止まっていることを伝えてください',
+    '認証に失敗したので止めました。リーダーに、止まっていることを伝えてください',
   );
 
   await list.getByRole('button', { name: '今すぐ同期' }).click();

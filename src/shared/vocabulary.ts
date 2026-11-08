@@ -2456,7 +2456,7 @@ export const dictionary = defineDictionary({
   connectionNextWhoOwner: '登録した{owner}か{leader}',
   connectionNextWhoLeader: '{leader}',
   connectionNextStopped: '{who}に、止まっていることを伝えてください。',
-  connectionNextError: '続けて失敗するときは、{who}に伝えてください。',
+  connectionNextError: '失敗が続くようなら、{who}に伝えてください。',
   connectionChooseScope: '範囲を選ぶ',
   connectionEmptyTitle: '{connection}がまだありません',
   connectionEmptyText:

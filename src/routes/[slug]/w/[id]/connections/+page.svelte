@@ -342,16 +342,16 @@
                       message: connection.last_error_message,
                       at: formatLocalDateTime(connection.last_error_at),
                       count: connection.consecutive_failures,
-                    })}&#32;{t('connectionNextError', { who })}</span
+                    })}{connection.status === 'error' ? t('connectionNextError', { who }) : ''}</span
               >
             </div>
           {/if}
-          {#if connection.stopped_reason || connection.status === 'stopped'}
+          {#if connection.status === 'stopped'}
             <div class="callout is-danger">
               <Icon name="alert" /><span
                 >{connection.stopped_reason === 'auth_failed'
                   ? t('connectionStoppedAuthFailed')
-                  : t('connectionStoppedOther')}&#32;{t('connectionNextStopped', { who })}</span
+                  : t('connectionStoppedOther')}{t('connectionNextStopped', { who })}</span
               >
             </div>
           {/if}
