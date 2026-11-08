@@ -361,6 +361,7 @@ export const dictionary = defineDictionary({
   firstStepHolidayTitle: '{organization}の休日を登録する',
   firstStepHolidayNote: '祝日などを貼り付けて、まとめて登録します。{capacity}の稼働日から除きます。',
   firstStepHolidayAction: '{page}を開く',
+  // 画面は出さない。マイプロフィールに1日の基準と稼働する曜日の欄が入る（#66）とき、FirstSteps の一言に戻す
   firstHintMember: '1日の時間は8時間、稼働する曜日は月〜金として{capacity}を数えます。違うときは{setting}で変えます。',
   firstHintLeader: '{column}、{detail}の決まった欄は、作ったときの既定のままです。変えるときは{setting}で変えます。',
 
@@ -1899,8 +1900,9 @@ export const dictionary = defineDictionary({
   sprintLengthDays: '{length} 日',
   sprintActive: '進行中',
   sprintEmptyTitle: 'まだ{sprint}がありません',
+  // 入れた{points}と{capacity}を見比べる言い方は、計画に作業量と基準の表示が入る（#66）とき戻す
   sprintEmptyText:
-    '{sprint}は、期間を区切って{task}を進める単位です。作ると、ここに先の{sprint}が並び、入れた{points}と{capacity}を見比べられます。終えた{sprint}がたまると、ベロシティも出ます。',
+    '{sprint}は、期間を区切って{task}を進める単位です。作ると、ここに先の{sprint}が並びます。終えた{sprint}がたまると、ベロシティも出ます。',
   // リーダーでない人の空の状態。作り方の案内の代わりに、作るのは誰かを添える
   sprintEmptyMemberText: '{sprint}は、期間を区切って{task}を進める単位です。{sprint}を作るのは{leader}です。',
   sprintEmptyClosedText: '終了した{workspace}には、{sprint}を作れません。',
@@ -2147,6 +2149,7 @@ export const dictionary = defineDictionary({
   xpEmptyText: '{task}を{complete}と、起票や{done}の経験値がここに並びます。',
   xpContentHidden: '（今所属していない{workspace}の内容は表示しません）',
   retrySection: 'もう一度試す（{section}）',
+  // 画面は出さない（開発の状況の説明になるため）。積載量の欄が入る（#66）ときに言い方を決め直す
   meOtherSettingsNote:
     '今は経験値、API トークン、テーマ、届いた招待を扱えます。1日の基準、稼働期間、休み、月の基準の上書き、積載量の合計は、これから足します。',
   // 自分のテーマ（マイプロフィールの節。選んだ瞬間に保存する）。{admin} は管理者、{organization} は組織、{label} はテーマの名前

@@ -332,7 +332,7 @@ test('有効なトークンが上限に達していたら、断られた理由�
       w('apiTokenHeaderLastUsed'),
       w('apiTokenActionsHeader'),
     ]);
-    await expect(page.getByText(w('meOtherSettingsNote'))).toBeVisible();
+    await expect(page.getByText(w('meOtherSettingsNote'))).toHaveCount(0);
 
     // 発行した直後のダイアログと、取り消しの確認も同じ辞書の文言で出す
     const name = uniqueName('辞書');

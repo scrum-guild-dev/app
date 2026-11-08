@@ -151,16 +151,9 @@
   // 主ボタンは、まだ済んでいない最初の必須の手順（押せる操作を持つもの）にだけ付ける。必須が済むと面は出ないので、任意の手順には付かない
   const nextIndex = $derived(rows.findIndex((row) => !row.done && !row.optional && row.action !== null));
 
-  // 末尾の一言。マイプロフィール、またはワークスペースの設定へ案内するリンクを文の中に置く
+  // 末尾の一言。ワークスペースの設定へ案内するリンクを文の中に置く（リーダーだけ）
+  // 一般の一言（firstHintMember）は、マイプロフィールに1日の基準と稼働する曜日の欄が入る（#66）まで出さない。案内先に欄が無く、行き止まりになるため
   const hint = $derived.by(() => {
-    if (role === 'member') {
-      const label = t('pageMe');
-      return {
-        text: t('firstHintMember', { capacity: t('capacity'), setting: label }),
-        label,
-        href: resolve('/[slug]/me', { slug }),
-      };
-    }
     if (role === 'leader') {
       const workspace = steps.find((step) => step.workspace !== null)?.workspace;
       if (workspace === null || workspace === undefined) return null;

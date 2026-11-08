@@ -72,7 +72,6 @@
     sprint: t('sprint'),
     task: t('task'),
     points: t('points'),
-    capacity: t('capacity'),
     leader: t('leader'),
   });
   // 空の状態の説明。終了したワークスペース、リーダー、リーダーでない人で、辞書の項目ごと分ける（文をつながない）

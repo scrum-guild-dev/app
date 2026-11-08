@@ -58,6 +58,15 @@ test.describe('一般', () => {
     expect(panelBox!.y).toBeLessThan(sectionBox!.y);
   });
 
+  test('マイプロフィールにまだ無い欄を案内する末尾の一言とリンクは出ない', async ({ page }) => {
+    await mockOperation(page, firstSteps, { slug: 'aoba' }, { role: 'member', steps: MEMBER_STEPS });
+    await page.goto('/aoba');
+
+    await expect(panel(page)).toBeVisible();
+    await expect(panel(page).locator('.panel-note')).toHaveCount(0);
+    await expect(panel(page).getByRole('link', { name: 'マイプロフィール' })).toHaveCount(0);
+  });
+
   test('未完の必須の手順に主ボタンが付き、押すとバックログへ移る', async ({ page }) => {
     await mockOperation(page, firstSteps, { slug: 'aoba' }, { role: 'member', steps: MEMBER_STEPS });
     await page.goto('/aoba');
@@ -132,6 +141,15 @@ test.describe('リーダー', () => {
     await page.goBack();
     await panel(page).getByRole('link', { name: '計画を開く' }).click();
     await expect(page).toHaveURL(`/aoba/w/${WORKSPACE.id}/plan`);
+  });
+
+  test('末尾の一言に「設定」へのリンクが出て、押すとワークスペースの設定へ移る', async ({ page }) => {
+    await mockOperation(page, firstSteps, { slug: 'aoba' }, { role: 'leader', steps: LEADER_STEPS });
+    await page.goto('/aoba');
+
+    await expect(panel(page).locator('.panel-note')).toHaveCount(1);
+    await panel(page).locator('.panel-note').getByRole('link', { name: '設定' }).click();
+    await expect(page).toHaveURL(`/aoba/w/${WORKSPACE.id}/settings`);
   });
 
   test('必須が済み、任意のスプリントが未完でも、応答が空なら面は出ない', async ({ page }) => {

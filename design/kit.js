@@ -534,7 +534,8 @@
     ],
   };
   const FIRST_HINT = {
-    member: () => `1日の時間は8時間、稼働する曜日は月〜金として${t("capacity")}を数えます。違うときは<a href="me.html">マイプロフィール</a>で変えます。`,
+    // 一般の一言は、マイプロフィールに1日の基準と稼働する曜日の欄が入る（#66）まで出さない（本番の FirstSteps と同じ）
+    member: () => "",
     leader: () => `${t("column")}、${t("detail")}の決まった欄は、作ったときの既定のままです。変えるときは<a href="${firstHref("settings.html")}">設定</a>で変えます。`,
     admin: () => "",
   };

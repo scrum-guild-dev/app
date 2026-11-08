@@ -74,7 +74,7 @@ SQ.mount("plan", () => {
     return `
       ${pageHead(D.workspaces.wa.name, t("plan"), [], actions)}
       ${SQ.emptyState("calendar", `まだ${t("sprint")}がありません`,
-        `${t("sprint")}は、期間を区切って${t("task")}を進める単位です。作ると、ここに先の${t("sprint")}が並び、入れた${t("points")}と${t("capacity")}を見比べられます。終えた${t("sprint")}がたまると、ベロシティも出ます。` +
+        `${t("sprint")}は、期間を区切って${t("task")}を進める単位です。作ると、ここに先の${t("sprint")}が並びます。終えた${t("sprint")}がたまると、ベロシティも出ます。` +
         (isLeader ? "" : `${t("sprint")}を作るのは${t("leader")}です。`), "", undefined, "map")}`;
   }
   const v = velocity();
