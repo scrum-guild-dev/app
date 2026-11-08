@@ -41,7 +41,7 @@ SQ.mount("admin", () => `
   ${pageHead("管理者だけが見られます", "組織の管理", [
     ["", "users", "ユーザー", A.users.filter((u) => !u.disabled).length],
     ["", "shield", t("admin"), A.users.filter((u) => u.admin && !u.disabled).length],
-    ["", "", t("workspace"), A.workspaces.filter((w) => !w.closed).length],
+    ["", "", `進行中の${t("workspace")}`, A.workspaces.filter((w) => !w.closed).length],
   ], `<button class="btn is-primary" type="button" data-dialog="createWorkspace">${icon("plus")}${t("workspace")}を作る</button>`)}
   <div class="settings">
     ${setting("お試し", "継続して使うには、運用者に問い合わせてください。", `

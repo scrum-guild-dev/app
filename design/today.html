@@ -59,15 +59,16 @@ SQ.mount("today", () => {
         ${load("10月の合計", "ユーザーの基準", 172.0, 168.0)}
         <p class="panel-note">休み <span class="mono">10/23</span> 半日</p>
       </section>`;
-  return `<div class="layout-aside">
-    <div class="layout-main">
-      ${pageHead(D.todayLabel, "今日やること", [
+  // 見出しは左右2列の外に出して全幅にする（本番と同じ。右の列は見出しの下から始まる）
+  return `${pageHead(D.todayLabel, "今日やること", [
         ["", "sun", "今日やると決めたもの", todayList.length],
         ["is-danger", "alert", `${t("due")}切れ`, overdueList.length],
         ["is-warn", "clock", `今週が${t("due")}`, dueList.length],
         ["is-ok", "check", "取り込み元で完了", open.filter((x) => x.srcDone).length],
         ["", "check", t("doneToday"), doneList.length],
       ])}
+  <div class="layout-aside">
+    <div class="layout-main">
       ${SQ.first ? SQ.firstSteps(SQ.first) : ""}
       ${active.length ? `<div class="notice-grid">${active.map((id) => sprintNotice(id)).join("")}</div>` : ""}
       ${part("s-overdue", `${t("due")}切れ`, overdueList)}

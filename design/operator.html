@@ -22,17 +22,16 @@
 // 組織ごとの集計は、人数と上限、閉じていないワークスペースの数、削除していないタスクの数、添付ファイルの上限、最後に使われた日時。
 // 人数が上限以上なら「上限に達した」の印を出す。添付ファイルの使った量は出さない（#68 で足す）。
 // 作った日時は列にせず、名前の列の slug の行に並べる（1280px の画面で表が横スクロールせずに収まる列の数にするため）
+// 枠は本番の /operator と同じ幅の広い紙（.gate.is-wide）1枚で、左のメニューと見出しの集計を持たない（#997）
 // 名前の直後、ほかの印の前に種類の印（チーム用、自分用）を出す。自分用（personal）の行は、人数 / 上限の列を空（ダッシュ）にし、上限に達した印と管理者の状態の印を出さず、
 // 管理者の指名と人数と容量の上限の変更を置かない（添付ファイルの上限の値は出す。停止、再開、停止の理由の切り替えはできる）
-const { D, t, icon, esc, pageHead } = SQ;
+const { D, t, icon, esc } = SQ;
 const K = D.operator.organizations;
 
 SQ.mount("operator", () => `
-  ${pageHead("運用者だけが見られます", "運用", [
-    ["", "", t("organization"), K.filter((k) => !k.suspended).length],
-    ["", "", "停止中", K.filter((k) => k.suspended).length],
-    [K.some((k) => !k.admins) ? "is-danger" : "", "", `${t("admin")}がいない`, K.filter((k) => !k.admins).length],
-  ], `<button class="btn is-primary" type="button" data-dialog="createOrganization">${icon("plus")}${t("organization")}を作る</button>`)}
+  <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
+  <h1 class="gate-title">運用</h1>
+  <div class="form-actions"><button class="btn is-primary" type="button" data-dialog="createOrganization">${icon("plus")}${t("organization")}を作る</button></div>
   <div class="callout is-info">${icon("shield")}<span>運用者は${t("organization")}の中（タスク、メンバー、記録、添付ファイルの中身など）を見られません。ここに出すのは名前、slug、状態と、数、上限、日時だけです。</span></div>
   <div class="table-wrap"><table class="table is-stacked"><thead><tr><th class="is-name">${t("organization")}・slug</th><th class="is-num">人数 / 上限</th><th class="is-num">${t("workspace")}の数</th><th class="is-num">${t("task")}の数</th><th class="is-num">添付ファイルの上限</th><th>最後に使われた日時</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
     <tbody>${K.map((k) => `<tr>
@@ -43,7 +42,7 @@ SQ.mount("operator", () => `
         ${k.purgeDue ? `<span class="props-note">消す予定日を過ぎたので、再開も停止の理由の切り替えも${k.personal ? "" : `${t("admin")}の指名も`}できません</span>` : k.personal ? "" : `<button class="btn is-sm is-quiet" type="button" data-dialog="reassignAdmin">${t("admin")}を指名</button>`}
         ${k.purgeDue ? "" : k.suspended ? `<button class="btn is-sm is-quiet" type="button" data-dialog="changeSuspension">停止の理由を変える</button><button class="btn is-sm is-quiet" type="button" data-toast="再開しました">再開する</button>` :`<button class="btn is-sm is-quiet is-danger" type="button" data-dialog="suspendOrganization">停止する</button>`}
       </span></td></tr>`).join("")}</tbody></table></div>
-  <p class="props-note">${t("organization")}を消す作業はこの画面では行わず、運用の手順書に沿って行います。</p>`, { operator: true });
+  <div class="form-actions"><button class="btn is-sm is-quiet" type="button" data-toast="見本のため、ログアウトしません">${t("logout")}</button></div>`, { operator: true });
 </script>
 </body>
 </html>

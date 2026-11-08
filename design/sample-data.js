@@ -16,9 +16,11 @@ window.SQ_DATA = (function () {
 
     // 自分が入れる組織。組織ごとに名前、レベル、経験値が別になる
     organizations: [
-      { slug: "aoba", name: "あおば開発", wss: 2, level: 7, admin: true, lastSeen: "10/20" },
-      { slug: "hibari", name: "ひばり工房", wss: 1, level: 3, lastSeen: "10/14" },
+      { slug: "aoba", name: "あおば開発", level: 7, admin: true },
+      { slug: "hibari", name: "ひばり工房", level: 3 },
     ],
+    // 入れる組織のうち、停止している組織（組織の選択に、押せない行で出す。入れる組織の一覧には並べない）
+    suspendedOrganizations: [{ slug: "nagi", name: "なぎ設計" }],
 
     users: {
       u1: { name: "ミナト", hue: 172, level: 7, role: "leader" },
@@ -218,8 +220,11 @@ Object.assign(window.SQ_DATA, {
     { who: "u5", role: "member", joined: "2025-04-01", left: "2026-08-31", alloc: null },
   ],
   invitations: [
-    { login: "kotone-dev", via: "github", role: "member", by: "u1", at: "10/18" },
-    { login: "mio.hoshino@example.com", via: "google", role: "member", by: "u1", at: "10/20", expires: "11/03" },
+    // at と expires は招待した日と期限の日（本番はワークスペースのタイムゾーンの YYYY-MM-DD）。期限の無い GitHub の招待に expires は無い。
+    // expired は期限を過ぎた招待（「期限切れ」の印を出す）
+    { login: "kotone-dev", via: "github", role: "member", by: "u1", at: "2026-10-18" },
+    { login: "mio.hoshino@example.com", via: "google", role: "member", by: "u1", at: "2026-10-20", expires: "2026-11-03" },
+    { login: "ryo.sakamoto@example.com", via: "google", role: "member", by: "u2", at: "2026-10-01", expires: "2026-10-15", expired: true },
   ],
 
   detailFields: ["受け入れ基準", "確かめ方"],

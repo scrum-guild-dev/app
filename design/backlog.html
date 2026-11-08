@@ -71,17 +71,16 @@ SQ.mount("backlog", () => {
   const open = SQ.tasksWhere((x) => x.ws === "wa" && !x.doneAt);
   const rootTasks = SQ.tasksWhere((x) => x.ws === "wa" && !x.story && !x.doneAt);
   const rootDone = SQ.tasksWhere((x) => x.ws === "wa" && !x.story && x.doneAt).length;
-  const actions = `<button class="btn" type="button" data-dialog="createEpic">${icon("plus")}${t("epic")}を作る</button>
-    <button class="btn" type="button" data-dialog="createStory">${icon("plus")}${t("story")}を作る</button>
-    <button class="btn is-primary" type="button" data-dialog="createTask">${icon("plus")}${t("create")}</button>`;
-  // 何もないときは、絞り込みの帯も出さずに最初の一歩だけを示す
+  // 見出しの右にボタンは置かない。エピック、ストーリー、タスクは木の末尾の空の行で作る
+  // 何もないときは、絞り込みの帯も出さずに最初の一歩だけを示し、その下に木の末尾の空の行を出す
   if (!SQ.tasksWhere((x) => x.ws === "wa").length && !Object.keys(D.epics).length && !Object.keys(D.stories).length) {
     return `
-      ${pageHead(D.workspaces.wa.name, t("backlog"), [], actions)}
+      ${pageHead(D.workspaces.wa.name, t("backlog"), [])}
       ${SQ.emptyState("board", `まだ${t("task")}がありません`,
-        `${t("task")}を優先する順に並べる場所です。上の「${t("create")}」から最初の${t("task")}を作ります。` +
-        (D.connections.length ? "" : `取り込み元を使うなら、${t("connection")}を登録すると${t("inbox")}に届き、そこからここへ入れられます。`),
-        D.connections.length ? "" : `<a class="btn is-sm" href="${SQ.firstHref("connections.html")}">${t("connection")}を登録する</a>`, undefined, "notice")}`;
+        `${t("task")}を優先する順に並べる場所です。下の空の行に題を入れて、最初の${t("task")}を作ります。`, "", undefined, "notice")}
+      <section class="section" aria-label="${t("backlog")}の${t("task")}"><div class="tree">
+        ${SQ.draftRow("new-epic", "root", `${t("epic")}を足す`)}${SQ.draftRow("new-story", "root", `${t("story")}を足す`)}${SQ.draftRow("root", "backlog", `${t("task")}を足す`)}
+      </div></section>`;
   }
   return `
     ${pageHead(D.workspaces.wa.name, t("backlog"), [
@@ -89,7 +88,7 @@ SQ.mount("backlog", () => {
       ["is-warn", "pen", `${t("detail")} 未記入`, open.filter((x) => x.unfilled).length],
       ["is-warn", "", "未見積もり", open.filter((x) => x.pts == null).length],
       ["", "", `${t("sprint")}に入っていない`, open.filter((x) => !x.sprint).length],
-    ], actions, SQ.teamXp())}
+    ], "", SQ.teamXp())}
     ${D.definitionOfDone.length ? `<details class="dod"><summary>${t("dod")}</summary><div class="doc-box"><ul>${D.definitionOfDone.map((d) => `<li>${SQ.esc(d)}</li>`).join("")}</ul></div></details>` : ""}
     <section class="section" aria-label="${t("backlog")}の${t("task")}">
     ${filterBar(open)}
