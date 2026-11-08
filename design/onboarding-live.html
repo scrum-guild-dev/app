@@ -21,6 +21,7 @@
         <p>表示はすべて架空です。保存・送信・API呼び出し・招待URLの発行・コピーは行いません。ボタンは操作できません。</p>
       </aside>
       <nav class="form-actions" aria-label="確認する状態">
+        <a class="btn is-quiet" href="#personal-only">個人用だけ作成済み</a>
         <a class="btn is-quiet" href="#saved">プロフィール保存済み</a>
         <a class="btn is-quiet" href="#failed">プロフィール保存エラー</a>
         <a class="btn is-quiet" href="#blocked">個人用の停止</a>
@@ -41,7 +42,7 @@ const { t, esc, icon } = SQ;
 const text = (key, params = {}) => esc(t(key).replace(/\{(\w+)\}/g, (match, name) => Object.hasOwn(params, name) ? String(params[name]) : match));
 const host = 'long-preview-host-for-onboarding-layout-check.example.invalid/';
 const button = key => `<button class="btn is-primary" type="button" aria-disabled="true">${text(key)}</button>`;
-const warning = (id, key) => `<div class="callout is-warn" id="${id}" role="alert" tabindex="-1">${icon('alert')}<span>${text(key)}</span></div>`;
+const warning = (id, key) => `<div class="callout is-warn" id="${id}" tabindex="-1">${icon('alert')}<span>${text(key)}</span></div>`;
 function progress(step, withTeam = false) {
   const titles = ['signupTitle', 'onboardingProfile', 'onboardingInviteChoice', ...(withTeam ? ['onboardingOrganization', 'onboardingInvite'] : [])];
   return `<ol class="onboarding-progress" aria-label="${text('onboardingProgress')}">${titles.map((key, index) => `<li ${index === step ? 'aria-current="step"' : ''}><span class="onboarding-dot" aria-hidden="true"></span><span class="visually-hidden">${text('onboardingStep', { current: index + 1, total: titles.length })} ${text(key, { organization: t('organization') })}</span></li>`).join('')}</ol>`;
@@ -49,16 +50,17 @@ function progress(step, withTeam = false) {
 function section(id, state, title, lead, body, step = 1, withTeam = false) {
   return `<section id="${id}" class="onboarding-stage" aria-labelledby="${id}-title"><div class="onboarding-content"><p class="field-hint">${esc(state)}</p><div class="onboarding-heading"><p class="onboarding-eyebrow">${text('onboardingStep', { current: step + 1, total: withTeam ? 5 : 3 })}</p><h2 id="${id}-title">${text(title)}</h2><p class="onboarding-lead">${text(lead)}</p></div>${body}<div class="onboarding-footer">${progress(step, withTeam)}</div></div></section>`;
 }
-function profile(id, saved) {
-  const description = saved ? '' : ` aria-describedby="${id}-error"`;
-  return `<div class="onboarding-fields"><div class="field"><label class="field-label" for="${id}-name">${text('onboardingName')}</label><input class="input" id="${id}-name" value="ユイ" autocomplete="name" maxlength="200"${saved ? ' readonly' : ''}${description}></div><div class="field"><label class="field-label" for="${id}-job">${text('onboardingJob')}</label><input class="input" id="${id}-job" value="エンジニア" autocomplete="organization-title" maxlength="200"${saved ? ' readonly' : ''}${description}></div><div class="field"><label class="field-label" for="${id}-slug">${text('onboardingPersonalUrl')}</label><div class="onboarding-url"><span aria-hidden="true">${esc(host)}</span><input class="input" id="${id}-slug" value="yui-solo" maxlength="40" spellcheck="false" autocomplete="off"${saved ? ' readonly' : ''} aria-describedby="${id}-hint${saved ? '' : ` ${id}-error`}"></div><p class="field-hint" id="${id}-hint">${text(saved ? 'onboardingProfileSaved' : 'onboardingPersonalUrlLiveHint')}</p></div><div class="onboarding-actions">${button('onboardingContinue')}</div></div>`;
+function profile(id, saved, personalOnly = false) {
+  const description = saved || personalOnly ? '' : ` aria-describedby="${id}-error"`;
+  return `<div class="onboarding-fields"><div class="field"><label class="field-label" for="${id}-name">${text('onboardingName')}</label><input class="input" id="${id}-name" value="ユイ" autocomplete="name" maxlength="200"${saved ? ' readonly' : ''}${description}></div><div class="field"><label class="field-label" for="${id}-job">${text('onboardingJob')}</label><input class="input" id="${id}-job" value="エンジニア" autocomplete="organization-title" maxlength="200"${saved ? ' readonly' : ''}${description}></div><div class="field"><label class="field-label" for="${id}-slug">${text('onboardingPersonalUrl')}</label><div class="onboarding-url"><span aria-hidden="true">${esc(host)}</span><input class="input" id="${id}-slug" value="yui-solo" maxlength="40" spellcheck="false" autocomplete="off"${saved || personalOnly ? ' readonly' : ''} aria-describedby="${id}-hint${saved || personalOnly ? '' : ` ${id}-error`}"></div><p class="field-hint" id="${id}-hint">${text(saved ? 'onboardingProfileSaved' : personalOnly ? 'onboardingPersonalUrlSaved' : 'onboardingPersonalUrlLiveHint')}</p></div><div class="onboarding-actions">${button('onboardingContinue')}</div></div>`;
 }
+const personalOnly = section('personal-only', '個人用URLは作成済みで、プロフィールはまだ保存していない状態。', 'onboardingProfile', 'onboardingProfileLead', profile('personal-only', false, true));
 const saved = section('saved', 'プロフィール保存済み。招待確認から戻った状態。', 'onboardingProfile', 'onboardingProfileLead', profile('saved', true));
 const failed = section('failed', 'プロフィール保存エラー。入力を残して再試行できる状態。', 'onboardingProfile', 'onboardingProfileLead', warning('failed-error', 'onboardingProfileFailed') + profile('failed', false));
 const blocked = `<section id="blocked" class="onboarding-stage" aria-labelledby="blocked-title"><div class="onboarding-content"><p class="field-hint">作成済みの個人用が停止し、入れない状態。リード文と進捗は出さない。</p><div class="onboarding-heading"><h2 id="blocked-title">${text('onboardingBlockedTitle')}</h2></div><div class="callout is-warn">${icon('alert')}<span>${text('onboardingPersonalUnavailable')}</span></div><a class="btn" href="organizations.html">${text('onboardingReturnOrganizations')}</a></div></section>`;
 const invitations = section('invitations', '招待の部分失敗。成功URLとコピー済みの表示を保つ状態。', 'onboardingInvite', 'onboardingInviteLiveLead', `${warning('invitations-error', 'onboardingInvitationsFailed')}<div class="onboarding-fields"><div class="field"><label class="field-label" for="invitation-emails">${text('onboardingGoogleEmails')}</label><textarea class="input" id="invitation-emails" rows="3" maxlength="6000" aria-describedby="invitation-hint invitations-error">yui@example.com, ren@example.com</textarea><p class="field-hint" id="invitation-hint">${text('onboardingInviteLiveNote')}</p></div><div class="onboarding-actions">${button('onboardingCreateInvites')}</div><div class="field" role="group" aria-label="yui@example.com"><label class="field-label" for="invitation-url">yui@example.com</label><input class="input" id="invitation-url" value="https://example.invalid/invite#sample-not-a-secret" readonly><button class="btn" type="button" aria-disabled="true" aria-label="${text('onboardingCopyLink')} yui@example.com">${text('onboardingCopyLink')}</button></div><div class="field" role="group" aria-label="ren@example.com"><p class="field-label">ren@example.com</p><p class="field-hint">${text('onboardingInvitationFailed')}</p></div><p class="field-hint">${text('onboardingInviteSecrets')}</p></div><p class="onboarding-notice wrap-anywhere" role="status">${text('onboardingCopied', { email: 'yui@example.com' })}</p><div class="onboarding-actions">${button('onboardingStartTeam')}</div>`, 4, true);
 document.getElementById('brand').innerHTML = `${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span>`;
-document.getElementById('states').innerHTML = saved + failed + blocked + invitations;
+document.getElementById('states').innerHTML = personalOnly + saved + failed + blocked + invitations;
 SQ.applyTheme();
 </script>
 </body>
