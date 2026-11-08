@@ -44,6 +44,12 @@
   import { trackStoryOrder, trackTaskOrder } from '../../../../lib/task-order.ts';
   import { completedMessage } from '../../../../lib/sprint-label.ts';
   import { focusRestored, focusSkipped, removeFromList } from '../../../../lib/task-removal.ts';
+  import {
+    clearReloadFailure,
+    markReloadFailed,
+    reloadFailureNote,
+    throwIfListFailed,
+  } from '../../../../lib/task-reload-failure.svelte.ts';
   import { showToast } from '../../../../lib/toast.svelte.ts';
   import { t } from '../../../../lib/vocabulary.svelte.ts';
   import { epicCreate, epicMove } from '../../../../shared/operations/epic/index.ts';
@@ -87,6 +93,10 @@
 
   const workspace = $derived(data.workspace);
   const tree = $derived(data.tree);
+  // 行の「⋯」から消した（戻した）後の読み直しの失敗の印（#979。task-reload-failure.svelte.ts）。木が読めたら下ろす
+  $effect(() => {
+    if (tree !== null) untrack(clearReloadFailure);
+  });
   // 木を読んだときの絞り込み（URL の問い合わせ）。絞っている間は並べ替え（上へ、下へ、Alt と ↑ ↓）を出さない
   const filter = $derived(data.filter);
   const filtering = $derived(isFiltering(filter));
@@ -510,7 +520,9 @@
     const reload = async (): Promise<void> => {
       await moves.whenIdle();
       await invalidate('app:backlog-tree');
+      await throwIfListFailed(() => page.data);
     };
+    const workspaceId = workspace.id;
     await removeFromList({
       slug: page.params.slug ?? '',
       workspaceId: workspace.id,
@@ -526,6 +538,7 @@
         await focusRestored(restoredId, focus);
       },
       onskipped: focusSkipped,
+      onreloadfailed: (failure) => markReloadFailed(failure, workspaceId),
     });
   }
 
@@ -1298,7 +1311,11 @@
       ><Icon name="x" />{t('filterClear')}</button
     >
   {/snippet}
-  <LoadFailed inShell extra={filtering ? clearOnFailure : undefined} />
+  <LoadFailed
+    inShell
+    extra={filtering ? clearOnFailure : undefined}
+    note={reloadFailureNote(workspace.id) ?? undefined}
+  />
 {:else if workspace && tree}
   <!-- チーム全体の経験値は、読めたときだけ見出しの中に出す（読めなくても画面は開く） -->
   {#snippet teamExperience()}

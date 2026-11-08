@@ -103,15 +103,85 @@ describe('removeFromList', () => {
     expect(mocks.focusPageHeading).toHaveBeenCalledTimes(1);
   });
 
-  test('読み直しが失敗しても reject せず、失敗を文で知らせ、キーボードでは数えを戻す', async () => {
+  test('読み直しが失敗しても reject せず、失敗を文で知らせ、キーボードでは通ったときと同じく「取り消す」へ移す', async () => {
     mocks.callOperation.mockResolvedValue({ ok: true, data: null });
     const reload = vi.fn(async () => {
       throw new Error('network');
     });
     await expect(removeFromList(args({ keyboard: true, reload }))).resolves.toBeUndefined();
     expect(toastMessages()).toContain('taskListReloadFailed');
+    expect(mocks.focusToastAction).toHaveBeenCalledWith(7);
+  });
+
+  test('読み直しが失敗して、待つ間に別の所へフォーカスを移した人からは奪わず、数えを戻す', async () => {
+    mocks.callOperation.mockResolvedValue({ ok: true, data: null });
+    mocks.focusIsFree.mockReturnValue(false);
+    const reload = vi.fn(async () => {
+      throw new Error('network');
+    });
+    await removeFromList(args({ keyboard: true, reload }));
     expect(mocks.resumeToast).toHaveBeenCalledWith(7);
     expect(mocks.focusToastAction).not.toHaveBeenCalled();
+  });
+
+  // #979: 印を置く画面は onreloadfailed を渡す。トーストは消えるので、画面に残す印に任せ、トーストは出さない
+  test('onreloadfailed を渡すと、読み直しの失敗はトーストでなく画面の印に任せる（消した後は deleted）', async () => {
+    mocks.callOperation.mockResolvedValue({ ok: true, data: null });
+    const reload = vi.fn(async () => {
+      throw new Error('network');
+    });
+    const onreloadfailed = vi.fn();
+    await expect(removeFromList(args({ keyboard: true, reload, onreloadfailed }))).resolves.toBeUndefined();
+    expect(onreloadfailed).toHaveBeenCalledExactlyOnceWith('deleted');
+    expect(toastMessages()).toEqual(['taskDeleted']);
+  });
+
+  test('onreloadfailed を渡すと、断られた後の読み直しの失敗は stale で渡す（403、404、409）', async () => {
+    for (const result of [failure(403, 'forbidden'), failure(404, 'not_found'), failure(409, 'conflict')]) {
+      vi.clearAllMocks();
+      mocks.callOperation.mockResolvedValue(result);
+      const onreloadfailed = vi.fn();
+      const reload = vi.fn(async () => {
+        throw new Error('network');
+      });
+      await removeFromList(args({ reload, onreloadfailed }));
+      expect(onreloadfailed).toHaveBeenCalledExactlyOnceWith('stale');
+      expect(toastMessages()).not.toContain('taskListReloadFailed');
+    }
+  });
+
+  test('読み直せたときは onreloadfailed を呼ばない', async () => {
+    mocks.callOperation.mockResolvedValue({ ok: true, data: null });
+    const onreloadfailed = vi.fn();
+    await removeFromList(args({ onreloadfailed }));
+    expect(onreloadfailed).not.toHaveBeenCalled();
+  });
+
+  test('取り消した後の読み直しの失敗は restored で渡す（トーストの「取り消す」から）', async () => {
+    mocks.callOperation.mockResolvedValueOnce({ ok: true, data: null });
+    const onreloadfailed = vi.fn();
+    const onrestored = vi.fn(async () => {
+      throw new Error('network');
+    });
+    await removeFromList(args({ onrestored, onreloadfailed }));
+    const action = (mocks.showToast.mock.calls[0] as unknown[])[2] as { run: (focused: boolean) => void };
+    mocks.callOperation.mockResolvedValueOnce({ ok: true, data: { cleared: [] } });
+    action.run(false);
+    await vi.waitFor(() => expect(onreloadfailed).toHaveBeenCalledExactlyOnceWith('restored'));
+    expect(toastMessages()).toEqual(['taskDeleted', 'taskRestored']);
+  });
+
+  test('取り消しが 404 で、その後の読み直し（onchanged）が失敗したら stale で渡し、トーストは出さない', async () => {
+    mocks.callOperation.mockResolvedValueOnce({ ok: true, data: null });
+    const onreloadfailed = vi.fn();
+    const reload = vi.fn(async () => {});
+    await removeFromList(args({ reload, onreloadfailed }));
+    const action = (mocks.showToast.mock.calls[0] as unknown[])[2] as { run: (focused: boolean) => void };
+    reload.mockRejectedValueOnce(new Error('network'));
+    mocks.callOperation.mockResolvedValueOnce(failure(404, 'not_found'));
+    action.run(false);
+    await vi.waitFor(() => expect(onreloadfailed).toHaveBeenCalledExactlyOnceWith('stale'));
+    expect(toastMessages()).not.toContain('taskListReloadFailed');
   });
 
   test('引き出しが開いているタスクを消したら、引き出しを閉じる', async () => {
