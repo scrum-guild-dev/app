@@ -371,6 +371,46 @@ test('幅 390px で、改めた案内の改定日は途中で折れず 1 行で�
   }
 });
 
+test('幅 320px で文字を 200% にして改定日が行より長くなっても、改めた案内の外へはみ出さない', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signIn(context, baseURL, 'unconsented');
+  await page.setViewportSize({ width: 320, height: 844 });
+  await routeOperation(page, consentStatus, (call) =>
+    call.fulfill({
+      ...UNCONSENTED,
+      latest: { terms_version: '2026-10-01', privacy_version: '2026-10-01', consented_at: OLD_CONSENT.consentedAt },
+    }),
+  );
+  await page.goto('/consent');
+  const dates = page.locator('.callout.is-info .mono');
+  await expect(dates).toHaveCount(2);
+  // 文字の大きさは rem なので、ルートの文字を大きくしてブラウザの文字の拡大を再現する
+  await page.evaluate(async () => {
+    document.documentElement.style.fontSize = '200%';
+    await document.fonts.ready;
+  });
+  const text = page.locator('.callout.is-info > span');
+  const box = await text.boundingBox();
+  for (const date of await dates.all()) {
+    const measured = await date.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const rects = [...range.getClientRects()];
+      return {
+        lines: new Set(rects.map((rect) => Math.round(rect.top))).size,
+        right: Math.max(...rects.map((rect) => rect.right)),
+      };
+    });
+    // 行より長いので中で折れ、文字の右端は案内の文の右端を越えない
+    expect(measured.lines).toBeGreaterThan(1);
+    expect(measured.right).toBeLessThanOrEqual((box?.x ?? 0) + (box?.width ?? 0) + 0.5);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});
+
 test('2つの文書のリンクは、行末の印で新しいタブで開くリンクと分かる', async ({ page, context, baseURL }) => {
   await signIn(context, baseURL, 'unconsented');
   await routeOperation(page, consentStatus, (call) => call.fulfill(UNCONSENTED));
