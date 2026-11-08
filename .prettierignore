@@ -15,6 +15,3 @@ worktrees/
 test-results/
 playwright-report/
 .e2e-preflight/
-
-# 外から入れたスキル。npx skills update が Codex 用のリンクを実体に置き換えることがある（docs/development.md の「外から入れたスキル」）
-.agents/skills/impeccable/
