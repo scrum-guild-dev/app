@@ -40,7 +40,7 @@ test('ページ全体は一覧を重ねず、アプリ内から来た画面へ�
   const region = page.getByRole('region', { name: 'ページだけで読む', exact: true });
   await expect(region).toBeVisible();
   // 引き出しからページ全体へ移った直後も、ページ全体の見出しにフォーカスがある（レイアウトが行へ戻すフォーカスで奪わない）
-  await expect(region.getByRole('heading', { level: 2 })).toBeFocused();
+  await expect(region.getByRole('heading', { level: 1 })).toBeFocused();
   await expect(page.locator('.entry')).toHaveCount(0);
   await expect(page.locator('.scrim')).toHaveCount(0);
   await expect(page.locator('.binding')).not.toHaveAttribute('inert', '');

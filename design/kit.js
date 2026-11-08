@@ -1182,11 +1182,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function saveStateHtml(name) {
     return `<span class="save-state" data-save-state="${name}" role="status"></span>`;
   }
+  // ページ全体は画面に h1 が無いので題を h1 にする（本番の TaskDrawer と同じ）。横と真ん中は h2
+  const drawerTitleTag = () => (renderedDrawerMode() === "page" ? "h1" : "h2");
   function drawerTitleHtml(x) {
-    if (drawerReadOnly()) return `<h2 class="drawer-title"><span id="drawer-title">${titleOf(x)}</span></h2>`;
+    if (drawerReadOnly()) return `<${drawerTitleTag()} class="drawer-title"><span id="drawer-title">${titleOf(x)}</span></${drawerTitleTag()}>`;
     // 取り込み元のタイトルは、ここでは変えられない（書けないことを添える）
-    if (x.src) return `<h2 class="drawer-title"><span id="drawer-title">${titleOf(x)}</span></h2><span class="props-note">取り込んだ${t("task")}のタイトルは、ここでは直せません</span>`;
-    return `<h2 class="visually-hidden"><span id="drawer-title">${titleOf(x)}</span></h2>
+    if (x.src) return `<${drawerTitleTag()} class="drawer-title"><span id="drawer-title">${titleOf(x)}</span></${drawerTitleTag()}><span class="props-note">取り込んだ${t("task")}のタイトルは、ここでは直せません</span>`;
+    return `<${drawerTitleTag()} class="visually-hidden"><span id="drawer-title">${titleOf(x)}</span></${drawerTitleTag()}>
       <div class="field"><div class="drawer-title"><label class="visually-hidden" for="drawer-edit-title">タイトル</label>
         <input class="input is-inline" id="drawer-edit-title" data-drawer-input="title" value="${esc(drawer.drafts.title ?? x.title)}" autocomplete="off"></div>
         <span class="field-error" role="alert" data-drawer-error="title"${drawer.errors.title ? "" : " hidden"}>${drawer.errors.title ? `${icon("alert")}${drawer.errors.title}` : ""}</span>${saveStateHtml("title")}</div>`;
@@ -1296,8 +1298,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${x.src ? `<span class="source-key">${esc(x.src.key)}</span><span class="chip">取り込み元: ${esc(x.src.status)}</span>` : ""}
         <span class="drawer-tools">
           ${drawerStepButtons()}${drawerModeButtons()}
-          <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
         </span>
+        <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
       </div>
       ${drawerReadOnly() ? `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の${t("task")}は、読み取りだけできます</span></div>` : ""}
       ${drawerTitleHtml(x)}
@@ -1412,8 +1414,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${storyMenuHtml(st)}
         <span class="drawer-tools">
           ${drawerStepButtons()}${drawerModeButtons()}
-          <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
         </span>
+        <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
       </div>
       ${ro ? `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の${t("story")}は、読み取りだけできます</span></div>` : ""}
       ${drawerTitleHtml(st)}
@@ -1431,8 +1433,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 引き出しの見本の状態。読み込み中と、読めなかったとき（もう一度試す）は、見出しと文だけ
   function drawerStateHtml() {
-    const top = `<div class="drawer-top">${isStoryDrawer() ? `<span class="chip">${icon("check")}${t("story")}</span>` : ""}<span class="drawer-tools">${drawerStepButtons()}${drawerModeButtons()}<button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></span></div>
-      <h2 class="drawer-title"><span id="drawer-title">${drawerNoun()}</span></h2>`;
+    const top = `<div class="drawer-top">${isStoryDrawer() ? `<span class="chip">${icon("check")}${t("story")}</span>` : ""}<span class="drawer-tools">${drawerStepButtons()}${drawerModeButtons()}</span><button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></div>
+      <${drawerTitleTag()} class="drawer-title"><span id="drawer-title">${drawerNoun()}</span></${drawerTitleTag()}>`;
     if (drawer.view === "loading") return `${top}<p class="field-hint">読み込んでいます</p>`;
     return `${top}<div class="callout is-danger" role="alert">${icon("alert")}<span>この${drawerNoun()}を読み込めませんでした。もう一度試してください。</span></div>
       <div class="form-actions"><button class="btn" type="button">もう一度試す</button></div>`;
