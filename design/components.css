@@ -1383,7 +1383,7 @@ dialog.dialog::backdrop { background: none; }
   /* 見た目は変えず、押せる範囲だけを 44px 四方以上に広げる部品。木の行のボタン（開閉の caret、＋タスク。題のリンクは下の a.tree-link）、操作の並びと
      囲みの中と絞り込みの帯の端の小さいボタン（高さを変えると、横に並ぶヒントの文字が上にずれるため）、バックログの行の押せる題
      （.entry-title）、完了の一覧の「さらに見る」と「もう一度試す」（.completed-status .btn.is-sm）、
-     上の帯の小さな切り替え（.pill。引き出しの閉じるも。.pill は元から position: relative） */
+     上の帯の小さな切り替え（.pill は元から position: relative。引き出しの閉じると前後と開き方は、下で見た目ごと 44px 四方にする） */
   .tree-caret, .tree-row .btn.is-sm, .form-actions .btn.is-sm, .callout-actions .btn.is-sm, .toolbar-end .btn.is-sm,
   .toolbar .btn.is-sm, .dropzone .btn.is-sm, .file-actions .btn.is-sm, .conn-actions .btn.is-sm,
   .completed-status .btn.is-sm, a.entry-title, button.entry-title { position: relative; }
@@ -1416,8 +1416,8 @@ dialog.dialog::backdrop { background: none; }
   }
   /* 引き出しのタブ（コメントと変更の履歴）は、広げた分が下のタブの中身（.thread）に覆われるので、見た目ごと 44px の高さにする */
   .drawer .tab { min-height: 44px; }
-  /* 開き方と前後のボタンは隣と押せる範囲が重ならないよう、見た目ごと 44px 四方にする */
-  .drawer-steps .pill, .drawer-mode .pill { min-width: 44px; min-height: 44px; justify-content: center; }
+  /* 開き方と前後のボタンと閉じるボタンは、隣と押せる範囲が重ならないよう、見た目ごと 44px 四方にする */
+  .drawer-steps .pill, .drawer-mode .pill, .drawer-close { min-width: 44px; min-height: 44px; justify-content: center; }
   /* 木の行の右端が折り返したとき、上の段の「＋タスク」の広げた分が、下の段の 44px のボタンに重ならないよう段の間を空ける */
   /* --space-3 では、上の段の「＋タスク」と下の段の「完了にする」の広げた範囲が重なる（e2e/layout-narrow-workspace.test.ts で確かめた） */
   .tree-end { row-gap: var(--space-5); }

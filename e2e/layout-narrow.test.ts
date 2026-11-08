@@ -5,7 +5,14 @@
 // 書き換えない（ほかのファイルと並べて走るため）
 import { workspaceList } from '../src/shared/operations/workspace/index.ts';
 import { expect, test } from './fixtures.ts';
-import { applyTheme, expectNarrowLayout, LAYOUT_THEMES, signIn } from './helpers.ts';
+import {
+  applyTheme,
+  expectNarrowLayout,
+  findTargetSizeViolations,
+  LAYOUT_THEMES,
+  NARROW_VIEWPORT,
+  signIn,
+} from './helpers.ts';
 import { rewriteOperation } from './operations.ts';
 
 // あおば開発の seed のワークスペース（受託開発チーム）
@@ -84,3 +91,25 @@ test('組織の管理（/aoba/admin）に空白の無い50字の名前のワー�
     }
   });
 });
+
+// 枠の外の画面（組織の選択、運用の画面）の紙の下のログアウト（.btn.is-sm.is-quiet）。見た目は小さいまま、
+// 操作の並び（.form-actions）の ::after で押せる範囲を 44px 四方に広げる（#994）。枠の外の画面は上の帯が無く、
+// expectNarrowLayout の待ちに合わないので、テーマごとに押せる範囲だけを測る
+for (const [who, path] of [
+  ['admin', '/'],
+  ['operator', '/operator'],
+] as const) {
+  test(`${path} のログアウトが、390px で 44px の範囲で押せる`, async ({ page, context, baseURL }) => {
+    await signIn(context, baseURL, who);
+    await page.setViewportSize(NARROW_VIEWPORT);
+    await page.goto(path);
+    const logout = page.getByRole('button', { name: 'ログアウト', exact: true });
+    await expect(logout).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    for (const theme of LAYOUT_THEMES) {
+      await applyTheme(page, theme);
+      const violations = await findTargetSizeViolations(page);
+      expect(violations, theme).toEqual([]);
+    }
+  });
+}
