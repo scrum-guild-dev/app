@@ -394,6 +394,17 @@ test('幅 320px で文字を 200% にして改定日が行より長くなって�
   });
   const text = page.locator('.callout.is-info > span');
   const box = await text.boundingBox();
+  // このテストが守るのは、行より長いときに nowrap のようにはみ出さないこと（行に収まるなら割らないことは、上の 390px のテストが見る）。
+  // その前提として、拡大した改定日を1行に並べた幅が、案内の文の幅を超えることを先に確かめる（環境で収まると、何も確かめずに通るため）
+  const oneLine = await dates.first().evaluate((element) => {
+    const probe = element.cloneNode(true) as HTMLElement;
+    probe.style.cssText = 'position: absolute; visibility: hidden; white-space: nowrap; display: inline';
+    element.parentElement!.append(probe);
+    const width = probe.getBoundingClientRect().width;
+    probe.remove();
+    return width;
+  });
+  expect(oneLine).toBeGreaterThan(await text.evaluate((element) => element.clientWidth));
   for (const date of await dates.all()) {
     const measured = await date.evaluate((element) => {
       const range = document.createRange();
