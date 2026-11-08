@@ -9,11 +9,16 @@ const fontsDir = new URL('../design/fonts/', import.meta.url);
 const css = readFileSync(new URL('guild-mono-jp.css', fontsDir), 'utf8');
 const faces = css.split('@font-face').slice(1);
 
+// unicode-range を [始まり, 終わり] の組にする。値の終わりは scripts/guild-mono-jp.py の parse_ranges と同じく
+// ; か } まで。読めない値（? の書き方、16 進でない字）は、範囲の判定をすり抜けないよう落とす
 function ranges(face: string): [number, number][] {
-  const value = /unicode-range:\s*([^;]+);/.exec(face)?.[1] ?? '';
+  const value = /unicode-range:\s*([^;}]+)/.exec(face)?.[1];
+  assert.ok(value, `unicode-range が無い面がある: ${face.slice(0, 80)}`);
   return value.split(',').map((part) => {
-    const [start, end = start] = part.trim().replace(/^U\+/i, '').split('-');
-    return [parseInt(start ?? '', 16), parseInt(end ?? '', 16)];
+    const match = /^U\+([0-9a-f]+)(?:-([0-9a-f]+))?$/i.exec(part.trim());
+    assert.ok(match, `読めない unicode-range: ${part.trim()}`);
+    const start = parseInt(match[1] ?? '', 16);
+    return [start, match[2] === undefined ? start : parseInt(match[2], 16)];
   });
 }
 
@@ -110,6 +115,14 @@ describe('Guild Mono JP の生成物', () => {
         assert.doesNotMatch(r.text, /plemol\s*jp/i, `${name} の name ID ${r.nameId} に予約名が残る`);
       }
     }
+  });
+
+  test('範囲の読み取りは、; の無い最後の宣言も読み、? の書き方は落とす', () => {
+    assert.deepEqual(ranges("{ src: url('a'); unicode-range: U+20-7e,U+3000 }"), [
+      [0x20, 0x7e],
+      [0x3000, 0x3000],
+    ]);
+    assert.throws(() => ranges('{ unicode-range: U+30??; }'), /読めない unicode-range/);
   });
 
   test('全角の空白（U+3000）はどの範囲にも入れない', () => {
