@@ -471,8 +471,8 @@ html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-col) {
 html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
   border-color: #37373d;
 }
-/* 中世風と現代風を覚えた人にも、読み込んだ後と同じ地と色で出す（値は design/tokens.css の各テーマの --color-bg、--color-sunken、
-   --color-line と --rule-double） */
+/* 中世風と現代風を覚えた人にも、読み込んだ後と同じ地と色で出す（値は design/tokens.css の各テーマの --color-bg、--color-surface、
+   --color-sunken、--color-line と --rule-double）。枠の外の紙（.boot-skeleton）も同じテーマの面と線にする */
 html[data-theme='medieval'] #boot-loading {
   background: #f3f4f1;
   color: #5b6672;
@@ -496,6 +496,13 @@ html[data-theme='medieval'] #boot-loading :is(.boot-corner, .boot-topbar, .boot-
 html[data-theme='medieval'] #boot-loading .boot-frame i {
   background: #c9cfd3;
 }
+html[data-theme='medieval'] #boot-loading .boot-skeleton {
+  background: #fbfbf8;
+  border-color: #c9cfd3;
+}
+html[data-theme='medieval'] #boot-loading .boot-skeleton i {
+  background: #c9cfd3;
+}
 html[data-theme='modern'] #boot-loading {
   background: #060a12;
   color: #8ea6c0;
@@ -507,6 +514,13 @@ html[data-theme='modern'] #boot-loading :is(.boot-binding, .boot-corner, .boot-t
   border-color: #1f3b5c;
 }
 html[data-theme='modern'] #boot-loading .boot-frame i {
+  background: #1f3b5c;
+}
+html[data-theme='modern'] #boot-loading .boot-skeleton {
+  background: #0b1322;
+  border-color: #1f3b5c;
+}
+html[data-theme='modern'] #boot-loading .boot-skeleton i {
   background: #1f3b5c;
 }
 @media (max-width: 760px) {
