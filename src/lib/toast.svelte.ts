@@ -17,15 +17,21 @@ export type ToastAction = {
 // 操作を押したときは呼ばず、run だけを呼ぶ。消えるのを待ってから送る操作（コメントの削除）のためにある
 export type Toast = { id: number; message: string; icon?: IconName; action?: ToastAction; onclose?: () => void };
 
-// 数秒で消える短い知らせ。kit.js の toast と同じ 4 秒。操作を付けたものは、押す間があるよう 10 秒で、
+// 数秒で消える短い知らせ。kit.js の toast と同じ 4 秒。失敗（アイコンが alert）は、理由を読み切れるよう 8 秒。操作を付けたものは、押す間があるよう 10 秒で、
 // ポインターが乗っている間とフォーカスがある間は数えるのを止め、外れてから数え直す（pauseToast、resumeToast）。
 // 操作は、同じことを画面のほかの場所でもできるものだけにする（消えても、できることを失わないため）。
 // 例外は、取り消せるのが出ている間だけの操作。消えるのを待ってから送る取り消し（コメントの削除。消えること自体が「送る」合図）と、
 // 送った後に戻す取り消し（タスクの削除。「取り消す」で task-restore を送る）
 const toastLifetimeMs = 4000;
+const failureToastLifetimeMs = 8000;
 const actionToastLifetimeMs = 10000;
 // 同時に出す数。あふれたら古いものから消す
 const maxToasts = 3;
+
+// 失敗の知らせか。アイコン alert を失敗の印とする（成功は check）。見た目（左の縦線）と長さを分ける
+export function isFailureToast(toast: Pick<Toast, 'icon'>): boolean {
+  return toast.icon === 'alert';
+}
 
 export const toasts: Toast[] = $state([]);
 
@@ -113,6 +119,8 @@ export function showToast(message: string, icon?: IconName, action?: ToastAction
   if (toasts.length > maxToasts) {
     for (const old of toasts.slice(0, toasts.length - maxToasts)) dismissToast(old.id);
   }
-  schedule(id, action === undefined ? toastLifetimeMs : actionToastLifetimeMs);
+  const lifetime =
+    action !== undefined ? actionToastLifetimeMs : isFailureToast({ icon }) ? failureToastLifetimeMs : toastLifetimeMs;
+  schedule(id, lifetime);
   return id;
 }

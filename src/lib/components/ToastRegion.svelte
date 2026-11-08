@@ -1,5 +1,15 @@
 <script lang="ts">
-  import { escapeToast, modalState, pauseToast, resumeToast, runToastAction, toasts } from '../toast.svelte.ts';
+  import { cubicOut } from 'svelte/easing';
+  import { prefersReducedMotion } from '../reduced-motion.ts';
+  import {
+    escapeToast,
+    isFailureToast,
+    modalState,
+    pauseToast,
+    resumeToast,
+    runToastAction,
+    toasts,
+  } from '../toast.svelte.ts';
   import Icon from './Icon.svelte';
 
   // kit.js の toast の置き場。showToast() で出す。画面の外側に1つ（+layout.svelte）と、各ダイアログの中に1つ（inDialog）置く。
@@ -10,36 +20,64 @@
   // ダイアログの中の領域には出さず、外側の領域だけに出す。ポインターかフォーカスがある間は、消すまでの時間を止める
   let { inDialog = false }: { inDialog?: boolean } = $props();
 
+  // 消えるときは、出るのと同じ辺（下）へ opacity で --duration-fast（120ms）抜ける。動きを減らす設定では抜けない（今と同じ）。
+  // CSS の animation: none は Web Animations の transition に効かないので、JS で見る
+  // 抜けている間（120ms）は、読み上げにも、新しく出した同じ文のトーストとの見分けにも数えない。
+  // class を toast-leaving に替え（見た目は同じ。design/components.css）、role と data-toast-id を外す
+  function toastOut(node: Element) {
+    node.classList.replace('toast', 'toast-leaving');
+    node.removeAttribute('role');
+    node.removeAttribute('data-toast-id');
+    const fast = parseFloat(getComputedStyle(node).getPropertyValue('--duration-fast'));
+    return {
+      duration: prefersReducedMotion() ? 0 : Number.isFinite(fast) ? fast : 120,
+      easing: cubicOut,
+      css: (t: number) => `opacity: ${t}; transform: translateY(${(1 - t) * 8}px)`,
+    };
+  }
+
   const shown = $derived(inDialog ? toasts.filter((toast) => toast.action === undefined) : toasts);
 </script>
 
 <div class="toasts" aria-live="polite" hidden={!inDialog && modalState.openCount > 0}>
   {#each shown as toast (toast.id)}
-    {#if toast.action}
-      {@const action = toast.action}
-      <!-- Esc は中のボタンから届くキー。トースト自身はフォーカスを受けない -->
-      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-      <div
-        class="toast"
-        role="status"
-        data-toast-id={toast.id}
-        onkeydown={(event) => {
-          if (event.key === 'Escape' && escapeToast(toast.id)) event.stopPropagation();
-        }}
-        onmouseenter={() => pauseToast(toast.id)}
-        onmouseleave={(event) => {
-          // フォーカスがトーストの中にある間は、ポインターが外れても数え直さない（キーボードの人が取り逃さない）
-          if (!event.currentTarget.contains(document.activeElement)) resumeToast(toast.id);
-        }}
-        onfocusin={() => pauseToast(toast.id)}
-        onfocusout={(event) => {
-          // トーストの中でフォーカスが移るだけなら止めたまま。ポインターが乗ったままなら、その下では数えない
-          // （ポインターが外れたとき mouseleave が数え直す）。どちらでもなければ数え直す
-          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-          if (!event.currentTarget.matches(':hover')) resumeToast(toast.id);
-        }}
+    {@const action = toast.action}
+    <!-- 退場の out: は each の項目の直下の要素に付ける（{#if} の中に置くと、項目が外れても再生されない）。
+         global にはしない（ダイアログの中の領域を持つ Dialog が閉じるとき、中のトーストの退場を待って、閉じるのが遅れる）。
+         Esc は中のボタンから届くキー。トースト自身はフォーカスを受けない -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="toast"
+      class:is-failure={isFailureToast(toast)}
+      role="status"
+      out:toastOut
+      data-toast-id={action ? toast.id : undefined}
+      onkeydown={action
+        ? (event) => {
+            if (event.key === 'Escape' && escapeToast(toast.id)) event.stopPropagation();
+          }
+        : undefined}
+      onmouseenter={action ? () => pauseToast(toast.id) : undefined}
+      onmouseleave={action
+        ? (event) => {
+            // フォーカスがトーストの中にある間は、ポインターが外れても数え直さない（キーボードの人が取り逃さない）
+            if (!event.currentTarget.contains(document.activeElement)) resumeToast(toast.id);
+          }
+        : undefined}
+      onfocusin={action ? () => pauseToast(toast.id) : undefined}
+      onfocusout={action
+        ? (event) => {
+            // トーストの中でフォーカスが移るだけなら止めたまま。ポインターが乗ったままなら、その下では数えない
+            // （ポインターが外れたとき mouseleave が数え直す）。どちらでもなければ数え直す
+            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+            if (!event.currentTarget.matches(':hover')) resumeToast(toast.id);
+          }
+        : undefined}
+    >
+      {#if toast.icon}<Icon name={toast.icon} />{/if}<span id={action ? `toast-message-${toast.id}` : undefined}
+        >{toast.message}</span
       >
-        {#if toast.icon}<Icon name={toast.icon} />{/if}<span id="toast-message-{toast.id}">{toast.message}</span>
+      {#if action}
         <!-- 名前が「取り消す: 題」だけでも、フォーカスが着いたときに、消した知らせの本文まで読まれるよう説明に結ぶ -->
         <button
           class="toast-action"
@@ -51,11 +89,7 @@
             runToastAction(toast.id, event.detail === 0 && event.currentTarget === document.activeElement)}
           >{action.label}</button
         >
-      </div>
-    {:else}
-      <div class="toast" role="status">
-        {#if toast.icon}<Icon name={toast.icon} />{/if}<span>{toast.message}</span>
-      </div>
-    {/if}
+      {/if}
+    </div>
   {/each}
 </div>
