@@ -36,9 +36,15 @@ async function renameStory(page: Page, from: string, to: string): Promise<void> 
   const saved = waitForResponses(page, '/story-update');
   await input.press('Enter');
   await saved;
-  await expect(page.getByRole('dialog', { name: to, exact: true })).toBeVisible();
+  const renamed = page.getByRole('dialog', { name: to, exact: true });
+  await expect(renamed).toBeVisible();
+  // 閉じる URL 移動の読み直しまで待つ。以前の題の locator は改名した時点で hidden になる。
+  const closed = waitForResponses(page, '/backlog-tree');
   await page.keyboard.press('Escape');
-  await expect(drawer).toBeHidden();
+  await expect(renamed).toBeHidden();
+  await page.waitForURL((url) => !url.searchParams.has('story'));
+  await (await closed).finished();
+  await expect(page.locator('.tree')).toHaveAttribute('aria-busy', 'false');
 }
 
 // 木の空の行でストーリーを作り、題を直して木を読み直す（読み直しが返るまで待つ）。
@@ -46,10 +52,7 @@ async function renameStory(page: Page, from: string, to: string): Promise<void> 
 // それが遅れて届いた読み直しで消えうる
 async function addStory(page: Page, title: string): Promise<void> {
   await addStoryRow(page, `${title}（下書き）`);
-  // 題を保存した後の読み直しと、引き出しを閉じたときの読み直し（URL から story を外す移動）の2回
-  const reloaded = waitForResponses(page, '/backlog-tree', 2);
   await renameStory(page, `${title}（下書き）`, title);
-  await reloaded;
   await waitForSettled(page);
 }
 
