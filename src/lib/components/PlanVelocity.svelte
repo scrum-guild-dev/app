@@ -62,9 +62,9 @@
         <div class="bars-labels">
           {#each velocity.sprints as item (item.id)}
             <span
-              >{sprintShortName(item, t)}{#if !item.counted}<br />{t('velocityExcludedLabel', {
-                  days: item.extended_days,
-                })}{/if}</span
+              >{sprintShortName(item, t)}{#if !item.counted}<small
+                  >{t('velocityExcludedLabel', { days: item.extended_days })}</small
+                >{/if}</span
             >
           {/each}
         </div>

@@ -876,6 +876,9 @@ a.brand { color: inherit; text-decoration: none; }
 .callout > span { color: var(--color-fg); flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
 /* 囲みの中の操作（ボタンと、その状態の文）。右に寄せ、狭い幅では本文の下へ折り返す */
 .callout-actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-left: auto; }
+/* レーンの中の囲みは幅が狭い（3 列で約 280px）。操作は本文の下の 1 行に置き、本文を広く取る */
+.lane .callout { padding: var(--space-3); }
+.lane .callout-actions { flex-basis: 100%; margin-left: 0; }
 /* 囲みの中のリンクは、本文と同じ色に下線を引く（既定のリンクの青は、ダークと現代風の地で読めない） */
 .callout a { color: inherit; text-decoration: underline; text-underline-offset: 0.2em; }
 .callout a.btn { text-decoration: none; }
@@ -1052,17 +1055,19 @@ label.pick-row:hover { background: var(--color-accent-soft); }
 .stat-num { font-family: var(--font-stat); font-weight: 700; font-size: var(--text-stat); line-height: 1; font-variant-numeric: tabular-nums; }
 .stat-num small { font-size: var(--text-sm); color: var(--color-muted); margin-left: 4px; }
 .bars { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-3); align-items: end; height: 110px; border-bottom: 1px solid var(--color-line); }
-.bars-avg { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--color-accent); }
+.bars-avg { position: absolute; z-index: 2; left: 0; right: 0; border-top: 1.5px dashed var(--color-accent); }
 /* 平均の文字は棒の上の数字に重ならないよう、グラフの外の凡例の行に置く（点線の見本と文字） */
 .bars-legend { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--color-accent); font-family: var(--font-mono); }
 .bars-legend i { width: 20px; border-top: 1.5px dashed var(--color-accent); }
 .bar-col { display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; height: 100%; text-align: center; }
-.bar-col b { font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 500; overflow-wrap: anywhere; }
+/* 平均の線は棒の上の数字に重なりうるので、数字を線の上の層に置き、数字の地で線を切る（棒の上には線が残る） */
+.bar-col b { position: relative; z-index: 3; align-self: center; padding-inline: 3px; background: var(--color-surface); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 500; overflow-wrap: anywhere; }
 .bar-col i { display: block; background: var(--color-accent); opacity: 0.8; width: min(100%, 48px); align-self: center; }
 .bar-col.is-excluded i { background: repeating-linear-gradient(135deg, var(--color-faint) 0 3px, transparent 3px 6px); border: 1px solid var(--color-faint); opacity: 1; }
 .bar-col.is-excluded b { color: var(--color-muted); }
 .bars-labels { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-3); font-size: var(--text-xs); color: var(--color-muted); text-align: center; }
-.bars-labels span { overflow-wrap: anywhere; min-width: 0; }
+.bars-labels span { overflow-wrap: break-word; word-break: auto-phrase; text-wrap: balance; min-width: 0; }
+.bars-labels small { display: block; font-size: inherit; }
 /* 名前の列のリンク（エピックの題など）は、長い題を列の幅で折り返す */
 .table .is-name a { overflow-wrap: anywhere; }
 

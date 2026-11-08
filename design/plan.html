@@ -34,13 +34,13 @@ function velocity() {
         <span class="bars-avg" style="bottom:${(avg / max) * 90}px"></span>
         ${ids.map((id) => { const s = D.sprints[id]; return `<div class="bar-col ${s.extended ? "is-excluded" : ""}"><b>${s.donePts}</b><i style="height:${(s.donePts / max) * 90}px"></i></div>`; }).join("")}
       </div>
-      <div class="bars-labels">${ids.map((id) => { const s = D.sprints[id]; return `<span>${s.name}${s.extended ? `<br>延長 ${s.extended} 日・除外` : ""}</span>`; }).join("")}</div>
+      <div class="bars-labels">${ids.map((id) => { const s = D.sprints[id]; return `<span>${s.name}${s.extended ? `<small>延長 ${s.extended} 日・除外</small>` : ""}</span>`; }).join("")}</div>
       <p class="bars-legend"><i aria-hidden="true"></i>平均 ${avg.toFixed(1)}</p>
     </div>
   </div>` };
 }
 
-function lane(id, avg) {
+function lane(id, avg, overdue) {
   const s = D.sprints[id];
   const list = SQ.tasksWhere((x) => x.sprint === id);
   const total = sumPts(list);
@@ -50,6 +50,7 @@ function lane(id, avg) {
   return `<section class="lane ${s.status === "active" ? "is-active" : ""}">
     <div class="lane-head"><h2 class="lane-title">${SQ.sprintLabel(id)}</h2>${s.status === "active" ? `<span class="chip is-ok">進行中</span>` : ""}</div>
     <div class="lane-sub"><span class="mono">${md(s.start)}〜${md(s.end)}</span>${s.extended ? `<span>延長 ${s.extended} 日</span>` : ""}${none ? `<span>未見積もり ${none} 件</span>` : ""}${unfilled ? `<span>${t("detail")} 未記入 ${unfilled} 件</span>` : ""}</div>
+    ${overdue ? `<div class="callout is-warn">${icon("alert")}<span>${SQ.sprintLabel(id)}は最終日（${md(s.end)}）を過ぎています。終わらなかった${t("task")}の行き先を決めて、終えてください。</span><div class="callout-actions"><button class="btn is-sm" type="button" aria-label="${t("sprint")}を終える: ${esc(SQ.sprintLabel(id))}">終える</button></div></div>` : ""}
     ${s.status === "active" && s.goal ? `<p class="lane-goal"><span class="lane-goal-label">${t("sprintGoal")}</span>${esc(s.goal)}</p>` : ""}
     <!-- 棒の「超過」は、入れたポイントがベロシティを厳密に上回るとき（同じ値は超過にしない）。下の積載量の節の許容幅（±12.5%）はメンバーごとの作業量の基準で、
          この棒の判定とは別。両者の関係は積載量の Issue（#66）で決める。印の文は長くなりうるので、列の幅で折り返す（下の長い文の例） -->
@@ -90,7 +91,7 @@ SQ.mount("plan", () => {
       ["is-warn", "", "未見積もり", unestimated],
     ], actions)}
     <section class="panel">${v.html}</section>
-    <div class="lanes">${lane("sp14", v.avg)}${lane("sp15", v.avg)}${lane("sp16", v.avg)}</div>
+    <div class="lanes">${lane("sp14", v.avg, true)}${lane("sp15", v.avg)}${lane("sp16", v.avg)}</div>
     <!-- 長い文の例: 狭い列でも、超過の印は折り返して列の中に収まる -->
     <div class="lane" style="max-width:14em"><div class="lane-fill"><div class="lane-fill-text"><span>入れた 30 pt</span><span class="chip is-danger">${icon("alert")}${t("over")}（ベロシティより 12.5 pt 多い）</span><span>ベロシティ 17.5</span></div></div></div>
     <section class="section" aria-labelledby="cap">
