@@ -351,8 +351,9 @@ vite の転送先も同じ値から作るので、画面は自分のワークツ
 
 この節は、人の端末とクラウドのセッションの e2e の仕組みを説明する。ローカルのセッションは e2e を走らせず、PR の CI に任せる（「開発の流れ」と「CI の e2e が落ちたとき」）。
 
-`pnpm e2e` は、実行のたびに `pnpm preview` と同じ中身（`pnpm build && node scripts/dev.ts --preview`）で build し直してサーバーを立て、終わると止める（`playwright.config.ts`、`scripts/e2e-server.ts`）。通った結果も落ちた結果も、今のコードで build したサーバーのものにするため（#132）。
+`pnpm e2e` は、実行のたびに `pnpm preview` に `--test-credentials` を足した中身（`pnpm build && node scripts/dev.ts --preview --test-credentials`）で build し直してサーバーを立て、終わると止める（`playwright.config.ts`、`scripts/e2e-server.ts`）。通った結果も落ちた結果も、今のコードで build したサーバーのものにするため（#132）。
 
+- `--test-credentials` は e2e 専用の固定の架空鍵を Worker へ渡すフラグ。手元のシークレットが無くても health が成功するようにする。通常の `pnpm dev` と `pnpm preview` はこの鍵を渡さず、開発者が設定した鍵を使う。使い捨ての計測サーバーも `scripts/test-credential-keys.ts` の同じ架空鍵を明示して渡す。これらの鍵を本番に使わない
 - 手元では、その実行だけの版（`e2e-<時刻>`。`APP_VERSION` を渡したときは `<渡した版>-e2e-<時刻>`）で build する。サーバーが立った後、`e2e/global-setup.ts` が `/api/health` の版と比べ、違えば seed を入れずに止まる。止まったときの文言は、前の e2e か `pnpm preview` のサーバーが API のポートで答えていることと、探し方（`lsof -i :<ポート>`）を出す。`/api/health` が10秒答えないときも、同じ案内で止まる。2xx 以外を返したときはステータスと立てたサーバーの出力を見る案内で、版の無い応答（JSON でないものを含む）はこのリポジトリでないサーバーを疑う案内で止まる（`scripts/e2e-server.ts` の `e2eGlobalSetup`）。CI は渡した SHA をそのまま使う（ランナーが毎回新しく、前のサーバーが無い）
 - 起動の前に API のポートの `/api/health` に答えるサーバーがあれば、Playwright が `... is already used` で止まる。`pnpm dev` も `pnpm preview` も同じポートの `wrangler dev` を使うので、立てたまま e2e を走らせるときは止めるか、`DEV_PORT_OFFSET` か `.dev-port-offset` でずらす（ワークツリーは名前から導いたオフセットで、本体の作業コピーとは重ならない）
 - ほかのワークツリーの e2e と並べて走らせるときは、並べたそれぞれの `--workers` の合計を、CPU のコアの数の半分（Playwright の既定のワーカーの数）までに割る。例: 8 コアで 2 本並べるならそれぞれ `--workers=2`、4 コアで 2 本ならそれぞれ `--workers=1`。既定のまま並べると、ワーカーだけでコアを使い切り、その上でそれぞれの `workerd` と build も動く。#325 の確かめでは、ワーカーを絞らずに並べた 110 件のうち 44 件が待ちの時間切れで落ち、`--workers=1` では全件通った（#364）。目安を超えたときの備えに、手元では `expect` の既定の待ちを延ばしてある（下の「e2e の書き方」）
