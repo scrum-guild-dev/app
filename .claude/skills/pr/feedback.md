@@ -32,6 +32,35 @@ GraphQL でしかできない操作（人へのリプライを PENDING review �
 
 PR 番号。省略時は現在のブランチの PR。
 
+## 監視する
+
+PR を作ったら、マージされるか閉じるまで監視し、知らせが来るたびに手順 1 から進める（`docs/development.md` の「PR の監視」。理由: 指摘、`main` とのコンフリクト、CI の失敗に、人が知らせる前に気付くため）。再開した PR でも、監視が無ければ始める。
+
+- クラウドのセッション: 作成の直後に `subscribe_pr_activity` で購読する。知らせ（コメント、レビュー、CI、コンフリクト、閉じたこと）で再開するので、`sleep` で取り直さずに手番を終える。購読の道具が無ければ、終わったら知らせてほしいと書いて止まる
+- 手元のセッション: 下のループを `run_in_background` で、サンドボックスの外（`dangerouslyDisableSandbox: true`）で走らせる（`gh` を複合のコマンドの中で回すと、サンドボックスの中では通信が落ちるため）。始める前に、同じ PR の待ちが既にあれば `TaskStop` で止める
+
+```bash
+pr=<number>; first=""; fails=0
+while :; do
+  if s=$(gh api "repos/{owner}/{repo}/pulls/$pr" --jq '"\(.state) \(.head.sha) \(.mergeable == false) \(.comments) \(.review_comments)"') &&
+     n=$(gh api "repos/{owner}/{repo}/pulls/$pr/reviews?per_page=100" --jq length) &&
+     set -- $s &&
+     ci=$(gh api "repos/{owner}/{repo}/commits/$2/check-runs?per_page=100" --jq '.check_runs | "\(map(select(.name != "review" and .status == "completed" and (.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled"))) | length) \(map(select(.name == "ci-ok" and .status == "completed")) | length)"'); then
+    fails=0; now="$s $n $ci"
+    if [ "$1" = closed ] || [ "$3" = true ] || [ "${ci%% *}" != 0 ] || { [ -n "$first" ] && [ "$now" != "$first" ]; }; then echo "state head conflict comments review_comments reviews ci_failed ci_ok_done"; echo "$now"; break; fi
+    [ -z "$first" ] && first=$now
+  else
+    fails=$((fails+1)); if [ "$fails" -ge 10 ]; then echo "gh が10回続けて失敗した"; exit 1; fi
+  fi
+  sleep 60
+done
+```
+
+- 抜けるのは、閉じた（マージせずに閉じたときも `closed`）、コンフリクトした、`review` 以外の CI が落ちた、新しいコメントかレビューが付いた、head が変わった、`ci-ok` が終わった、のどれか。抜けたら手順 1 から進め、対応が済んだら、閉じていなければループを回し直す
+- コンフリクトしたら、ほかの対応より先に `sync-base` で取り込む（コンフリクトの間は CI が走らないため）。取り込みもほかの直しとまとめて1回で push する
+- `gh` が10回続けて失敗したら（認証の失効、404 など）、理由を伝え、終わったら知らせてほしいと頼んで止まる
+- 監視を止めるのは、PR が閉じた、人が止めるよう言った、手順 5 の `main` の問題か止まる条件に当たった、のどれか。クラウドでは `unsubscribe_pr_activity` で購読を解く
+
 ## 手順
 
 ### 1. 状態を取る
@@ -335,6 +364,14 @@ gh api -X POST "repos/{owner}/{repo}/actions/runs/<run_id>/rerun-failed-jobs"
 
 `<run_id>` は、落ちたチェックの `html_url` の `/actions/runs/<run_id>/` から取る。走らせ直しても落ちたら、止まる条件のとおり原因を報告して判断を仰ぐ。走らせ直したことと落ちたテストの名前は、手順 6 の報告に書く。
 
+CI は、`ci-ok` が成功するまで直して push することを繰り返す。原因が `main` にあると見たら、直す前に `main` の最新の CI を確かめる。
+
+```bash
+gh api --method GET "repos/{owner}/{repo}/actions/workflows/ci.yml/runs" -f branch=main -f event=push -f per_page=3 --jq '.workflow_runs[] | {head_sha, status, conclusion, url: .html_url}'
+```
+
+PR が変えていない箇所で落ち、`main` の最新の実行でも同じジョブが同じ理由で落ちていれば、PR では直さない（理由: `main` の直しは別の Issue と PR で行う。PR に混ぜると差分が増え、ほかの PR も同じ直しを重ねる）。落ちたジョブ、理由、`main` の実行のリンクを PR コメントと返答に書き、監視を止める。`main` が直ったら知らせてほしいと書く。
+
 ### 6. 報告を書く
 
 CI と AI レビューへの対応後は、`docs/development.md` の「CI・AI レビュー対応後のレポート」の6行形式で返答する。PR ごとの Artifact や HTML は作らず、PR 本文や完了条件を繰り返さない。
@@ -379,27 +416,17 @@ CI の再実行や AI レビューを省いた理由は該当する行に添え�
 - セッションがマージできる（手元の対話のセッションで、手順 10 の確かめを満たす）: 聞かずに手順 10 に進む
 - できない（クラウドのセッション、非対話の実行、または確かめを満たさない）: 聞かずに、人がマージするものとして下に進む。満たさない理由（`needs-human`、`ci-ok` の失敗など）があれば返答に書く
 
-人がマージするとき、手元のセッションは止まらず、PR が閉じるのを待つ（理由: 人がマージの後に戻って知らせ、片付けと追従を頼む手間を無くす）。クラウドのセッションは、手番を終えると裏の実行の知らせで再開できないので、待たずに、マージしたら知らせてほしいと伝えて止まる。
+人がマージするとき、セッションは止まらず、上の「監視する」を続けて PR が閉じるのを待つ（理由: 人がマージの後に戻って知らせ、片付けと追従を頼む手間を無くす。待つ間の指摘、コンフリクト、CI の失敗にも気付く）。
 
-手元では次のループを `run_in_background` で、サンドボックスの外（`dangerouslyDisableSandbox: true`）で走らせる。`gh` を複合のコマンドの中で回すと、サンドボックスの中では通信が落ちるため。
-
-```bash
-fails=0; while :; do s=$(gh api "repos/{owner}/{repo}/pulls/<number>" --jq .state 2>&1); if [ "$s" = closed ]; then gh api "repos/{owner}/{repo}/pulls/<number>" --jq '{merged, state}'; break; elif [ "$s" = open ]; then fails=0; else fails=$((fails+1)); if [ "$fails" -ge 10 ]; then echo "gh が10回続けて失敗した: $s"; exit 1; fi; fi; sleep 60; done
-```
-
-- マージせずに閉じたときも `state` は `closed` になるので、ループは終わる
-- `gh` が10回続けて失敗したら（認証の失効、404 など）、理由を出して終わる。知らせが来たら理由を伝え、マージしたら知らせてほしいと頼んで止まる
-- 待ちを始める前に、同じ PR の待ちが既にあれば `TaskStop` で止める（二重に後片付けしないため）
-- 待つ間に、人が「マージした」と知らせたら待ちを止めて手順 10 に進む。人がマージしないと言ったとき、新しい指摘で手順 1 に戻るときも待ちを止める
-
-知らせが来たら手順 10 の後片付けに進む。
+- 閉じたら `gh api "repos/{owner}/{repo}/pulls/<number>" --jq '{merged, state}'` で確かめ、手順 10 の後片付けに進む
+- 待つ間に、人が「マージした」と知らせたら待ちを止めて手順 10 に進む。人がマージしないと言ったときも待ちを止める。新しい指摘やコンフリクト、CI の失敗で抜けたら手順 1 に戻る
 
 #### 待つ間に手番を終えるとき
 
 手順 1、5、7 で待つ間に手番を終えるときは、何を待っているかを書く（理由: 書かないと、人は止まったと思って「続けて」を打ちに来る）。
 
 - 手元のセッション: 知らせで再開するので入力は要らないと書く。手順 7 では、マージせずに残すなら知らせてほしいことも書く
-- クラウドのセッション: 手番を終えるとセッションが終わり、知らせでは再開しない。終わったら知らせてほしいと書く
+- クラウドのセッション: `subscribe_pr_activity` の知らせで再開するので入力は要らないと書く。購読できなかったときだけ、終わったら知らせてほしいと書く
 
 ### 8. 人のレビューが付いたら繰り返す
 
@@ -441,7 +468,8 @@ fails=0; while :; do s=$(gh api "repos/{owner}/{repo}/pulls/<number>" --jq .stat
 - 報告を書き、人の判断が要ることに `AskUserQuestion` で答えが出ている。マージの扱いは聞いていない
 - 作成者以外の人のレビューが付いた PR では、書き込み権限を API で確認したレビュワーの最後の状態が `APPROVED` になっている
 - 人の指摘のうちチェックリストに無かったものが、追記されたか、追記しない判断がユーザーから出ている
-- 人がマージするとき（`needs-human`、`ci-ok` などの確かめを満たさない、非対話の実行、クラウドのセッション）、手元のセッションは止まらずに PR が閉じるのを待ち、クラウドのセッションは聞かずに、知らせてほしいと伝えて止まっている
+- PR を作ったか再開したら、「監視する」で監視を始めている（クラウドは `subscribe_pr_activity`）。コンフリクトは見つけた回で取り込み、CI は `ci-ok` が成功するまで直しているか、原因が `main` にあることを伝えて止まっている
+- 人がマージするとき（`needs-human`、`ci-ok` などの確かめを満たさない、非対話の実行、クラウドのセッション）、セッションは聞かずに、監視を続けて PR が閉じるのを待っている
 - 待つ間に手番を終えるときは、何を待っているかと、入力が要るかを伝えている
 - 自分でマージしたとき、待ちが終わったとき、またはマージの知らせを受けたときは、マージ済みを確かめている。`merged` が `true` なら後片付けし、Issue に `status:accepting` が付いて開いたままであることを確かめ、受け持つほかの PR を追従させ、開発ボードを出し直したか飛ばしたかを報告している
 - 自分でマージしたなら、マージの前に `needs-human`、`label`、`ci-ok`、残った CRITICAL と HIGH を確かめ、`--match-head-commit` で確かめた head をマージしている。人に聞いてマージしていない
@@ -451,6 +479,7 @@ fails=0; while :; do s=$(gh api "repos/{owner}/{repo}/pulls/<number>" --jq .stat
 - 指摘の意図が読み取れない。推測で直さずリプライで聞く
 - 指摘が仕様の変更を含む。Issue の完了条件に戻って確認する
 - CI の失敗が自分の変更と関係なく、手順 5 で1回走らせ直しても落ちる。原因を報告して判断を仰ぐ
+- CI の失敗の原因が `main` にある（手順 5）。PR コメントと返答で伝え、監視を止める
 - 直すと他の指摘と矛盾する。両方を引用して確認する
 
 ## つまずいたとき
