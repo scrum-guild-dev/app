@@ -552,6 +552,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
   background: var(--color-sunken); color: var(--color-fg); line-height: 1.8; white-space: nowrap;
 }
 .status-dot { font-size: var(--text-xs); color: var(--color-muted); white-space: nowrap; }
+.status-dot.is-wrap { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
 .status-dot::before { content: "● "; color: var(--color-accent); font-size: 8px; vertical-align: 2px; }
 .source-key { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); white-space: nowrap; }
 /* 長い URL を載せる所（引き出しの外のエピックの画面など）。空白の無い URL でも折り返す。引き出しの中は .drawer .source-key が同じ指定を持つ */

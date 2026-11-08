@@ -13,13 +13,17 @@ import { taskDetailSchema } from './task.ts';
 export const taskDetail = defineOperation({
   name: 'task-detail',
   description:
-    'タスク1件のタイトル、本文、ポイント、期日、リンク、担当（今所属しているか付き）、完了の状態、削除できるか、決まった欄の値と未記入か、期日の印を決める今日と週の始まりを返す',
+    'タスク1件のタイトル、本文、ポイント、期日、リンク、担当（今所属しているか付き）、完了の状態、削除できるか、決まった欄の値と未記入か、期日の印を決める今日と週の始まり、列、親のストーリーとエピック、今日やるの印を返す',
   mode: 'read',
   permission: 'member',
   workspace: true,
   input: z.object({ workspace_id: idSchema, task_id: idSchema }),
   output: z.object({
     task: taskDetailSchema,
+    column: z.object({ id: z.string(), name: z.string().nullable(), is_done: z.boolean() }).nullable(),
+    story: z.object({ id: z.string(), title: z.string() }).nullable(),
+    epic: z.object({ id: z.string(), title: z.string() }).nullable(),
+    today_on: z.string().nullable(),
     fields: z.array(taskFieldValueSchema),
     unfilled: z.boolean(),
     // バックログのタスクか（受信箱とアーカイブでは偽）。欄ごとの「未記入」の印は、バックログで完了していないタスクだけに出す

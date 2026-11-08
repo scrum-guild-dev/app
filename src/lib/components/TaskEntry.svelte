@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TodayMarkButton from './TodayMarkButton.svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { tick } from 'svelte';
@@ -614,19 +615,7 @@
     {/if}
   {/if}
   {#if onToggleToday !== undefined && !done}
-    <button
-      class="sun"
-      type="button"
-      aria-pressed={marked}
-      aria-label={t('todayMarkLabel', { mark: t('todayMark'), title: task.title })}
-      title={t('todayMark')}
-      aria-disabled={pending}
-      onclick={() => {
-        if (!pending) onToggleToday(task);
-      }}
-    >
-      <Icon name="sun" />
-    </button>
+    <TodayMarkButton title={task.title} {marked} disabled={pending} onclick={() => onToggleToday?.(task)} />
   {:else}
     <span aria-hidden="true"></span>
   {/if}

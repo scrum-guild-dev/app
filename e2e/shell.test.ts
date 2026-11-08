@@ -478,7 +478,12 @@ test('書体を自分のオリジンから読み込み、外へ通信しない',
 
   expect([...origins]).toEqual([new URL(baseURL ?? '').origin]);
   expect(fonts.length).toBeGreaterThan(0);
-  expect(await page.evaluate(() => document.fonts.check('700 16px "BIZ UDPGothic"'))).toBe(true);
+  expect(fonts.every((url) => url.includes('noto-sans-jp'))).toBe(true);
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toHaveCSS(
+    'font-family',
+    /"Noto Sans JP"/,
+  );
+  expect(await page.evaluate(() => document.fonts.check('700 16px "Noto Sans JP"'))).toBe(true);
   expect(await collect()).toEqual([]);
 });
 
