@@ -838,8 +838,9 @@ test('保存に失敗した書きかけがあるときだけ、閉じようと�
   // 送れる書きかけは、確かめずに閉じる。保存に失敗した書きかけだけが確かめる
   await slow.unroute();
   await drawer.getByRole('button', { name: 'もう一度保存する' }).click();
-  await drawer.getByRole('button', { name: '閉じる' }).click();
-  await expect(drawer).toBeHidden();
+  // 保存成功で引き出しの読み上げ名も変わる。旧タイトルを閉じる操作の条件にしない。
+  await page.getByRole('dialog').getByRole('button', { name: '閉じる', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 test('期日で欄を離れた直後と、ポイントを選んだ直後に閉じても、結果は木に反映され、トーストで知らせる', async ({
