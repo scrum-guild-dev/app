@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { today } from '../src/shared/operations/organization/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
-import { taskReopen } from '../src/shared/operations/task/index.ts';
+import { inboxToBacklog, taskReopen } from '../src/shared/operations/task/index.ts';
 import {
   createBoardColumn,
   createMembership,
@@ -112,6 +112,27 @@ async function createWorld() {
 }
 
 describe('today: 返すタスクの範囲', () => {
+  test('受信箱のタスクは今日やることに出ず、バックログへ移した後は同じ一覧に出る', async () => {
+    const world = await createWorld();
+    const ws = await world.workspace();
+    const task = await world.task(ws, {
+      tray: 'inbox',
+      is_imported: 1,
+      created_by: null,
+      due_on: '2026-11-01',
+    });
+
+    expect((await world.read()).tasks).toEqual([]);
+
+    const moved = await post(app, inboxToBacklog, {
+      slug: world.organization.slug,
+      token: world.me.token,
+      body: { workspace_id: ws.id, items: [{ task_id: task.id }] },
+    });
+    expect(moved.status).toBe(200);
+    expect((await world.read()).tasks.map((row) => row.id)).toEqual([task.id]);
+  });
+
   test('2つのワークスペースに所属する人の、両方の担当タスクが出る。行にワークスペースの ID と名前が付く', async () => {
     const world = await createWorld();
     const asahi = await world.workspace({ name: 'あさひ班' });

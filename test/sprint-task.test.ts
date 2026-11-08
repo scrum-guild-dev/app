@@ -7,6 +7,7 @@ import { sprintDelete, sprintList, sprintTaskAdd, sprintTaskRemove } from '../sr
 import { storyDelete } from '../src/shared/operations/story/index.ts';
 import {
   backlogTree,
+  inboxToBacklog,
   taskComplete,
   taskCreate,
   taskDelete,
@@ -190,6 +191,31 @@ async function entryOf(target: Target, taskId: string) {
 }
 
 describe('sprint-task-add', () => {
+  test('受信箱のタスクはスプリントへ入らず、バックログへ移した後は同じタスクを入れられる', async () => {
+    const { target, board, sprint } = await setup();
+    const task = await createTask(target.organization, target.workspace.id, target.member.userId!, {
+      tray: 'inbox',
+      is_imported: 1,
+      created_by: null,
+    });
+    const before = await stateOf(target, task.id);
+
+    const rejected = await add(target, sprint.id, [task.id]);
+    expect(rejected.status).toBe(404);
+    expect(await errorCodeOf(rejected)).toBe('not_found');
+    expect(await stateOf(target, task.id)).toEqual(before);
+
+    expect((await call(target, inboxToBacklog, { items: [{ task_id: task.id }] })).status).toBe(200);
+    const added = await add(target, sprint.id, [task.id]);
+    expect(added.status).toBe(200);
+    expect(await added.json()).toEqual({ added: 1, skipped: { completed: 0, unavailable: 0, already: 0 } });
+    const state = await stateOf(target, task.id);
+    expect(state.task).toMatchObject({ tray: 'backlog', sprint_id: sprint.id, column_id: board.first });
+    expect(state.entries).toHaveLength(1);
+    expect(state.entries[0]).toMatchObject({ sprint_id: sprint.id, ended_at: null, outcome: null });
+    expect(state.logs.map(sprintChanges)).toContainEqual([null, { id: sprint.id, name: '第15回' }]);
+  });
+
   test('先頭の列の末尾に置き、入った行と変更の履歴を残す。名前の無いスプリントは期間を名前にする', async () => {
     const { target, board } = await setup();
     const sprint = await createSprint(target.organization, target.workspace.id, {
