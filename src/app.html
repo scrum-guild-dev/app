@@ -21,8 +21,11 @@
     <!-- inline の script と style を置かない。CSP のハッシュから漏れて止まる -->
     <div id="app">%sveltekit.body%</div>
     <!-- URL を直接開いた最初の読み込みで、300ms たっても画面が描けないときだけ見える（static/boot-loading.css）。
-         SvelteKit は最初の load が終わるまで画面を描かないため。文は辞書の loading と同じ（scripts/vocabulary.test.ts）。
-         画面が描かれたら src/routes/+layout.svelte が取り除く -->
-    <div id="boot-loading" role="status">読み込んでいます</div>
+         SvelteKit は最初の load が終わるまで画面を描かないため。文は辞書の loading、loadFailedTitle、retry と同じ（scripts/vocabulary.test.ts）。
+         15 秒たっても描けないときは、CSS だけで失敗の文と再読み込みのリンクに替える。画面が描かれたら src/routes/+layout.svelte が取り除く -->
+    <div id="boot-loading" role="status">
+      <span class="boot-wait">読み込んでいます</span>
+      <span class="boot-failed">読み込めませんでした <a href="">もう一度試す</a></span>
+    </div>
   </body>
 </html>

@@ -31,9 +31,25 @@ const row: TodayTask = {
   sprint: null,
 };
 
-test('失敗のトーストは左に縦線が付き、成功の倍の 8 秒ほど出る', async ({ page, context, baseURL }) => {
+test('失敗のトーストは左に縦線が付き、成功の倍の 8 秒ほど出て、消えるときは抜ける動きが再生される', async ({
+  page,
+  context,
+  baseURL,
+}) => {
   await signIn(context, baseURL, 'member');
   await page.clock.install();
+  // Svelte の out は Element.animate で動く。{#each} の項目の削除でも再生される（out:…|global）ことを、呼び出しの記録で確かめる
+  await page.addInitScript(() => {
+    const played: { opacity: unknown }[] = [];
+    (window as unknown as { __played: typeof played }).__played = played;
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (keyframes, options) {
+      if (this.classList.contains('toast') && Array.isArray(keyframes)) {
+        for (const frame of keyframes) played.push({ opacity: (frame as Keyframe).opacity });
+      }
+      return animate.call(this, keyframes, options);
+    };
+  });
   await routeOperation(page, today, { slug: 'aoba' }, (call) =>
     call.fulfill({ tasks: [{ ...row }], sprint_goals: [] }),
   );
@@ -52,6 +68,8 @@ test('失敗のトーストは左に縦線が付き、成功の倍の 8 秒ほ�
   await expect(toast).toBeVisible();
   await page.clock.runFor(3_700);
   await expect(toast).toHaveCount(0);
+  const played = await page.evaluate(() => (window as unknown as { __played: { opacity: unknown }[] }).__played);
+  expect(played.length).toBeGreaterThan(0);
 });
 
 test('URL を直接開いて木の読み込みが遅いとき、300ms 後に読み込み中の表示が出て、描けたら消える', async ({
@@ -75,4 +93,24 @@ test('URL を直接開いて木の読み込みが遅いとき、300ms 後に読�
   release();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(boot).toHaveCount(0);
+});
+
+test('15 秒たっても描けないときは、読み込み中の文を失敗の文と再読み込みのリンクに替える', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  // CSS の animation-delay は page.clock では進まないので、実時間で 15 秒待つ
+  test.setTimeout(60_000);
+  await signIn(context, baseURL, 'admin');
+  // 木が返らない（描けない）まま 15 秒たたせる
+  await routeOperation(page, backlogTree, { slug: 'aoba' }, () => new Promise<void>(() => {}));
+  await page.goto(WORKSPACE, { waitUntil: 'commit' });
+
+  const boot = page.locator('#boot-loading');
+  await expect(boot.getByText('読み込んでいます')).toBeVisible();
+  await expect(boot.getByText('読み込めませんでした')).toBeHidden();
+  await expect(boot.getByText('読み込めませんでした')).toBeVisible({ timeout: 20_000 });
+  await expect(boot.getByText('読み込んでいます')).toBeHidden();
+  await expect(boot.getByRole('link', { name: 'もう一度試す' })).toBeVisible();
 });

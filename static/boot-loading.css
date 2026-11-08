@@ -15,20 +15,35 @@
   font-family: system-ui, sans-serif;
   font-size: 1rem;
   visibility: hidden;
-  /* 15 秒たっても画面が描けない（JS が取れない、通信が切れた）ときは、覆いを解いて「読み込み中」と偽り続けない */
-  animation:
-    boot-loading-show 0s linear 300ms forwards,
-    boot-loading-give-up 0s linear 15s forwards;
+  animation: boot-loading-show 0s linear 300ms forwards;
 }
 @keyframes boot-loading-show {
   to {
     visibility: visible;
   }
 }
-@keyframes boot-loading-give-up {
+/* 15 秒たっても画面が描けない（JS が取れない、通信が切れた）ときは、「読み込み中」と偽り続けず、失敗の文と再読み込みのリンクに替える。
+   どちらも同じ時間（15s）に動かすので、並びの順には頼らない（待つ文を隠す animation と、失敗の文を見せる animation は別の要素） */
+#boot-loading .boot-failed {
+  display: none;
+  animation: boot-failed-show 0s linear 15s forwards;
+}
+#boot-loading .boot-wait {
+  animation: boot-wait-hide 0s linear 15s forwards;
+}
+@keyframes boot-failed-show {
   to {
-    visibility: hidden;
+    display: inline;
   }
+}
+@keyframes boot-wait-hide {
+  to {
+    display: none;
+  }
+}
+#boot-loading a {
+  color: inherit;
+  text-decoration: underline;
 }
 @media (prefers-color-scheme: dark) {
   #boot-loading {
