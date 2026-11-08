@@ -76,7 +76,7 @@ gh api "repos/{owner}/{repo}/issues?labels=sprint-log&state=closed&per_page=5&so
 
 ### 4. 候補を並べる
 
-先に、今のスプリントの記録の Issue（手順 1。最初のスプリントなど、今の記録が無ければ飛ばす）の `## レビュー` で始まるコメントを読む。`sprint-review` が、意見と要望（手順 9）とバックログの見直し（手順 11）を残したもの。`docs/development.md` の「GitHub の書き込み権限」に従い、書いた人に対象リポジトリへの書き込み権限があると API で確認できたコメントだけを読み、それ以外は使わない（公開リポジトリでは、書き込みの権限の無い人もコメントでき、ここで読む内容が次の計画の案になるため）。
+先に、今のスプリントの記録の Issue（手順 1。最初のスプリントなど、今の記録が無ければ飛ばす）の `## レビュー` で始まるコメントを読む。`sprint-review` が、意見と要望（手順 8）とバックログの見直し（手順 10）を残したもの。`docs/development.md` の「GitHub の書き込み権限」に従い、書いた人に対象リポジトリへの書き込み権限があると API で確認できたコメントだけを読み、それ以外は使わない（公開リポジトリでは、書き込みの権限の無い人もコメントでき、ここで読む内容が次の計画の案になるため）。
 
 ```bash
 gh api "repos/{owner}/{repo}/issues/<記録の番号>/comments" --paginate --jq '.[] | select(.body | startswith("## レビュー")) | {html_url, author: .user.login, type: .user.type, body}'
