@@ -8,6 +8,7 @@
   import { invitationAccept, invitationDecline, invitationList } from '../../shared/operations/workspace/index.ts';
   import { callOperation } from '../api.ts';
   import { focusPageHeading } from '../focus-heading.ts';
+  import { formatMonthDay } from '../format.ts';
   import { invitationErrorText, invitationRoleLabel } from '../invitation-text.ts';
   import { isUnauthenticated, loginUrl } from '../login-redirect.ts';
   import { showToast } from '../toast.svelte.ts';
@@ -145,14 +146,14 @@
     <div class="callout is-info" data-invitation-row={invitation.invitation_id}>
       <Icon name="mail" />
       <span class="wrap-anywhere">
-        {t('meInvitationLine', {
+        <b>{invitation.workspace_name}</b><br />
+        {t('invitationLine', {
           organization: current.organization.name,
           inviter: invitation.invited_by_name,
-          workspace: invitation.workspace_name,
           role: invitationRoleLabel(invitation.role),
-          date: invitation.invited_on,
+          date: formatMonthDay(invitation.invited_on),
         })}
-        {#if invitation.closed}{t('invitationInboxClosed', { workspace: t('workspace') })}{/if}
+        {#if invitation.closed}<br />{t('invitationInboxClosed', { workspace: t('workspace') })}{/if}
       </span>
       <div class="callout-actions">
         <!-- 送っている間は、読み上げの名前も見える文言と同じにする -->

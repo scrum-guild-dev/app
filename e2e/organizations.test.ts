@@ -345,6 +345,9 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await expect(page.getByRole('heading', { level: 1, name: '組織を選ぶ' })).toBeVisible();
     await expect(page.locator('.nav')).toHaveCount(0);
     await expect(page.locator('a.choice')).toHaveText([/あおば開発/, /ひばり工房/]);
+    // 押せる行（a.choice）には右端に印があり、押せない行（.is-static）には無い
+    await expect(page.locator('a.choice > svg.ico')).toHaveCount(2);
+    await expect(page.locator('.choice.is-static svg.ico')).toHaveCount(0);
 
     await page.getByRole('link', { name: /あおば開発/ }).click();
     await expect(page).toHaveURL(/\/aoba$/);
@@ -692,7 +695,8 @@ test.describe('ログインしていない人と、組織が無い人', () => {
     );
     await page.goto('/');
     await expect(page.getByText('まだ入れる組織がありません')).toBeVisible();
-    await expect(page.getByText('下の届いた招待から組織を選び、招待を承諾すると入れます。')).toBeVisible();
+    await expect(page.getByText('届いた招待から組織を選び、承諾すると入れます。')).toBeVisible();
+    await expect(page.getByRole('link', { name: /つばめ商会/ })).toBeVisible();
     await expect(page.getByText('招待が届くと、ここに出ます')).toHaveCount(0);
   });
 
@@ -790,6 +794,9 @@ test.describe('すべてのワークスペースから外れた人（ツバサ�
     await expect(page.getByText('管理者から招待が届くと、ここに出ます。')).toHaveCount(0);
     // 停止した組織へは入れないので、組織の画面へのリンクにしない
     await expect(page.getByRole('link', { name: /かもめ社/ })).toHaveCount(0);
+    // 押せない行には、押せる行の印（chevron）を置かない
+    await expect(page.locator('.choice.is-static')).toHaveCount(1);
+    await expect(page.locator('.choice.is-static svg.ico')).toHaveCount(0);
     expect(await findA11yViolations(page)).toEqual([]);
     expect(await collect()).toEqual([]);
   });

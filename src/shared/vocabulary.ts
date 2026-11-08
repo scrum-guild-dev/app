@@ -931,8 +931,7 @@ export const dictionary = defineDictionary({
   noOrganizationSuspendedText:
     '停止している{organization}があります。下の「停止している{organization}」を見てください。',
   // 入れる組織は無いが、届いた招待がある人
-  noOrganizationInvitedTitle: 'まだ入れる組織がありません',
-  noOrganizationInvitedText: '下の届いた招待から組織を選び、招待を承諾すると入れます。',
+  organizationChooseInvitedLead: 'まだ入れる組織がありません。届いた招待から組織を選び、承諾すると入れます。',
   invitationsHeading: '届いた招待',
   invitationPending: '承諾待ちの招待があります',
   invitationsNote: 'すべての組織に届いた招待を、組織ごとにまとめて出します。押すと、承諾するか辞退するかを選べます。',
@@ -946,8 +945,9 @@ export const dictionary = defineDictionary({
   invitationInboxLead: '{organization}から届いた招待です。承諾すると、その{workspace}に入れます。',
   invitationInboxEmptyTitle: '承諾待ちの招待はありません',
   invitationInboxEmptyText: 'この組織に届いた招待は、承諾か辞退が済んだか、取り消されました。',
-  // {inviter} は招待した人の名前、{role} はロール、{date} は招待した日（YYYY-MM-DD）
-  invitationInboxMeta: '{organization}・{inviter}さんから・{role}・{date}',
+  // 届いた招待の文。招待の画面とマイプロフィールで同じ形にする。{organization} は組織の名前、{inviter} は招待した人の名前、
+  // {role} はロール、{date} は招待した日（月/日。formatMonthDay）
+  invitationLine: '{organization}の{inviter}さんから、{role}として招かれました（{date}）',
   invitationInboxClosed: 'この{workspace}は終了しているため、承諾できません。辞退はできます。',
   invitationAccept: '承諾する',
   invitationDecline: '辞退する',
@@ -2251,9 +2251,7 @@ export const dictionary = defineDictionary({
   meThemeChanged: 'テーマを「{label}」に変えました',
   meThemeFollowed: 'テーマを{organization}の既定に戻しました',
   meThemeFailed: 'テーマを変えられませんでした。もう一度試してください。',
-  // マイプロフィールの「届いた招待」（この組織のワークスペースへの招待。別の組織の招待は組織の切り替えから）。
-  // {organization} は組織の名前、{inviter} は招待した人の名前、{workspace} はワークスペースの名前、{role} はロール、{date} は招待した日
-  meInvitationLine: '{organization}の{inviter}さんから「{workspace}」への招待が届いています（{role}、{date}）。',
+  // マイプロフィールの「届いた招待」（この組織のワークスペースへの招待。別の組織の招待は組織の切り替えから）。文は invitationLine
   meInvitationsFailed: '届いた招待を読み込めませんでした',
   // アカウントのメニューの「マイプロフィール」に付ける、届いた招待の件数。{count} は件数
   navInvitationsBadge: '招待 {count}',
