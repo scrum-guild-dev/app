@@ -232,18 +232,20 @@ test('「⋯」の削除の項目の上に区切りの罫線があり、4つの�
   await expectNoA11yViolationsInThemes(page, 'backlog');
 });
 
-test('引き出しを開いたまま同じ行の「⋯」から消すと、引き出しが閉じて消したタスクが出続けない', async ({ page }) => {
+test('引き出しを開いている間は、背後の行の「⋯」を押せない（開いたまま同じ行から消す操作は起きない）', async ({
+  page,
+}) => {
   await createWorkspace(page, '行の削除の引き出し');
   await addTaskRow(page, '開いたまま消す行');
   await page.getByRole('link', { name: '開いたまま消す行', exact: true }).click();
   const drawer = page.getByRole('dialog', { name: '開いたまま消す行' });
   await expect(drawer).toBeVisible();
 
-  await chooseRowAction(page, '開いたまま消す行', DELETE);
-  await expect(page.locator('.toasts:visible .toast', { hasText: '「開いたまま消す行」を削除しました' })).toBeVisible();
-  await expect(drawer).toHaveCount(0);
-  await expect(page).not.toHaveURL(/task=/);
-  await expect(page.getByRole('link', { name: '開いたまま消す行', exact: true })).toHaveCount(0);
+  // 引き出しは aria-modal のダイアログで、背後の行へのポインターを受け止める。消すのは引き出しの「このタスクを削除する」から
+  await expect(rowMenuToggle(page, '開いたまま消す行').click({ trial: true, timeout: 2000 })).rejects.toThrow(
+    'intercepts pointer events',
+  );
+  await expect(drawer).toBeVisible();
 });
 
 test('動かしを送っている最中にカードを消しても、動かしたカードは元の列に見えない', async ({ page }) => {
