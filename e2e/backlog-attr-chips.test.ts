@@ -510,6 +510,61 @@ test('選択の窓は、高さだけが変わっても閉じず、幅が変わ�
   expect(box!.y).toBeGreaterThanOrEqual(0);
   expect(box!.y + box!.height).toBeLessThanOrEqual(size.height - 100);
 
+  // 項目にフォーカスがある状態で幅が変わると、閉じて、フォーカスがチップへ戻る（body に落ちない）
+  await expect(menu.getByRole('menuitemradio').first()).toBeFocused();
   await page.setViewportSize({ width: size.width - 100, height: size.height - 100 });
   await expect(menu).toBeHidden();
+  await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeFocused();
+});
+
+test('担当の候補を読んでいる間と読めなかったときに、常に置いた状態の領域が読み込みと失敗を言い、また失敗したら「まだ読み込めませんでした」を出す', async ({
+  page,
+}) => {
+  await createWorkspace(page, '状態を伝えるワークスペース');
+  await addTaskRow(page, '状態を伝える件');
+  const row = page.locator('.entry', { hasText: '状態を伝える件' });
+  await waitForSettled(page);
+
+  // 読み込み中（member-list を保留）
+  const held = gate();
+  const unHold = await routeOperation(page, memberList, { slug: 'aoba' }, async (call) => {
+    await held.wait;
+    await call.passThrough();
+  });
+  await row.getByRole('button', { name: '担当: 未設定' }).click();
+  const menu = page.getByRole('menu', { name: '担当を選ぶ' });
+  const status = page.locator('[data-attr-chip-status]');
+  await expect(status).toHaveText('読み込んでいます');
+  await expect(menu).toHaveAttribute('aria-busy', 'true');
+  await expectNoA11yViolationsInThemes(page, 'backlog-attr-menu');
+  held.release();
+  await expect(menu.getByRole('menuitemradio').nth(1)).toBeVisible();
+  await expect(status).toHaveText('');
+  await unHold();
+  await page.keyboard.press('Escape');
+
+  // 読めなかったとき、押してもまた失敗したとき
+  const unFail = await failOperation(page, memberList, { slug: 'aoba' }, 503, 'unavailable');
+  await row.getByRole('button', { name: '担当: 未設定' }).click();
+  await expect(status).toHaveText('担当の候補を読み込めませんでした');
+  const retry = menu.getByRole('menuitem', { name: '担当の候補を読み込めませんでした。もう一度試す' });
+  await expect(retry).toBeVisible();
+  await retry.click();
+  await expect(status).toHaveText('まだ読み込めませんでした');
+  await expect(
+    menu.getByRole('menuitem', { name: '担当の候補を読み込めませんでした。まだ読み込めませんでした。もう一度試す' }),
+  ).toBeVisible();
+  await expectNoA11yViolationsInThemes(page, 'backlog-attr-menu');
+
+  // 閉じて開き直したら、押していないので「まだ」は出さない
+  await page.keyboard.press('Escape');
+  await row.getByRole('button', { name: '担当: 未設定' }).click();
+  await expect(status).toHaveText('担当の候補を読み込めませんでした');
+  await expect(retry).toBeVisible();
+
+  // 読めるようになって押すと、候補が戻り、領域は空になる
+  await unFail();
+  await retry.click();
+  await expect(menu.getByRole('menuitemradio').nth(1)).toBeVisible();
+  await expect(status).toHaveText('');
 });
