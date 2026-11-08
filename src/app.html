@@ -15,9 +15,14 @@
     <!-- 描く前にテーマを当てるので、async や defer を付けない。inline にするとハッシュから漏れて止まる。
          meta の CSP は自分より後の要素にだけ効くので、%sveltekit.head%（CSP の meta を含む）の後に置く -->
     <script src="%sveltekit.assets%/theme-init.js"></script>
+    <link rel="stylesheet" href="%sveltekit.assets%/boot-loading.css" />
   </head>
   <body data-sveltekit-preload-data="hover">
     <!-- inline の script と style を置かない。CSP のハッシュから漏れて止まる -->
     <div id="app">%sveltekit.body%</div>
+    <!-- URL を直接開いた最初の読み込みで、300ms たっても画面が描けないときだけ見える（static/boot-loading.css）。
+         SvelteKit は最初の load が終わるまで画面を描かないため。文は辞書の loading と同じ（scripts/vocabulary.test.ts）。
+         画面が描かれたら src/routes/+layout.svelte が取り除く -->
+    <div id="boot-loading" role="status">読み込んでいます</div>
   </body>
 </html>

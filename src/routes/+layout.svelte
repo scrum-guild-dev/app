@@ -10,7 +10,7 @@
   import '@fontsource/zen-old-mincho/900.css';
   import '../../design/tokens.css';
   import '../../design/components.css';
-  import type { Snippet } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import { navigating } from '$app/state';
   import ArtSprite from '../lib/components/ArtSprite.svelte';
   import IconSprite from '../lib/components/IconSprite.svelte';
@@ -29,6 +29,9 @@
   const SLOW_MS = 300;
   const loadingFromOutside = $derived(navigating.to !== null && !navigating.from?.route.id?.startsWith('/[slug]'));
   let slow = $state(false);
+
+  // URL を直接開いた最初の読み込みの表示（src/app.html の #boot-loading）は、画面が描かれたら要らない
+  onMount(() => document.getElementById('boot-loading')?.remove());
 
   $effect(() => {
     if (!loadingFromOutside) return;

@@ -1674,16 +1674,25 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!el) return;
     const [, mark = "", text = ""] = /^(<svg[\s\S]*?<\/svg>)?([\s\S]*)$/.exec(html) || [];
     const item = document.createElement("div");
-    item.className = "toast"; item.setAttribute("role", "status");
+    // 失敗（アイコン alert）は、左に危険の色の縦線を付け、理由を読み切れるよう 8 秒出す（本番の toast.svelte.ts の isFailureToast と同じ）
+    const failure = mark.includes('href="#i-alert"');
+    item.className = failure ? "toast is-failure" : "toast"; item.setAttribute("role", "status");
     item.innerHTML = `${mark}<span>${text}</span>${action ? `<button class="toast-action" type="button" data-toast-dismiss>${esc(action)}</button>` : ""}`;
     el.append(item);
-    const lifetime = action ? 10000 : 4000;
-    let timer = setTimeout(() => item.remove(), lifetime);
+    const lifetime = action ? 10000 : failure ? 8000 : 4000;
+    // 消えるときは、出るのと同じ下へ opacity で抜けてから外す（動きを減らす設定では CSS が transition を止めるので、すぐ外れる）
+    const leave = () => {
+      if (item.classList.contains("is-leaving")) return;
+      item.classList.add("is-leaving");
+      const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      setTimeout(() => item.remove(), still ? 0 : 120);
+    };
+    let timer = setTimeout(leave, lifetime);
     if (!action) return;
     // 操作のボタンは、押したら onAction を行ってから、知らせを消す（消すのは data-toast-dismiss の受け口）
     if (onAction) item.querySelector(".toast-action").addEventListener("click", onAction, { once: true });
     const pause = () => clearTimeout(timer);
-    const resume = () => { clearTimeout(timer); timer = setTimeout(() => item.remove(), lifetime); };
+    const resume = () => { clearTimeout(timer); timer = setTimeout(leave, lifetime); };
     item.addEventListener("mouseenter", pause); item.addEventListener("focusin", pause);
     item.addEventListener("mouseleave", resume); item.addEventListener("focusout", resume);
   }

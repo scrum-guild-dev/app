@@ -1,5 +1,15 @@
 <script lang="ts">
-  import { escapeToast, modalState, pauseToast, resumeToast, runToastAction, toasts } from '../toast.svelte.ts';
+  import { cubicOut } from 'svelte/easing';
+  import { prefersReducedMotion } from '../reduced-motion.ts';
+  import {
+    escapeToast,
+    isFailureToast,
+    modalState,
+    pauseToast,
+    resumeToast,
+    runToastAction,
+    toasts,
+  } from '../toast.svelte.ts';
   import Icon from './Icon.svelte';
 
   // kit.js の toast の置き場。showToast() で出す。画面の外側に1つ（+layout.svelte）と、各ダイアログの中に1つ（inDialog）置く。
@@ -9,6 +19,17 @@
   // 操作の付いたトーストは、文の後ろにボタン（.toast-action）を出し、押したらそのトーストを消す。押すと画面が動くので、
   // ダイアログの中の領域には出さず、外側の領域だけに出す。ポインターかフォーカスがある間は、消すまでの時間を止める
   let { inDialog = false }: { inDialog?: boolean } = $props();
+
+  // 消えるときは、出るのと同じ辺（下）へ opacity で --duration-fast（120ms）抜ける。動きを減らす設定では抜けない（今と同じ）。
+  // CSS の animation: none は Web Animations の transition に効かないので、JS で見る
+  function toastOut(node: Element) {
+    const fast = parseFloat(getComputedStyle(node).getPropertyValue('--duration-fast'));
+    return {
+      duration: prefersReducedMotion() ? 0 : Number.isFinite(fast) ? fast : 120,
+      easing: cubicOut,
+      css: (t: number) => `opacity: ${t}; transform: translateY(${(1 - t) * 8}px)`,
+    };
+  }
 
   const shown = $derived(inDialog ? toasts.filter((toast) => toast.action === undefined) : toasts);
 </script>
@@ -21,7 +42,9 @@
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
       <div
         class="toast"
+        class:is-failure={isFailureToast(toast)}
         role="status"
+        out:toastOut
         data-toast-id={toast.id}
         onkeydown={(event) => {
           if (event.key === 'Escape' && escapeToast(toast.id)) event.stopPropagation();
@@ -53,7 +76,7 @@
         >
       </div>
     {:else}
-      <div class="toast" role="status">
+      <div class="toast" class:is-failure={isFailureToast(toast)} role="status" out:toastOut>
         {#if toast.icon}<Icon name={toast.icon} />{/if}<span>{toast.message}</span>
       </div>
     {/if}

@@ -42,6 +42,11 @@ describe('言葉の辞書', () => {
     assert.equal(word('pageTitle', { page: word('pageToday'), app: word('appName') }), '今日やること - Scrum Guild');
   });
 
+  test('最初の読み込みで出す文（src/app.html の #boot-loading）は辞書の loading と同じ', () => {
+    const html = readFileSync(new URL('../src/app.html', import.meta.url), 'utf8');
+    assert.equal(/<div id="boot-loading"[^>]*>([^<]*)<\/div>/.exec(html)?.[1], dictionary.loading);
+  });
+
   test('ホーム画面に出る名前（iOS の追加時の名前とマニフェスト）は辞書の名前と同じ', () => {
     const html = readFileSync(new URL('../src/app.html', import.meta.url), 'utf8');
     const iosTitle = /<meta\s[^>]*name="apple-mobile-web-app-title"[^>]*content="([^"]*)"/.exec(html)?.[1];

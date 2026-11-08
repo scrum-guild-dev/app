@@ -1740,6 +1740,10 @@ a.choice > div > span, .choice.is-static > div > span { display: block; }
 .toasts { position: fixed; z-index: 40; right: max(var(--space-4), env(safe-area-inset-right, 0px)); bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); display: grid; gap: var(--space-2); }
 .toast { display: flex; gap: var(--space-2); align-items: center; padding: var(--space-3) var(--space-4); background: var(--color-fg); color: var(--color-bg); border-radius: var(--radius-1); box-shadow: var(--shadow-float); font-size: var(--text-sm); overflow-wrap: anywhere; max-width: min(420px, calc(100vw - 2 * var(--space-4))); animation: toast-in var(--duration-stamp) var(--ease-out) 1; }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* 失敗の知らせ（アイコン alert）。成功と同じ反転の地に、危険の薄い色の左の縦線を足し、色でも見分ける（長さは本番が 8 秒にする）。
+   消えるとき（.is-leaving）は、出るのと同じ下へ opacity で 120ms 抜ける。本番は ToastRegion.svelte の out、見本は kit.js の toast が付ける */
+.toast.is-failure { border-inline-start: 4px solid var(--color-danger-soft); }
+.toast.is-leaving { opacity: 0; transform: translateY(8px); transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out); }
 /* 文の後ろに置く操作（絞り込みを外す など）。地の色が反転しているので、枠と文字は地の上の色（currentColor）にする */
 .toast > span { flex: 1 1 auto; min-width: 0; }
 .toast-action { flex: none; padding: var(--space-1) var(--space-2); border: 1px solid currentColor; border-radius: var(--radius-1); background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; }

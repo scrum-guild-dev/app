@@ -1,0 +1,38 @@
+/* 画面の JS が動き出す前（URL を直接開いた最初の読み込み）の、読み込み中の表示（src/app.html の #boot-loading）。
+   SvelteKit は最初の load がすべて終わるまで root のレイアウトを描かないので、デザインシステムの部品（LoadingSheet）は使えない。
+   デザインシステムの CSS もこの時点では届いていないため、ここに限り自分のオリジンの小さなファイルで、同じ地と文字の色を持つ。
+   値は design/tokens.css のシンプルの --color-bg と --color-fg、--color-muted（OS がダークのときはダーク）と同じにする。
+   速い読み込みでは出さないよう、300ms たってから見せる（LoadingSheet の SLOW_MS と同じ）。動きではないので、動きを減らす設定でも同じ。
+   画面が描かれたら +layout.svelte が取り除く。 */
+#boot-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: #f7f7f8;
+  color: #5c5f66;
+  font-family: system-ui, sans-serif;
+  font-size: 1rem;
+  visibility: hidden;
+  animation: boot-loading-show 0s linear 300ms forwards;
+}
+@keyframes boot-loading-show {
+  to {
+    visibility: visible;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  #boot-loading {
+    background: #121214;
+    color: #a2a2ab;
+  }
+}
+html[data-theme='simple_light'] #boot-loading {
+  background: #f7f7f8;
+  color: #5c5f66;
+}
+html[data-theme='simple_dark'] #boot-loading {
+  background: #121214;
+  color: #a2a2ab;
+}
