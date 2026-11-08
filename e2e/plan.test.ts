@@ -328,6 +328,7 @@ test('ベロシティは延長した回を除いた直近3回の平均で、先�
   await expect(velocity.locator('.bar-col.is-excluded b')).toHaveText('13');
   await expect(velocity.locator('.bar-col b')).toHaveText(['6', '13', '8', '7']);
   await expect(velocity.locator('.bars-labels')).toContainText('延長 3 日・除外');
+  await expect(velocity.locator('.bars-labels small')).toHaveText('延長 3 日・除外');
   await expect(velocity.getByRole('img', { name: /9月の追い込み 13 pt（延長のため除外）/ })).toBeVisible();
 
   // 見出しの集計。ベロシティ、超過した先のスプリントの数、未見積もりの件数
