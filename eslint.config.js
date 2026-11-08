@@ -11,15 +11,7 @@ const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
 
 export default defineConfig(
   includeIgnoreFile(gitignorePath),
-  {
-    ignores: [
-      'design/',
-      '.claude/',
-      // npx skills update は Codex 用のリンクを外から入れたスキルの実体に置き換える
-      '.agents/skills/impeccable/',
-      'worker-configuration.d.ts',
-    ],
-  },
+  { ignores: ['design/', '.claude/', 'worker-configuration.d.ts'] },
   js.configs.recommended,
   ts.configs.recommended,
   svelte.configs.recommended,
