@@ -68,8 +68,10 @@ test('失敗のトーストは左に縦線が付き、成功の倍の 8 秒ほ�
   await expect(toast).toBeVisible();
   await page.clock.runFor(3_700);
   await expect(toast).toHaveCount(0);
-  const played = await page.evaluate(() => (window as unknown as { __played: { opacity: unknown }[] }).__played);
-  expect(played.length).toBeGreaterThan(0);
+  // 退場の再生は、消す時間切れの直後の描画の中で始まる。記録が付くのを待つ
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __played: unknown[] }).__played.length))
+    .toBeGreaterThan(0);
 });
 
 test('URL を直接開いて木の読み込みが遅いとき、300ms 後に読み込み中の表示が出て、描けたら消える', async ({
