@@ -149,7 +149,9 @@ test('招待の画面（/invite）から、利用規約とプライバシーポ�
     await expect(opened.getByRole('heading', { level: 1, name: heading })).toBeVisible();
     await expect(opened).toHaveURL(new RegExp(`${path}$`));
     // 新しいタブは直に開いた画面なので、戻るボタンの代わりに / へのリンクを出す
-    await expect(opened.getByRole('link', { name: 'Scrum Guild を開く' })).toBeVisible();
+    await expect(
+      opened.getByRole('group', { name: '関連するページ' }).getByRole('link', { name: 'Scrum Guild を開く' }),
+    ).toBeVisible();
     await opened.close();
     // 元の画面は、秘密を持ったまま残り、ログインのボタンを押せる
     await expect(page.getByRole('button', { name: 'Google でログイン' })).toBeVisible();
@@ -177,4 +179,22 @@ test('/login と /invite も、リンクを足した後に幅 390px で横には
     expect(await findOverflowViolations(page)).toEqual([]);
     expect(await findTargetSizeViolations(page)).toEqual([]);
   }
+});
+
+test('/terms の先頭近くにも、元の画面へ戻る操作がある（直に開いた人は / へのリンク、アプリの中から来た人は戻るボタン）', async ({
+  page,
+}) => {
+  await page.goto('/terms');
+  const top = page.getByRole('group', { name: '元の画面へ' });
+  await expect(top.getByRole('link', { name: 'Scrum Guild を開く' })).toBeVisible();
+  const box = await top.boundingBox();
+  expect(box && box.y).toBeLessThan(400);
+
+  await page.goto('/login?return_to=%2Faoba');
+  await page
+    .getByRole('group', { name: '利用規約とプライバシーポリシー' })
+    .getByRole('link', { name: '利用規約' })
+    .click();
+  await page.getByRole('group', { name: '元の画面へ' }).getByRole('button', { name: '前の画面に戻る' }).click();
+  await expect(page).toHaveURL(/\/login\?return_to=%2Faoba$/);
 });

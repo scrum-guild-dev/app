@@ -1158,7 +1158,7 @@ export const dictionary = defineDictionary({
   loginErrorOrganizationReauthRequired:
     'この{organization}に入るには、ログインし直してください。API トークンも、ログインし直してから発行し直す必要があります。',
   loginLead:
-    'いずれかの{organization}に所属しているか、招待されている人がログインできます。招待されたときの手段でログインしてください。',
+    'いずれかの{organization}に所属しているか、招待されている人がログインできます。招待されたときの手段でログインしてください。初めての人は、下の会員登録から始められます。',
   loginWithGithub: 'GitHub でログイン',
   loginWithGoogle: 'Google でログイン',
   loginNote:
@@ -1171,8 +1171,11 @@ export const dictionary = defineDictionary({
   loginWithPasswordMoving: 'ログインしています',
   // 違うパスワード、登録の無いメールアドレス、形の合わない入力（401）。どれかは分けない（登録の有無を漏らさない）
   loginErrorInvalidCredentials: 'メールアドレスかパスワードが違います。確かめて、もう一度ログインしてください。',
-  loginErrorDenied:
-    'ログインできませんでした。どの{organization}の{workspace}にも所属しておらず、招待も届いていません。招待された手段（GitHub か Google）と、招待されたアカウントでログインしているか確かめてください。招待がまだなら、{leader}に GitHub のユーザー名か Google のメールアドレスで招待してもらってください。アカウントがまだ無い人は、会員登録から始められます。',
+  // 警告は事実だけを短く言い（3行以内）、次の行動は警告の中のボタン（loginErrorDeniedSignup）と、ボタンの下の案内（loginErrorDeniedHint）に分ける
+  loginErrorDenied: 'ログインできませんでした。どの{organization}にも所属しておらず、招待も届いていません。',
+  loginErrorDeniedSignup: '会員登録から始める',
+  loginErrorDeniedHint:
+    '招待された手段（GitHub か Google）と、招待されたアカウントでログインしているか確かめてください。招待がまだなら、{leader}に GitHub のユーザー名か Google のメールアドレスで招待してもらってください。',
   // パスワードが合った後に、入れる{organization}も招待も無いとき（POST /api/auth/password/login の 403 denied）。
   // 招待された手段を確かめる案内は GitHub と Google の人向けなので、パスワードの人には出さない
   loginErrorDeniedPassword:
@@ -1374,6 +1377,8 @@ export const dictionary = defineDictionary({
   legalLinksLabel: '利用規約とプライバシーポリシー',
   // 規約とポリシーの画面の下の、もう一方のページと元の画面へのリンクの組の名前（読み上げ）
   legalPageLinksLabel: '関連するページ',
+  // 本文の上に置く、元の画面へ戻る操作の組の名前（読み上げ）。下の組と名前を分ける
+  legalExitLabel: '元の画面へ',
   // アプリの中から移ってきたときの「元の画面へ戻る」ボタン（履歴を戻る）と、直に開いたときの / へのリンク
   legalBack: '前の画面に戻る',
   legalOpenApp: '{app} を開く',

@@ -148,9 +148,7 @@ test('return_to は自分のサイトのパスだけを開始の URL に渡す',
 
 test('?error= の理由を、辞書の文言で出す。知らない値は出さない', async ({ page }) => {
   await page.goto('/login?error=denied');
-  await expect(page.getByRole('alert')).toContainText(
-    'ログインできませんでした。どの組織のワークスペースにも所属しておらず',
-  );
+  await expect(page.getByRole('alert')).toContainText('ログインできませんでした。どの組織にも所属しておらず');
   // 停止した組織にしか入れない人もログインできるので、suspended の理由は無くなった（#639）。古い URL は知らない値と同じく何も出さない
   await page.goto('/login?error=suspended');
   await expect(page.getByRole('heading', { level: 1, name: 'ログイン' })).toBeVisible();
@@ -214,4 +212,38 @@ test.describe('seed のセッション', () => {
     const res = await context.request.post('/api/me', { headers: { Origin: 'https://evil.example' }, data: {} });
     expect(res.status()).toBe(403);
   });
+});
+
+test('?error=denied の警告は 3 行以内で、会員登録のボタンを含み、GitHub のボタンが 390px の最初の画面に入る', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 667 });
+  await page.goto('/login?error=denied');
+  const alert = page.getByRole('alert');
+  await expect(alert.getByRole('link', { name: '会員登録から始める' })).toHaveAttribute('href', '/signup');
+  // 文の行数（ボタンの行を除く）。行の高さで割る
+  const lines = await alert.locator(':scope > span').evaluate((el) => {
+    const style = getComputedStyle(el);
+    const lineHeight = parseFloat(style.lineHeight);
+    if (Number.isNaN(lineHeight)) throw new Error('line-height が数値でない');
+    return Math.round(el.getBoundingClientRect().height / lineHeight);
+  });
+  expect(lines).toBeLessThanOrEqual(3);
+  const box = await page.getByRole('link', { name: 'GitHub でログイン' }).boundingBox();
+  expect(box && box.y + box.height).toBeLessThanOrEqual(667);
+  // 確かめる手段の案内はボタンの下
+  await expect(alert.getByText('招待された手段')).toHaveCount(0);
+  // 注記は警告の説明として結ぶ（警告の文には混ぜない）
+  await expect(alert).toHaveAccessibleDescription(/招待された手段/);
+  const hint = page.getByText('招待された手段（GitHub か Google）と');
+  await expect(hint).toBeVisible();
+  const googleBox = await page.getByRole('link', { name: 'Google でログイン' }).boundingBox();
+  const hintBox = await hint.boundingBox();
+  expect(hintBox && googleBox && hintBox.y).toBeGreaterThan((googleBox?.y ?? 0) + (googleBox?.height ?? 0));
+  expect(hintBox && box && hintBox.y).toBeGreaterThan((box?.y ?? 0) + (box?.height ?? 0));
+});
+
+test('リード文に、初めての人の行き先がある', async ({ page }) => {
+  await page.goto('/login');
+  await expect(page.getByText('初めての人は、下の会員登録から始められます。')).toBeVisible();
 });
