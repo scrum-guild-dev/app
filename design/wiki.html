@@ -414,7 +414,8 @@ function statesHtml() {
 
 function render() {
   const head = pageHead(store.name, "Wiki", [],
-    `<button class="btn" type="button" data-wiki="upload">${t("wikiUpload")}</button><button class="btn is-primary" type="button" data-wiki="new-root">ページを足す</button>`,
+    // 本番と同じく、「.md を上げる」は書いている間（足す、編集）は出さない
+    `${S.mode === "new" || S.mode === "edit" ? "" : `<button class="btn" type="button" data-wiki="upload">${t("wikiUpload")}</button>`}<button class="btn is-primary" type="button" data-wiki="new-root">ページを足す</button>`,
     `<p class="props-note">${isOrg ? `${t("organization")}の Wiki。${t("organization")}のユーザーの全員が見て、全員が書けます。` : `${t("workspace")}の Wiki。メンバー全員（${t("admin")}を含む）が見て、全員が書けます。`}</p>`);
   // リンクの説明（新しいタブで開く）。本文のリンクの aria-describedby が指す、画面で1つだけの隠した文
   return `${head}<span id="wiki-newtab" hidden>${t("markdownNewTab")}</span><div class="layout-wiki">${sideHtml()}<div class="wiki-main" id="wiki-main">${mainHtml()}</div></div>${statesHtml()}`;
