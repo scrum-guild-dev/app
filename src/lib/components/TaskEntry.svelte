@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
+  import { tick } from 'svelte';
   import { memberList } from '../../shared/operations/workspace/index.ts';
   import { taskAssign, taskDetail, taskUpdate } from '../../shared/operations/task/index.ts';
   import { TASK_POINT_VALUES } from '../../shared/task.ts';
@@ -192,10 +193,22 @@
     if (!gone) showToast(message, 'alert');
   }
 
+  // 木を読み直し、読み直した task の prop が届くまで待つ（onSaved の invalidateAll は data を替えて返るが、
+  // 子の prop は次の描画で替わる）。読み直しが例外で抜けても、送る周は止めない（止めると、読み直しの間に選び直した値が
+  // 送られないまま行に残る）。読み直せなかった行は、次の読み直しで本当の値に合う
+  async function reload(): Promise<void> {
+    try {
+      await attrs?.onSaved();
+    } catch {
+      // 知らせは出さない（保存は通っていて、「保存しました」を出した後）
+    }
+    await tick();
+  }
+
   // 断られた後の読み直しと知らせ。木を読み直して、行を本当の値に戻す
   async function rejected(message: string): Promise<void> {
     failure(message);
-    await attrs?.onSaved();
+    await reload();
   }
 
   // 失敗の応答を、知らせる文に直す。完了にされていた409は、読み直した今の値で決める
@@ -227,6 +240,17 @@
     if (!pointsSending) void sendPoints();
   }
 
+  // 通った値（choice）の後始末。選んだ値が通った値のままなら、選んだ値と基準を外す（行は task を出す）。
+  // 選び直されていれば、基準を通った値にして残す
+  function settlePoints(choice: PointsChoice): void {
+    if (pointsPending === null || pointsPending.value === choice) {
+      pointsPending = null;
+      confirmedPoints = undefined;
+    } else {
+      confirmedPoints = choice;
+    }
+  }
+
   // 1本ずつ送る。送っている間に選び直されたら、最後の選択だけを送る。失敗したら元の値に戻す
   async function sendPoints(): Promise<void> {
     if (attrs === undefined) return;
@@ -239,9 +263,10 @@
           // 先に通った値が残っている（選び直して元に戻した）ので、読み直して行を本当の値に合わせる
           if (confirmedPoints !== undefined) {
             confirmedPoints = undefined;
-            await attrs.onSaved();
+            await reload();
           }
-          break;
+          // 読み直しの間に選び直されていれば、次の周が送る
+          continue;
         }
         const result = await callOperation(
           taskUpdate,
@@ -249,14 +274,16 @@
           { slug: attrs.slug },
         );
         if (result.ok) {
-          confirmedPoints = choice;
-          // 選び直されていなければ、読み直した値が出るまで選んだ値を見せる。選び直されていれば、次の周が最後の選択を送る
+          // 選び直されていなければ、読み直した値が出るまで選んだ値を見せる
           if (pointsPending !== null && pointsPending.value === choice) {
             showToast(t('taskSaved'), 'check');
-            await attrs.onSaved();
-            confirmedPoints = undefined;
-            if (pointsPending !== null && pointsPending.value === choice) pointsPending = null;
+            await reload();
           }
+          // 最後の選択が通った値なら終える。違えば（送っている間か読み直しの間に選び直された）、通った値を基準に残し、
+          // 次の周がそれと比べて送る。選び直したときは、読み直しが失敗するか別の読み直しに置き換えられて task が古いままでも、
+          // 基準を誤らない。選び直さずに task が古いまま終わったときは、行が古い値に戻り、その値を選んでも送らない
+          // （次の読み直しで合う。task が追いつくまで基準を残すのは、送る状態機械を切り出す #888 で扱う）
+          settlePoints(choice);
           continue;
         }
         const message =
@@ -277,6 +304,15 @@
     if (!assigneeSending) void sendAssignee();
   }
 
+  function settleAssignee(choice: string): void {
+    if (assigneePending === null || assigneePending.value === choice) {
+      assigneePending = null;
+      confirmedAssignee = undefined;
+    } else {
+      confirmedAssignee = choice;
+    }
+  }
+
   async function sendAssignee(): Promise<void> {
     if (attrs === undefined) return;
     assigneeSending = true;
@@ -287,9 +323,9 @@
           assigneePending = null;
           if (confirmedAssignee !== undefined) {
             confirmedAssignee = undefined;
-            await attrs.onSaved();
+            await reload();
           }
-          break;
+          continue;
         }
         const result = await callOperation(
           taskAssign,
@@ -297,13 +333,11 @@
           { slug: attrs.slug },
         );
         if (result.ok) {
-          confirmedAssignee = choice;
           if (assigneePending !== null && assigneePending.value === choice) {
             showToast(t('taskSaved'), 'check');
-            await attrs.onSaved();
-            confirmedAssignee = undefined;
-            if (assigneePending !== null && assigneePending.value === choice) assigneePending = null;
+            await reload();
           }
+          settleAssignee(choice);
           continue;
         }
         let message: string;

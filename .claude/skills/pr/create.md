@@ -390,7 +390,7 @@ gh api -X POST "repos/{owner}/{repo}/pulls/<n>/reviews/<review_id>/events" -f ev
 
 ## Step 8: CI・レビュー対応に進む
 
-作成結果を報告したら、同じ pr スキル内の [feedback.md](feedback.md) に進む。別スキルを起動しない。
+作成結果を報告したら、同じ pr スキル内の [feedback.md](feedback.md) に進む。別スキルを起動しない。作成モードでは、feedback.md の「監視する」で PR の監視を先に始める（クラウドは `subscribe_pr_activity`）。
 
 ## 注意事項
 

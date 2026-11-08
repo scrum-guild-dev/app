@@ -26,7 +26,7 @@ Codex の進行役が **`implementer` として実装を委譲したときだけ
 
 ## スキルと点検の原本
 
-Codex 用の入口は `.agents/skills/`。`add-operation`、`d1-migration`、`ui-polish`、`pr` は `.claude/skills/` の原本への相対リンクで共有する。
+Codex 用の入口は `.agents/skills/`。`add-operation`、`d1-migration`、`pr`、外から入れた動きのスキル（`find-animation-opportunities`、`review-animations`、`improve-animations`。`docs/development.md` の「外から入れたスキル」）は `.claude/skills/` の原本への相対リンクで共有する。
 `increment-build` と `done-check` は Codex 向けの入口を持つ。共通の着手・受け入れ・検査・点検基準は `docs/agent-workflows/`、レビューの役割とチェックリストは `.claude/` の共有定義を参照する。
 同名の Claude 用スキルを Codex の工程として直接実行しない。
 
