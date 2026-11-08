@@ -8,6 +8,7 @@ import { ApiError } from '../errors.ts';
 import { uuidv7 } from '../uuid.ts';
 import type { OutsideAccount } from './account.ts';
 import { implement } from './implement.ts';
+import { readAccountProfile } from './onboarding.ts';
 
 type FirstLogin = { login_provider: string; login_subject: string; login_name: string };
 
@@ -16,7 +17,7 @@ type FirstLogin = { login_provider: string; login_subject: string; login_name: s
 export async function writeFirstAdmin(
   created: CreatedOrganization,
   organization: { slug: string; name: string; createdAt: Date; kind?: OrganizationKind },
-  admin: { accountId: string; login: FirstLogin },
+  admin: { accountId: string; login: FirstLogin; name?: string },
 ): Promise<void> {
   const userId = uuidv7(organization.createdAt.getTime());
   const at = organization.createdAt.toISOString();
@@ -28,7 +29,7 @@ export async function writeFirstAdmin(
         account_id: admin.accountId,
         login_provider: admin.login.login_provider,
         login_subject: admin.login.login_subject,
-        name: admin.login.login_name,
+        name: admin.name ?? admin.login.login_name,
         is_admin: 1,
         created_at: at,
         updated_at: at,
@@ -105,13 +106,18 @@ export const createMyOrganizationOperation = implement(
     );
     if (login === undefined) throw new Error('組織を作るアカウントのログインが無い');
 
+    const profile = await readAccountProfile(db, accountId);
     const createdAt = now();
     const created = await account.createOrganization({ slug: input.slug, name: input.name, now: createdAt });
     if (created === 'slug_taken') throw new ApiError(409, 'conflict', { reason: 'slug_taken' });
     if (created === 'trial_limit') throw new ApiError(409, 'conflict', { reason: 'trial_limit' });
 
     try {
-      await writeFirstAdmin(created, { slug: input.slug, name: input.name, createdAt }, { accountId, login });
+      await writeFirstAdmin(
+        created,
+        { slug: input.slug, name: input.name, createdAt },
+        { accountId, login, name: profile?.name },
+      );
     } catch (err) {
       await abandon(account, created.organizationId, createMyOrganization.name);
       throw err;

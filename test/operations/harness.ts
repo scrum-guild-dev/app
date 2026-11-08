@@ -27,7 +27,9 @@ import {
 // 入力が組織の中の行を指さない操作は、成功する入力を noReference に書く（分離の検査はスラッグだけになる）。
 // 入力に `_id` で終わる項目がある操作には書けない（行を指しているので、関数で作る）
 // caller は、その入力で呼ぶ人。届いた招待の承諾と辞退のように、呼んだ人に宛てた行を指す操作が使う（省略は対象の組織の管理者）
-export type Pointer = ((target: Target, caller: Person) => Promise<unknown>) | { noReference: unknown };
+export type Pointer =
+  | ((target: Target, caller: Person) => Promise<unknown>)
+  | { noReference: unknown; prepare?: (target: Target) => Promise<void> };
 export type Pointers = Readonly<Record<string, Pointer>>;
 
 type App = ReturnType<typeof createApp>;
@@ -177,7 +179,9 @@ export async function inputFor(
 ): Promise<unknown> {
   const pointer = pointers[definition.name];
   if (pointer === undefined) return {};
-  return typeof pointer === 'function' ? pointer(target, caller) : pointer.noReference;
+  if (typeof pointer === 'function') return pointer(target, caller);
+  await pointer.prepare?.(target);
+  return pointer.noReference;
 }
 
 // 自分の組織の行を指す入力は成功し、別の組織の行を指す入力は 404 になる。404 が入力の誤りや権限の不足ではなく、
