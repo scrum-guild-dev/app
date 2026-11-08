@@ -134,7 +134,19 @@ async function main(planPath, outArg) {
       else if (action.select !== undefined) await locate(page, action.select).selectOption({ label: action.label });
       else if (action.fill !== undefined) await locate(page, action.fill).fill(action.text);
       else if (action.wait !== undefined) await locate(page, action.wait).waitFor({ state: action.state ?? 'visible' });
-      else await wait(action.pause);
+      else if (action.press !== undefined || action.hold !== undefined) {
+        // 要素を指したときはフォーカスしてから押す。hold は押している間 ms だけ待ってから離す
+        if (action.on) await locate(page, action.on).focus();
+        if (action.press !== undefined) await page.keyboard.press(action.press);
+        else {
+          await page.keyboard.down(action.hold);
+          try {
+            await wait(action.ms);
+          } finally {
+            await page.keyboard.up(action.hold);
+          }
+        }
+      } else await wait(action.pause);
     };
     // 録画にはマウスカーソルが映らないので、操作する要素を枠で示す。枠は画面の動きに数えない
     const mark = (spec) =>

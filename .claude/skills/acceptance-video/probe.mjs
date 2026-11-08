@@ -31,6 +31,14 @@ export function probeExec(page, base) {
       await locate(page, spec).fill(action.text, { timeout });
     } else if (kind === 'wait') {
       await locate(page, spec).waitFor({ state: action.state ?? 'visible', timeout });
+    } else if (kind === 'press' || kind === 'hold') {
+      // 要素を指したときはフォーカスしてから押す。hold は待たずに押して離す（待ちは省く決まり）
+      if (spec) await locate(page, spec).focus({ timeout });
+      if (kind === 'press') await page.keyboard.press(action.press);
+      else {
+        await page.keyboard.down(action.hold);
+        await page.keyboard.up(action.hold);
+      }
     } else {
       throw new Error(`試しが知らない操作: ${kind}`);
     }
