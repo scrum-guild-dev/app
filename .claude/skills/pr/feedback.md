@@ -354,7 +354,7 @@ gh api -X POST "repos/{owner}/{repo}/issues/{number}/labels" -f "labels[]=ai-rev
 
 push の後は head を取り直してから（手順 1 のドラフトの節と同じ）、手順 1 の check-runs を取り直す。push の直後は、まだ全部のチェックが付いていない（`label` など一部だけが先に付く）。`ci-ok` が付き、全部のチェックが `completed` になるまで、間を空けて取り直して待つ（理由: 付いたチェックだけを見ると、`label` が終わった時点で全部終わったと読み、CI の本体を待たずに進む）。15 分待っても `ci-ok` が出なければ、待ちをやめて人に渡す（理由: CI は通常 10 分以内に終わるので、それを超えたら詰まりを疑う）。`mergeable` が `false` ならコンフリクトで CI が走っていないので、先に `sync-base` で取り込む。待つ間に手番を終えるときは、手順 7 の「待つ間に手番を終えるとき」に従って伝える。
 
-クラウドでは e2e の失敗を関連ファイルで再現し、修正後に `pnpm e2e:preflight <base-ref> --files … --reason …` で影響する検査を確かめ、修正をまとめて push して CI の全件結果を待つ。無効になっていない記録は工程が変わっただけでは再検査しない。ローカルのセッションでは CI の e2e ジョブ（`e2e`、`e2e-dev`、`e2e-repeat`）の失敗を手元で再現させず（フックが `pnpm e2e` を止める）、ジョブのログ（`get_job_logs`）と成果物の `playwright-report/`、trace（`pnpm exec playwright show-trace`）で直す。2回続けて直せなければ、人に手元での再現を頼む（`docs/development.md` の「CI の e2e が落ちたとき」）。
+クラウドでは e2e の失敗を関連ファイルで再現し、修正後に `pnpm e2e:preflight <base-ref> --files … --reason …` で影響する検査を確かめ、修正をまとめて push して CI の全件結果を待つ。`e2e:preflight` が Playwright が無いとして終了コード 3 を返す環境では、ローカルと同じくジョブのログと trace で直して push し、CI で確かめる。無効になっていない記録は工程が変わっただけでは再検査しない。ローカルのセッションでは CI の e2e ジョブ（`e2e`、`e2e-dev`、`e2e-repeat`）の失敗を手元で再現させず（フックが `pnpm e2e` を止める）、ジョブのログ（`get_job_logs`）と成果物の `playwright-report/`、trace（`pnpm exec playwright show-trace`）で直す。2回続けて直せなければ、人に手元での再現を頼む（`docs/development.md` の「CI の e2e が落ちたとき」）。
 
 落ちたテストが PR で変えていない領域のもので、前の head では同じコードで通っていたら、失敗したジョブを1回だけ走らせ直す（理由: e2e の待ちの時間切れのような揺らぎのたびに人に聞くと、待ちが増える）。
 

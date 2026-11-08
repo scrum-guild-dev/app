@@ -314,6 +314,50 @@ export function runPreflight(
   }
 }
 
+// Playwright の依存か Chromium が無い環境では e2e を省き、PR の CI で確かめる（docs/development.md）。
+export const PLAYWRIGHT_UNAVAILABLE_EXIT = 3;
+
+type Browser = { close(): Promise<void> };
+type Launcher = { chromium: { launch(): Promise<Browser> } };
+
+const firstLine = (error: unknown) => (error instanceof Error ? error.message : String(error)).split('\n')[0]!;
+
+// 「入っていない」ときだけ理由を返す。入っているのに壊れている・不安定な失敗は省く理由にせず、そのまま投げる。
+export async function playwrightUnavailableReason(
+  load: () => Launcher | Promise<Launcher> = () => import('@playwright/test'),
+): Promise<string | undefined> {
+  let playwright: Launcher;
+  try {
+    playwright = await load();
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (
+      (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND') &&
+      // 欠けたのが @playwright/test 自体のときだけ。依存や入口が欠けた壊れた導入（imported from …/@playwright/test/…）は含めない。
+      /^Cannot find (package|module) '@playwright\/test'/.test(firstLine(error))
+    )
+      return `@playwright/test が入っていない: ${firstLine(error)}`;
+    throw error;
+  }
+  let browser: Browser;
+  try {
+    // 実行ファイルの有無だけでは headless の別の版を見落とすため、実際に起動する。
+    browser = await playwright.chromium.launch();
+  } catch (error) {
+    if (firstLine(error).includes("Executable doesn't exist")) return `Chromium が入っていない: ${firstLine(error)}`;
+    throw error;
+  }
+  await browser.close();
+  return undefined;
+}
+
+// 引数・base・対象の誤りは、Playwright の有無より先に拒む。ブラウザの要らない計画（文書のみ）は省かない。
+export function preflightTargets(base: string, options: SelectionOptions, cwd = process.cwd()) {
+  const baseSha = resolveBase(cwd, base);
+  const { selection, plan } = currentPlan(cwd, baseSha, git(cwd, 'rev-parse', 'HEAD').trim(), options);
+  return { selection, plan };
+}
+
 const USAGE =
   '使い方: pnpm e2e:preflight [base-ref] [--files <e2e/*.test.ts…> --reason <理由> | --all --reason <理由>] | --verify <result.json> [base-ref] [同じ対象指定]（base-ref は --files より前に指定する）';
 
@@ -353,6 +397,18 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     verifyPreflight(result, base, process.cwd(), options);
     console.log('[e2e:preflight] 記録と現在のコード・対象が一致する（全件成功は scope: all のみ）');
   } else {
+    const { selection, plan } = preflightTargets(base, options);
+    const unavailable = plan.length ? await playwrightUnavailableReason() : undefined;
+    if (unavailable !== undefined) {
+      console.error(`[e2e:preflight] Playwright が入っていないため e2e を省く（${unavailable}）。`);
+      console.error(
+        `[e2e:preflight] 確かめるつもりだった対象（${selection.scope}）: ${selection.scope === 'all' ? '全件' : JSON.stringify(selection.files)} — ${selection.reason}`,
+      );
+      console.error(
+        '[e2e:preflight] 結果は記録しない。PR を作り、本文に未実施の理由と対象を書いて、CI の e2e・e2e-dev・e2e-repeat で確かめる',
+      );
+      process.exit(PLAYWRIGHT_UNAVAILABLE_EXIT);
+    }
     runPreflight(base, options);
   }
 }

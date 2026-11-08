@@ -66,6 +66,6 @@ done-check から pr へ続ける。親のある最後のタスクでは親の�
 
 ## クラウドの対象検査
 
-PR 前は `docs/development.md` の「クラウドで PR 前に e2e を確かめる」に従い、対象と理由を指定して通常・開発・関連する繰り返しを確認する。全件は CI に任せ、必要時だけ `--all --reason …` で明示する。実行前に対象・モード・所要時間の見込みを共有し、対象検査と CI の待ちを分けて記録する。
+PR 前は `docs/development.md` の「クラウドで PR 前に e2e を確かめる」に従い、対象と理由を指定して通常・開発・関連する繰り返しを確認する。全件は CI に任せ、必要時だけ `--all --reason …` で明示する。実行前に対象・モード・所要時間の見込みを共有し、対象検査と CI の待ちを分けて記録する。`e2e:preflight` を実行して Playwright が無いとして終了コード 3 が返ったときだけ e2e を省いて PR を作り、CI で担保する。
 
 コミットや工程の移動だけで入力が同じで、実行時HEADが現在のHEADの祖先なら e2e を再実行しない。amend・squash・rebaseなどで祖先関係が失われた場合は再実行する。実行時と同じ対象指定で `pnpm e2e:preflight --verify <result.json> [base-ref] [同じ選定オプション]` を使い、元の結果と両HEAD・入力の一致を示す照合記録を引き継ぐ。条件は `docs/agent-workflows/validation.md` と `docs/development.md` の「クラウドで PR 前に e2e を確かめる」に従う。
