@@ -93,10 +93,15 @@
     <GateSheet brand title={t('inviteTitle', { app: t('appName') })}>
       {#if usable === false}
         <div class="callout is-warn" role="alert"><Icon name="alert" /><span>{t('inviteUnusable')}</span></div>
+        <!-- 出口。秘密を持たない状態なので、法文のリンクと違い同じタブで移る -->
+        <div class="form-actions">
+          <a class="btn is-sm is-quiet" href={resolve('/login')}>{t('inviteToLogin')}</a>
+        </div>
       {:else}
         <p>{t('inviteLead')}</p>
-        <!-- 画面の経路ではなく Worker への POST。秘密は URL ではなく本文で送る -->
-        <form method="POST" action="/api/auth/google/start" bind:this={form} data-sveltekit-reload>
+        <!-- 画面の経路ではなく Worker への POST。秘密は URL ではなく本文で送る。中身は隠し欄だけなので hidden にし、
+             紙の gap を足さない（足すと本文とボタンの間がログインの画面の倍になる）。hidden でも submit() で送れる -->
+        <form method="POST" action="/api/auth/google/start" bind:this={form} data-sveltekit-reload hidden>
           <input type="hidden" name={CLAIM_TOKEN_FIELD} bind:this={field} />
         </form>
         <button class="btn is-wide is-google" type="button" aria-disabled={moving ? 'true' : undefined} onclick={start}

@@ -9,6 +9,7 @@
   import Icon from '../../lib/components/Icon.svelte';
   import { revisedDocuments } from '../../lib/consent-revision.ts';
   import { formatDateTime } from '../../lib/format-datetime.ts';
+  import { PRIVACY_VERSION, TERMS_VERSION } from '../../lib/legal/versions.ts';
   import { isUnauthenticated, loginUrl } from '../../lib/login-redirect.ts';
   import { t } from '../../lib/vocabulary.svelte.ts';
   import type { OutputOf } from '../../shared/operations/define.ts';
@@ -29,6 +30,14 @@
         ? 'consentRevisedTerms'
         : 'consentRevisedPrivacy',
   );
+
+  // 同意する2つの文書のリンク（新しいタブで開く）
+  function legalDocuments(termsVersion: string, privacyVersion: string) {
+    return [
+      { href: resolve('/terms'), title: t('termsTitle'), version: termsVersion },
+      { href: resolve('/privacy'), title: t('privacyTitle'), version: privacyVersion },
+    ];
+  }
 
   async function loadStatus() {
     const result = await callOperation(consentStatus, {});
@@ -110,7 +119,14 @@
           <span class="field-hint" role="status">{busy ? t('retrying') : ''}</span>
         </div>
       {:else}
-        <p role="status">{t('loading')}</p>
+        <!-- 読み込み中は、読み込んだ後の未同意のフォームを、この画面が持つ今の版で見えないまま置いて高さを取り、
+             読み込みの文をその上端に重ねる。縦中央の紙が読み込み後に伸びて、ロゴと見出しが動かないようにする -->
+        <div class="gate-pending">
+          <p role="status">{t('loading')}</p>
+          <div class="gate-pending-body" aria-hidden="true" inert>
+            {@render consentForm(TERMS_VERSION, PRIVACY_VERSION)}
+          </div>
+        </div>
       {/if}
     {:else if status.current}
       <p>{t('consentCurrent')}</p>
@@ -131,46 +147,46 @@
             {#each revised as doc (doc.kind)}
               {@const title = t(doc.kind === 'terms' ? 'termsTitle' : 'privacyTitle')}
               <br />{title}
-              <span class="mono">{t('legalRevised', { date: doc.version })}</span>
+              <span class="mono nowrap">{t('legalRevised', { date: doc.version })}</span>
             {/each}</span
           >
         </div>
       {/if}
-      <p>{t('consentLead', { app: t('appName') })}</p>
-      <div class="choice-list">
-        <a class="choice" href={resolve('/terms')} target="_blank" rel="noopener noreferrer">
-          <div>
-            <b>{t('termsTitle')}</b><span class="mono">{t('consentVersion', { version: status.terms_version })}</span>
-          </div>
-          <span class="visually-hidden"> {t('markdownNewTab')}</span>
-        </a>
-        <a class="choice" href={resolve('/privacy')} target="_blank" rel="noopener noreferrer">
-          <div>
-            <b>{t('privacyTitle')}</b><span class="mono"
-              >{t('consentVersion', { version: status.privacy_version })}</span
-            >
-          </div>
-          <span class="visually-hidden"> {t('markdownNewTab')}</span>
-        </a>
-      </div>
-      <label class="choice is-static is-consent">
-        <input type="checkbox" bind:checked disabled={busy} />
-        <span>{t('consentCheckLabel')}</span>
-      </label>
-      <div class="form-actions">
-        <button
-          class="btn is-primary"
-          type="button"
-          aria-disabled={!checked || busy}
-          aria-describedby={checked ? undefined : 'consent-submit-hint'}
-          onclick={submit}
-        >
-          {busy ? t('consentSubmitting') : t('consentSubmit')}
-        </button>
-        <LogoutButton />
-      </div>
-      <span class="field-hint is-reserved" id="consent-submit-hint" aria-hidden={checked}>{t('consentSubmitHint')}</span
-      >
+      {@render consentForm(status.terms_version, status.privacy_version)}
     {/if}
   </GateSheet>
 </Gate>
+
+<!-- 未同意のフォーム。読み込み中の高さを取る見えない骨組みと、読み込んだ後の本物で同じ組みを使う（ずれると紙が動く） -->
+{#snippet consentForm(termsVersion: string, privacyVersion: string)}
+  <p>{t('consentLead', { app: t('appName') })}</p>
+  <div class="choice-list">
+    {#each legalDocuments(termsVersion, privacyVersion) as doc (doc.href)}
+      <!-- 新しいタブで開くリンク。行末の印（link のアイコン）で、文字を読まなくても別の画面が開くと分かるようにする -->
+      <a class="choice" href={doc.href} target="_blank" rel="noopener noreferrer">
+        <div>
+          <b>{doc.title}</b><span class="mono">{t('consentVersion', { version: doc.version })}</span>
+        </div>
+        <Icon name="link" />
+        <span class="visually-hidden"> {t('markdownNewTab')}</span>
+      </a>
+    {/each}
+  </div>
+  <label class="choice is-static is-consent">
+    <input type="checkbox" bind:checked disabled={busy} />
+    <span>{t('consentCheckLabel')}</span>
+  </label>
+  <div class="form-actions">
+    <button
+      class="btn is-primary"
+      type="button"
+      aria-disabled={!checked || busy}
+      aria-describedby={checked ? undefined : 'consent-submit-hint'}
+      onclick={submit}
+    >
+      {busy ? t('consentSubmitting') : t('consentSubmit')}
+    </button>
+    <LogoutButton />
+  </div>
+  <span class="field-hint is-reserved" id="consent-submit-hint" aria-hidden={checked}>{t('consentSubmitHint')}</span>
+{/snippet}

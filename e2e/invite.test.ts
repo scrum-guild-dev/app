@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.ts';
-import { watchViolations } from './helpers.ts';
+import { createLayoutCheck, expectNoA11yViolationsInThemes, NARROW_VIEWPORT, watchViolations } from './helpers.ts';
 
 // 招待の URL を開く画面（/invite#<秘密>）。本物の Google へは行かないので、ログインを始める POST の応答は差し替える。
 // 開始の API の処理（形の検査、cross-site の拒否、レート制限、結ぶ処理）は test/invite-google.test.ts
@@ -238,4 +238,49 @@ test('押したときに隠し欄へ入れた秘密は、ページを離れる�
 test('ほかの画面の Referrer-Policy は変えない', async ({ page }) => {
   const response = await page.goto('/login');
   expect(response?.headers()['referrer-policy']).toBe('strict-origin-when-cross-origin');
+});
+
+test('使えない URL の画面は、警告の下にログインの画面へ戻るボタンがあり、押すとログインの画面へ移る', async ({
+  page,
+}) => {
+  await page.goto('/invite');
+  await expect(page.getByRole('alert')).toContainText('この招待の URL は使えません');
+  const exit = page.getByRole('link', { name: 'ログインの画面へ' });
+  // 同じタブで移る（秘密を持たない状態なので、新しいタブにしない）
+  await expect(exit).not.toHaveAttribute('target', /.+/);
+  // 警告の下にある
+  const alert = await page.getByRole('alert').boundingBox();
+  expect((await exit.boundingBox())?.y).toBeGreaterThan((alert?.y ?? 0) + (alert?.height ?? 0));
+  await exit.click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'ログイン' })).toBeVisible();
+});
+
+test('有効な招待の本文とボタンの間は、ログインの画面の本文とボタンの間と同じ', async ({ page }) => {
+  // 本文の下端から、紙の最初の幅いっぱいのボタン（招待は Google、ログインは GitHub。ログインの画面ではリンク）の上端まで
+  async function gap(lead: string): Promise<number> {
+    const text = await page.getByText(lead).boundingBox();
+    const target = await page.locator('.gate-sheet .btn.is-wide').first().boundingBox();
+    return (target?.y ?? 0) - ((text?.y ?? 0) + (text?.height ?? 0));
+  }
+  await page.goto(`/invite#${CLAIM_TOKEN}`);
+  await expect(page.getByRole('button', { name: 'Google でログイン' })).toBeVisible();
+  const invite = await gap('招待されたメールアドレスの Google アカウントでログインしてください。');
+  await page.goto('/login');
+  await expect(page.getByRole('link', { name: 'GitHub でログイン' })).toBeVisible();
+  const login = await gap('いずれかの組織に所属しているか');
+  expect(invite).toBeGreaterThan(0);
+  expect(Math.abs(invite - login)).toBeLessThanOrEqual(0.5);
+});
+
+test('使えない URL の画面は、4つのテーマで axe の違反が無く、390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({
+  page,
+}) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto('/invite');
+  await expect(page.getByRole('link', { name: 'ログインの画面へ' })).toBeVisible();
+  await expectNoA11yViolationsInThemes(page, 'invite');
+  const check = createLayoutCheck('invite');
+  await check.inThemes(page);
+  check.finish();
 });

@@ -24,6 +24,7 @@ export const uiScreens = [
   'admin',
   'operator-reassign',
   'consent',
+  'invite',
   'terms',
   'privacy',
 ] as const;

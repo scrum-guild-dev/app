@@ -1,7 +1,7 @@
 import { PRIVACY_VERSION, TERMS_VERSION } from '../src/lib/legal/versions.ts';
 import { consentRecord, consentStatus } from '../src/shared/operations/session/consent.ts';
 import { expect, test } from './fixtures.ts';
-import { signIn, waitForSettled } from './helpers.ts';
+import { createLayoutCheck, NARROW_VIEWPORT, signIn, waitForSettled } from './helpers.ts';
 import { resetAccountConsents, seedOldAccountConsent } from './local-d1.ts';
 import { routeOperation } from './operations.ts';
 
@@ -310,4 +310,116 @@ test('409 の後の読み直しに失敗したら、古い版のフォームを�
   await page.getByRole('button', { name: 'もう一度試す' }).click();
   await expect(page.getByRole('checkbox', { name: CHECKBOX_NAME })).toBeVisible();
   await expect(page.getByText('同意の状態を読み込めませんでした。もう一度試してください。')).toHaveCount(0);
+});
+
+for (const width of [1280, 390]) {
+  test(`読み込んでいる間から本文が出るまで、ロゴと見出しの位置が動かない（幅 ${width}px）`, async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await signIn(context, baseURL, 'unconsented');
+    await page.setViewportSize({ width, height: 900 });
+    // 読み込みの応答を、読み込み中の位置を測るまで止める
+    let release: () => void = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await routeOperation(page, consentStatus, async (call) => {
+      await released;
+      await call.fulfill(UNCONSENTED);
+    });
+    await page.goto('/consent');
+    await expect(page.getByRole('status').filter({ hasText: '読み込んでいます' })).toBeVisible();
+    // 骨組みは見えず、読み上げにも出ない（チェックボックスもリンクも役割で引けない）
+    await expect(page.getByRole('checkbox', { name: CHECKBOX_NAME })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /^利用規約/ })).toHaveCount(0);
+    await page.evaluate(() => document.fonts.ready);
+    const brand = page.locator('.gate-brand');
+    const title = page.getByRole('heading', { level: 1, name: '同意の確認' });
+    const before = { brand: await brand.boundingBox(), title: await title.boundingBox() };
+    release();
+    await expect(page.getByRole('checkbox', { name: CHECKBOX_NAME })).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    const after = { brand: await brand.boundingBox(), title: await title.boundingBox() };
+    expect(Math.abs((after.brand?.y ?? 0) - (before.brand?.y ?? Infinity))).toBeLessThanOrEqual(1);
+    expect(Math.abs((after.title?.y ?? 0) - (before.title?.y ?? Infinity))).toBeLessThanOrEqual(1);
+  });
+}
+
+test('幅 390px で、改めた案内の改定日は途中で折れず 1 行で読める', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'unconsented');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await routeOperation(page, consentStatus, (call) =>
+    call.fulfill({
+      ...UNCONSENTED,
+      latest: { terms_version: '2026-10-01', privacy_version: '2026-10-01', consented_at: OLD_CONSENT.consentedAt },
+    }),
+  );
+  await page.goto('/consent');
+  const dates = page.locator('.callout.is-info .mono');
+  await expect(dates).toHaveCount(2);
+  await page.evaluate(() => document.fonts.ready);
+  for (const date of await dates.all()) {
+    expect(await date.evaluate((element) => element.getClientRects().length)).toBe(1);
+  }
+});
+
+test('2つの文書のリンクは、行末の印で新しいタブで開くリンクと分かる', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'unconsented');
+  await routeOperation(page, consentStatus, (call) => call.fulfill(UNCONSENTED));
+  await page.goto('/consent');
+  for (const name of [/^利用規約.*新しいタブで開きます$/, /^プライバシーポリシー.*新しいタブで開きます$/]) {
+    const link = page.getByRole('link', { name });
+    await expect(link).toHaveAttribute('target', '_blank');
+    // 行末の印は見えていて、読み上げからは外す
+    const mark = link.locator('> svg.ico');
+    await expect(mark).toBeVisible();
+    await expect(mark).toHaveAttribute('aria-hidden', 'true');
+    // 印は版の文字の右にある
+    const text = await link.locator('> div').boundingBox();
+    expect((await mark.boundingBox())?.x).toBeGreaterThan((text?.x ?? 0) + (text?.width ?? 0) - 1);
+  }
+});
+
+test('幅 1280px で、同意の主文の最後の行に 1 字だけ落ちない', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'unconsented');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await routeOperation(page, consentStatus, (call) => call.fulfill(UNCONSENTED));
+  await page.goto('/consent');
+  await expect(page.getByRole('checkbox', { name: CHECKBOX_NAME })).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  // 最後の2字が同じ行にあること（1 字だけ次の行に落ちると、最後の字だけ行の上端が違う）
+  const sameLine = await page.locator('.choice.is-consent > span').evaluate((element) => {
+    const text = element.firstChild!;
+    const length = text.textContent!.length;
+    const top = (start: number): number => {
+      const range = document.createRange();
+      range.setStart(text, start);
+      range.setEnd(text, start + 1);
+      return range.getBoundingClientRect().top;
+    };
+    return top(length - 1) === top(length - 2);
+  });
+  expect(sameLine).toBe(true);
+});
+
+test('同意の画面が 390px で横にはみ出さず、押せる要素が 44px 四方で押せる（改めた案内のある状態）', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signIn(context, baseURL, 'unconsented');
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await routeOperation(page, consentStatus, (call) =>
+    call.fulfill({
+      ...UNCONSENTED,
+      latest: { terms_version: '2026-10-01', privacy_version: '2026-10-01', consented_at: OLD_CONSENT.consentedAt },
+    }),
+  );
+  await page.goto('/consent');
+  await expect(page.getByRole('checkbox', { name: CHECKBOX_NAME })).toBeVisible();
+  const check = createLayoutCheck('consent');
+  await check.inThemes(page);
+  check.finish();
 });
