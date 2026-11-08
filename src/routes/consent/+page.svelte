@@ -147,7 +147,7 @@
             {#each revised as doc (doc.kind)}
               {@const title = t(doc.kind === 'terms' ? 'termsTitle' : 'privacyTitle')}
               <br />{title}
-              <span class="mono nowrap">{t('legalRevised', { date: doc.version })}</span>
+              <span class="mono keep-together">{t('legalRevised', { date: doc.version })}</span>
             {/each}</span
           >
         </div>
@@ -162,12 +162,12 @@
   <p>{t('consentLead', { app: t('appName') })}</p>
   <div class="choice-list">
     {#each legalDocuments(termsVersion, privacyVersion) as doc (doc.href)}
-      <!-- 新しいタブで開くリンク。行末の印（link のアイコン）で、文字を読まなくても別の画面が開くと分かるようにする -->
+      <!-- 新しいタブで開くリンク。行末の印（external のアイコン。外へ出る矢印）で、文字を読まなくても別の画面が開くと分かるようにする -->
       <a class="choice" href={doc.href} target="_blank" rel="noopener noreferrer">
         <div>
           <b>{doc.title}</b><span class="mono">{t('consentVersion', { version: doc.version })}</span>
         </div>
-        <Icon name="link" />
+        <Icon name="external" />
         <span class="visually-hidden"> {t('markdownNewTab')}</span>
       </a>
     {/each}

@@ -25,15 +25,15 @@ const app = "Scrum Guild";
 const version = "2026-10-31";
 const consentLead = t("consentLead").replace("{app}", app);
 const consentVersion = (v) => t("consentVersion").replace("{version}", v);
-// 行末の印（link のアイコン）で、文字を読まなくても新しいタブで開くリンクと分かるようにする。読み上げは visually-hidden で補う
-const newTab = `${icon("link")}<span class="visually-hidden"> ${t("markdownNewTab")}</span>`;
+// 行末の印（external のアイコン。外へ出る矢印）で、文字を読まなくても新しいタブで開くリンクと分かるようにする。読み上げは visually-hidden で補う
+const newTab = `${icon("external")}<span class="visually-hidden"> ${t("markdownNewTab")}</span>`;
 // 同じ画面に複数の状態を並べるので、説明の id は状態ごとに分ける（本番は画面に1つ）
 const legalLinks = () => `<div class="choice-list">
   <a class="choice" href="terms.html" target="_blank" rel="noopener noreferrer"><div><b>${t("termsTitle")}</b><span class="mono">${consentVersion(version)}</span></div>${newTab}</a>
   <a class="choice" href="privacy.html" target="_blank" rel="noopener noreferrer"><div><b>${t("privacyTitle")}</b><span class="mono">${consentVersion(version)}</span></div>${newTab}</a>
 </div>`;
 // 前の版に同意した人への「改めました」の案内（.callout.is-info）。改めた文書ごとに、名前と改定日を出す
-const revisedDoc = (title) => `<br>${title} <span class="mono nowrap">${t("legalRevised").replace("{date}", version)}</span>`;
+const revisedDoc = (title) => `<br>${title} <span class="mono keep-together">${t("legalRevised").replace("{date}", version)}</span>`;
 const revised = (headingKey, docs) => `<div class="callout is-info">${icon("file")}<span><b>${t(headingKey)}</b> ${docs.join(" ")}</span></div>`;
 const revisedTerms = revisedDoc(t("termsTitle"));
 const revisedPrivacy = revisedDoc(t("privacyTitle"));

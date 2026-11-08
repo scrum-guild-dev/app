@@ -273,6 +273,18 @@ test('有効な招待の本文とボタンの間は、ログインの画面の�
   expect(Math.abs(invite - login)).toBeLessThanOrEqual(0.5);
 });
 
+test('有効な招待の画面は、4つのテーマで axe の違反が無く、390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({
+  page,
+}) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(`/invite#${CLAIM_TOKEN}`);
+  await expect(page.getByRole('button', { name: 'Google でログイン' })).toBeVisible();
+  await expectNoA11yViolationsInThemes(page, 'invite');
+  const check = createLayoutCheck('invite');
+  await check.inThemes(page);
+  check.finish();
+});
+
 test('使えない URL の画面は、4つのテーマで axe の違反が無く、390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({
   page,
 }) => {

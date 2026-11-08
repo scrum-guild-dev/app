@@ -360,8 +360,14 @@ test('幅 390px で、改めた案内の改定日は途中で折れず 1 行で�
   const dates = page.locator('.callout.is-info .mono');
   await expect(dates).toHaveCount(2);
   await page.evaluate(() => document.fonts.ready);
+  // 中の文字の行の数を数える（inline-block の箱は折れても矩形が1つなので、箱ではなく文字の矩形の上端で見る）
   for (const date of await dates.all()) {
-    expect(await date.evaluate((element) => element.getClientRects().length)).toBe(1);
+    const lines = await date.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+    });
+    expect(lines).toBe(1);
   }
 });
 
@@ -376,6 +382,8 @@ test('2つの文書のリンクは、行末の印で新しいタブで開くリ�
     const mark = link.locator('> svg.ico');
     await expect(mark).toBeVisible();
     await expect(mark).toHaveAttribute('aria-hidden', 'true');
+    // 外へ出る矢印（link の鎖はコピーの印なので使わない）
+    await expect(mark.locator('use')).toHaveAttribute('href', '#i-external');
     // 印は版の文字の右にある
     const text = await link.locator('> div').boundingBox();
     expect((await mark.boundingBox())?.x).toBeGreaterThan((text?.x ?? 0) + (text?.width ?? 0) - 1);
@@ -399,7 +407,7 @@ test('幅 1280px で、同意の主文の最後の行に 1 字だけ落ちない
       range.setEnd(text, start + 1);
       return range.getBoundingClientRect().top;
     };
-    return top(length - 1) === top(length - 2);
+    return Math.abs(top(length - 1) - top(length - 2)) < 1;
   });
   expect(sameLine).toBe(true);
 });

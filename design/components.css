@@ -30,8 +30,9 @@ h1, h2, h3 { text-wrap: balance; }
 .mono { font-family: var(--font-mono); }
 /* 区切りのない長い文字列（版の SHA、ID、URL）を、狭い幅でも途中で折る */
 .wrap-anywhere { overflow-wrap: anywhere; }
-/* 途中で折ると読めなくなる短い値（改定日の「改定日: 2026-10-31」など）を、1 行のまま次の行へ送る。長い文字列には使わない */
-.nowrap { white-space: nowrap; }
+/* 途中で折ると読めなくなる短い値（改定日の「改定日: 2026-10-31」など）を、行に収まるなら割らずに次の行へ送る。
+   nowrap にしないのは、文字の拡大や 320px で行より長くなったときに、はみ出さず中で折るため。長い文字列には使わない */
+.keep-together { display: inline-block; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
@@ -1438,9 +1439,8 @@ dialog.dialog::backdrop { background: none; }
 .choice b { display: block; font-size: var(--text-sm); overflow-wrap: anywhere; }
 .choice span { font-size: var(--text-xs); color: var(--color-muted); overflow-wrap: anywhere; }
 /* 同意の主文は補足ではなく、確認して行う操作そのものなので本文と同じ強さで出す */
-.choice.is-consent > span { font-size: var(--text-md); color: var(--color-fg); }
-/* 主文の最後の行に 1 字だけ落ちないよう、行の長さをならす（1280px で「同意しま／す」と割れた） */
-.choice.is-consent > span { text-wrap: pretty; }
+/* 最後の行に 1 字だけ落ちないよう、行の長さをならす（1280px で「同意しま／す」と割れた。効かないブラウザは従来の折り返し） */
+.choice.is-consent > span { font-size: var(--text-md); color: var(--color-fg); text-wrap: pretty; }
 /* 選択肢にクリア報酬の印（.tier）を載せるとき、額の数字は印の中で続けて読ませる（.choice b の見出しの指定を戻す） */
 .choice .tier b { display: inline; font-size: inherit; }
 /* 押すと移る選択肢（組織の選択など）。choice と同じ見た目のリンク */
@@ -1448,7 +1448,7 @@ a.choice { color: inherit; text-decoration: none; align-items: center; }
 a.choice:hover, a.choice:focus-visible { border-color: var(--color-accent); }
 a.choice > div, .choice.is-static > div { flex: 1; min-width: 0; }
 a.choice > div > span, .choice.is-static > div > span { display: block; }
-/* 新しいタブで開く選択肢（同意の文書のリンク）の行末の印（link のアイコン）。枠と文字だけでは押せることも別の画面が開くことも
+/* 新しいタブで開く選択肢（同意の文書のリンク）の行末の印（external のアイコン）。枠と文字だけでは押せることも別の画面が開くことも
    見えないので、文字を読まなくても分かる印を置く。読み上げは visually-hidden の「新しいタブで開きます」が補う */
 a.choice > .ico { flex: none; color: var(--color-muted); }
 a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent); }

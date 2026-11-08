@@ -12,6 +12,8 @@
     flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
     archive: '<path d="M3 4h18v4H3zM5 8v12h14V8M10 12h4"/>',
     link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    // 新しいタブで開くリンクの印（外へ出る矢印）。link（鎖）はコピーと取り込み元の URL の印なので分ける
+    external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     git: '<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8M8 6h4a4 4 0 0 1 4 4"/>',
     tag: '<path d="M3 4v7l9 9 8-8-9-9H4a1 1 0 0 0-1 1z"/><circle cx="7.5" cy="8" r="1.5"/>',
     bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
