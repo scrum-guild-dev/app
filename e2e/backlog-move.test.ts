@@ -34,16 +34,18 @@ async function renameStory(page: Page, from: string, to: string): Promise<void> 
   const input = drawer.getByRole('textbox', { name: 'タイトル' });
   await input.fill(to);
   const saved = waitForResponses(page, '/story-update');
+  const reloaded = waitForResponses(page, '/backlog-tree');
   await input.press('Enter');
   await saved;
   const renamed = page.getByRole('dialog', { name: to, exact: true });
   await expect(renamed).toBeVisible();
-  // 閉じる URL 移動の読み直しまで待つ。以前の題の locator は改名した時点で hidden になる。
-  const closed = waitForResponses(page, '/backlog-tree');
+  // 保存による木の更新を待つ。URL の story を外す移動では木が読み直されない場合もある。
+  await (await reloaded).finished();
+  await expect(page.locator('.tree').getByRole('link', { name: to, exact: true })).toBeVisible();
+  // 以前の題の locator は改名した時点で hidden になるので、現在の題で閉じたことを確認する。
   await page.keyboard.press('Escape');
   await expect(renamed).toBeHidden();
   await page.waitForURL((url) => !url.searchParams.has('story'));
-  await (await closed).finished();
   await expect(page.locator('.tree')).toHaveAttribute('aria-busy', 'false');
 }
 
