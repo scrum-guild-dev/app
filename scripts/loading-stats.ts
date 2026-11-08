@@ -18,22 +18,16 @@ export function trialTiming(operations: readonly Timing[]) {
   const secondary = Math.max(0, ...operations.filter((o) => o.secondary).map((o) => o.ms));
   return { primary: main, secondary, total: Math.max(main, secondary), saving: Math.max(0, secondary - main) };
 }
-export function comparison(
-  trials: readonly ReturnType<typeof trialTiming>[],
-  reverseTrials: readonly ReturnType<typeof trialTiming>[] = trials,
-) {
-  const p50Saving = percentile(
-    trials.map((t) => t.saving),
-    0.5,
-  );
-  const p95Saving = percentile(
-    trials.map((t) => t.saving),
-    0.95,
-  );
-  // 発行順を逆にしても従が主より遅い場合だけ候補とする。
-  const reverseP50 = percentile(
-    reverseTrials.map((t) => t.saving),
-    0.5,
-  );
-  return { p50Saving, p95Saving, candidate: p50Saving > 0 && reverseP50 > 0 };
+// 完了差の分位点は診断値。ローカルの直列処理から実装の可否を判定しない。
+export function comparison(trials: readonly ReturnType<typeof trialTiming>[]) {
+  return {
+    p50Saving: percentile(
+      trials.map((t) => t.saving),
+      0.5,
+    ),
+    p95Saving: percentile(
+      trials.map((t) => t.saving),
+      0.95,
+    ),
+  };
 }

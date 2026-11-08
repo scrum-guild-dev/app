@@ -158,7 +158,6 @@ try {
       continue;
     }
     const operations = [...screen.operations, ...(screen.after ?? [])];
-    const orderTrials = [];
     for (const reverse of [false, true]) {
       const label = reverse ? '逆順' : '正順';
       const read = () =>
@@ -176,7 +175,6 @@ try {
       const trials = samples.map((sample) =>
         trialTiming(sample.map((o) => ({ ms: o.completedMs, secondary: o.secondary }))),
       );
-      orderTrials.push(trials);
       const result = comparison(trials);
       console.log(
         `| ${screen.route} | ${label}: 合計（各試行の最終完了） | ${percentile(
@@ -188,11 +186,13 @@ try {
         ).toFixed(2)} |`,
       );
       console.log(
-        `| ${screen.route} | ${label}: 短縮見込み | ${result.p50Saving.toFixed(2)} | ${result.p95Saving.toFixed(2)} |`,
+        `| ${screen.route} | ${label}: 従と主の完了差（診断値） | ${result.p50Saving.toFixed(2)} | ${result.p95Saving.toFixed(2)} |`,
       );
     }
-    const candidate = comparison(orderTrials[0]!, orderTrials[1]!).candidate;
-    console.log(`| ${screen.route} | 後回しの判定（両順）: ${candidate ? '候補' : 'なし'} | — | — |`);
+    const assessments = [];
+    if (screen.operations.some((op) => op.secondary)) assessments.push('並列の従: 判定不能');
+    if (screen.after?.some((op) => op.secondary)) assessments.push('逐次の従: 構造上の候補');
+    console.log(`| ${screen.route} | ${assessments.join(' / ') || '従なし'} | — | — |`);
     if (screen.note) console.log(`\n${screen.route}: ${screen.note}\n`);
   }
 } finally {
