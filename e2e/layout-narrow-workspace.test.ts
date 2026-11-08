@@ -9,7 +9,9 @@ import { sprintBoard } from '../src/shared/operations/sprint/index.ts';
 import { expect, test } from './fixtures.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
 import {
+  LAYOUT_THEMES,
   NARROW_VIEWPORT,
+  applyTheme,
   createWorkspace,
   expectNarrowLayout,
   findOverflowViolations,
@@ -22,6 +24,7 @@ import { SAMPLE_BOARD } from './sprint-fixture.ts';
 const WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 const TASK_ID = '019a0000-0000-7000-8000-000000000801';
 const EPIC_ID = '019a0000-0000-7000-8000-000000000b01';
+const STORY_ID = '019a0000-0000-7000-8000-000000000901';
 
 type W = (key: DictionaryKey, params?: TemplateParams) => string;
 
@@ -169,4 +172,80 @@ test('終了したワークスペースのエピックの画面は、「戻る�
   // 終了の帯の中のリンク（組織の管理へ）は、どのワークスペースの画面にも出る帯の部品で、この画面の対象ではない
   const violations = await findTargetSizeViolations(page);
   expect(violations.filter((violation) => !violation.detail.includes('div.callout'))).toEqual([]);
+});
+
+// 引き出しの上の帯の右端（前後、開き方、閉じる）。閉じるは見た目ごと 44px 四方で、隣のボタンと箱が交わらない（#994）。
+// 押せる範囲の汎用の検査は、::after で広げた範囲が隣に重なっても、上に描かれた方に当たれば通るので、箱の大きさと交わりを直接確かめる
+async function expectDrawerToolsApart(
+  page: Page,
+  drawer: ReturnType<Page['locator']>,
+  neighbors: number,
+): Promise<void> {
+  const close = drawer.locator('.drawer-close');
+  await expect(close).toBeVisible();
+  // 組織の読み込みでテーマが DB の値に戻らないよう、要求が止んでから当てる
+  await page.waitForLoadState('networkidle');
+  for (const theme of LAYOUT_THEMES) {
+    await applyTheme(page, theme);
+    const boxes = await drawer.locator('.drawer-tools button:visible').evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          close: button.classList.contains('drawer-close'),
+          x: rect.x,
+          y: rect.y,
+          w: rect.width,
+          h: rect.height,
+        };
+      }),
+    );
+    // 前後と開き方と閉じるは、どれも見た目ごと 44px 四方
+    for (const box of boxes) {
+      expect(box.w, `${theme}: 右端のボタンの幅`).toBeGreaterThanOrEqual(44);
+      expect(box.h, `${theme}: 右端のボタンの高さ`).toBeGreaterThanOrEqual(44);
+    }
+    const closeBox = boxes.find((box) => box.close);
+    expect(closeBox, `${theme}: 閉じるボタンが無い`).toBeDefined();
+    // 隣のボタンの数は固定する（出るはずのボタンが消えて、交わりの確かめが空振りしないように）。
+    // 狭い幅では開き方の「真ん中」を出さない。タスクは前後の2つと開き方（横、ページ全体、新しいタブ）の3つ、
+    // ストーリーは横だけが残って開き方の組ごと出ないので前後の2つ、ページ全体は前後が出ず開き方の3つ
+    const others = boxes.filter((box) => !box.close);
+    expect(others.length, `${theme}: 閉じるボタンの隣のボタンの数`).toBe(neighbors);
+    for (const other of others) {
+      const apart =
+        other.x + other.w <= closeBox!.x ||
+        closeBox!.x + closeBox!.w <= other.x ||
+        other.y + other.h <= closeBox!.y ||
+        closeBox!.y + closeBox!.h <= other.y;
+      expect(apart, `${theme}: 閉じるボタンと隣のボタンの箱が交わる`).toBe(true);
+    }
+    expect(await findTargetSizeViolations(page), theme).toEqual([]);
+    // 測っている間に、画面の読み直しで DB のテーマに戻っていない
+    expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(theme);
+  }
+}
+
+test('タスクの引き出し（前後のボタンつき）、ストーリーの引き出し、ページ全体の閉じるボタンが、390px で見た目ごと 44px 四方になり隣と交わらない', async ({
+  page,
+}) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  // タスクの引き出し。木の題から開くと、前後のボタンが閉じるボタンの左に並ぶ
+  await page.goto(WORKSPACE);
+  await page.getByRole('link', { name: 'ポイント付与のバッチを作る', exact: true }).click();
+  const task = page.getByRole('dialog', { name: 'ポイント付与のバッチを作る' });
+  await expect(task.getByRole('heading', { level: 2 })).toBeFocused();
+  await expect(task.locator('.drawer-steps')).toBeVisible();
+  await expectDrawerToolsApart(page, task, 5);
+  // ストーリーの引き出し
+  await page.goto(`${WORKSPACE}?story=${STORY_ID}`);
+  const story = page.getByRole('dialog');
+  await expect(story.getByRole('heading', { level: 2 })).toBeFocused();
+  // 前後のボタンは、バックログが木を読んで順を置いてから出る。見出しのフォーカスだけでは数える時点に間に合わない
+  await expect(story.locator('.drawer-steps')).toBeVisible();
+  await expectDrawerToolsApart(page, story, 2);
+  // ページ全体で開いたタスク
+  await page.goto(`${WORKSPACE}/tasks/${TASK_ID}`);
+  const whole = page.locator('.drawer.is-page');
+  await expect(whole.getByRole('heading', { level: 2 })).toBeVisible();
+  await expectDrawerToolsApart(page, whole, 3);
 });
