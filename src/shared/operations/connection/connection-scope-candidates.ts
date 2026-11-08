@@ -12,6 +12,9 @@ export const connectionScopeCandidates = defineOperation({
   permission: 'member',
   workspace: true,
   rateLimit: { max: 20, windowSeconds: 300 },
+  // サーバーは取り込み元への 1 回の問い合わせに 10 秒の上限を掛け、候補を読むときは何回か問い合わせうる。
+  // 画面の既定（10 秒）では正常な応答も切れるので、長く待つ
+  clientTimeoutMs: 30_000,
   input: connectionIdInput,
   output: z.object({ candidates: z.array(z.object({ id: z.string(), name: z.string() })) }),
 });
