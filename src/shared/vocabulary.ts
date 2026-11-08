@@ -1232,6 +1232,8 @@ export const dictionary = defineDictionary({
   // /invite を、URL の続き（# 以降）が無いまま開いたとき。秘密は読んだらすぐ URL から消すので、戻る・再読み込みでもここに来る
   inviteUnusable:
     'この招待の URL は使えません。招待の URL を開いた直後の画面だけが使えます。戻る・再読み込みをしたときや、URL が欠けているときは、届いた招待の URL をもう一度開いてください。',
+  // 使えない旨の下の出口。戻る・再読み込みで来た人（すでに入れる組織がある人を含む）が行き止まりにならないよう、ログインの画面へ移す
+  inviteToLogin: 'ログインの画面へ',
   inviteMoving: 'Google へ移っています',
   // URL を読み終えてボタンを出したときに、読み上げの領域へ入れる（ボタンは URL を置き換えた後に出るため）
   inviteReady: '招待の URL を読みました。「Google でログイン」を押すとログインを始めます。',
@@ -2500,6 +2502,10 @@ export const dictionary = defineDictionary({
   connectionErrorCalloutPlain: '{message}',
   connectionStoppedAuthFailed: '認証に失敗したので止めました。',
   connectionStoppedOther: '止まっています。',
+  connectionNextWhoOwner: '登録した{owner}か{leader}',
+  connectionNextWhoLeader: '{leader}',
+  connectionNextStopped: '{who}に、止まっていることを伝えてください。',
+  connectionNextError: '失敗が続くようなら、{who}に伝えてください。',
   connectionChooseScope: '範囲を選ぶ',
   connectionEmptyTitle: '{connection}がまだありません',
   connectionEmptyText:

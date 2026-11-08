@@ -3,6 +3,7 @@ import {
   dismissToast,
   escapeToast,
   focusToastAction,
+  isFailureToast,
   pauseToast,
   resumeToast,
   runToastAction,
@@ -51,6 +52,30 @@ describe('onclose', () => {
     const id = showToast('x', undefined, undefined, onclose);
     dismissToast(id, true);
     expect(onclose).not.toHaveBeenCalled();
+  });
+});
+
+describe('出ている長さ', () => {
+  it('成功は4秒、失敗（alert）は8秒、操作つきは失敗でも10秒', () => {
+    vi.useFakeTimers();
+    showToast('できた', 'check');
+    showToast('できなかった', 'alert');
+    showToast('戻せる', 'alert', { label: '取り消す', run: () => {} });
+    expect(toasts).toHaveLength(3);
+    vi.advanceTimersByTime(4_000);
+    expect(toasts.map((toast) => toast.message)).toEqual(['できなかった', '戻せる']);
+    vi.advanceTimersByTime(3_999);
+    expect(toasts).toHaveLength(2);
+    vi.advanceTimersByTime(1);
+    expect(toasts.map((toast) => toast.message)).toEqual(['戻せる']);
+    vi.advanceTimersByTime(2_000);
+    expect(toasts).toHaveLength(0);
+  });
+
+  it('isFailureToast はアイコン alert だけを失敗とする', () => {
+    expect(isFailureToast({ icon: 'alert' })).toBe(true);
+    expect(isFailureToast({ icon: 'check' })).toBe(false);
+    expect(isFailureToast({})).toBe(false);
   });
 });
 

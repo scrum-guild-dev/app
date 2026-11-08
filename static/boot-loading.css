@@ -1,0 +1,64 @@
+/* 画面の JS が動き出す前（URL を直接開いた最初の読み込み）の、読み込み中の表示（src/app.html の #boot-loading）。
+   SvelteKit は最初の load がすべて終わるまで root のレイアウトを描かないので、デザインシステムの部品（LoadingSheet）は使えない。
+   デザインシステムの CSS もこの時点では届いていないため、ここに限り自分のオリジンの小さなファイルで、同じ地と文字の色を持つ。
+   値は design/tokens.css のシンプルの --color-bg と --color-fg、--color-muted（OS がダークのときはダーク）と同じにする。
+   速い読み込みでは出さないよう、300ms たってから見せる（LoadingSheet の SLOW_MS と同じ）。動きではないので、動きを減らす設定でも同じ。
+   画面が描かれたら +layout.svelte が取り除く。 */
+#boot-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: #f7f7f8;
+  color: #5c5f66;
+  font-family: system-ui, sans-serif;
+  font-size: 1rem;
+  visibility: hidden;
+  animation: boot-loading-show 0s linear 300ms forwards;
+}
+@keyframes boot-loading-show {
+  to {
+    visibility: visible;
+  }
+}
+/* 15 秒たっても画面が描けない（JS が取れない、通信が切れた）ときは、「読み込み中」と偽り続けず、失敗の文と再読み込みのリンクに替える。
+   どちらも同じ時間（15s）に動かすので、並びの順には頼らない（待つ文を隠す animation と、失敗の文を見せる animation は別の要素） */
+#boot-loading > span {
+  grid-area: 1 / 1;
+}
+#boot-loading .boot-failed {
+  visibility: hidden;
+  animation: boot-failed-show 0s linear 15s forwards;
+}
+#boot-loading .boot-wait {
+  animation: boot-wait-hide 0s linear 15s forwards;
+}
+@keyframes boot-failed-show {
+  to {
+    visibility: visible;
+  }
+}
+@keyframes boot-wait-hide {
+  to {
+    visibility: hidden;
+  }
+}
+#boot-loading a {
+  color: inherit;
+  text-decoration: underline;
+}
+@media (prefers-color-scheme: dark) {
+  #boot-loading {
+    background: #121214;
+    color: #a2a2ab;
+  }
+}
+html[data-theme='simple_light'] #boot-loading {
+  background: #f7f7f8;
+  color: #5c5f66;
+}
+html[data-theme='simple_dark'] #boot-loading {
+  background: #121214;
+  color: #a2a2ab;
+}

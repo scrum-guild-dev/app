@@ -893,7 +893,7 @@ test.describe('カードのドラッグ', () => {
     await expect(titlesIn(page, 'レビュー')).toHaveText([]);
     await unroute();
     await page.mouse.move(0, 0);
-    await expect(page.locator('.toasts:visible .toast')).toHaveCount(0);
+    await expect(page.locator('.toasts:visible .toast')).toHaveCount(0, { timeout: 12_000 });
   });
 
   test('完了を戻すのが断られたら、列の移動は送らず、理由を知らせる。戻せないカードはつかめない', async ({
@@ -951,7 +951,7 @@ test.describe('カードのドラッグ', () => {
     expect(columnMoves).toEqual([]);
     await unroute();
     await page.mouse.move(0, 0);
-    await expect(page.locator('.toasts:visible .toast')).toHaveCount(0);
+    await expect(page.locator('.toasts:visible .toast')).toHaveCount(0, { timeout: 12_000 });
   });
 
   test('完了の列へ落とした直後に別のカードを落としても、続けて積んだ移動は捨てられずに送られる', async ({
@@ -1018,7 +1018,7 @@ test.describe('カードのドラッグ', () => {
     await unrouteReopen();
     await unrouteMove();
     await page.mouse.move(0, 0);
-    await expect(page.locator('.toasts:visible .toast')).toHaveCount(0);
+    await expect(page.locator('.toasts:visible .toast')).toHaveCount(0, { timeout: 12_000 });
   });
 
   test('別の画面で先に完了にされていたとき（409 の conflict）も、落とした完了として扱い、読み直す', async ({
@@ -1041,6 +1041,6 @@ test.describe('カードのドラッグ', () => {
     await waitForSettled(page);
     await unroute();
     await page.mouse.move(0, 0);
-    await expect(page.locator('.toasts:visible .toast')).toHaveCount(0);
+    await expect(page.locator('.toasts:visible .toast')).toHaveCount(0, { timeout: 12_000 });
   });
 });

@@ -25,6 +25,7 @@ const PROVIDER = { backlog: ["link", "Backlog"], github: ["git", "GitHub"] };
 
 function conn(c) {
   const mine = c.owner === D.me;
+  const next = (pre, post) => pre + (mine ? t("leader") : `登録した${user(c.owner).name}か${t("leader")}`) + post;
   const [cls, label] = STATE[c.status];
   return `<section class="panel conn">
     <div class="conn-head">
@@ -36,8 +37,8 @@ function conn(c) {
           : `<button class="btn is-sm is-quiet" type="button">止める</button><button class="btn is-sm is-quiet is-danger" type="button">削除</button>`}
       </span>
     </div>
-    ${c.error ? `<div class="callout is-warn">${icon("alert")}<span>${esc(c.error)}（${esc(c.errorAt)}、${c.failures} 回続けて失敗）</span></div>` : ""}
-    ${c.stoppedReason ? `<div class="callout is-danger">${icon("alert")}<span>${esc(c.stoppedReason)}</span></div>` : ""}
+    ${c.error ? `<div class="callout is-warn">${icon("alert")}<span>${esc(c.error)}（${esc(c.errorAt)}、${c.failures} 回続けて失敗）${c.status === "error" ? " " + esc(next("失敗が続くようなら、", "に伝えてください。")) : ""}</span></div>` : ""}
+    ${c.status === "stopped" ? `<div class="callout is-danger">${icon("alert")}<span>${esc(c.stoppedReason ?? "止まっています。")}${esc(next("", "に、止まっていることを伝えてください。"))}</span></div>` : ""}
     <dl class="facts">
       <div><dt>登録した人</dt><dd>${avatarOf(c.owner)}${esc(user(c.owner).name)}</dd></div>
       <div><dt>取り込み元</dt><dd>${PROVIDER[c.provider][1]}・<span class="mono">${esc(c.host)}</span></dd></div>
