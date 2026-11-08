@@ -209,7 +209,9 @@
         if (alive && taskId === requestedTaskId) {
           if (requestedAssigneeVersion === assigneeVersion)
             taskContext = { ...taskContext, today_on: result.data.today_on };
-          if ((await refresh(true)) === null && !taskGone) showToast(t('todayMarkRefreshFailed'), 'alert');
+          const latest = await refresh(true);
+          if (latest === null && alive && taskId === requestedTaskId && !taskGone)
+            showToast(t('todayMarkRefreshFailed'), 'alert');
         }
         onchanged();
         await invalidate('app:today');
@@ -787,11 +789,13 @@
     latestRefreshTaskId = requestedTaskId;
     const pending = (async (): Promise<TaskDetail | null> => {
       const result = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: requestedTaskId }, { slug });
-      if (!alive || taskId !== requestedTaskId) return null;
+      // 閉じた後も同じタスクの読めた結果は返す。保存元が成功を失敗や削除と誤認しないため。
+      if (!alive) return result.ok ? result.data.task : null;
+      if (taskId !== requestedTaskId) return null;
       // 後発の読み取りに表示を譲る場合も、その結果を呼び出し元へ返す。null は読み取り失敗だけを表す。
       if (requestedVersion !== refreshVersion) return latestRefreshTaskId === requestedTaskId ? latestRefresh : null;
       if (!result.ok) {
-        if (refreshCloseIfGone && result.status === 404) gone();
+        if (refreshCloseIfGone && result.status === 404 && alive) gone();
         return null;
       }
       if (alive && taskId === requestedTaskId) {

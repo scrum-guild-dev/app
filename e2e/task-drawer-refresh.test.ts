@@ -209,3 +209,40 @@ test('印の読み直しを完了の読み直しが追い越しても、404 な�
     page.locator('.toast:visible').filter({ hasText: 'このタスクは見つかりません。一覧を読み直します' }),
   ).toHaveCount(1);
 });
+
+test('印の読み直し中に閉じても、成功した読み取りを失敗と知らせない', async ({ page }) => {
+  await createWorkspace(page, '閉じた後の読み直し');
+  await addTaskRow(page, '印を保存して閉じる');
+  await page.getByRole('link', { name: '印を保存して閉じる', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '印を保存して閉じる' });
+  await drawer.getByRole('combobox', { name: '担当', exact: true }).selectOption({ label: 'ミナト' });
+  const sun = drawer.getByRole('button', { name: '今日やる: 印を保存して閉じる', exact: true });
+  await expect(sun).toHaveAttribute('aria-disabled', 'false');
+  let captured = false;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await routeOperation(page, taskDetail, { slug: 'aoba' }, async (call) => {
+    const output = await call.fetch();
+    if (output.today_on !== null) {
+      captured = true;
+      await gate;
+    }
+    await call.fulfill(output);
+  });
+  try {
+    await sun.click();
+    await expect.poll(() => captured).toBe(true);
+    await drawer.getByRole('button', { name: '閉じる', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  } finally {
+    release();
+  }
+  // 印操作の onchanged が呼ばれた後の木まで待ち、終了後の通知も確かめる。
+  const reloaded = waitForResponses(page, '/backlog-tree');
+  await (await reloaded).finished();
+  await waitForSettled(page);
+  // 消えるまで待って成功させない。更新完了直後に誤った通知が無いことを確かめる。
+  expect(await page.locator('.toast:visible').filter({ hasText: '印は保存しましたが' }).count()).toBe(0);
+});
