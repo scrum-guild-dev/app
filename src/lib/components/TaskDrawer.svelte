@@ -185,6 +185,7 @@
   });
   let marking = $state(false);
   let assigneeVersion = 0;
+  let savedVersion = 0;
   let refreshVersion = 0;
   let latestRefresh: Promise<TaskDetail | null> | null = null;
   const todayReasonId = `${ids}-today-reason`;
@@ -668,6 +669,7 @@
       { slug },
     );
     if (result.ok) {
+      savedVersion++;
       if (alive && task !== null) {
         const saved = result.data.task;
         const merged: TaskDetail = { ...task, completed_at: saved.completed_at, can_delete: saved.can_delete };
@@ -759,6 +761,7 @@
   // 今の値を読み直す。読めなければ今の表示のまま（null）
   function refresh(closeIfGone = false): Promise<TaskDetail | null> {
     const requestedVersion = ++refreshVersion;
+    const requestedSavedVersion = savedVersion;
     const requestedTaskId = taskId;
     const pending = (async (): Promise<TaskDetail | null> => {
       const result = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: requestedTaskId }, { slug });
@@ -769,14 +772,17 @@
         return null;
       }
       if (alive && taskId === requestedTaskId) {
-        task = result.data.task;
+        // 読み取り開始後に保存した欄を、古い応答の属性や決まった欄で戻さない。
+        if (requestedSavedVersion === savedVersion) {
+          task = result.data.task;
+          fields = result.data.fields;
+        }
         taskContext = {
           column: result.data.column,
           story: result.data.story,
           epic: result.data.epic,
           today_on: result.data.today_on,
         };
-        fields = result.data.fields;
         inBacklog = result.data.in_backlog;
         clock = { today: result.data.today, weekStart: result.data.week_start };
         if (canWrite && task.completed_at === null && candidates === null) void loadCandidates();
@@ -791,6 +797,7 @@
   // ---- 決まった欄（TaskFieldValues が task-field-set で保存する） ----
   // 書けた。応答の欄だけを入れ替え（別の欄の保存と前後しても、古い値で戻さない）、履歴と木を読み直す
   function fieldSaved(saved: TaskFieldValue): void {
+    savedVersion++;
     if (!alive) {
       onchanged();
       return;
@@ -925,6 +932,7 @@
       { slug },
     );
     if (result.ok) {
+      savedVersion++;
       if (alive && task !== null) {
         const saved = result.data.task;
         if (saved.assignee?.id !== task.assignee?.id) {

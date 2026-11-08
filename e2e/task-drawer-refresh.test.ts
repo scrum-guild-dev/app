@@ -68,3 +68,47 @@ test('印の保存後に詳細が読めなくても押された状態を保ち�
   await sun.click();
   await expect(sun).toHaveAttribute('aria-pressed', 'false');
 });
+
+test('担当変更後の遅い読み直しがポイントの保存を戻さない', async ({ page }) => {
+  await createWorkspace(page, '担当とポイントの保存');
+  await addTaskRow(page, '別の欄も保存する');
+  await page.getByRole('link', { name: '別の欄も保存する', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '別の欄も保存する' });
+  const assignee = drawer.getByRole('combobox', { name: '担当', exact: true });
+  await assignee.selectOption({ label: 'ミナト' });
+  await expect(drawer.getByRole('button', { name: '今日やる: 別の欄も保存する', exact: true })).toHaveAttribute(
+    'aria-disabled',
+    'false',
+  );
+  let captured = false;
+  let first = true;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await routeOperation(page, taskDetail, { slug: 'aoba' }, async (call) => {
+    const delay = first;
+    first = false;
+    const output = await call.fetch();
+    if (delay) {
+      captured = true;
+      await gate;
+    }
+    await call.fulfill(output);
+  });
+  const points = drawer.getByRole('radio', { name: '5', exact: true });
+  try {
+    await assignee.selectOption({ label: '担当なし' });
+    await expect.poll(() => captured).toBe(true);
+    await points.check();
+    await expect(
+      page
+        .locator('.entry', { hasText: '別の欄も保存する' })
+        .getByRole('button', { name: 'ポイント: 5 pt', exact: true }),
+    ).toBeVisible();
+  } finally {
+    release();
+  }
+  await waitForSettled(page);
+  await expect(points).toBeChecked();
+});
