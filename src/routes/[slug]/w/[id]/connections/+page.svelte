@@ -303,6 +303,10 @@
       {#each connections as connection (connection.id)}
         {@const state = STATE[connection.status]}
         {@const mine = meId !== null && connection.owner_user_id === meId}
+        {@const who =
+          mine || !connection.owner_name
+            ? t('connectionNextWhoLeader', { leader: t('leader') })
+            : t('connectionNextWhoOwner', { owner: connection.owner_name, leader: t('leader') })}
         <section class="panel conn" role="listitem" data-connection-id={connection.id}>
           <div class="conn-head">
             <span class="kind is-story"><Icon name="git" /></span>
@@ -338,16 +342,16 @@
                       message: connection.last_error_message,
                       at: formatLocalDateTime(connection.last_error_at),
                       count: connection.consecutive_failures,
-                    })}</span
+                    })}&#32;{t('connectionNextError', { who })}</span
               >
             </div>
           {/if}
-          {#if connection.stopped_reason}
+          {#if connection.stopped_reason || connection.status === 'stopped'}
             <div class="callout is-danger">
               <Icon name="alert" /><span
                 >{connection.stopped_reason === 'auth_failed'
                   ? t('connectionStoppedAuthFailed')
-                  : t('connectionStoppedOther')}</span
+                  : t('connectionStoppedOther')}&#32;{t('connectionNextStopped', { who })}</span
               >
             </div>
           {/if}

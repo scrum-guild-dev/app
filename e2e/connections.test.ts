@@ -242,7 +242,7 @@ test('候補を読んでいる間に別の接続を開いても、遅れて届�
   await expect(group.getByLabel('two/from-b')).toBeVisible();
 });
 
-test('止まっている接続は、止まった事実だけを出し、再開の操作を案内しない', async ({ page }) => {
+test('止まっている接続は、止まった事実と次の手（誰に伝えるか）を出し、再開の操作は案内しない', async ({ page }) => {
   await mockOperation(
     page,
     connectionList,
@@ -251,15 +251,41 @@ test('止まっている接続は、止まった事実だけを出し、再開�
       connections: [
         created({ id: 'stopped-auth', name: '認証が切れた接続', status: 'stopped', stopped_reason: 'auth_failed' }),
         created({ id: 'stopped-other', name: '別の理由の接続', status: 'stopped', stopped_reason: 'member_left' }),
+        created({
+          id: 'stopped-theirs',
+          name: 'ハルカの接続',
+          status: 'stopped',
+          stopped_reason: 'auth_failed',
+          owner_user_id: 'other',
+          owner_name: 'ハルカ',
+        }),
+        created({
+          id: 'error-theirs',
+          name: '不調の接続',
+          status: 'error',
+          last_error_message: '応答が遅れています',
+          owner_user_id: 'other',
+          owner_name: 'ハルカ',
+        }),
       ],
     },
   );
   await page.goto(`${WORKSPACE}/connections`);
   const auth = page.locator('[data-connection-id="stopped-auth"]');
   await expect(auth.locator('.state-badge')).toHaveText('停止');
-  await expect(auth.locator('.callout.is-danger')).toHaveText('認証に失敗したので止めました。');
+  await expect(auth.locator('.callout.is-danger')).toHaveText(
+    '認証に失敗したので止めました。 リーダーに、止まっていることを伝えてください。',
+  );
   const other = page.locator('[data-connection-id="stopped-other"]');
-  await expect(other.locator('.callout.is-danger')).toHaveText('止まっています。');
+  await expect(other.locator('.callout.is-danger')).toHaveText(
+    '止まっています。 リーダーに、止まっていることを伝えてください。',
+  );
+  await expect(page.locator('[data-connection-id="stopped-theirs"] .callout.is-danger')).toHaveText(
+    '認証に失敗したので止めました。 登録したハルカかリーダーに、止まっていることを伝えてください。',
+  );
+  await expect(page.locator('[data-connection-id="error-theirs"] .callout.is-warn')).toHaveText(
+    '応答が遅れています 続けて失敗するときは、登録したハルカかリーダーに伝えてください。',
+  );
   await expect(page.getByText('再開')).toHaveCount(0);
 });
 
@@ -309,7 +335,7 @@ test('今すぐ同期は本人の接続にだけ出て、押すと届いた件�
   await expect(list.getByRole('listitem').filter({ hasText: 'ハルカの GitHub' })).not.toContainText('今すぐ同期');
   await expect(list.getByRole('listitem').filter({ hasText: '止まった GitHub' })).not.toContainText('今すぐ同期');
   await expect(list.getByRole('listitem').filter({ hasText: '止まった GitHub' })).toContainText(
-    '認証に失敗したので止めました',
+    '認証に失敗したので止めました。 リーダーに、止まっていることを伝えてください',
   );
 
   await list.getByRole('button', { name: '今すぐ同期' }).click();

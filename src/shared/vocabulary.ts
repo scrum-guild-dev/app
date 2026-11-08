@@ -2453,6 +2453,10 @@ export const dictionary = defineDictionary({
   connectionErrorCalloutPlain: '{message}',
   connectionStoppedAuthFailed: '認証に失敗したので止めました。',
   connectionStoppedOther: '止まっています。',
+  connectionNextWhoOwner: '登録した{owner}か{leader}',
+  connectionNextWhoLeader: '{leader}',
+  connectionNextStopped: '{who}に、止まっていることを伝えてください。',
+  connectionNextError: '続けて失敗するときは、{who}に伝えてください。',
   connectionChooseScope: '範囲を選ぶ',
   connectionEmptyTitle: '{connection}がまだありません',
   connectionEmptyText:
