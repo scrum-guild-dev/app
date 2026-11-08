@@ -24,8 +24,11 @@
 }
 /* 15 秒たっても画面が描けない（JS が取れない、通信が切れた）ときは、「読み込み中」と偽り続けず、失敗の文と再読み込みのリンクに替える。
    どちらも同じ時間（15s）に動かすので、並びの順には頼らない（待つ文を隠す animation と、失敗の文を見せる animation は別の要素） */
+#boot-loading > span {
+  grid-area: 1 / 1;
+}
 #boot-loading .boot-failed {
-  display: none;
+  visibility: hidden;
   animation: boot-failed-show 0s linear 15s forwards;
 }
 #boot-loading .boot-wait {
@@ -33,12 +36,12 @@
 }
 @keyframes boot-failed-show {
   to {
-    display: inline;
+    visibility: visible;
   }
 }
 @keyframes boot-wait-hide {
   to {
-    display: none;
+    visibility: hidden;
   }
 }
 #boot-loading a {

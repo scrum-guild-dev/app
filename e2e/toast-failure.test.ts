@@ -88,7 +88,7 @@ test('URL を直接開いて木の読み込みが遅いとき、300ms 後に読�
 
   const boot = page.locator('#boot-loading');
   await expect(boot).toBeVisible();
-  await expect(boot).toHaveText('読み込んでいます');
+  await expect(boot.locator('.boot-wait')).toHaveText('読み込んでいます');
 
   release();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
