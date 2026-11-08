@@ -37,11 +37,13 @@ test('見本のバックログ: 空の行に題を打って Enter で足し、�
   await draft.fill('見本で足す一件目');
   await draft.press('Enter');
   await expect(page.locator('.entry-title', { hasText: '見本で足す一件目' })).toHaveCount(1);
-  // 同じ欄に戻り、続けて打てる
+  // 同じ欄に戻り、欄は空になって、続けて打てる
   await expect(draft).toBeFocused();
+  await expect(draft).toHaveValue('');
   await page.keyboard.type('二件目');
   await page.keyboard.press('Enter');
-  await expect(page.locator('.entry-title', { hasText: '二件目' })).toHaveCount(1);
+  await expect(page.locator('.entry-title').filter({ hasText: /^二件目$/ })).toHaveCount(1);
+  await expect(page.locator('.entry-title', { hasText: '一件目二件目' })).toHaveCount(0);
   // Esc は書きかけを消して離れ、作らない。空のまま Enter でも作らない
   const count = await page.locator('.entry-title').count();
   await page.keyboard.type('作らない題');
@@ -212,6 +214,21 @@ test('見本のスプリント: 列の末尾の空の行に題を打って Enter
   await draft.press('Enter');
   await expect(page.locator('.card-title', { hasText: '列に足すカード' })).toHaveCount(1);
   await expect(draft).toBeFocused();
+  await expect(draft).toHaveValue('');
+  await page.keyboard.type('次のカード');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.card-title').filter({ hasText: /^次のカード$/ })).toHaveCount(1);
+});
+
+test('見本のスプリント: 足しても、ほかの列の空の行の書きかけは残る', async ({ page }) => {
+  await openSample(page, 'sprint.html');
+  const drafts = page.locator('input[data-draft^="col:"]');
+  await drafts.nth(1).fill('書きかけ');
+  await drafts.first().fill('足すカード');
+  await drafts.first().press('Enter');
+  await expect(page.locator('.card-title').filter({ hasText: /^足すカード$/ })).toHaveCount(1);
+  await expect(drafts.first()).toHaveValue('');
+  await expect(drafts.nth(1)).toHaveValue('書きかけ');
 });
 
 test('見本のバックログ: 幅 390px で「⋯」を開くと、メニューが読める幅で画面の中に収まる', async ({ page }) => {
