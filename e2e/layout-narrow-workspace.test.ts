@@ -84,6 +84,71 @@ test('スプリントが 390px で横にはみ出さず、押せる要素が 44p
   });
 });
 
+// バックログのタスクの行の密度（#999）。行の高さを詰めても、押せる範囲（::after で 44px に広げたもの）が隣と重ならない。
+// 押せる範囲の汎用の検査は、重なっても上に描かれた方に当たれば通るので、広げた範囲の箱を直接比べる
+test('バックログのタスクの行が 390px で今より低く、チップと完了の丸の押せる範囲が 44px で隣と重ならない', async ({
+  page,
+}) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(WORKSPACE);
+  const row = page.locator('.entry', {
+    has: page.getByRole('link', { name: 'ポイント付与のバッチを作る', exact: true }),
+  });
+  await expect(row).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  for (const theme of LAYOUT_THEMES) {
+    await applyTheme(page, theme);
+    const result = await row.evaluate((entry) => {
+      // 押せる範囲は ::after で広げるので、疑似要素の大きさから箱を作る。見た目の大きさが 44px 以上ならそのまま使う
+      const targets = [...entry.querySelectorAll<HTMLElement>('.entry-end button, .entry-end a, .entry-title')].filter(
+        (el) => el.getClientRects().length > 0,
+      );
+      const boxes = targets.map((el) => {
+        const rect = el.getBoundingClientRect();
+        const after = getComputedStyle(el, '::after');
+        const w = Math.max(rect.width, after.content === 'none' ? 0 : parseFloat(after.width) || 0);
+        const h = Math.max(rect.height, after.content === 'none' ? 0 : parseFloat(after.height) || 0);
+        const cx = rect.x + rect.width / 2;
+        const cy = rect.y + rect.height / 2;
+        return { name: el.textContent?.trim().slice(0, 12) ?? '', x: cx - w / 2, y: cy - h / 2, w, h };
+      });
+      return { height: entry.getBoundingClientRect().height, boxes };
+    });
+    // 以前は約 155px。見本の seed で測って決めた目標（余白に 8px の許容）
+    expect(result.height, `${theme}: 行の高さ`).toBeLessThanOrEqual(125);
+    for (const box of result.boxes) {
+      expect(box.w, `${theme}: ${box.name} の幅`).toBeGreaterThanOrEqual(43.5);
+      expect(box.h, `${theme}: ${box.name} の高さ`).toBeGreaterThanOrEqual(43.5);
+    }
+    for (const [i, a] of result.boxes.entries()) {
+      for (const b of result.boxes.slice(i + 1)) {
+        const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        expect(overlapX > 0.5 && overlapY > 0.5, `${theme}: ${a.name} と ${b.name} の押せる範囲が重なる`).toBe(false);
+      }
+    }
+  }
+});
+
+test('スプリントの列の「タスクを足す」の欄の案内が、390px でも切れずに読める', async ({ page }) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
+  await page.goto(`${WORKSPACE}/sprint`);
+  const input = page.locator('.board-col .draft-row .input').first();
+  await expect(input).toBeVisible();
+  await expect(input).toHaveAttribute('placeholder', 'タスクを足す');
+  // 案内の文字の幅が、欄の中身の幅（余白を除く）に収まる
+  const fits = await input.evaluate((el: HTMLInputElement) => {
+    const style = getComputedStyle(el);
+    const canvas = document.createElement('canvas').getContext('2d');
+    if (canvas === null) return false;
+    canvas.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const inner = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    return canvas.measureText(el.placeholder).width <= inner;
+  });
+  expect(fits).toBe(true);
+});
+
 test('受信箱が 390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({ page }) => {
   await expectNarrowLayout(page, 'inbox', async (w) => {
     await page.goto(`${WORKSPACE}/inbox`);

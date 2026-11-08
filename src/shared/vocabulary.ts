@@ -2079,6 +2079,8 @@ export const dictionary = defineDictionary({
   sprintBoardRegion: '{sprint}の{column}とカード',
   sprintBoardColumnEmpty: 'なし',
   sprintBoardAddTask: '{task}を足す',
+  // 列の中の欄の案内。列は狭く（4列の 1280px と 390px で）、「（題を打って Enter）」まで入らないので、短く言い切る。Enter の案内は列の下の注（sprintBoardDraftHint）に任せる
+  sprintBoardAddTaskPlaceholder: '{task}を足す',
   sprintBoardAddTaskIn: '{task}を足す: {column}',
   sprintBoardTaskAdded: '「{title}」を{column}に足しました',
   sprintBoardAddGone: 'この{sprint}か{column}が見つかりません。{task}は作られていません。一覧を読み直します',

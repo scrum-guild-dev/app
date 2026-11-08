@@ -755,6 +755,7 @@
                 bind:this={draftRows[column.id]}
                 keyshortcut={column.id === firstOpenColumnId ? ariaKeyshortcuts(NEW_TASK_KEY) : undefined}
                 label={t('sprintBoardAddTask', { task: t('task') })}
+                placeholder={t('sprintBoardAddTaskPlaceholder', { task: t('task') })}
                 name={t('sprintBoardAddTaskIn', { task: t('task'), column: columnName(column) })}
                 problem={cardTitleProblem}
                 create={(title) => addCard(column, title)}
