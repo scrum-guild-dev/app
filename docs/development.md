@@ -636,7 +636,7 @@ Codex が探索する入口は `.agents/skills/`。原本を複製せず、共�
 | --- | --- |
 | `add-operation` | `.claude/skills/add-operation` への相対リンク。API の操作を足す手順を共有する |
 | `d1-migration` | `.claude/skills/d1-migration` への相対リンク。D1 の変更と検証を共有する。Issue や PR への書き込みは直接依頼時の承認の範囲に従う |
-| `ui-polish` | `.claude/skills/ui-polish` への相対リンク。画面を作る・直す基準を共有する |
+| `impeccable`、`find-animation-opportunities`、`review-animations`、`improve-animations` | `.claude/skills/` の同名への相対リンク。外から入れた画面のスキル（下の「外から入れたスキル」）を共有する |
 | `pr` | `.claude/skills/pr` への相対リンク。PR の状態で必要な詳細だけを読み、Codex は AGENTS.md の承認範囲を優先する |
 | `increment-build` | Codex 用の `SKILL.md`。着手の判定と受け入れ条件は `docs/agent-workflows/` を参照し、実装の進行は Codex が受け持つ |
 | `done-check` | Codex 用の `SKILL.md`。検査・点検基準は `docs/agent-workflows/`、レビューの役割は共有定義を参照し、未コミット・新規ファイルも点検する |
@@ -693,7 +693,7 @@ git の保護フックと CI は既存のものを使う。
 
 | スキル、エージェント | 扱い |
 | --- | --- |
-| `pr`、`done-check`、`backlog-refine`、`ui-polish`、`japanese-tech-writing` | 残す。`pr` の改善の提案の手順は `retro` に移した（2026-10-27、#315）。`pr` の、`gh` が使えないときの MCP の表とスタック PR は、同じディレクトリの `github-mcp.md` と `stack.md` に分けた |
+| `pr`、`done-check`、`backlog-refine`、`japanese-tech-writing` | 残す。`pr` の改善の提案の手順は `retro` に移した（2026-10-27、#315）。`pr` の、`gh` が使えないときの MCP の表とスタック PR は、同じディレクトリの `github-mcp.md` と `stack.md` に分けた |
 | `backlog-add` | 残す。人が書いた計画を見るレビューモードと、Backlog を読む手順、文体の癖を覚える手順は外した（2026-10-27、#315）。計画の点検は `backlog-refine` で詰める |
 | `retro` | 足した（2026-10-27、#315）。セッションの訂正、下書きと実物の差、つまずきから次も効く学びを拾い、スキル、チェックリスト、`CLAUDE.md` への取り入れを2件まで提案する。頼まれたときだけ動き、ほかのスキルからは呼ばない。PR ごとに提案で止まらないようにするため |
 | `sync-base` | `rebase-base` をこのリポジトリ向けに書き換えた。merge で取り込み、通常の push まで行う |
@@ -714,9 +714,26 @@ git の保護フックと CI は既存のものを使う。
 | `add-operation` | 足した（2026-10-25）。操作の定義を1つ足す型紙。定義、処理、一覧への登録、組織の分離のテスト用の関数、権限のテスト、画面から呼ぶ口までを一続きで作る |
 | `.claude/checklists/` | `cloudflare-workers.md` と `multi-tenant.md` を足した。`database.md` を D1 向けに書き直し、`languages/typescript.md` から使わないフレームワーク（Vue、Nuxt、Express、Sequelize）の節を外し、SvelteKit の節を SPA モード向けに直した |
 
+### 外から入れたスキル
+
+画面の見た目と動きは、利用の多い公開のスキルを `npx skills add` でこのリポジトリに入れて使う。出どころと中身のハッシュは `skills-lock.json` に残り、`npx skills update -p` で上げる。中身は手で直さず、このリポジトリに合わせる決まりはこの節に書く。
+
+| スキル | 出どころ | 使う場面 |
+| --- | --- | --- |
+| `impeccable` | `pbakaus/impeccable` | 画面のデザインの指摘（`critique`）と、アクセシビリティ、性能、狭い幅の点検（`audit`） |
+| `find-animation-opportunities` | `emilkowalski/skills` | 動きを足すと分かりやすくなる箇所を探す |
+| `review-animations` | `emilkowalski/skills` | 今ある動きを点検する |
+| `improve-animations` | `emilkowalski/skills` | 動きを足す、直す |
+
+- 基準は `docs/design.md` とデザインシステム（`design/`）で、スキルの指摘と食い違えばこちらに従う。直すときは、画面ごとの CSS を持たない決まりのとおり、部品とトークンを先にデザインシステムへ足す
+- `impeccable` は `PRODUCT.md` と `DESIGN.md` を前提に作られている。このリポジトリでは作らず、`init`、`document`、`extract` は使わない。画面は業務の道具なので Operate のモードで見させる
+- `impeccable` は初めの実行で自前の実行ファイルを取ってきて動かす。動かせないときは、スキルの手順どおり `docs/design.md` を直接読ませる
+- 動きの時間とイージングは既存のトークン（`--duration-flash`、`--duration-gauge` など）を使い、`prefers-reduced-motion` のときは止めるか切り替えだけにする（`docs/design.md` の「どのテーマにも共通すること」の演出）
+- Codex からは `.agents/skills/` の同名の相対リンクで同じものを読む
+
 ### 名前の付け方
 
-工程のスキルは、扱うスクラムの成果物で名前を付ける（2026-10-26 に決めた。#306）。名前から工程の順が `backlog-` → `increment-` → `done-` → `pr-` と読めるようにするため。開発の流れは1週間のスプリントで区切り、スクラムのイベントのスキルはイベントの名前にする（2026-10-29 に決めた。#473。下の「スクラムのイベントと成果物」）。計画と締めは `sprint-plan`、点検は `daily-scrum`、受け入れはスプリントレビューと同じく、できたインクリメントをプロダクトオーナーが確かめる場なので `sprint-review`（2026-10-28。#373）、振り返りは `retro`。表では、イベントのスキルを、成果物の工程の流れの中で行う位置に並べる。スクラムが決めていない技術の作業（PR）は `pr-` のまま置く。道具や型紙のスキル（`sync-base`、`d1-migration`、`add-operation`、`ui-polish` など）は工程ではないので、この付け方に合わせない。
+工程のスキルは、扱うスクラムの成果物で名前を付ける（2026-10-26 に決めた。#306）。名前から工程の順が `backlog-` → `increment-` → `done-` → `pr-` と読めるようにするため。開発の流れは1週間のスプリントで区切り、スクラムのイベントのスキルはイベントの名前にする（2026-10-29 に決めた。#473。下の「スクラムのイベントと成果物」）。計画と締めは `sprint-plan`、点検は `daily-scrum`、受け入れはスプリントレビューと同じく、できたインクリメントをプロダクトオーナーが確かめる場なので `sprint-review`（2026-10-28。#373）、振り返りは `retro`。表では、イベントのスキルを、成果物の工程の流れの中で行う位置に並べる。スクラムが決めていない技術の作業（PR）は `pr-` のまま置く。道具や型紙のスキル（`sync-base`、`d1-migration`、`add-operation` など）は工程ではないので、この付け方に合わせない。
 
 | 工程 | スキル | 成果物 | 前の名前 |
 | --- | --- | --- | --- |
