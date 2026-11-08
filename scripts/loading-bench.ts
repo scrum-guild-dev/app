@@ -62,6 +62,7 @@ const stop = () => {
 };
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
+process.on('SIGHUP', stop);
 function command(args: string[]) {
   if (interrupted) throw new Error('計測を中断しました');
   const result = spawnSync('wrangler', [...args, '--config', config, '--local', '--persist-to', dir], {
@@ -199,6 +200,7 @@ try {
   await tracked?.stop();
   process.off('SIGINT', stop);
   process.off('SIGTERM', stop);
+  process.off('SIGHUP', stop);
   rmSync(dir, { recursive: true, force: true });
   console.log(`削除済み: ${dir}`);
 }
