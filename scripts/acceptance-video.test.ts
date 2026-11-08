@@ -231,6 +231,9 @@ describe('record.mjs --check', () => {
   test('press と hold の値の誤りは断る', () => {
     rejected({ steps: [{ actions: [{ press: '' }] }] }, /press はキーの名前/);
     rejected({ steps: [{ actions: [{ press: { css: 'a' } }] }] }, /press はキーの名前/);
+    // スペースキーは ' ' ちょうどだけ。空白が 2 つ以上やタブは断る
+    rejected({ steps: [{ actions: [{ press: '  ' }] }] }, /press はキーの名前/);
+    rejected({ steps: [{ actions: [{ press: '\t' }] }] }, /press はキーの名前/);
     rejected({ steps: [{ actions: [{ hold: 'Meta' }] }] }, /hold には ms/);
     rejected({ steps: [{ actions: [{ hold: 'Meta', ms: 10_001 }] }] }, /hold には ms/);
     rejected({ steps: [{ actions: [{ press: '?', on: { css: '' } }] }] }, /actions\[0\]\.on: css は空でない文字列/);

@@ -65,7 +65,7 @@ function actionProblems(action, where) {
   } else if (KEY_VERBS.includes(verb)) {
     // スペースキーは " " なので、trim せず長さで見る
     const key = action[verb];
-    if (typeof key !== 'string' || key.length === 0) {
+    if (typeof key !== 'string' || key.length === 0 || (key.trim() === '' && key !== ' ')) {
       problems.push(`${where}: ${verb} はキーの名前（a、?、Enter、Space など。空でない文字列）`);
     } else if (verb === 'hold' && key !== '+' && key.includes('+')) {
       // keyboard.down は単一のキーだけを受ける（組み合わせは press）
