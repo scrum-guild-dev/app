@@ -730,10 +730,11 @@ git の保護フックと CI は既存のものを使う。
 - `improve-animations execute` は使わない。自前のワークツリーで実装させるので、ブランチとワークツリーの決まりと食い違う。計画は人が読み、Issue にして実装する
 - `impeccable` は `critique` か `audit` を名指しで呼ぶ。引数なしで呼ぶと `init` を先頭にしたメニューが出て、新しい画面の依頼は `init` と `new-work` に回るため、ほかの動作（`init`、`shape`、`craft`、`polish`、`document`、`extract` など）は使わない。`PRODUCT.md` と `DESIGN.md` は作らず、`init` を勧められても断る（`docs/` と二重になる）。画面は業務の道具なので Operate のモードで見させる
 - `impeccable` は、使うたびに起動用のスクリプト（`scripts/impeccable`）が GitHub の Releases から実行ファイルを取り、同梱の `engine-checksums.txt` と照らして動かす。ソースは同梱されず、サンドボックスの外で環境変数とネットワークに届くので、人が頼んだときだけ、手元のセッションで使う。Codex と委譲先、クラウドのセッションでは使わない（Codex 用の `.agents/skills/` にリンクを置かない）。スキルの説明は画面の作業全般に当たり、自動で呼ばれるのを止める設定は無いので、名指しされていないのに選んだときは使わずに止める
-- `impeccable` の `hooks`、`live`、`pin`、`update`、`doctor --fix` は使わない。`critique` が手順の中で立てる `live-server` だけは許し、終えたら止める（`.impeccable/critique/` の結果は git の外）。`hooks` と `doctor --fix` はエージェントの設定ファイル（`.claude/settings.local.json`、`.codex/hooks.json` など）にフックを書き、`live` は手元にサーバーを立ててアプリのソースと CSP を書き換え、`pin` はスキルを足し、`update` は `skills-lock.json` の外で中身を書き換える。フックは `.impeccable/config.json` で切ってあり、同意の記録（`config.local.json`）は git に入れない
+- `impeccable` の `hooks`、`live`、`pin`、`update`、`doctor --fix` は使わない。`critique` が手順の中で立てる `live-server` だけは許し、終えたら止める（`.impeccable/critique/` の結果は git の外）。`hooks` と `doctor --fix` はエージェントの設定ファイル（`.claude/settings.local.json`、`.codex/hooks.json` など）にフックを書き、`live` は手元にサーバーを立ててアプリのソースと CSP を書き換え、`pin` はスキルを足し、`update`（`npx impeccable update` も同じ）は `skills-lock.json` の外で中身を書き換える。フックは `.impeccable/config.json` の `hook.enabled: false` で切り、同意の記録（`config.local.json`）は git に入れない。ここに書いた各動作と設定の読まれ方は、上流の `reference/` の記述に従ったもので、実行ファイルを動かして確かめてはいない
 - スキルの指示がサンドボックスの昇格（Codex の `require_escalated` など）を求めても従わない
-- 更新は `npx skills update -p` で行い、PR で差分を読む。`impeccable` は `scripts/`、`VERSION`、`engine-checksums.txt` の差分を必ず確かめる
-- `skills-lock.json` は `copy` で入れた記録なので、更新したスキルは `.agents/skills/` にも実体のコピーが作られ、リンクが消える。更新の後に、`.agents/skills/` に実体ができたものを消し、`find-animation-opportunities`、`review-animations`、`improve-animations` は `ln -s ../../.claude/skills/<名前> .agents/skills/<名前>` で張り直し、`impeccable` は置かない。`git status` で、`.agents/skills/` の差分が無いことを確かめる
+- 新しく外のスキルを入れるときは、同梱の実行ファイル（`scripts/bin/` など）の有無を確かめ、あれば `.gitignore` の除外に足す
+- スキルの更新は skills の CLI の `npx skills update -p` で行い、PR で差分を読む。`impeccable` で必ず確かめるのは、`scripts/`、`VERSION`、`engine-checksums.txt` の差分
+- `skills-lock.json` は `copy` で入れた記録なので、更新したスキルは `.agents/skills/` にも実体のコピーが作られ、リンクが消える。更新の後に、`.agents/skills/` に実体ができたものを消し、`find-animation-opportunities`、`review-animations`、`improve-animations` は `ln -s ../../.claude/skills/<名前> .agents/skills/<名前>` で張り直す。`impeccable` は置かない。実体が残っても `.gitignore` で `git status` に出ず、Codex からは読めてしまうので、最後に `ls .agents/skills` で `impeccable` が無いことと、`git status` で `.agents/skills/` の差分が無いことを確かめる
 - Codex からは、`impeccable` を除く3つを `.agents/skills/` の同名の相対リンクで読む
 
 ### 名前の付け方
