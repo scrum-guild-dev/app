@@ -931,6 +931,26 @@ test('760px 以下で組織とワークスペースの名前が長くても、�
   for (const width of links) expect(width).toBeGreaterThanOrEqual(44);
 });
 
+test('760px 以下で今の画面の名前が長くても、パンくずはアカウントのメニューに重ならない', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto(`/aoba/w/${AOBA_WORKSPACE_ID}/sprint`);
+  const crumbs = page.getByRole('navigation', { name: 'パンくず' });
+  await expect(crumbs).toBeVisible();
+  await crumbs.locator('.breadcrumb-item').evaluateAll((items) => {
+    for (const item of items) item.textContent = '架空の長い名前0123456789012345678901234567890123456789';
+  });
+  const overlaps = await page.evaluate(() => {
+    const account = document.querySelector('.account-menu-button')!.getBoundingClientRect();
+    return [...document.querySelectorAll('.breadcrumb .breadcrumb-item')].filter((item) => {
+      const box = item.getBoundingClientRect();
+      return (
+        box.left < account.right && box.right > account.left && box.top < account.bottom && box.bottom > account.top
+      );
+    }).length;
+  });
+  expect(overlaps).toBe(0);
+});
+
 test.describe('指で押す画面の 761px 以上', () => {
   test.use({ hasTouch: true, viewport: { width: 1024, height: 800 } });
   test('押せる大きさの要素が入っても、角のマスと上の帯の罫が同じ高さに通る', async ({ page }) => {
