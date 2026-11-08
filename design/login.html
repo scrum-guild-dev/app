@@ -53,6 +53,14 @@ function render() {
       <div class="form-actions" role="group" aria-label="利用規約とプライバシーポリシー"><a class="btn is-sm is-quiet" href="#" target="_blank" rel="noopener noreferrer">利用規約<span class="visually-hidden"> 新しいタブで開きます</span></a><a class="btn is-sm is-quiet" href="#" target="_blank" rel="noopener noreferrer">プライバシーポリシー<span class="visually-hidden"> 新しいタブで開きます</span></a></div>
     </section>
     <section class="gate-sheet">
+      <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
+      <h1 class="gate-title">Scrum Guild への招待</h1>
+      <div class="callout is-warn" role="alert">${icon("alert")}<span>この招待の URL は使えません。招待の URL を開いた直後の画面だけが使えます。戻る・再読み込みをしたときや、URL が欠けているときは、届いた招待の URL をもう一度開いてください。</span></div>
+      <div class="form-actions"><a class="btn is-sm is-quiet" href="#">ログインの画面へ</a></div>
+      <div class="form-actions" role="group" aria-label="利用規約とプライバシーポリシー"><a class="btn is-sm is-quiet" href="#" target="_blank" rel="noopener noreferrer">利用規約<span class="visually-hidden"> 新しいタブで開きます</span></a><a class="btn is-sm is-quiet" href="#" target="_blank" rel="noopener noreferrer">プライバシーポリシー<span class="visually-hidden"> 新しいタブで開きます</span></a></div>
+    </section>
+    <p class="gate-note">招待の画面（/invite）を、URL の続き（# 以降）が無いか形の違う URL で開いた状態の見本です。戻る・再読み込みで来た人（すでに入れる${t("organization")}がある人を含む）が行き止まりにならないよう、警告の下に「ログインの画面へ」（同じタブで移る）を置きます。秘密を持たない状態なので、法文のリンクと違い新しいタブにしません。</p>
+    <section class="gate-sheet">
       <div class="callout is-info">${icon("shield")}<span>${t("loggedOut")}</span></div>
       <p class="gate-note">ログアウトした直後のログインの画面の表示の見本です。見出しの下、ログインのボタンの上に出します。エラーがあるときは、エラーだけを出します。</p>
     </section>
