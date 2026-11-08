@@ -12,7 +12,7 @@
   place-items: center;
   background: #f7f7f8;
   color: #5c5f66;
-  font-family: system-ui, sans-serif;
+  font-family: 'Noto Sans JP', system-ui, sans-serif;
   font-size: 1rem;
   visibility: hidden;
   animation: boot-loading-show 0s linear 300ms forwards;

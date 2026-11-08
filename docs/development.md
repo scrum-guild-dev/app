@@ -165,12 +165,12 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 
 ### 書体
 
-- 書体は `@fontsource` の4つのパッケージ（`biz-udpgothic`、`zen-old-mincho`、`ibm-plex-mono`、`chakra-petch`）から、`src/routes/+layout.svelte` が使う太さだけを import する。太さは見本（`design/today.html`）の Google Fonts の URL と同じ（BIZ UDPGothic 400 と 700、Zen Old Mincho 700 と 900、IBM Plex Mono 400 と 500、Chakra Petch 500、600、700）。
+- 書体は `@fontsource/noto-sans-jp` から、`src/routes/+layout.svelte` が 400、500、600、700、900 を import する。全テーマの本文・見出し・数字に共通で使い、見本の Google Fonts の URL も同じ太さにする。
 - Google Fonts は使わない。利用者の IP を外へ出さず、CSP に外の先を足さない。書体のファイルは build が `build/_app/immutable/assets/` に書き出し、自分の Worker から配る。
 - パッケージは `devDependencies` に置く。書体のファイルは build のときに CSS から拾って `build/` に書き出すだけで、Worker の実行時には要らない。
-- 日本語の書体は文字の範囲ごとに約120のファイルに分かれ（`unicode-range`）、ブラウザは使う文字のファイルだけを読む。build の出力は woff2 が514ファイル、`build/` 全体で約530ファイル、約13MB になる（Workers Static Assets の上限は20,000ファイル）。
+- 日本語の書体は文字の範囲ごとに約120のファイルに分かれ（`unicode-range`）、ブラウザは使う文字のファイルだけを読む。使う太さの分だけ build に書き出す（Workers Static Assets の上限は20,000ファイル）。
 - `@fontsource` の CSS は woff2 と woff の両方を `src` に書くが、woff は使われない。woff を `build/` に出さないため、`scripts/fontsource-woff2.ts` の Vite プラグインが、CSS を Vite に渡す前に woff の指定を外す（実際の CSS での確認は `scripts/fontsource-woff2.test.ts`）。
-- 書体の CSS は1本にまとまり、約440KB（gzip で約136KB）。`index.html` の `<link rel="stylesheet">` から読むので描画を止めるが、この大きさと止まることは受け入れた。理由は2つ。1つは、日本語の書体を文字の範囲で分けて読む以上、範囲の一覧（`unicode-range`）を CSS に持つ構造が避けられないこと（Google Fonts の CSS も同じ構造）。もう1つは、ファイル名にハッシュが入って `immutable` でキャッシュされ、2回目からの読み込みが軽いこと。
+- 書体の CSS は1本にまとまり、文字範囲と太さの定義を含む。`index.html` の `<link rel="stylesheet">` から読むので描画を止めるが、この大きさと止まることは受け入れた。理由は2つ。1つは、日本語の書体を文字の範囲で分けて読む以上、範囲の一覧（`unicode-range`）を CSS に持つ構造が避けられないこと（Google Fonts の CSS も同じ構造）。もう1つは、ファイル名にハッシュが入って `immutable` でキャッシュされ、2回目からの読み込みが軽いこと。
 - Vite は小さいファイルを `data:` の URI にして CSS へ埋め込むが、CSP の `font-src`（`default-src 'self'`）は `data:` を通さない。`vite.config.ts` の `build.assetsInlineLimit` を 0 にして、すべてファイルとして出す。
 - 太さを足すときは、見本の Google Fonts の URL も同じ PR で直す。
 
