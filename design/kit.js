@@ -3198,6 +3198,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const x = task(el.dataset.done);
       x.doneAt = "10/20 10:12"; if (x.sprint && x.col) x.prevCol = x.col, x.col = "done";
       stamped.add(x.id); redrawAll();
+      toast(`${icon("check")}<span>${t("task")}を${t("done")}にしました${x.pts > 0 ? "<br>+40 XP" : ""}</span>`);
       document.querySelector(`#content [data-undo="${x.id}"]`)?.focus();
       return;
     }

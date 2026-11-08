@@ -143,6 +143,17 @@ async function completeThanked(
   return (await liveHelps(target, task.id)).length;
 }
 
+test('完了の応答は今回の手助けを含む実際の付与の合計で、前回の付与を含まない', async () => {
+  const target = await createTarget();
+  const { task } = await thankedTask(target, [target.leader]);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await call(target, taskComplete, task.id, WEDNESDAY);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ xp_granted: XP_HELP });
+    await reopen(target, task.id, WEDNESDAY);
+  }
+});
+
 describe('手助けの付与（task-complete）', () => {
   test('感謝が2件あるタスクを完了にすると、2人に1行ずつ付く。ポイントが無くても付く', async () => {
     const target = await createTarget();

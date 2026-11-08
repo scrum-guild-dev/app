@@ -1801,6 +1801,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 .toast.is-leaving { opacity: 0; transform: translateY(8px); transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out); }
 /* 文の後ろに置く操作（絞り込みを外す など）。地の色が反転しているので、枠と文字は地の上の色（currentColor）にする */
 :is(.toast, .toast-leaving) > span { flex: 1 1 auto; min-width: 0; }
+:is(.toast, .toast-leaving) > span { white-space: pre-line; }
 .toast-action { flex: none; padding: var(--space-1) var(--space-2); border: 1px solid currentColor; border-radius: var(--radius-1); background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .toast-action:hover { background: color-mix(in srgb, currentColor 20%, transparent); }
 .toast-action:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

@@ -592,7 +592,7 @@
         // 別の画面で先に完了にされていたときは、同じ完了の印で示し、知らせる
         showToast(
           result.ok
-            ? completedMessage(result.data.left_sprint, t)
+            ? completedMessage(result.data.left_sprint, result.data.xp_granted, t)
             : t('taskAlreadyDone', { task: t('task'), done: t('done') }),
           'check',
         );
