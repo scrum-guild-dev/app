@@ -1,6 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { callOperation } from '../../../../lib/api.ts';
 import { filterFromParams, filterInput } from '../../../../lib/backlog-filter.ts';
+import { startBacklogRead } from '../../../../lib/backlog-tallies.ts';
 import { isUnauthenticated, loginUrl } from '../../../../lib/login-redirect.ts';
 import { categoryRepositoryList } from '../../../../shared/operations/definition/index.ts';
 import { experienceTeamTotal } from '../../../../shared/operations/experience/index.ts';
@@ -21,6 +22,7 @@ export const load: PageLoad = async ({ params, fetch, url, depends }) => {
   depends('app:backlog-tree');
   // 読み直しを始めた時刻。画面で足した行が、この木に無いのを「消えた」と決めてよいかを、足した時刻との前後で決める
   const loadedAt = performance.now();
+  const readVersion = startBacklogRead();
   const filter = filterFromParams(url.searchParams);
   const options = { slug: params.slug, fetcher: fetch };
   const [result, definitions, teamTotal] = await Promise.all([
@@ -32,6 +34,7 @@ export const load: PageLoad = async ({ params, fetch, url, depends }) => {
   return {
     tree: result.ok ? result.data : null,
     loadedAt,
+    readVersion,
     filter,
     definitions: definitions.ok ? definitions.data : null,
     teamTotal: teamTotal.ok ? teamTotal.data.total : null,

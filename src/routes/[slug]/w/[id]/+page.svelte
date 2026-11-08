@@ -39,6 +39,14 @@
     treeStories,
   } from '../../../../lib/added-rows.ts';
   import { MoveQueue } from '../../../../lib/move-queue.ts';
+  import {
+    backlogTallies,
+    pendingBacklogPoints,
+    pendingBacklogTasks,
+    backlogReadVersion,
+    type SavedBacklogPoints,
+    type PendingBacklogTask,
+  } from '../../../../lib/backlog-tallies.ts';
   import { completionFailureMessage } from '../../../../lib/story-completion.ts';
   import { moveFailureMessage } from '../../../../lib/move-failure.ts';
   import { trackStoryOrder, trackTaskOrder } from '../../../../lib/task-order.ts';
@@ -157,6 +165,8 @@
   // at は足した時刻（performance.now()）。木の loadedAt（読み直しを始めた時刻）がこれより後なら、その木は足した行を含むはず
   // fromTree は、木にもとからあった行を完了にして写したもの（親の合計は、木が持つ分に含まれるので足さない）
   let added = $state<{ task: BacklogTask; storyId: string | null; at: number; fromTree?: true }[]>([]);
+  // 絞り込み中の起票は木へ直接出さず、全体の件数だけに足す。次の読み直しが起票を含めば捨てる。
+  let tallyAdded = $state<PendingBacklogTask[]>([]);
   let addedFor: string | undefined;
   // 前の読み込みで要求した絞り込み（読み込みに失敗した読み直しも含む）。絞り込みの条件が替わったときだけ、印と行を持ち越さない（carriesOver）
   let loadedFilter: typeof filter | undefined;
@@ -171,6 +181,7 @@
   let addedEpics = $state<{ epic: BacklogEpic; at: number }[]>([]);
   let addedStories = $state<{ story: BacklogStory; epicId: string | null; at: number }[]>([]);
   let completedIds = $state<string[]>([]);
+  let savedPoints = $state<SavedBacklogPoints>({});
   // 完了の応答が返った時刻（performance.now()）。これより前に始まった読み直しが遅れて届いても、完了の印を捨てない（completionSettled）
   let completedAt: Record<string, number> = {};
   let pendingIds = $state<string[]>([]);
@@ -216,9 +227,23 @@
     const unsettled = done.filter((id) => !completionSettled(completedAt[id] ?? Infinity, loadedAtForDone));
     // 木に無い行を残すかは、足した時刻と読み直しを始めた時刻で決める（src/lib/added-rows.ts）
     const loadedAt = untrack(() => data.loadedAt);
+    savedPoints = carry
+      ? pendingBacklogPoints(
+          untrack(() => savedPoints),
+          loadedAt,
+          loaded !== null,
+        )
+      : {};
     const keepRow = (at: number, inLoaded: boolean) =>
       carry &&
       keepAddedRow({ at }, { inLoadedTree: inLoaded, completed: false, treeLoaded: loaded !== null, loadedAt });
+    tallyAdded = sameWorkspace
+      ? pendingBacklogTasks(
+          untrack(() => tallyAdded),
+          untrack(() => data.readVersion),
+          loaded !== null,
+        )
+      : [];
     const loadedStoryIds = (loaded === null ? [] : treeStories(loaded)).map((story) => story.id);
     // 画面で足したストーリーのうち、この回で残すもの。孤立の判定にも、捨てるものを含めない
     const keptStories = untrack(() => addedStories).filter((entry) =>
@@ -388,17 +413,16 @@
   const taskPlaces = $derived(placesOf(taskLists));
   const rootRows = $derived(taskLists[ROOT] ?? []);
 
-  // 見出しの「<詳細> 未記入」の件数。絞り込みに関わらず、ワークスペースの完了していないタスク全体の値（API の unfilled_count）に、
-  // 読み直すまでの間の画面の変更を足し引きする: 起票で足した行（まだ木に無いもの）の未記入を足し、完了にした行の未記入を引く
-  const unfilledCount = $derived.by(() => {
-    if (tree === null) return 0;
-    const loaded = [...loadedStories.flatMap(({ row: story }) => story.tasks), ...tree.tasks];
-    const fresh = added.filter((entry) => !inTree(tree, entry.task.id)).map((entry) => entry.task);
-    const unfilledOpen = (rows: readonly BacklogTask[]) =>
-      rows.filter((row) => row.unfilled && !completedIds.includes(row.id)).length;
-    const completedLoaded = loaded.filter((row) => row.unfilled && completedIds.includes(row.id)).length;
-    return Math.max(0, tree.unfilled_count - completedLoaded + unfilledOpen(fresh));
-  });
+  // 絞り込みに左右されない全体の件数に、画面で起票・完了・見積もりした分を足し引きする。
+  const tallies = $derived(
+    backlogTallies(
+      tree ?? { open_count: 0, unfilled_count: 0, unestimated_count: 0, unscheduled_count: 0 },
+      tree === null ? [] : [...treeStories(tree).flatMap((story) => story.tasks), ...tree.tasks],
+      [...added, ...tallyAdded].map((entry) => entry.task),
+      completedIds,
+      savedPoints,
+    ),
+  );
 
   // ドラッグの判定に渡す、今の木の並び（画面で動かした並びを含む）
   const dropIndex = $derived(
@@ -676,6 +700,7 @@
   async function created(task: BacklogTask, storyId: string | null): Promise<void> {
     // 絞っているときは、足した行が絞り込みに当たるかを画面では決めないので、木を読み直す
     if (filtering) {
+      tallyAdded = [...tallyAdded, { task, afterRead: backlogReadVersion() }];
       const parent = storyId === null ? undefined : openStories.find((story) => story.id === storyId);
       const message =
         parent === undefined
@@ -1254,6 +1279,9 @@
           slug: page.params.slug ?? '',
           workspaceId: workspace.id,
           onSaved: () => invalidateAll(),
+          onPointsSaved: (row, value) => {
+            savedPoints = { ...savedPoints, [row.id]: { value, at: performance.now() } };
+          },
           onStale: () => void invalidateAll(),
           definitions: data.definitions,
         }
@@ -1325,7 +1353,12 @@
     title={t('backlog')}
     eyebrow={workspace.name}
     focusable
-    tallies={[{ tone: 'warn', icon: 'pen', label: t('unfilledChip', { detail: t('detail') }), count: unfilledCount }]}
+    tallies={[
+      { icon: 'board', label: t('backlogTallyOpen', { task: t('task') }), count: tallies.open_count },
+      { tone: 'warn', icon: 'pen', label: t('unfilledChip', { detail: t('detail') }), count: tallies.unfilled_count },
+      { tone: 'warn', label: t('pointsUnsetTitle'), count: tallies.unestimated_count },
+      { label: t('backlogTallyUnscheduled', { sprint: t('sprint') }), count: tallies.unscheduled_count },
+    ]}
     meta={data.teamTotal === null ? undefined : teamExperience}
   ></PageHead>
 
@@ -1371,6 +1404,10 @@
           onchange={(next) => void applyFilter(next)}
         />
       {/if}
+      {#if filtering}
+        <!-- 当たる行が0件でも、見出しの集計は絞る前の全体の値 -->
+        <p class="action-note">{t('filterTotalsNote', { points: t('points') })}</p>
+      {/if}
       {#if !firstStep && filtering && epics.length === 0 && tree.stories.length === 0 && rootRows.length === 0}
         <!-- 絞り込みに当たるものが無い。木の代わりに、無いことと、絞り込みを外す操作を出す -->
         <EmptyState icon="search" title={t('backlogNoMatchTitle')} text={t('backlogNoMatchText')}>
@@ -1391,10 +1428,6 @@
               <span class="drag-note">{t('backlogDragNote')}</span>
             {/if}
           </p>
-        {/if}
-        {#if filtering}
-          <!-- 絞っても、ポイントの合計と完了の件数は絞る前の全体の値を出すので、そのことを添える -->
-          <p class="action-note">{t('filterTotalsNote', { points: t('points') })}</p>
         {/if}
         {@render treeView()}
       {/if}
