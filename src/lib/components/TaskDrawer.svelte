@@ -185,6 +185,7 @@
   });
   let marking = $state(false);
   let refreshVersion = 0;
+  let latestRefresh: Promise<TaskDetail | null> | null = null;
   const todayReasonId = `${ids}-today-reason`;
 
   async function toggleToday() {
@@ -750,32 +751,35 @@
   }
 
   // 今の値を読み直す。読めなければ今の表示のまま（null）
-  async function refresh(closeIfGone = false): Promise<TaskDetail | null> {
+  function refresh(closeIfGone = false): Promise<TaskDetail | null> {
     const requestedVersion = ++refreshVersion;
     const requestedTaskId = taskId;
-    const result = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: taskId }, { slug });
-    // 後から始めた読み取りがあれば、その応答を待ち、古い値で担当や印を戻さない。
-    if (requestedVersion !== refreshVersion) return null;
-    if (!result.ok) {
-      if (closeIfGone && result.status === 404 && alive && taskId === requestedTaskId) gone();
-      return null;
-    }
-    if (alive && taskId === requestedTaskId) {
-      task = result.data.task;
-      taskContext = {
-        column: result.data.column,
-        story: result.data.story,
-        epic: result.data.epic,
-        today_on: result.data.today_on,
-      };
-      fields = result.data.fields;
-      inBacklog = result.data.in_backlog;
-      clock = { today: result.data.today, weekStart: result.data.week_start };
-      if (canWrite && task.completed_at === null && candidates === null) void loadCandidates();
-      // 別の人の変更を読み直したので、その変更が載った履歴も読み直す
-      void loadHistory();
-    }
-    return result.data.task;
+    const pending = (async (): Promise<TaskDetail | null> => {
+      const result = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: requestedTaskId }, { slug });
+      // 後発の読み取りに表示を譲る場合も、その結果を呼び出し元へ返す。null は読み取り失敗だけを表す。
+      if (requestedVersion !== refreshVersion) return latestRefresh;
+      if (!result.ok) {
+        if (closeIfGone && result.status === 404 && alive && taskId === requestedTaskId) gone();
+        return null;
+      }
+      if (alive && taskId === requestedTaskId) {
+        task = result.data.task;
+        taskContext = {
+          column: result.data.column,
+          story: result.data.story,
+          epic: result.data.epic,
+          today_on: result.data.today_on,
+        };
+        fields = result.data.fields;
+        inBacklog = result.data.in_backlog;
+        clock = { today: result.data.today, weekStart: result.data.week_start };
+        if (canWrite && task.completed_at === null && candidates === null) void loadCandidates();
+        void loadHistory();
+      }
+      return result.data.task;
+    })();
+    latestRefresh = pending;
+    return pending;
   }
 
   // ---- 決まった欄（TaskFieldValues が task-field-set で保存する） ----
