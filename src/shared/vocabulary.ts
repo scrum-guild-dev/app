@@ -25,7 +25,6 @@ export const dictionary = defineDictionary({
     'このチームの利用開始を再開できません。組織の選択に戻り、権限とワークスペースを確認してください。',
   onboardingWorkspaceFailed:
     'チームは作成済みですが、招待先のワークスペースを作れませんでした。もう一度試してください。',
-  onboardingDefaultWorkspace: 'チームのタスク',
   onboardingEmailsInvalid: 'Googleでログインするメールアドレスを、カンマか改行で区切って1〜20件入力してください。',
   onboardingInvitationsFailed:
     '一部の招待を作成できませんでした。作成済みのリンクは残しています。入力を確認してもう一度試してください。',
