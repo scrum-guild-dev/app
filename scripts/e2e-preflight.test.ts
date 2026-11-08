@@ -691,12 +691,18 @@ test('入っているのに壊れている・不安定な失敗は省く理由�
     }),
     /Unexpected token/,
   );
-  await assert.rejects(
-    playwrightUnavailableReason(() => {
-      throw Object.assign(new Error("Cannot find package 'playwright-core'"), { code: 'ERR_MODULE_NOT_FOUND' });
-    }),
-    /playwright-core/,
-  );
+  for (const message of [
+    "Cannot find package 'playwright-core'",
+    "Cannot find package 'playwright' imported from /app/node_modules/@playwright/test/index.mjs",
+    "Cannot find module '/app/node_modules/@playwright/test/index.js'",
+  ]) {
+    await assert.rejects(
+      playwrightUnavailableReason(() => {
+        throw Object.assign(new Error(message), { code: 'ERR_MODULE_NOT_FOUND' });
+      }),
+      (error: Error) => error.message === message,
+    );
+  }
   await assert.rejects(
     playwrightUnavailableReason(launcher(() => Promise.reject(new Error('Timeout 30000ms exceeded')))),
     /Timeout/,
@@ -721,7 +727,7 @@ test('CLI は Chromium が無いとき検査も記録もせず、対象を示し
   const result = cli(cwd, ['base'], join(cwd, 'no-browsers'));
   assert.equal(result.status, 3, result.stderr);
   assert.match(result.stderr, /Playwright が入っていないため e2e を省く（Chromium が入っていない/);
-  assert.match(result.stderr, /確かめるつもりだった対象: \["e2e\/new\.test\.ts"\]/);
+  assert.match(result.stderr, /確かめるつもりだった対象（targeted）: \["e2e\/new\.test\.ts"\]/);
   assert.match(result.stderr, /CI の e2e・e2e-dev・e2e-repeat で確かめる/);
   assert.equal(existsSync(join(cwd, '.e2e-preflight')), false);
 });
@@ -729,11 +735,22 @@ test('CLI は Chromium が無いとき検査も記録もせず、対象を示し
 test('CLI は Chromium が無くても、base と対象の誤りを省く終了コードに変えない', (t) => {
   const cwd = fixture(t);
   const browsers = join(cwd, 'no-browsers');
-  for (const args of [['nosuch'], ['base', '--files', 'e2e/other.test.ts', '--reason', '関連']]) {
-    const result = cli(cwd, args, browsers);
-    assert.notEqual(result.status, 0);
-    assert.notEqual(result.status, 3, `${args.join(' ')}: ${result.stderr}`);
+  for (const [args, message] of [
+    [['nosuch'], /git rev-parse/],
+    [['base', '--files', 'e2e/other.test.ts', '--reason', '関連'], /e2e\/new\.test\.ts/],
+  ] as const) {
+    const result = cli(cwd, [...args], browsers);
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`);
+    assert.match(result.stderr, message);
+    assert.doesNotMatch(result.stderr, /Playwright が入っていない/);
   }
+});
+
+test('CLI は全件の指定で Chromium が無いとき、対象を全件と示して止まる', (t) => {
+  const cwd = fixture(t);
+  const result = cli(cwd, ['base', '--all', '--reason', '共通基盤'], join(cwd, 'no-browsers'));
+  assert.equal(result.status, 3, result.stderr);
+  assert.match(result.stderr, /確かめるつもりだった対象（all）: 全件 — 共通基盤/);
 });
 
 test('CLI は文書のみなら Chromium が無くても省略記録を作る', (t) => {

@@ -333,7 +333,8 @@ export async function playwrightUnavailableReason(
     const code = (error as { code?: unknown } | null)?.code;
     if (
       (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND') &&
-      firstLine(error).includes('@playwright/test')
+      // 欠けたのが @playwright/test 自体のときだけ。依存や入口が欠けた壊れた導入（imported from …/@playwright/test/…）は含めない。
+      /^Cannot find (package|module) '@playwright\/test'/.test(firstLine(error))
     )
       return `@playwright/test が入っていない: ${firstLine(error)}`;
     throw error;
@@ -401,7 +402,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (unavailable !== undefined) {
       console.error(`[e2e:preflight] Playwright が入っていないため e2e を省く（${unavailable}）。`);
       console.error(
-        `[e2e:preflight] 確かめるつもりだった対象: ${JSON.stringify(selection.files)} — ${selection.reason}`,
+        `[e2e:preflight] 確かめるつもりだった対象（${selection.scope}）: ${selection.scope === 'all' ? '全件' : JSON.stringify(selection.files)} — ${selection.reason}`,
       );
       console.error(
         '[e2e:preflight] 結果は記録しない。PR を作り、本文に未実施の理由と対象を書いて、CI の e2e・e2e-dev・e2e-repeat で確かめる',
