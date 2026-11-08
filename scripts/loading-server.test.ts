@@ -27,3 +27,28 @@ test('起動失敗でも後片付けが完了する', { timeout: 3000 }, async (
   assert.equal(server.stopped, true);
   await server.stop();
 });
+
+test(
+  '親が先に終了しても同じグループの孫サーバーを止める',
+  { skip: process.platform === 'win32', timeout: 4000 },
+  async () => {
+    const code = `const {spawn} = require('node:child_process');
+    const child = spawn(process.execPath, ['-e', "require('node:http').createServer((q,s)=>s.end('ok')).listen(0,'127.0.0.1',function(){console.log(this.address().port)})"], {stdio:['ignore','pipe','ignore']});
+    child.stdout.once('data', data => {console.log(data.toString().trim()); process.exit(0)});`;
+    const child = spawn(process.execPath, ['-e', code], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    const server = trackServer(child, true);
+    const port = Number((await once(child.stdout!, 'data'))[0].toString().trim());
+    await once(child, 'exit');
+    assert.equal((await fetch(`http://127.0.0.1:${port}`)).status, 200);
+    try {
+      await server.stop();
+      await assert.rejects(fetch(`http://127.0.0.1:${port}`, { signal: AbortSignal.timeout(500) }));
+    } finally {
+      try {
+        process.kill(-child.pid!, 'SIGKILL');
+      } catch {
+        /* テストが作ったグループのみ */
+      }
+    }
+  },
+);

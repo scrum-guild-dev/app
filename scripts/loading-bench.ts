@@ -58,7 +58,7 @@ let tracked: ReturnType<typeof trackServer> | undefined;
 let interrupted = false;
 const stop = () => {
   interrupted = true;
-  server?.kill('SIGTERM');
+  tracked?.interrupt();
 };
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
@@ -127,9 +127,9 @@ try {
       '--inspector-port',
       String(port + 1),
     ],
-    { stdio: 'ignore', cwd: dir },
+    { stdio: 'ignore', cwd: dir, detached: process.platform !== 'win32' },
   );
-  tracked = trackServer(server);
+  tracked = trackServer(server, process.platform !== 'win32');
   for (let i = 0; ; i++) {
     if (interrupted || tracked.stopped || i >= 120) throw new Error('計測サーバーが立ち上がりません');
     try {
