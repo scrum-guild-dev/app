@@ -988,9 +988,9 @@ button.tree-folded[aria-expanded="true"] .ico { transform: rotate(90deg); }
 @container (max-width: 640px) {
   .entry { grid-template-columns: var(--grip-col, ) 32px minmax(0, 1fr); }
   .entry-end { grid-column: -2; flex-wrap: wrap; }
-  /* 「今日やる」の太陽（.sun）の無い行は、空の 32px の列を持たず、題とチップに幅を返す（390px で 44px 広がり、題の下の印が 1 行に収まる） */
-  .entry:not(:has(> .sun)) { grid-template-columns: var(--grip-col, ) minmax(0, 1fr); }
-  .entry > span[aria-hidden="true"]:not(.grip):empty { display: none; }
+  /* 「今日やる」の太陽（.sun）の無いバックログの木（.tree）の行は、空の 32px の列を持たず、題とチップに幅を返す（受信箱の選ぶ欄と「今日やること」の一覧は、行の左端を揃えるので列を残す）（390px で 44px 広がり、題の下の印が 1 行に収まる） */
+  .tree .entry:not(:has(> .sun)) { grid-template-columns: var(--grip-col, ) minmax(0, 1fr); }
+  .tree .entry > span[aria-hidden="true"]:not(.grip):empty { display: none; }
   /* 印の行（.entry-meta、押せない）が題とチップの段の間にあれば、段の間は詰める（題と段の押せる範囲は印の行が分ける）。
      印の行が無いときだけ、題の下へ広げた範囲（約 11px）がチップの段に重ならない間を残す */
   .entry:has(.entry-meta) { row-gap: 2px; }
@@ -1431,9 +1431,9 @@ dialog.dialog::backdrop { background: none; }
   .drawer .tab { min-height: 44px; }
   /* 開き方と前後のボタンと閉じるボタンは、隣と押せる範囲が重ならないよう、見た目ごと 44px 四方にする */
   .drawer-steps .pill, .drawer-mode .pill, .drawer-close { min-width: 44px; min-height: 44px; justify-content: center; }
-  /* 木の行の右端が折り返したとき、上の段の「＋タスク」の広げた分が、下の段の 44px のボタンに重ならないよう段の間を空ける */
-  /* --space-3 では、上の段の「＋タスク」と下の段の「完了にする」の広げた範囲が重なる（e2e/layout-narrow-workspace.test.ts で確かめた） */
   .tree-end { row-gap: 0; }
+  /* ボタンだけの段（ratio も note も無い段）も 44px にする。広げた範囲が次の段に重ならない */
+  .tree-row .tree-end .btn.is-sm { margin-block: 8px; }
   /* 右端の段は、どの段も 44px の高さにする（「完了 / 全体」と残りの件数の文字を 44px の箱に入れ、ボタンは段の中央に置く）。
      段が 44px なので、段の間に余白が要らず、ボタンの広げた範囲も隣の段に重ならない。題の広げた範囲（下へ約 11px）は、
      段の上の余白（約 8px）と下の行の間（--space-1）に収まる（e2e/layout-narrow-workspace.test.ts で確かめる） */
@@ -1761,8 +1761,8 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   .row-menu-btn { opacity: 1; width: 44px; height: 44px; }
   .chip-btn::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
   /* 見た目の縦の余白は持たない。::after の 44px が隣の段に重ならないよう、折り返す段の間（row-gap）だけで空ける。
-     チップの段は「⋯」（44px）と同じ段なので、1段のときは 44px の高さに収まり、折り返した 2 段目は 26px + 18px で 44px の間隔になる */
-  .entry-end, .card-foot { row-gap: 18px; }
+     チップの段は「⋯」（44px）と同じ段なので、1段のときは 44px の高さに収まり、折り返した 2 段目は、チップの高さ（約 22px。書体で変わる）に 24px を足して 44px 以上の間隔になる */
+  .entry-end:has(.chip-btn), .card-foot:has(.chip-btn) { row-gap: 24px; }
 }
 /* 書きっぱなしの欄（.is-inline）。静止時は破線の罫で書ける欄と示し、押すと実線の入力欄になる。引き出しのタイトル、リンク、本文に使う */
 .input.is-inline, .textarea.is-inline { background: transparent; border-color: var(--color-control-edge); border-style: dashed; }
