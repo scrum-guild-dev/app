@@ -583,7 +583,7 @@ test('個人用だけ作成済みなら未保存のプロフィールを案内�
   await page.goto('/auth/setup');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(word('onboardingProfile'));
   await expect(page.getByLabel('個人用のURL', { exact: true })).toHaveAttribute('readonly');
-  await expect(page.locator('#setup-personal-hint')).toHaveText('作成済みの個人用URLです。あとから変更できません。');
+  await expect(page.locator('#setup-personal-hint')).toHaveText(word('onboardingPersonalUrlSaved'));
   await expect(page.getByText('プロフィールは保存済みです。', { exact: false })).toHaveCount(0);
   const name = '🙂'.repeat(100);
   await page.getByLabel('表示する名前').fill(name);
@@ -613,8 +613,9 @@ for (const profile of [null, { name: '導入 ユイ', title: '' }]) {
       personal: { slug: 'setup-blocked', available: false },
     }));
     await page.goto('/auth/setup');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('利用開始を再開できません');
-    await expect(page.getByText('個人用の準備ができました。', { exact: false })).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(word('onboardingBlockedTitle'));
+    for (const selector of ['.onboarding-progress', '.onboarding-lead', '.onboarding-eyebrow'])
+      await expect(page.locator(selector)).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'チームを作って招待する', exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: word('onboardingReturnOrganizations') })).toBeVisible();
     expect(await findA11yViolations(page)).toEqual([]);
