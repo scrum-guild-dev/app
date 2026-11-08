@@ -194,9 +194,14 @@
   }
 
   // 木を読み直し、読み直した task の prop が届くまで待つ（onSaved の invalidateAll は data を替えて返るが、
-  // 子の prop は次の描画で替わる）。待たないと、次の周が古い task と比べて「保存済み」と誤る
+  // 子の prop は次の描画で替わる）。読み直しが例外で抜けても、送る周は止めない（止めると、読み直しの間に選び直した値が
+  // 送られないまま行に残る）。読み直せなかった行は、次の読み直しで本当の値に合う
   async function reload(): Promise<void> {
-    await attrs?.onSaved();
+    try {
+      await attrs?.onSaved();
+    } catch {
+      // 知らせは出さない（保存は通っていて、「保存しました」を出した後）
+    }
     await tick();
   }
 
@@ -235,6 +240,17 @@
     if (!pointsSending) void sendPoints();
   }
 
+  // 通った値（choice）の後始末。選んだ値が通った値のままなら、選んだ値と基準を外す（行は task を出す）。
+  // 選び直されていれば、基準を通った値にして残す
+  function settlePoints(choice: PointsChoice): void {
+    if (pointsPending === null || pointsPending.value === choice) {
+      pointsPending = null;
+      confirmedPoints = undefined;
+    } else {
+      confirmedPoints = choice;
+    }
+  }
+
   // 1本ずつ送る。送っている間に選び直されたら、最後の選択だけを送る。失敗したら元の値に戻す
   async function sendPoints(): Promise<void> {
     if (attrs === undefined) return;
@@ -249,7 +265,8 @@
             confirmedPoints = undefined;
             await reload();
           }
-          break;
+          // 読み直しの間に選び直されていれば、次の周が送る
+          continue;
         }
         const result = await callOperation(
           taskUpdate,
@@ -257,18 +274,14 @@
           { slug: attrs.slug },
         );
         if (result.ok) {
-          confirmedPoints = choice;
-          // 選び直されていなければ、読み直した値が出るまで選んだ値を見せる。選び直されていれば、次の周が最後の選択を送る
+          // 選び直されていなければ、読み直した値が出るまで選んだ値を見せる
           if (pointsPending !== null && pointsPending.value === choice) {
             showToast(t('taskSaved'), 'check');
-            // 読み直しが例外で抜けても、通った値と選んだ値を残さない（残すと、次の選択が古い基準と比べられ、行も選んだ値のまま止まる）
-            try {
-              await reload();
-            } finally {
-              confirmedPoints = undefined;
-              if (pointsPending !== null && pointsPending.value === choice) pointsPending = null;
-            }
+            await reload();
           }
+          // 最後の選択が通った値なら終える。違えば（送っている間か読み直しの間に選び直された）、通った値を基準に残し、
+          // 次の周がそれと比べて送る。読み直しが失敗するか別の読み直しに置き換えられて task が古いままでも、基準を誤らない
+          settlePoints(choice);
           continue;
         }
         const message =
@@ -289,6 +302,15 @@
     if (!assigneeSending) void sendAssignee();
   }
 
+  function settleAssignee(choice: string): void {
+    if (assigneePending === null || assigneePending.value === choice) {
+      assigneePending = null;
+      confirmedAssignee = undefined;
+    } else {
+      confirmedAssignee = choice;
+    }
+  }
+
   async function sendAssignee(): Promise<void> {
     if (attrs === undefined) return;
     assigneeSending = true;
@@ -301,7 +323,7 @@
             confirmedAssignee = undefined;
             await reload();
           }
-          break;
+          continue;
         }
         const result = await callOperation(
           taskAssign,
@@ -309,16 +331,11 @@
           { slug: attrs.slug },
         );
         if (result.ok) {
-          confirmedAssignee = choice;
           if (assigneePending !== null && assigneePending.value === choice) {
             showToast(t('taskSaved'), 'check');
-            try {
-              await reload();
-            } finally {
-              confirmedAssignee = undefined;
-              if (assigneePending !== null && assigneePending.value === choice) assigneePending = null;
-            }
+            await reload();
           }
+          settleAssignee(choice);
           continue;
         }
         let message: string;

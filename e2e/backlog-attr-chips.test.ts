@@ -7,6 +7,7 @@
 // 最後に、選択の窓を開いた状態を4つの見た目で axe にかける。
 import { expect, test } from './fixtures.ts';
 import { memberList } from '../src/shared/operations/workspace/member-list.ts';
+import { backlogTree } from '../src/shared/operations/task/backlog-tree.ts';
 import { taskAssign } from '../src/shared/operations/task/task-assign.ts';
 import { taskDetail } from '../src/shared/operations/task/task-detail.ts';
 import { taskUpdate } from '../src/shared/operations/task/task-update.ts';
@@ -25,6 +26,19 @@ import { failOperation, routeOperation } from './operations.ts';
 // 次の描画まで待ってから、画面の高さを返す（resize のイベントは描画の前に届く）
 function nextFrameHeight(): Promise<number> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve(window.innerHeight)));
+}
+
+// 木の中の、題が title のタスクのポイントを書き換える（古い木を返すため）
+function withPoints<T>(tree: T, title: string, points: number | null): T {
+  const walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(walk);
+    if (value === null || typeof value !== 'object') return value;
+    const entries = Object.entries(value).map(([key, item]) => [key, walk(item)] as const);
+    const object = Object.fromEntries(entries) as Record<string, unknown>;
+    if (object.title === title && 'points' in object && 'assignee' in object) object.points = points;
+    return object;
+  };
+  return walk(tree) as T;
 }
 
 // 応答を保留する門。release() まで、通した操作は本物の API へ流れない
@@ -190,6 +204,52 @@ test('送っている間に元の値へ選び直しても、サーバーの値�
   ).toBeVisible();
 });
 
+test('保存が通った後の読み直しの間に元の値へ選び直すと、読み直しが古い木を返しても元の値を送り直す', async ({
+  page,
+}) => {
+  await createWorkspace(page, '読み直しの間のワークスペース');
+  await addTaskRow(page, '読み直しの間に選ぶ件');
+  const row = page.locator('.entry', { hasText: '読み直しの間に選ぶ件' });
+  // 足した後の読み直しが終わってから、木の読み直しを保留する
+  await waitForSettled(page);
+
+  // 5 が通った後の木の読み直しを保留し、その間に「未見積もり」へ選び直す。読み直しは、別の読み直しに置き換えられたときと同じく、
+  // この行を古い値（未設定）のまま返す。行の task と比べると「保存済み」と誤るので、通った値（5）と比べて送り直す必要がある
+  const held = gate();
+  let arrived!: () => void;
+  const reading = new Promise<void>((resolve) => (arrived = resolve));
+  let first = true;
+  const unroute = await routeOperation(page, backlogTree, { slug: 'aoba' }, async (call) => {
+    // 書き換えるのは最初の読み直しだけ。後の読み直しは、SvelteKit が新しい読み直しに置き換えて取り消すことがあるので、
+    // 流すのが取り消し後になった失敗は捨てる
+    if (!first) {
+      await call.passThrough().catch(() => {});
+      return;
+    }
+    first = false;
+    arrived();
+    await held.wait;
+    await call.fulfill(withPoints(await call.fetch(), '読み直しの間に選ぶ件', null));
+  });
+  const sent = waitForResponses(page, '/task-update', 2);
+  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
+  await page.getByRole('menuitemradio', { name: '5 pt', exact: true }).click();
+  await reading;
+  await row.getByRole('button', { name: 'ポイント: 5 pt' }).click();
+  await page.getByRole('menuitemradio', { name: '未見積もり', exact: true }).click();
+  held.release();
+  // 読み直した木（5）が届いても、未見積もりを送り直す
+  await sent;
+  await waitForSettled(page);
+  await expect(row.getByRole('button', { name: 'ポイント: 未設定' })).toBeVisible();
+  await unroute();
+
+  await page.reload();
+  await expect(
+    page.locator('.entry', { hasText: '読み直しの間に選ぶ件' }).getByRole('button', { name: 'ポイント: 未設定' }),
+  ).toBeVisible();
+});
+
 test('断られた理由を読み直せなかったら、競合とも完了とも言い切らず、保存できなかったと知らせて元の値に戻す', async ({
   page,
 }) => {
@@ -263,7 +323,9 @@ test('担当の候補を読んでいる間に開いても、Esc で閉じてチ�
   const row = page.locator('.entry', { hasText: '候補を待つ件' });
 
   const held = gate();
+  let reads = 0;
   const unroute = await routeOperation(page, memberList, { slug: 'aoba' }, async (call) => {
+    reads += 1;
     await held.wait;
     await call.passThrough();
   });
@@ -277,13 +339,14 @@ test('担当の候補を読んでいる間に開いても、Esc で閉じてチ�
   await expect(menu).toBeHidden();
   await expect(chip).toBeFocused();
 
-  // 読み終えた後に開くと、候補が出る
+  // 読み終えた後に開くと、候補を読み直して出す
   held.release();
   await waitForSettled(page);
-  await unroute();
   await chip.click();
   await expect(menu.getByRole('menuitemradio').nth(1)).toBeVisible();
   await expect(menu).toHaveAttribute('aria-busy', 'false');
+  expect(reads).toBe(2);
+  await unroute();
 });
 
 test('担当を送っている間に元の値へ選び直しても、サーバーの値と行が食い違わない', async ({ page }) => {
@@ -378,6 +441,10 @@ test('担当の候補を読めなければ「担当なし」だけを選べ、�
   await retry.click();
   await expect(menu.getByRole('menuitemradio').nth(1)).toBeVisible();
   await expect(retry).toHaveCount(0);
+  // 押した「もう一度試す」が消えても、フォーカスはメニューに残り（選んでいる項目へ移る）、Esc でチップへ戻れる
+  await expect(menu.getByRole('menuitemradio', { name: '担当なし', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(row.getByRole('button', { name: '担当: 未設定' })).toBeFocused();
 });
 
 test('選択の窓は、高さだけが変わっても閉じず、幅が変わると閉じる', async ({ page }) => {
@@ -395,6 +462,11 @@ test('選択の窓は、高さだけが変わっても閉じず、幅が変わ�
   // resize の処理は描画の前に走るので、次の描画を待ってから確かめる
   await expect.poll(() => page.evaluate(nextFrameHeight)).toBe(size.height - 100);
   await expect(menu).toBeVisible();
+  // 置き直して、縮んだ画面の中に収まる
+  const box = await menu.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(size.height - 100);
 
   await page.setViewportSize({ width: size.width - 100, height: size.height - 100 });
   await expect(menu).toBeHidden();
