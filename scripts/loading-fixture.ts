@@ -1,4 +1,4 @@
-// loading-bench 専用の使い捨て D1。backlog-bench.ts の行の生成を流用する。
+// loading-bench 専用の使い捨て D1。backlog-bench.ts から複製し、読み取り集計用の履歴を加えた。
 // seed（seed/data.sql）のあおば開発と、その管理者（ミナト）と一般のユーザー（ハルカ）
 const ORGANIZATION_ID = '019a0000-0000-7000-8000-000000000201';
 const ADMIN_USER_ID = '019a0000-0000-7000-8000-000000000301';
@@ -54,7 +54,7 @@ INSERT INTO tasks (id, workspace_id, is_imported, tray, title, story_id, categor
     CASE WHEN i % 4 = 0 THEN '${id(prefix, 1, 'r')}' END,
     CASE i % 3 WHEN 0 THEN '${ADMIN_USER_ID}' WHEN 1 THEN '${MEMBER_USER_ID}' END,
     CASE i % 5 WHEN 0 THEN NULL WHEN 1 THEN 1 WHEN 2 THEN 2 WHEN 3 THEN 3 ELSE 5 END,
-    CASE WHEN (i / 7) % 10 < ${shape.completedPerTen} THEN '${AT}' END,
+    CASE WHEN (i / 7) % 10 < ${shape.completedPerTen} THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now', printf('-%d days', i % 7)) END,
     CASE WHEN (i / 7) % 10 < ${shape.completedPerTen} THEN '${ADMIN_USER_ID}' END,
     printf('a0%06dV', i), '${ADMIN_USER_ID}', '${AT}', '${AT}' FROM n;
 `;
@@ -66,9 +66,36 @@ export function loadingFixtureSql(): string {
   return (
     shapeSql({ workspaceId: loadingWorkspace, prefix: '1', completedPerTen: 8 }) +
     `
-INSERT INTO board_columns (id, workspace_id, name, position, created_at, updated_at) VALUES ('${id('1', 1, 'b')}', '${loadingWorkspace}', '未着手', 'a0', '${AT}', '${AT}');
+INSERT INTO board_columns (id, workspace_id, name, is_done, position, created_at, updated_at) VALUES
+  ('${id('1', 1, 'b')}', '${loadingWorkspace}', '未着手', 0, 'a0', '${AT}', '${AT}'),
+  ('${id('1', 2, 'b')}', '${loadingWorkspace}', '完了', 1, 'a1', '${AT}', '${AT}');
+-- 直近6日を2日ずつの終了スプリントに分ける。当日分はバックログでの完了。
+INSERT INTO sprints (id, workspace_id, name, start_on, end_on, status, started_at, started_by, closed_at, closed_by, created_at, updated_at)
+  WITH n(i) AS (VALUES (1), (2), (3))
+  SELECT ${sqlId('1', 'p', 'i + 1')}, '${loadingWorkspace}', '終了した計測 ' || i,
+    date('now', printf('-%d days', i * 2)), date('now', printf('-%d days', i * 2 - 1)), 'closed',
+    strftime('%Y-%m-%dT%H:%M:%fZ', 'now', printf('-%d days', i * 2)), '${ADMIN_USER_ID}',
+    strftime('%Y-%m-%dT%H:%M:%fZ', 'now', printf('-%d days', i * 2 - 1)), '${ADMIN_USER_ID}', '${AT}', '${AT}' FROM n;
+UPDATE tasks SET sprint_id=${sqlId('1', 'p', '(CAST(substr(id, -12) AS INTEGER) % 7 - 1) / 2 + 2')},
+  column_id='${id('1', 2, 'b')}', column_position=position
+  WHERE workspace_id='${loadingWorkspace}' AND completed_at IS NOT NULL AND CAST(substr(id, -12) AS INTEGER) % 7 > 0;
+INSERT INTO completions (id, workspace_id, task_id, completed_at, completed_by, points, assignee_user_id, sprint_id, category_id, billing_month, created_at, updated_at)
+  SELECT ${sqlId('1', 'f', 'CAST(substr(t.id, -12) AS INTEGER)')}, t.workspace_id, t.id, t.completed_at, t.completed_by,
+    t.points, t.assignee_user_id, t.sprint_id, coalesce(t.category_id, s.category_id, e.category_id),
+    strftime('%Y-%m', t.completed_at), t.completed_at, t.completed_at
+  FROM tasks t LEFT JOIN stories s ON s.id=t.story_id LEFT JOIN epics e ON e.id=s.epic_id
+  WHERE t.workspace_id='${loadingWorkspace}' AND t.completed_at IS NOT NULL;
+-- task-complete と同じく1点以上の完了を担当者（未割当なら完了者）の30XPにする。
+INSERT INTO xp_grants (id, workspace_id, user_id, action, task_id, completion_id, amount, dedupe_key, confirmed_at)
+  SELECT ${sqlId('1', 'x', 'CAST(substr(task_id, -12) AS INTEGER)')}, workspace_id,
+    coalesce(assignee_user_id, completed_by), 'task_completed', task_id, id, 30, 'task_completed:' || id, completed_at
+  FROM completions WHERE workspace_id='${loadingWorkspace}' AND points >= 1;
+INSERT INTO comments (id, workspace_id, task_id, author_user_id, body_md, created_at)
+  SELECT ${sqlId('1', 'h', 'CAST(substr(id, -12) AS INTEGER)')}, workspace_id, id, '${ADMIN_USER_ID}',
+    '計測用の作業メモ: 確認と引き継ぎを記録する。', coalesce(completed_at, '${AT}')
+  FROM tasks WHERE workspace_id='${loadingWorkspace}';
 INSERT INTO sprints (id, workspace_id, name, start_on, end_on, status, started_at, started_by, created_at, updated_at) VALUES ('${id('1', 1, 'p')}', '${loadingWorkspace}', '計測', date('now'), date('now', '+13 days'), 'active', '${AT}', '${ADMIN_USER_ID}', '${AT}', '${AT}');
-UPDATE tasks SET sprint_id='${id('1', 1, 'p')}', column_id='${id('1', 1, 'b')}', column_position=position, today_on=date('now') WHERE workspace_id='${loadingWorkspace}' AND completed_at IS NULL AND rowid IN (SELECT rowid FROM tasks WHERE workspace_id='${loadingWorkspace}' AND completed_at IS NULL LIMIT 30);
+UPDATE tasks SET sprint_id='${id('1', 1, 'p')}', column_id='${id('1', 1, 'b')}', column_position=position, today_on=date('now') WHERE workspace_id='${loadingWorkspace}' AND completed_at IS NULL AND rowid IN (SELECT rowid FROM tasks WHERE workspace_id='${loadingWorkspace}' AND completed_at IS NULL ORDER BY position, id LIMIT 30);
 ` +
     ['organization', 'workspace']
       .map(
