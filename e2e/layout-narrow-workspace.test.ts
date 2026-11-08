@@ -255,15 +255,18 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   await expect(task.getByRole('heading', { level: 2 })).toBeFocused();
   await expect(task.locator('.drawer-steps')).toBeVisible();
   await expectDrawerToolsApart(page, task, 5);
-  // ポイントの選択は折り返しても、どの選択肢にも右と下の区切りが付き、左の線は残らない
+  // ポイントの選択は折り返しても、どの選択肢にも右と下の区切り（box-shadow）が付き、左の線は残らない
   const borders = await task.locator('.segmented[aria-labelledby] label span').evaluateAll((spans) =>
     spans.map((span) => {
       const style = getComputedStyle(span);
-      return { left: style.borderLeftWidth, right: style.borderRightWidth };
+      return { left: style.borderLeftWidth, shadow: style.boxShadow };
     }),
   );
   expect(borders.length).toBeGreaterThan(1);
-  for (const border of borders) expect(border).toEqual({ left: '0px', right: '1px' });
+  for (const border of borders) {
+    expect(border.left).toBe('0px');
+    expect(border.shadow).not.toBe('none');
+  }
   // ストーリーの引き出し
   await page.goto(`${WORKSPACE}?story=${STORY_ID}`);
   const story = page.getByRole('dialog');

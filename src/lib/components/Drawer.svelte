@@ -167,15 +167,6 @@
 >
   <div class="drawer-top">
     {#if top}{@render top()}{/if}
-    <button
-      class="pill drawer-close"
-      type="button"
-      aria-label={t('close')}
-      bind:this={closeButton}
-      onclick={onrequestclose}
-    >
-      <Icon name="x" />
-    </button>
     <span class="drawer-tools">
       {#if stepping && adjacent}
         <span class="drawer-steps" role="group" aria-label={t('drawerSteps', { task: word })}>
@@ -218,6 +209,15 @@
         </span>
       {/if}
     </span>
+    <button
+      class="pill drawer-close"
+      type="button"
+      aria-label={t('close')}
+      bind:this={closeButton}
+      onclick={onrequestclose}
+    >
+      <Icon name="x" />
+    </button>
   </div>
   {@render children()}
 </div>
