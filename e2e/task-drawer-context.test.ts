@@ -42,6 +42,8 @@ test('列と親を表示し、今日やるの印を付け外す', async ({ page 
   await expect(sun).toHaveAttribute('aria-disabled', 'false');
   await sun.click();
   await expect(sun).toHaveAttribute('aria-pressed', 'false');
+  // 印は詳細の再取得より先に反映される。更新が終わってから後片付けへ進む。
+  await expect(sun).toHaveAttribute('aria-disabled', 'false');
   await waitForSettled(page);
 });
 
