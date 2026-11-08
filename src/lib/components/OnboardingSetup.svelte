@@ -298,7 +298,9 @@
   <div class="onboarding-stage">
     <section class="onboarding-content" aria-labelledby="setup-title">
       <div class="onboarding-heading">
-        <p class="onboarding-eyebrow">{t('onboardingStep', { current: step + 1, total: titles.length })}</p>
+        {#if !blocked}<p class="onboarding-eyebrow">
+            {t('onboardingStep', { current: step + 1, total: titles.length })}
+          </p>{/if}
         <h1 id="setup-title" tabindex="-1" bind:this={heading}>
           {t(blocked ? 'onboardingBlockedTitle' : titles[step], words)}
         </h1>
