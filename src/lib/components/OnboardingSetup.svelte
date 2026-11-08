@@ -299,19 +299,21 @@
     <section class="onboarding-content" aria-labelledby="setup-title">
       <div class="onboarding-heading">
         <p class="onboarding-eyebrow">{t('onboardingStep', { current: step + 1, total: titles.length })}</p>
-        <h1 id="setup-title" tabindex="-1" bind:this={heading}>{t(titles[step], words)}</h1>
-        <p class="onboarding-lead">
-          {t(
-            step === 1
-              ? 'onboardingProfileLead'
-              : step === 2
-                ? 'onboardingInviteChoiceLead'
-                : step === 3
-                  ? 'onboardingOrganizationLead'
-                  : 'onboardingInviteLiveLead',
-            words,
-          )}
-        </p>
+        <h1 id="setup-title" tabindex="-1" bind:this={heading}>
+          {t(blocked ? 'onboardingBlockedTitle' : titles[step], words)}
+        </h1>
+        {#if !blocked}<p class="onboarding-lead">
+            {t(
+              step === 1
+                ? 'onboardingProfileLead'
+                : step === 2
+                  ? 'onboardingInviteChoiceLead'
+                  : step === 3
+                    ? 'onboardingOrganizationLead'
+                    : 'onboardingInviteLiveLead',
+              words,
+            )}
+          </p>{/if}
       </div>
       {#if blocked}
         <div class="callout is-warn"><Icon name="alert" /><span>{t('onboardingPersonalUnavailable')}</span></div>
@@ -487,13 +489,13 @@
       </p>
     </section>
   </div>
-  <footer class="onboarding-footer">
-    <ol class="onboarding-progress" aria-label={t('onboardingProgress')}>
-      {#each titles as item, index (item)}<li aria-current={index === step ? 'step' : undefined}>
-          <span class="onboarding-dot" aria-hidden="true"></span><span class="visually-hidden"
-            >{t('onboardingStep', { current: index + 1, total: titles.length })} {t(item, words)}</span
-          >
-        </li>{/each}
-    </ol>
-  </footer>
+  {#if !blocked}<footer class="onboarding-footer">
+      <ol class="onboarding-progress" aria-label={t('onboardingProgress')}>
+        {#each titles as item, index (item)}<li aria-current={index === step ? 'step' : undefined}>
+            <span class="onboarding-dot" aria-hidden="true"></span><span class="visually-hidden"
+              >{t('onboardingStep', { current: index + 1, total: titles.length })} {t(item, words)}</span
+            >
+          </li>{/each}
+      </ol>
+    </footer>{/if}
 </main>

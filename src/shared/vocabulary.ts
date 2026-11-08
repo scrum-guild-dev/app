@@ -11,6 +11,7 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 }
 
 export const dictionary = defineDictionary({
+  onboardingBlockedTitle: '利用開始を再開できません',
   onboardingStart: '利用開始の設定',
   onboardingProfileInvalid:
     '表示する名前は1〜100文字、肩書きは100文字以内で入力してください。改行や制御文字は使えません。',

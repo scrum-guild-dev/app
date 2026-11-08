@@ -582,3 +582,23 @@ test('個人用だけ作成済みなら未保存のプロフィールを案内�
   expect(saved.personal.slug).toBe('setup-prior-own');
   expect(creations).toBe(0); // APIRequestContextで先に作った1件の後、画面は作成を送っていない。
 });
+for (const profile of [null, { name: '導入 ユイ', title: '' }]) {
+  test(`入れない個人用は準備完了や招待を案内しない（プロフィール${profile === null ? '未保存' : '保存済み'}）`, async ({
+    context,
+    baseURL,
+    page,
+  }) => {
+    await signIn(context, baseURL, 'createOrg');
+    await rewriteOperation(page, onboardingStatus, (output) => ({
+      ...output,
+      profile,
+      personal: { slug: 'setup-blocked', available: false },
+    }));
+    await page.goto('/auth/setup');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('利用開始を再開できません');
+    await expect(page.getByText('個人用の準備ができました。', { exact: false })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'チームを作って招待する', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: word('onboardingReturnOrganizations') })).toBeVisible();
+    expect(await findA11yViolations(page)).toEqual([]);
+  });
+}
