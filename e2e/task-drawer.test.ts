@@ -71,19 +71,22 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
   await expect(row.getByRole('button', { name: 'ポイント: 5 pt' })).toBeVisible();
 
   // 期日も選んだら保存する。木の行に期日の印が出る
-  await drawer.getByLabel('期日').fill('2099-12-31');
+  await drawer.getByLabel('期日', { exact: true }).fill('2099-12-31');
   await expect(row.getByRole('button', { name: /^期日: (?!未設定)/ })).toBeVisible();
-  await drawer.getByLabel('期日').fill('');
+  await drawer.getByLabel('期日', { exact: true }).fill('');
   await expect(row.getByRole('button', { name: '期日: 未設定' })).toBeVisible();
 
   // タイトルは押すと入力欄になり、Enter で確定する。行のタイトルが変わる
-  await drawer.getByRole('button', { name: /見積もりを送る/ }).click();
+  await drawer
+    .locator('.drawer-title')
+    .getByRole('button', { name: /見積もりを送る/ })
+    .click();
   const titleInput = drawer.getByRole('textbox', { name: 'タイトル' });
   await expect(titleInput).toBeFocused();
   await titleInput.fill('見積もりを送って確かめる');
   await titleInput.press('Enter');
   await expect(row.getByRole('link', { name: '見積もりを送って確かめる' })).toBeVisible();
-  await expect(drawer.getByRole('button', { name: /見積もりを送って確かめる/ })).toBeFocused();
+  await expect(drawer.locator('.drawer-title').getByRole('button', { name: /見積もりを送って確かめる/ })).toBeFocused();
 
   // 「保存」「取り消し」のボタンは無い。リンクは押すと入力欄になり、使えない値は欄を離れたときに理由を出して送らず、
   // Esc で保存していない書きかけが元の値に戻る（引き出しは閉じない）
@@ -117,7 +120,10 @@ test('開く → 属性を直す → 本文に script を含む Markdown を書�
   expect(await page.evaluate(() => (window as unknown as { __injected?: boolean }).__injected)).toBeUndefined();
 
   // 書きかけのまま閉じると、捨てるかを確かめる。書き続けると引き出しは開いたまま
-  await drawer.getByRole('button', { name: /見積もりを送って確かめる/ }).click();
+  await drawer
+    .locator('.drawer-title')
+    .getByRole('button', { name: /見積もりを送って確かめる/ })
+    .click();
   await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await drawer.getByRole('button', { name: '閉じる' }).click();
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });
@@ -202,7 +208,7 @@ test('完了したタスクのポイントは直せず、理由を添える。�
   const toasts = page.locator('.toasts:visible .toast');
   await expect(toasts).toHaveCount(0, { timeout: 10_000 });
   const saved = waitForResponses(page, '/task-update');
-  await drawer.getByLabel('期日').fill('2099-01-02');
+  await drawer.getByLabel('期日', { exact: true }).fill('2099-01-02');
   await saved;
   await expect(toasts).toHaveText(['保存しました']);
   await expect(drawer.getByRole('button', { name: 'クリア' })).toBeVisible();
@@ -468,7 +474,10 @@ test('変更の履歴: 読めなければ「もう一度試す」で読み直し
     await call.fulfill({ ...output, entries: [first], next: { created_at: first.created_at, id: first.id } });
   });
   // 続けて同じ欄を直すと履歴が1行にまとまるので、行を分けるために別の欄（タイトル）を直す
-  await drawer.getByRole('button', { name: /履歴を読み直す/ }).click();
+  await drawer
+    .locator('.drawer-title')
+    .getByRole('button', { name: /履歴を読み直す/ })
+    .click();
   const titleInput = drawer.getByRole('textbox', { name: 'タイトル' });
   await titleInput.fill('履歴を読み直した');
   await titleInput.press('Enter');
@@ -604,7 +613,10 @@ test('書きかけのまま戻るで別の画面へ移ろうとすると確か�
   const listUrl = page.url();
   const drawer = await openDrawer(page, '戻る前の確認');
   const drawerUrl = page.url();
-  await drawer.getByRole('button', { name: /戻る前の確認/ }).click();
+  await drawer
+    .locator('.drawer-title')
+    .getByRole('button', { name: /戻る前の確認/ })
+    .click();
   await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await page.goBack();
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });
@@ -625,7 +637,10 @@ test('前後の空白だけの違いは、書きかけに数えず、確認せ�
   await createWorkspace(page, '書きかけの判定ワークスペース');
   await addTaskRow(page, '同じ値');
   const drawer = await openDrawer(page, '同じ値');
-  await drawer.getByRole('button', { name: /同じ値/ }).click();
+  await drawer
+    .locator('.drawer-title')
+    .getByRole('button', { name: /同じ値/ })
+    .click();
   await drawer.getByRole('textbox', { name: 'タイトル' }).fill('  同じ値  ');
   // 空白だけの違いは、確認せずに閉じる
   await drawer.getByRole('button', { name: '閉じる' }).click();
@@ -691,7 +706,7 @@ test('期日は、打ちかけの年は送らず、年がそろった値だけ�
   page.on('request', (request) => {
     if (request.url().endsWith('/api/aoba/task-update')) requests.push(request.postData() ?? '');
   });
-  const due = drawer.getByLabel('期日');
+  const due = drawer.getByLabel('期日', { exact: true });
   const type = (value: string) =>
     due.evaluate((input: HTMLInputElement, next) => {
       input.value = next;
@@ -724,7 +739,10 @@ test('保存を409で断られたとき、送った欄に合う文を出す。�
   const raced = 'ほかの人が同時に直したため、保存できませんでした';
   await expect(drawer.locator('.props').getByText(raced, { exact: false })).toBeVisible();
   await expect(drawer.getByText('完了したタスクのポイントは直せません')).toHaveCount(0);
-  await drawer.getByRole('button', { name: /断られる/ }).click();
+  await drawer
+    .locator('.drawer-title')
+    .getByRole('button', { name: /断られる/ })
+    .click();
   await drawer.getByRole('textbox', { name: 'タイトル' }).fill('同時に直された');
   await drawer.getByRole('textbox', { name: 'タイトル' }).press('Enter');
   await expect(drawer.locator('.edit-form').getByText(raced, { exact: false })).toBeVisible();
@@ -741,7 +759,7 @@ test('保存を409で断られたとき、送った欄に合う文を出す。�
     if (request.url().endsWith('/api/aoba/organization')) organizationRequests.push(request.url());
   });
   // 保存の後は木だけを読み直す
-  await drawer.getByLabel('期日').fill('2099-12-31');
+  await drawer.getByLabel('期日', { exact: true }).fill('2099-12-31');
   await expect(page.getByRole('status').filter({ hasText: '保存しました' })).toBeVisible();
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole('textbox', { name: 'タイトル' })).toHaveValue('');
@@ -803,7 +821,10 @@ test('保存に失敗した書きかけがあるときだけ、閉じようと�
   await addTaskRow(page, '失敗で残る');
   const drawer = await openDrawer(page, '失敗で残る');
   const slow = await slowTaskUpdate(page, { status: 500, code: 'internal' });
-  await drawer.getByRole('button', { name: /失敗で残る/ }).click();
+  await drawer
+    .locator('.drawer-title')
+    .getByRole('button', { name: /失敗で残る/ })
+    .click();
   await drawer.getByRole('textbox', { name: 'タイトル' }).fill('送っている最中のタイトル');
   await drawer.getByRole('textbox', { name: 'タイトル' }).press('Enter');
   // 送っている間は、書きかけに数えない（閉じても待たずに送る）。失敗すると、入力と理由が残る
@@ -829,7 +850,7 @@ test('期日で欄を離れた直後と、ポイントを選んだ直後に閉�
   const row = page.locator('.entry', { hasText: '閉じた後に返る' });
   const drawer = await openDrawer(page, '閉じた後に返る');
   let slow = await slowTaskUpdate(page);
-  await drawer.getByLabel('期日').fill('2099-12-31');
+  await drawer.getByLabel('期日', { exact: true }).fill('2099-12-31');
   // 閉じるボタンを押すと、期日の入力が外れて（blur）送られる。送った値は書きかけではないので、確認なしで閉じる
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(drawer).toBeHidden();
@@ -858,7 +879,7 @@ test('期日の 600ms の待ちの間に Esc で閉じようとすると確か�
   await addTaskRow(page, '期日を待つ');
   const drawer = await openDrawer(page, '期日を待つ');
   const { bodies } = await slowTaskUpdate(page);
-  await drawer.getByLabel('期日').fill('2099-12-31');
+  await drawer.getByLabel('期日', { exact: true }).fill('2099-12-31');
   await page.keyboard.press('Escape');
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });
   await expect(confirm).toBeVisible();
@@ -873,7 +894,7 @@ test('期日の保存中に次の値を選んでも、先の応答で入力欄�
   await addTaskRow(page, '期日を続ける');
   const drawer = await openDrawer(page, '期日を続ける');
   const { bodies } = await slowTaskUpdate(page);
-  const due = drawer.getByLabel('期日');
+  const due = drawer.getByLabel('期日', { exact: true });
   await due.fill('2099-12-30');
   await due.press('Enter');
   await expect.poll(() => bodies.length).toBe(1);
@@ -888,7 +909,9 @@ test('期日の保存中に次の値を選んでも、先の応答で入力欄�
   await expect(due).toHaveValue('2099-12-31');
   // 保存した値は、読み直しても同じ
   await page.reload();
-  await expect(page.getByRole('dialog', { name: '期日を続ける' }).getByLabel('期日')).toHaveValue('2099-12-31');
+  await expect(page.getByRole('dialog', { name: '期日を続ける' }).getByLabel('期日', { exact: true })).toHaveValue(
+    '2099-12-31',
+  );
 });
 
 test('期日は Enter で保存でき、「クリア」を押すと空にして保存し、フォーカスを入力欄へ移す', async ({ page }) => {
@@ -900,7 +923,7 @@ test('期日は Enter で保存でき、「クリア」を押すと空にして�
   page.on('request', (request) => {
     if (request.url().endsWith('/api/aoba/task-update')) bodies.push(request.postDataJSON());
   });
-  const due = drawer.getByLabel('期日');
+  const due = drawer.getByLabel('期日', { exact: true });
   await due.fill('2099-12-31');
   await due.press('Enter');
   // 600ms を待たずに、Enter で送る
@@ -919,7 +942,7 @@ test('期日が過ぎたタスクを開くと、引き出しの期日に「期�
   await addTaskRow(page, '期日の印を見る');
   const drawer = await openDrawer(page, '期日の印を見る');
   const chip = drawer.locator('.props .chip');
-  await drawer.getByLabel('期日').fill('2000-01-02');
+  await drawer.getByLabel('期日', { exact: true }).fill('2000-01-02');
   await expect(chip).toHaveText(/期日切れ 1\/2/);
   // 開き直しても、読み込んだ値で印を出す
   await page.reload();
@@ -929,7 +952,7 @@ test('期日が過ぎたタスクを開くと、引き出しの期日に「期�
   await expect(reopenedChip).toHaveClass(/is-danger/);
   await expect(reopened.locator('.props .chip svg, .props .chip .ico')).toHaveCount(1);
   // 期日を直すと、保存した値で印を出し直す（未来の日付は、色なしの印）
-  await reopened.getByLabel('期日').fill('2099-12-31');
+  await reopened.getByLabel('期日', { exact: true }).fill('2099-12-31');
   await expect(reopenedChip).toHaveText('12/31');
   await expect(reopenedChip).not.toHaveClass(/is-danger/);
 });
@@ -945,7 +968,7 @@ test('取り込んだタスクは、タイトルを直せず、リンクの欄�
   }));
   const drawer = await openDrawer(page, '取り込んだ体');
   await expect(drawer.getByText('取り込んだタスクのタイトルは、ここでは直せません')).toBeVisible();
-  await expect(drawer.getByRole('button', { name: /取り込んだ体/ })).toHaveCount(0);
+  await expect(drawer.locator('.drawer-title').getByRole('button', { name: /取り込んだ体/ })).toHaveCount(0);
   await expect(drawer.getByRole('button', { name: /削除する/ })).toHaveCount(0);
   await expect(drawer.getByText('取り込んだタスクは削除せず、アーカイブへ移して外します。')).toBeVisible();
   await expect(drawer.getByText('リンク', { exact: true })).toHaveCount(0);
@@ -956,7 +979,10 @@ test('1行の入力欄は、日本語の変換中の Enter では送らない', 
   await createWorkspace(page, '変換中ワークスペース');
   await addTaskRow(page, '変換中に送らない');
   const drawer = await openDrawer(page, '変換中に送らない');
-  await drawer.getByRole('button', { name: /変換中に送らない/ }).click();
+  await drawer
+    .locator('.drawer-title')
+    .getByRole('button', { name: /変換中に送らない/ })
+    .click();
   const input = drawer.getByRole('textbox', { name: 'タイトル' });
   await input.fill('変換の途中');
   const prevented = await input.evaluate((element) => {
