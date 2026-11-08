@@ -5,6 +5,8 @@ import { test } from 'node:test';
 import { loadingFixtureSql, loadingWorkspace } from './loading-fixture.ts';
 
 test('読み取り計測fixtureは実スキーマで最近の完了・経験値・終了スプリントを集計できる', () => {
+  // UTCの日付境界直前でも、全ステートメントは同じ基準日を使う。
+  const now = new Date('2026-11-08T23:59:59.999Z');
   const db = new DatabaseSync(':memory:');
   try {
     db.exec('PRAGMA foreign_keys = ON');
@@ -15,11 +17,16 @@ test('読み取り計測fixtureは実スキーマで最近の完了・経験値�
       db.exec(readFileSync(new URL(file, migrations), 'utf8'));
     }
     db.exec(readFileSync(new URL('../seed/data.sql', import.meta.url), 'utf8'));
-    db.exec(loadingFixtureSql());
+    const fixture = loadingFixtureSql(now);
+    assert.equal(fixture.includes("'now'"), false);
+    db.exec(fixture);
     const count = (table: string, condition = '1') =>
       Number(
-        db.prepare(`SELECT count(*) AS n FROM ${table} WHERE workspace_id=? AND (${condition})`).get(loadingWorkspace)
-          ?.n,
+        db
+          .prepare(
+            `SELECT count(*) AS n FROM ${table} WHERE workspace_id=? AND (${condition.replaceAll("'now'", `'${now.toISOString()}'`)})`,
+          )
+          .get(loadingWorkspace)?.n,
       );
     assert.equal(count('tasks'), 5000);
     assert.equal(count('epics'), 10);
@@ -77,6 +84,15 @@ test('読み取り計測fixtureは実スキーマで最近の完了・経験値�
       .all(loadingWorkspace);
     assert.equal(velocities.length, 3);
     assert.ok(velocities.every((row) => Number(row.points) > 0));
+    assert.equal(
+      db
+        .prepare(
+          `SELECT count(*) AS n FROM completions c JOIN sprints s ON s.id=c.sprint_id
+      WHERE c.workspace_id=? AND c.completed_at>s.closed_at`,
+        )
+        .get(loadingWorkspace)?.n,
+      0,
+    );
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   } finally {
     db.close();

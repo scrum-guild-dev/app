@@ -62,7 +62,8 @@ INSERT INTO tasks (id, workspace_id, is_imported, tray, title, story_id, categor
 
 export const loadingWorkspace = id('1', 1);
 export const loadingEpic = id('1', 1, 'e');
-export function loadingFixtureSql(): string {
+export function loadingFixtureSql(now = new Date()): string {
+  const timestamp = now.toISOString();
   return (
     shapeSql({ workspaceId: loadingWorkspace, prefix: '1', completedPerTen: 8 }) +
     `
@@ -106,5 +107,5 @@ SELECT printf('019c000${index}-0000-7000-8000-%012d', i), '${index === 0 ? ORGAN
 `,
       )
       .join('\n')
-  );
+  ).replaceAll("'now'", `'${timestamp}'`);
 }
