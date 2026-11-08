@@ -115,5 +115,6 @@ test('15 秒たっても描けないときは、読み込み中の文を失敗�
   await expect(boot.getByText('読み込めませんでした')).toBeHidden();
   await expect(boot.getByText('読み込めませんでした')).toBeVisible({ timeout: 20_000 });
   await expect(boot.getByText('読み込んでいます')).toBeHidden();
+  await expect(boot.locator('.boot-skeleton')).toBeHidden();
   await expect(boot.getByRole('link', { name: 'もう一度試す' })).toBeVisible();
 });
