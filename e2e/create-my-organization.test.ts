@@ -402,6 +402,10 @@ test('利用開始の保存する画面は390px・4テーマで表示と操作�
   const actions = ['次へ', 'チームを作って招待する', '組織を作って進む'];
   for (let stage = 0; stage < 4; stage++) {
     if (stage === 0 || stage === 2) {
+      const field = page.locator('.onboarding-url').first();
+      expect(
+        await field.locator('.input').evaluate((element) => element.getBoundingClientRect().width),
+      ).toBeGreaterThan((await field.boundingBox())!.width / 2);
       await page
         .locator('.onboarding-url > span')
         .first()
