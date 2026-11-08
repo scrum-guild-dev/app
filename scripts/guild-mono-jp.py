@@ -26,11 +26,13 @@ WEIGHTS = {400: 'Regular', 700: 'Bold'}
 EXCLUDED = {0x3000}
 # 書体の名前を表す欄。著作権（0）、ライセンス（13、14）は書き換えない
 NAME_IDS_TO_RENAME = {1, 3, 4, 6, 16, 17, 18, 21, 22}
+NAME_IDS_ALLOWING_RESERVED = {0, 13, 14}
+RESERVED_PATTERN = re.compile(r'plemol\s*jp', re.IGNORECASE)
 
 
 def parse_ranges(css: str) -> list[set[int]]:
     slices = []
-    for block in re.findall(r'unicode-range:\s*([^;]+);', css):
+    for block in re.findall(r'unicode-range:\s*([^;}]+)', css):
         codepoints = set()
         for part in block.split(','):
             part = part.strip().removeprefix('U+').removeprefix('u+')
@@ -65,8 +67,13 @@ def rename(font: TTFont) -> None:
         text = record.toUnicode()
         # PostScript 名（6）は空白を持てない
         replacement = FAMILY.replace(' ', '') if record.nameID == 6 else FAMILY
-        record.string = text.replace(RESERVED, replacement)
-    leftover = [r.nameID for r in font['name'].names if r.nameID in NAME_IDS_TO_RENAME and RESERVED in r.toUnicode()]
+        record.string = RESERVED_PATTERN.sub(replacement, text)
+    # 著作権とライセンスの欄だけは予約名を書いてよい。表記の揺れ（大文字小文字、空白）も残りとして数える
+    leftover = [
+        r.nameID
+        for r in font['name'].names
+        if r.nameID not in NAME_IDS_ALLOWING_RESERVED and RESERVED_PATTERN.search(r.toUnicode())
+    ]
     if leftover:
         raise SystemExit(f'予約名が残った name ID: {leftover}')
 

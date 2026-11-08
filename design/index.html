@@ -232,7 +232,7 @@ const SECTIONS = [
     `<div class="screens">${SCREENS.map(([href, name, note]) => `<a href="${href}"><b>${typeof name === "function" ? name() : name}</b><span>${note}</span></a>`).join("")}</div>`)],
   ["colors", "色", () => block("colors", "色", "色は役割で名前を付ける。部品は tokens.css の変数だけを使い、素の値を書かない。テーマを切り替えると、同じ名前のまま値が入れ替わる。",
     colorBlock(), ["完了の色は完了の印とクリアだけ、経験値の色は経験値とレベルとレイドだけに使い、他の意味を持たせない。", "状態の色は、必ずアイコンか文字と一緒に使う（色だけで区別しない）。", "操作の色は操作と選択と進みの色。飾りには使わない。"])],
-  ["type", "文字", () => block("type", "文字", "書体は役割で4つに分ける。",
+  ["type", "文字", () => block("type", "文字", "書体は役割で4つのトークンに分ける。今は中世風の見出しだけが明朝で、ほかはどれも Guild Mono JP（太さは 400 と 700）。",
     `<div>
       <div class="type-row"><span class="cat-name">--font-display<br>2xl / --weight-display</span><span class="page-title">今日やること</span></div>
       <div class="type-row"><span class="cat-name">--font-display<br>xl / --weight-display</span><span class="section-title">今週が${t("due")}</span></div>

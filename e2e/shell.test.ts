@@ -478,14 +478,25 @@ test('書体を自分のオリジンから読み込み、外へ通信しない',
 
   expect([...origins]).toEqual([new URL(baseURL ?? '').origin]);
   expect(fonts.length).toBeGreaterThan(0);
-  // 本文の 400 と見出しの 700 の両方が届き、日本語の見出しの文字の範囲まで読み込み済みになる
-  expect(fonts.some((url) => url.includes('guild-mono-jp-400-'))).toBe(true);
-  expect(fonts.some((url) => url.includes('guild-mono-jp-700-'))).toBe(true);
-  expect(
-    await page.evaluate(() =>
-      ['400', '700'].every((weight) => document.fonts.check(`${weight} 16px "Guild Mono JP"`, '今日やること')),
-    ),
-  ).toBe(true);
+  // 見出しの 700 の「今」と本文の 400 の「や」を受け持つ面が、それぞれ読み込み済みになる。
+  // document.fonts.check は、文字を受け持つ面が無いときも true を返すので使わず、面の unicode-range で確かめる
+  const loaded = await page.evaluate(() => {
+    const covers = (range: string, codePoint: number) =>
+      range.split(',').some((part) => {
+        const [start, end = start] = part.trim().replace(/^U\+/i, '').split('-');
+        return parseInt(start ?? '', 16) <= codePoint && codePoint <= parseInt(end ?? '', 16);
+      });
+    const isLoaded = (weight: string, char: string) =>
+      [...document.fonts].some(
+        (face) =>
+          face.family.replaceAll('"', '') === 'Guild Mono JP' &&
+          face.weight === weight &&
+          face.status === 'loaded' &&
+          covers(face.unicodeRange, char.codePointAt(0) ?? 0),
+      );
+    return { heading: isLoaded('700', '今'), body: isLoaded('400', 'や') };
+  });
+  expect(loaded).toEqual({ heading: true, body: true });
   expect(await collect()).toEqual([]);
 });
 
