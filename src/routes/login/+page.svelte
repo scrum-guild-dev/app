@@ -51,6 +51,7 @@
   let formError = $state<DictionaryKey | undefined>(undefined);
   let attempts = $state(0);
   const formErrorId = 'login-form-error';
+  const deniedHintId = 'login-denied-hint';
 
   async function submitPassword(event: SubmitEvent) {
     event.preventDefault();
@@ -84,7 +85,11 @@
   <GateSheet brand title={t('loginTitle')}>
     <!-- ?error= の理由。組織の再ログイン案内は、パスワードの入力エラーと一緒にも出す -->
     {#if errorKey && (!formError || errorKey === 'loginErrorOrganizationReauthRequired')}
-      <div class="callout is-warn" role="alert">
+      <div
+        class="callout is-warn"
+        role="alert"
+        aria-describedby={errorKey === 'loginErrorDenied' && !formError ? deniedHintId : undefined}
+      >
         <Icon name="alert" /><span>{t(errorKey, words)}</span>
         {#if errorKey === 'loginErrorDenied'}
           <!-- 入れる組織も招待も無い人の行き先。戻り先は引き継がない（下の会員登録の入口と同じ） -->
@@ -147,7 +152,7 @@
       </form>
     {/if}
     {#if errorKey === 'loginErrorDenied' && !formError}
-      <p class="gate-note">{t('loginErrorDeniedHint', words)}</p>
+      <p class="gate-note" id={deniedHintId}>{t('loginErrorDeniedHint', words)}</p>
     {/if}
     <p class="gate-note">{t('loginNote', words)}</p>
     <!-- 会員登録の画面へ。戻り先は引き継がない（組織の画面から来た人は、登録した後に入れない組織の画面でなく `/` に着く）。

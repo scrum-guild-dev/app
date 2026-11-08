@@ -65,7 +65,7 @@ function render() {
       <p class="gate-note">ログアウトした直後のログインの画面の表示の見本です。見出しの下、ログインのボタンの上に出します。エラーがあるときは、エラーだけを出します。</p>
     </section>
     <section class="gate-sheet">
-      <div class="callout is-warn">${icon("alert")}<span>ログインできませんでした。どの${t("organization")}の${t("workspace")}にも所属しておらず、招待も届いていません。</span><div class="callout-actions"><a class="btn is-sm" href="#">会員登録から始める</a></div></div>
+      <div class="callout is-warn">${icon("alert")}<span>ログインできませんでした。どの${t("organization")}にも所属しておらず、招待も届いていません。</span><div class="callout-actions"><a class="btn is-sm" href="#">会員登録から始める</a></div></div>
       <p class="gate-note">招待された手段（GitHub か Google）と、招待されたアカウントでログインしているか確かめてください。招待がまだなら、${t("leader")}に GitHub のユーザー名か Google のメールアドレスで招待してもらってください。</p>
       <p class="gate-note">ログインできないときの表示の見本です。警告は事実だけを短く言い、行き先は警告の中のボタンに、確かめることはボタンの下の注記に置きます（本番はログインのボタンの下）。</p>
     </section>
@@ -91,6 +91,7 @@ function render() {
     <section class="gate-sheet">
       <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
       <h2 class="gate-title">プライバシーポリシー</h2>
+      <div class="form-actions" role="group" aria-label="元の画面へ"><button class="btn is-sm is-quiet" type="button">前の画面に戻る</button></div>
       <p>改定日: 2026-10-31</p>
       <div class="doc-box">
         <h2 class="doc-h1">第2条 預からないもの</h2>
@@ -100,7 +101,7 @@ function render() {
       </div>
       <div class="form-actions" role="group" aria-label="関連するページ"><a class="btn is-sm" href="#">利用規約</a><button class="btn is-sm is-quiet" type="button">前の画面に戻る</button></div>
     </section>
-    <p class="gate-note">利用規約とプライバシーポリシー（/terms、/privacy）の見本です。ログインしていなくても開けます。紙の幅は 720px までで、本文は紙の直下に Markdown で置き、下にもう一方のページへのリンクと、元の画面へ戻る操作を置きます（アプリの中から移ってきたときは「前の画面に戻る」ボタン、直に開いたときは「Scrum Guild を開く」リンク）。改定日は紙の上に本文と同じ大きさで1か所だけ出します。ログインと招待の画面の紙の下にも、両方へのリンクを置きます（招待の画面は、秘密を持つので新しいタブで開きます）。</p>
+    <p class="gate-note">利用規約とプライバシーポリシー（/terms、/privacy）の見本です。ログインしていなくても開けます。紙の幅は 720px までで、見出しの直下（改定日の上）にも元の画面へ戻る操作を1つ置き、本文は紙の直下に Markdown で置き、下にもう一方のページへのリンクと、元の画面へ戻る操作を置きます（アプリの中から移ってきたときは「前の画面に戻る」ボタン、直に開いたときは「Scrum Guild を開く」リンク）。改定日は紙の上に本文と同じ大きさで1か所だけ出します。ログインと招待の画面の紙の下にも、両方へのリンクを置きます（招待の画面は、秘密を持つので新しいタブで開きます）。</p>
   </div></div>`;
 }
 SQ.applyTheme();

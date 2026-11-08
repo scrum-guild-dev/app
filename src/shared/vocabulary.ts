@@ -1172,11 +1172,12 @@ export const dictionary = defineDictionary({
   // 違うパスワード、登録の無いメールアドレス、形の合わない入力（401）。どれかは分けない（登録の有無を漏らさない）
   loginErrorInvalidCredentials: 'メールアドレスかパスワードが違います。確かめて、もう一度ログインしてください。',
   // 警告は事実だけを短く言い（3行以内）、次の行動は警告の中のボタン（loginErrorDeniedSignup）と、ボタンの下の案内（loginErrorDeniedHint）に分ける
-  loginErrorDenied:
-    'ログインできませんでした。どの{organization}の{workspace}にも所属しておらず、招待も届いていません。',
+  loginErrorDenied: 'ログインできませんでした。どの{organization}にも所属しておらず、招待も届いていません。',
   loginErrorDeniedSignup: '会員登録から始める',
   loginErrorDeniedHint:
     '招待された手段（GitHub か Google）と、招待されたアカウントでログインしているか確かめてください。招待がまだなら、{leader}に GitHub のユーザー名か Google のメールアドレスで招待してもらってください。',
+  // パスワードが合った後に、入れる{organization}も招待も無いとき（POST /api/auth/password/login の 403 denied）。
+  // 招待された手段を確かめる案内は GitHub と Google の人向けなので、パスワードの人には出さない
   loginErrorDeniedPassword:
     'ログインできませんでした。どの{organization}の{workspace}にも所属しておらず、招待も届いていません。ほかの手段で招待されていないか確かめてください。招待がまだなら、{leader}に招待してもらってください。',
   // メールアドレスかパスワードの欄が空のまま送ろうとしたとき。送らずに出す（回数の上限を使わない）

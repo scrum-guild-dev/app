@@ -149,7 +149,9 @@ test('招待の画面（/invite）から、利用規約とプライバシーポ�
     await expect(opened.getByRole('heading', { level: 1, name: heading })).toBeVisible();
     await expect(opened).toHaveURL(new RegExp(`${path}$`));
     // 新しいタブは直に開いた画面なので、戻るボタンの代わりに / へのリンクを出す
-    await expect(opened.getByRole('link', { name: 'Scrum Guild を開く' })).toBeVisible();
+    await expect(
+      opened.getByRole('group', { name: '関連するページ' }).getByRole('link', { name: 'Scrum Guild を開く' }),
+    ).toBeVisible();
     await opened.close();
     // 元の画面は、秘密を持ったまま残り、ログインのボタンを押せる
     await expect(page.getByRole('button', { name: 'Google でログイン' })).toBeVisible();

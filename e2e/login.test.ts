@@ -148,9 +148,7 @@ test('return_to は自分のサイトのパスだけを開始の URL に渡す',
 
 test('?error= の理由を、辞書の文言で出す。知らない値は出さない', async ({ page }) => {
   await page.goto('/login?error=denied');
-  await expect(page.getByRole('alert')).toContainText(
-    'ログインできませんでした。どの組織のワークスペースにも所属しておらず',
-  );
+  await expect(page.getByRole('alert')).toContainText('ログインできませんでした。どの組織にも所属しておらず');
   // 停止した組織にしか入れない人もログインできるので、suspended の理由は無くなった（#639）。古い URL は知らない値と同じく何も出さない
   await page.goto('/login?error=suspended');
   await expect(page.getByRole('heading', { level: 1, name: 'ログイン' })).toBeVisible();
@@ -226,13 +224,19 @@ test('?error=denied の警告は 3 行以内で、会員登録のボタンを含
   // 文の行数（ボタンの行を除く）。行の高さで割る
   const lines = await alert.locator('span').evaluate((el) => {
     const style = getComputedStyle(el);
-    return Math.round(el.getBoundingClientRect().height / parseFloat(style.lineHeight));
+    const lineHeight = parseFloat(style.lineHeight);
+    if (Number.isNaN(lineHeight)) throw new Error('line-height が数値でない');
+    return Math.round(el.getBoundingClientRect().height / lineHeight);
   });
   expect(lines).toBeLessThanOrEqual(3);
   const box = await page.getByRole('link', { name: 'GitHub でログイン' }).boundingBox();
   expect(box && box.y + box.height).toBeLessThanOrEqual(667);
   // 確かめる手段の案内はボタンの下
-  await expect(page.getByText('招待された手段（GitHub か Google）と')).toBeVisible();
+  await expect(alert.getByText('招待された手段')).toHaveCount(0);
+  const hint = page.getByText('招待された手段（GitHub か Google）と');
+  await expect(hint).toBeVisible();
+  const hintBox = await hint.boundingBox();
+  expect(hintBox && box && hintBox.y).toBeGreaterThan((box?.y ?? 0) + (box?.height ?? 0));
 });
 
 test('リード文に、初めての人の行き先がある', async ({ page }) => {
