@@ -228,7 +228,12 @@ export async function removeE2eSeedTasks(): Promise<void> {
 export async function removeCreatedOrganizations(who: keyof typeof SEED_SESSIONS): Promise<void> {
   const created = `SELECT id FROM organizations WHERE created_by_account_id = '${SEED_SESSIONS[who].accountId}'`;
   const workspaces = `SELECT id FROM workspaces WHERE organization_id IN (${created})`;
+  // 繰り返しでも、このテスト用アカウントの作成枠だけを元に戻す。製品の上限はAPIテストで検査する。
+  const creationKeys = ['create-my-organization', 'create-personal-organization']
+    .map((name) => `'operation:${name}:${SEED_SESSIONS[who].accountId}'`)
+    .join(', ');
   await executeLocalD1([
+    `DELETE FROM rate_limits WHERE key IN (${creationKeys});`,
     `DELETE FROM change_logs WHERE organization_id IN (${created});`,
     ...['invitations', 'memberships', 'workspace_point_rates', 'board_columns', 'detail_fields'].map(
       (table) => `DELETE FROM ${table} WHERE workspace_id IN (${workspaces});`,
