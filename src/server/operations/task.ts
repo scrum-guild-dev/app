@@ -624,6 +624,42 @@ export function unfilledCountStatement(db: OrganizationDb, workspaceId: string) 
   );
 }
 
+// 見出しの3集計。絞り込みを適用せず、未完了のバックログ全体を1文で数える。
+export function backlogCountsStatement(db: OrganizationDb, workspaceId: string) {
+  return db.statement((q) =>
+    q
+      .selectFrom('tasks')
+      .select((eb) => [
+        eb.fn.countAll<number>().as('open_count'),
+        eb.fn.count<number>(eb.case().when('tasks.points', 'is', null).then(1).end()).as('unestimated_count'),
+        eb.fn
+          .count<number>(
+            eb
+              .case()
+              .when(
+                eb.not(
+                  eb.exists(
+                    eb
+                      .selectFrom('sprints')
+                      .select('sprints.id')
+                      .whereRef('sprints.id', '=', 'tasks.sprint_id')
+                      .where('sprints.workspace_id', '=', workspaceId)
+                      .where('sprints.deleted_at', 'is', null),
+                  ),
+                ),
+              )
+              .then(1)
+              .end(),
+          )
+          .as('unscheduled_count'),
+      ])
+      .where('tasks.workspace_id', '=', workspaceId)
+      .where('tasks.tray', '=', 'backlog')
+      .where('tasks.deleted_at', 'is', null)
+      .where('tasks.completed_at', 'is', null),
+  );
+}
+
 // 件数に上限を付けない（5 万件で測った数は docs/data-model.md）。
 // ストーリーは親のないものとエピックの下のものを1つの文で読み、epic_id で分ける。削除したエピックの下のストーリーも
 // （その配下のタスクも）読むが、エピックの一覧に親が無いので、どこにも並べずに捨てる。
@@ -652,6 +688,7 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
     rootOpenResult,
     rootDoneResult,
     unfilledResult,
+    countsResult,
     assigneesResult,
   ] = await db.batch([
     db.statement((q) =>
@@ -740,6 +777,7 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
     rootOpenTasksStatement(db, workspaceId, filter),
     rootCompletedCountStatement(db, workspaceId),
     unfilledCountStatement(db, workspaceId),
+    backlogCountsStatement(db, workspaceId),
     // 担当の絞り込みの選択肢。今所属している人（担当にできる人と同じ条件）と、未完了のバックログのタスクの担当に残っている人
     db.statement((q) =>
       q
@@ -910,6 +948,9 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
     // 絞っているときは出さない（画面は折りたたみの1行を出さない）
     completed_count: filtering ? null : Number(rootDoneResult.rows[0]?.count ?? 0),
     unfilled_count: Number(unfilledResult.rows[0]?.count ?? 0),
+    open_count: Number(countsResult.rows[0]?.open_count ?? 0),
+    unestimated_count: Number(countsResult.rows[0]?.unestimated_count ?? 0),
+    unscheduled_count: Number(countsResult.rows[0]?.unscheduled_count ?? 0),
     choices: {
       // 今所属している人を先に、それぞれ名前の順（並べ替えは安定）
       assignees: assigneesResult.rows

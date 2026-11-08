@@ -538,6 +538,8 @@ export const dictionary = defineDictionary({
   backlogPageName: '{backlog}・{name}',
   // 未完了が0件で、完了した親のないタスクがあるとき、折りたたみの行の上に出す
   backlogNoOpenTitle: '未完了の{task}はありません',
+  backlogTallyOpen: '未完了の{task}',
+  backlogTallyUnscheduled: '{sprint}に入っていない',
   backlogNoOpenText: '次の{task}は、下の空の行に題を入れて作ります。',
   // 絞り込みの帯（見本の design/backlog.html の .toolbar）。{label} は選択欄の名前（{assignee}、{category}、リポジトリ、{epic}）
   filterLabel: '{backlog}の絞り込み',
