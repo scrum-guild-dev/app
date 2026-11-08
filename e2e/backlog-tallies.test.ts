@@ -77,6 +77,15 @@ test('見積もりを保存できたら、木の読み直しを待つ間にも�
   await expect(tallies).toHaveText(['1', '1', '0', '1']);
 });
 
+test('絞り込みに当たる行が0件でも、集計が全体の値であることを知らせる', async ({ page }) => {
+  await createWorkspace(page, '当たる行がない件数');
+  await addTaskRow(page, '請求の確認');
+  await page.getByRole('searchbox', { name: 'タイトルで探す' }).fill('当たらない語');
+  await expect(page.getByText('絞り込みに当たるものはありません', { exact: true })).toBeVisible();
+  await expect(page.locator('.page-head .tally dd')).toHaveText(['1', '1', '1', '1']);
+  await expect(page.getByText('ポイントと件数は、絞る前の全体の値です')).toBeVisible();
+});
+
 test('計画でスプリントへ入れたタスクは、バックログに戻ったとき未割り当ての数から外れる', async ({ page }) => {
   await createWorkspace(page, 'スプリントの件数');
   await addTaskRow(page, '次に取り組む作業');

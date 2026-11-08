@@ -1394,6 +1394,10 @@
           onchange={(next) => void applyFilter(next)}
         />
       {/if}
+      {#if filtering}
+        <!-- 当たる行が0件でも、見出しの集計は絞る前の全体の値 -->
+        <p class="action-note">{t('filterTotalsNote', { points: t('points') })}</p>
+      {/if}
       {#if !firstStep && filtering && epics.length === 0 && tree.stories.length === 0 && rootRows.length === 0}
         <!-- 絞り込みに当たるものが無い。木の代わりに、無いことと、絞り込みを外す操作を出す -->
         <EmptyState icon="search" title={t('backlogNoMatchTitle')} text={t('backlogNoMatchText')}>
@@ -1414,10 +1418,6 @@
               <span class="drag-note">{t('backlogDragNote')}</span>
             {/if}
           </p>
-        {/if}
-        {#if filtering}
-          <!-- 絞っても、ポイントの合計と完了の件数は絞る前の全体の値を出すので、そのことを添える -->
-          <p class="action-note">{t('filterTotalsNote', { points: t('points') })}</p>
         {/if}
         {@render treeView()}
       {/if}
