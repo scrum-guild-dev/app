@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // Issue の題と理由は外の人も書けるので、HTML に入れる前にエスケープする。動画は置き場所の直下の mp4 だけを読む
 const VIDEO_NAME = /^[A-Za-z0-9._-]+\.mp4$/;
 const MANIFEST_KEYS = ['title', 'judge', 'items'];
-// ng の理由の選択肢。sprint-review の手順 10 の候補の種別（不具合、仕様の穴、要望）に写せる分け方にしてある
+// ng の理由の選択肢。sprint-review の手順 9 の候補の種別（不具合、仕様の穴、要望）に写せる分け方にしてある
 export const NG_REASONS = ['条件を満たさない', '表示が崩れる・動かない', '文言・言葉づかいが違う', '想定と違う', '要望がある'];
 const ITEM_KEYS = ['issue', 'title', 'video', 'skipped', 'failed', 'captions', 'done'];
 const OUTCOMES = ['video', 'skipped', 'failed'];

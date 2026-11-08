@@ -151,7 +151,7 @@ ffmpeg -y -loglevel error -i <mp4> -vf "fps=1,scale=480:-1,tile=6x5" -frames:v 1
 
 ### 6. 片付けて報告する
 
-録画が失敗した場合も行う。`pnpm preview` のバックグラウンドのタスクを止め（`pkill` は使わない）、手順 3 の `curl` が応答しないことを確かめる。`pnpm db:seed` で D1 を戻す。ワークツリーは人に聞いてから消す（`sprint-review` の手順 12）。
+録画が失敗した場合も行う。`pnpm preview` のバックグラウンドのタスクを止め（`pkill` は使わない）、手順 3 の `curl` が応答しないことを確かめる。`pnpm db:seed` で D1 を戻す。ワークツリーは人に聞いてから消す（`sprint-review` の手順 11）。
 mp4 の場所と長さ、手元に残したもの（ワークツリー、書き換えた D1 を戻したか）を報告する。
 
 ## まとめて撮る
