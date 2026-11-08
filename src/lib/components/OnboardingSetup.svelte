@@ -220,7 +220,7 @@
     const params = new SvelteURLSearchParams({ team: teamSlug });
     if (returnTo !== '/') params.set('return_to', returnTo);
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- 固定の経路をresolveし、URLSearchParamsで構成したクエリだけを足す
-    await goto(`${resolve('/auth/setup')}?${params}`, { replaceState: true });
+    await goto(`${resolve('/auth/setup')}?${params}`, { replace: true });
   }
   async function prepareWorkspace(slug: string) {
     if (busy || blocked) return;
