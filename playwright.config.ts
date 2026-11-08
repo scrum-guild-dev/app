@@ -31,7 +31,7 @@ export default defineConfig({
   ],
   webServer: {
     // package.json の preview と同じ中身（scripts/e2e-server.test.ts が一致を確かめる）。E2E_DEV_BUILD=1 では開発モードの build にする
-    command: e2eServerCommand(process.env),
+    command: `${e2eServerCommand(process.env)} --test-credentials`,
     url: `${baseURL}/api/health`,
     // 既定では、答えるサーバーが既にあれば止まる。使い回すのは E2E_REUSE_SERVER=1 のときだけ（CI では使い回さない）
     reuseExistingServer: reuseExistingServer(process.env),

@@ -104,7 +104,7 @@ Workers Builds が使えるのは、Builds が自分で作ったトークンだ�
 
 ### シークレット
 
-Worker のシークレットは、ダッシュボードの Worker の Settings → Variables and Secrets か `wrangler secret put` で入れる。ダッシュボードでは Type を `Secret` にする。`Variable` で入れると、Workers Builds の次のデプロイで、`wrangler.jsonc` の `vars` に無い名前として消える。消えても `/api/health` は 200 のままで、運用者がいない状態になるか、GitHub のログインが「いまログインを受け付けられません」になるか、接続の認証情報の保存と読み出しが止まるだけなので、気づいたら `Secret` として入れ直す。どちらで入れても、保存するとその場で新しい版が本番に出る。値は git に入れず、手元の開発用の値は、本体の作業コピーで `.dev.vars.example` を `.dev.vars` に写して入れる。ワークツリーの `.dev.vars` は本体へのリンクなので、そこで写すと本体の値を上書きする（`docs/development.md` の「ワークツリーで作業する」）。
+Worker のシークレットは、ダッシュボードの Worker の Settings → Variables and Secrets か `wrangler secret put` で入れる。ダッシュボードでは Type を `Secret` にする。`Variable` で入れると、Workers Builds の次のデプロイで、`wrangler.jsonc` の `vars` に無い名前として消える。`CONNECTION_CREDENTIAL_KEYS` が消えると `/api/health` は 503 になる。他のシークレットは health では検査せず、運用者がいない状態になるか、GitHub のログインが「いまログインを受け付けられません」になる。気づいたら `Secret` として入れ直す。どちらで入れても、保存するとその場で新しい版が本番に出る。Workers Builds を通らないため煙のテストと自動の切り戻しは走らない。鍵を直した後は `/api/health` を読み、HTTP 200 と `status: "ok"`、`database: "ok"`、`credentialKeys: "ok"` を確かめる。値は git に入れず、手元の開発用の値は、本体の作業コピーで `.dev.vars.example` を `.dev.vars` に写して入れる。ワークツリーの `.dev.vars` は本体へのリンクなので、そこで写すと本体の値を上書きする（`docs/development.md` の「ワークツリーで作業する」）。
 
 | 名前 | 中身 |
 | --- | --- |
@@ -207,8 +207,12 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 ```
 
 - 版は 1 以上の整数（9桁まで。JSON のキーは文字列で書く。DB の `credential_key_version` は INTEGER）。暗号化には最大の版を使い、暗号文には使った版が付く。復号は暗号文の版の鍵を引くので、新旧の鍵を並べて置ける
-- 鍵は 32 バイトの乱数を base64 にしたもの。作り方は `openssl rand -base64 32`
-- 本番は `wrangler secret put CONNECTION_CREDENTIAL_KEYS`（か、ダッシュボードの Worker の Settings → Variables and Secrets で Type を `Secret`）で入れる。`/api/health` は鍵を見ないので確かめにならず、鍵が使えるかは接続の認証情報を保存して初めて分かる（保存の操作ができたら、入れた後に保存を試す。それまでは `openssl rand -base64 32` で作った値を JSON の `<base64>` に入れたかを目で確かめる）。開発用は `.dev.vars.example` の値を `.dev.vars` に写す。開発用の値を本番に使わない
+- 鍵は 32 バイトの乱数を base64 にしたもの。次で JSON を1行で作り、出力全体をシークレットの値に入れる（base64 だけを入れない）
+
+  ```sh
+  openssl rand -base64 32 | node -e 'let s=""; process.stdin.on("data", c => s += c); process.stdin.on("end", () => console.log(JSON.stringify({"1":s.trim()})))'
+  ```
+- 本番は `wrangler secret put CONNECTION_CREDENTIAL_KEYS`（か、ダッシュボードの Worker の Settings → Variables and Secrets で Type を `Secret`）で入れる。`/api/health` は暗号化と同じ規則で鍵の形を検査し、不備があれば HTTP 503 と `credentialKeys: "unavailable"` を返す。正しければ `credentialKeys: "ok"` を返す。鍵の数、版、値は返さない。煙のテストは不備のある版を失敗にして前の版へ戻す。既存の暗号文を復号できるかまでは検査しない。開発用は `.dev.vars.example` の値を `.dev.vars` に写す。開発用の値を本番に使わない
 - 無いか形が違うと、認証情報の保存と読み出しは固定の文のエラーで止まる。鍵も平文も暗号文も、エラーにもログにも出さない
 - 暗号文は、`connection-credential:` に接続の ID を続けた文字列を認証データにするので、接続の ID を決めてから暗号化する。別の接続の行へ写しても復号できない
 - JSON に同じ版を2回書くと、後ろの鍵が黙って採られ、前の鍵で書いた暗号文が復号できなくなる。鍵を足すときは、必ず新しい版（今の最大より大きい整数）で足し、同じ版を書き換えない

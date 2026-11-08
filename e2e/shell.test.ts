@@ -746,7 +746,7 @@ test('経路に合わないパスも 200 でシェルを返し、CSP の違反�
 test('/api/health は D1 に届いて 200 で版を返す', async ({ request }) => {
   const res = await request.get('/api/health');
   expect(res.status()).toBe(200);
-  expect(await res.json()).toEqual({ status: 'ok', database: 'ok', version });
+  expect(await res.json()).toEqual({ status: 'ok', database: 'ok', credentialKeys: 'ok', version });
 });
 
 // 760px 以下ではメニューが上の帯になる。本文が画面の高さに届かなくても、メニューは中身の高さのままで、余りは本文が受け取る

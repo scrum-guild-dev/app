@@ -974,7 +974,7 @@ PR で変えていない領域のテストが、前の head では通ってい�
 
 - 版は `wrangler deploy` の1回で上げる。`wrangler versions upload` と `versions deploy` の2段にしないのは、`versions upload` が Worker のまだ無い初回に失敗し、cron やルート（triggers）の変更も反映しないため。版を段階的に流さないので、2段に分ける得も無い
 - rollback には必ず版の ID を渡す。`wrangler rollback` は版を指定しないと、直近のデプロイを除いた履歴から 100% で動いていた版を選ぶ。その間に別のデプロイが挟まると、このスクリプトが切り替える直前の版とずれるため
-- 煙のテストが確かめるのは版と DB への疎通。`/api/health` は共通の入口で `SELECT 1` を送り、届けば 200 の `{ status, database, version }`、届かなければ 503 の `unavailable` を返す。503 は失敗として数えるので、D1 に届かない版は上の rollback で戻る（`versionFromHealth` が応答を読む）
+- 煙のテストが確かめるのは版、DB への疎通、接続の認証情報の鍵の形。`/api/health` は共通の入口で `SELECT 1` を送り、届いて鍵の形も正しければ 200 の `{ status, database, credentialKeys, version }`、DB に届かなければ 503 の `unavailable` を返す。鍵が無いか形が違うときも 503 を返し、`credentialKeys` は `unavailable` になる。鍵の数、版、値は返さない。503 は失敗として数えるので、D1 に届かない版は上の rollback で戻る（`versionFromHealth` が応答を読む）
 - 煙のテストの URL はスクリプトの定数（`PRODUCTION_URL`）。ドメインへ移すときに直す
 - マイグレーションは自動では戻さない。戻すかは人が決め、ログのブックマークで Time Travel から戻す（`docs/operations.md` の「戻し方」）
 

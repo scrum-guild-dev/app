@@ -593,7 +593,25 @@ describe('versionFromHealth', () => {
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
   test('D1 に届いた版の応答から version を取る', async () => {
-    assert.equal(await versionFromHealth(json({ status: 'ok', database: 'ok', version: SHA })), SHA);
+    assert.equal(
+      await versionFromHealth(json({ status: 'ok', database: 'ok', credentialKeys: 'ok', version: SHA })),
+      SHA,
+    );
+  });
+
+  test('鍵が無い・不正・未検査の 200 と、不備を示す 503 は失敗にする', async () => {
+    for (const credentialKeys of [undefined, 'unavailable', false, null, {}]) {
+      await assert.rejects(
+        versionFromHealth(json({ status: 'ok', database: 'ok', credentialKeys, version: SHA })),
+        /health の形ではありません/,
+      );
+    }
+    await assert.rejects(
+      versionFromHealth(
+        json({ status: 'unavailable', database: 'ok', credentialKeys: 'unavailable', version: SHA }, 503),
+      ),
+      /HTTP 503/,
+    );
   });
 
   test('D1 に届かない版の 503 は、code を添えて失敗にする', async () => {
