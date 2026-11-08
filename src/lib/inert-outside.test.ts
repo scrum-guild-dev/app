@@ -34,7 +34,8 @@ class FakeObserver {
     this.#entry = { callback, targets: [], connected: true };
     observers.push(this.#entry);
   }
-  observe(target: FakeElement): void {
+  observe(target: FakeElement, options: MutationObserverInit): void {
+    expect(options).toEqual({ childList: true });
     this.#entry.targets.push(target);
   }
   disconnect(): void {
@@ -115,6 +116,17 @@ describe('inertOutside', () => {
     list.setAttribute('inert', '');
     run()();
     expect(list.hasAttribute('inert')).toBe(true);
+  });
+
+  test('要素でない差し込み（テキスト）は飛ばし、差し込み時にすでに inert の要素は閉じても外さない', () => {
+    const undo = run();
+    const text = { nodeType: 3 } as unknown as FakeElement;
+    for (const entry of observers) entry.callback([{ target: shell, addedNodes: [text] }]);
+    const already = new FakeElement('already');
+    already.setAttribute('inert', '');
+    insert(shell, already);
+    undo();
+    expect(already.hasAttribute('inert')).toBe(true);
   });
 
   test('引き出しの中（監視していない階層）に差し込まれた要素には付けない', () => {

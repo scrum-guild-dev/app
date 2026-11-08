@@ -114,7 +114,7 @@ test('引き出しを開いたまま背後の一覧が作り直されても、�
   await drawer.getByRole('button', { name: '閉じる', exact: true }).click();
   await expect(drawer).toBeHidden();
   const toggle = rowMenuToggle(page, '作り直される行');
-  expect(await toggle.evaluate((element) => element.closest('[inert]') !== null)).toBe(false);
+  await expect.poll(() => toggle.evaluate((element) => element.closest('[inert]') !== null)).toBe(false);
   await toggle.click();
   await expect(page.getByRole('menu', { name: '操作: 作り直される行', exact: true })).toBeVisible();
 });

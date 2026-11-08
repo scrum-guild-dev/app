@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { invalidateAll } from '$app/navigation';
-  import { RELOAD_NOTE_ATTRIBUTE } from '../task-reload-failure.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import EmptyState from './EmptyState.svelte';
   import Gate from './Gate.svelte';
@@ -49,7 +48,8 @@
 {#if inShell}
   <PageHead title={t('loadFailedTitle')} />
   {#if note !== undefined}
-    <div class="callout is-warn" {...{ [RELOAD_NOTE_ATTRIBUTE]: '' }}>
+    <!-- data-task-reload-note は task-reload-failure.svelte.ts の RELOAD_NOTE_ATTRIBUTE と同じ名前（描いたかをこの属性で確かめる） -->
+    <div class="callout is-warn" data-task-reload-note>
       <Icon name="alert" /><span role="alert">{note}</span>
     </div>
   {/if}
