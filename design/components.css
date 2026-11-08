@@ -1439,7 +1439,6 @@ dialog.dialog::backdrop { background: none; }
      段の上の余白（約 8px）と題の下の間（--space-3。ボタンの広げた範囲も上へ約 8px 出るので、11.5 + 8 を 8 + 12 が超える）に収まる（e2e/layout-narrow-workspace.test.ts で確かめる） */
   .tree-ratio, .tree-note { display: inline-flex; align-items: center; min-height: 44px; }
   .tree-row { row-gap: var(--space-3); }
-  .entry, .tree-row { padding-block: var(--space-2); }
   /* 表の名前の列のリンク（組織の管理のワークスペースの名前）は、2行に折り返しても 44px の高さの1つの箱にする */
   .table .is-name a { display: inline-flex; align-items: center; min-height: 44px; }
   /* コメントの見出しの「編集」「削除」は、広げた分（上下に約 9px）が本文の1行目のリンクに重ならないよう、見出しの下を空ける */
@@ -1762,6 +1761,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   .chip-btn::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
   /* 見た目の縦の余白は持たない。::after の 44px が隣の段に重ならないよう、折り返す段の間（row-gap）だけで空ける。
      チップの段は「⋯」（44px）と同じ段なので、1段のときは 44px の高さに収まり、折り返した 2 段目は、チップの高さ（約 22px。書体で変わる）に 24px を足して 44px 以上の間隔になる */
+  .entry-end, .card-foot { row-gap: 18px; }
   .entry-end:has(.chip-btn), .card-foot:has(.chip-btn) { row-gap: 24px; }
   /* 印の行が無い行は、題の広げた範囲（下へ約 11px）とチップの広げた範囲（上へ約 11px）が重ならない間（22px 以上）を、題とチップの段の間に取る */
   .entry:not(:has(.entry-meta)):has(.chip-btn) { row-gap: 22px; }

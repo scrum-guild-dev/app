@@ -114,8 +114,8 @@ test('バックログのタスクの行が 390px で今より低く、チップ�
       });
       return { height: entry.getBoundingClientRect().height, boxes };
     });
-    // 以前は約 155px。見本の seed で測って決めた目標（余白に 8px の許容）
-    expect(result.height, `${theme}: 行の高さ`).toBeLessThanOrEqual(125);
+    // 以前は約 181px（seed のこの行を本番と同じ build の 390px で測った。2026-11-08）。いまは約 170px。書体の差に 5px の許容
+    expect(result.height, `${theme}: 行の高さ`).toBeLessThanOrEqual(175);
     for (const box of result.boxes) {
       expect(box.w, `${theme}: ${box.name} の幅`).toBeGreaterThanOrEqual(43.5);
       expect(box.h, `${theme}: ${box.name} の高さ`).toBeGreaterThanOrEqual(43.5);
@@ -169,15 +169,15 @@ test('ストーリーの行の題と右端のボタンの押せる範囲が重�
   }
   await page.goto(`${WORKSPACE}/inbox`);
   const row = page.locator('.entry:has(.row-check)').first();
-  if ((await row.count()) > 0) {
-    const [check, main] = await Promise.all([
-      row.locator('.row-check').boundingBox(),
-      row.locator('.entry-main').boundingBox(),
-    ]);
-    // 選ぶ欄は題の左の列で、題の上の別の段にならない
-    expect(check!.y).toBeLessThan(main!.y + main!.height);
-    expect(check!.x + check!.width).toBeLessThanOrEqual(main!.x + 1);
-  }
+  await expect(row).toBeVisible();
+  const [check, main] = await Promise.all([
+    row.locator('.row-check').boundingBox(),
+    row.locator('.entry-main').boundingBox(),
+  ]);
+  // 選ぶ欄は題の左の列で、題の上の別の段にならない（縦の範囲が重なり、横は題の左に収まる）
+  expect(check!.y).toBeLessThan(main!.y + main!.height);
+  expect(main!.y).toBeLessThan(check!.y + check!.height);
+  expect(check!.x + check!.width).toBeLessThanOrEqual(main!.x + 1);
 });
 
 test('スプリントの列の「タスクを足す」の欄の案内が、390px でも切れずに読める', async ({ page }) => {
