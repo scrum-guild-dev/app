@@ -179,7 +179,7 @@ test('終了したワークスペースのエピックの画面は、「戻る�
 async function expectDrawerToolsApart(
   page: Page,
   drawer: ReturnType<Page['locator']>,
-  minNeighbors: number,
+  neighbors: number,
 ): Promise<void> {
   const close = drawer.locator('.drawer-close');
   await expect(close).toBeVisible();
@@ -206,10 +206,12 @@ async function expectDrawerToolsApart(
     }
     const closeBox = boxes.find((box) => box.close);
     expect(closeBox, `${theme}: 閉じるボタンが無い`).toBeDefined();
-    // 隣のボタンの無い引き出し（ストーリー）は、交わりを確かめる相手が無く、大きさだけが効く
-    const neighbors = boxes.filter((box) => !box.close);
-    expect(neighbors.length, `${theme}: 閉じるボタンの隣のボタンの数`).toBeGreaterThanOrEqual(minNeighbors);
-    for (const other of neighbors) {
+    // 隣のボタンの数は固定する（出るはずのボタンが消えて、交わりの確かめが空振りしないように）。
+    // 狭い幅では開き方の「真ん中」を出さない。タスクは前後の2つと開き方（横、ページ全体、新しいタブ）の3つ、
+    // ストーリーは横だけが残って開き方の組ごと出ないので前後の2つ、ページ全体は前後が出ず開き方の3つ
+    const others = boxes.filter((box) => !box.close);
+    expect(others.length, `${theme}: 閉じるボタンの隣のボタンの数`).toBe(neighbors);
+    for (const other of others) {
       const apart =
         other.x + other.w <= closeBox!.x ||
         closeBox!.x + closeBox!.w <= other.x ||
@@ -233,15 +235,15 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   const task = page.getByRole('dialog', { name: 'ポイント付与のバッチを作る' });
   await expect(task.getByRole('heading', { level: 2 })).toBeFocused();
   await expect(task.locator('.drawer-steps')).toBeVisible();
-  await expectDrawerToolsApart(page, task, 2);
+  await expectDrawerToolsApart(page, task, 5);
   // ストーリーの引き出し
   await page.goto(`${WORKSPACE}?story=${STORY_ID}`);
   const story = page.getByRole('dialog');
   await expect(story.getByRole('heading', { level: 2 })).toBeFocused();
-  await expectDrawerToolsApart(page, story, 0);
+  await expectDrawerToolsApart(page, story, 2);
   // ページ全体で開いたタスク
   await page.goto(`${WORKSPACE}/tasks/${TASK_ID}`);
   const whole = page.locator('.drawer.is-page');
   await expect(whole.getByRole('heading', { level: 2 })).toBeVisible();
-  await expectDrawerToolsApart(page, whole, 0);
+  await expectDrawerToolsApart(page, whole, 3);
 });
