@@ -10,6 +10,11 @@
   // スクロールでは置き直し、幅の変化では閉じる。
   // locked に理由を渡すと押せない（aria-disabled）。理由は見える注記にはせず、読み上げ（aria-describedby）と title で読める。
   // retry を渡すと、メニューの末尾に「もう一度試す」を出す（候補を読めなかったとき）。onopen は開くたびに呼ぶ（候補を読み直すため）。
+  // 「もう一度試す」を押した後の読み直しが終わって retry が残っていれば、また失敗したということ（成功すれば retry は外れる）。
+  // 項目の文に「まだ読み込めませんでした」を添える。
+  // 読み込み中と失敗は、メニューの隣に開いている間は常に置いた role="status" の領域へ、描いた次のフレームで文字を入れて読み上げに伝える
+  // （読み込んでいます、failedNote、まだ読み込めませんでした、空）。領域と文字を同じ描画で入れない。
+  // 幅の変化で閉じるとき、フォーカスがメニューか窓の中にあればチップへ戻す（高さだけの変化では閉じない）。
   type Option = { value: string; text: string };
   let {
     attr,
@@ -54,6 +59,26 @@
   let root = $state<HTMLElement>();
   let button = $state<HTMLButtonElement>();
   let list = $state<HTMLElement>();
+  // 今開いている間に「もう一度試す」を押したか
+  let tried = $state(false);
+  let announced = $state('');
+  const failedAgain = $derived(tried && !retrying && retry !== undefined);
+  const retryText = $derived(
+    retrying ? t('retrying') : failedAgain ? `${t('retryFailed')}。${t('retry')}` : t('retry'),
+  );
+  const status = $derived(
+    open && panel === undefined
+      ? retry !== undefined
+        ? retrying
+          ? t('retrying')
+          : failedAgain
+            ? t('retryFailed')
+            : (failedNote ?? '')
+        : busy
+          ? t('loading')
+          : ''
+      : '',
+  );
 
   function items(): HTMLElement[] {
     return list ? [...list.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([aria-disabled="true"])')] : [];
@@ -79,6 +104,7 @@
   async function show(): Promise<void> {
     if (locked !== undefined) return;
     open = true;
+    tried = false;
     onopen?.();
     await tick();
     place();
@@ -173,7 +199,7 @@
     // 幅が変わったときだけ閉じる（スマホのアドレスバーの出入りは高さだけが変わる。そのときは置き直す）
     let width = window.innerWidth;
     const close = (): void => {
-      if (window.innerWidth !== width) hide(false);
+      if (window.innerWidth !== width) hide(list?.contains(document.activeElement) === true);
       else place();
       width = window.innerWidth;
     };
@@ -183,6 +209,19 @@
       window.removeEventListener('scroll', reposition, true);
       window.removeEventListener('resize', close);
     };
+  });
+
+  // 状態の文字は、領域を描いた次のフレームで入れる（最初から文字が入っていると読み上げられないことがある）
+  $effect(() => {
+    const next = status;
+    if (!open) {
+      announced = '';
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      announced = next;
+    });
+    return () => cancelAnimationFrame(frame);
   });
 
   // 候補が読み終わるなどで中身が替わったら、置き直す
@@ -273,12 +312,19 @@
             type="button"
             role="menuitem"
             aria-disabled={retrying}
-            onclick={() => !retrying && retry?.()}
+            onclick={() => {
+              if (retrying) return;
+              tried = true;
+              retry?.();
+            }}
           >
-            <span>{failedNote}。{retrying ? t('retrying') : t('retry')}</span>
+            <span>{failedNote}。{retryText}</span>
           </button>
         </li>
       {/if}
     </ul>
+  {/if}
+  {#if open && panel === undefined}
+    <span class="visually-hidden" role="status" data-attr-chip-status>{announced}</span>
   {/if}
 </span>
