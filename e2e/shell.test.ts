@@ -479,24 +479,26 @@ test('書体を自分のオリジンから読み込み、外へ通信しない',
   expect([...origins]).toEqual([new URL(baseURL ?? '').origin]);
   expect(fonts.length).toBeGreaterThan(0);
   // 見出しの 700 の「今」と本文の 400 の「や」を受け持つ面が、それぞれ読み込み済みになる。
-  // document.fonts.check は、文字を受け持つ面が無いときも true を返すので使わず、面の unicode-range で確かめる
-  const loaded = await page.evaluate(() => {
-    const covers = (range: string, codePoint: number) =>
-      range.split(',').some((part) => {
-        const [start, end = start] = part.trim().replace(/^U\+/i, '').split('-');
-        return parseInt(start ?? '', 16) <= codePoint && codePoint <= parseInt(end ?? '', 16);
-      });
-    const isLoaded = (weight: string, char: string) =>
-      [...document.fonts].some(
-        (face) =>
-          face.family.replaceAll('"', '') === 'Guild Mono JP' &&
-          face.weight === weight &&
-          face.status === 'loaded' &&
-          covers(face.unicodeRange, char.codePointAt(0) ?? 0),
-      );
-    return { heading: isLoaded('700', '今'), body: isLoaded('400', 'や') };
-  });
-  expect(loaded).toEqual({ heading: true, body: true });
+  // document.fonts.check は、文字を受け持つ面が無いときも true を返すので使わず、面の unicode-range で確かめる。
+  // fonts.ready の後に読み込みが始まる面もあるので、読み込み済みになるまで取り直す
+  const loaded = () =>
+    page.evaluate(() => {
+      const covers = (range: string, codePoint: number) =>
+        range.split(',').some((part) => {
+          const [start, end = start] = part.trim().replace(/^U\+/i, '').split('-');
+          return parseInt(start ?? '', 16) <= codePoint && codePoint <= parseInt(end ?? '', 16);
+        });
+      const isLoaded = (weight: string, char: string) =>
+        [...document.fonts].some(
+          (face) =>
+            face.family.replaceAll('"', '') === 'Guild Mono JP' &&
+            face.weight === weight &&
+            face.status === 'loaded' &&
+            covers(face.unicodeRange, char.codePointAt(0) ?? 0),
+        );
+      return { heading: isLoaded('700', '今'), body: isLoaded('400', 'や') };
+    });
+  await expect.poll(loaded).toEqual({ heading: true, body: true });
   expect(await collect()).toEqual([]);
 });
 
