@@ -1724,6 +1724,11 @@ export const dictionary = defineDictionary({
   taskDeleteForbidden: '作った人と{leader}だけが削除できます',
   // 削除や取り消しは通ったが、一覧の読み直しが失敗した
   taskListReloadFailed: '画面を読み直せませんでした。ページを開き直してください。',
+  // 行とカードの「⋯」から消した後と戻した後の読み直しが失敗した。画面に「もう一度試す」と並べて残す印（トーストだけで伝えない）。
+  // 何が済んだかを先に言う。taskListStaleReloadFailed は、断られた後の読み直し（何も変えていない）
+  taskDeletedReloadFailed: '{task}は削除しましたが、画面を読み直せませんでした。もう一度試してください。',
+  taskRestoredReloadFailed: '{task}は戻しましたが、画面を読み直せませんでした。もう一度試してください。',
+  taskListStaleReloadFailed: '画面を読み直せませんでした。もう一度試してください。',
   // 削除の取り消し（task-restore）。削除のトーストの「取り消す」から呼ぶ
   taskRestoreAction: '取り消す',
   taskRestoreActionLabel: '{action}: {title}',

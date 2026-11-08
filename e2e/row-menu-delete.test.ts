@@ -283,3 +283,57 @@ test('動かしを送っている最中にカードを消しても、動かし�
   await expect(titlesIn('未着手')).toHaveCount(0);
   await unroute();
 });
+
+// #979: 消した後の読み直し（backlog-tree、sprint-board）だけが失敗したとき。load が一覧を null にして画面は読み込みの失敗に替わる。
+// 一時のトーストだけで伝えず、見出しの下に何が済んだか（削除はできている）を残し、「もう一度試す」で読み直せたら消える
+test('消した後の読み直しが失敗すると、トーストが消えた後も「削除しましたが」の印と「もう一度試す」が残り、読み直せると消える', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await createWorkspace(page, '行の削除の読み直し');
+  await addTaskRow(page, '読み直しに落ちる行');
+  const unroute = await failOperation(page, backlogTree, AOBA, 500, 'internal');
+  await chooseRowAction(page, '読み直しに落ちる行', DELETE);
+
+  const notice = page.locator('[data-task-reload-notice]');
+  await expect(notice).toHaveText('タスクは削除しましたが、画面を読み直せませんでした。もう一度試してください。');
+  await expect(notice.getByRole('alert')).toBeVisible();
+  const retry = page.getByRole('button', { name: 'もう一度試す', exact: true });
+  await expect(retry).toBeVisible();
+  // トースト（10 秒）が消えた後も、印は残る
+  await expect(page.locator('.toasts:visible .toast', { hasText: '「読み直しに落ちる行」を削除しました' })).toHaveCount(
+    0,
+    { timeout: 20_000 },
+  );
+  await expect(notice).toBeVisible();
+  await expect(retry).toBeVisible();
+  await expectNoA11yViolationsInThemes(page, 'backlog');
+
+  await unroute();
+  await retry.click();
+  await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '読み直しに落ちる行', exact: true })).toHaveCount(0);
+});
+
+test('スプリントのカードを消した後のボードの読み直しが失敗しても、「削除しましたが」の印と「もう一度試す」が残る', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await createWorkspace(page, `カードの削除の読み直し ${test.info().repeatEachIndex}-${test.info().retry}`);
+  await startSprintWithCards(page, ['読み直しに落ちるカード', '残るカード']);
+  const unroute = await failOperation(page, sprintBoard, AOBA, 500, 'internal');
+  await chooseRowAction(page, '読み直しに落ちるカード', DELETE);
+
+  const notice = page.locator('[data-task-reload-notice]');
+  await expect(notice).toHaveText('タスクは削除しましたが、画面を読み直せませんでした。もう一度試してください。');
+  const retry = page.getByRole('button', { name: 'もう一度試す', exact: true });
+  await expect(retry).toBeVisible();
+
+  await unroute();
+  await retry.click();
+  await expect(page.getByRole('heading', { level: 1, name: 'スプリント 第9回' })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '残るカード', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '読み直しに落ちるカード', exact: true })).toHaveCount(0);
+});
