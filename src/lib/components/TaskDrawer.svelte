@@ -189,6 +189,8 @@
   let savedVersion = 0;
   let refreshVersion = 0;
   let latestRefresh: Promise<TaskDetail | null> | null = null;
+  let latestRefreshTaskId: string | null = null;
+  let refreshCloseIfGone = false;
   const todayReasonId = `${ids}-today-reason`;
 
   async function toggleToday() {
@@ -780,17 +782,21 @@
     const requestedVersion = ++refreshVersion;
     const requestedSavedVersion = savedVersion;
     const requestedTaskId = taskId;
+    // このタスクで削除判定を求めた読み取りは、後発へ譲っても失わない。
+    refreshCloseIfGone = closeIfGone || (latestRefreshTaskId === requestedTaskId && refreshCloseIfGone);
+    latestRefreshTaskId = requestedTaskId;
     const pending = (async (): Promise<TaskDetail | null> => {
       const result = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: requestedTaskId }, { slug });
+      if (!alive || taskId !== requestedTaskId) return null;
       // 後発の読み取りに表示を譲る場合も、その結果を呼び出し元へ返す。null は読み取り失敗だけを表す。
-      if (requestedVersion !== refreshVersion) return latestRefresh;
+      if (requestedVersion !== refreshVersion) return latestRefreshTaskId === requestedTaskId ? latestRefresh : null;
       if (!result.ok) {
-        if (closeIfGone && result.status === 404 && alive && taskId === requestedTaskId) gone();
+        if (refreshCloseIfGone && result.status === 404) gone();
         return null;
       }
       if (alive && taskId === requestedTaskId) {
         // 途中で保存が通ったら、その後の値を取り直す。古い欄を戻さず、完了状態や権限も取りこぼさない。
-        if (requestedSavedVersion !== savedVersion) return refresh(closeIfGone);
+        if (requestedSavedVersion !== savedVersion) return refresh(refreshCloseIfGone);
         task = result.data.task;
         fields = result.data.fields;
         taskContext = {

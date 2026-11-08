@@ -177,3 +177,35 @@ test('本文の保存が完了後の読み直しと重なっても、完了の�
   await expect(drawer.getByText('保存した本文を保つ', { exact: true })).toBeVisible();
   await waitForSettled(page);
 });
+
+test('印の読み直しを完了の読み直しが追い越しても、404 なら引き出しを閉じる', async ({ page }) => {
+  await createWorkspace(page, '削除の読み直しが重なる');
+  await addTaskRow(page, '消えた詳細を閉じる');
+  await page.getByRole('link', { name: '消えた詳細を閉じる', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '消えた詳細を閉じる' });
+  await drawer.getByRole('combobox', { name: '担当', exact: true }).selectOption({ label: 'ミナト' });
+  const sun = drawer.getByRole('button', { name: '今日やる: 消えた詳細を閉じる', exact: true });
+  await expect(sun).toHaveAttribute('aria-disabled', 'false');
+  let reads = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await routeOperation(page, taskDetail, { slug: 'aoba' }, async (call) => {
+    const read = ++reads;
+    if (read === 1) await gate;
+    await call.fail(404, 'not_found');
+  });
+  try {
+    await sun.click();
+    await expect.poll(() => reads).toBe(1);
+    await drawer.getByRole('button', { name: '完了にする', exact: true }).click();
+    await expect.poll(() => reads).toBe(2);
+  } finally {
+    release();
+  }
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(
+    page.locator('.toast:visible').filter({ hasText: 'このタスクは見つかりません。一覧を読み直します' }),
+  ).toHaveCount(1);
+});
