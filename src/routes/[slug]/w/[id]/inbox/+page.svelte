@@ -144,6 +144,7 @@
   {#if inbox.connection_count === 0 && tasks.length === 0}
     <EmptyState
       icon="inbox"
+      art="notice"
       title={t('inboxNoConnectionTitle', { connection: t('connection') })}
       text={t('inboxNoConnectionText', { connection: t('connection') })}
     />

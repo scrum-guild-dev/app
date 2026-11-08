@@ -793,7 +793,7 @@
       <span class="notice-label">${t("sprintGoal")}</span>
       <p class="notice-title is-goal">${esc(s.goal)}</p>
       <div class="notice-meta">${opts.showWs !== false ? `<span>${esc(D.workspaces[s.ws].name)}</span>` : ""}<span>${sprintLabel(id)}</span>${s.name ? `<span class="mono">${md(s.start)}〜${md(s.end)}</span>` : ""}<span>残り ${s.days - s.dayIndex} 日</span></div>
-      <div class="day-ticks" role="img" aria-label="${s.days} 日のうち ${s.dayIndex + 1} 日目">${ticks}</div>
+      <div class="day-ticks" role="img" aria-label="${s.days} 日のうち ${Math.min(s.dayIndex + 1, s.days)} 日目">${ticks}</div>
     </article>`;
   }
   // レイドの貼り紙（一覧や計画の中で使う小さな形）
@@ -2040,7 +2040,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       : `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。${t("requester")}か${t("leader")}に、${t("epic")}の${t("done")}を取り消してもらってください。`}</span></div>`);
   }
   // エピックの作成と変更のダイアログ（本番の EpicDialog）。欄はストーリーのダイアログから受け入れ基準を除いたもの。
-  // バックログの見出しの「エピックを作る」と、木のエピックの行の題から開く。依頼主、クリア報酬、討伐隊はエピックの画面（#65）で直す。
+  // 見本のカタログ（「ダイアログと演出」）と、木のエピックの行の題から開く（本番には無く、木の空の行で作り、引き出しで直す）。依頼主、クリア報酬、討伐隊はエピックの画面（#65）で直す。
   // 直すときは、欄の下に「この<エピック>を削除する」を置く（ストーリーのダイアログと同じ）
   function epicDialog(title, e, readOnly = false, canDelete = true) {
     const link = e && e.link ? e.link : "";
@@ -2183,7 +2183,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
          <p class="props-note">${esc(D.sprints.sp14.goal)}</p>
          <div class="segmented" role="radiogroup"><label><input type="radio" name="d-goal" checked><span>達成した</span></label><label><input type="radio" name="d-goal"><span>達成していない</span></label></div></div>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${sprintLabel("sp14")} を終えました">終える</button>`),
-    // ストーリーを作るダイアログは見本だけに残るもの（本番は木の空の行で作る）。バックログの見出しの「<ストーリー>を作る」から開く。
+    // ストーリーを作るダイアログは見本だけに残るもの（本番は木の空の行で作る）。見本のカタログ（「ダイアログと演出」）から開く。
     // 直すのは題のリンクで開く引き出し（storyDrawerHtml。自動保存。削除は引き出しの帯の「⋯」）で、ダイアログは無い
     createStory: () => storyDialog(`${t("story")}を作る`),
     createEpic: () => epicDialog(`${t("epic")}を作る`, null),
@@ -2746,10 +2746,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     ["settings", "gear", () => "設定", "settings.html"],
     ["history", "clock", () => "変更の履歴", "history.html"],
   ];
-  // 運用者の画面。組織の外にあり、組織の中の画面へは行けない
-  const OPERATOR_PAGES = [
-    ["operator", "shield", () => "運用", "operator.html"],
-  ];
   function navHtml(current, pages) {
     // ワークスペースがまだない管理者には、ワークスペースの中の画面を出さない
     const cut = Object.keys(D.workspaces).length ? pages.length : pages.indexOf("workspace");
@@ -2825,19 +2821,17 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // アカウントのメニュー。上の帯の自分の名前を押すと開き、中は「マイプロフィール」、管理者だけ「組織の管理」、最後に「ログアウト」。
   // 開閉は組織の切り替えと同じ: ボタン、外を押す、Tab で外へ出る、Esc。メニューの中にフォーカスがあるときに閉じたら、ボタンへ戻す。
-  // 見本ではログアウトせず、トーストだけを出す。運用者の枠も同じメニュー（本番の /operator は紙の下のボタン）
+  // 見本ではログアウトせず、トーストだけを出す。運用者の画面（operator.html）は紙の枠なので、このメニューを持たず紙の下のボタンでログアウトする
   let accountMenuOpen = false;
   // busy は、ログアウトを押して結果を待っている間（項目を aria-disabled にして文言を替え、読み上げの領域に伝える）。
   // admin は管理者の印を出し、読み上げの名前にも含める
-  function accountMenuHtml({ open = accountMenuOpen, id = "account-menu-list", live = true, operator = page && page.operator, busy = false, admin = !!D.organizations.find((org) => org.slug === D.organization)?.admin, invitationCount = (D.receivedInvites || []).length } = {}) {
-    const name = operator ? D.operator.name : user(D.me).name;
-    const badge = operator ? "運用者" : admin ? t("admin") : "";
-    const who = operator
-      ? `${avatar(D.operator.name, 0)}${esc(name)}<span class="chip">運用者</span>`
-      : `${avatarOf(D.me)}${esc(name)}${admin ? `<span class="chip">${t("admin")}</span>` : ""}${emblem(user(D.me).level, true)}`;
+  function accountMenuHtml({ open = accountMenuOpen, id = "account-menu-list", live = true, busy = false, admin = !!D.organizations.find((org) => org.slug === D.organization)?.admin, invitationCount = (D.receivedInvites || []).length } = {}) {
+    const name = user(D.me).name;
+    const badge = admin ? t("admin") : "";
+    const who = `${avatarOf(D.me)}${esc(name)}${admin ? `<span class="chip">${t("admin")}</span>` : ""}${emblem(user(D.me).level, true)}`;
     const label = t("accountMenuLabel").replace("{name}", badge ? `${name}（${badge}）` : name);
-    const count = operator ? 0 : invitationCount;
-    const items = operator ? "" : `<li><a href="${firstHref("me.html")}" ${page && page.current === "me" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageMe")}</span>${count > 0 ? `<span class="account-menu-badge" aria-hidden="true">${t("navInvitationsBadge").replace("{count}", count)}</span><span class="visually-hidden">${t("navInvitationsLabel").replace("{count}", count)}</span>` : ""}</a></li>${admin ? `<li><a href="${firstHref("admin.html")}" ${page && page.current === "admin" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageOrgAdmin")}</span></a></li>` : ""}`;
+    const count = invitationCount;
+    const items = `<li><a href="${firstHref("me.html")}" ${page && page.current === "me" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageMe")}</span>${count > 0 ? `<span class="account-menu-badge" aria-hidden="true">${t("navInvitationsBadge").replace("{count}", count)}</span><span class="visually-hidden">${t("navInvitationsLabel").replace("{count}", count)}</span>` : ""}</a></li>${admin ? `<li><a href="${firstHref("admin.html")}" ${page && page.current === "admin" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageOrgAdmin")}</span></a></li>` : ""}`;
     return `<div class="account-menu"><button class="account-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-account-menu" : ""}><span class="me">${who}</span>${count > 0 ? '<span class="account-menu-invite" aria-hidden="true"></span>' : ""}${icon("chevron")}</button>
       <span class="visually-hidden" role="status">${busy ? t("logoutMoving") : ""}</span>
       <ul class="account-menu-list" id="${id}" aria-label="${esc(label)}" ${open ? "" : "hidden"}>${items}<li><button type="button" ${busy ? 'aria-disabled="true"' : ""} ${live ? 'data-toast="見本のため、ログアウトしません"' : ""}><span class="org-menu-name">${busy ? t("logoutMoving") : t("logout")}</span></button></li></ul></div>`;
@@ -2868,10 +2862,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   let page = null;
   function redraw() {
     if (!page) return;
-    document.getElementById("org-menu-slot").innerHTML = page.operator ? "" : orgMenuHtml();
-    document.getElementById("account-menu-slot").innerHTML = accountMenuHtml();
-    document.getElementById("breadcrumb-slot").innerHTML = breadcrumbHtml();
-    document.getElementById("app-nav").innerHTML = navHtml(page.current, page.operator ? OPERATOR_PAGES : PAGES);
+    if (!page.operator) {
+      document.getElementById("org-menu-slot").innerHTML = orgMenuHtml();
+      document.getElementById("account-menu-slot").innerHTML = accountMenuHtml();
+      document.getElementById("breadcrumb-slot").innerHTML = breadcrumbHtml();
+      document.getElementById("app-nav").innerHTML = navHtml(page.current, PAGES);
+    }
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
     document.getElementById("content").innerHTML = page.render();
@@ -2909,7 +2905,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   function currentCrumbs() {
     if (!page) return [];
-    if (page.operator) return [{ label: "運用", current: true }];
     const orgs = D.organizations;
     const org = orgs.find((k) => k.slug === D.organization) || orgs[0];
     const crumbs = [{ label: orgName(org), href: firstHref("today.html") }];
@@ -2922,12 +2917,20 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     return crumbs;
   }
   // 画面の見本を組み立てる。render は中身の HTML を返す関数。
-  // opts.operator なら運用者の画面の枠にする（組織のメニュー、通知、レベルを出さない）
+  // opts.operator なら運用者の画面の枠にする。本番の /operator と同じく、左のメニューと上の帯を置かず、
+  // 幅の広い紙（.gate.is-wide）1枚に組む。render は紙の中身を返す
   function mount(current, render, opts = {}) {
     page = { current, render, operator: !!opts.operator };
-    const who = page.operator
-      ? `<span id="account-menu-slot"></span>`
-      : `${first ? `<button class="pill" type="button" aria-label="通知 0件">${icon("bell")}</button>`
+    if (page.operator) {
+      document.getElementById("app").innerHTML = `
+    <main class="gate is-wide"><div class="gate-stack"><section class="gate-sheet" id="content"></section></div></main>
+    <div class="dialog" id="dialog" hidden></div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>`;
+      applyTheme();
+      redraw();
+      return;
+    }
+    const who = `${first ? `<button class="pill" type="button" aria-label="通知 0件">${icon("bell")}</button>`
           : `<button class="pill" type="button" aria-label="通知 3件">${icon("bell")}<span class="pill-count">3</span></button>`}
           <span id="account-menu-slot"></span>`;
     document.getElementById("app").innerHTML = `
@@ -2946,10 +2949,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       <div class="sheet">
         <div class="topbar">
           <span id="breadcrumb-slot"></span>
-          ${page.operator ? "" : `<div class="nav-search" role="search" aria-label="画面とタスクを探す">${icon("search")}<input class="nav-search-input" id="nav-search-input" type="text" role="combobox" autocomplete="off" spellcheck="false" aria-label="画面とタスクを探す" aria-expanded="false" aria-controls="nav-search-list" aria-autocomplete="list" aria-keyshortcuts="Control+K Meta+K" placeholder="画面やタスクを探す"><kbd class="kbd nav-search-key" aria-hidden="true">${ASSIST_KEY}</kbd><ul class="nav-search-list" id="nav-search-list" role="listbox" aria-label="画面とタスクを探す" hidden></ul><span class="visually-hidden" role="status" id="nav-search-status"></span></div>`}
-          ${page.operator ? "" : `<button class="pill assist-launch" type="button" data-assist-open>${icon("spark")}<span data-assist-label></span></button>`}
+          <div class="nav-search" role="search" aria-label="画面とタスクを探す">${icon("search")}<input class="nav-search-input" id="nav-search-input" type="text" role="combobox" autocomplete="off" spellcheck="false" aria-label="画面とタスクを探す" aria-expanded="false" aria-controls="nav-search-list" aria-autocomplete="list" aria-keyshortcuts="Control+K Meta+K" placeholder="画面やタスクを探す"><kbd class="kbd nav-search-key" aria-hidden="true">${ASSIST_KEY}</kbd><ul class="nav-search-list" id="nav-search-list" role="listbox" aria-label="画面とタスクを探す" hidden></ul><span class="visually-hidden" role="status" id="nav-search-status"></span></div>
+          <button class="pill assist-launch" type="button" data-assist-open>${icon("spark")}<span data-assist-label></span></button>
           <button class="pill" type="button" data-switch="theme">${icon("moon")}<span data-theme-label></span></button>
-          ${page.operator ? "" : `<button class="pill" type="button" data-switch="first">${icon("redo")}<span>見本: ${firstLabel(first)}</span></button>`}
+          <button class="pill" type="button" data-switch="first">${icon("redo")}<span>見本: ${firstLabel(first)}</span></button>
           ${who}
         </div>
         <main class="content" id="content"></main>
