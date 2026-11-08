@@ -1679,10 +1679,16 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 .skeleton-line.is-short { width: 70%; }
 .skeleton-line.is-block { height: 2.5em; }
 @keyframes skeleton-pulse { 50% { opacity: .45; } }
+/* 強制色では地の色が消えるので、帯を縁で残す */
+@media (forced-colors: active) {
+  .skeleton-line { border: 1px solid CanvasText; }
+}
 /* 組織の枠へ移る間の骨組み（LoadingSheet の shape）。枠と同じ部品（.app、.binding、.topbar、.content、.page-head）の中に帯を置き、
    左のメニューの幅、上の帯の高さ、本文の余白を読み込んだ後と同じにする。本文は行き先の画面の組み（data-shape）に近い形にし、
    2列や節は本物と同じ部品（.layout-aside、.layout-wiki、.settings、.board、.lanes）に任せて、畳む幅も本物と揃える。
-   帯の大きさは、組織の切り替え、メニューの項目、パンくず、検索の欄、アカウントのボタン、行、カードのおおよその大きさに合わせる */
+   帯の大きさは、組織の切り替え（.org-menu-button の 60px）、メニューの項目、パンくず、検索の欄（.nav-search-input の 36px）、
+   アカウントのボタン、行、カードのおおよその大きさを写した値で、本物の部品を変えても追従しない（形が近ければよく、位置を揃えるのは枠の部品）。
+   最初の読み込みの static/boot-loading.css も同じ値を写す */
 .skeleton-frame .skeleton-line.is-org { height: 60px; }
 .skeleton-frame .skeleton-nav { gap: var(--space-4); padding-inline: var(--space-2); }
 .skeleton-frame .skeleton-nav .skeleton-line.is-org { margin-inline: calc(-1 * var(--space-2)); }
@@ -1726,7 +1732,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   .skeleton-frame .skeleton-nav .skeleton-line { flex: none; width: 6rem; }
   .skeleton-frame .skeleton-line.is-org { flex: 1 1 12rem; }
   /* アカウントのボタンは指で押す高さ（44px）になるので、帯の外の余白で同じ高さを取る */
-  .skeleton-frame .topbar > .skeleton-line.is-account { margin-block: 8px; }
+  .skeleton-frame .topbar > .skeleton-line.is-account { margin-block: var(--space-2); }
   .skeleton-frame .topbar > .skeleton-line.is-search { flex: 1 1 100%; order: 3; height: 44px; }
 }
 

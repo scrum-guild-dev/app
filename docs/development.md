@@ -182,6 +182,7 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 - `static/theme-init.js` は同期で読むので、小さなファイルでも読み終えるまで HTML の解析が止まる。`_headers` では `Cache-Control` を指定せず、Cloudflare の既定（毎回確かめる）のまま配る。描画のたびに「変わっていないか」の問い合わせが1往復増えるが、ファイルは数百バイトで、ちらつきを無くす利点が上回るので受け入れた。名前にハッシュを入れて `immutable` にすれば往復は無くなる一方、`app.html` から名前を引く仕掛けが要り、遅れが問題になってから足せば足りる。
 - テーマのキーと値は `src/shared/theme.ts` と同じにする。`scripts/theme.test.ts` が、`static/theme-init.js` を偽の `localStorage` で動かして確かめる。
 - `static/boot-loading.css` も同じ性質（`src/app.html` の head が読み、URL を直接開いた最初の読み込みの `#boot-loading` の見た目を持つ。デザインシステムの CSS が届く前に要るので、画面ごとの CSS を持たない決まりの例外）。
+- `static/boot-shape.js` も同期で読む同じ性質のファイル。`src/app.html` の `#boot-loading` の後に置き、URL から骨組みの形（組織の枠の画面ごとの形か、枠の外の紙）を選んで `html` に `data-boot`（畳んだ左のメニューなら `data-boot-nav` も）を付け、本文の骨組みを固定の文字列で組み立てる。往復は `theme-init.js` と同じく1つ増える。形と URL の対応は `src/lib/loading-shape.ts`（画面を移るときの `LoadingSheet`）と同じにし、`scripts/boot-shape.test.ts` が全画面の URL と、形ごとの帯の数、`static/boot-loading.css` にクラスの描き方があることを確かめる。`static/boot-loading.css` は枠の寸法（左のメニュー 240px と 64px、上の帯 60px、本文の余白）と、各テーマの地、面、線の色を `design/` から写して持つ。`design/` の枠の寸法かテーマの色を変えるときは、ここも合わせる（e2e の `toast-failure.test.ts` が、左のメニューの幅、上の帯、画面の見出しの位置の一致を確かめる）。画面が描かれたら `src/routes/+layout.svelte` が `#boot-loading` と `data-boot` を取り除く。
 - 画面が動き出してからの切り替えとストアは `src/lib/theme.svelte.ts`。本物の値は組織の枠が入れる。組織の操作の結果の `me.theme`（`users.theme`）、なければ `organization.theme`（`organizations.theme`）を `setTheme` に渡すので、`data-theme` と `localStorage` が同じ値になる（`src/lib/organization.svelte.ts`）。組織を切り替えたときも同じで、切り替えた先の値に替わる。
 
 ### 架空のデータ

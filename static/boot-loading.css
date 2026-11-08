@@ -79,6 +79,8 @@ html[data-boot] #boot-loading .boot-skeleton {
   display: none;
 }
 html[data-boot] #boot-loading .boot-frame {
+  /* 帯の高さは em で決めるので、本物の本文の文字（--text-md）と同じ大きさにする */
+  font-size: 0.875rem;
   position: absolute;
   inset: 0;
   display: grid;
@@ -160,6 +162,9 @@ html[data-boot] #boot-loading .boot-frame {
 #boot-loading .boot-content {
   padding: 8px 32px 40px;
   gap: 32px;
+}
+#boot-loading .boot-body {
+  gap: 16px;
 }
 #boot-loading .boot-head {
   gap: 12px;
@@ -280,6 +285,21 @@ html[data-boot] #boot-loading .boot-frame {
   }
   #boot-loading .boot-cols.is-wiki {
     gap: 20px;
+  }
+}
+/* 広い幅でマウスだけで操作する画面は、本物と同じく本文の間と見出しの下を詰める（design/components.css の「広い幅でマウスで操作する画面の詰め」） */
+@media (min-width: 761px) and (pointer: fine) and (not (any-pointer: coarse)) {
+  #boot-loading .boot-content {
+    gap: 24px;
+  }
+  #boot-loading .boot-head {
+    padding-bottom: 16px;
+  }
+}
+/* 強制色では地の色が消えるので、帯を縁で残す */
+@media (forced-colors: active) {
+  #boot-loading .boot-frame i {
+    border: 1px solid CanvasText;
   }
 }
 @media (min-width: 761px) and (hover: hover) {
@@ -450,4 +470,48 @@ html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-col) {
 }
 html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
   border-color: #37373d;
+}
+/* 中世風と現代風を覚えた人にも、読み込んだ後と同じ地と色で出す（値は design/tokens.css の各テーマの --color-bg、--color-sunken、
+   --color-line と --rule-double） */
+html[data-theme='medieval'] #boot-loading {
+  background: #f3f4f1;
+  color: #5b6672;
+}
+html[data-theme='medieval'] #boot-loading :is(.boot-binding, .boot-col) {
+  background: #e9ebe6;
+}
+html[data-theme='medieval'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
+  border-color: #c9cfd3;
+}
+html[data-theme='medieval'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head) {
+  border-style: double;
+  border-width: 0;
+}
+html[data-theme='medieval'] #boot-loading .boot-binding {
+  border-right-width: 3px;
+}
+html[data-theme='medieval'] #boot-loading :is(.boot-corner, .boot-topbar, .boot-head) {
+  border-bottom-width: 3px;
+}
+html[data-theme='medieval'] #boot-loading .boot-frame i {
+  background: #c9cfd3;
+}
+html[data-theme='modern'] #boot-loading {
+  background: #060a12;
+  color: #8ea6c0;
+}
+html[data-theme='modern'] #boot-loading :is(.boot-binding, .boot-col) {
+  background: #070d18;
+}
+html[data-theme='modern'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
+  border-color: #1f3b5c;
+}
+html[data-theme='modern'] #boot-loading .boot-frame i {
+  background: #1f3b5c;
+}
+@media (max-width: 760px) {
+  html[data-theme='medieval'] #boot-loading .boot-binding {
+    border-right-width: 0;
+    border-bottom-width: 3px;
+  }
 }

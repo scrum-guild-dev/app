@@ -34,7 +34,12 @@
   let slow = $state(false);
 
   // URL を直接開いた最初の読み込みの表示（src/app.html の #boot-loading）は、画面が描かれたら要らない
-  onMount(() => document.getElementById('boot-loading')?.remove());
+  // （骨組みの形の印 data-boot と data-boot-nav も、以後の画面の開閉と食い違わないよう外す）
+  onMount(() => {
+    document.getElementById('boot-loading')?.remove();
+    delete document.documentElement.dataset.boot;
+    delete document.documentElement.dataset.bootNav;
+  });
 
   $effect(() => {
     if (!loadingFromOutside) return;

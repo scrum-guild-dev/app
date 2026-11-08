@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import type { OutputOf } from '../src/shared/operations/define.ts';
 import { myOrganizations, type organizationInfo } from '../src/shared/operations/organization/index.ts';
-import { findA11yViolations, signIn, watchViolations } from './helpers.ts';
+import { findA11yViolations, shownBox, signIn, watchViolations } from './helpers.ts';
 import { rewriteOperation } from './operations.ts';
 
 // 組織の操作の応答を書き換える。サーバーの応答をそのまま取り、必要な項目だけ上書きして返す
@@ -301,19 +301,23 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     // 本文は今日やることの組み（本文と右の脇の2列）で、脇の列の位置も読み込んだ後と同じ
     await expect(page.locator('.skeleton-frame')).toHaveAttribute('data-shape', 'aside');
     await expect(page.locator('.gate')).toHaveCount(0);
-    const loadingBinding = await page.locator('.binding').boundingBox();
-    const loadingTopbar = await page.locator('.topbar').boundingBox();
-    const loadingSide = await page.locator('.layout-side').boundingBox();
+    const loadingBinding = await shownBox(page.locator('.binding'));
+    const loadingTopbar = await shownBox(page.locator('.topbar'));
+    const loadingHead = await shownBox(page.locator('.page-head'));
+    const loadingSide = await shownBox(page.locator('.layout-side'));
     await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
     await expect(page.locator('.skeleton-frame')).toHaveCount(0);
-    const loadedBinding = await page.locator('.binding').boundingBox();
-    const loadedTopbar = await page.locator('.topbar').boundingBox();
-    expect(loadingBinding?.width).toBe(loadedBinding?.width);
-    expect(loadingTopbar?.x).toBe(loadedTopbar?.x);
-    expect(loadingTopbar?.height).toBe(loadedTopbar?.height);
-    const loadedSide = await page.locator('.layout-side').boundingBox();
-    expect(loadingSide?.x).toBe(loadedSide?.x);
-    expect(loadingSide?.width).toBe(loadedSide?.width);
+    const loadedBinding = await shownBox(page.locator('.binding'));
+    const loadedTopbar = await shownBox(page.locator('.topbar'));
+    const loadedHead = await shownBox(page.locator('.page-head'));
+    const loadedSide = await shownBox(page.locator('.layout-side'));
+    expect(loadingBinding.width).toBe(loadedBinding.width);
+    expect(loadingTopbar.x).toBe(loadedTopbar.x);
+    expect(loadingTopbar.height).toBe(loadedTopbar.height);
+    expect(loadingHead.x).toBe(loadedHead.x);
+    expect(loadingHead.y).toBe(loadedHead.y);
+    expect(loadingSide.x).toBe(loadedSide.x);
+    expect(loadingSide.width).toBe(loadedSide.width);
   });
 
   test('読み込み中の表示は、移り始めてから 300ms たつまで出さない', async ({ page }) => {
