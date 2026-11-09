@@ -162,6 +162,24 @@ test('4テーマで引き出しは最初だけ出現し、前後移動とペー�
   ).toBe(true);
 });
 
+test('390px の帯を測り直しても、4テーマで引き出しの最初の出現を失わない', async ({ page, context, baseURL }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(context, baseURL, 'admin');
+  await watchMotion(page);
+  await createWorkspace(page, '狭い帯と引き出し');
+  await addTaskRow(page, '狭い画面で出現する');
+  await waitForSettled(page);
+
+  for (const theme of A11Y_THEMES) {
+    await applyTheme(page, theme);
+    await clearMotion(page);
+    await page.getByRole('link', { name: '狭い画面で出現する', exact: true }).click();
+    await expectDrawerEntrance(page);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.drawer')).toHaveCount(0);
+  }
+});
+
 test('追加したタスク・ストーリー・エピックだけが一度光り、読み直しても光り直さない', async ({
   page,
   context,
