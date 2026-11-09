@@ -22,9 +22,12 @@ test('押せない同意ボタンは4テーマと狭い幅でも文字が読め�
     latest: null,
     current: false,
   });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/consent');
   const button = page.getByRole('button', { name: '同意して進む' });
   const checkbox = page.getByRole('checkbox');
+  await expect(button).toHaveCSS('transition-property', /opacity/);
+  await expect(page.locator('.choice.is-consent')).toHaveCSS('transition-duration', '0.12s, 0.12s');
   await expect(button).toHaveAttribute('aria-disabled', 'true');
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 900 });
@@ -59,6 +62,12 @@ test('押せない同意ボタンは4テーマと狭い幅でも文字が読め�
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     }
   }
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await checkbox.check();
+  await expect(button).toHaveCSS('transition-duration', '0s');
+  await expect(page.locator('.choice.is-consent')).toHaveCSS('transition-duration', '0s');
+  await checkbox.uncheck();
+  await expect(button).toHaveAttribute('aria-disabled', 'true');
   await expectNoA11yViolationsInThemes(page, 'consent');
 });
 

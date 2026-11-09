@@ -55,7 +55,7 @@ function lane(id, avg, overdue) {
     <!-- 棒の「超過」は、入れたポイントがベロシティを厳密に上回るとき（同じ値は超過にしない）。下の積載量の節の許容幅（±12.5%）はメンバーごとの作業量の基準で、
          この棒の判定とは別。両者の関係は積載量の Issue（#66）で決める。印の文は長くなりうるので、列の幅で折り返す（下の長い文の例） -->
     <div class="lane-fill">
-      <div class="lane-fill-bar ${total > avg ? "is-over" : ""}" role="img" aria-label="入れた ${total} pt、ベロシティ ${avg.toFixed(1)} pt"><span style="width:${(total / max) * 100}%"></span><i style="left:${(avg / max) * 100}%"></i></div>
+      <div class="lane-fill-bar ${total > avg ? "is-over" : ""}" role="img" aria-label="入れた ${total} pt、ベロシティ ${avg.toFixed(1)} pt"><span style="transform:scaleX(${total / max})"></span><i style="left:${(avg / max) * 100}%"></i></div>
       <div class="lane-fill-text"><span>入れた ${total} pt</span>${total > avg ? `<span class="chip is-danger">${icon("alert")}${t("over")}（ベロシティより ${(total - avg).toFixed(1).replace(/\.0$/, "")} pt 多い）</span>` : ""}<span>ベロシティ ${avg.toFixed(1)}</span></div>
     </div>
     ${list.map((x) => `<div class="lane-row ${x.doneAt ? "is-done" : ""}">${pts(x.pts)}<a href="#" data-task="${x.id}">${esc(x.title)}</a><span class="lane-row-end">${x.doneAt ? `<span class="hanko" role="img" aria-label="${esc(x.title)}: ${t("done")}">${icon("check")}<b>完</b></span>` : ""}${avatarOf(x.who)}${x.doneAt ? `<span class="lane-row-slot" aria-hidden="true"></span>` : `<button class="icon-btn" type="button" aria-label="外す: ${esc(x.title)}" title="外す">${icon("x")}</button>`}</span></div>`).join("") || `<p class="action-note">まだ何も入っていません</p>`}

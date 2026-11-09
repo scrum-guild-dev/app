@@ -77,6 +77,7 @@ test.describe('アカウントのメニュー', () => {
       await page.setViewportSize({ width, height: 800 });
       await page.goto('/aoba');
       await page.getByRole('button', { name: /アカウントのメニュー$/ }).click();
+      await expect(page.locator('.account-menu-list:not(.row-menu-list)')).toHaveCSS('translate', /^0px(?: 0px)?$/);
       const boxes = await page.locator('.account-menu-list a, .account-menu-list button').evaluateAll((elements) =>
         elements.map((el) => {
           const box = el.getBoundingClientRect();

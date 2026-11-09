@@ -478,7 +478,7 @@ const SECTIONS = [
       <div class="bars-labels"><span>第11回</span><span>第12回<small>延長 3 日・除外</small></span><span>第13回</span></div><p class="bars-legend"><i aria-hidden="true"></i>平均 31.7</p></div></div></div>
      <div class="lanes" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))"><section class="lane is-active"><div class="lane-head"><h3 class="lane-title">${SQ.sprintLabel("sp14")}</h3><span class="chip is-ok">進行中</span></div>
       <p class="lane-goal"><span class="lane-goal-label">${t("sprintGoal")}</span>${esc(D.sprints.sp14.goal)}</p>
-      <div class="lane-fill"><div class="lane-fill-bar"><span style="width:62%"></span><i style="left:80%"></i></div><div class="lane-fill-text"><span>入れた 25 pt</span><span>ベロシティ 31.7</span></div></div>
+      <div class="lane-fill"><div class="lane-fill-bar"><span style="transform:scaleX(0.62)"></span><i style="left:80%"></i></div><div class="lane-fill-text"><span>入れた 25 pt</span><span>ベロシティ 31.7</span></div></div>
       <div class="lane-row">${pts(5)}<a href="#" data-task="t1">ポイント付与のバッチを作る</a><span class="lane-row-end">${avatarOf("u1")}<button class="icon-btn" type="button" aria-label="外す: ポイント付与のバッチを作る" title="外す">${icon("x")}</button></span></div>
       <div class="lane-row">${pts(null)}<a href="#" data-task="t13">ポイント失効の通知メールを作る</a><span class="lane-row-end">${avatarOf(null)}<button class="icon-btn" type="button" aria-label="外す: ポイント失効の通知メールを作る" title="外す">${icon("x")}</button></span></div>
       <div class="lane-row is-done">${pts(2)}<a href="#" data-task="t7">タイムアウトの閾値を見直す</a><span class="lane-row-end"><span class="hanko" role="img" aria-label="タイムアウトの閾値を見直す: ${t("done")}">${icon("check")}<b>完</b></span>${avatarOf("u4")}<span class="lane-row-slot" aria-hidden="true"></span></span></div>
@@ -723,9 +723,9 @@ const SECTIONS = [
     ["色はテーマの文字の薄い色に従い、絵柄はテーマで替えない。文とボタンより目立たせない（アイコンの色より濃くしない）。", "読み上げから外す（aria-hidden）。何が出る場所かと次にやることは、隣の文が伝える。", "種類は掲示板（一覧が空）、宝箱（報酬や明細が空）、地図（最初の一歩）の3つ。場面ごとに選び、増やすときはここに足す。", "「最初にやること」では、パネルの見出しの左に小さい形（SQ.art(map, true)、.art.is-lead）で置く。見本は下の「最初にやること」。"],
     "SQ.art(name, lead) .art .art.is-lead / SQ.emptyState(…, art)")],
   ["first", "最初にやること", () => block("first", "最初にやること", "初めて使う人の今日やることの先頭に、ロールごとの手順を出す。済んだかは今のデータから決まる。必須の手順がすべて済むと出なくなる。",
-    `<div class="two">${SQ.firstSteps("member", { preview: true })}${SQ.firstSteps("admin", { preview: true })}</div>`,
+    `<div class="two">${SQ.firstSteps("member", { preview: true, motionPreview: true })}${SQ.firstSteps("admin", { preview: true })}</div>`,
     ["ロールは一般、リーダー、ワークスペースがまだない管理者の3つ。", "主ボタンは、まだ済んでいない最初の必須の手順にだけ付ける。", "取り込み元やスプリントのように使わないチームもあるものは「任意」にし、済んでいなくても手順の一覧を消す妨げにしない。"],
-    "SQ.firstSteps(role) / .panel .steps .step .is-done .chip")],
+    "SQ.firstSteps(role) / 本番は未完了→済みだけ演出 / motionPreview を指定した枚だけ判子の見本 / .panel .steps .step .is-done .is-new .chip")],
   ["status", "状態と事実の並び", () => block("status", "状態と事実の並び", "接続などの状態は、色と文字の両方で示す。事実は見出しと値の組で並べる。",
     `<div class="cat-row"><span class="state-badge is-ok">有効</span><span class="state-badge is-error">エラー</span><span class="state-badge is-stopped">停止</span><span class="state-badge is-muted">下書き</span></div>
      <dl class="facts"><div><dt>取り込み元</dt><dd>Backlog・<span class="mono">acme.backlog.jp</span></dd></div><div><dt>最後に成功</dt><dd class="mono">10/20 10:00</dd></div><div><dt>認証情報</dt><dd class="mono">••••q9Zt</dd></div><div><dt>取り込む範囲</dt><dd><span class="tag">SHOP（ECサイト）</span></dd></div></dl>`,

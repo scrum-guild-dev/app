@@ -333,9 +333,10 @@
 
 {#snippet main()}
   <!-- 最初にやること。手順が空（必須が済んだ、出す手順が無い）か読めなかったときは置かない -->
-  {#if data.firstSteps !== null && data.firstSteps.role !== null && data.firstSteps.steps.length > 0 && (data.firstSteps.role !== 'admin' || data.organization?.me.is_admin)}
+  {#if data.organization !== null && data.firstSteps !== null && data.firstSteps.role !== null && data.firstSteps.steps.length > 0 && (data.firstSteps.role !== 'admin' || data.organization.me.is_admin)}
     <FirstSteps
       slug={data.slug}
+      memberId={data.organization.me.id}
       role={data.firstSteps.role}
       steps={data.firstSteps.steps}
       organizationName={data.organization ? organizationLabel(data.organization.organization) : ''}

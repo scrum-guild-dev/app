@@ -569,6 +569,8 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto('/aoba');
     await menuButton(page).click();
+    // 入場中の小数座標でなく、最終位置で44pxの押せる高さを測る。
+    await expect(page.locator('.org-menu-list')).toHaveCSS('translate', /^0px(?: 0px)?$/);
     for (const link of await menuLinks(page).all()) {
       const box = await link.boundingBox();
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
