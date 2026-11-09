@@ -85,6 +85,7 @@ for (const scope of ['organization', 'workspace'] as const) {
     await expect(page).toHaveURL(outer);
     expect(calls).toBe(1);
     await expect(page.locator('.toast:visible')).toContainText(`「${targetTitle}」を消しました。`);
+    await page.locator('.wiki-page-list > summary').click();
     const outerNode = page
       .locator('.wiki-node')
       .filter({ has: page.getByRole('link', { name: outerTitle, exact: true }) })
@@ -107,6 +108,7 @@ for (const scope of ['organization', 'workspace'] as const) {
       );
     } else {
       await expect(page.getByRole('heading', { name: outerTitle, level: 2, exact: true })).toBeVisible();
+      await page.locator('.wiki-page-list > summary').click();
       await page.getByRole('button', { name: `${outerTitle}を開く`, exact: true }).click();
       await expect(outerNode.locator(':scope > ul > li > .wiki-node > a')).toHaveText([siblingTitle, childTitle]);
     }
@@ -262,7 +264,8 @@ test('終了したワークスペースでは自分のページも消すボタ�
     closed_at: '2026-11-03T00:00:00.000Z',
   }));
   await page.goto(url);
-  await expect(page.getByText('終了したワークスペースの Wiki は読むだけです。', { exact: true })).toBeVisible();
+  await expect(page.getByText(/に終了しました。読み取り専用です。/)).toHaveCount(1);
+  await expect(page.getByText('終了したワークスペースの Wiki は読むだけです。', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '消す', exact: true })).toHaveCount(0);
 });
 
