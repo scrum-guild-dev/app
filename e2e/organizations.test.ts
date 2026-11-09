@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import type { OutputOf } from '../src/shared/operations/define.ts';
 import { myOrganizations, type organizationInfo } from '../src/shared/operations/organization/index.ts';
-import { findA11yViolations, signIn, watchViolations } from './helpers.ts';
+import { findA11yViolations, shownBox, signIn, watchViolations } from './helpers.ts';
 import { rewriteOperation } from './operations.ts';
 
 // 組織の操作の応答を書き換える。サーバーの応答をそのまま取り、必要な項目だけ上書きして返す
@@ -297,7 +297,27 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await expect(page.getByRole('heading', { level: 1, name: '読み込んでいます' })).toBeVisible();
     await expect(page).toHaveTitle('読み込んでいます - Scrum Guild');
     await expect(page.locator('[role="status"].visually-hidden').first()).toHaveText('読み込んでいます');
+    // 行き先が組織の枠なので、骨組みは紙ではなく枠の形で、左のメニューの幅と上の帯の高さは読み込んだ後と同じ。
+    // 本文は今日やることの組み（本文だけの1列）で、本文の位置も読み込んだ後と同じ
+    await expect(page.locator('.skeleton-frame')).toHaveAttribute('data-shape', 'today');
+    await expect(page.locator('.gate')).toHaveCount(0);
+    const loadingBinding = await shownBox(page.locator('.binding'));
+    const loadingTopbar = await shownBox(page.locator('.topbar'));
+    const loadingHead = await shownBox(page.locator('.page-head'));
+    const loadingMain = await shownBox(page.locator('.layout-main'));
     await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+    await expect(page.locator('.skeleton-frame')).toHaveCount(0);
+    const loadedBinding = await shownBox(page.locator('.binding'));
+    const loadedTopbar = await shownBox(page.locator('.topbar'));
+    const loadedHead = await shownBox(page.locator('.page-head'));
+    const loadedMain = await shownBox(page.locator('.layout-main'));
+    expect(loadingBinding.width).toBe(loadedBinding.width);
+    expect(loadingTopbar.x).toBe(loadedTopbar.x);
+    expect(loadingTopbar.height).toBe(loadedTopbar.height);
+    expect(loadingHead.x).toBe(loadedHead.x);
+    expect(loadingHead.y).toBe(loadedHead.y);
+    expect(loadingMain.x).toBe(loadedMain.x);
+    expect(loadingMain.width).toBe(loadedMain.width);
   });
 
   test('読み込み中の表示は、移り始めてから 300ms たつまで出さない', async ({ page }) => {

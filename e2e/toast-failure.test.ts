@@ -5,7 +5,7 @@ import { today } from '../src/shared/operations/organization/index.ts';
 import type { TodayTask } from '../src/shared/operations/organization/today.ts';
 import { backlogTree, taskTodayMark } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
-import { signIn } from './helpers.ts';
+import { shownBox, signIn } from './helpers.ts';
 import { routeOperation } from './operations.ts';
 
 const WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
@@ -91,11 +91,30 @@ test('URL を直接開いて木の読み込みが遅いとき、300ms 後に読�
   const boot = page.locator('#boot-loading');
   await expect(boot).toBeVisible();
   await expect(boot.locator('.boot-wait')).toHaveText('読み込んでいます');
-  await expect(boot.locator('.boot-skeleton')).toBeVisible();
+  // 行き先が組織の枠なので、紙ではなく枠の形の骨組みを出す。左のメニューの幅と上の帯の高さは描いた後と同じ。
+  // 本文はバックログの組み（絞り込みの行と木の行）
+  await expect(boot.locator('.boot-frame')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-boot', 'tree');
+  await expect(boot.locator('.boot-body .boot-row .is-select')).toHaveCount(4);
+  await expect(boot.locator('.boot-skeleton')).toBeHidden();
+  const bootBinding = await shownBox(boot.locator('.boot-binding'));
+  const bootTopbar = await shownBox(boot.locator('.boot-topbar'));
+  const bootHead = await shownBox(boot.locator('.boot-head'));
 
   release();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(boot).toHaveCount(0);
+  // 描いた後は、骨組みの形の印を html に残さない
+  await expect(page.locator('html')).not.toHaveAttribute('data-boot');
+  const binding = await shownBox(page.locator('.binding'));
+  const topbar = await shownBox(page.locator('.topbar'));
+  const head = await shownBox(page.locator('.page-head'));
+  expect(bootBinding.width).toBe(binding.width);
+  expect(bootTopbar.x).toBe(topbar.x);
+  expect(bootTopbar.height).toBe(topbar.height);
+  // 画面の見出しの始まりも同じ位置（本文の余白が本物と同じ）
+  expect(bootHead.x).toBe(head.x);
+  expect(bootHead.y).toBe(head.y);
 });
 
 test('15 秒たっても描けないときは、読み込み中の文を失敗の文と再読み込みのリンクに替える', async ({
@@ -117,6 +136,6 @@ test('15 秒たっても描けないときは、読み込み中の文を失敗�
   await expect(boot.getByText('読み込めませんでした')).toBeHidden();
   await expect(boot.getByText('読み込めませんでした')).toBeVisible({ timeout: 20_000 });
   await expect(boot.getByText('読み込んでいます')).toBeHidden();
-  await expect(boot.locator('.boot-skeleton')).toBeHidden();
+  await expect(boot.locator('.boot-frame')).toBeHidden();
   await expect(boot.getByRole('link', { name: 'もう一度試す' })).toBeVisible();
 });
