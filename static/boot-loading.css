@@ -3,7 +3,7 @@
    デザインシステムの CSS もこの時点では届いていないため、ここに限り自分のオリジンの小さなファイルで、同じ地と文字の色を持つ。
    値は design/tokens.css のシンプルの --color-bg と --color-fg、--color-muted、--color-surface、--color-sunken、--color-line（OS がダークのときはダーク）と同じにする。
    速い読み込みでは出さないよう、300ms たってから見せる（LoadingSheet の SLOW_MS と同じ）。動きではないので、動きを減らす設定でも同じ。
-   画面が描かれたら +layout.svelte が取り除く。 */
+   画面が描かれたら +layout.svelte が120msで抜いてから取り除く（動きを減らす設定では即座に取り除く）。 */
 #boot-loading {
   position: fixed;
   inset: 0;
@@ -21,6 +21,13 @@
   font-size: 1rem;
   visibility: hidden;
   animation: boot-loading-show 0s linear 300ms forwards;
+}
+/* design/tokens.css の --duration-fast と --ease-out の写し。
+   デザインシステムの CSS が届く前にも使うので、ここでは値を持つ。 */
+#boot-loading.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @keyframes boot-loading-show {
   to {
@@ -458,6 +465,9 @@ html[data-boot] #boot-loading .boot-frame {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  #boot-loading.is-leaving {
+    transition: none;
+  }
   /* visibility の時間切り替えは動きではない。共通 CSS の animation: none に消されないよう残す。 */
   #boot-loading {
     animation: boot-loading-show 0s linear 300ms forwards !important;
@@ -490,11 +500,6 @@ html[data-boot] #boot-loading .boot-frame {
   from {
     opacity: 0;
     transform: translateY(8px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  #boot-loading .boot-failed {
-    animation: boot-failed-show 0s linear 15s forwards;
   }
 }
 @media (forced-colors: active) {
@@ -663,18 +668,5 @@ html[data-theme='modern'] #boot-loading .boot-skeleton i {
   html[data-theme='medieval'] #boot-loading .boot-binding {
     border-right-width: 0;
     border-bottom-width: 3px;
-  }
-}
-
-/* design/tokens.css の --duration-fast と --ease-out の写し。
-   デザインシステムの CSS が届く前にも使うので、ここでは値を持つ。 */
-#boot-loading.is-leaving {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-@media (prefers-reduced-motion: reduce) {
-  #boot-loading.is-leaving {
-    transition: none;
   }
 }
