@@ -132,10 +132,13 @@ test('15 秒たっても描けないときは、読み込み中の文を失敗�
   await page.goto(WORKSPACE, { waitUntil: 'commit' });
 
   const boot = page.locator('#boot-loading');
-  await expect(boot.getByText('読み込んでいます')).toBeVisible();
+  // 待つ文は読み上げ用に1pxへ隠す。見える骨組みと、15秒で替わるvisibilityを別に確かめる。
+  await expect(boot.locator('.boot-frame')).toBeVisible();
+  await expect(boot.locator('.boot-wait')).toHaveText('読み込んでいます');
+  await expect(boot.locator('.boot-wait')).toHaveCSS('visibility', 'visible');
   await expect(boot.getByText('読み込めませんでした')).toBeHidden();
   await expect(boot.getByText('読み込めませんでした')).toBeVisible({ timeout: 20_000 });
-  await expect(boot.getByText('読み込んでいます')).toBeHidden();
+  await expect(boot.locator('.boot-wait')).toHaveCSS('visibility', 'hidden');
   await expect(boot.locator('.boot-frame')).toBeHidden();
   await expect(boot.getByRole('link', { name: 'もう一度試す' })).toBeVisible();
 });
