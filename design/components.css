@@ -488,8 +488,9 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 }
 .pill:hover:not([aria-disabled="true"]) { border-color: var(--color-muted); }
 .pill[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
-/* 押した状態は .btn.is-on と同じ（accent-soft の地に accent の枠と文字）。主ボタンの塗りつぶしと紛らわしいので塗りつぶさない。色に加えて太字でも示す */
+/* 押した状態は .btn.is-on と同じ（accent-soft の地に accent の枠と文字）。主ボタンの塗りつぶしと紛らわしいので塗りつぶさない。色に加えて、文字は太字、アイコンは太い線でも示す */
 .pill[aria-pressed="true"], .pill[aria-pressed="true"]:hover { background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent); font-weight: 700; }
+.pill[aria-pressed="true"] .ico { stroke-width: 2.6; }
 .pill-count {
   position: absolute; top: -7px; right: -7px; min-width: 17px; height: 17px; padding: 0 4px;
   background: var(--color-stamp); color: var(--color-on-accent); border-radius: var(--radius-full);
@@ -1239,9 +1240,8 @@ label.pick-row:hover { background: var(--color-accent-soft); }
   .drawer-top > .drawer-close { order: 1; margin-left: auto; }
   .drawer-top > .drawer-tools { order: 2; flex-basis: 100%; margin-left: 0; justify-content: flex-start; }
 }
-/* 開き方は押した時点で実行するボタンの組（.pill）。選んでいる形は aria-pressed で示し、色に加えて太字にする */
+/* 開き方は押した時点で実行するアイコンのボタンの組（.pill）。選んでいる形は aria-pressed で示し、色に加えてアイコンの線を太くする */
 .drawer-mode { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); }
-.drawer-mode .pill { white-space: nowrap; }
 /* 前後のタスクへ移るボタンの組（.pill の矢印）。開き方の左に並べる。端の向きは aria-disabled（.pill の見た目）で止める */
 .drawer-steps { display: inline-flex; gap: var(--space-2); }
 .drawer-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-xl); line-height: var(--leading-tight); overflow-wrap: anywhere; }

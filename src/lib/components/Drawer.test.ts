@@ -83,6 +83,12 @@ describe('開き方の切り替え', () => {
     }
   });
 
+  test('今描いている形のボタンだけに aria-pressed="true" を付ける', () => {
+    const body = html({ mode: 'center' });
+    expect(body.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(body).toMatch(/aria-label="真ん中" title="真ん中" aria-pressed="true"/);
+  });
+
   test('形を渡せば、その形だけを出す（ストーリーの引き出しは横と真ん中だけ）', () => {
     const body = html({ modes: ['side', 'center'] });
     expect(body).toContain('aria-label="横"');
