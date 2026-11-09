@@ -4,9 +4,14 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { isBenchHealth, trackServer } from './loading-server.ts';
 test('別の開発サーバーの health を受け付けない', () => {
-  const health = { status: 'ok', database: 'ok', version: 'dev' };
+  const health = { status: 'ok', database: 'ok', credentialKeys: 'ok', version: 'dev' };
   assert.equal(isBenchHealth(health, 'unique-bench'), false);
   assert.equal(isBenchHealth({ ...health, version: 'unique-bench' }, 'unique-bench'), true);
+  assert.equal(isBenchHealth({ status: 'ok', database: 'ok', version: 'unique-bench' }, 'unique-bench'), false);
+  assert.equal(
+    isBenchHealth({ ...health, credentialKeys: 'unavailable', version: 'unique-bench' }, 'unique-bench'),
+    false,
+  );
   assert.equal(isBenchHealth({ version: 'unique-bench' }, 'unique-bench'), false);
 });
 test('シグナル終了済みでも後片付けが完了する', { timeout: 3000 }, async () => {
