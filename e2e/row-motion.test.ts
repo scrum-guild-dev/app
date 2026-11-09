@@ -17,6 +17,7 @@ import {
   applyTheme,
   createWorkspace,
   signIn,
+  waitForResponses,
   waitForSettled,
 } from './helpers.ts';
 import { failOperation, routeOperation } from './operations.ts';
@@ -171,6 +172,58 @@ test('追加したタスク・ストーリー・エピックだけが一度光�
   await waitForSettled(page);
   expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
 });
+
+for (const kind of ['タスク', 'ストーリー'] as const) {
+  test(`絞り込み中の${kind}追加は、読み直して表示された行だけが一度光る`, async ({ page, context, baseURL }) => {
+    await signIn(context, baseURL, 'admin');
+    await watchMotion(page);
+    await createWorkspace(page, `絞り込みと${kind}の光`);
+    await addTaskRow(page, '一致する既存タスク');
+    const search = page
+      .getByRole('search', { name: 'バックログの絞り込み' })
+      .getByRole('searchbox', { name: 'タイトルで探す' });
+    const filtered = waitForResponses(page, '/backlog-tree');
+    await search.fill('一致');
+    await filtered;
+    await expect(page).toHaveURL(/\?q=/);
+    await applyTheme(page, 'simple_light');
+    await clearMotion(page);
+
+    const input = page.locator('.tree > .draft-row').getByRole('textbox', { name: `${kind}を足す`, exact: true });
+    const matching = `一致する新しい${kind}`;
+    await input.fill(matching);
+    await input.press('Enter');
+    await expect(page.getByRole('link', { name: matching, exact: true })).toBeVisible();
+    await expect
+      .poll(async () =>
+        (await motions(page)).filter((entry) => entry.name === 'drop-flash').map((entry) => entry.label),
+      )
+      .toEqual([matching]);
+
+    // 再読み込みで直前の光とトーストを外す。q はURLに残り、フィルターを保つ。
+    await page.reload();
+    await waitForSettled(page);
+    const excluded = `対象外の新しい${kind}`;
+    await input.fill(excluded);
+    await input.press('Enter');
+    await expect(
+      page.getByRole('status').filter({ hasText: '作りました。絞り込みに当たらないので表示していません' }),
+    ).toBeVisible();
+    await expect(input).toHaveValue('');
+    await waitForSettled(page);
+    await frames(page);
+    await expect(page.getByRole('link', { name: excluded, exact: true })).toHaveCount(0);
+    expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+
+    // 作成そのものは成功している。条件を外して後から現れた行にも光を持ち越さない。
+    const unfiltered = waitForResponses(page, '/backlog-tree');
+    await search.fill('');
+    await unfiltered;
+    await expect(page.getByRole('link', { name: excluded, exact: true })).toBeVisible();
+    await frames(page);
+    expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+  });
+}
 
 const taskId = '019a0000-0000-7000-8000-000000009101';
 const workspaceId = '019a0000-0000-7000-8000-000000000401';
