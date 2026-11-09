@@ -536,7 +536,8 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 
 /* box-shadow が消える強制色モードでも、押下中は内側の輪で知らせる。 */
 @media (forced-colors: active) {
-  :is(.btn, .done-btn, .chip-btn, .pill):active:not(:disabled):not([aria-disabled="true"]) {
+  :is(.btn, .done-btn, .chip-btn, .pill):active:not(:disabled):not([aria-disabled="true"]),
+  .pill[aria-pressed="true"]:has(> .ico:only-child):active:not(:disabled):not([aria-disabled="true"]) {
     outline: 2px solid Highlight; outline-offset: -4px;
   }
 }
