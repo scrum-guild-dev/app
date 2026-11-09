@@ -541,6 +541,15 @@ Linear の提供画像7枚を参考に、登録 → プロフィール（個人�
 - 本番の Svelte では、tokens.css と components.css をそのまま読み込み、kit.js の関数を1つずつコンポーネントにする（次の節）。
 - tokens.css と components.css は `src/routes/+layout.svelte` が `design/` から import する。複製しない。見本の Worker（`wrangler.design.jsonc`）の build watch paths が `design/*` なので、この2つを直すと見本も出し直される。
 
+### アイコンの出どころ
+
+- 今ある手書きのアイコンはそのまま使う。同じ意味のアイコンが既にあれば、新しく足さずにそれを使う。
+- 新しく足す業務のアイコンは [Lucide](https://lucide.dev) から SVG の中の要素を写す。npm の依存（`lucide`、`lucide-svelte`）は足さない。見本の `design/icons.js` と本番の `src/lib/icons.ts` の両方に同じ定義を置き、`scripts/design-parity.test.ts`（`node --test scripts/design-parity.test.ts`）で中身の一致を確かめる。
+- 格子は `viewBox="0 0 24 24"`。Lucide の外側の SVG と、線の見た目を指定する属性（`stroke-width`、`stroke-linecap`、`stroke-linejoin` など）は写さず、`design/components.css` の `.ico` に任せる（線の太さは 1.8、端と角は round）。
+- 最初に Lucide から写す PR で、リポジトリの `licenses/lucide.txt` に Lucide の LICENSE の全文（ISC と、Feather 由来のアイコンに適用される MIT の著作権表示・許諾文）を置く。この方針を決めるだけの段階では作らない。以降も、写す版の表示を保つ。
+- 写した項目には、両方の定義の横に出どころのコメントを付ける（Lucide のアイコン名、取得元の URL と版、`licenses/lucide.txt` の参照）。Feather 由来のものは Lucide の LICENSE の一覧で確かめ、コメントにもその由来と MIT が適用されることを残す。
+- ゲームの物の `crystal`、`chest`、`crest`、`heart` は Lucide に置き換えない。ゲームの物を新しく足すときも手書きにし、使う場面は次の節の決まりに従う。
+
 ### ゲームの物のアイコン
 
 ゲームの仕組みの部分を、業務の画面の中でひと目で見分けられるように、4つの語にだけゲームの物のアイコンを付ける。見本はカタログの「アイコン」の「ゲームの物」。
