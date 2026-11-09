@@ -312,6 +312,25 @@ test.each([true, false])(
   },
 );
 
+test('sync前に別組織で例外応答を受けても、元の組織に待機と失敗を持ち越さない', async () => {
+  let reject!: (error: Error) => void;
+  call.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, rejectCall) => {
+        reject = rejectCall;
+      }),
+  );
+  const { favorites, replace } = setup();
+  const pending = favorites.refresh(true);
+  replace({ scope: 'sakura/person', slug: 'sakura', items: [], available: true });
+  reject(new Error('架空の読み取り例外'));
+  await pending;
+  replace({ scope: 'aoba/person', slug: 'aoba', items: [], available: true });
+  expect(favorites.loading).toBe(false);
+  expect(favorites.loadFailed).toBe(false);
+  expect(favorites.retryFailed).toBe(false);
+});
+
 test('手動の最初の応答が届いた直後の背景更新も、待機を解除せず合流する', async () => {
   let finish!: (reply: { ok: true; data: { favorites: []; marks: [] } }) => void;
   call.mockResolvedValueOnce({ ok: true, data: { favorites: [], marks: [] } });

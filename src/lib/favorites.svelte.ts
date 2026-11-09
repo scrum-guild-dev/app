@@ -122,6 +122,15 @@ export class Favorites {
     });
     return manual.promise;
   }
+  private acceptRequest(request: number, scope: string): boolean {
+    if (request !== this.request) return false;
+    if (this.source().scope !== scope) {
+      this.refreshState = null;
+      if (this.manualRequest?.scope === scope) this.manualRequest = null;
+      return false;
+    }
+    return true;
+  }
   private queuedManual(scope: string): boolean {
     return this.manualRequest?.scope === scope && this.manualRequest.queued;
   }
@@ -132,11 +141,7 @@ export class Favorites {
     this.refreshState = { scope: source.scope, loading: true, failed: this.loadFailed, manual: userInitiated };
     try {
       const result = await callOperation(favoriteList, {}, { slug: source.slug });
-      if (request !== this.request) return;
-      if (this.source().scope !== source.scope) {
-        this.refreshState = null;
-        return;
-      }
+      if (!this.acceptRequest(request, source.scope)) return;
       if (result.ok) {
         this.cached = {
           ...source,
@@ -153,7 +158,7 @@ export class Favorites {
         manual: userInitiated,
       };
     } catch {
-      if (request === this.request && this.source().scope === source.scope)
+      if (this.acceptRequest(request, source.scope))
         this.refreshState = {
           scope: source.scope,
           loading: userInitiated && this.queuedManual(source.scope),
