@@ -111,4 +111,9 @@ test('390px で虫眼鏡から開いた欄は、Esc で畳んで虫眼鏡へフ�
   await page.keyboard.press('Control+k');
   await expect(search).toBeFocused();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  // Shift+Tab で欄の外（虫眼鏡）へ戻っても畳む。開いたまま残すと、フォーカスの無い欄が帯に出続ける
+  await page.keyboard.press('Shift+Tab');
+  await expect(toggle).toBeFocused();
+  await expect(search).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 });

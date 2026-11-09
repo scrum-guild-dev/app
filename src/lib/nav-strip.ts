@@ -9,17 +9,19 @@ export type NavStripBox = { left: number; right: number };
 
 // 今のページの項目が欠けずに見えていれば null（送らない）。欠けていれば、項目の左に手前の項目を少し残す scrollLeft を返す。
 // 項目がワークスペースの節にあり、節の先頭（ワークスペースの札）から項目までが帯に収まるなら、札も見える位置まで送る
-// （書体を読み終えて幅が変わり、札だけが隠れたときも送り直す）
+// （書体を読み終えて幅が変わり、札だけが隠れたときも送り直す）。
+// 右端も peek の幅を残す。右に続きがあると端に幕（components.css の .nav[data-more-end]::after）が重なり、項目が薄く消えるため
 export function navStripScrollLeft(
   view: NavStripView,
   item: NavStripBox,
   group: NavStripBox | null,
   peek: number = NAV_STRIP_PEEK,
 ): number | null {
-  const fitsWithGroup = group !== null && group.left <= item.left && item.right - group.left <= view.width - peek;
+  const room = view.width - 2 * peek;
+  const fitsWithGroup = group !== null && group.left <= item.left && item.right - group.left <= room;
   const start = fitsWithGroup ? group.left : item.left;
-  // 札（収まるとき）から項目までが欠けずに見えていれば送らない
-  if (start >= view.left && item.right <= view.left + view.width) return null;
+  // 札（収まるとき）から項目までが、右端の peek にかからずに見えていれば送らない
+  if (start >= view.left && item.right <= view.left + view.width - peek) return null;
   return Math.max(0, view.scrollLeft + start - view.left - peek);
 }
 

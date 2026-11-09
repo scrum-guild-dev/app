@@ -46,6 +46,7 @@
     moreEnd = edges.end;
   }
 
+  // 今の項目が隠れていれば送り、端の印を付け直す
   function scrollToCurrent(): void {
     if (!nav) return;
     const item = nav.querySelector<HTMLElement>('a.nav-item[aria-current="page"]');
@@ -79,10 +80,14 @@
     };
   });
 
+  // 帯の大きさ（幅を跨いで狭めたとき、回転したとき）と、項目の大きさ（ワークスペースの名前、件数の印、テーマの書体）が
+  // 変わったら測り直す。今の項目が見えている間は送らない（手で送るだけでは大きさが変わらないので、送った位置は戻さない）
   $effect(() => {
+    void sections;
     if (!nav) return;
-    const observer = new ResizeObserver(syncEdges);
+    const observer = new ResizeObserver(scrollToCurrent);
     observer.observe(nav);
+    for (const child of nav.children) observer.observe(child);
     return () => observer.disconnect();
   });
 

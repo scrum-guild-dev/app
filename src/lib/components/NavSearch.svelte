@@ -72,7 +72,8 @@
     expanded = false;
     query = '';
     if (restore) {
-      if (opener && opener.isConnected) opener.focus();
+      // 開いた場所が見えないとき（虫眼鏡から開いた後に 761px 以上へ広げ、虫眼鏡が隠れた）は、フォーカスを移せないので欄から外す
+      if (opener && opener.isConnected && opener.getClientRects().length > 0) opener.focus();
       else input?.blur();
     }
     opener = null;
@@ -125,7 +126,8 @@
     },
   }));
 
-  // 欄の外へフォーカスが移ったら候補を閉じ、畳む。虫眼鏡のボタンへ移ったときは畳まない（続くボタンの click が畳む）
+  // 欄の外へフォーカスが移ったら候補を閉じ、畳む。Shift+Tab で虫眼鏡へ戻ったときも畳む（マウスで虫眼鏡を押したときは、
+  // ボタンの mousedown がフォーカスを動かさないので、ここは通らず click が畳む）
   function onFocusout(event: FocusEvent): void {
     const next = event.relatedTarget;
     if (!root || (next instanceof Node && root.contains(next))) return;
@@ -133,7 +135,7 @@
       open = false;
       query = '';
     }
-    if (next !== toggle) expanded = false;
+    expanded = false;
   }
 </script>
 
@@ -143,6 +145,7 @@
   aria-label={t('navSearchLabel')}
   aria-expanded={expanded}
   aria-controls={boxId}
+  aria-keyshortcuts={ariaKeyshortcuts(SEARCH_KEYS)}
   bind:this={toggle}
   onmousedown={(event) => {
     // 開いた欄からフォーカスを動かさない。Safari は押したボタンにフォーカスを移さず、欄の focusout で先に畳んでから

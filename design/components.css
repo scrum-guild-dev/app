@@ -374,6 +374,8 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .nav-search-toggle:hover, .nav-search-toggle[aria-expanded="true"] { border-color: var(--color-line); background: var(--color-surface); color: var(--color-fg); }
 /* 見本だけの道具の入れ物。広い幅では入れ物を消し、帯の項目として並べる */
 .topbar-tools { display: contents; }
+/* 見本のワークスペースの切り替えの入れ物（kit.js が描き直すため）。本番には無いので、箱を消して .ws-menu を .nav の直接の子と同じに並べる */
+#ws-menu-slot { display: contents; }
 @media (max-width: 760px) {
   .nav-search-toggle { display: inline-grid; }
   .nav-search:not([data-open]) { display: none; }
@@ -892,8 +894,11 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .nav[data-more-start]::before, .nav[data-more-end]::after {
     content: ""; position: sticky; z-index: 1; flex: none; align-self: stretch; width: 2rem; pointer-events: none;
   }
-  .nav[data-more-start]::before { left: 0; margin-right: -2rem; background: linear-gradient(to right, var(--color-sunken), transparent); }
-  .nav[data-more-end]::after { right: 0; margin-left: -2rem; background: linear-gradient(to left, var(--color-sunken), transparent); }
+  /* 幕も flex の項目なので、幅に加えて隣との gap も打ち消す（打ち消さないと、印が付いた瞬間に項目が gap の分ずれる） */
+  .nav[data-more-start]::before { left: 0; margin-right: calc(-2rem - var(--space-1)); background: linear-gradient(to right, var(--color-sunken), transparent); }
+  .nav[data-more-end]::after { right: 0; margin-left: calc(-2rem - var(--space-1)); background: linear-gradient(to left, var(--color-sunken), transparent); }
+  /* Tab で端の項目へ移ったとき、フォーカスの輪が幕の下に入らないよう、幕の幅だけ内側で止める */
+  .nav { scroll-padding-inline: 2rem; }
   /* 強制カラーでは薄くせず、端で欠けた項目だけを合図にする */
   @media (forced-colors: active) { .nav[data-more-start]::before, .nav[data-more-end]::after { content: none; } }
   .topbar, .content {
@@ -904,6 +909,9 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .breadcrumb { min-width: 6rem; }
   /* アカウントのボタンはアバターと▾だけにし、パンくずに幅を残す。表示名は読み上げの名前と一覧の「マイプロフィール」で分かる */
   .account-menu-button .me-detail { display: none; }
+  /* 所属していない管理者の印（帯の直接の子の .chip）は、パンくずの行に並べると幅が足りずアカウントのボタンを2行目へ押し出すので、
+     帯の最後の行へ回す */
+  .topbar > .chip { order: 4; }
   /* 見本だけの道具（テーマ、見本の切り替えなど）は、パンくずの行に並べず、帯の最後の行にまとめる */
   .topbar-tools { display: flex; flex-wrap: wrap; gap: var(--space-2); order: 4; flex-basis: 100%; }
   /* アカウントのメニューの一覧は、ボタンではなく帯を基準に、左右の余白の内側へ広げる（ボタンが左に寄っても画面の外へ出ない） */
