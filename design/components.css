@@ -1568,7 +1568,11 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 /* 一覧が広いまま指で押す画面（タブレットの横置きなど）では、行の右端が題の下へ折り返さないまま 44px のボタンが並ぶ。
    題の列に 12rem を先に取り、右端は残りの幅に収まらなければ中で折り返す（右端の列は max-content まで、題の列を押しのけない） */
 @media (pointer: coarse) and (min-width: 761px) {
-  @container (min-width: 641px) {
+  @container book (min-width: 521px) {
+    .entry { grid-template-columns: var(--grip-col, ) 32px minmax(12rem, 1fr) minmax(0, max-content); }
+    .entry-end { flex-wrap: wrap; justify-content: flex-end; }
+  }
+  @container tree (min-width: 641px) {
     .entry { grid-template-columns: var(--grip-col, ) 32px minmax(12rem, 1fr) minmax(0, max-content); }
     .entry-end { flex-wrap: wrap; justify-content: flex-end; }
   }

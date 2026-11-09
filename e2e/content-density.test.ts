@@ -77,3 +77,36 @@ for (const path of ['/aoba', '/aoba/me', '/aoba/wiki']) {
     }
   });
 }
+
+test.describe('指で押す画面の台帳', () => {
+  test.use({ hasTouch: true, viewport: { width: 1280, height: 900 } });
+
+  test('521〜640pxでも題の12remを保ち、右端を残りの幅で折り返す', async ({ page }) => {
+    await page.goto('/aoba');
+    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+    const list = page.locator('.book').first();
+    const row = list.locator('.entry').first();
+    await expect(row).toBeVisible();
+    // 文字を大きくした端末でも、44pxの操作が題を押しのけない。
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '150%';
+    });
+    for (const theme of A11Y_THEMES) {
+      await applyTheme(page, theme);
+      const minimum = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize) * 12);
+      for (const width of [521, 594, 640]) {
+        await list.evaluate((el, width) => {
+          el.style.boxSizing = 'content-box';
+          el.style.width = `${width}px`;
+        }, width);
+        const main = await row.locator('.entry-main').boundingBox();
+        const end = await row.locator('.entry-end').boundingBox();
+        expect(main).not.toBeNull();
+        expect(end).not.toBeNull();
+        expect(main!.width, `${theme}/${width}: 題の幅`).toBeGreaterThanOrEqual(minimum);
+        expect(end!.x).toBeGreaterThanOrEqual(main!.x + main!.width);
+        await expect(row.locator('.entry-end')).toHaveCSS('flex-wrap', 'wrap');
+      }
+    }
+  });
+});
