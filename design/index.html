@@ -664,6 +664,9 @@ const SECTIONS = [
           <div class="form-actions" role="group" aria-label="関連するページ"><a class="btn is-sm" href="#">プライバシーポリシー</a><button class="btn is-sm is-quiet" type="button">前の画面に戻る</button></div>
         </section>
       </div>
+      <p>画面移動では次のラッパーで読み込みの紙を包む（下の見本は中身だけ）。</p>
+      <pre><code>&lt;div class="loading-overlay"&gt;LoadingSheet の中身&lt;/div&gt;</code></pre>
+      <p>.loading-overlay は表示中から全画面に固定し、ページと同じ背景と自身のスクロール位置を保つ。到着時に .is-leaving を付け、Svelte の退場で120msだけ DOM を保持する。動きを減らす設定では即座に取り除く。</p>
       <section class="gate-sheet" style="margin-top:var(--space-6); width:min(440px,100%)">
         <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
         <h1 class="visually-hidden">読み込んでいます</h1>
@@ -677,7 +680,7 @@ const SECTIONS = [
       </div>
     </div>`,
     ["読み込み中の骨組みは、中身が出たらその上に重ね、opacity だけで120ms（--duration-fast）抜ける。動きを減らす設定と300ms以内の読み込みでは切り替えだけにする。読み込み中の紙（LoadingSheet。.skeleton .skeleton-line）は、文字の代わりに .skeleton の灰色の帯を置く。帯は aria-hidden で、読み上げは root の role=status の領域が「読み込んでいます」と伝える。この紙の形は行き先が枠の外の画面のときだけで、行き先が組織の枠なら、枠と同じ部品（.app.skeleton-frame、.binding、.topbar、.content、.page-head）の中に帯を置き、左のメニューの幅と上の帯の高さを読み込んだ後と同じにする。本文は行き先の画面の組み（2列の .layout-aside、.board の列、.lanes、.settings の節、.layout-wiki、行の一覧、タスクの欄）に近い形にする（src/lib/loading-shape.ts）。見本は今日やることの形（data-shape が aside。.layout-aside）で、ほかの形は LoadingSheet.svelte が同じ部品（.skeleton-row、.skeleton-line の is-item、is-card、is-panel、is-chart、is-lane、is-input、is-select、is-button、is-label、is-value）で組む。畳んだ左のメニュー（.app の data-nav-collapsed）では、帯を32pxの四角にする。", "紙の幅は 440px までで、狭い画面では画面の幅に収める。", "読み込み中の紙（同意の確認）は、読み込んだ後の中身を .gate-pending-body（aria-hidden と inert）に見えないまま置いて高さを取り、読み込みの文を .gate-pending で上端に重ねる。縦中央の紙が読み込み後に伸びて動かないようにする。", "表を載せる画面（運用）は、外側の .gate に is-wide を付けて、紙の幅を 1200px までに広げる（本番では Gate の wide）。", "長い文を読む画面（利用規約とプライバシーポリシー）は、外側の .gate に is-reading を付けて、紙の幅を 720px までに広げる（本番では Gate の reading）。紙の直下に Markdown の本文（.doc-box）を置くと、紙が枠なので .doc-box の枠と余白を外し、条の見出し（.doc-h1。画面の見出しの次の段）の前を広く空ける。法文の本体は辞書に入れず、Markdown のファイル（src/lib/legal/）に置く。", "枠の外の画面では、テーマを既定（シンプル（自動））に戻す。どの組織の値も持ち越さない。", "本番の Gate は、外側を main にする。"],
-    ".gate .gate-stack .gate-sheet .gate-brand .gate-title .gate-note .gate-divider / .gate.is-wide / .gate.is-reading / .gate-sheet > .doc-box / .gate-pending .gate-pending-body / .skeleton .skeleton-line / .app.skeleton-frame[data-shape] .skeleton-nav .skeleton-body .skeleton-row")],
+    ".gate .gate-stack .gate-sheet .gate-brand .gate-title .gate-note .gate-divider / .gate.is-wide / .gate.is-reading / .gate-sheet > .doc-box / .gate-pending .gate-pending-body / .loading-overlay .loading-overlay.is-leaving / .skeleton .skeleton-line / .app.skeleton-frame[data-shape] .skeleton-nav .skeleton-body .skeleton-row")],
   ["settings", "設定の節と並べ替え", () => block("settings", "設定の節と並べ替え", "設定の画面は、左に説明、右に入力を置く節を縦に並べる。並べ替えられる一覧は、ドラッグの他に上下のボタンを持つ。",
     `<div class="settings"><section class="setting"><div class="setting-head"><h3 class="setting-title">${t("column")}</h3><p class="setting-desc">名前は付けたままで、訳しません。</p></div><div class="setting-body">
       <ol class="order-list">${D.columns.filter((c) => !c.done).map((c, i, a) => `<li><span class="grip" aria-hidden="true">${icon("grip")}</span><input class="input" value="${c.name}" aria-label="名前"><span class="order-actions"><button class="icon-btn" type="button" aria-label="上へ" ${i === 0 ? "disabled" : ""}>${icon("up")}</button><button class="icon-btn" type="button" aria-label="下へ" ${i === a.length - 1 ? "disabled" : ""}>${icon("down")}</button><button class="icon-btn is-danger" type="button" aria-label="削除">${icon("trash")}</button></span></li>`).join("")}
