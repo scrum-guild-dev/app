@@ -105,7 +105,7 @@ h1, h2, h3 { text-wrap: balance; }
 .nav-badge { margin-left: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
 /* 組織とワークスペースの切り替え。共通のボタンとリンクの一覧。
    選ぶと画面が移るので select にしない（矢印キーで選んだだけで移ってしまう）。
-   組織は狭い幅でも出す。ワークスペースは畳んだ列で隠し、760px 以下はメニューの帯の中の札にする（下の狭い画面の規則）。 */
+   組織は狭い幅でも出す。ワークスペースは畳んだ列で隠し、760px 以下は浮きメニューの中に出す（下の狭い画面の規則）。 */
 :is(.org-menu, .ws-menu) { display: grid; gap: var(--space-1); min-width: 0; }
 :is(.org-menu-button, .ws-menu-button) {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--space-2);
@@ -152,7 +152,7 @@ h1, h2, h3 { text-wrap: balance; }
 .org-menu-note { flex-basis: 100%; font-size: var(--text-xs); color: var(--color-muted); }
 /* 組織ではない行（組織の一覧へ戻るリンクと、押すとダイアログを開く「組織を作る」）は、組織の行より控えめにする */
 :is(.org-menu-list, .ws-menu-list) .is-aside a, :is(.org-menu-list, .ws-menu-list) .is-aside button { color: var(--color-muted); }
-/* 狭い幅と、指で押す画面では、押す所を 44px 以上にする。左のメニューのロゴと項目（狭い幅では上の帯に並ぶ）も同じ */
+/* 狭い幅と、指で押す画面では、押す所を 44px 以上にする。左のメニューのロゴと項目（狭い幅では項目を浮きメニューに出す）も同じ */
 @media (max-width: 760px), (pointer: coarse) {
   :is(.org-menu-list, .ws-menu-list) a, :is(.org-menu-list, .ws-menu-list) button, .account-menu-list a, .account-menu-list button, .account-menu-button { min-height: 44px; }
   .nav-toggle { width: 44px; height: 44px; }
@@ -197,7 +197,7 @@ h1, h2, h3 { text-wrap: balance; }
 @media (hover: none) {
   .nav-toggle { display: none; }
 }
-/* 761px 以上でホバーのできる端末だけ、左のメニューを 64px のアイコン列へ畳む。狭い画面では上の帯の形を保つ */
+/* 761px 以上でホバーのできる端末だけ、左のメニューを 64px のアイコン列へ畳む。狭い画面では下のタブバーと浮きメニューを使う */
 @media (min-width: 761px) and (hover: hover) {
   .app[data-nav-collapsed="true"] .org-menu-button:focus-visible .nav-tip { display: grid; }
   /* 項目の名前の札。開閉のボタンの札（.nav-tip）と同じ見た目 */
@@ -901,58 +901,74 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .layout-aside { grid-template-columns: minmax(0, 1fr); }
   .layout-side { position: static; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
 }
+/* 部品の見た目は全幅で定義し、表示は下のメディアクエリで切り替える。
+   カタログは広い幅でもスマホ用部品の静止見本を並べるため。 */
+  .mobile-navigation {
+    position: fixed; z-index: 15;
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    left: max(var(--space-4), env(safe-area-inset-left, 0px));
+    right: max(var(--space-4), env(safe-area-inset-right, 0px));
+    display: flex; justify-content: center; align-items: center; gap: var(--space-3);
+    pointer-events: none;
+  }
+  .mobile-tabs {
+    display: flex; align-items: center; gap: var(--space-1); padding: var(--space-2);
+    border: 1px solid var(--color-line); border-radius: var(--radius-full);
+    background: var(--color-surface); box-shadow: var(--shadow-float); pointer-events: auto;
+  }
+  .mobile-tab {
+    position: relative;
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: var(--mobile-tab-size); height: var(--mobile-tab-size); padding: 0; border: 1px solid transparent; border-radius: var(--radius-full);
+    color: var(--color-muted); background: transparent; text-decoration: none;
+  }
+  @media (hover: hover) { .mobile-tab:hover { background: var(--color-rule); } }
+  .mobile-tab[aria-current="page"], .mobile-tab[aria-expanded="true"] {
+    color: var(--color-fg); background: var(--color-sunken); border-color: var(--color-line);
+  }
+  /* 背景の差だけに頼らず、操作の色の点で現在地を示す。 */
+  .mobile-tab[aria-current="page"]::after {
+    content: ""; position: absolute; bottom: var(--space-1);
+    width: var(--space-1); height: var(--space-1); border-radius: var(--radius-full);
+    background: var(--color-accent);
+  }
+  .mobile-tab .ico { width: var(--text-xl); height: var(--text-xl); }
+  .mobile-menu-arrows { display: grid; grid-template-rows: repeat(2, var(--space-3)); }
+  .mobile-menu-arrows .ico { width: var(--text-lg); height: var(--text-lg); }
+  .mobile-menu-arrows .ico:first-child { transform: rotate(-90deg); }
+  .mobile-menu-arrows .ico:last-child { transform: rotate(90deg); }
+  .mobile-create-slot { flex: 0 0 var(--mobile-tab-size); height: var(--mobile-tab-size); }
+  .mobile-menu {
+    position: fixed; inset: auto 0 calc(var(--mobile-navigation-clearance) + env(safe-area-inset-bottom, 0px));
+    margin-inline: auto; padding: 0; width: min(28rem, calc(100% - 2 * var(--space-4)));
+    max-height: calc(100dvh - var(--mobile-navigation-clearance) - var(--space-6) - env(safe-area-inset-bottom, 0px));
+    overflow: auto; overscroll-behavior: contain; color: var(--color-fg);
+    background: var(--color-surface); border: 1px solid var(--color-line);
+    border-radius: var(--radius-2); box-shadow: var(--shadow-float);
+  }
+  .mobile-menu::backdrop { background: var(--color-scrim); }
+  html:has(dialog.mobile-menu:modal) { overflow: hidden; }
+  .mobile-menu-sheet { padding: var(--space-4); display: grid; gap: var(--space-3); }
+  .mobile-menu-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+  .mobile-menu-head h2 { margin: 0; font-size: var(--text-lg); }
+  @media (forced-colors: active) {
+    .mobile-tab[aria-current="page"]::after { background: CanvasText; forced-color-adjust: none; }
+  }
+  .mobile-menu .icon-btn { min-width: 44px; min-height: 44px; }
+  .mobile-menu .nav { display: grid; gap: 1px; overflow: visible; width: auto; }
+  .mobile-menu .nav-group { display: block; }
+  .mobile-menu .nav-favorites { display: grid; }
+  .mobile-menu .nav-item { white-space: normal; min-width: 44px; min-height: 44px; }
+  .mobile-menu .nav-item-label { overflow-wrap: anywhere; }
+  .mobile-menu .org-menu, .mobile-menu .ws-menu { position: relative; min-width: 0; }
+  /* 切り替えの一覧は面を押し広げる。スクロール領域の外へ切らない。 */
+  .mobile-menu .org-menu-list, .mobile-menu .ws-menu-list { position: static; margin-top: var(--space-2); }
+  .mobile-menu .org-menu-button, .mobile-menu .ws-menu-button { min-height: 44px; }
+
 @media (max-width: 760px) {
-  /* 本文が min-height に届かないとき、余りを本文の行にだけ回す（既定ではメニューの行も伸びて下に空きが出る） */
-  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
-  /* 帯の中のワークスペースの一覧は、綴じを基準に帯の下へ出す（下の .nav .ws-menu-list） */
-  .binding { position: relative; border-right: 0; border-bottom: var(--rule-double); }
-  /* 狭い幅では角のマスの形をやめ、ロゴ、組織の切り替え、メニューを1つの帯に並べる（中身の箱は消す）。
-     ロゴと組織の切り替えを1行目に並べ、メニューの帯を2行目にする */
-  .binding-body { display: contents; }
-  .binding-head { position: static; height: auto; padding: 0; background: none; border-bottom: 0; }
-  .binding-head .brand-art { width: 120px; }
-  .binding-inner {
-    position: static; height: auto; overflow: visible;
-    flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--space-3);
-    padding-block: var(--space-3);
-    padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
-    padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
-  }
-  .nav-group, .binding-foot { display: none; }
-  .nav-toggle { display: none; }
-  .org-menu { flex: 1 1 10rem; }
-  /* 折り返す長い組織名に合わせて、隣の短い項目を縦に伸ばさず上端を揃える。 */
-  .nav { display: flex; align-items: flex-start; overflow-x: auto; width: 100%; gap: var(--space-1); }
-  .nav-item { white-space: nowrap; }
-  .nav-item.is-wrapping .nav-item-label { max-width: 12rem; }
-  /* ワークスペースの切り替えは、帯の中のワークスペースの項目の直前に、今の名前と▾の札で出す。
-     「ワークスペース」の見出しは目には出さず、読み上げの名前（aria-label）に残す */
-  .nav .ws-menu { display: block; flex: none; }
-  .nav .ws-menu-button { display: inline-flex; align-items: center; gap: var(--space-1); width: auto; min-height: 44px; max-width: 12rem; padding-block: 0; }
-  .nav .ws-menu-label { display: none; }
-  /* 一覧は帯のスクロール領域に切られないよう、綴じ（.binding）を基準に帯の下へ重ねて出し、左右の余白の内側へ広げる */
-  .nav .ws-menu-list {
-    position: absolute; z-index: 10; top: 100%; box-shadow: var(--shadow-float);
-    left: max(var(--space-4), env(safe-area-inset-left, 0px)); right: max(var(--space-4), env(safe-area-inset-right, 0px));
-  }
-  /* 横に続きがある側の端を、綴じの地の色で薄く消す（NavMenu が data-more-start、data-more-end を付ける）。
-     mask-image は帯の外へ出す一覧まで切るので使わず、端に貼り付けた幕を重ねる。幕の幅は margin で打ち消し、項目の並びを変えない */
-  /* 幕の幅は、送り位置の peek（src/lib/nav-strip.ts の NAV_STRIP_PEEK、kit.js の同名の値）と同じ px にそろえる。
-     rem にすると、文字を大きくした端末で幕だけ広がり、送った今の項目が幕にかかる */
-  .nav { --nav-strip-peek: 32px; }
-  .nav[data-more-start]::before, .nav[data-more-end]::after {
-    content: ""; position: sticky; z-index: 1; flex: none; align-self: stretch; width: var(--nav-strip-peek); pointer-events: none;
-  }
-  /* 幕も flex の項目なので、幅に加えて隣との gap も打ち消す（打ち消さないと、印が付いた瞬間に項目が gap の分ずれる） */
-  .nav[data-more-start]::before { left: 0; margin-right: calc(-1 * var(--nav-strip-peek) - var(--space-1)); background: linear-gradient(to right, var(--color-sunken), transparent); }
-  .nav[data-more-end]::after { right: 0; margin-left: calc(-1 * var(--nav-strip-peek) - var(--space-1)); background: linear-gradient(to left, var(--color-sunken), transparent); }
-  /* Tab で端の項目へ移ったとき、フォーカスの輪が幕の下に入らないよう、幕の幅だけ内側で止める */
-  .nav { scroll-padding-inline: var(--nav-strip-peek); }
-  /* 強制カラーでは薄くせず、端で欠けた項目だけを合図にする */
-  @media (forced-colors: active) { .nav[data-more-start]::before, .nav[data-more-end]::after { content: none; } }
-  .nav-favorites { display: flex; flex: none; align-items: flex-start; gap: var(--space-1); }
-  .nav-favorites > .nav-group { display: block; flex: none; white-space: nowrap; padding-block: var(--space-2); }
-  .nav-favorites .nav-item-label { max-width: 12rem; }
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr; }
+  .binding { display: none; }
+  .content { padding-bottom: calc(var(--mobile-navigation-clearance) + env(safe-area-inset-bottom, 0px)); }
   .topbar, .content {
     padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
     padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
@@ -975,6 +991,10 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .entry { grid-template-columns: var(--grip-col, ) 32px minmax(0, 1fr); }
   .entry-end { grid-column: -2; flex-wrap: wrap; }
   .notice-facts { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (min-width: 761px) {
+  .mobile-navigation, .mobile-menu { display: none; }
 }
 
 /* ===== 画面の見出しの操作 ===== */
@@ -1359,7 +1379,7 @@ label.pick-row:hover { background: var(--color-accent-soft); }
 .action-note { font-size: var(--text-xs); color: var(--color-muted); max-width: 72ch; }
 
 /* ===== タスクの詳細（引き出し） ===== */
-.scrim { position: fixed; inset: 0; background: rgb(10 15 20 / 0.4); z-index: 20; }
+.scrim { position: fixed; inset: 0; background: var(--color-scrim); z-index: 20; }
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 21; width: min(620px, 100%);
   background: var(--color-surface); border-left: var(--rule-double); box-shadow: var(--shadow-float); overflow-y: auto;
@@ -1948,12 +1968,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   .app.skeleton-frame[data-nav-collapsed="true"] .skeleton-nav { padding-inline: 0; }
 }
 @media (max-width: 760px) {
-  /* 狭い幅の枠は、ロゴと組織の切り替えとメニューの項目の横並びの行を1つの帯に並べる（ワークスペースの区切りは出さない）。
-     上の帯は、パンくず、畳んだ検索の虫眼鏡、アバターだけのアカウントの1段にする */
-  .skeleton-frame .skeleton-nav { display: flex; flex: 1 1 100%; align-items: center; gap: var(--space-4); min-height: 44px; overflow: hidden; }
-  .skeleton-frame .skeleton-nav.is-group { display: none; }
-  .skeleton-frame .skeleton-nav .skeleton-line { flex: none; width: 6rem; }
-  .skeleton-frame .skeleton-line.is-org { flex: 1 1 10rem; }
+  /* 狭い幅では左のメニューを隠し、パンくず・検索・アカウントの帯から始める。 */
   /* アカウントのボタンは指で押す高さ（44px）になるので、帯の外の余白で同じ高さを取る */
   .skeleton-frame .topbar > .skeleton-line.is-account { width: 3.5rem; margin-block: var(--space-2); }
   .skeleton-frame .topbar > .skeleton-line.is-search { flex: none; min-width: 0; width: 44px; height: 44px; }
@@ -2059,6 +2074,9 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 
 /* ===== 知らせ（トースト） ===== */
 .toasts { position: fixed; z-index: 40; right: max(var(--space-4), env(safe-area-inset-right, 0px)); bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); display: grid; gap: var(--space-2); }
+@media (max-width: 760px) {
+  html:has(.mobile-navigation) .toasts { bottom: calc(var(--mobile-navigation-clearance) + env(safe-area-inset-bottom, 0px)); }
+}
 .toast, .toast-leaving { display: flex; gap: var(--space-2); align-items: center; padding: var(--space-3) var(--space-4); background: var(--color-fg); color: var(--color-bg); border-radius: var(--radius-1); box-shadow: var(--shadow-float); font-size: var(--text-sm); overflow-wrap: anywhere; max-width: min(420px, calc(100vw - 2 * var(--space-4))); animation: toast-in var(--duration-stamp) var(--ease-out) 1; }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 /* 失敗の知らせ（アイコン alert）。成功と同じ反転の地に、危険の薄い色の左の縦線を足し、色でも見分ける（長さは本番が 8 秒にする）。

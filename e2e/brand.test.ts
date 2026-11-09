@@ -74,13 +74,18 @@ for (const screen of [
       await page.setViewportSize({ width, height: 900 });
       for (const theme of themes) {
         await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-        await expectHorizontalBrand(page);
+        if (screen.path.startsWith('/aoba') && width <= 760) {
+          await expect(page.locator('.brand-art')).toHaveCount(0);
+          await expect(page.locator('.mobile-tabs')).toBeVisible();
+        } else {
+          await expectHorizontalBrand(page);
+        }
       }
     }
   });
 }
 
-test('畳んだメニューはマーク単体で名前を保ち、狭い幅では横組みに戻る', async ({ page, context, baseURL }) => {
+test('畳んだメニューはマーク単体で名前を保ち、狭い幅ではロゴを隠す', async ({ page, context, baseURL }) => {
   await signIn(context, baseURL, 'member');
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/aoba');
@@ -100,7 +105,8 @@ test('畳んだメニューはマーク単体で名前を保ち、狭い幅で�
     await expect(brand).toHaveAccessibleName('Scrum Guild');
   }
   await page.setViewportSize({ width: 390, height: 700 });
-  await expectHorizontalBrand(page);
+  await expect(brand).toHaveCount(0);
+  await expect(page.locator('.mobile-tabs')).toBeVisible();
 });
 
 test('faviconとホーム画面アイコンがHTMLではなく画像として配信される', async ({ page, request }) => {

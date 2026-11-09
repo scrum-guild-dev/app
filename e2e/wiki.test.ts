@@ -29,7 +29,7 @@ test('自分用の組織の Wiki は組織の表示名で案内する', async ({
 });
 
 for (const theme of A11Y_THEMES) {
-  test(`長い組織名を全文読め、狭い幅の隣のメニューは伸びず上端が揃う（${theme}）`, async ({ page }) => {
+  test(`長い組織名を全文読め、狭い幅では浮きメニューから移れる（${theme}）`, async ({ page }) => {
     const name = 'A'.repeat(80);
     await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
       ...output,
@@ -38,11 +38,12 @@ for (const theme of A11Y_THEMES) {
     await page.goto('/aoba/wiki');
     const menu = page.locator('.nav-item', { hasText: `${name}の Wiki` });
     const label = menu.locator('.nav-item-label');
-    const ordinary = page.getByRole('link', { name: '今日やること', exact: true });
+    const ordinary = page.locator('#app-nav').getByRole('link', { name: '今日やること', exact: true });
     await expect(label).toBeVisible();
     await applyTheme(page, theme);
     for (const width of [1280, 1024, 390, 320]) {
       await page.setViewportSize({ width, height: 800 });
+      if (width <= 760) await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
       await expect(label).toBeVisible();
       await expect(label).toHaveText(`${name}の Wiki`);
       expect(await label.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
@@ -52,15 +53,18 @@ for (const theme of A11Y_THEMES) {
         const wikiBox = (await menu.boundingBox())!;
         const todayBox = (await ordinary.boundingBox())!;
         expect(todayBox.height).toBeLessThan(wikiBox.height);
-        expect(Math.abs(todayBox.y - wikiBox.y)).toBeLessThanOrEqual(1);
+        expect(todayBox.y + todayBox.height).toBeLessThanOrEqual(wikiBox.y);
+        await page.keyboard.press('Escape');
       }
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     }
-    // 狭い幅でも隣の項目と本文を操作できる。
+    // 本文を操作してから浮きメニューを開き、今日と Wiki を行き来できる。
     await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
     await expect(page.getByLabel('題', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
     await ordinary.click();
     await expect(page).toHaveURL(/\/aoba$/);
+    await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
     await menu.click();
     await expect(page).toHaveURL(/\/aoba\/wiki$/);
     // 広い幅では長い名前のまま畳み、再び全文を表示できる。

@@ -146,3 +146,19 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(boot.getByRole('link', { name: 'もう一度試す' })).toBeVisible();
   });
 }
+
+test('390px の失敗トーストは下のタブバーを覆わない（#1102）', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'member');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await routeOperation(page, today, { slug: 'aoba' }, (call) =>
+    call.fulfill({ tasks: [{ ...row }], sprint_goals: [] }),
+  );
+  await routeOperation(page, taskTodayMark, { slug: 'aoba' }, (call) => call.fail(404, 'not_found'));
+  await page.goto('/aoba');
+  await page.getByRole('button', { name: '今日やる: 消えた行' }).click();
+  const toast = page.getByRole('status').filter({ hasText: 'このタスクは見つかりません' });
+  await expect(toast).toBeVisible();
+  const toastBox = await toast.boundingBox();
+  const tabsBox = await page.locator('.mobile-tabs').boundingBox();
+  expect(toastBox!.y + toastBox!.height).toBeLessThanOrEqual(tabsBox!.y);
+});
