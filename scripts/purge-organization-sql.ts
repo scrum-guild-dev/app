@@ -7,6 +7,7 @@
 // - どの文にも「その組織が解約で停止していて、消す予定日を過ぎている」の EXISTS を付ける。一時的な停止、停止していない組織、
 //   予定日の当日より前の組織、無い ID では何も消えない
 // - 外部キーの子から順に消し、organizations の行を最後に消す。途中で止まっても、同じ順で流し直せば続きから消える
+// - favorites と Wiki は先頭の専用の文で消し、残りは TABLES の順で消す。Wiki の2表は TABLES に含めず別に件数を照合する
 // - 共通の表のうち消すのは organizations の行だけ。accounts、account_logins、sessions、api_tokens、oauth_states、rate_limits は消さない
 //   （アカウントはほかの組織でも使う。アカウントをどうするかは #407。セッションと API トークンはアカウントに結ぶ。入れる組織を失った人の
 //   セッションとトークンは、その人の次のリクエストか期限切れで消える）
@@ -20,7 +21,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // 組織で絞る条件の形。epic は workspace_id を持たず、エピックを通して組織に結ぶ表（epic_party_members）
 type Scope = 'organization' | 'workspace' | 'epic' | 'task' | 'connection' | 'user';
 
-// 削除と残件数の照合に使う全表の一覧。favorites は Wiki の分割削除より先に専用の文で消し、通常の削除文からは除く。
+// 通常の削除と残件数の照合に使う表の一覧（Wiki の2表は別枠）。favorites は Wiki より先に専用の文で消し、通常の削除文からは除く。
 // ほかは外部キーの子から順。xp_grants は自分の表を指す（reverses_grant_id）が、1文で組織の行をまとめて消すので、文の終わりの検査に当たらない
 const TABLES: readonly (readonly [table: string, scope: Scope])[] = [
   ['favorites', 'user'],
