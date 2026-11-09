@@ -19,7 +19,7 @@
 <script>
 "use strict";
 // 今日やること: 所属するすべてのワークスペースから、自分が担当するタスクを並べる
-const { D, t, book, section, foldedSection, pageHead, sprintNotice, levelPanel, load } = SQ;
+const { D, t, book, section, foldedSection, pageHead, sprintNotice } = SQ;
 
 SQ.mount("today", () => {
   const mine = SQ.tasksWhere((x) => x.who === D.me);
@@ -49,17 +49,7 @@ SQ.mount("today", () => {
   // 今日やる以外の区分は、空なら出さない
   const part = (id, title, list) => (list.length ? section(id, title, list.length, book(list, opts)) : "");
   const dueOpts = { ...opts, meta: (x) => (dueDate(x) === D.today ? '<span class="chip is-warn">期日は今日</span>' : "") };
-  const capacityPanel = SQ.first
-    ? `<section class="panel"><div class="panel-title"><b>${t("capacity")}</b></div>
-        <p class="panel-note">${hasWs ? "" : `${t("workspace")}に所属して、`}${t("sprint")}に担当の${t("task")}が入ると、作業量と基準がここに並びます。</p></section>`
-    : `<section class="panel">
-        <div class="panel-title"><b>${t("capacity")}</b>今の${t("sprint")}</div>
-        ${load(D.workspaces.wa.name, "配分 60%", 45.6, 56.0)}
-        ${load(D.workspaces.wb.name, "配分 40%", 30.4, 12.0, { none: 1 })}
-        ${load("10月の合計", "ユーザーの基準", 172.0, 168.0)}
-        <p class="panel-note">休み <span class="mono">10/23</span> 半日</p>
-      </section>`;
-  // 見出しは左右2列の外に出して全幅にする（本番と同じ。右の列は見出しの下から始まる）
+  // 見出しと区分を全幅で置く。積載量は #66 で今日やるの近くに足す。
   return `${pageHead(D.todayLabel, "今日やること", [
         ["", "sun", "今日やると決めたもの", todayList.length],
         ["is-danger", "alert", `${t("due")}切れ`, overdueList.length],
@@ -67,7 +57,6 @@ SQ.mount("today", () => {
         ["is-ok", "check", "取り込み元で完了", open.filter((x) => x.srcDone).length],
         ["", "check", t("doneToday"), doneList.length],
       ])}
-  <div class="layout-aside">
     <div class="layout-main">
       ${SQ.first ? SQ.firstSteps(SQ.first) : ""}
       ${active.length ? `<div class="notice-grid">${active.map((id) => sprintNotice(id)).join("")}</div>` : ""}
@@ -77,11 +66,7 @@ SQ.mount("today", () => {
       ${restList.length ? foldedSection("s-sprint", `進行中の${t("sprint")}`, restList.length, book(restList, opts)) : ""}
       ${part("s-done", t("doneToday"), doneList)}
     </div>
-    <aside class="layout-side" aria-label="自分の記録">
-      ${levelPanel()}
-      ${capacityPanel}
-    </aside>
-  </div>`;
+  `;
 });
 </script>
 </body>

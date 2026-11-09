@@ -825,10 +825,13 @@ test('検索の800ms待ち・変換中・空白だけの変更を区別する', 
     };
   });
   const sent = () => page.evaluate(() => (window as typeof window & { wikiSearchSends: string[] }).wikiSearchSends);
+  const query = page.getByRole('searchbox', { name: 'Wiki の題と本文を探す', exact: true });
+  // 画面を読み終えてから時計を差し替える。読み取りの途中で差し替えると、読み取りの打ち切り（10 秒。src/lib/api.ts）の
+  // タイマーも差し替えた時計で動き、pauseAt の 60 秒の飛びで発火して、画面が読み込みの失敗になる
+  await expect(query).toBeVisible();
   const clockStart = Date.now();
   await page.clock.install({ time: new Date(clockStart) });
   await page.clock.pauseAt(new Date(clockStart + 60000));
-  const query = page.getByRole('searchbox', { name: 'Wiki の題と本文を探す', exact: true });
   await query.fill('最初');
   await page.clock.fastForward(799);
   expect(await sent()).toEqual([]);
