@@ -126,3 +126,14 @@ test('0件は節を出さず、一覧失敗は0件と分けて説明と再試行
   expect(body).toContain('お気に入りを読み込めませんでした。');
   expect(body).toContain('もう一度試す');
 });
+
+test('リンクにできる対象が無い一覧では見出しだけの節を出さない', () => {
+  favoriteState.current = {
+    available: true,
+    items: [
+      { id: 'bad', target_type: 'task', target_id: 'task', workspace_id: null, title: '架空の題', created_at: '' },
+    ],
+  };
+  const body = render(NavMenu, { props: { current: '/aoba', slug: 'aoba', hasWorkspace: false, isAdmin: false } }).body;
+  expect(body).not.toContain('nav-favorites');
+});

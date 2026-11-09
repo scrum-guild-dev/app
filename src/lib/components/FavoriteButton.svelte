@@ -20,6 +20,7 @@
   } = $props();
   const favorites = useFavorites();
   const errorId = $props.id();
+  const writeErrorId = `${errorId}-write`;
   let star = $state<HTMLButtonElement>();
   let failure = $state<{ id: string; message: string } | null>(null);
   const marked = $derived(favorites?.marked(targetType, targetId) ?? false);
@@ -50,17 +51,18 @@
       title={t(marked ? 'favoriteRemove' : 'favoriteAdd')}
       aria-disabled={!favorites.available || favorites.busy(targetType, targetId)}
       aria-busy={favorites.loading || favorites.busy(targetType, targetId)}
-      aria-describedby={favorites.loadFailed || !favorites.available || failure?.id === identity ? errorId : undefined}
+      aria-describedby={[
+        favorites.loadFailed || !favorites.available ? errorId : '',
+        failure?.id === identity ? writeErrorId : '',
+      ]
+        .filter(Boolean)
+        .join(' ') || undefined}
       onclick={toggle}><Icon name="star" /></button
     >
     <FavoriteLoadStatus
       id={favorites.loadFailed || !favorites.available ? errorId : undefined}
       onrecovered={() => star?.focus()}
     />
-    {#if !favorites.loadFailed && favorites.available && failure?.id === identity}<span
-        id={errorId}
-        class="field-error"
-        role="alert">{failure.message}</span
-      >{/if}
+    {#if failure?.id === identity}<span id={writeErrorId} class="field-error" role="alert">{failure.message}</span>{/if}
   </span>
 {/if}

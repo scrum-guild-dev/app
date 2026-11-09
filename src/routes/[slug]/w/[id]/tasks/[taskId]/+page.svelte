@@ -131,6 +131,7 @@
       taskId={page.params.taskId ?? ''}
       currentUserId={data.organization?.me.id ?? null}
       canWrite={workspace.closedAt === null}
+      workspaceClosed={workspace.closedAt !== null}
       definitionOfDone={workspace.definitionOfDone}
       onclose={() => void close()}
       onchanged={() => void invalidate('app:backlog-tree')}

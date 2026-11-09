@@ -85,6 +85,7 @@
     workspaceId: workspaceIdProp,
     storyId,
     canWrite,
+    workspaceClosed = false,
     clock,
     parents,
     onclose,
@@ -103,6 +104,7 @@
     workspaceId: string;
     storyId: string;
     canWrite: boolean;
+    workspaceClosed?: boolean;
     // 期日の印を決める、ワークスペースの今日と週の始まり（画面が木から渡す）。無ければ印を出さない
     clock: { today: string; weekStart: number } | null;
     // 親に選べるエピック（完了も中止もしていないもの）。無ければ（木が無い）親を移すを出さない
@@ -1057,7 +1059,13 @@
   {#snippet top()}
     <span class="chip"><Icon name="check" />{t('story')}</span>
     {#if story !== null}
-      <FavoriteButton targetType="story" targetId={story.id} title={story.title} {workspaceId} menuVisible={canWrite} />
+      <FavoriteButton
+        targetType="story"
+        targetId={story.id}
+        title={story.title}
+        {workspaceId}
+        menuVisible={!workspaceClosed}
+      />
     {/if}
     {#if done}<span class="chip is-ok"><Icon name="check" />{t('done')}</span>{/if}
     {#if canWrite && story !== null && menuItems.length > 0}

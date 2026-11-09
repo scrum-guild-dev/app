@@ -35,6 +35,12 @@
     workspaceSwitcher?: Snippet;
   } = $props();
 
+  const favoriteLinks = $derived(
+    (favorites?.items ?? [])
+      .map((favorite) => ({ favorite, item: favoriteNavItem(resolve('/[slug]', { slug }), favorite) }))
+      .filter(({ item }) => item.href !== null),
+  );
+
   const sections = $derived(
     visibleNav(undefined, {
       hasWorkspace,
@@ -84,18 +90,17 @@
         {/if}
       {/if}
     {/each}
-    {#if section.heading === undefined && favorites && (favorites.loadFailed || !favorites.available || favorites.items.length > 0)}
+    {#if section.heading === undefined && favorites && (favorites.loadFailed || !favorites.available || favoriteLinks.length > 0)}
       <div class="nav-favorites">
         <div class="nav-group"><span class="nav-group-label">{t('favorites')}</span></div>
         <FavoriteLoadStatus
           onrecovered={() =>
-            document
-              .getElementById(NAV_MENU_ID)
-              ?.querySelector<HTMLAnchorElement>('.nav-favorites a, .nav-item')
-              ?.focus()}
+            (
+              document.getElementById(NAV_MENU_ID)?.querySelector<HTMLAnchorElement>('.nav-favorites a') ??
+              document.getElementById(NAV_MENU_ID)?.querySelector<HTMLAnchorElement>('.nav-item')
+            )?.focus()}
         />
-        {#each favorites?.items ?? [] as favorite (`${favorite.target_type}/${favorite.target_id}`)}
-          {@const item = favoriteNavItem(resolve('/[slug]', { slug }), favorite)}
+        {#each favoriteLinks as { favorite, item } (`${favorite.target_type}/${favorite.target_id}`)}
           {#if item.href !== null}
             <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- favoriteNavItem は resolve 済みの組織パスにエンコードした対象だけを足す -->
             <a class="nav-item" href={item.href} title={favorite.title}>
