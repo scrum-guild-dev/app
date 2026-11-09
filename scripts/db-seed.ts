@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { SEED_SESSIONS } from '../seed/sessions.ts';
 import { seedSql } from './seed.ts';
+import { retryLocalD1 } from './local-d1-retry.ts';
 
 const persistIndex = process.argv.indexOf('--persist-to');
 const persistTo = persistIndex === -1 ? undefined : process.argv[persistIndex + 1];
@@ -16,11 +17,15 @@ if (persistIndex !== -1 && !persistTo) {
 }
 const local = ['--local', ...(persistTo ? ['--persist-to', persistTo] : [])];
 
-function wrangler(args: string[], capture = false): string {
-  const result = spawnSync('wrangler', ['d1', ...args, ...local], {
-    stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
-    encoding: 'utf8',
-  });
+async function wrangler(args: string[], capture = false): Promise<string> {
+  const result = await retryLocalD1(() =>
+    spawnSync('wrangler', ['d1', ...args, ...local], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+    }),
+  );
+  if (!capture && result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
   if (result.error || result.status !== 0) {
     console.error(`wrangler d1 ${args[0]} が失敗しました`);
     process.exit(result.status ?? 1);
@@ -28,10 +33,10 @@ function wrangler(args: string[], capture = false): string {
   return result.stdout ?? '';
 }
 
-wrangler(['migrations', 'apply', 'DB']);
+await wrangler(['migrations', 'apply', 'DB']);
 
 const listed = JSON.parse(
-  wrangler(
+  await wrangler(
     ['execute', 'DB', '--json', '--command', "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"],
     true,
   ),
@@ -43,7 +48,7 @@ const dir = mkdtempSync(path.join(tmpdir(), 'scrum-guild-seed-'));
 try {
   const file = path.join(dir, 'seed.sql');
   writeFileSync(file, seedSql(tables, data, Object.values(SEED_SESSIONS), new Date()));
-  wrangler(['execute', 'DB', '--file', file]);
+  await wrangler(['execute', 'DB', '--file', file]);
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
