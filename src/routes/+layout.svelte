@@ -68,6 +68,7 @@
   });
 
   function loadingOut(node: HTMLElement) {
+    if (prefersReducedMotion()) return { duration: 0 };
     // クラスを付ける前に opacity: 1 の状態を確定し、CSS の transition を開始する。
     const fast = parseFloat(getComputedStyle(node).getPropertyValue('--duration-fast'));
     node.classList.add('is-leaving');
@@ -75,7 +76,7 @@
     node.setAttribute('aria-hidden', 'true');
     // Svelte は退場中の DOM の保持だけを受け持つ。動きは共通 CSS のトークンで揃える。
     return {
-      duration: prefersReducedMotion() ? 0 : Number.isFinite(fast) ? fast : 120,
+      duration: Number.isFinite(fast) ? fast : 120,
     };
   }
 

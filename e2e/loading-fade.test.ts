@@ -99,6 +99,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.evaluate(() => {
       const seen = {
         duration: -1,
+        leavingAdded: false,
         fixed: false,
         contentTop: -1,
         hidden: false,
@@ -109,7 +110,11 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         opacity: [] as number[],
       };
       Object.assign(window, { __sheetFade: seen });
-      new MutationObserver(() => {
+      new MutationObserver((records) => {
+        for (const record of records) {
+          if (record.target instanceof HTMLElement && record.target.matches('.loading-overlay.is-leaving'))
+            seen.leavingAdded = true;
+        }
         const overlay = document.querySelector<HTMLElement>('.loading-overlay.is-leaving');
         const heading = document.querySelector('h1:not(.visually-hidden)');
         if (!overlay || !heading) return;
@@ -160,6 +165,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
           window as unknown as {
             __sheetFade: {
               duration: number;
+              leavingAdded: boolean;
               fixed: boolean;
               contentTop: number;
               hidden: boolean;
@@ -173,6 +179,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         ).__sheetFade,
     );
     if (reducedMotion === 'no-preference') {
+      expect(seen.leavingAdded).toBe(true);
       expect(seen.duration).toBe(120);
       expect(seen.opacity[0]).toBe(1);
       expect(seen.opacity.at(-1)).toBe(0);
@@ -186,7 +193,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       expect(seen.contentTop).toBeCloseTo((await heading.boundingBox())!.y, 0);
       await expectNoA11yViolationsInThemes(page, 'today');
     } else {
-      expect(seen.duration).toBeLessThanOrEqual(0);
+      expect(seen.leavingAdded).toBe(false);
     }
   });
 }
