@@ -284,6 +284,7 @@ const SECTIONS = [
       <button class="btn is-primary" type="button" aria-disabled="true" aria-describedby="cat-disabled-hint">同意して進む</button>
       <button class="btn is-danger" type="button" aria-disabled="true">停止しています</button>
       <button class="btn is-quiet" type="button" aria-disabled="true">あとで</button>
+      <button class="btn is-on" type="button" aria-pressed="true" disabled>並べ替え</button>
       <span class="field-hint" id="cat-disabled-hint">確認して印を付けると進めます</span>
       <button class="btn is-sm is-on" type="button" aria-pressed="true">${avatar("ハルカ", 28)}ハルカ に送った</button>
       <button class="link-btn" type="button">戻す</button>
@@ -301,7 +302,7 @@ const SECTIONS = [
       <button class="btn is-google" type="button">${SQ.googleMark}Google でログイン</button>
       <span class="field-hint">ログインの画面の Google のボタン。テーマに合わせて明暗が替わる</span>
     </div>`,
-    ["文言は押すと起きることをそのまま書く（「完了にする」「参加する」）。", "押せない理由がある無効のボタンは、title か横の文で理由を示す。", "押せない .btn は全体に不透明度を掛けず、sunken の面・muted の文字・line の枠にする。文字と面は 4.5:1 以上とし、ホバーでも主色や危険の色に戻さない。", "送っている最中や読み直している最中のように、フォーカスを残したいボタンは disabled でなく aria-disabled=\"true\" にする（.btn は薄い面と読める文字、.pill は薄い見た目になる）。押しても何も起きないよう、処理の側で無視する。", "取り消せない操作（削除）は is-danger にし、確認は画面の中のダイアログで行う。", "切り替えのボタンは aria-pressed を持ち、押した状態は is-on で示す。.pill の切り替え（引き出しの開き方）は aria-pressed=\"true\" だけで同じ見た目（accent-soft の地に accent の枠と文字と太字）になる。ホバーしても枠は accent のまま。", "is-google はログインと会員登録の画面の Google のボタンだけに使う。ロゴと色は Google のブランドの決まりで固定し（テーマのトークンを通さない）、主ボタン（is-primary）にしない。明暗は、既定のテーマだけ OS に従い、ほかはテーマに合わせる。"],
+    ["文言は押すと起きることをそのまま書く（「完了にする」「参加する」）。", "押せない理由がある無効のボタンは、title か横の文で理由を示す。", "押せない .btn は全体に不透明度を掛けず、sunken の面・muted の文字・line の枠にする。文字と面は 4.5:1 以上とし、ホバーでも主色や危険の色に戻さない。静かな操作は透明な面と枠を保ち、選択中の操作は主色の枠を残す。", "送っている最中や読み直している最中のように、フォーカスを残したいボタンは disabled でなく aria-disabled=\"true\" にする（.btn は薄い面と読める文字、.pill は薄い見た目になる）。押しても何も起きないよう、処理の側で無視する。", "取り消せない操作（削除）は is-danger にし、確認は画面の中のダイアログで行う。", "切り替えのボタンは aria-pressed を持ち、押した状態は is-on で示す。.pill の切り替え（引き出しの開き方）は aria-pressed=\"true\" だけで同じ見た目（accent-soft の地に accent の枠と文字と太字）になる。ホバーしても枠は accent のまま。", "is-google はログインと会員登録の画面の Google のボタンだけに使う。ロゴと色は Google のブランドの決まりで固定し（テーマのトークンを通さない）、主ボタン（is-primary）にしない。明暗は、既定のテーマだけ OS に従い、ほかはテーマに合わせる。"],
     ".btn .is-primary .is-quiet .is-danger .is-sm .is-on .is-google / .link-btn / .pill .pill-count")],
   ["forms", "入力と道具の帯", () => block("forms", "入力と道具の帯", "",
     `<div class="toolbar"><label class="search" for="q0">${icon("search")}<input id="q0" type="search" placeholder="${t("backlogSearch")}"></label>

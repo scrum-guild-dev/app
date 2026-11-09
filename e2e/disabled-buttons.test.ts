@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { Locator } from '@playwright/test';
 import { listOrganizations } from '../src/shared/operations/operator/list-organizations.ts';
 import { organizationSuspend } from '../src/shared/operations/operator/organization-suspend.ts';
@@ -65,12 +66,33 @@ async function buttonColors(button: Locator) {
       }, 0);
     };
     const foreground = luminance(style.color);
-    const background = luminance(style.backgroundColor);
+    // 静かな操作は透明な面を保つので、その下の不透明な面との比を測る。
+    let surface: Element | null = element;
+    let surfaceColor = style.backgroundColor;
+    while (surface && surfaceColor === 'rgba(0, 0, 0, 0)') {
+      surface = surface.parentElement;
+      if (surface) surfaceColor = getComputedStyle(surface).backgroundColor;
+    }
+    const background = luminance(surfaceColor);
+    const palette = document.createElement('span');
+    palette.style.cssText =
+      'color:var(--color-accent);background:var(--color-on-accent);border-color:var(--color-line)';
+    document.body.append(palette);
+    const paletteStyle = getComputedStyle(palette);
+    const accent = paletteStyle.color;
+    const onAccent = paletteStyle.backgroundColor;
+    const line = paletteStyle.borderTopColor;
+    palette.remove();
     return {
       ratio: (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05),
       opacity: style.opacity,
       background: style.backgroundColor,
       color: style.color,
+      border: style.borderTopColor,
+      filter: style.filter,
+      accent,
+      onAccent,
+      line,
     };
   });
 }
@@ -131,5 +153,63 @@ test('停止の送信中は危険操作と取り消しの文字が4テーマで�
     }
   } finally {
     release();
+  }
+});
+
+// 共通CSSの部品検証。実画面の送信中に加え、選択中と静かな操作のnative/ARIA無効も守る。
+test('選択中の無効ボタンは印を残し、静かな無効ボタンは枠を足さず、親の面が違っても文字が読める', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setContent('<main><div id="plate"></div></main>');
+  for (const sheet of ['tokens', 'components']) {
+    await page.addStyleTag({ content: await readFile(new URL(`../design/${sheet}.css`, import.meta.url), 'utf8') });
+  }
+  await page.locator('#plate').evaluate((element) => {
+    for (const variant of ['is-quiet', 'is-quiet is-danger', 'is-on']) {
+      for (const aria of [false, true]) {
+        const button = document.createElement('button');
+        button.className = `btn ${variant}`;
+        button.textContent = '操作';
+        if (aria) button.setAttribute('aria-disabled', 'true');
+        else button.disabled = true;
+        element.append(button);
+      }
+    }
+  });
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of A11Y_THEMES) {
+      await applyTheme(page, theme);
+      for (const surface of ['bg', 'surface', 'sunken']) {
+        await page.locator('#plate').evaluate((element, value) => {
+          (element as HTMLElement).style.backgroundColor = `var(--color-${value})`;
+        }, surface);
+        for (const button of await page.locator('#plate .btn').all()) {
+          await page.mouse.move(width - 1, 899);
+          const disabled = await buttonColors(button);
+          const selected = await button.evaluate((element) => element.classList.contains('is-on'));
+          const background = selected
+            ? await button.evaluate((element) => {
+                const probe = document.createElement('span');
+                probe.style.backgroundColor = 'var(--color-sunken)';
+                element.append(probe);
+                const color = getComputedStyle(probe).backgroundColor;
+                probe.remove();
+                return color;
+              })
+            : 'rgba(0, 0, 0, 0)';
+          const border = selected ? disabled.accent : 'rgba(0, 0, 0, 0)';
+          expect(disabled.ratio, `${theme} ${surface} ${width}px`).toBeGreaterThanOrEqual(4.5);
+          expect(disabled.opacity).toBe('1');
+          await expect(button).toHaveCSS('background-color', background);
+          await expect(button).toHaveCSS('border-top-color', border);
+          await expect(button).toHaveCSS('filter', 'none');
+          await button.hover({ force: true });
+          await expect(button).toHaveCSS('background-color', background);
+          await expect(button).toHaveCSS('border-top-color', border);
+          await expect(button).toHaveCSS('color', disabled.color);
+          await expect(button).toHaveCSS('filter', 'none');
+        }
+      }
+    }
   }
 });
