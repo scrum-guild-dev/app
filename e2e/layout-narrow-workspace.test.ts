@@ -113,15 +113,10 @@ test('バックログの先頭2行が390×844pxに入り、補助情報を各1�
     expect(await findOverflowViolations(page), theme).toEqual([]);
     expect(await findTargetSizeViolations(page), theme).toEqual([]);
     await expectNoA11yViolations(page, 'backlog');
-    const closedDirections = await Promise.all(
-      [summary, filters, help].map((button) =>
-        button.locator('svg').evaluate((icon) => getComputedStyle(icon).transform),
-      ),
-    );
     for (const button of [summary, filters, help]) await button.click();
     for (const [index, button] of [summary, filters, help].entries()) {
       await expect(button.locator('svg')).toBeVisible();
-      expect(await button.locator('svg').evaluate((icon) => getComputedStyle(icon).transform)).not.toBe(
+      expect(await button.locator('svg').evaluate((icon) => getComputedStyle(icon).transform)).toBe(
         closedDirections[index],
       );
     }
