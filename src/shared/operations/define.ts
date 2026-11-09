@@ -29,6 +29,9 @@ type PermissionsIn<Scope extends string> = {
 
 export const permissions = Object.keys(permissionScopes) as Permission[];
 
+// setTimeout が受け付ける最大の待ち時間（符号付き 32 ビット）。超えると即座に発火し、長く待つつもりの読み取りがすぐ切れる
+const MAX_TIMER_MS = 2_147_483_647;
+
 // URL の最後の1区分になるので、英小文字と数字をハイフンでつないだ1語に限る
 const OPERATION_NAME_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
@@ -50,6 +53,9 @@ type Common<Input, Output> = {
   // 入力と権限を検証した後、件数の重みで数える。通常のrateLimitとは排他的。
   readonly weightedRateLimit?: RateLimit & { readonly weight: (input: unknown) => number };
   readonly maxBodyBytes?: number;
+  // 画面（src/lib/api.ts の callOperation）が応答を待つ上限（ミリ秒）。read の操作だけに付けられ、省けば既定の 10 秒。
+  // 取り込み元に何度か問い合わせるなど、正常でも既定を超えうる read にだけ長い値を付ける
+  readonly clientTimeoutMs?: number;
   // API トークンでは呼べない（403）。Cookie のセッションの行や Cookie を直に扱う操作（ログアウト）に付ける。組織の外の操作だけ
   readonly cookieOnly?: true;
   // 同意していない人にも通す（同意の検査を飛ばす）。permission: 'login' の操作だけ
@@ -130,6 +136,17 @@ export function assertOperationDefinition(definition: AnyOperationDefinition): v
       definition.body !== undefined)
   ) {
     throw new Error(`操作 ${name} の response は、組織の直下の read の操作に 'binary' だけ付けられる`);
+  }
+  if (
+    definition.clientTimeoutMs !== undefined &&
+    (definition.mode !== 'read' ||
+      !Number.isInteger(definition.clientTimeoutMs) ||
+      definition.clientTimeoutMs <= 0 ||
+      definition.clientTimeoutMs > MAX_TIMER_MS)
+  ) {
+    throw new Error(
+      `操作 ${name} の clientTimeoutMs は、read の操作に ${MAX_TIMER_MS} 以下の正の整数（ミリ秒）だけ付けられる`,
+    );
   }
   if (definition.rateLimit && definition.weightedRateLimit)
     throw new Error(`操作 ${name} は回数の上限を二重に持てない`);

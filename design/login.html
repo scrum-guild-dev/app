@@ -6,7 +6,7 @@
 <title>Scrum Guild ログイン</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Zen+Old+Mincho:wght@700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;900&display=swap">
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="components.css">
 </head>
@@ -33,17 +33,7 @@ function render() {
       <div class="form-actions"><a class="btn is-sm" href="#">アカウントがまだ無い人は会員登録</a></div>
       <div class="form-actions" role="group" aria-label="利用規約とプライバシーポリシー"><a class="btn is-sm is-quiet" href="#">利用規約</a><a class="btn is-sm is-quiet" href="#">プライバシーポリシー</a></div>
     </section>
-    <section class="gate-sheet">
-      <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
-      <h1 class="gate-title">会員登録</h1>
-      <p>GitHub か Google のアカウントで、アカウントを作ります。アカウントだけ作った人は無料で、招待されて入る人も無料です。自分の${t("organization")}を作った場合は、30日間お試しで使い始められます。</p>
-      <button class="btn is-wide" type="button">${icon("git")}GitHub で会員登録</button>
-      <button class="btn is-wide is-google" type="button">${SQ.googleMark}Google で会員登録</button>
-      <p class="gate-note">GitHub と Google は本人確認だけに使います。会員登録のあとに、自分の${t("organization")}を作るか、招待を待つかを選べます。</p>
-      <div class="form-actions"><a class="btn is-sm is-quiet" href="#">アカウントがある人はログイン</a></div>
-      <div class="form-actions" role="group" aria-label="利用規約とプライバシーポリシー"><a class="btn is-sm is-quiet" href="#">利用規約</a><a class="btn is-sm is-quiet" href="#">プライバシーポリシー</a></div>
-    </section>
-    <p class="gate-note">会員登録の画面（/signup）の見本です。パスワードの欄は無く、GitHub と Google のボタンだけを置きます。登録の往復の失敗は、ログインの画面に戻して出します。</p>
+    <p class="gate-note"><a href="signup.html">会員登録と利用開始の見本へ</a></p>
     <section class="gate-sheet">
       <h2 class="dialog-title">Scrum Guild への招待</h2>
       <p>招待されたメールアドレスの Google アカウントでログインしてください。</p>

@@ -59,6 +59,79 @@
 
   // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
   const DICT = {
+  signupTitle: "会員登録",
+  onboardingStart: "利用開始の設定",
+  onboardingProfileInvalid: "表示する名前は1〜100文字、肩書きは100文字以内で入力してください。改行や制御文字は使えません。",
+  onboardingProfileFailed: "プロフィールを保存できませんでした。入力を残したまま、もう一度試せます。",
+  onboardingSaving: "保存しています",
+  onboardingProfileSaved: "作成済みの個人用URLです。あとから変更できません。プロフィールは保存済みです。",
+  onboardingPersonalUrlSaved: "作成済みの個人用URLです。あとから変更できません。",
+  onboardingBlockedTitle: "利用開始を再開できません",
+  onboardingPersonalUrlLiveHint: "自分だけで使う場所のURLです。半角の英小文字・数字・ハイフンで2〜40文字。あとから変更できません。",
+  onboardingTeamUnavailable: "このチームの利用開始を再開できません。組織の選択に戻り、権限とワークスペースを確認してください。",
+  onboardingWorkspaceFailed: "チームは作成済みですが、招待先のワークスペースを作れませんでした。もう一度試してください。",
+  onboardingEmailsInvalid: "Googleでログインするメールアドレスを、カンマか改行で区切って1〜20件入力してください。",
+  onboardingInvitationsFailed: "一部の招待を作成できませんでした。作成済みのリンクは残しています。入力を確認してもう一度試してください。",
+  onboardingCopyFailed: "コピーできませんでした。表示されたURLを選択してコピーしてください。",
+  onboardingPersonalUnavailable: "作成済みの自分用の組織に入れません。組織の選択画面で状態を確認してください。",
+  onboardingReturnOrganizations: "組織の選択に戻る",
+  onboardingInviteChoiceLiveNote: "個人用はこのまま使い始められます。チームで使う場合は、組織と招待先のワークスペースを作ります。チーム利用はあとからでも始められます。",
+  onboardingStartPersonal: "個人用で使い始める",
+  onboardingTeamCreateNote: "チームの{organization}は30日間のお試しで作成します。招待先として「チームのタスク」というワークスペースも作ります。",
+  onboardingCreateTeam: "組織を作って進む",
+  onboardingInviteLiveLead: "Googleアカウントで参加するメンバーの招待リンクを作りましょう。",
+  onboardingGoogleEmails: "招待するGoogleアカウントのメールアドレス",
+  onboardingInviteLiveNote: "カンマか改行で区切って20件まで。メールは送信しません。作成したURLを本人に共有してください。再発行すると同じ宛先の古いURLは使えなくなります。",
+  onboardingCreateInvites: "招待リンクを作成",
+  onboardingCopyLink: "招待リンクをコピー",
+  onboardingInviteSecrets: "このページを離れると、作成した招待URLは再表示できません。本人に共有するまで、このページを開いたままにしてください。",
+  onboardingInvitationFailed: "招待を作成できませんでした。",
+  onboardingCopied: "{email} の招待リンクをコピーしました。",
+  onboardingStartTeam: "チームで使い始める",
+  onboardingInviteChoice: 'チームメイトを招待',
+  onboardingPersonalUrl: "個人用のURL",
+  onboardingPersonalUrlHint: "自分用の場所のURLです。チーム利用の有無にかかわらず使います。この見本では作成されません。",
+  onboardingTeamUrl: "チーム用のURL",
+  onboardingInviteChoiceLead: "個人用の準備ができました。チームメイトも招待しますか？",
+  onboardingInviteChoiceNote: "チームで使う場合は、チームの組織を作ってメンバーを招待します。チーム利用はあとからでも始められます。",
+  onboardingNoTeam: "今は招待せずに見本を終える",
+  onboardingAddTeam: "チームを作って招待する",
+  onboardingPreview: "利用開始のプレビュー",
+  onboardingOpen: "利用開始の流れを見る（プレビュー）",
+  onboardingDisclosure: "操作できるデザインの見本です。入力は保存されず、登録・送信・外部接続は行われません。",
+  onboardingExit: "プレビューを閉じる",
+  onboardingStep: "{total} ステップ中 {current}",
+  onboardingAccount: "Scrum Guild をはじめる",
+  onboardingAccountLead: "チームの仕事を、一歩ずつ前へ。まずはアカウントを選びましょう。",
+  onboardingOrganization: "{organization}を作成",
+  onboardingOrganizationLead: "チームが集まる場所に、名前を付けましょう。",
+  onboardingProfile: "プロフィールを設定",
+  onboardingProfileLead: "表示する名前を決めましょう。",
+  onboardingInvite: "チームメイトを招待",
+  onboardingInviteLead: "一緒に仕事を進める仲間を迎えましょう。",
+  onboardingGoogle: "Google で続ける（見本）",
+  onboardingGithubAccount: "GitHub で続ける（見本）",
+  onboardingAuthNote: "このボタンは次の見本に進みます。外部サービスでのログインは始まりません。",
+  onboardingOrganizationName: "{organization}の名前",
+  onboardingOrganizationExample: "ひばり工房",
+  onboardingUrlHint: "URL の表示例です。このアドレスは作成されません。",
+  onboardingOrganizationNote: "本登録では、{organization}を作ると30日間のお試しが始まります。この見本では作成も課金も行いません。",
+  onboardingCreatePreview: "作成後の画面を見る",
+  onboardingName: "表示する名前",
+  onboardingNameExample: "ユイ",
+  onboardingJob: "役割・肩書き（任意）",
+  onboardingJobExample: "ソフトウェアエンジニア",
+  onboardingProfileNote: "名前と肩書きの入力例です。画像の変更とプロフィールの保存は行いません。",
+  onboardingContinue: "次へ",
+  onboardingSkip: "スキップ",
+  onboardingInviteLabel: "メールアドレス",
+  onboardingInviteNote: "複数の宛先をカンマで区切る入力例です。招待メールは送信されません。",
+  onboardingLinkPreview: "招待リンクの案内を見る",
+  onboardingLinkNote: "見本のため招待リンクは発行・コピーされません。実際の招待は正式な登録後に行います。",
+  onboardingSkipFinish: 'スキップして会員登録へ',
+  onboardingFinish: "見本を終えて会員登録へ",
+  onboardingBack: "戻る",
+  onboardingProgress: "利用開始のステップ",
     wiki: "Wiki",
     orgWiki: "{organization}の Wiki",
     orgWikiAccess: "この組織の全員が、読んで書けます。",
@@ -419,10 +492,10 @@
     ];
   }
   // 空の行（.draft-row）。題だけを打って Enter で足す。kind は root（親なし）、story（ストーリーの下）、col（スプリントの列）
-  function draftRow(kind, key, label) {
+  function draftRow(kind, key, label, placeholder) {
     const id = `draft-${kind}-${key}`;
     return `<div class="draft-row" data-draft-row>${icon("plus")}<label class="visually-hidden" for="${id}">${esc(label)}</label>` +
-      `<input class="input" id="${id}" data-draft="${kind}:${key}" placeholder="${esc(label)}（題を打って Enter）" autocomplete="off" enterkeyhint="done"></div>`;
+      `<input class="input" id="${id}" data-draft="${kind}:${key}" placeholder="${esc(placeholder ?? `${label}（題を打って Enter）`)}" autocomplete="off" enterkeyhint="done"></div>`;
   }
   // 属性のチップ。タスクの属性（pts か who）を、行のチップを押して後から決める。値がなければ薄い破線の形（未設定）。
   // 押すと値の一覧（行の「⋯」と同じメニュー）が開き、選ぶと見本の中で保存する
@@ -650,7 +723,7 @@
         <div class="board-col-head">${c.done ? icon("check") : ""}<span class="board-col-name">${c.done ? t("done") : esc(c.name)}</span><span class="board-col-n">${items.length}</span><span class="board-col-pts">${sumPts(items)} pt</span></div>
         ${c.done && D.definitionOfDone.length ? `<details class="dod"><summary>${t("dod")}</summary>${dodDoc()}</details>` : ""}
         ${items.map((x, i) => card(x, c.done ? undefined : orderOf(i), { mark: opts.cardMarks && opts.cardMarks(x, i, c), grab: opts.grab ? opts.grab(x) : !x.doneAt, key: opts.key })).join("") || `<p class="board-empty">なし</p>`}
-        ${opts.draft && !c.done ? draftRow("col", c.id, `${t("task")}を足す: ${c.name}`) : ""}
+        ${opts.draft && !c.done ? draftRow("col", c.id, `${t("task")}を足す: ${c.name}`, `${t("task")}を足す`) : ""}
       </section>`;
     }).join("")}</div></div>`;
   }
@@ -1182,11 +1255,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function saveStateHtml(name) {
     return `<span class="save-state" data-save-state="${name}" role="status"></span>`;
   }
+  // ページ全体は画面に h1 が無いので題を h1 にする（本番の TaskDrawer と同じ）。横と真ん中は h2
+  const drawerTitleTag = () => (renderedDrawerMode() === "page" ? "h1" : "h2");
   function drawerTitleHtml(x) {
-    if (drawerReadOnly()) return `<h2 class="drawer-title"><span id="drawer-title">${titleOf(x)}</span></h2>`;
+    if (drawerReadOnly()) return `<${drawerTitleTag()} class="drawer-title"><span id="drawer-title">${titleOf(x)}</span></${drawerTitleTag()}>`;
     // 取り込み元のタイトルは、ここでは変えられない（書けないことを添える）
-    if (x.src) return `<h2 class="drawer-title"><span id="drawer-title">${titleOf(x)}</span></h2><span class="props-note">取り込んだ${t("task")}のタイトルは、ここでは直せません</span>`;
-    return `<h2 class="visually-hidden"><span id="drawer-title">${titleOf(x)}</span></h2>
+    if (x.src) return `<${drawerTitleTag()} class="drawer-title"><span id="drawer-title">${titleOf(x)}</span></${drawerTitleTag()}><span class="props-note">取り込んだ${t("task")}のタイトルは、ここでは直せません</span>`;
+    return `<${drawerTitleTag()} class="visually-hidden"><span id="drawer-title">${titleOf(x)}</span></${drawerTitleTag()}>
       <div class="field"><div class="drawer-title"><label class="visually-hidden" for="drawer-edit-title">タイトル</label>
         <input class="input is-inline" id="drawer-edit-title" data-drawer-input="title" value="${esc(drawer.drafts.title ?? x.title)}" autocomplete="off"></div>
         <span class="field-error" role="alert" data-drawer-error="title"${drawer.errors.title ? "" : " hidden"}>${drawer.errors.title ? `${icon("alert")}${drawer.errors.title}` : ""}</span>${saveStateHtml("title")}</div>`;
@@ -1296,14 +1371,14 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${x.src ? `<span class="source-key">${esc(x.src.key)}</span><span class="chip">取り込み元: ${esc(x.src.status)}</span>` : ""}
         <span class="drawer-tools">
           ${drawerStepButtons()}${drawerModeButtons()}
-          <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
         </span>
+        <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
       </div>
       ${drawerReadOnly() ? `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の${t("task")}は、読み取りだけできます</span></div>` : ""}
       ${drawerTitleHtml(x)}
       ${x.srcDone && !x.doneAt ? `<div class="callout is-ok">${icon("check")}<span>取り込み元で完了になりました。完了にするかはここで決めます。</span></div>` : ""}
       <dl class="props">
-        <div><dt>${t("column")}</dt><dd>${colName(x) ? `<span class="status-dot">${esc(colName(x))}</span>` : "—"}</dd></div>
+        <div><dt>${t("column")}</dt><dd>${colName(x) ? `<span class="status-dot is-wrap">${esc(colName(x))}</span>` : "—"}</dd></div>
         <div><dt>${t("assignee")}</dt><dd>${drawerAssigneeHtml(x)}</dd></div>
         <div><dt>${t("points")}</dt><dd>${drawerPointsHtml(x)}</dd></div>
         <div><dt>${t("due")}</dt><dd>${drawerDueHtml(x)}</dd></div>
@@ -1412,8 +1487,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${storyMenuHtml(st)}
         <span class="drawer-tools">
           ${drawerStepButtons()}${drawerModeButtons()}
-          <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
         </span>
+        <button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button>
       </div>
       ${ro ? `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の${t("story")}は、読み取りだけできます</span></div>` : ""}
       ${drawerTitleHtml(st)}
@@ -1431,8 +1506,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 引き出しの見本の状態。読み込み中と、読めなかったとき（もう一度試す）は、見出しと文だけ
   function drawerStateHtml() {
-    const top = `<div class="drawer-top">${isStoryDrawer() ? `<span class="chip">${icon("check")}${t("story")}</span>` : ""}<span class="drawer-tools">${drawerStepButtons()}${drawerModeButtons()}<button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></span></div>
-      <h2 class="drawer-title"><span id="drawer-title">${drawerNoun()}</span></h2>`;
+    const top = `<div class="drawer-top">${isStoryDrawer() ? `<span class="chip">${icon("check")}${t("story")}</span>` : ""}<span class="drawer-tools">${drawerStepButtons()}${drawerModeButtons()}</span><button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></div>
+      <${drawerTitleTag()} class="drawer-title"><span id="drawer-title">${drawerNoun()}</span></${drawerTitleTag()}>`;
     if (drawer.view === "loading") return `${top}<p class="field-hint">読み込んでいます</p>`;
     return `${top}<div class="callout is-danger" role="alert">${icon("alert")}<span>この${drawerNoun()}を読み込めませんでした。もう一度試してください。</span></div>
       <div class="form-actions"><button class="btn" type="button">もう一度試す</button></div>`;
@@ -3123,6 +3198,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const x = task(el.dataset.done);
       x.doneAt = "10/20 10:12"; if (x.sprint && x.col) x.prevCol = x.col, x.col = "done";
       stamped.add(x.id); redrawAll();
+      toast(`${icon("check")}<span>${t("task")}を${t("done")}にしました${x.pts > 0 ? "\n+40 XP" : ""}</span>`);
       document.querySelector(`#content [data-undo="${x.id}"]`)?.focus();
       return;
     }

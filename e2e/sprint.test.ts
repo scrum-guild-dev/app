@@ -967,7 +967,12 @@ test.describe('カードのドラッグ', () => {
     // 完了の応答を遅らせ、返る前に2枚目を落とす。完了が列の途中で読み直すと、続けて積んだ移動は送られずに捨てられていた
     const unrouteComplete = await routeOperation(page, taskComplete, { slug: 'aoba' }, async (call) => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      await call.fulfill({ task_id: completingId, completed_at: '2026-10-20T00:00:00.000Z', left_sprint: false });
+      await call.fulfill({
+        task_id: completingId,
+        completed_at: '2026-10-20T00:00:00.000Z',
+        left_sprint: false,
+        xp_granted: 40,
+      });
     });
     const unrouteMove = await mockOperation(page, taskColumnMove, { slug: 'aoba' }, { task_id: 'x', column_id: 'y' });
     const columnMoves: string[] = [];

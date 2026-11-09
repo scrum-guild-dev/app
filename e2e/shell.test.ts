@@ -478,7 +478,12 @@ test('書体を自分のオリジンから読み込み、外へ通信しない',
 
   expect([...origins]).toEqual([new URL(baseURL ?? '').origin]);
   expect(fonts.length).toBeGreaterThan(0);
-  expect(await page.evaluate(() => document.fonts.check('700 16px "BIZ UDPGothic"'))).toBe(true);
+  expect(fonts.every((url) => url.includes('noto-sans-jp'))).toBe(true);
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toHaveCSS(
+    'font-family',
+    /"Noto Sans JP"/,
+  );
+  expect(await page.evaluate(() => document.fonts.check('700 16px "Noto Sans JP"'))).toBe(true);
   expect(await collect()).toEqual([]);
 });
 
@@ -746,7 +751,7 @@ test('経路に合わないパスも 200 でシェルを返し、CSP の違反�
 test('/api/health は D1 に届いて 200 で版を返す', async ({ request }) => {
   const res = await request.get('/api/health');
   expect(res.status()).toBe(200);
-  expect(await res.json()).toEqual({ status: 'ok', database: 'ok', version });
+  expect(await res.json()).toEqual({ status: 'ok', database: 'ok', credentialKeys: 'ok', version });
 });
 
 // 760px 以下ではメニューが上の帯になる。本文が画面の高さに届かなくても、メニューは中身の高さのままで、余りは本文が受け取る

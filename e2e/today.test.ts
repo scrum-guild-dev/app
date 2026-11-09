@@ -3,7 +3,6 @@
 // 実行する日にも seed の日付にも依存しない。サーバーが返す行の範囲は test/today.test.ts が確かめる。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。一般のユーザーはハルカ（あおば開発の受託開発チームに所属）
 import type { Locator, Page } from '@playwright/test';
-import { experienceSummary } from '../src/shared/operations/experience/index.ts';
 import { today } from '../src/shared/operations/organization/index.ts';
 import type { TodayTask } from '../src/shared/operations/organization/today.ts';
 import { taskComplete, taskReopen, taskTodayMark } from '../src/shared/operations/task/index.ts';
@@ -261,17 +260,19 @@ test('担当のタスクが無いときは今日やると決めたものだけ�
   await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();
 });
 
-test('右の列は「自分の記録」で、経験値を読めなかったときは列ごと出さない', async ({ page }) => {
-  await mockOperation(page, today, { slug: 'aoba' }, { tasks: ALL_SECTIONS, sprint_goals: [] });
-  await page.goto('/aoba');
-  await expect(page.getByRole('complementary', { name: '自分の記録' })).toBeVisible();
-
-  const unroute = await failOperation(page, experienceSummary, { slug: 'aoba' }, 500, 'internal');
-  await page.reload();
-  await expect(region(page, '期日切れ')).toBeVisible();
-  await expect(page.getByRole('complementary', { name: '自分の記録' })).toHaveCount(0);
-  await unroute();
-});
+for (const width of [390, 1280]) {
+  test(`今日やることは ${width}px でレベルの面を出さず経験値を読まない`, async ({ page }) => {
+    const requests: string[] = [];
+    page.on('request', (request) => requests.push(request.url()));
+    await page.setViewportSize({ width, height: 900 });
+    await mockOperation(page, today, { slug: 'aoba' }, { tasks: ALL_SECTIONS, sprint_goals: [] });
+    await page.goto('/aoba');
+    await expect(region(page, '期日切れ')).toBeVisible();
+    await expect(page.locator('.layout-aside, .layout-side')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'レベル', exact: true })).toHaveCount(0);
+    expect(requests.some((url) => url.includes('/experience-summary'))).toBe(false);
+  });
+}
 
 test('今日やることを読めなかったときは、空の一覧にせず読み込みの失敗と「もう一度試す」を出す', async ({ page }) => {
   const unroute = await failOperation(page, today, { slug: 'aoba' }, 500, 'internal');
@@ -295,7 +296,7 @@ function removeTask(tasks: TodayTask[], id: unknown): void {
 }
 
 // 印、完了、戻すの操作。今日の読み取りと、3 つの操作を、行の状態を持つ応答に差し替える（操作の後の読み直しで、行が区分を移る）
-async function routeTodayState(page: Page, tasks: TodayTask[]) {
+async function routeTodayState(page: Page, tasks: TodayTask[], xpGranted = 40) {
   const calls: { operation: string; input: unknown }[] = [];
   await routeOperation(page, today, { slug: 'aoba' }, (call) => call.fulfill({ tasks, sprint_goals: [] }));
   await routeOperation(page, taskTodayMark, { slug: 'aoba' }, (call) => {
@@ -311,7 +312,12 @@ async function routeTodayState(page: Page, tasks: TodayTask[]) {
     task.completed_at = '2026-11-04T03:00:00.000Z';
     task.is_today_completed = true;
     task.reopenable = true;
-    return call.fulfill({ task_id: task.id, completed_at: task.completed_at, left_sprint: false });
+    return call.fulfill({
+      task_id: task.id,
+      completed_at: task.completed_at,
+      left_sprint: false,
+      xp_granted: xpGranted,
+    });
   });
   await routeOperation(page, taskReopen, { slug: 'aoba' }, (call) => {
     calls.push({ operation: 'task-reopen', input: call.input });
@@ -354,12 +360,19 @@ test('太陽のボタンで印を付けると今日やると決めたものに�
 test('完了にすると今日の完了に移って静止でなく判を押す動き付きの印が出て、「戻す」で元の区分に戻る', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const task = row('終わらせる', { today_on: TODAY });
   const calls = await routeTodayState(page, [task]);
   await page.goto('/aoba');
 
   await page.getByRole('button', { name: '完了にする: 終わらせる' }).click();
   const done = region(page, '今日の完了').locator('.entry', { hasText: '終わらせる' });
+  await expect(page.getByRole('status').filter({ hasText: '+40 XP' })).toBeVisible();
+  const toastText = page.getByRole('status').filter({ hasText: '+40 XP' }).locator('span');
+  await expect(toastText).toHaveCSS('white-space', 'pre-line');
+  const toastBox = await toastText.boundingBox();
+  expect(toastBox).not.toBeNull();
+  expect(toastBox!.x + toastBox!.width).toBeLessThanOrEqual(390);
   await expect(done).toBeVisible();
   await expect(done.locator('.hanko')).toHaveClass(/\bis-new\b/);
   await expect(done.locator('.hanko')).toBeFocused();
@@ -372,6 +385,15 @@ test('完了にすると今日の完了に移って静止でなく判を押す�
   await expect(page.getByRole('button', { name: '完了にする: 終わらせる' })).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'の完了を戻しました' })).toBeVisible();
   expect(calls.map((call) => call.operation)).toEqual(['task-complete', 'task-reopen']);
+});
+
+test('経験値の付かない完了ではXPの行を出さない', async ({ page }) => {
+  await routeTodayState(page, [row('経験値なし', { today_on: TODAY, points: 0 })], 0);
+  await page.goto('/aoba');
+  await page.getByRole('button', { name: '完了にする: 経験値なし' }).click();
+  const toast = page.getByRole('status').filter({ hasText: 'タスクを完了にしました' });
+  await expect(toast).toBeVisible();
+  await expect(toast).not.toContainText('XP');
 });
 
 test('終了したスプリントの中で完了した行には「戻す」を出さない', async ({ page }) => {

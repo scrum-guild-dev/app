@@ -731,8 +731,9 @@ describe('task-complete', () => {
 
     const res = await complete(target, target.member, task.id);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { task_id: string; completed_at: string };
+    const body = (await res.json()) as { task_id: string; completed_at: string; xp_granted: number };
     expect(body.task_id).toBe(task.id);
+    expect(body.xp_granted).toBe(XP_TASK_COMPLETED);
 
     const records = await recordsOf(target, task.id);
     expect(records.task).toMatchObject({ completed_at: body.completed_at, completed_by: target.member.userId });
@@ -788,13 +789,23 @@ describe('task-complete', () => {
   ])('%s のタスクの完了では、xp_grants は0行で、完了の記録と履歴は書く', async (_name, points) => {
     const target = await createTarget();
     const task = await createTask(target.organization, target.workspace.id, target.admin.userId!, { points });
-    expect((await complete(target, target.member, task.id)).status).toBe(200);
+    const response = await complete(target, target.member, task.id);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ xp_granted: 0 });
 
     const records = await recordsOf(target, task.id);
     expect(records.grants).toEqual([]);
     expect(records.completions).toHaveLength(1);
     expect(records.completions[0]!.points).toBe(points);
     expect(records.logs).toHaveLength(1);
+  });
+
+  test('起票と完了が本人なら両方の経験値だけを返す', async () => {
+    const target = await createTarget();
+    const task = await createTask(target.organization, target.workspace.id, target.member.userId!, { points: 1 });
+    const response = await complete(target, target.member, task.id);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ xp_granted: XP_TASK_CREATED + XP_TASK_COMPLETED });
   });
 
   test('担当のいるタスクの完了の経験値は担当者へ、起票の経験値は作った人へ付く', async () => {
@@ -804,7 +815,9 @@ describe('task-complete', () => {
       points: 1,
       assignee_user_id: target.leader.userId,
     });
-    expect((await complete(target, target.admin, task.id)).status).toBe(200);
+    const response = await complete(target, target.admin, task.id);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ xp_granted: 0 });
 
     const records = await recordsOf(target, task.id);
     expect(records.completions[0]).toMatchObject({

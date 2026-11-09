@@ -409,7 +409,7 @@
         done = true;
         // 別の画面で先に完了にされていたときも、読み直して完了の列に置く
         const message = result.ok
-          ? completedMessage(result.data.left_sprint, t)
+          ? completedMessage(result.data.left_sprint, result.data.xp_granted, t)
           : t('taskAlreadyDone', { task: t('task'), done: t('done') });
         // トーストが読み上げる
         showToast(message, 'check');
@@ -755,6 +755,7 @@
                 bind:this={draftRows[column.id]}
                 keyshortcut={column.id === firstOpenColumnId ? ariaKeyshortcuts(NEW_TASK_KEY) : undefined}
                 label={t('sprintBoardAddTask', { task: t('task') })}
+                placeholder={t('sprintBoardAddTaskPlaceholder', { task: t('task') })}
                 name={t('sprintBoardAddTaskIn', { task: t('task'), column: columnName(column) })}
                 problem={cardTitleProblem}
                 create={(title) => addCard(column, title)}

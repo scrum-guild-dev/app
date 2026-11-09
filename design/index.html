@@ -6,7 +6,7 @@
 <title>Scrum Guild デザインシステム</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Zen+Old+Mincho:wght@700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;900&display=swap">
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="components.css">
 <style>
@@ -99,6 +99,9 @@ const COLORS = [
 ];
 const SCREENS = [
   ["consent.html", "同意の確認", "利用規約とプライバシーポリシーへの同意、同意済み、更新、読み込み失敗"],
+  ["signup.html", "会員登録", "登録の認証方法を選び、利用開始へ進む"],
+  ["onboarding.html", "利用開始のプレビュー", "プロフィールで個人用URLを設定し、招待時にチーム利用を選ぶ見本"],
+  ["onboarding-live.html", "利用開始の保存と失敗", "プロフィール保存済み・保存エラー・個人用の停止・招待の部分失敗の静的見本"],
   ["login.html", "ログイン", "ログイン、ログインできないとき、会員登録、届いた招待"],
   ["organizations.html", "組織の選択", "入れる組織が2つ以上の人のログイン直後"],
   ["today.html", "今日やること", "全ワークスペースの自分のタスク、レベル、積載量"],
@@ -231,19 +234,19 @@ const SECTIONS = [
     `<div class="screens">${SCREENS.map(([href, name, note]) => `<a href="${href}"><b>${typeof name === "function" ? name() : name}</b><span>${note}</span></a>`).join("")}</div>`)],
   ["colors", "色", () => block("colors", "色", "色は役割で名前を付ける。部品は tokens.css の変数だけを使い、素の値を書かない。テーマを切り替えると、同じ名前のまま値が入れ替わる。",
     colorBlock(), ["完了の色は完了の印とクリアだけ、経験値の色は経験値とレベルとレイドだけに使い、他の意味を持たせない。", "状態の色は、必ずアイコンか文字と一緒に使う（色だけで区別しない）。", "操作の色は操作と選択と進みの色。飾りには使わない。"])],
-  ["type", "文字", () => block("type", "文字", "書体は役割で4つに分ける。",
+  ["type", "文字", () => block("type", "文字", "書体は Noto Sans JP に統一し、用途を4つの変数で表す。",
     `<div>
       <div class="type-row"><span class="cat-name">--font-display<br>2xl / --weight-display</span><span class="page-title">今日やること</span></div>
       <div class="type-row"><span class="cat-name">--font-display<br>xl / --weight-display</span><span class="section-title">今週が${t("due")}</span></div>
       <div class="type-row"><span class="cat-name">--font-display<br>lg / 700</span><span class="notice-title">勤怠の月次の締めを手作業なしで回す</span></div>
-      <div class="type-row"><span class="cat-name">--font-body<br>md / 400</span><span>購入額に応じてポイントを付け、次の購入で使えるようにする。年内の公開が先方との約束。</span></div>
-      <div class="type-row"><span class="cat-name">--font-body<br>xs</span><span style="font-size:var(--text-xs);color:var(--color-muted)">補足とラベルの大きさ。12px より小さくしない。</span></div>
+      <div class="type-row"><span class="cat-name">--font-body<br>body / 400</span><span>購入額に応じてポイントを付け、次の購入で使えるようにする。年内の公開が先方との約束。</span></div>
+      <div class="type-row"><span class="cat-name">--font-body<br>xs</span><span style="font-size:var(--text-xs);color:var(--color-muted)">短い補足の大きさ。フォームラベルは14px。12px より小さくしない。</span></div>
       <div class="type-row"><span class="cat-name">--font-mono</span><span class="mono">SHOP-128 · acme/shop#412 · 2026-10-13 〜 10/26 · 5 pt</span></div>
       <div class="type-row"><span class="cat-name">.wrap-anywhere</span><span class="mono wrap-anywhere">9f2c4e7a1b3d5f60718293a4b5c6d7e8f901a2b3</span></div>
       <div class="type-row"><span class="cat-name">.keep-together</span><span>利用規約が改められました <span class="mono keep-together">改定日: 2026-10-31</span></span></div>
       <div class="type-row"><span class="cat-name">--font-stat</span><span class="xp-num">1,240<small>XP</small></span></div>
     </div>`,
-    ["見出しの書体（--font-display）は画面と節の見出し、貼り紙と引き出しの題、列の名前だけ。本文やボタンには使わない。シンプルはゴシック、中世風は明朝、現代風は Chakra Petch とゴシック。", "キー、日付、ポイントは mono、レベルと経験値と積載量の数字は stat。数字が縦に並ぶ所は等幅の数字にする。", "版（40文字のコミットの SHA）、ID、URL のように、区切りがなく長くなる文字列には wrap-anywhere を足す。狭い幅でも、横にはみ出さずに途中で折る。表のセルなど折らない所では付けない。", "途中で折ると読めなくなる短い値（改定日の「改定日: 2026-10-31」など）には keep-together を足す。行に収まるなら割らずに次の行へ送り、文字の拡大や狭い幅で行より長くなったときだけ中で折る（はみ出さない）。区切りのない長い文字列には使わず、wrap-anywhere にする。"])],
+    ["見出しの書体（--font-display）は画面と節の見出し、貼り紙と引き出しの題、列の名前だけ。本文やボタンには使わない。全テーマで Noto Sans JP を使う。", "キー、日付、ポイントは mono、レベルと経験値と積載量の数字は stat。数字が縦に並ぶ所は等幅の数字にする。", "版（40文字のコミットの SHA）、ID、URL のように、区切りがなく長くなる文字列には wrap-anywhere を足す。狭い幅でも、横にはみ出さずに途中で折る。表のセルなど折らない所では付けない。", "途中で折ると読めなくなる短い値（改定日の「改定日: 2026-10-31」など）には keep-together を足す。行に収まるなら割らずに次の行へ送り、文字の拡大や狭い幅で行より長くなったときだけ中で折る（はみ出さない）。区切りのない長い文字列には使わず、wrap-anywhere にする。"])],
   ["space", "余白と形", () => block("space", "余白と形", "余白は 4px 刻み。角、区切りの線、影はテーマで変わる。",
     `<div class="two"><div class="field">${[1, 2, 3, 4, 5, 6, 8, 10].map((n) => `<div class="space-row"><span class="cat-name" style="width:80px">--space-${n}</span><i style="width:var(--space-${n})"></i></div>`).join("")}</div>
      <div class="field">
@@ -336,7 +339,7 @@ const SECTIONS = [
       <span class="chip is-name">${icon("calendar")}<span><span class="visually-hidden">${t("sprint")}：</span><span class="mono">11/2〜11/15</span></span></span>
     </div>
     <div class="cat-row">
-      <span class="tag">受託開発チーム</span><span class="status-dot">作業中</span>
+      <span class="tag">受託開発チーム</span><span class="status-dot is-wrap">作業中</span>
       <span class="source-key">${icon("link")} SHOP-128</span><span class="source-key">${icon("git")} acme/shop#412</span>
       <span class="source-key is-wrap">${icon("link")} https://example.com/spec/points/very-long-path-without-any-space-that-must-wrap-inside-the-column-even-on-a-narrow-screen/0123456789012345678901234567890123456789</span><a class="btn is-sm" href="#" aria-label="リンクを新しいタブで開く">開く</a>
       ${pts(0)}${pts(5)}${pts(13)}${pts(null)}
@@ -350,7 +353,7 @@ const SECTIONS = [
     <div class="callout is-danger">${icon("alert")}<span>認証に失敗したので止めました。</span></div>
     <div class="callout is-warn">${icon("alert")}<span role="alert">${t("workspace")}の一覧を更新できませんでした</span><div class="callout-actions"><button class="btn is-sm" type="button">もう一度試す</button><span class="field-hint" role="status">まだ読み込めませんでした</span></div></div>`,
     ["期日の印は、期限切れが赤、今日と今週が橙、それより先は色なし。完了したら色を付けない。", "is-ok は取り込み元の状態や進行中のような「良い状態」、is-done はクリアと完了（完了の印と同じ役の色。中世風では朱）。", "取り込み元の期限には「（取り込み元）」を添える。", "区分、リポジトリ、入っているスプリントの名前は .chip.is-name で出す。名前は利用者が付ける（50 字まで）ので、行の幅を超えたら折り返して全文を出す。区分はタグ、リポジトリは git、スプリントは暦のアイコンを添えて、状態の印と見分けられるようにする。名前の無いスプリントは期間（M/D〜M/D）を .mono で出す。種類は見えない文字（「区分：」「リポジトリ：」「スプリント：」）で読み上げに添える。", "長い URL を載せる所（エピックの画面の概要など）は、URL を .source-key.is-wrap で折り返して全文を出し、その横に aria-label 付きの「開く」（.btn.is-sm）を置く。引き出しの中は .drawer .source-key が同じ折り返しを持つ。", "ポイントは枠付きの数字、未見積もりは点線の「未」。", "クリア報酬の段階（小・中・大）は、ポイントと混ざらないよう別の形（tier）にする。", "囲みに操作を付けるときは、ボタンと状態の文を .callout-actions にまとめる。右に寄り、狭い幅では本文の下へ折り返す。3 列のレーンの中（.lane、幅 1081px 以上）は幅が狭いので、いつも本文の下の 1 行に置く。狭い幅と指で押す画面では、中の小さいボタン（.btn.is-sm）の押せる範囲を、見た目を変えずに 44px 四方以上へ広げる（.form-actions の中も同じ）。失敗の知らせ（role=\"alert\"）は本文の span に付け、状態の文（role=\"status\"）を alert の中に入れ子にしない。", "読み直しの失敗の前に済んだ操作は、何が済んだかを先に言う囲み（.callout.is-warn）で画面に残す（トーストは消えるので）。行とカードの「⋯」から消した後に一覧ごと読めなかったときは、読み込みの失敗の画面の見出しの下に「タスクは削除しましたが、画面を読み直せませんでした。もう一度試してください。」の囲みだけを置き、「もう一度試す」は空の状態の1つにする。", "終了したワークスペースの帯は .callout.is-info で、ワークスペースの中のどの画面にも先頭に置く。再開するボタンは置かず、管理者には組織の管理へのリンクだけを添える。"],
-    ".chip .is-danger .is-warn .is-todo .is-ok .is-done .is-carry .is-name / .tag / .status-dot / .source-key / .pts .is-none / .tier / .kind .is-epic .is-story / .callout .is-ok .is-warn .is-info .callout-actions")],
+    ".chip .is-danger .is-warn .is-todo .is-ok .is-done .is-carry .is-name / .tag / .status-dot .is-wrap / .source-key / .pts .is-none / .tier / .kind .is-epic .is-story / .callout .is-ok .is-warn .is-info .callout-actions")],
   ["people", "人とレベル", () => block("people", "人とレベル", "他の人に見せるのはレベルだけ。経験値の数字は本人だけ。",
     `<div class="cat-row">
       ${avatarOf("u1")}${avatarOf("u2", { lg: true })}${avatar(null)}${avatarOf("u5")}
@@ -366,7 +369,7 @@ const SECTIONS = [
     `<div class="cat-row"><span class="entry-end"><span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span><button class="link-btn" type="button" aria-label="${t("done")}を戻す: 見本" aria-disabled="false">戻す</button><button class="link-btn" type="button" aria-label="${t("done")}を戻す: 送信中の見本" aria-disabled="true">戻す</button></span><span class="field-hint">完了の行の「戻す」（.entry-end .link-btn。折り返さず、縮めない）。右は送っている最中（aria-disabled）</span></div>`,
     ["行の左端の太陽は「今日やる」。押すと金色になる。", "完了は判子で示し、すぐ横に「戻す」を置く。", "完了の操作を送っている最中は、丸を薄くして押しても何も起きないようにする（aria-disabled。フォーカスは残す）。", "今日やるの印の太陽は、送っている最中は薄くして押しても何も起きないようにする（aria-disabled。押された状態の色は保つ）。読み上げの名前は題を添える（「今日やる: <題>」）。","狭い幅（760px 以下）と指で押す画面では、完了の操作と今日やるの太陽と完了の行の「戻す」（.entry-end .link-btn）の押せる範囲を 44px 四方以上に広げる（見た目は変えず、::after で広げる）。ポイントなどの .segmented の選択肢も 44px の高さにする。", "取り込んだタスクは、キーと取り込み元のアイコンを必ず添える。"],
     ".book .entry .is-done .entry-main .entry-title .entry-meta .entry-end / .sun[aria-pressed] .sun[aria-disabled] / .done-btn .done-btn[aria-disabled] / .hanko .is-new / .entry-end .link-btn")],
-  ["board", "列とカード", () => block("board", "列とカード", "スプリントの列。列の名前は明朝。完了の列にだけ完成の定義を添える。狭いときは横に送る。",
+  ["board", "列とカード", () => block("board", "列とカード", "スプリントの列。列の名前は見出しの書体。完了の列にだけ完成の定義を添える。狭いときは横に送る。",
     board("sp14"),
     ["列の名前はリーダーが付けたもので、訳さない。完了の列だけは「完了」と出す。列の数は .board の --board-cols で渡す（既定は 4）。列は 232px を下限にし、足りない幅では .board-wrap の中で横にスクロールする。", "カードの操作（列の移動）は、ドラッグの他にキーボードでもできるようにする。完了でないカードは tabindex=\"0\" で選べ、中のどこにフォーカスがあっても Alt と ← → で隣の列の末尾へ、Alt と ↑ ↓ で列の中を1つ動かす。同じ操作を、カードの右下の「⋯」（.row-menu）のメニュー（前の列へ、上へ、下へ、次の列へ）でもできる。カードの操作は、完了の丸と「⋯」だけを出す。動かした後の位置は読み上げる（「<題>を<列>の N 番目に移しました（M 件中）」）。", "最後の完了でない列の「次の列へ」と Alt と → は、完了の列へ移す代わりに完了にする（カードの完了の操作と同じ）。前の列と上と下の端は aria-disabled で、「これより前の列はありません」「いちばん上です」「いちばん下です」を読み上げる。完了の列のカードは選べず、動かすボタンも持たない。完了の印の横の「戻す」（.link-btn）で完了の前の列の末尾へ戻し、戻したカードへフォーカスを移す。完了したストーリーの下のカードと、終了したスプリントのカードには「戻す」を出さない。完了の列の見出しの下には、完成の定義（.dod）を畳んで置く（空なら出さない）。", "選んでいるカード（中にフォーカスがある間）は .card:focus-within で枠の色を変え、左に太い線を入れる（色だけに頼らない）。", "狭い幅（760px 以下）と指で押す画面では、.card-title と .done-btn と完了のカードの「戻す」（.card .link-btn）を 44px 四方にする。「⋯」（.row-menu-btn）は、狭い幅と指で押す画面では常に出して 44px 四方にする。",
       `完成の定義（<code>.dod</code>）は畳んで置き、中身はワークスペースの Markdown を <code>.doc-box</code> で描く（<code>.dod</code> の中では枠と余白を外し、見出しも小さい文字のままにする）。開くまで本文を描かない。空なら出さない。${t("backlog")}の木の上にも同じ部品を1つだけ置き、行ごとには繰り返さない。`],
@@ -382,7 +385,7 @@ const SECTIONS = [
     `<div class="cat-row"><button class="btn is-sm" type="button" data-replay-flash>${icon("redo")}もう一度光らせる</button><span class="field-hint">落としたカード（1列目の2枚目）は、背景を戻しながら光る</span></div>`,
     ["カードはカード全体をつかめる（つかめるカードは draggable=\"true\" で、カーソルは grab）。題のリンクは draggable=\"false\" にして、リンクの既定のドラッグがカードのドラッグを奪わないようにする。完了、戻す、「⋯」のボタンは押すだけで動き出さない。指（タッチ）でも、カードの長押しで動かせる。つかめるのは、書き込めて完了していないカードと、完了の列で「戻す」を出すカード。完了したストーリーの下のカードと、終了したワークスペースのカードはつかめない。", "落とす位置は [data-drop] で示す。before と after はカードとカードの間の線（--color-accent の 2px と左端の小さな丸。カードの幅いっぱい）で、カードの上半分に重ねると前、下半分に重ねると後ろ。into は列（.board-col）の囲みで、.dropzone.is-over と同じ --color-accent の枠と --color-accent-soft の地。カードの無い所と列の頭に重ねると、その列の末尾に入る。", "完了の列は、どこに重ねても列を囲む（位置の線は出さない）。完了でないカードを離すと完了にし、完了の列の中で動かし直しても何も起きない。完了の列のカードを別の列へ落とすと、完了を戻してから落とした列と位置へ移す。元と同じ位置と、落とせない場所には何も示さない。", "つかんだカードは元の位置で薄くする（.is-dragging）。落としたカードは、背景を --color-accent-soft から地の色へ約 0.8 秒（--duration-flash）で戻し、--color-accent の 1px の枠も同じ長さで消して光らせる（.is-dropped）。prefers-reduced-motion のときは光らせず、薄くするのも切り替えだけにする。", "色は既存のトークンだけで、4つのテーマに新しい色は足さない。キーボードとボタンの操作は「列とカード」のまま使える。"],
     ".card[draggable=true] .card-title[draggable=false] / .card[data-drop=before] .card[data-drop=after] / .board-col[data-drop=into] / .is-dragging .is-dropped（.card.is-dropped）")],
-  ["tree", "木", () => block("tree", "木（バックログ）", "エピック、ストーリー、タスクの階層。エピックの行は一段下の地と明朝で区切る。",
+  ["tree", "木", () => block("tree", "木（バックログ）", "エピック、ストーリー、タスクの階層。エピックの行は一段下の地と見出しの書体で区切る。",
     `<div class="tree">${treeEpic("e2")}${treeStory("s4", true)}${treeStory("s1", true, { doneAt: "2026-10-22" })}</div>` +
     `<div class="tree">${treeEpic("e1", { cleared: true, key: "e1-cleared" })}${treeEpic("e2", { canceled: true, empty: true, key: "e2-canceled" })}${treeEpic("e1", { empty: true, key: "e1-empty" })}</div>` +
     `<div class="cat-row"><span class="order-actions"><button class="icon-btn" type="button" aria-label="上へ" title="上へ" aria-disabled="true">${icon("up")}</button><button class="icon-btn" type="button" aria-label="下へ" title="下へ">${icon("down")}</button><button class="icon-btn" type="button" aria-label="親を移す" title="親を移す">${icon("swap")}</button></span><span class="field-hint">行の並べ替えと親の移動。先頭の行の「上へ」は aria-disabled</span></div>`,

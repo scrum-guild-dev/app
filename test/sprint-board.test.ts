@@ -3,8 +3,8 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, test } from 'vitest';
 import { setFixedNow } from '../src/shared/clock.ts';
-import { sprintBoard, sprintStart, taskColumnMove } from '../src/shared/operations/sprint/index.ts';
-import { taskComplete } from '../src/shared/operations/task/index.ts';
+import { sprintBoard, sprintStart, sprintTaskAdd, taskColumnMove } from '../src/shared/operations/sprint/index.ts';
+import { inboxToBacklog, taskComplete } from '../src/shared/operations/task/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb, verifyWorkspace } from '../src/server/db/index.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
@@ -420,6 +420,35 @@ describe('sprint-start', () => {
 });
 
 describe('sprint-board', () => {
+  test('受信箱のタスクはボードに出ず、バックログへ移してスプリントに入れた後は出る', async () => {
+    const { target, board } = await setup();
+    const sprint = await activeSprintWith(target);
+    const existing = await card(target, sprint.id, board.first.id, 'a0');
+    const inbox = await createTask(target.organization, target.workspace.id, target.member.userId!, {
+      tray: 'inbox',
+      is_imported: 1,
+      created_by: null,
+    });
+    const readCards = async () => {
+      const res = await call(target, sprintBoard, {});
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { sprint: { id: string }; columns: { tasks: { id: string }[] }[] };
+      expect(body.sprint.id).toBe(sprint.id);
+      return body.columns.flatMap((column) => column.tasks).map((task) => task.id);
+    };
+
+    expect(await readCards()).toEqual([existing.id]);
+    const rejected = await call(target, sprintTaskAdd, { sprint_id: sprint.id, task_ids: [inbox.id] });
+    expect(rejected.status).toBe(404);
+    expect(await errorCodeOf(rejected)).toBe('not_found');
+    expect(await readCards()).toEqual([existing.id]);
+
+    expect((await call(target, inboxToBacklog, { items: [{ task_id: inbox.id }] })).status).toBe(200);
+    expect(await readCards()).toEqual([existing.id]);
+    expect((await call(target, sprintTaskAdd, { sprint_id: sprint.id, task_ids: [inbox.id] })).status).toBe(200);
+    expect(await readCards()).toEqual([existing.id, inbox.id]);
+  });
+
   test('進行中のスプリントが無ければ sprint は null で列は空', async () => {
     const { target } = await setup();
     await createSprint(target.organization, target.workspace.id);

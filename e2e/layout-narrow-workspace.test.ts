@@ -84,6 +84,122 @@ test('スプリントが 390px で横にはみ出さず、押せる要素が 44p
   });
 });
 
+// バックログのタスクの行の密度（#999）。行の高さを詰めても、押せる範囲（::after で 44px に広げたもの）が隣と重ならない。
+// 押せる範囲の汎用の検査は、重なっても上に描かれた方に当たれば通るので、広げた範囲の箱を直接比べる
+test('バックログのタスクの行が 390px で今より低く、チップと完了の丸の押せる範囲が 44px で隣と重ならない', async ({
+  page,
+}) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(WORKSPACE);
+  const row = page.locator('.entry', {
+    has: page.getByRole('link', { name: 'ポイント付与のバッチを作る', exact: true }),
+  });
+  await expect(row).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  for (const theme of LAYOUT_THEMES) {
+    await applyTheme(page, theme);
+    const result = await row.evaluate((entry) => {
+      // 押せる範囲は ::after で広げるので、疑似要素の大きさから箱を作る。見た目の大きさが 44px 以上ならそのまま使う
+      const targets = [...entry.querySelectorAll<HTMLElement>('.entry-end button, .entry-end a, .entry-title')].filter(
+        (el) => el.getClientRects().length > 0,
+      );
+      const boxes = targets.map((el) => {
+        const rect = el.getBoundingClientRect();
+        const after = getComputedStyle(el, '::after');
+        const w = Math.max(rect.width, after.content === 'none' ? 0 : parseFloat(after.width) || 0);
+        const h = Math.max(rect.height, after.content === 'none' ? 0 : parseFloat(after.height) || 0);
+        const cx = rect.x + rect.width / 2;
+        const cy = rect.y + rect.height / 2;
+        return { name: el.textContent?.trim().slice(0, 12) ?? '', x: cx - w / 2, y: cy - h / 2, w, h };
+      });
+      return { height: entry.getBoundingClientRect().height, boxes };
+    });
+    // 以前は約 181px（seed のこの行を本番と同じ build の 390px で測った。2026-11-08）。いまは約 170px。書体の差に 5px の許容
+    expect(result.height, `${theme}: 行の高さ`).toBeLessThanOrEqual(175);
+    for (const box of result.boxes) {
+      expect(box.w, `${theme}: ${box.name} の幅`).toBeGreaterThanOrEqual(43.5);
+      expect(box.h, `${theme}: ${box.name} の高さ`).toBeGreaterThanOrEqual(43.5);
+    }
+    for (const [i, a] of result.boxes.entries()) {
+      for (const b of result.boxes.slice(i + 1)) {
+        const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        expect(overlapX > 0.5 && overlapY > 0.5, `${theme}: ${a.name} と ${b.name} の押せる範囲が重なる`).toBe(false);
+      }
+    }
+  }
+});
+
+// ストーリーの行（題のリンクと右端の段）と、受信箱の行（選ぶ欄、題、右端）の 390px の並び（#999）。
+// 題の広げた押せる範囲が右端のボタンの範囲に重ならないことと、受信箱の選ぶ欄が題と同じ段に並ぶことを確かめる
+test('ストーリーの行の題と右端のボタンの押せる範囲が重ならず、受信箱の行は選ぶ欄と題が同じ段に並ぶ', async ({
+  page,
+}) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(WORKSPACE);
+  await expect(page.getByRole('link', { name: 'ポイント付与のバッチを作る', exact: true })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const boxesOf = (selector: string) =>
+    page.locator(selector).evaluateAll((rows) =>
+      rows.map((row) =>
+        [...row.querySelectorAll<HTMLElement>('a.tree-link, .tree-end button')]
+          .filter((el) => el.getClientRects().length > 0)
+          .map((el) => {
+            const rect = el.getBoundingClientRect();
+            const after = getComputedStyle(el, '::after');
+            const w = Math.max(rect.width, parseFloat(after.width) || 0);
+            const h = Math.max(rect.height, parseFloat(after.height) || 0);
+            return { y: rect.y + rect.height / 2 - h / 2, h, x: rect.x + rect.width / 2 - w / 2, w };
+          }),
+      ),
+    );
+  for (const theme of LAYOUT_THEMES) {
+    await applyTheme(page, theme);
+    const rows = await boxesOf('.tree-row.is-story');
+    expect(rows.length).toBeGreaterThan(0);
+    for (const boxes of rows) {
+      for (const [i, a] of boxes.entries()) {
+        for (const b of boxes.slice(i + 1)) {
+          const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+          const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+          expect(overlapX > 0.5 && overlapY > 0.5, `${theme}: ストーリー行の押せる範囲が重なる`).toBe(false);
+        }
+      }
+    }
+  }
+  await page.goto(`${WORKSPACE}/inbox`);
+  const row = page.locator('.entry:has(.row-check)').first();
+  await expect(row).toBeVisible();
+  const [check, main] = await Promise.all([
+    row.locator('.row-check').boundingBox(),
+    row.locator('.entry-main').boundingBox(),
+  ]);
+  // 選ぶ欄は題の左の列で、題の上の別の段にならない（縦の範囲が重なり、横は題の左に収まる）
+  expect(check!.y).toBeLessThan(main!.y + main!.height);
+  expect(main!.y).toBeLessThan(check!.y + check!.height);
+  expect(check!.x + check!.width).toBeLessThanOrEqual(main!.x + 1);
+});
+
+test('スプリントの列の「タスクを足す」の欄の案内が、390px でも切れずに読める', async ({ page }) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
+  await page.goto(`${WORKSPACE}/sprint`);
+  const input = page.locator('.board-col .draft-row .input').first();
+  await expect(input).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  await expect(input).toHaveAttribute('placeholder', 'タスクを足す');
+  // 案内の文字の幅が、欄の中身の幅（余白を除く）に収まる
+  const fits = await input.evaluate((el: HTMLInputElement) => {
+    const style = getComputedStyle(el);
+    const canvas = document.createElement('canvas').getContext('2d');
+    if (canvas === null) return false;
+    canvas.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const inner = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    return canvas.measureText(el.placeholder).width <= inner;
+  });
+  expect(fits).toBe(true);
+});
+
 test('受信箱が 390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({ page }) => {
   await expectNarrowLayout(page, 'inbox', async (w) => {
     await page.goto(`${WORKSPACE}/inbox`);
@@ -187,18 +303,20 @@ async function expectDrawerToolsApart(
   await page.waitForLoadState('networkidle');
   for (const theme of LAYOUT_THEMES) {
     await applyTheme(page, theme);
-    const boxes = await drawer.locator('.drawer-tools button:visible').evaluateAll((buttons) =>
-      buttons.map((button) => {
-        const rect = button.getBoundingClientRect();
-        return {
-          close: button.classList.contains('drawer-close'),
-          x: rect.x,
-          y: rect.y,
-          w: rect.width,
-          h: rect.height,
-        };
-      }),
-    );
+    const boxes = await drawer
+      .locator('.drawer-tools button:visible, .drawer-top > .drawer-close')
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const rect = button.getBoundingClientRect();
+          return {
+            close: button.classList.contains('drawer-close'),
+            x: rect.x,
+            y: rect.y,
+            w: rect.width,
+            h: rect.height,
+          };
+        }),
+      );
     // 前後と開き方と閉じるは、どれも見た目ごと 44px 四方
     for (const box of boxes) {
       expect(box.w, `${theme}: 右端のボタンの幅`).toBeGreaterThanOrEqual(44);
@@ -219,6 +337,23 @@ async function expectDrawerToolsApart(
         closeBox!.y + closeBox!.h <= other.y;
       expect(apart, `${theme}: 閉じるボタンと隣のボタンの箱が交わる`).toBe(true);
     }
+    // 閉じるは帯の 1 段目（先頭の印と同じ段）の右端に残る（前後と開き方が 2 段目に落ちても、閉じるを探さない）
+    await expect(drawer.locator('.drawer-top .chip').first()).toBeVisible();
+    const rows = await drawer.evaluate((root) => {
+      const close = root.querySelector('.drawer-close')!.getBoundingClientRect();
+      const first = root.querySelector('.drawer-top > :first-child')!.getBoundingClientRect();
+      const top = root.querySelector('.drawer-top')!.getBoundingClientRect();
+      return {
+        closeTop: close.top,
+        closeRight: close.right,
+        firstTop: first.top,
+        topRight: top.right,
+        topHeight: top.height,
+      };
+    });
+    expect(Math.abs(rows.closeTop - rows.firstTop), `${theme}: 閉じるが 1 段目に無い`).toBeLessThanOrEqual(30);
+    expect(rows.topRight - rows.closeRight, `${theme}: 閉じるが右端に無い`).toBeLessThanOrEqual(2);
+    expect(rows.topHeight, `${theme}: 帯が高すぎる`).toBeLessThan(110);
     expect(await findTargetSizeViolations(page), theme).toEqual([]);
     // 測っている間に、画面の読み直しで DB のテーマに戻っていない
     expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(theme);
@@ -236,6 +371,18 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   await expect(task.getByRole('heading', { level: 2 })).toBeFocused();
   await expect(task.locator('.drawer-steps')).toBeVisible();
   await expectDrawerToolsApart(page, task, 5);
+  // ポイントの選択は折り返しても、どの選択肢にも右と下の区切り（box-shadow）が付き、左の線は残らない
+  const borders = await task.locator('.segmented[aria-labelledby] label span').evaluateAll((spans) =>
+    spans.map((span) => {
+      const style = getComputedStyle(span);
+      return { left: style.borderLeftWidth, shadow: style.boxShadow };
+    }),
+  );
+  expect(borders.length).toBeGreaterThan(1);
+  for (const border of borders) {
+    expect(border.left).toBe('0px');
+    expect(border.shadow).not.toBe('none');
+  }
   // ストーリーの引き出し
   await page.goto(`${WORKSPACE}?story=${STORY_ID}`);
   const story = page.getByRole('dialog');
@@ -246,6 +393,8 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   // ページ全体で開いたタスク
   await page.goto(`${WORKSPACE}/tasks/${TASK_ID}`);
   const whole = page.locator('.drawer.is-page');
-  await expect(whole.getByRole('heading', { level: 2 })).toBeVisible();
+  // ページ全体は画面に h1 が無いので、題を h1 にする（引き出しの h2 のまま読み上げが h2 から始まらない）
+  await expect(whole.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expectDrawerToolsApart(page, whole, 3);
 });
