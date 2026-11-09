@@ -10,6 +10,11 @@ const WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 test.beforeEach(async ({ context, baseURL, page }) => {
   await signIn(context, baseURL, 'admin');
   await page.setViewportSize(NARROW_VIEWPORT);
+  // 並列テストが足した所属先を自動選択させず、この検査では seed の行き先を固定する。
+  await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (output) => ({
+    ...output,
+    workspaces: output.workspaces.filter((workspace) => workspace.id === WORKSPACE.split('/').at(-1)),
+  }));
 });
 
 for (const theme of LAYOUT_THEMES) {
