@@ -21,6 +21,7 @@
   import TreeStory from '../../../../lib/components/TreeStory.svelte';
   import { callOperation, type ApiResult } from '../../../../lib/api.ts';
   import { BacklogDnd } from '../../../../lib/backlog-dnd.svelte.ts';
+  import { DropFlash } from '../../../../lib/drop-flash.svelte.ts';
   import { indexTree, ROOT, type DropMove, type DropRow } from '../../../../lib/backlog-drop.ts';
   import {
     emptyFilter,
@@ -180,6 +181,15 @@
   // 空の行で作ったエピックとストーリー。読み直さずに木へ足し、読み直した木に入ったら捨てる（タスクの added と同じ考え方）
   let addedEpics = $state<{ epic: BacklogEpic; at: number }[]>([]);
   let addedStories = $state<{ story: BacklogStory; epicId: string | null; at: number }[]>([]);
+  // 作った行だけ一度光らせる。DND の光とは別の状態なので、絞り込み中の追加にも使える。
+  const createdFlash = new DropFlash<{ kind: 'task' | 'story' | 'epic'; id: string }>();
+  function wasAdded(kind: 'task' | 'story' | 'epic', id: string): boolean {
+    return createdFlash.value?.kind === kind && createdFlash.value.id === id;
+  }
+  $effect(() => {
+    void page.params.id;
+    return () => createdFlash.clear();
+  });
   let completedIds = $state<string[]>([]);
   let savedPoints = $state<SavedBacklogPoints>({});
   // 完了の応答が返った時刻（performance.now()）。これより前に始まった読み直しが遅れて届いても、完了の印を捨てない（completionSettled）
@@ -707,21 +717,25 @@
           ? t('taskCreated', { backlog: t('backlog') })
           : t('taskCreatedUnder', { story: t('story'), title: parent.title });
       await invalidate('app:backlog-tree');
-      if ((await revealOrNotice('task', task.id, message)) && storyId !== null) expandStory(storyId);
+      if (await revealOrNotice('task', task.id, message)) {
+        if (storyId !== null) expandStory(storyId);
+        createdFlash.show({ kind: 'task', id: task.id });
+      }
       return;
     }
     added = [...added, { task, storyId, at: performance.now() }];
     // 畳まれている親の行は開いて、足した行が見えるようにする
     if (storyId !== null) expandStory(storyId);
+    createdFlash.show({ kind: 'task', id: task.id });
   }
 
   // エピックかストーリーを作った。木を読み直し、絞っているときに作ったものを知らせる
   async function saved(kind: 'story' | 'epic', createdId: string | null): Promise<void> {
     const wasFiltering = filtering;
     await invalidateAll();
-    if (createdId === null || !wasFiltering) return;
+    if (createdId === null) return;
     const message = kind === 'story' ? t('storyCreated', { story: t('story') }) : t('epicCreated', { epic: t('epic') });
-    await revealOrNotice(kind, createdId, message);
+    if (!wasFiltering || (await revealOrNotice(kind, createdId, message))) createdFlash.show({ kind, id: createdId });
   }
 
   // 空の行の題の検査（画面の検査は API の検証と同じ判定。空は送らないので required は出ない）
@@ -781,6 +795,7 @@
       },
     ];
     showToast(t('epicCreated', { epic: t('epic') }), 'check');
+    createdFlash.show({ kind: 'epic', id: made.id });
     return null;
   }
 
@@ -846,6 +861,7 @@
     ];
     if (epicId !== null) epicRows[epicId]?.expand();
     showToast(t('storyCreated', { story: t('story') }), 'check');
+    createdFlash.show({ kind: 'story', id: made.id });
     return null;
   }
 
@@ -1258,6 +1274,7 @@
   {@const place = taskPlaces[task.id]}
   <!-- 親なしのタスクは、移す先のストーリーがあるときだけ「親を移す」を出す（ストーリーの下のタスクは、親なしへ移せる） -->
   <TaskEntry
+    addedFlash={wasAdded('task', task.id)}
     bind:this={entries[task.id]}
     {task}
     {clock}
@@ -1296,6 +1313,7 @@
        完了か中止したエピックの下では、完了と取り消しは必ず断られるので、押せない理由を出す -->
 
   <TreeStory
+    addedFlash={wasAdded('story', story.id)}
     bind:this={treeRows[story.id]}
     {story}
     completedContext={!filtering && workspace
@@ -1440,6 +1458,7 @@
       {#each epics as epic, epicIndex (epic.id)}
         {@const points = epicPoints(epic)}
         <TreeEpic
+          addedFlash={wasAdded('epic', epic.id)}
           bind:this={epicRows[epic.id]}
           {epic}
           pointsDone={points.done}

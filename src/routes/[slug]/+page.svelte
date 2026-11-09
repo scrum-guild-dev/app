@@ -79,10 +79,12 @@
   let pendingIds = $state<string[]>([]);
   // 今この画面で完了にした行。判を押す動き（.is-new）はこの行だけで再生する
   let justDoneIds = $state<string[]>([]);
+  // 完了の応答と読み直しが両方済んで、移った先の行を出せたときだけ光らせる。
+  let doneFlashes = $state<Record<string, number>>({});
 
   // notice は、すぐ出す知らせ。読み直した後の今日の読み取りを見て決めるときは、読み直しの後に呼ぶ関数にする
   type Notice = { message: string; icon: 'check' | 'alert' };
-  type Outcome = { notice: Notice | (() => Notice); reload: boolean; focus: string };
+  type Outcome = { notice: Notice | (() => Notice); reload: boolean; focus: string; flash?: true };
   const notify = (message: string, icon: Notice['icon']): Notice => ({ message, icon });
 
   // 読み直した後、同じ行の操作（selector）へフォーカスを戻す。行が無いか、フォーカスが行の中に入らなかったとき
@@ -115,6 +117,9 @@
       if (typeof outcome.notice !== 'function') showToast(outcome.notice.message, outcome.notice.icon);
       // 読み直しの失敗は、load が today を null にして答える（invalidate は reject しない）。知らせは、そのとき残った読み取りで決める
       if (outcome.reload) await invalidate('app:today');
+      if (outcome.flash && sections.done.some((entry) => entry.id === task.id)) {
+        doneFlashes = { ...doneFlashes, [task.id]: performance.now() };
+      }
       if (deferred !== undefined) {
         await tick();
         const notice = deferred();
@@ -186,6 +191,7 @@
             notice: notify(completedMessage(result.data.left_sprint, result.data.xp_granted, t), 'check'),
             reload: true,
             focus,
+            flash: true,
           };
         }
         if (result.status === 401) return null;
@@ -265,6 +271,7 @@
         task={taskOf(task)}
         done={options.done ?? false}
         justDone={justDoneIds.includes(task.id)}
+        flash={options.done ? (doneFlashes[task.id] ?? 0) : 0}
         pending={pendingIds.includes(task.id)}
         onComplete={() => void complete(task)}
         marked={task.today_on !== null}

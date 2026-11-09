@@ -28,6 +28,7 @@
     pointsAll,
     clock,
     empty,
+    addedFlash = false,
     canMoveUp = false,
     canMoveDown = false,
     onMove,
@@ -41,6 +42,7 @@
     pointsAll: number;
     clock: { today: string; weekStart: number };
     empty: boolean;
+    addedFlash?: boolean;
     canMoveUp?: boolean;
     canMoveDown?: boolean;
     onMove?: (epic: BacklogEpic, delta: -1 | 1) => void;
@@ -94,7 +96,7 @@
   <div
     class="tree-row is-epic"
     class:has-grip={hasGrip}
-    class:is-dropped={dnd?.isFlashing('epic', epic.id)}
+    class:is-dropped={addedFlash || dnd?.isFlashing('epic', epic.id)}
     onkeydown={keydown}
     data-row-id={epic.id}
     data-drop={dropMark === 'into' ? 'into' : undefined}

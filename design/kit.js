@@ -1581,7 +1581,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
     drawer.id = null; drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     renderDrawer();
-    const back = drawer.opener && document.querySelector(`[${isStoryDrawer() ? "data-story" : "data-task"}="${drawer.opener}"]`);
+    const back = drawer.opener instanceof HTMLElement ? drawer.opener : drawer.opener && document.querySelector(`[${isStoryDrawer() ? "data-story" : "data-task"}="${drawer.opener}"]`);
     if (back) back.focus();
   }
   // ---- 自動保存。タイトル、リンク、本文、決まった欄 ----
@@ -1718,6 +1718,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function renderDrawer() {
     const el = document.getElementById("drawer"), scrim = document.getElementById("scrim");
     if (!el) return;
+    el.classList.add("is-motion"); scrim.classList.add("is-motion");
     applyDrawerSize(el);
     if (drawer.id) { captureDrafts(); el.innerHTML = drawerHtml(); el.hidden = false; scrim.hidden = location.pathname.endsWith("/task.html"); }
     else { el.innerHTML = ""; el.hidden = true; scrim.hidden = true; }
@@ -1734,6 +1735,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     dialogOnlyButtons = onlyButtons;
     dialogOpener = document.activeElement;
     const el = document.getElementById("dialog");
+    el.classList.add("is-motion");
     el.innerHTML = `<div class="dialog-sheet" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
       <div class="dialog-head"><h2 class="dialog-title" id="dialog-title">${title}</h2>
         <button class="pill" type="button" data-close-dialog aria-label="閉じる">${icon("x")}</button></div>
@@ -1856,6 +1858,20 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
 
   // ---- 空の行 ----
+  // 足した行・区分を移った行の目印。描き直した後の行にだけ付け、
+  // animationend が来ない reduced-motion のときは付けない。
+  function flashRow(row) {
+    if (!row || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    row.classList.remove("is-dropped");
+    void row.offsetWidth;
+    row.classList.add("is-dropped");
+    const finish = (event) => {
+      if (event.target !== row || event.animationName !== "drop-flash") return;
+      row.classList.remove("is-dropped");
+      row.removeEventListener("animationend", finish);
+    };
+    row.addEventListener("animationend", finish);
+  }
   let draftSeq = 0;
   // 題を打って Enter で足す。見本の中だけで持ち、足したら同じ欄に戻って続けて打てる
   function createFromDraft(input) {
@@ -1874,6 +1890,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     // redraw() は値のある空の行を控えて戻すので、足した題が戻らないよう、描き直す前にこの欄だけ空にする
     input.value = "";
     redrawAll();
+    flashRow(document.querySelector(`#content [data-task="${x.id}"]`)?.closest(".entry, .card"));
     document.getElementById(input.id)?.focus();
     toast(`${icon("check")}${t("task")}を足しました: ${esc(title)}`);
   }
@@ -3257,6 +3274,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const x = task(el.dataset.done);
       x.doneAt = "10/20 10:12"; if (x.sprint && x.col) x.prevCol = x.col, x.col = "done";
       stamped.add(x.id); redrawAll();
+      if (page?.current === "today") flashRow(document.querySelector(`[aria-labelledby="s-done"] [data-task="${x.id}"]`)?.closest(".entry"));
       toast(`${icon("check")}<span>${t("task")}を${t("done")}にしました${x.pts > 0 ? "\n+40 XP" : ""}</span>`);
       document.querySelector(`#content [data-undo="${x.id}"]`)?.focus();
       return;
@@ -3790,7 +3808,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     formatTrialStopDateTime,
     first, firstHref, firstSteps, emptyState, art,
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
-    onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer,
+    onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer, flashRow,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
     avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
     card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
