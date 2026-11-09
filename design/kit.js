@@ -3059,28 +3059,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     location.href = firstHref(target, next);
   }
   let page = null;
-  // 760px 以下のメニューの帯（横に送る .nav）。描き直したら今のページの項目が見える位置まで送り、続きがある端に印を付ける
-  // （CSS が端を薄くする）。計算は本番の src/lib/nav-strip.ts と同じ。広い幅の縦の列は横にはみ出さないので、送らず印も付かない
-  const NAV_STRIP_PEEK = 32;
-  function syncNavStrip(scroll) {
-    const nav = document.getElementById("app-nav");
-    if (!nav) return;
-    const item = scroll && nav.querySelector('a.nav-item[aria-current="page"]');
-    if (item && nav.scrollWidth > nav.clientWidth) {
-      const view = nav.getBoundingClientRect(); const box = item.getBoundingClientRect();
-      const group = nav.querySelector(".ws-menu")?.getBoundingClientRect();
-      // 両端に peek を残す（続きがあると端に幕が重なるため。左の幕は左に送ってあるときだけ出る）
-      const start = group && group.left <= box.left && box.right - group.left <= nav.clientWidth - 2 * NAV_STRIP_PEEK ? group.left : box.left;
-      if (start < view.left + (nav.scrollLeft > 1 ? NAV_STRIP_PEEK : 0) || box.right > view.left + nav.clientWidth - NAV_STRIP_PEEK) nav.scrollLeft = Math.max(0, nav.scrollLeft + start - view.left - NAV_STRIP_PEEK);
-    }
-    nav.toggleAttribute("data-more-start", nav.scrollLeft > 1);
-    nav.toggleAttribute("data-more-end", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
-  }
-  document.addEventListener("scroll", (ev) => { if (ev.target.id === "app-nav") syncNavStrip(false); }, true);
-  // 書体を読み終えると項目の幅が変わるので、送り位置を測り直す
-  document.fonts?.ready.then(() => syncNavStrip(true));
-  // 幅を跨いで狭めたとき、回転したときも、今の項目が隠れていれば送る（本番の NavMenu は ResizeObserver で同じことをする）
-  window.addEventListener("resize", () => syncNavStrip(true));
   function redraw() {
     if (!page) return;
     if (!page.operator) {
@@ -3092,7 +3070,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const tabs = document.getElementById("mobile-navigation-slot");
     if (tabs) tabs.innerHTML = mobileTabsHtml(page.current);
     syncMobileMenu();
-    syncNavStrip(true);
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
     document.getElementById("content").innerHTML = page.render();
