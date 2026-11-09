@@ -30,6 +30,7 @@
   import LoadFailed from './LoadFailed.svelte';
   import WikiContent from './WikiContent.svelte';
   import PageHead from './PageHead.svelte';
+  import FavoriteButton from './FavoriteButton.svelte';
   import WikiTree from './WikiTree.svelte';
   import WikiSearch from './WikiSearch.svelte';
   import WikiHistory from './WikiHistory.svelte';
@@ -609,6 +610,9 @@
           <h2 id="wiki-page-title" tabindex="-1" class="section-title wrap-anywhere">{current.title}</h2>
         </div>
         <div class="form-actions wiki-page-actions">
+          {#if current.id !== deletedPageId}
+            <FavoriteButton targetType="wiki_page" targetId={current.id} title={current.title} {workspaceId} />
+          {/if}
           <button
             class="btn"
             type="button"

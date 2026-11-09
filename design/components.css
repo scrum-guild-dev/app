@@ -97,6 +97,8 @@ h1, h2, h3 { text-wrap: balance; }
 .nav-item .ico { color: var(--color-muted); }
 .nav-item[aria-current="page"] .ico { color: var(--color-accent); }
 .nav-item-label { min-width: 0; }
+.nav-favorites { min-width: 0; }
+.nav-favorites .nav-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 名前を含む項目。狭い幅の帯でも nowrap を引き継がず、名前を全文読めるよう折り返す。 */
 .nav-item.is-wrapping { flex-shrink: 0; }
 .nav-item.is-wrapping .nav-item-label { white-space: normal; overflow-wrap: anywhere; }
@@ -221,7 +223,8 @@ h1, h2, h3 { text-wrap: balance; }
   .app[data-nav-collapsed="true"] .org-menu-button > .chip,
   .app[data-nav-collapsed="true"] .ws-menu,
   .app[data-nav-collapsed="true"] .nav-badge,
-  .app[data-nav-collapsed="true"] .binding-foot { display: none; }
+  .app[data-nav-collapsed="true"] .binding-foot,
+  .app[data-nav-collapsed="true"] .nav-favorites { display: none; }
   /* 節の見出しは罫だけを見せ、文字は読み上げに残す */
   .app[data-nav-collapsed="true"] .nav-group-label {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
@@ -387,6 +390,11 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
   display: grid; gap: var(--space-8); align-content: start;
 }
 
+/* 全文を薄くしても補足を読めるよう、待っている間だけ本文の文字色に寄せる。 */
+.content[aria-busy="true"] { opacity: 0.95; --color-muted: var(--color-fg); }
+.content[aria-busy="true"] .team-xp > b,
+.content[aria-busy="true"] .state-badge { color: var(--color-fg); }
+
 /* アカウントの新しいトークンの発行。組織の枠の上部に置き、長い名前も全文を折り返す。 */
 .token-notice {
   margin: var(--space-2) var(--space-8) var(--space-4);
@@ -414,7 +422,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
    中でスクロールさせると、面の影とフォーカスの輪が切れ、押せる要素の無い脇は読み上げとキーボードで動かせない */
 .layout-side.is-static { position: static; }
 /* 同じ画面の値を読み直している間は、木（.tree[aria-busy]）と同じく薄くして、古い値のまま止まっていないことを見せる */
-.layout-aside[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) ease-out; }
+.layout-aside[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) var(--ease-out); }
 
 /* ===== 画面の見出しと集計 ===== */
 .page-head { display: grid; gap: var(--space-3); padding-bottom: var(--space-5); border-bottom: var(--rule-double); }
@@ -500,8 +508,15 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 }
 .pill:hover:not([aria-disabled="true"]) { border-color: var(--color-muted); }
 .pill[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
-/* 押した状態は .btn.is-on と同じ（accent-soft の地に accent の枠と文字）。主ボタンの塗りつぶしと紛らわしいので塗りつぶさない。色に加えて太字でも示す */
+/* 押した状態は .btn.is-on と同じ（accent-soft の地に accent の枠と文字）。主ボタンの塗りつぶしと紛らわしいので塗りつぶさない。色に加えて、文字は太字、アイコンは太い線でも示す */
 .pill[aria-pressed="true"], .pill[aria-pressed="true"]:hover { background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent); font-weight: 700; }
+.pill[aria-pressed="true"] .ico { stroke-width: 2.6; }
+/* アイコンだけの .pill（引き出しの開き方）は線の太さの差が小さいので、枠を内側に1本足して二重にし、形でも示す。
+   強制色では地の色と box-shadow が消えるので、内側の outline で残す（フォーカスの輪が出ている間はそちらに譲る） */
+.pill[aria-pressed="true"]:has(> .ico:only-child) { box-shadow: inset 0 0 0 1px var(--color-accent); }
+@media (forced-colors: active) {
+  .pill[aria-pressed="true"]:has(> .ico:only-child):not(:focus-visible) { outline: 1px solid CanvasText; outline-offset: -4px; }
+}
 .pill-count {
   position: absolute; top: -7px; right: -7px; min-width: 17px; height: 17px; padding: 0 4px;
   background: var(--color-stamp); color: var(--color-on-accent); border-radius: var(--radius-full);
@@ -640,6 +655,22 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
 .entry-end .link-btn { white-space: nowrap; flex: none; }
 .entry.is-done .entry-title { color: var(--color-muted); font-weight: 400; }
 .book-empty { padding: var(--space-4); color: var(--color-muted); font-size: var(--text-sm); }
+
+/* 本人のお気に入り。塗りの有無でも状態を示す。 */
+.favorite-mark {
+  display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px;
+  border: 0; border-radius: var(--radius-1); background: none; color: var(--color-muted);
+}
+.favorite-mark:hover { background: var(--color-rule); color: var(--color-fg); }
+.favorite-mark[aria-pressed="true"] { color: var(--color-accent); }
+.favorite-mark[aria-pressed="true"] .ico { fill: currentColor; }
+.favorite-mark[aria-disabled="true"] { cursor: not-allowed; }
+.favorite-mark[aria-busy="true"] { cursor: wait; }
+.favorite-mark[aria-disabled="true"]:hover { background: none; }
+.favorite-control { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.favorite-control .field-error { max-width: 28rem; }
+/* お気に入りの読み直しは、小さいボタンでもタッチで押せる範囲を確保する。 */
+.favorite-control .btn, .nav-favorites .btn { min-width: 44px; min-height: 44px; padding: var(--space-2) var(--space-3); }
 
 /* 今日やるの印 */
 .sun {
@@ -856,6 +887,9 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .nav { display: flex; align-items: flex-start; overflow-x: auto; width: 100%; gap: var(--space-1); }
   .nav-item { white-space: nowrap; }
   .nav-item.is-wrapping .nav-item-label { max-width: 12rem; }
+  .nav-favorites { display: flex; flex: none; align-items: flex-start; gap: var(--space-1); }
+  .nav-favorites > .nav-group { display: block; flex: none; white-space: nowrap; padding-block: var(--space-2); }
+  .nav-favorites .nav-item-label { max-width: 12rem; }
   .topbar, .content {
     padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
     padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
@@ -954,7 +988,7 @@ a.brand { color: inherit; text-decoration: none; }
 .tree { background: var(--color-surface); border: 1px solid var(--color-line); border-left: var(--rule-double); border-radius: var(--radius-1); }
 .tree > * + * { border-top: 1px solid var(--color-line); }
 /* 絞り込みを変えて読み直している間は、前の木を残したまま少し薄くする（操作はできる） */
-.tree[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) ease-out; }
+.tree[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) var(--ease-out); }
 /* 右端が横に並ぶ幅では、題の列に 12rem を先に取り、右端は残りの幅に収まらなければ中で折り返す（指で押す画面の 44px のボタンでも、
    題の列を押しのけない） */
 .tree-row {
@@ -1257,9 +1291,8 @@ label.pick-row:hover { background: var(--color-accent-soft); }
   .drawer-top > .drawer-close { order: 1; margin-left: auto; }
   .drawer-top > .drawer-tools { order: 2; flex-basis: 100%; margin-left: 0; justify-content: flex-start; }
 }
-/* 開き方は押した時点で実行するボタンの組（.pill）。選んでいる形は aria-pressed で示し、色に加えて太字にする */
+/* 開き方は押した時点で実行するアイコンのボタンの組（.pill）。選んでいる形は aria-pressed で示し、色に加えてアイコンの線を太くする */
 .drawer-mode { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); }
-.drawer-mode .pill { white-space: nowrap; }
 /* 前後のタスクへ移るボタンの組（.pill の矢印）。開き方の左に並べる。端の向きは aria-disabled（.pill の見た目）で止める */
 .drawer-steps { display: inline-flex; gap: var(--space-2); }
 .drawer-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-xl); line-height: var(--leading-tight); overflow-wrap: anywhere; }
@@ -1631,7 +1664,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   to { outline-color: transparent; }
 }
 .entry.is-dropped, .tree-row.is-dropped, .order-list li.is-dropped, .card.is-dropped {
-  outline: 1px solid transparent; outline-offset: -1px; animation: drop-flash var(--duration-flash) ease-out;
+  outline: 1px solid transparent; outline-offset: -1px; animation: drop-flash var(--duration-flash) var(--ease-out);
 }
 /* スプリントのカードと列のドラッグ。つかむ場所はカード全体（ドラッグできるカードは draggable="true"）で、題のリンクとボタンは押すだけ。
    before / after はカードとカードの間の線（カードの幅いっぱい）。線は隙間（--space-2 = 8px）の真ん中に引く。
@@ -1934,7 +1967,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   display: grid; place-items: center; width: 112px; height: 112px; border-radius: 50%;
   border: 3px solid var(--color-done); color: var(--color-done); background: var(--color-ok-soft);
   font-family: var(--font-display); font-weight: var(--weight-display); font-size: 24px; letter-spacing: 0.1em;
-  animation: hanko-press 420ms var(--ease-out) 1;
+  animation: hanko-press var(--duration-celebrate) var(--ease-out) 1;
 }
 .celebrate-title { overflow-wrap: anywhere; max-width: 100%; font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-xl); }
 .celebrate-reward { font-family: var(--font-stat); font-weight: 700; font-size: var(--text-lg); color: var(--color-xp); }
@@ -1982,6 +2015,10 @@ button.file-name { border: 0; background: none; padding: 0; text-align: left; co
 button.file-name:hover { text-decoration-color: currentColor; }
 .file-meta { font-size: var(--text-xs); color: var(--color-muted); overflow-wrap: anywhere; }
 .file-actions { display: flex; gap: var(--space-1); }
+@media (max-width: 760px), (pointer: coarse) {
+  .file-actions .icon-btn { width: 44px; height: 44px; }
+  .file-name:is(button, a) { min-height: 44px; display: flex; align-items: center; }
+}
 .file-row.is-error { border-color: var(--color-danger); }
 .file-row.is-error > .ico, .file-row.is-error .file-meta { color: var(--color-danger); }
 .file-bar { height: 4px; border-radius: var(--radius-full); background: var(--color-gauge); overflow: hidden; margin-top: 4px; }
@@ -2002,6 +2039,7 @@ button.file-name:hover { text-decoration-color: currentColor; }
 .composer-foot .field-hint { flex: 1 1 200px; }
 /* プレビュー（ダイアログの中） */
 .preview { display: grid; place-items: center; min-height: 240px; border: 1px solid var(--color-line); border-radius: var(--radius-1); overflow: hidden; }
+.preview > img, .preview > video { max-width: 100%; max-height: 60vh; object-fit: contain; }
 .preview .file-art { width: 100%; aspect-ratio: 16 / 10; }
 .dialog-sheet.is-wide { width: min(820px, 100%); }
 /* 使っている量と上限（添付ファイルの合計）。80% を超えたら is-warn、上限に達したら is-full */
@@ -2273,7 +2311,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   width: auto; height: auto; border-radius: var(--radius-1); padding: var(--space-3) var(--space-6);
   border: 1px solid var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft);
   box-shadow: 0 0 24px -4px var(--color-accent); text-shadow: 0 0 10px var(--color-accent);
-  animation: system-in 420ms var(--ease-out) 1;
+  animation: system-in var(--duration-celebrate) var(--ease-out) 1;
 }
 @keyframes system-in {
   0% { opacity: 0; transform: scaleY(0.2); filter: brightness(2); }
@@ -2336,3 +2374,8 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 /* 本文より上、ダイアログ（30）とトースト（40）より下。 */
 .loading-overlay { position: fixed; inset: 0; z-index: 10; overflow: auto; background: var(--page-background); }
 .loading-overlay.is-leaving { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); pointer-events: none; }
+
+/* title を開けないタッチ端末では、項目にフォーカスすると省略した題を全文にする。 */
+@media (hover: none) {
+  .nav-favorites .nav-item:focus .nav-item-label { white-space: normal; overflow-wrap: anywhere; }
+}

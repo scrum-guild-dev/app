@@ -20,6 +20,7 @@ import {
   createTask,
   createUser,
   createWorkspace,
+  uuidv7,
 } from './factories.ts';
 
 const AT = '2026-10-20T00:00:00.000Z';
@@ -1722,4 +1723,66 @@ describe('アカウントのプロフィール', () => {
       .first();
     expect(row).toBeNull();
   });
+});
+
+// お気に入りの対象、重複、参照と日時の制約。
+async function favoriteSchemaFixture() {
+  const organization = await createOrganization();
+  const user = await createUser(organization);
+  const workspace = await createWorkspace(organization, user.id);
+  const task = await createTask(organization, workspace.id, user.id);
+  const story = await createStory(organization, workspace.id, user.id);
+  const epic = await createEpic(organization, workspace.id, user.id);
+  return { organization, user, workspace, task, story, epic };
+}
+
+function insertFavoriteSchema(
+  userId: string,
+  workspaceId: string | null,
+  taskId: string | null,
+  storyId: string | null = null,
+  epicId: string | null = null,
+  wikiId: string | null = null,
+  at = AT,
+) {
+  return env.DB.prepare(
+    'INSERT INTO favorites (id,user_id,workspace_id,task_id,story_id,epic_id,wiki_page_id,created_at) VALUES (?,?,?,?,?,?,?,?)',
+  )
+    .bind(uuidv7(), userId, workspaceId, taskId, storyId, epicId, wikiId, at)
+    .run();
+}
+
+test('お気に入りの対象はちょうど1つで、タスク・ストーリー・エピックにはワークスペースが要る', async () => {
+  const f = await favoriteSchemaFixture();
+  await expect(insertFavoriteSchema(f.user.id, f.workspace.id, f.task.id)).resolves.toMatchObject({ success: true });
+  await expect(insertFavoriteSchema(f.user.id, f.workspace.id, null)).rejects.toThrow(/CHECK/);
+  await expect(insertFavoriteSchema(f.user.id, f.workspace.id, f.task.id, f.story.id)).rejects.toThrow(/CHECK/);
+  await expect(insertFavoriteSchema(f.user.id, null, f.task.id)).rejects.toThrow(/CHECK/);
+});
+
+test('対象ごとに本人との組が一意で、別の人は同じ対象を持てる', async () => {
+  const f = await favoriteSchemaFixture();
+  const other = await createUser(f.organization);
+  for (const [task, story, epic] of [
+    [f.task.id, null, null],
+    [null, f.story.id, null],
+    [null, null, f.epic.id],
+  ]) {
+    await insertFavoriteSchema(f.user.id, f.workspace.id, task!, story!, epic!);
+    await insertFavoriteSchema(other.id, f.workspace.id, task!, story!, epic!);
+    await expect(insertFavoriteSchema(f.user.id, f.workspace.id, task!, story!, epic!)).rejects.toThrow(/UNIQUE/);
+  }
+});
+
+test('外部キーと作成日時の形を検査する', async () => {
+  const f = await favoriteSchemaFixture();
+  await expect(insertFavoriteSchema(f.user.id, f.workspace.id, uuidv7())).rejects.toThrow(/FOREIGN KEY/);
+  await expect(insertFavoriteSchema(f.user.id, f.workspace.id, null, uuidv7())).rejects.toThrow(/FOREIGN KEY/);
+  await expect(insertFavoriteSchema(f.user.id, f.workspace.id, null, null, uuidv7())).rejects.toThrow(/FOREIGN KEY/);
+  await expect(insertFavoriteSchema(f.user.id, null, null, null, null, uuidv7())).rejects.toThrow(/FOREIGN KEY/);
+  await expect(insertFavoriteSchema(uuidv7(), f.workspace.id, f.task.id)).rejects.toThrow(/FOREIGN KEY/);
+  await expect(insertFavoriteSchema(f.user.id, uuidv7(), f.task.id)).rejects.toThrow(/FOREIGN KEY/);
+  await expect(insertFavoriteSchema(f.user.id, f.workspace.id, f.task.id, null, null, null, 'invalid')).rejects.toThrow(
+    /CHECK/,
+  );
 });

@@ -105,7 +105,7 @@ test('発行の知らせは専用の操作で読み、読めなくても組織�
   expect(failure.data.invitationCount).toBe(0);
 });
 
-test('通知の再取得は枠の load の依存として登録しない', async () => {
+test('日常の書き込みの再取得を組織の枠の load に依存させない', async () => {
   const { depends } = await run({ [orgPath]: organization, [minePath]: mine([]) });
   expect(depends).not.toHaveBeenCalled();
 });

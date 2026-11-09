@@ -3,6 +3,7 @@
   import { MediaQuery } from 'svelte/reactivity';
   import { effectiveTaskOpenMode, type StepSource, type TaskOpenMode } from '../drawer.svelte.ts';
   import type { DictionaryKey } from '../../shared/vocabulary.ts';
+  import type { IconName } from '../icons.ts';
   import { inertOutside } from '../inert-outside.ts';
   import { ariaKeyshortcuts } from '../shortcut-keys.ts';
   import { useShortcut } from '../shortcuts.svelte.ts';
@@ -68,12 +69,13 @@
   let scrimElement = $state<HTMLElement>();
   let closeButton = $state<HTMLButtonElement>();
 
+  // 中身はアイコンだけで、名前は aria-label と title に持つ（前後のボタンと同じ形）
   const modeChoices = [
-    { value: 'side', label: 'drawerSide' },
-    { value: 'center', label: 'drawerCenter' },
-    { value: 'page', label: 'drawerPage' },
-    { value: 'tab', label: 'drawerTab' },
-  ] as const satisfies readonly { value: TaskOpenMode; label: DictionaryKey }[];
+    { value: 'side', label: 'drawerSide', icon: 'panel' },
+    { value: 'center', label: 'drawerCenter', icon: 'centered' },
+    { value: 'page', label: 'drawerPage', icon: 'maximize' },
+    { value: 'tab', label: 'drawerTab', icon: 'external' },
+  ] as const satisfies readonly { value: TaskOpenMode; label: DictionaryKey; icon: IconName }[];
 
   const word = $derived(noun ?? t('task'));
   const shownChoices = $derived(modes === undefined ? modeChoices : modeChoices.filter((c) => modes.includes(c.value)));
@@ -202,9 +204,13 @@
             <button
               class="pill"
               type="button"
+              aria-label={t(choice.label)}
+              title={t(choice.label)}
               aria-pressed={shownMode === choice.value}
-              onclick={() => onmode(choice.value, shownMode)}>{t(choice.label)}</button
+              onclick={() => onmode(choice.value, shownMode)}
             >
+              <Icon name={choice.icon} />
+            </button>
           {/each}
         </span>
       {/if}

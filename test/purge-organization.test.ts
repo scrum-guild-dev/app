@@ -146,15 +146,40 @@ async function fillOrganization(organization: Awaited<ReturnType<typeof createOr
   await createOrganizationHoliday(organization, admin.id);
   const wikiDb = orgDb(env, organization.verified);
   for (const scope of [{ workspaceId: ws }, { organizationId: organization.id }]) {
+    const pageId = uuidv7();
     await insertWikiPage(
       wikiDb,
       scope,
-      uuidv7(),
+      pageId,
       null,
       { title: '手順', body_md: '本文', userId: admin.id, at: AT },
       Number.MAX_SAFE_INTEGER,
     );
+    await wikiDb.batch([
+      wikiDb.statement((q) =>
+        q.insertInto('favorites').values({
+          id: uuidv7(),
+          user_id: admin.id,
+          workspace_id: 'workspaceId' in scope ? ws : null,
+          wiki_page_id: pageId,
+          created_at: AT,
+        }),
+      ),
+    ]);
   }
+  await wikiDb.batch([
+    ...[{ task_id: task.id }, { story_id: story.id }, { epic_id: epic.id }].map((target) =>
+      wikiDb.statement((q) =>
+        q.insertInto('favorites').values({
+          id: uuidv7(),
+          user_id: admin.id,
+          workspace_id: ws,
+          ...target,
+          created_at: AT,
+        }),
+      ),
+    ),
+  ]);
 }
 
 // すべての表の、すべての行。比べると、行数だけでなく、残った行がどの組織のものかまで分かる
@@ -282,19 +307,20 @@ describe('purge-organization（解約した組織のデータを消す SQL）', 
     });
   });
 
-  test('先頭5文は、Wiki の版2つ、ページ2つ、取り込み元の応答の順で、すべて1文32件に分けてある', () => {
-    const head = sqlLines(purgeOrganizationSql(uuidv7())).slice(0, 5);
+  test('先頭6文は、お気に入りを先に消し、Wiki の版2つ、ページ2つ、取り込み元の応答を1文32件ずつ消す', () => {
+    const head = sqlLines(purgeOrganizationSql(uuidv7())).slice(0, 6);
     expect(head.map((statement) => /^DELETE FROM (\w+) /.exec(statement)?.[1])).toEqual([
+      'favorites',
       'wiki_page_revisions',
       'wiki_page_revisions',
       'wiki_pages',
       'wiki_pages',
       'task_source_payloads',
     ]);
-    for (const statement of head) expect(statement).toContain('LIMIT 32');
+    for (const statement of head.slice(1)) expect(statement).toContain('LIMIT 32');
   });
 
-  test('取り込み元の応答は先頭5文の1回で32件ずつ消え、ほかの組織の応答は残る', async () => {
+  test('取り込み元の応答は先頭6文の1回で32件ずつ消え、ほかの組織の応答は残る', async () => {
     const other = await createOrganization();
     await fillOrganization(other, (await createAccount({ last_login_at: AT })).id);
     const target = await createOrganization(EXPIRED());
@@ -308,7 +334,7 @@ describe('purge-organization（解約した組織のデータを消す SQL）', 
     const otherBefore = await payloads(other.id);
     expect(otherBefore).toBeGreaterThan(0);
 
-    const head = sqlLines(purgeOrganizationSql(target.id)).slice(0, 5);
+    const head = sqlLines(purgeOrganizationSql(target.id)).slice(0, 6);
     await runStatementsForTest(env, head);
     expect(await payloads(target.id)).toBe(1);
     await runStatementsForTest(env, head);

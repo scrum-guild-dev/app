@@ -25,6 +25,8 @@ export const errorCodes = [
   // ワークスペースの作成・再開（workspace-create、workspace-reopen）が、自分用の利用中の個数の上限で断られた。409。
   // details は { used, limit }（used は利用中の数）。画面は作成のダイアログか再開の一覧の上に、理由と枠を空ける方法を出す
   'workspace_limit_reached',
+  // 本人のお気に入りが20件に達した。409、details は { used, limit }。
+  'favorite_limit',
   // 閉じたワークスペースへの書き込み。読み取り専用なので書けない。409
   'workspace_closed',
   // 招待の作成（invitation-create）の 409。招待する人がもうそのワークスペースに所属している、同じワークスペースに承諾待ちの招待がある、

@@ -198,3 +198,28 @@ describe('定義の上限の欄', () => {
     ).toThrow(/clientTimeoutMs/);
   });
 });
+
+test('成功した組織内の書き込みだけを通知し、読み取り・失敗や通知先の例外で保存結果を変えない', async () => {
+  const { onOperationWrite } = await import('./operation-events.ts');
+  const listener = vi.fn();
+  const stop = onOperationWrite(listener);
+  const stopThrowing = onOperationWrite(() => {
+    throw new Error('架空の購読側の失敗');
+  });
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ value: 'ok' }));
+  try {
+    expect(await callOperation(writeOperation, {}, { slug: 'aoba', fetcher })).toEqual({
+      ok: true,
+      data: { value: 'ok' },
+    });
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ name: 'timeout-write', slug: 'aoba' });
+    fetcher.mockResolvedValue(jsonResponse({ value: 'read' }));
+    await callOperation(readOperation, {}, { slug: 'aoba', fetcher });
+    fetcher.mockResolvedValue(new Response('{}', { status: 500 }));
+    await callOperation(writeOperation, {}, { slug: 'aoba', fetcher });
+    expect(listener).toHaveBeenCalledTimes(1);
+  } finally {
+    stop();
+    stopThrowing();
+  }
+});

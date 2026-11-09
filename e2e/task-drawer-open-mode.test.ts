@@ -34,7 +34,18 @@ test('ページ全体は一覧を重ねず、アプリ内から来た画面へ�
     .click();
   const members = `${backlog}/members`;
   await page.goto(`${members}?task=${id}`);
-  await modeButton(page.getByRole('dialog', { name: 'ページだけで読む' }), 'ページ全体').click();
+  // 開き方はアイコンだけのボタンで、名前は載せたときの title にも出す
+  const opened = page.getByRole('dialog', { name: 'ページだけで読む' });
+  for (const name of ['横', '真ん中', 'ページ全体', '新しいタブ']) {
+    await expect(modeButton(opened, name)).toHaveAttribute('title', name);
+    await expect(modeButton(opened, name).locator('svg.ico')).toBeVisible();
+  }
+  // 押している形は色に加えて、線を太くし、枠を内側に足して二重にする
+  await expect(modeButton(opened, '横').locator('svg.ico')).toHaveCSS('stroke-width', '2.6px');
+  await expect(modeButton(opened, '真ん中').locator('svg.ico')).toHaveCSS('stroke-width', '1.8px');
+  await expect(modeButton(opened, '横')).not.toHaveCSS('box-shadow', 'none');
+  await expect(modeButton(opened, '真ん中')).toHaveCSS('box-shadow', 'none');
+  await modeButton(opened, 'ページ全体').click();
   const detail = `${backlog}/tasks/${id}`;
   await expect(page).toHaveURL(detail);
   const region = page.getByRole('region', { name: 'ページだけで読む', exact: true });

@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, setContext } from 'svelte';
+  import { ATTACHMENT_DELETIONS, type AttachmentDeletions } from '../attachment-context.ts';
+  import { attachmentDownload } from '../../shared/operations/attachment/index.ts';
+  import { operationPath } from '../../shared/operations/define.ts';
   import { beforeNavigate, goto, invalidate } from '$app/navigation';
   import {
     taskTodayMark,
@@ -47,6 +50,7 @@
   import { announceRemoved, type RestoreTarget } from '../task-removal.ts';
   import { t } from '../vocabulary.svelte.ts';
   import TodayMarkButton from './TodayMarkButton.svelte';
+  import FavoriteButton from './FavoriteButton.svelte';
   import Avatar from './Avatar.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Drawer from './Drawer.svelte';
@@ -57,6 +61,7 @@
   import Markdown from './Markdown.svelte';
   import RepositoryPicker from './RepositoryPicker.svelte';
   import TaskComments from './TaskComments.svelte';
+  import TaskAttachments from './TaskAttachments.svelte';
   import TaskFieldValues from './TaskFieldValues.svelte';
   import TaskThanks from './TaskThanks.svelte';
 
@@ -106,6 +111,7 @@
     currentUserId,
     taskId,
     canWrite,
+    workspaceClosed = false,
     definitionOfDone,
     onclose,
     onchanged,
@@ -126,6 +132,7 @@
     currentUserId: string | null;
     taskId: string;
     canWrite: boolean;
+    workspaceClosed?: boolean;
     // ワークスペースの完成の定義（Markdown）。空なら null で、完了の操作の横に何も出さない
     definitionOfDone: string | null;
     // 閉じる。画面の枠が `?task=` を外し、フォーカスを行へ戻す
@@ -178,6 +185,9 @@
 
   let loadState = $state<'loading' | 'ready' | 'failed'>('loading');
   let task = $state<TaskDetail | null>(null);
+  let attachmentRevision = $state(0);
+  const deletedAttachments = $state<AttachmentDeletions>({ urls: [] });
+  setContext(ATTACHMENT_DELETIONS, deletedAttachments);
   let taskContext = $state<Pick<OutputOf<typeof taskDetail>, 'column' | 'story' | 'epic' | 'today_on'>>({
     column: null,
     story: null,
@@ -709,6 +719,7 @@
         if ('body_md' in fields) bases.body_md = fields.body_md ?? '';
       }
       if (expected === undefined || !alive) showToast(t('taskSaved'), 'check');
+      if (attachmentIds.length > 0 && alive) attachmentRevision++;
       onchanged();
       return null;
     }
@@ -1606,6 +1617,13 @@
 >
   {#snippet top()}
     {#if task !== null}
+      <FavoriteButton
+        targetType="task"
+        targetId={task.id}
+        title={task.title}
+        {workspaceId}
+        menuVisible={!workspaceClosed}
+      />
       <span class="chip"
         ><Icon name={task.is_imported ? 'link' : 'pen'} />{task.is_imported
           ? t('taskImportedChip', { task: t('task') })
@@ -2038,6 +2056,19 @@
         {@render bodyView()}
       {/if}
     </div>
+
+    <TaskAttachments
+      {slug}
+      {workspaceId}
+      {taskId}
+      {canWrite}
+      revision={attachmentRevision}
+      ondeleted={(id) => {
+        deletedAttachments.urls.push(operationPath(attachmentDownload, slug, { id }));
+        onchanged();
+      }}
+      {onstale}
+    />
 
     <!-- 完了の帯（kit.js の drawerHtml の .done-bar）。完了していて戻せるときは、日時の横に「戻す」 -->
     {#if task.completed_at !== null || canWrite || definitionOfDone !== null}

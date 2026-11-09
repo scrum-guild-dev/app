@@ -16,11 +16,21 @@ export const screens: Screen[] = [
   { route: '/operator', operator: true, operations: [op('list-organizations', {}, false, true)] },
   {
     route: '/[slug]/+layout',
-    operations: [op('organization'), op('my-organizations', {}, false, true), op('token-notice', {}, true, true)],
+    operations: [
+      op('organization'),
+      op('my-organizations', {}, false, true),
+      op('token-notice', {}, true, true),
+      op('favorite-list'),
+    ],
   },
   {
     route: '/[slug]/+layout（招待あり）',
-    operations: [op('organization'), op('my-organizations', {}, false, true), op('token-notice', {}, true, true)],
+    operations: [
+      op('organization'),
+      op('my-organizations', {}, false, true),
+      op('token-notice', {}, true, true),
+      op('favorite-list'),
+    ],
     after: [op('invitation-list', {}, true)],
     note: '並列群の完了後に招待の件数を読む条件分岐を再現する。',
   },

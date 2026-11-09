@@ -170,12 +170,15 @@ test('32版ずつ組織を消せ、版が残る間は親子ページを消さず
         .where('id', '=', f.target.organization.id),
     ),
   ]);
-  const steps = purgeOrganizationStatements(f.target.organization.id);
-  await runStatementsForTest(env, steps.slice(0, 4));
+  // Wiki の外部キーを持つお気に入りも先に消す。文の追加で固定の件数がずれないよう対象で選ぶ。
+  const steps = purgeOrganizationStatements(f.target.organization.id).filter((statement) =>
+    /^DELETE FROM (favorites|wiki_page_revisions|wiki_pages) WHERE /.test(statement),
+  );
+  await runStatementsForTest(env, steps);
   let counts = await firstRowForTest(env, purgeOrganizationCountSql(f.target.organization.id));
   expect(counts?.wiki_page_revisions).toBeGreaterThan(0);
   expect(counts?.wiki_pages).toBe(2);
-  for (let i = 0; i < 4; i++) await runStatementsForTest(env, steps.slice(0, 4));
+  for (let i = 0; i < 4; i++) await runStatementsForTest(env, steps);
   counts = await firstRowForTest(env, purgeOrganizationCountSql(f.target.organization.id));
   expect(counts?.wiki_page_revisions).toBe(0);
   expect(counts?.wiki_pages).toBe(0);

@@ -73,6 +73,7 @@ type BaseContextOf<D extends AnyOperationDefinition> = D extends OutsideOperatio
     : OrganizationContext<z.output<D['input']>>;
 
 export type ContextOf<D extends AnyOperationDefinition> = BaseContextOf<D> &
+  (D extends { readonly storage: 'attachments' } ? { attachmentStorage: Pick<R2Bucket, 'delete'> } : unknown) &
   (D extends { readonly body: 'binary' }
     ? { binary: BinaryBody; requestId: string } // requestId は失敗のログ用（deferrer のログと同じ値）
     : unknown) &

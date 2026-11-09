@@ -62,6 +62,8 @@ type Common<Input, Output> = {
   readonly skipsConsent?: true;
   // 本文がファイルのバイトの操作。入力の JSON はヘッダー X-Operation-Input で運ぶ。組織の中の write の操作だけ
   readonly body?: 'binary';
+  // 添付を削除する道具。組織の中の write だけが宣言できる。
+  readonly storage?: 'attachments';
   // ファイルを返す GET /api/<slug>/<name>/<id>。組織の直下の read だけ。
   // 入力はパスの id、応答は Response。CLI と MCP（JSON）からは呼べない。
   readonly response?: 'binary';
@@ -136,6 +138,12 @@ export function assertOperationDefinition(definition: AnyOperationDefinition): v
       definition.body !== undefined)
   ) {
     throw new Error(`操作 ${name} の response は、組織の直下の read の操作に 'binary' だけ付けられる`);
+  }
+  if (
+    definition.storage !== undefined &&
+    (definition.storage !== 'attachments' || scope === 'outside' || definition.mode !== 'write')
+  ) {
+    throw new Error(`操作 ${name} の storage は、組織の中の write に 'attachments' だけ付けられる`);
   }
   if (
     definition.clientTimeoutMs !== undefined &&

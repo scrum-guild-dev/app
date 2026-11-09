@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { navigationLoading } from '../navigation-loading.svelte.ts';
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
   import { t } from '../vocabulary.svelte.ts';
@@ -171,6 +172,8 @@
     </div>
 
     {@render notice?.()}
-    <main class="content" id="content">{@render children()}</main>
+    <main class="content" id="content" aria-busy={navigationLoading.kind === 'inside' ? true : undefined}>
+      {@render children()}
+    </main>
   </div>
 </div>

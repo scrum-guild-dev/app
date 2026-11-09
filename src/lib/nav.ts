@@ -141,3 +141,22 @@ export const navSections: NavSection[] = [
     ],
   },
 ];
+
+// 読み取り操作が返した対象だけから、組織をまたがないリンクを組む。
+export function favoriteNavItem(
+  base: string,
+  favorite: import('./favorites.svelte.ts').Favorite,
+): { href: string | null; icon: IconName } {
+  const id = encodeURIComponent(favorite.target_id);
+  const workspace = favorite.workspace_id === null ? null : `${base}/w/${encodeURIComponent(favorite.workspace_id)}`;
+  switch (favorite.target_type) {
+    case 'task':
+      return { href: workspace === null ? null : `${workspace}/tasks/${id}`, icon: 'check' };
+    case 'story':
+      return { href: workspace === null ? null : `${workspace}?story=${id}`, icon: 'board' };
+    case 'epic':
+      return { href: workspace === null ? null : `${workspace}/epics/${id}`, icon: 'flag' };
+    case 'wiki_page':
+      return { href: `${workspace ?? base}/wiki/${id}`, icon: 'file' };
+  }
+}
