@@ -947,7 +947,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     border-radius: var(--radius-show); box-shadow: var(--shadow-float);
   }
   .mobile-menu::backdrop { background: rgb(10 15 20 / 0.4); }
-  html:has(.mobile-menu[open]) { overflow: hidden; }
+  html:has(dialog.mobile-menu:modal) { overflow: hidden; }
   .mobile-menu-sheet { padding: var(--space-4); display: grid; gap: var(--space-3); }
   .mobile-menu-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
   .mobile-menu-head h2 { margin: 0; font-size: var(--text-lg); }
