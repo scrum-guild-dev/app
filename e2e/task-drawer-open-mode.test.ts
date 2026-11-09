@@ -34,7 +34,13 @@ test('ページ全体は一覧を重ねず、アプリ内から来た画面へ�
     .click();
   const members = `${backlog}/members`;
   await page.goto(`${members}?task=${id}`);
-  await modeButton(page.getByRole('dialog', { name: 'ページだけで読む' }), 'ページ全体').click();
+  // 開き方はアイコンだけのボタンで、名前は載せたときの title にも出す
+  const opened = page.getByRole('dialog', { name: 'ページだけで読む' });
+  for (const name of ['横', '真ん中', 'ページ全体', '新しいタブ']) {
+    await expect(modeButton(opened, name)).toHaveAttribute('title', name);
+    await expect(modeButton(opened, name).locator('svg.ico')).toBeVisible();
+  }
+  await modeButton(opened, 'ページ全体').click();
   const detail = `${backlog}/tasks/${id}`;
   await expect(page).toHaveURL(detail);
   const region = page.getByRole('region', { name: 'ページだけで読む', exact: true });
