@@ -16,7 +16,7 @@
 <script>
 "use strict";
 // #1010 の確認用。データはこのページ内だけで変わり、保存しない。
-const { D, esc, icon } = SQ;
+const { D, esc, icon, t } = SQ;
 let sequence = 0;
 const additions = [];
 const operation = { suspended: false, reason: "一時停止", limit: 15 };
@@ -39,9 +39,9 @@ SQ.mount("backlog", () => `
     <section class="panel" aria-labelledby="motion-additions">
       <h2 id="motion-additions" class="panel-title">足した行</h2>
       <div class="form-actions">
-        <button class="btn" type="button" data-motion-add="task">タスクを足す</button>
-        <button class="btn" type="button" data-motion-add="story">ストーリーを足す</button>
-        <button class="btn" type="button" data-motion-add="epic">エピックを足す</button>
+        <button class="btn" type="button" data-motion-add="task">${t("task")}を足す</button>
+        <button class="btn" type="button" data-motion-add="story">${t("story")}を足す</button>
+        <button class="btn" type="button" data-motion-add="epic">${t("epic")}を足す</button>
       </div>
       <div class="book" id="motion-added">${additions.filter(({ id, kind }) => kind === "task" ? SQ.task(id) : kind === "story" ? D.stories[id] : D.epics[id]).map(({ id, kind }) => `<div data-motion-row="${id}">${kind === "task" ? SQ.entry(SQ.task(id)) : kind === "story" ? SQ.treeStory(id, true) : SQ.treeEpic(id, { empty: true })}</div>`).join("")}</div>
     </section>
@@ -79,7 +79,7 @@ document.addEventListener("click", (event) => {
   const add = event.target.closest("[data-motion-add]");
   if (add) {
     const kind = add.dataset.motionAdd, id = `motion${++sequence}`;
-    const title = `${{ task: "タスク", story: "ストーリー", epic: "エピック" }[kind]}の見本 ${sequence}`;
+    const title = `${t(kind)}の見本 ${sequence}`;
     if (kind === "task") D.tasks.push({ id, title, ws: "wa", creator: D.me });
     else if (kind === "story") D.stories[id] = { title, ac: [], body: [], creator: D.me };
     else D.epics[id] = { title, cat: "k1", tier: "small", party: [], body: [], creator: D.me };

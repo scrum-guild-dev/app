@@ -832,7 +832,7 @@ function render() {
         <span class="page-eyebrow">Scrum Guild</span>
         <h1 class="page-title">デザインシステム</h1>
         <p class="cat-lead">テーマは5つ（シンプル（自動、ライト、ダーク）、中世風、現代風）。すぐ下で切り替えられる。部品はどのテーマでも同じで、変わるのは tokens.css の変数とテーマの飾りだけ。画面は、ここにある部品だけで組む。足りない部品は先にここへ足す。読み込む順は tokens.css、components.css、icons.js、sample-data.js、kit.js。</p>
-        <p><a href="motion.html">出現と行の合図（#1010 の見本）</a></p>
+        <p><a href="motion.html">出現と行の合図の見本</a>では、<code>.is-motion</code> による引き出しとダイアログの出現、<code>.is-dropped</code> による行の強調を試せます。</p>
       </div>
       <div class="segmented" role="radiogroup" aria-label="テーマ">${SQ.THEMES.map((v) => `<label><input type="radio" name="cat-theme" value="${v}" data-pick-theme><span>${SQ.THEME_LABEL[v]}</span></label>`).join("")}</div>
     </header>
