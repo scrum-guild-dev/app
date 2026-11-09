@@ -1,5 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { PRIVACY_VERSION, TERMS_VERSION } from '../src/lib/legal/versions.ts';
+import { favoriteList } from '../src/shared/operations/favorite.ts';
 import { consentStatus } from '../src/shared/operations/session/consent.ts';
 import { sprintBoard } from '../src/shared/operations/sprint/index.ts';
 import { mockOperation } from './operations.ts';
@@ -8,6 +9,21 @@ import type { UiScreen } from './ui-exclusions.ts';
 
 const WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 const EPIC_ID = '019a0000-0000-7000-8000-000000000b01';
+const FAVORITE_ROWS = (
+  [
+    ['task', '朝会の進め方をまとめる'],
+    ['story', '初めて使う人が招待から最初のタスクまで迷わず進められる'],
+    ['epic', 'お気に入りの長い題の見本'.repeat(4) + 'とても長くて空白の無い題が折り返して崩れないことを確かめる'],
+    ['wiki_page', 'ふくろう班の開発手順'],
+  ] as const
+).map(([target_type, title], index) => ({
+  id: `019a0000-0000-7000-8000-00000000f0${index}0`,
+  target_type,
+  target_id: `019a0000-0000-7000-8000-00000000f0${index}1`,
+  workspace_id: '019a0000-0000-7000-8000-000000000401',
+  title,
+  created_at: '2026-11-10T00:00:00.000Z',
+}));
 
 // 画面ごとの URL と、落ち着いたとみなす要素（見出しと、読み込んで描く主な要素）
 export const a11yScreens: {
@@ -39,6 +55,16 @@ export const a11yScreens: {
     ready: (page) => [
       page.getByRole('heading', { level: 1, name: '今日やること' }),
       page.getByRole('region', { name: '今日やると決めたもの' }),
+    ],
+  },
+  {
+    screen: 'favorites',
+    path: '/aoba/favorites',
+    // 星の数は seed で決まらないので、種類ごとに1件と、空白の無い長い題の行を返す
+    prepare: (page) => mockOperation(page, favoriteList, { slug: 'aoba' }, { favorites: FAVORITE_ROWS, marks: [] }),
+    ready: (page) => [
+      page.getByRole('heading', { level: 1, name: 'お気に入り' }),
+      page.getByRole('main').getByRole('link', { name: /朝会の進め方をまとめる/ }),
     ],
   },
   {

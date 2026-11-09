@@ -5,6 +5,7 @@
 // 主な画面と、開いた状態。検査のファイルは、この名前で除外を引く
 export const uiScreens = [
   'today',
+  'favorites',
   'backlog',
   'epic',
   'task-drawer',
