@@ -2814,6 +2814,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!items.length) return "";
     return `<div class="nav-favorites"><div class="nav-group"><span class="nav-group-label">${t("favorites")}</span></div>${items.map((item) => `<a class="nav-item" href="${esc(item.href)}" title="${esc(item.title)}">${icon(item.icon)}<span class="nav-item-label">${esc(item.title)}</span></a>`).join("")}</div>`;
   }
+  // 背景での更新中は追加の読み込み表示をせず、直前の状態と操作を保つ。
+  function favoriteBackgroundHtml() {
+    return `<span class="favorite-control" data-favorite-background-demo>${favoriteButtonHtml(true)}<span class="field-hint" role="status"></span></span>`;
+  }
   // 初回取得失敗→再試行中→再失敗→再試行→成功を、同じ領域で確かめる見本。
   function favoriteRetryHtml(available = false) {
     return `<span class="favorite-control" data-favorite-retry-demo data-available="${available}">
@@ -3782,7 +3786,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   document.addEventListener("pointerdown", () => keyHints.hide(), true);
 
   window.SQ = {
-    favoriteButtonHtml, favoritesNavHtml, favoriteRetryHtml,
+    favoriteButtonHtml, favoritesNavHtml, favoriteRetryHtml, favoriteBackgroundHtml,
     formatTrialStopDateTime,
     first, firstHref, firstSteps, emptyState, art,
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,

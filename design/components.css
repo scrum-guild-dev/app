@@ -663,6 +663,8 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
 .favorite-mark[aria-disabled="true"]:hover { background: none; }
 .favorite-control { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .favorite-control .field-error { max-width: 28rem; }
+/* お気に入りの読み直しは、小さいボタンでもタッチで押せる範囲を確保する。 */
+.favorite-control .btn, .nav-favorites .btn { min-width: 44px; min-height: 44px; padding: var(--space-2) var(--space-3); }
 
 /* 今日やるの印 */
 .sun {
@@ -880,7 +882,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .nav-item { white-space: nowrap; }
   .nav-item.is-wrapping .nav-item-label { max-width: 12rem; }
   .nav-favorites { display: flex; flex: none; align-items: flex-start; gap: var(--space-1); }
-  .nav-favorites > .nav-group { display: block; flex: none; white-space: nowrap; padding-block: 7px; }
+  .nav-favorites > .nav-group { display: block; flex: none; white-space: nowrap; padding-block: var(--space-2); }
   .nav-favorites .nav-item-label { max-width: 12rem; }
   .topbar, .content {
     padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
