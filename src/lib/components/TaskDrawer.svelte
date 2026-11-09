@@ -1385,7 +1385,7 @@
       if (!alive) {
         // 送っている間に閉じられた。通ったら木を読み直して知らせ、失敗は知らせる
         if (result.ok) {
-          showToast(completedMessage(result.data.left_sprint, t), 'check');
+          showToast(completedMessage(result.data.left_sprint, result.data.xp_granted, t), 'check');
           onchanged();
         } else if (result.status !== 409 || result.error?.code !== 'conflict') {
           showToast(t('taskCompleteFailed', { done: t('done') }), 'alert');
@@ -1394,7 +1394,7 @@
       }
       if (result.ok) {
         if (task !== null) task = { ...task, completed_at: result.data.completed_at };
-        showToast(completedMessage(result.data.left_sprint, t), 'check');
+        showToast(completedMessage(result.data.left_sprint, result.data.xp_granted, t), 'check');
         // 戻せるか（reopenable）と、始まっていないスプリントから外れたことを出すため、詳細ごと読み直す（履歴も読み直す）
         await refresh();
         onchanged();

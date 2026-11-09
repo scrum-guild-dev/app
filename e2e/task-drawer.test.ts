@@ -179,11 +179,9 @@ test('完了したタスクのポイントは直せず、理由を添える。�
   const drawer = page.getByRole('dialog', { name: '済んだ依頼' });
   await drawer.getByRole('radio', { name: '3', exact: true }).check();
   await expect(row.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
-  await drawer.getByRole('button', { name: '閉じる' }).click();
-
-  await row.getByRole('button', { name: /完了にする/ }).click();
-  await expect(row.getByRole('img', { name: '済んだ依頼: 完了' })).toBeVisible();
-  await row.getByRole('link', { name: '済んだ依頼' }).click();
+  await drawer.getByRole('button', { name: '完了にする', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'タスクを完了にしました' })).toContainText('+40 XP');
+  // 引き出しで完了すると背面の木は読み直して行を畳む。そのまま開いた引き出しで確かめる。
   await expect(drawer.getByText('完了したタスクのポイントは直せません')).toBeVisible();
   // 理由の文は、ポイントの欄の説明に結ばれる。読み取り専用でも、選んだ値は薄めずに読める
   await expect(drawer.getByRole('radiogroup', { name: 'ポイント' })).toHaveAccessibleDescription(

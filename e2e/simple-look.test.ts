@@ -57,30 +57,27 @@ test.describe('今日やることの画面', () => {
     await prepareToday(page, context, baseURL);
   });
 
-  test('シンプルは上の色の線が細く角が小さく、状態の印に枠を引かない。ゲージの角と、中世風と現代風は今の形のまま', async ({
+  test('シンプルは上の色の線が細く角が小さく、状態の印に枠を引かない。中世風と現代風は今の形のまま', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/aoba');
     const notice = page.locator('.notice');
     const overdue = page.locator('.entry .chip.is-danger');
-    const gauge = page.locator('.gauge');
     await expect(notice).toHaveCount(1);
     await expect(overdue).toHaveCount(1);
-    await expect(gauge).toHaveCount(1);
+    await expect(page.locator('.gauge')).toHaveCount(0);
 
-    for (const [theme, edge, radius, gaugeRadius, framed] of [
-      ['simple_light', '2px', '4px', '6px', false],
-      ['simple_dark', '2px', '4px', '6px', false],
-      ['medieval', '5px', '2px', '2px', true],
+    for (const [theme, edge, radius, framed] of [
+      ['simple_light', '2px', '4px', false],
+      ['simple_dark', '2px', '4px', false],
+      ['medieval', '5px', '2px', true],
       // 現代風の貼り紙は、テーマの飾りが光る枠の 1px にする
-      ['modern', '1px', '2px', '2px', true],
+      ['modern', '1px', '2px', true],
     ] as const) {
       await applyTheme(page, theme);
       await expect(notice, theme).toHaveCSS('border-top-width', edge);
       await expect(notice, theme).toHaveCSS('border-top-left-radius', radius);
-      // 経験値のゲージは見せ場なので、記録の角を詰めても両端の丸みを変えない
-      await expect(gauge, theme).toHaveCSS('border-top-left-radius', gaugeRadius);
       // 状態の印の枠は、シンプルでは透明（地の色で示す）、ほかは文字と同じ色
       const border = await overdue.evaluate((el) => {
         const style = getComputedStyle(el);
@@ -88,6 +85,21 @@ test.describe('今日やることの画面', () => {
       });
       if (framed) expect(border.matchesText, theme).toBe(true);
       else expect(border.color, theme).toBe('rgba(0, 0, 0, 0)');
+    }
+  });
+
+  test('プロフィールの経験値ゲージは4つの見た目で従来の丸みを保つ', async ({ page }) => {
+    await page.goto('/aoba/me');
+    const gauge = page.locator('.gauge');
+    await expect(gauge).toHaveCount(1);
+    for (const [theme, radius] of [
+      ['simple_light', '6px'],
+      ['simple_dark', '6px'],
+      ['medieval', '2px'],
+      ['modern', '2px'],
+    ] as const) {
+      await applyTheme(page, theme);
+      await expect(gauge, theme).toHaveCSS('border-top-left-radius', radius);
     }
   });
 
