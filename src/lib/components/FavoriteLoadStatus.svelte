@@ -7,7 +7,7 @@
   async function retry(event: MouseEvent & { currentTarget: EventTarget & HTMLButtonElement }) {
     if (!favorites || favorites.loading) return;
     const focused = document.activeElement === event.currentTarget;
-    await favorites.refresh();
+    await favorites.refresh(true);
     if (focused && favorites.available && !favorites.loadFailed) {
       await tick();
       onrecovered?.();
@@ -16,11 +16,11 @@
 </script>
 
 {#if favorites}
-  {#if favorites.loadFailed || !favorites.available}
+  {#if favorites.loadFailed || !favorites.available || favorites.loading}
     <span {id} class="field-error">{t('favoriteLoadFailed')}</span>
     <button class="btn is-sm" type="button" aria-disabled={favorites.loading} onclick={retry}>{t('retry')}</button>
   {/if}
   <span class="field-hint" role="status"
-    >{favorites.loading ? t('retrying') : favorites.loadFailed ? t('retryFailed') : ''}</span
+    >{favorites.loading ? t('retrying') : favorites.retryFailed ? t('retryFailed') : ''}</span
   >
 {/if}

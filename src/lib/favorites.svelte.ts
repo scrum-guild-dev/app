@@ -26,6 +26,7 @@ const changedTargets = new Set([
   'workspace-close',
   'workspace-reopen',
   'membership-leave',
+  'invitation-accept',
   'membership-role-update',
   'user-admin-update',
   'user-disable',
@@ -48,7 +49,7 @@ export class Favorites {
   private pending = $state<string[]>([]);
   private cached = $state.raw<Source | null>(null);
   private request = 0;
-  private refreshState = $state.raw<{ scope: string; loading: boolean; failed: boolean } | null>(null);
+  private refreshState = $state.raw<{ scope: string; loading: boolean; failed: boolean; manual: boolean } | null>(null);
   constructor(private source: () => Source) {}
   private currentSource(): Source {
     const source = this.source();
@@ -62,6 +63,11 @@ export class Favorites {
   sync(): void {
     const source = this.source();
     const cached = untrack(() => this.cached);
+    const refreshing = untrack(() => this.refreshState);
+    if (refreshing && refreshing.scope !== source.scope) {
+      this.request++;
+      this.refreshState = null;
+    }
     if (source.available && (cached?.scope !== source.scope || (source.requestedAt ?? 0) > (cached.requestedAt ?? 0)))
       this.cached = source;
   }
@@ -72,21 +78,33 @@ export class Favorites {
     });
   }
   get loading() {
-    return this.refreshState?.scope === this.source().scope && this.refreshState.loading;
+    return this.refreshState?.scope === this.source().scope && this.refreshState.manual && this.refreshState.loading;
   }
   get loadFailed() {
     return this.refreshState?.scope === this.source().scope
       ? this.refreshState.failed
       : !this.currentSource().available;
   }
-  async refresh(): Promise<void> {
+  get retryFailed() {
+    return (
+      this.refreshState?.scope === this.source().scope &&
+      this.refreshState.manual &&
+      this.refreshState.failed &&
+      !this.refreshState.loading
+    );
+  }
+  async refresh(userInitiated = false): Promise<void> {
     const source = this.source();
     const request = ++this.request;
     const requestedAt = performance.now();
-    this.refreshState = { scope: source.scope, loading: true, failed: false };
+    this.refreshState = { scope: source.scope, loading: true, failed: this.loadFailed, manual: userInitiated };
     try {
       const result = await callOperation(favoriteList, {}, { slug: source.slug });
-      if (request !== this.request || this.source().scope !== source.scope) return;
+      if (request !== this.request) return;
+      if (this.source().scope !== source.scope) {
+        this.refreshState = null;
+        return;
+      }
       if (result.ok) {
         this.cached = {
           ...source,
@@ -96,10 +114,10 @@ export class Favorites {
           requestedAt,
         };
       }
-      this.refreshState = { scope: source.scope, loading: false, failed: !result.ok };
+      this.refreshState = { scope: source.scope, loading: false, failed: !result.ok, manual: userInitiated };
     } catch {
       if (request === this.request && this.source().scope === source.scope)
-        this.refreshState = { scope: source.scope, loading: false, failed: true };
+        this.refreshState = { scope: source.scope, loading: false, failed: true, manual: userInitiated };
     }
   }
   // 後から届いた一覧でも、読み取り開始が保存成功より前なら新しい本人の操作を保つ。

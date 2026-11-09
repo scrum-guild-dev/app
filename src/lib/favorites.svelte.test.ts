@@ -170,7 +170,7 @@ test('再取得の失敗は正常な一覧と星を残し、再試行の失敗�
   const { favorites } = setup([row]);
   favorites.sync();
   call.mockResolvedValue({ ok: false, status: 500, error: null });
-  const refresh = favorites.refresh();
+  const refresh = favorites.refresh(true);
   expect(favorites.loading).toBe(true);
   await refresh;
   expect(favorites.loading).toBe(false);
@@ -217,4 +217,42 @@ test('別組織に移動してから届いた一覧を混ぜない', async () =>
   await pending;
   expect(favorites.items).toEqual([]);
   expect(favorites.loading).toBe(false);
+});
+
+test('Aで再取得中にBへ移ってAへ戻っても待機状態と古い失敗を持ち越さない', async () => {
+  let finish!: (result: { ok: false; status: number; error: null }) => void;
+  call.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { favorites, replace } = setup();
+  const pending = favorites.refresh(true);
+  expect(favorites.loading).toBe(true);
+  replace({ scope: 'sakura/person', slug: 'sakura', items: [], available: true });
+  favorites.sync();
+  replace({ scope: 'aoba/person', slug: 'aoba', items: [], available: true });
+  favorites.sync();
+  expect(favorites.loading).toBe(false);
+  finish({ ok: false, status: 500, error: null });
+  await pending;
+  expect(favorites.loading).toBe(false);
+  expect(favorites.loadFailed).toBe(false);
+});
+
+test('背景更新は読み上げ用の待機状態を出さず、利用者の再試行だけを通知する', async () => {
+  const { favorites } = setup();
+  call.mockResolvedValue({ ok: false, status: 500, error: null });
+  const background = favorites.refresh();
+  expect(favorites.loading).toBe(false);
+  await background;
+  expect(favorites.loadFailed).toBe(true);
+  expect(favorites.retryFailed).toBe(false);
+  const retry = favorites.refresh(true);
+  expect(favorites.loading).toBe(true);
+  expect(favorites.loadFailed).toBe(true);
+  await retry;
+  expect(favorites.loading).toBe(false);
+  expect(favorites.retryFailed).toBe(true);
 });
