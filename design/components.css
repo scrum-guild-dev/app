@@ -917,6 +917,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     background: var(--color-surface); box-shadow: var(--shadow-float); pointer-events: auto;
   }
   .mobile-tab {
+    position: relative;
     display: inline-flex; align-items: center; justify-content: center; flex: none;
     width: var(--mobile-tab-size); height: var(--mobile-tab-size); padding: 0; border: 1px solid transparent; border-radius: var(--radius-full);
     color: var(--color-muted); background: transparent; text-decoration: none;
@@ -924,6 +925,12 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .mobile-tab:hover { background: var(--color-rule); }
   .mobile-tab[aria-current="page"], .mobile-tab[aria-expanded="true"] {
     color: var(--color-fg); background: var(--color-sunken); border-color: var(--color-line);
+  }
+  /* 背景の差だけに頼らず、操作の色の点で現在地を示す。 */
+  .mobile-tab[aria-current="page"]::after {
+    content: ""; position: absolute; bottom: var(--space-1);
+    width: var(--space-1); height: var(--space-1); border-radius: var(--radius-full);
+    background: var(--color-accent);
   }
   .mobile-tab .ico { width: var(--text-xl); height: var(--text-xl); }
   .mobile-menu-arrows { display: grid; grid-template-rows: repeat(2, var(--space-3)); }

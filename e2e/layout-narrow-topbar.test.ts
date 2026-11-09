@@ -26,6 +26,32 @@ for (const theme of LAYOUT_THEMES) {
       expect(box!.height).toBeGreaterThanOrEqual(44);
     }
     await expect(tabs.getByRole('link', { name: '今日やること', exact: true })).toHaveAttribute('aria-current', 'page');
+    const mark = await tabs.locator('[aria-current="page"]').evaluate((element) => {
+      const marker = getComputedStyle(element, '::after');
+      const luminance = (color: string) =>
+        color
+          .match(/[\d.]+/g)!
+          .slice(0, 3)
+          .map(Number)
+          .reduce((sum, value, index) => {
+            const channel = value / 255;
+            return (
+              sum +
+              (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4) *
+                [0.2126, 0.7152, 0.0722][index]
+            );
+          }, 0);
+      const fg = luminance(marker.backgroundColor);
+      const bg = luminance(getComputedStyle(element).backgroundColor);
+      return {
+        content: marker.content,
+        width: parseFloat(marker.width),
+        contrast: (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05),
+      };
+    });
+    expect(mark.content).not.toBe('none');
+    expect(mark.width).toBeGreaterThan(0);
+    expect(mark.contrast).toBeGreaterThanOrEqual(3);
     await tabs.getByRole('link', { name: 'お気に入り', exact: true }).click();
     await expect(page).toHaveURL(/\/aoba\/favorites$/);
     await expect(tabs.getByRole('link', { name: 'お気に入り', exact: true })).toHaveAttribute('aria-current', 'page');
