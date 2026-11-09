@@ -1108,7 +1108,7 @@ label.pick-row:hover { background: var(--color-accent-soft); }
    表が横にはみ出す（運用の組織の一覧）。積んだ行（is-stacked）でも、右端で切れずに折り返す */
 .table .is-name .chip { white-space: normal; }
 /* 表の補足は初めは畳む。注意の有無は summary の印にも残し、開くとすべての印を読める。 */
-.table-details > summary { cursor: pointer; font-size: var(--text-xs); }
+.table-details > summary { cursor: pointer; font-size: var(--text-xs); line-height: var(--leading-tight); }
 .table-details-alert { display: inline-flex; align-items: center; gap: var(--space-1); }
 .table-details-alert.is-danger { color: var(--color-danger); }
 .table-details-alert.is-warn { color: var(--color-warn); }
