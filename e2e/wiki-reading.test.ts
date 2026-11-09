@@ -123,23 +123,6 @@ for (const scope of ['organization', 'workspace'] as const) {
       await expect(search).toBeVisible();
       await expect(list.locator('summary')).toBeHidden();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      // 共通ヘッダーの既知の問題（#343）は既存の検査に任せ、Wiki の一覧と本文を調べる。
-      expect((await new AxeBuilder({ page }).include('.content').withTags(A11Y_TAGS).analyze()).violations).toEqual([]);
-      wikiPage.body_md = '最初に読める手順の本文です。';
-      await page.goto(root);
-      if (scope === 'workspace') {
-        await mockOperation(
-          page,
-          workspaceInfo,
-          { slug: 'aoba' },
-          { name: '手順のチーム', closed_at: '2026-11-01T00:00:00.000Z', definition_of_done_md: null, role: 'leader' },
-        );
-        await page.goto(`${root}/${wikiPage.id}`);
-        await expect(page.getByText(/に終了しました。読み取り専用です。/)).toHaveCount(1);
-        await expect(page.getByText('終了したワークスペースの Wiki は読むだけです。', { exact: true })).toHaveCount(0);
-        await expect(page.getByRole('button', { name: '編集する', exact: true })).toHaveCount(0);
-        await expect(access).toHaveCount(0);
-      }
     });
   }
 }

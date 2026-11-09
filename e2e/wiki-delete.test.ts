@@ -266,6 +266,8 @@ test('終了したワークスペースでは自分のページも消すボタ�
   await page.goto(url);
   await expect(page.getByText(/に終了しました。読み取り専用です。/)).toHaveCount(1);
   await expect(page.getByText('終了したワークスペースの Wiki は読むだけです。', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '編集する', exact: true })).toHaveCount(0);
+  await expect(page.locator('.page-head > .props-note')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '消す', exact: true })).toHaveCount(0);
 });
 
