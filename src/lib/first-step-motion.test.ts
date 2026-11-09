@@ -61,12 +61,27 @@ describe('手順の完了をまたいだ演出', () => {
     firstStepMotion(element, { key: 'hibari/other/leader/invite_members', done: true });
     expect(element.classList.contains('is-new')).toBe(false);
   });
+  test('同じ要素のキー切り替えは切り替え先の記録で判断し、前の演出を残さない', () => {
+    const node = setup();
+    const other = 'hibari/other/leader/invite_members';
+    firstStepMotion(node(), { key: other, done: false });
+    const element = node();
+    const motion = firstStepMotion(element, { key, done: true });
+    motion.update({ key: other, done: true });
+    expect(element.classList.contains('is-new')).toBe(true);
+    motion.update({ key, done: true });
+    expect(element.classList.contains('is-new')).toBe(false);
+  });
   test('動きを減らす設定では完了を記録しても押さない', () => {
     const node = setup(true);
     firstStepMotion(node(), { key, done: false });
     const element = node();
     firstStepMotion(element, { key, done: true });
     expect(element.classList.contains('is-new')).toBe(false);
+    vi.stubGlobal('window', { ...window, matchMedia: () => ({ matches: false }) });
+    const reopened = node();
+    firstStepMotion(reopened, { key, done: true });
+    expect(reopened.classList.contains('is-new')).toBe(false);
   });
   test('保存を使えなくても表示中の変化だけを押し、中断と取り消しで消す', () => {
     const node = setup(false, true);
