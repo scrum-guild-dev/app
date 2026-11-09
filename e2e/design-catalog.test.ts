@@ -53,6 +53,11 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
     for (const theme of THEMES) {
       await test.step(theme, async () => {
         await pickTheme(theme);
+        const loadingCode = page.locator('pre').filter({ hasText: 'LoadingSheet の中身' });
+        await expect(loadingCode).toBeVisible();
+        const codeBox = await loadingCode.boundingBox();
+        expect(codeBox!.x).toBeGreaterThanOrEqual(0);
+        expect(codeBox!.x + codeBox!.width).toBeLessThanOrEqual(width + 1);
         for (const [index, nav] of (await section.locator('.nav').all()).entries()) {
           await nav.scrollIntoViewIfNeeded();
           // テーマを当てた後のスタイルと寸法は同期で決まるので、メニュー1つ分を1回の evaluate でまとめて読む
