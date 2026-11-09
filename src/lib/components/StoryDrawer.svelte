@@ -42,6 +42,7 @@
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Drawer from './Drawer.svelte';
   import DueChip from './DueChip.svelte';
+  import FavoriteButton from './FavoriteButton.svelte';
   import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
   import MoveParentDialog from './MoveParentDialog.svelte';
@@ -1055,6 +1056,9 @@
 >
   {#snippet top()}
     <span class="chip"><Icon name="check" />{t('story')}</span>
+    {#if story !== null}
+      <FavoriteButton targetType="story" targetId={story.id} title={story.title} {workspaceId} />
+    {/if}
     {#if done}<span class="chip is-ok"><Icon name="check" />{t('done')}</span>{/if}
     {#if canWrite && story !== null && menuItems.length > 0}
       <RowMenu title={story.title} items={menuItems} />

@@ -59,6 +59,10 @@
 
   // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
   const DICT = {
+    favorites: "お気に入り",
+    favoriteAdd: "お気に入りにする",
+    favoriteRemove: "お気に入りから外す",
+    favoriteLimit: "お気に入りは20件までです。左のメニューのお気に入りから外してから追加してください。",
   signupTitle: "会員登録",
   onboardingStart: "利用開始の設定",
   onboardingProfileInvalid: "表示する名前は1〜100文字、肩書きは100文字以内で入力してください。改行や制御文字は使えません。",
@@ -2801,6 +2805,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
 
   // ---- 画面の枠 ----
   // [id, アイコン, 名前, ファイル, 件数]。文字列だけの行は見出し
+  function favoriteButtonHtml(marked = false, disabled = false) {
+    return `<button class="favorite-mark" type="button" aria-pressed="${marked}" aria-disabled="${disabled}" aria-label="${t("favoriteAdd")}" title="${t(marked ? "favoriteRemove" : "favoriteAdd")}" data-favorite-demo>${icon("star")}</button>`;
+  }
+  function favoritesNavHtml(items = []) {
+    if (!items.length) return "";
+    return `<div class="nav-favorites"><div class="nav-group"><span class="nav-group-label">${t("favorites")}</span></div>${items.map((item) => `<a class="nav-item" href="${esc(item.href)}" title="${esc(item.title)}">${icon(item.icon)}<span class="nav-item-label">${esc(item.title)}</span></a>`).join("")}</div>`;
+  }
   const PAGES = [
     "organization",
     ["today", "sun", () => "今日やること", "today.html"],
@@ -3191,6 +3202,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (hit("data-account-link")) { closeAccountMenu(); return; }
     if (hit("data-account-menu")) { setAccountMenu(!accountMenuOpen, true); return; }
     if (accountMenuOpen && !ev.target.closest(".account-menu")) closeAccountMenu();
+    if ((el = hit("data-favorite-demo"))) {
+      if (el.getAttribute("aria-disabled") === "true") return;
+      const marked = el.getAttribute("aria-pressed") !== "true";
+      el.setAttribute("aria-pressed", String(marked));
+      el.title = t(marked ? "favoriteRemove" : "favoriteAdd");
+      return;
+    }
     if ((el = hit("data-sun"))) {
       const x = task(el.dataset.sun);
       x.todayOn = x.todayOn === D.today ? null : D.today;
@@ -3729,6 +3747,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   document.addEventListener("pointerdown", () => keyHints.hide(), true);
 
   window.SQ = {
+    favoriteButtonHtml, favoritesNavHtml,
     formatTrialStopDateTime,
     first, firstHref, firstSteps, emptyState, art,
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,

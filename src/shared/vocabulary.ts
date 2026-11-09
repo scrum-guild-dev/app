@@ -11,6 +11,13 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 }
 
 export const dictionary = defineDictionary({
+  favorites: 'お気に入り',
+  favoriteAdd: 'お気に入りにする',
+  favoriteRemove: 'お気に入りから外す',
+  favoriteLimit: 'お気に入りは20件までです。左のメニューのお気に入りから外してから追加してください。',
+  favoriteLoadFailed: 'お気に入りを読み込めませんでした。',
+  favoriteFailed: 'お気に入りを変更できませんでした。もう一度お試しください。',
+
   onboardingBlockedTitle: '利用開始を再開できません',
   onboardingStart: '利用開始の設定',
   onboardingProfileInvalid:

@@ -47,6 +47,7 @@
   import { announceRemoved, type RestoreTarget } from '../task-removal.ts';
   import { t } from '../vocabulary.svelte.ts';
   import TodayMarkButton from './TodayMarkButton.svelte';
+  import FavoriteButton from './FavoriteButton.svelte';
   import Avatar from './Avatar.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Drawer from './Drawer.svelte';
@@ -1606,6 +1607,7 @@
 >
   {#snippet top()}
     {#if task !== null}
+      <FavoriteButton targetType="task" targetId={task.id} title={task.title} {workspaceId} />
       <span class="chip"
         ><Icon name={task.is_imported ? 'link' : 'pen'} />{task.is_imported
           ? t('taskImportedChip', { task: t('task') })

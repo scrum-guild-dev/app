@@ -97,6 +97,8 @@ h1, h2, h3 { text-wrap: balance; }
 .nav-item .ico { color: var(--color-muted); }
 .nav-item[aria-current="page"] .ico { color: var(--color-accent); }
 .nav-item-label { min-width: 0; }
+.nav-favorites { min-width: 0; }
+.nav-favorites .nav-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 名前を含む項目。狭い幅の帯でも nowrap を引き継がず、名前を全文読めるよう折り返す。 */
 .nav-item.is-wrapping { flex-shrink: 0; }
 .nav-item.is-wrapping .nav-item-label { white-space: normal; overflow-wrap: anywhere; }
@@ -221,7 +223,8 @@ h1, h2, h3 { text-wrap: balance; }
   .app[data-nav-collapsed="true"] .org-menu-button > .chip,
   .app[data-nav-collapsed="true"] .ws-menu,
   .app[data-nav-collapsed="true"] .nav-badge,
-  .app[data-nav-collapsed="true"] .binding-foot { display: none; }
+  .app[data-nav-collapsed="true"] .binding-foot,
+  .app[data-nav-collapsed="true"] .nav-favorites { display: none; }
   /* 節の見出しは罫だけを見せ、文字は読み上げに残す */
   .app[data-nav-collapsed="true"] .nav-group-label {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
@@ -635,6 +638,18 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
 .entry.is-done .entry-title { color: var(--color-muted); font-weight: 400; }
 .book-empty { padding: var(--space-4); color: var(--color-muted); font-size: var(--text-sm); }
 
+/* 本人のお気に入り。塗りの有無でも状態を示す。 */
+.favorite-mark {
+  display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px;
+  border: 0; border-radius: var(--radius-1); background: none; color: var(--color-muted);
+}
+.favorite-mark:hover { background: var(--color-rule); color: var(--color-fg); }
+.favorite-mark[aria-pressed="true"] { color: var(--color-accent); }
+.favorite-mark[aria-pressed="true"] .ico { fill: currentColor; }
+.favorite-mark[aria-disabled="true"] { cursor: wait; }
+.favorite-control { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.favorite-control .field-error { max-width: 28rem; }
+
 /* 今日やるの印 */
 .sun {
   display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-1);
@@ -850,6 +865,8 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .nav { display: flex; align-items: flex-start; overflow-x: auto; width: 100%; gap: var(--space-1); }
   .nav-item { white-space: nowrap; }
   .nav-item.is-wrapping .nav-item-label { max-width: 12rem; }
+  .nav-favorites { display: flex; flex: none; gap: var(--space-1); }
+  .nav-favorites .nav-item-label { max-width: 12rem; }
   .topbar, .content {
     padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
     padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));

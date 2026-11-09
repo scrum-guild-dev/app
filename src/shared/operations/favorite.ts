@@ -5,11 +5,13 @@ import { idSchema } from '../id.ts';
 const targetType = z.enum(['task', 'story', 'epic', 'wiki_page']);
 export const favoriteList = defineOperation({
   name: 'favorite-list',
-  description: '自分のお気に入りを読む',
+  description:
+    '自分のお気に入りを読む。favoritesはメニューに出せる対象、marksは閉じたワークスペースを含む今読める対象の印',
   mode: 'read',
   permission: 'organization',
   input: z.object({}),
   output: z.object({
+    marks: z.array(z.object({ target_type: targetType, target_id: z.string() })),
     favorites: z.array(
       z.object({
         id: z.string(),
