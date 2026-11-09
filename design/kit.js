@@ -685,7 +685,7 @@
   let narrowDisclosureId = 0;
   function narrowDisclosure(label, body) {
     const id = `narrow-disclosure-${++narrowDisclosureId}`;
-    return `<div class="narrow-disclosure" data-open="false"><button class="btn is-sm is-quiet narrow-disclosure-toggle" type="button" aria-expanded="false" aria-controls="${id}">${esc(label)}</button><div class="narrow-disclosure-body" id="${id}">${body}</div></div>`;
+    return `<div class="narrow-disclosure" data-open="false"><button class="btn is-sm is-quiet narrow-disclosure-toggle" type="button" aria-expanded="false" aria-controls="${id}">${icon("chevron")}<span>${esc(label)}</span></button><div class="narrow-disclosure-body" id="${id}">${body}</div></div>`;
   }
   document.addEventListener("click", (event) => {
     const button = event.target.closest && event.target.closest(".narrow-disclosure-toggle");

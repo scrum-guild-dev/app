@@ -87,7 +87,18 @@ test('バックログの先頭2行が390×844pxに入り、補助情報を各1�
       expect(row.bottom, theme).toBeLessThanOrEqual(NARROW_VIEWPORT.height);
     }
     await expectNoA11yViolations(page, 'backlog');
+    const closedDirections = await Promise.all(
+      [summary, filters, help].map((button) =>
+        button.locator('svg').evaluate((icon) => getComputedStyle(icon).transform),
+      ),
+    );
     for (const button of [summary, filters, help]) await button.click();
+    for (const [index, button] of [summary, filters, help].entries()) {
+      await expect(button.locator('svg')).toBeVisible();
+      expect(await button.locator('svg').evaluate((icon) => getComputedStyle(icon).transform)).not.toBe(
+        closedDirections[index],
+      );
+    }
     for (const button of [summary, filters, help]) await expect(button).toHaveAttribute('aria-expanded', 'true');
     await expect(header.locator('.team-xp')).toBeVisible();
     for (const label of ['詳細 未記入', '未見積もり', 'スプリントに入っていない']) {
@@ -101,7 +112,18 @@ test('バックログの先頭2行が390×844pxに入り、補助情報を各1�
     expect(await findOverflowViolations(page), theme).toEqual([]);
     expect(await findTargetSizeViolations(page), theme).toEqual([]);
     await expectNoA11yViolations(page, 'backlog');
+    const closedDirections = await Promise.all(
+      [summary, filters, help].map((button) =>
+        button.locator('svg').evaluate((icon) => getComputedStyle(icon).transform),
+      ),
+    );
     for (const button of [summary, filters, help]) await button.click();
+    for (const [index, button] of [summary, filters, help].entries()) {
+      await expect(button.locator('svg')).toBeVisible();
+      expect(await button.locator('svg').evaluate((icon) => getComputedStyle(icon).transform)).not.toBe(
+        closedDirections[index],
+      );
+    }
   }
 });
 

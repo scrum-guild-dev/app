@@ -48,7 +48,7 @@ document.addEventListener("input", (ev) => {
   const filtering = [...bar.querySelectorAll("select")].some((s) => s.value !== "") || bar.querySelector("#q").value.trim() !== "";
   bar.querySelector("#f-clear").hidden = !filtering;
   const count = [...bar.querySelectorAll("select")].filter((s) => s.value !== "").length;
-  bar.querySelector(".narrow-disclosure-toggle").textContent = count ? t("backlogFiltersCount").replace("{count}", count) : t("backlogFilters");
+  bar.querySelector(".narrow-disclosure-toggle span").textContent = count ? t("backlogFiltersCount").replace("{count}", count) : t("backlogFilters");
   document.getElementById("order-help").hidden = filtering;
   document.getElementById("filter-order-note").hidden = !filtering;
   document.getElementById("totals-note").hidden = !filtering;
