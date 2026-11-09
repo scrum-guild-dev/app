@@ -1109,7 +1109,7 @@ label.pick-row:hover { background: var(--color-accent-soft); }
 .table .is-name .chip { white-space: normal; }
 /* 表の補足は初めは畳む。注意の有無は summary の印にも残し、開くとすべての印を読める。 */
 .table-details > summary { cursor: pointer; font-size: var(--text-xs); }
-.table-details-alert { display: inline-flex; align-items: center; gap: 4px; }
+.table-details-alert { display: inline-flex; align-items: center; gap: var(--space-1); }
 .table-details-alert.is-danger { color: var(--color-danger); }
 .table-details-alert.is-warn { color: var(--color-warn); }
 .table-details-body { display: flex; flex-wrap: wrap; gap: var(--space-1); padding-block: var(--space-1); }
