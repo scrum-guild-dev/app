@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { FLASH_MS } from '../src/lib/flash-duration.ts';
 import type { OutputOf } from '../src/shared/operations/define.ts';
 import type { TodayTask } from '../src/shared/operations/organization/today.ts';
 import { today } from '../src/shared/operations/organization/today.ts';
@@ -61,6 +62,21 @@ async function clearMotion(page: Page): Promise<void> {
   await page.evaluate(() => {
     (Reflect.get(window, '__rowMotion') as Motion[]).length = 0;
   });
+}
+
+async function expectNoFlash(page: Page): Promise<void> {
+  const until = Date.now() + FLASH_MS;
+  // rAF 2回の後に開始イベントが届く。強調の時間全体を観測し、途中で一度でも
+  // 光った記録が残れば成功させない。最初の「まだ出ていない」だけでは通さない。
+  await expect
+    .poll(
+      async () => {
+        if ((await motions(page)).some((entry) => entry.name === 'drop-flash')) return 'flashed';
+        return Date.now() >= until ? 'quiet' : 'waiting';
+      },
+      { timeout: FLASH_MS + 5000, intervals: [50, 100, 200] },
+    )
+    .toBe('quiet');
 }
 
 async function expectDrawerEntrance(page: Page): Promise<void> {
@@ -170,7 +186,7 @@ test('追加したタスク・ストーリー・エピックだけが一度光�
   }
   await page.reload();
   await waitForSettled(page);
-  expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+  await expectNoFlash(page);
 });
 
 for (const kind of ['タスク', 'ストーリー'] as const) {
@@ -213,7 +229,7 @@ for (const kind of ['タスク', 'ストーリー'] as const) {
     await waitForSettled(page);
     await frames(page);
     await expect(page.getByRole('link', { name: excluded, exact: true })).toHaveCount(0);
-    expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+    await expectNoFlash(page);
 
     // 作成そのものは成功している。条件を外して後から現れた行にも光を持ち越さない。
     const unfiltered = waitForResponses(page, '/backlog-tree');
@@ -221,7 +237,7 @@ for (const kind of ['タスク', 'ストーリー'] as const) {
     await unfiltered;
     await expect(page.getByRole('link', { name: excluded, exact: true })).toBeVisible();
     await frames(page);
-    expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+    await expectNoFlash(page);
   });
 }
 
@@ -274,7 +290,7 @@ for (const reduced of [false, true]) {
     await page.goto('/aoba');
     await page.getByRole('button', { name: '完了にする: 移った行の合図' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'できませんでした' })).toBeVisible();
-    expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+    await expectNoFlash(page);
     await removeFailure();
     await page.getByRole('button', { name: '完了にする: 移った行の合図' }).click();
     await expect(
@@ -283,7 +299,7 @@ for (const reduced of [false, true]) {
         .getByRole('link', { name: task.title, exact: true }),
     ).toBeVisible();
     await frames(page);
-    if (reduced) expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+    if (reduced) await expectNoFlash(page);
     else
       await expect
         .poll(
@@ -293,7 +309,7 @@ for (const reduced of [false, true]) {
         .toBe(1);
     await page.reload();
     await waitForSettled(page);
-    expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+    await expectNoFlash(page);
   });
 }
 
@@ -326,10 +342,10 @@ test('運用の再開に成功して読み直した行だけが光り、失敗�
   const removeFailure = await failOperation(page, organizationResume, 500, 'internal');
   await page.goto('/operator');
   await waitForSettled(page);
-  expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+  await expectNoFlash(page);
   await page.getByRole('button', { name: '「ひばり工房」を再開する' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'できませんでした' })).toBeVisible();
-  expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+  await expectNoFlash(page);
   await removeFailure();
   await page.getByRole('button', { name: '「ひばり工房」を再開する' }).click();
   await expect
@@ -342,7 +358,7 @@ test('運用の再開に成功して読み直した行だけが光り、失敗�
     .toBe(1);
   await page.reload();
   await waitForSettled(page);
-  expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+  await expectNoFlash(page);
 });
 
 type ListedOrganization = OutputOf<typeof listOrganizations>['organizations'][number];
@@ -419,7 +435,7 @@ for (const operation of ['停止', '理由変更', '上限変更'] as const) {
       }
       await page.goto('/operator');
       await waitForSettled(page);
-      expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+      await expectNoFlash(page);
       const openLabel =
         operation === '停止'
           ? '「合図の組織」を停止する'
@@ -459,7 +475,7 @@ for (const operation of ['停止', '理由変更', '上限変更'] as const) {
       } else {
         const notice = outcome === 'state_changed' ? '状態が変わっていました' : '操作できませんでした';
         await expect(page.getByRole('status').filter({ hasText: notice })).toBeVisible();
-        expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+        await expectNoFlash(page);
       }
     });
   }
