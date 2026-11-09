@@ -14,7 +14,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { beforeNavigate, goto, invalidate, refreshAll } from '$app/navigation';
   import { page } from '$app/state';
-  import { onDestroy, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { wikiClient } from '../wiki-client.ts';
   import type { WikiData } from '../wiki-load.ts';
   import type { WorkspaceView } from '../workspace.ts';
@@ -57,6 +57,19 @@
       : data.workspace?.name,
   );
   const current = $derived(data.wikiPage);
+  let narrowWiki = $state(false);
+  const currentPageId = $derived(current?.id ?? null);
+  let pageListOpen = $derived(!narrowWiki || currentPageId === null);
+  onMount(() => {
+    // .layout-wiki が1列になる幅と揃える。広い幅へ戻したときは一覧を必ず開く。
+    const query = window.matchMedia('(max-width: 1080px)');
+    const update = () => {
+      narrowWiki = query.matches;
+    };
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  });
   const pages = $derived(data.wikiPages ?? []);
   let deletePending = $state(false);
   const scopedFailure = $derived(recovery.path === page.url.pathname ? recovery.failure : '');
@@ -423,12 +436,11 @@
         aria-disabled={historyBusy || uploadBusy || deleteBlocked}
         onclick={() => begin(true)}>{t('wikiAdd')}</button
       >{/if}{/snippet}
-  {#snippet meta()}{#if data.wikiPages !== null && !data.wikiNotFound}<p class="section-hint">
+  {#snippet meta()}{#if data.wikiPages !== null && !data.wikiNotFound && canWrite}<p class="props-note">
         {t(wiki.accessLabel)}
       </p>{/if}{/snippet}
 </PageHead>
-{#if workspaceId !== null && !canWrite}<p class="callout is-info">{t('wikiClosed')}</p>{/if}
-<p role="status" class="field-hint">{notice}</p>
+<p role="status" class={notice ? 'field-hint' : 'visually-hidden'}>{notice}</p>
 {#if scopedFailure}
   <div class="callout is-warn" role="alert">
     <Icon name="alert" />
@@ -444,37 +456,42 @@
     </div>
   </div>
 {/if}
-<p class="field-hint" role="status">{recovery.busy ? t('wikiReloading') : ''}</p>
+<p class="visually-hidden" role="status">{recovery.busy ? t('wikiReloading') : ''}</p>
 {#if data.wikiFailed && mode === 'read'}
   {#if !scopedFailure}<LoadFailed inShell />{/if}
 {:else}
   <div class="layout-wiki">
     <aside class="wiki-side">
-      {#if data.wikiPages !== null}{#key wiki.rootHref}<WikiSearch
-            {slug}
-            workspaceId={workspaceId || null}
-            {pages}
-            currentId={current?.id ?? null}
-          >
-            {#snippet children(searching)}
-              {#if pages.length}<WikiTree
-                  bind:this={wikiTree}
-                  {pages}
-                  {wiki}
-                  {searching}
-                  canWrite={canWrite &&
-                    !deleteBlocked &&
-                    current?.id !== deletedPageId &&
-                    mode === 'read' &&
-                    !saving &&
-                    !historyBusy &&
-                    !uploadBusy}
-                  currentId={current?.id ?? null}
-                />{:else}<p class="section-hint" hidden={searching}>
-                  {t('wikiTreeEmpty')}
-                </p>{/if}
-            {/snippet}
-          </WikiSearch>{/key}{/if}
+      <details class="wiki-page-list" bind:open={pageListOpen}>
+        <summary>{t('wikiPageList')}</summary>
+        <div class="wiki-list-content">
+          {#if data.wikiPages !== null}{#key wiki.rootHref}<WikiSearch
+                {slug}
+                workspaceId={workspaceId || null}
+                {pages}
+                currentId={current?.id ?? null}
+              >
+                {#snippet children(searching)}
+                  {#if pages.length}<WikiTree
+                      bind:this={wikiTree}
+                      {pages}
+                      {wiki}
+                      {searching}
+                      canWrite={canWrite &&
+                        !deleteBlocked &&
+                        current?.id !== deletedPageId &&
+                        mode === 'read' &&
+                        !saving &&
+                        !historyBusy &&
+                        !uploadBusy}
+                      currentId={current?.id ?? null}
+                    />{:else}<p class="section-hint" hidden={searching}>
+                      {t('wikiTreeEmpty')}
+                    </p>{/if}
+                {/snippet}
+              </WikiSearch>{/key}{/if}
+        </div>
+      </details>
     </aside>
     <section class="wiki-main" aria-label={t('wikiPage')}>
       <nav class="crumbs" aria-label={t('wikiCrumbs')}>
@@ -583,49 +600,49 @@
       {:else if current}
         <div class="wiki-head">
           <h2 id="wiki-page-title" tabindex="-1" class="section-title wrap-anywhere">{current.title}</h2>
-          <div class="form-actions">
-            <button
-              class="btn"
-              type="button"
-              aria-disabled={deleteBlocked}
-              onclick={() => {
-                if (!deleteBlocked) download();
-              }}>{t('wikiDownload')}</button
+        </div>
+        <div class="form-actions wiki-page-actions">
+          <button
+            class="btn"
+            type="button"
+            aria-disabled={deleteBlocked}
+            onclick={() => {
+              if (!deleteBlocked) download();
+            }}>{t('wikiDownload')}</button
+          >
+          <button
+            class="btn"
+            type="button"
+            aria-disabled={deleteBlocked}
+            onclick={() => {
+              if (!deleteBlocked) historyPage = current.id;
+            }}>{t('wikiHistory')}</button
+          >
+          {#if canWrite && current.id !== deletedPageId}
+            <button class="btn" type="button" aria-disabled={deleteBlocked} onclick={() => begin(false)}
+              >{t('wikiEdit')}</button
             >
             <button
               class="btn"
               type="button"
+              id="wiki-parent-action"
               aria-disabled={deleteBlocked}
-              onclick={() => {
-                if (!deleteBlocked) historyPage = current.id;
-              }}>{t('wikiHistory')}</button
-            >
-            {#if canWrite && current.id !== deletedPageId}
-              <button class="btn" type="button" aria-disabled={deleteBlocked} onclick={() => begin(false)}
-                >{t('wikiEdit')}</button
-              >
-              <button
+              onclick={(event) => {
+                if (!deleteBlocked) wikiTree?.showMove(event.currentTarget, current);
+              }}>{t('moveParent')}</button
+            >{#if depth < 10}<button
                 class="btn"
                 type="button"
-                id="wiki-parent-action"
                 aria-disabled={deleteBlocked}
-                onclick={(event) => {
-                  if (!deleteBlocked) wikiTree?.showMove(event.currentTarget, current);
-                }}>{t('moveParent')}</button
-              >{#if depth < 10}<button
-                  class="btn"
-                  type="button"
-                  aria-disabled={deleteBlocked}
-                  onclick={() => begin(true, current.id)}>{t('wikiAddChild')}</button
-                >{:else}<p class="field-hint">{t('wikiDepth')}</p>{/if}
-            {/if}
-            {#if canDelete}<button
-                class="btn is-danger"
-                type="button"
-                aria-disabled={deleteBlocked || uploadBusy || historyBusy}
-                onclick={(event) => removePage(event.currentTarget)}>{t('wikiDelete')}</button
-              >{/if}
-          </div>
+                onclick={() => begin(true, current.id)}>{t('wikiAddChild')}</button
+              >{:else}<p class="field-hint">{t('wikiDepth')}</p>{/if}
+          {/if}
+          {#if canDelete}<button
+              class="btn is-danger"
+              type="button"
+              aria-disabled={deleteBlocked || uploadBusy || historyBusy}
+              onclick={(event) => removePage(event.currentTarget)}>{t('wikiDelete')}</button
+            >{/if}
         </div>
         <WikiContent source={current.body_md} internalLinkPrefix={`${page.url.origin}${wiki.rootHref}/`} />
       {:else if pages.length}

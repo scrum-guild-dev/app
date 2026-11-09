@@ -35,12 +35,10 @@ API の追加は `add-operation`、マイグレーションは `d1-migration`、
 
 ## 検証と引き渡し
 
-整形と検査は `CLAUDE.md` と `AGENTS.md` に従う。クラウドの PR 前は対象と理由を指定した e2e の通常・開発・関連する繰り返しを確認し、全件は CI に任せる。必要時だけ `--all --reason …` で明示する。実行前に対象・モード・所要時間の見込みを共有し、対象検査と CI の待ちを分けて記録する。`e2e:preflight` を実行して Playwright が無いとして終了コード 3 が返ったときだけ e2e を省いて PR を作り、CI で担保する。
+整形と検査は `CLAUDE.md` と `AGENTS.md` に従う。E2E はローカル・クラウドとも CI で実行し、明示的な依頼が無ければ `e2e:preflight` や `--verify` を実行しない。変更に必要な E2E を追加・更新し、関連するユニットテスト・静的解析・型チェックをこのセッションで行う。CI の結果は別に確認し、確認できなければ未検証と報告する。
 委譲した場合も差分の範囲と新規ファイルを確認する。[検査結果の再利用](../../../docs/agent-workflows/validation.md) に従いログと入力状態を確認し、未実施・無効になった検査だけを行う。
 自分の差分は `.agents/skills/done-check/SKILL.md` で点検し、範囲内の問題を直す。
 
 最後に、変更内容、完了条件の充足状況、検査と未検証の項目、Issue と文書に無い判断を報告する。
 PR を求められている場合は `.agents/skills/pr/SKILL.md` に従い、承認範囲で作成・CI とレビュー対応まで進める。
 外部への操作は `AGENTS.md` の承認の範囲に従う。未承認ならローカルの差分と PR 案までで渡し、実装・検証の前に承認待ちで止まらない。
-
-コミットや工程の移動だけで入力が同じで、実行時HEADが現在のHEADの祖先なら e2e を再実行しない。amend・squash・rebaseなどで祖先関係が失われた場合は再実行する。実行時と同じ対象指定で `pnpm e2e:preflight --verify <result.json> [base-ref] [同じ選定オプション]` を使い、元の結果と両HEAD・入力の一致を示す照合記録を引き継ぐ。条件は `docs/agent-workflows/validation.md` と `docs/development.md` の「クラウドで PR 前に e2e を確かめる」に従う。

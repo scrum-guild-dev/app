@@ -182,7 +182,7 @@ function renderMd(src) {
 const person = (id) => `<span class="person">${avatarOf(id)}${esc(user(id).name)}</span>`;
 const fmTable = (rows) => `<div class="table-wrap"><table class="table is-properties"><caption class="visually-hidden">ページの frontmatter（題を除く）</caption>
   <thead><tr><th scope="col">キー</th><th scope="col">値</th></tr></thead>
-  <tbody>${rows.map(([k, v]) => `<tr><th scope="row" class="mono is-wrap">${esc(k)}</th><td class="is-wrap">${esc(v) || '<span class="props-note">（空）</span>'}</td></tr>`).join("")}</tbody></table></div>`;
+  <tbody>${rows.map(([k, v]) => `<tr><th scope="row" class="mono is-wrap">${esc(k)}</th><td class="mono is-wrap">${esc(v) || '<span class="props-note">（空）</span>'}</td></tr>`).join("")}</tbody></table></div>`;
 // ページの頭の表と本文。題に使った title は表に出さない。読めない frontmatter は、表を出さずに知らせ、全文を本文として描く
 function pageBody(md) {
   const { rows, bad, body } = splitMd(md);
@@ -239,9 +239,22 @@ function statusText() {
   const n = searchHits().length;
   return n ? `${n} 件のページが見つかりました` : `「${q}」に当たるページはありません。語を減らすか、別の語で探してください。`;
 }
+let pageListOpen = true;
+let pageListPage;
+const wikiNarrow = window.matchMedia("(max-width: 1080px)");
+wikiNarrow.addEventListener("change", () => {
+  const list = document.querySelector(".wiki-page-list");
+  pageListOpen = !wikiNarrow.matches || !S.page;
+  if (list) list.open = pageListOpen;
+});
+document.addEventListener("toggle", (event) => {
+  if (event.target.matches?.(".wiki-page-list") && event.target.isConnected) pageListOpen = event.target.open;
+}, true);
 function sideHtml() {
+  if (pageListPage !== S.page) pageListOpen = !wikiNarrow.matches || !S.page;
+  pageListPage = S.page;
   const searching = S.query.trim() !== "";
-  return `<aside class="wiki-side" aria-label="${scopeName}の検索とページの木">
+  return `<aside class="wiki-side" aria-label="${scopeName}の検索とページの木"><details class="wiki-page-list" ${pageListOpen ? "open" : ""}><summary>${t("wikiPageList")}</summary><div class="wiki-list-content">
     <form class="form" id="wiki-search-form" role="search" aria-label="Wiki の題と本文を探す"><div class="field"><label for="wiki-q">Wiki の題と本文を探す</label><input class="input" type="search" id="wiki-q" value="${esc(S.query)}" aria-describedby="wiki-q-hint wiki-q-status">
       <p class="field-hint" id="wiki-q-hint">この Wiki の中だけを探します。空白で区切って5語・100字まで。</p></div>
       <div class="form-actions"><button class="btn" type="submit">探す</button></div></form>
@@ -250,7 +263,7 @@ function sideHtml() {
       <div class="panel-title"><b>ページ</b><span class="props-note">${store.pages.length} 件</span>
         <button class="btn is-sm is-quiet toolbar-end" type="button" id="wiki-reorder" data-wiki="reorder" aria-pressed="${S.reorder}" ${searching ? "hidden" : ""}>${icon("swap")}並べ替える</button></div>
       <div id="wiki-list">${listHtml()}</div>
-    </div></aside>`;
+    </div></div></details></aside>`;
 }
 
 // ---- 右の欄 ----
@@ -273,7 +286,8 @@ function readHtml(p) {
     <header class="wiki-head">
       <h2 class="section-title" id="wiki-main-title" tabindex="-1">${esc(p.title)}</h2>
       ${metaLine(p)}
-      <div class="toolbar">
+    </header>
+      <div class="toolbar wiki-page-actions">
         <button class="btn is-primary" type="button" data-wiki="edit">${icon("pen")}編集する</button>
         <button class="btn" type="button" data-wiki="versions">${icon("clock")}版の一覧</button>
         <button class="btn" type="button" data-wiki="download">${icon("download")}.md で落とす</button>
@@ -281,7 +295,6 @@ function readHtml(p) {
         <button class="btn is-sm is-quiet" type="button" data-wiki="move">${icon("swap")}親を移す</button>
         <button class="btn is-sm is-quiet is-danger" type="button" data-wiki="delete">${icon("trash")}消す</button>
       </div>
-    </header>
     ${pageBody(p.md)}
     <section class="section" aria-labelledby="wiki-children-title">
       <div class="section-head"><h3 class="section-title" id="wiki-children-title">子のページ</h3><span class="section-count">${children.length} 件</span></div>
@@ -400,7 +413,7 @@ function statesHtml() {
       ${panel(isOrg ? "消せないとき" : `終了した${t("workspace")}の Wiki`, isOrg
         ? `<p class="field-hint">消せるのは${delWho}です。</p>
            <p class="props-note">作った人でも${t("admin")}でもない人には、「消す」を出しません。</p>`
-        : `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の Wiki は、読み取りだけできます。</span></div>
+        : `<p class="props-note">終了日と読み取り専用の案内は、画面の上の帯に1回だけ出します。</p>
            <div class="toolbar"><button class="btn is-primary" type="button" aria-disabled="true">${icon("pen")}編集する</button><button class="btn" type="button" aria-disabled="true">${icon("clock")}版の一覧</button></div>
            <p class="props-note">書く操作（足す、編集、移す、消す、上げる）は出さないか押せなくし、読む操作（開く、版を見る、.md で落とす、探す）は使えます。書こうとしたときは、終了しているため書けないことを伝えます。</p>
            <p class="field-hint">終了した${t("workspace")}では、消せる人にも「消す」を出しません。</p>`)}

@@ -924,3 +924,10 @@ export async function openEpicPage(page: Page, title: string): Promise<void> {
   await drawer.getByRole('link', { name: 'エピックの画面を開く' }).click();
   await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
 }
+
+// 見えている要素の位置と大きさ。見えていない（null）ときは、位置を比べる前に落とす（null 同士で素通りさせない）
+export async function shownBox(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error(`見えていない要素の位置を比べようとした: ${locator.toString()}`);
+  return box;
+}
