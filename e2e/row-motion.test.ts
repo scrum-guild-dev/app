@@ -51,6 +51,28 @@ async function clearMotion(page: Page): Promise<void> {
   });
 }
 
+async function expectDrawerEntrance(page: Page): Promise<void> {
+  await expect
+    .poll(async () =>
+      (await motions(page))
+        .filter((entry) => /\bdrawer\b/.test(entry.target))
+        .map((entry) => entry.name)
+        .sort(),
+    )
+    .toEqual(['opacity', 'transform']);
+  const entering = (await motions(page)).filter((entry) => /\bdrawer\b/.test(entry.target));
+  expect(entering.every((entry) => entry.duration.split(',').every((part) => parseFloat(part) <= 0.26))).toBe(true);
+  await expect
+    .poll(async () => (await motions(page)).some((entry) => /\bscrim\b/.test(entry.target) && entry.name === 'opacity'))
+    .toBe(true);
+  // networkidle は CSS の開始・終了を待たない。開始を観測して、対象の演出が終わってから
+  // 記録を消す。直前の出現が、次の「動かない」操作の記録に混ざるのを防ぐ。
+  await page.evaluate(async () => {
+    const animations = [...document.querySelectorAll('.drawer, .scrim')].flatMap((element) => element.getAnimations());
+    await Promise.all(animations.map((animation) => animation.finished.catch(() => undefined)));
+  });
+}
+
 async function frames(page: Page): Promise<void> {
   await page.evaluate(
     () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
@@ -75,21 +97,7 @@ test('4テーマで引き出しは最初だけ出現し、前後移動とペー�
     await page.getByRole('link', { name: '出現の一', exact: true }).click();
     const drawer = page.locator('.drawer');
     await expect(drawer).toBeVisible();
-    await expect
-      .poll(async () =>
-        (await motions(page))
-          .filter((entry) => /\bdrawer\b/.test(entry.target))
-          .map((entry) => entry.name)
-          .sort(),
-      )
-      .toEqual(['opacity', 'transform']);
-    const entering = (await motions(page)).filter((entry) => /\bdrawer\b/.test(entry.target));
-    expect(entering.every((entry) => entry.duration.split(',').every((part) => parseFloat(part) <= 0.26))).toBe(true);
-    await expect
-      .poll(async () =>
-        (await motions(page)).some((entry) => /\bscrim\b/.test(entry.target) && entry.name === 'opacity'),
-      )
-      .toBe(true);
+    await expectDrawerEntrance(page);
     await waitForSettled(page);
     await clearMotion(page);
     await drawer.getByRole('button', { name: '次のタスク', exact: true }).click();
@@ -100,7 +108,9 @@ test('4テーマで引き出しは最初だけ出現し、前後移動とペー�
     await expect(drawer).toHaveCount(0);
   }
 
+  await clearMotion(page);
   await page.getByRole('link', { name: '出現の一', exact: true }).click();
+  await expectDrawerEntrance(page);
   await waitForSettled(page);
   await clearMotion(page);
   await page.locator('.drawer').getByRole('button', { name: 'ページ全体', exact: true }).click();
