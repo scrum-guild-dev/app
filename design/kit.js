@@ -314,7 +314,7 @@
     consentRevisedBoth: "利用規約とプライバシーポリシーが改められました",
     markdownTableRegion: "表", teamXpLabel: "チーム全体の経験値", filterLabel: "{backlog}の絞り込み", backlogSearch: "タイトルで探す",
     filterAll: "{label}: すべて", filterMe: "自分", unassigned: "担当なし", leftMember: "（離脱済み）", categoryNone: "{category}なし",
-    backlogSummary: "集計", backlogFilters: "絞り込み", backlogFiltersCount: "絞り込み（{count}）",
+    backlogSummary: "集計", backlogFilters: "絞り込み", backlogFiltersCount: "絞り込み（{count}条件）",
     backlogPriority: "上ほど優先", backlogOrderHelp: "並べ替えの使い方",
     filterNoRepository: "リポジトリなし", filterNoEpic: "{epic}なし", filterClear: "絞り込みを外す",
     backlogFilterOrderNote: "上にあるものほど優先します。絞り込みを外すと並べ替えられます。", backlogNoMatchTitle: "絞り込みに当たるものはありません",

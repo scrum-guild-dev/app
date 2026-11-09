@@ -132,7 +132,7 @@ test('390pxで閉じた絞り込みにも条件数と解除を残し、広い幅
   await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(`${WORKSPACE}?assignee=me&repository=none`);
   const bar = page.getByRole('search', { name: 'バックログの絞り込み' });
-  const filters = bar.getByRole('button', { name: '絞り込み（2）', exact: true });
+  const filters = bar.getByRole('button', { name: '絞り込み（2条件）', exact: true });
   await expect(filters).toHaveAttribute('aria-expanded', 'false');
   await expect(bar.getByRole('combobox')).toHaveCount(0);
   await filters.click();

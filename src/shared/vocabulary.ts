@@ -583,7 +583,7 @@ export const dictionary = defineDictionary({
   filterTotalsNote: '{points}と件数は、絞る前の全体の値です',
   backlogSummary: '集計',
   backlogFilters: '絞り込み',
-  backlogFiltersCount: '絞り込み（{count}）',
+  backlogFiltersCount: '絞り込み（{count}条件）',
   backlogPriority: '上ほど優先',
   backlogOrderHelp: '並べ替えの使い方',
   filterClear: '絞り込みを外す',
