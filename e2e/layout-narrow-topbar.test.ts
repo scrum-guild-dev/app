@@ -3,6 +3,7 @@
 // ワークスペースの札から一覧を開くのは e2e/workspace-switcher.test.ts、虫眼鏡から検索を開くのは e2e/nav-search.test.ts。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。読むだけにし、seed の行もテーマも書き換えない
 import type { Page } from '@playwright/test';
+import { NAV_STRIP_PEEK } from '../src/lib/nav-strip.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
 import { expect, test } from './fixtures.ts';
 import { applyTheme, LAYOUT_THEMES, NARROW_VIEWPORT, signIn } from './helpers.ts';
@@ -20,8 +21,9 @@ async function measureFrame(page: Page) {
     await document.fonts.ready;
     // 書体やテーマで項目の幅が変わると、帯（NavMenu の ResizeObserver）が描く前に送り直す。2 フレーム待ってから測る
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    // 端の幕の幅（components.css の --nav-strip-peek、src/lib/nav-strip.ts の NAV_STRIP_PEEK）
-    const peek = 32;
+    // 端の幕の幅は、帯に当たった CSS の値（components.css の --nav-strip-peek）から読む。送り位置の peek（src/lib/nav-strip.ts の
+    // NAV_STRIP_PEEK、32px）とずれると、今の項目が幕にかかってこの確かめが落ちる
+    const peek = parseFloat(getComputedStyle(document.getElementById('app-nav')!).getPropertyValue('--nav-strip-peek'));
     const item = document.querySelector<HTMLElement>('.breadcrumb [aria-current="page"]')!;
     // 省略記号が出たかは、文字の幅と箱の幅で比べる。scrollWidth と clientWidth は整数に丸めるので、1px 未満の縮みを拾えない
     const range = document.createRange();
@@ -33,6 +35,7 @@ async function measureFrame(page: Page) {
     const link = nav.querySelector('a.nav-item[aria-current="page"]')!.getBoundingClientRect();
     const more = { start: nav.hasAttribute('data-more-start'), end: nav.hasAttribute('data-more-end') };
     return {
+      peek,
       clipped: range.getBoundingClientRect().width > item.getBoundingClientRect().width + 0.01,
       gap: account.left - item.getBoundingClientRect().right,
       sameRow: Math.abs(account.top + account.height / 2 - (crumb.top + crumb.height / 2)) < 12,
@@ -68,6 +71,8 @@ for (const [path, name] of [
       expect(result.gap, `${theme}: 今の画面の名前がアカウントのボタンに重なる`).toBeGreaterThanOrEqual(0);
       expect(result.sameRow, `${theme}: アカウントのボタンがパンくずの行に無い`).toBe(true);
       expect(result.linkInStrip, `${theme}: 今のページの項目が帯の外にある`).toBe(true);
+      // 幕の幅を読めないと（変数の名前が変わった、など）、幕にかかるかの確かめが空振りする
+      expect(result.peek, `${theme}: 幕の幅（--nav-strip-peek）`).toBe(NAV_STRIP_PEEK);
       expect(result.clearOfFade, `${theme}: 今のページの項目が端の幕にかかる`).toBe(true);
       // ワークスペースの項目は 390px の帯からはみ出し、今の項目まで送るので、左に続きがある（右は、末尾の設定では無い）
       expect(result.scrollable, `${theme}: 帯がはみ出していない`).toBe(true);
