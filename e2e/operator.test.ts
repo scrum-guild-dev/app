@@ -105,6 +105,40 @@ test.describe('運用者', () => {
     await signIn(context, baseURL, 'operator');
   });
 
+  test('閉じた行でも色に頼らず状態と対象の組織を見分けられる', async ({ page }) => {
+    const cases = [
+      {
+        name: 'お試し組織',
+        label: 'お試し期限切れ',
+        icon: 'alert',
+        values: { trial_ends_on: '2026-10-31', trial_expired: true },
+      },
+      {
+        name: '解約組織',
+        label: '解約',
+        icon: 'alert',
+        values: { suspended_at: '2026-11-01T00:00:00.000Z', purge_on: '2026-12-01' },
+      },
+      { name: '不在組織', label: '管理者不在', icon: 'alert', values: { admin_status: 'none' as const } },
+      { name: '招待組織', label: '招待期限切れ', icon: 'alert', values: { admin_status: 'expired' as const } },
+      { name: '停止組織', label: '停止中', icon: 'clock', values: { suspended_at: '2026-11-01T00:00:00.000Z' } },
+      { name: '指名組織', label: '指名待ち', icon: 'clock', values: { admin_status: 'pending' as const } },
+    ];
+    await mockList(
+      page,
+      cases.map((item, index) => organization({ slug: `status-${index}`, name: item.name, ...item.values })),
+    );
+    await page.goto('/operator');
+    const rows = page.locator('.table tbody tr');
+    await expect(rows).toHaveCount(cases.length);
+    for (const [index, item] of cases.entries()) {
+      const summary = rows.nth(index).locator('summary');
+      await expect(summary.locator('.table-details-alert')).toHaveText(item.label);
+      await expect(summary.locator('.table-details-alert use')).toHaveAttribute('href', `#i-${item.icon}`);
+      await expect(summary).toHaveAccessibleName(new RegExp(`${item.name}.*${item.label}`));
+    }
+  });
+
   for (const width of [1280, 390]) {
     test(`${width}pxで印の多い行も閉じれば通常行の1.5倍以内で、開くとすべて読める`, async ({ page }) => {
       await mockList(page, [
@@ -126,7 +160,9 @@ test.describe('運用者', () => {
       const rows = page.locator('.table tbody tr');
       await expect(rows).toHaveCount(4);
       await expect(rows.first().locator('details')).toHaveCount(0);
-      await expect(rows.nth(1).locator('summary')).toHaveAccessibleName(/お試しの期限を過ぎています/);
+      await expect(rows.nth(1).locator('summary')).toHaveAccessibleName(
+        /印の多い組織0.*お試し期限切れ.*解約.*管理者不在.*停止中/,
+      );
       await page.setViewportSize({ width, height: 900 });
       for (const theme of A11Y_THEMES) {
         await applyTheme(page, theme);

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { operatorStatuses } from '../../lib/operator-status.ts';
   import { tick } from 'svelte';
   import { invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
@@ -213,40 +214,32 @@
             </thead>
             <tbody>
               {#each data.organizations as organization (organization.slug)}
+                {@const statuses = operatorStatuses(organization)}
+                {@const primaryStatus = statuses[0]}
                 <tr>
                   <td class="is-name">
                     {organization.name}
-                    {#if organization.self_created || organization.trial_ends_on !== null || organization.suspended_at || (organization.kind !== 'personal' && organization.admin_status !== 'active')}
+                    {#if organization.self_created || organization.trial_ends_on !== null || statuses.length > 0}
                       <details class="table-details">
                         <summary>
+                          <span class="visually-hidden">{organization.name} </span>
                           <span class="chip"
                             >{organization.kind === 'personal'
                               ? t('operatorKindPersonal')
                               : t('operatorKindTeam')}</span
                           >
-                          {#if organization.trial_expired || (organization.suspended_at && organization.purge_on) || (organization.kind !== 'personal' && ['none', 'expired'].includes(organization.admin_status))}
-                            <span class="table-details-alert is-danger"
-                              ><Icon name="alert" /><span class="visually-hidden"
-                                >{organization.trial_expired
-                                  ? t('trialExpired')
-                                  : organization.suspended_at && organization.purge_on
-                                    ? t('operatorPurgeOn', { date: organization.purge_on })
-                                    : organization.admin_status === 'none'
-                                      ? t('operatorAdminNone', words)
-                                      : t('operatorAdminExpired', words)}
-                              </span>{t('detail')}</span
+                          {#if primaryStatus}
+                            <span
+                              class="table-details-alert"
+                              class:is-danger={primaryStatus.tone === 'danger'}
+                              class:is-warn={primaryStatus.tone === 'warn'}
+                              ><Icon name={primaryStatus.icon} />{t(primaryStatus.label)}</span
                             >
-                          {:else if organization.suspended_at || (organization.kind !== 'personal' && organization.admin_status === 'pending')}
-                            <span class="table-details-alert is-warn"
-                              ><Icon name="alert" /><span class="visually-hidden"
-                                >{organization.suspended_at
-                                  ? t('operatorSuspended', { date: formatUtcDate(organization.suspended_at) })
-                                  : t('operatorAdminPending', words)}
-                              </span>{t('detail')}</span
-                            >
-                          {:else}
-                            {t('detail')}
+                            {#each statuses.slice(1) as status (status.code)}
+                              <span class="visually-hidden">、{t(status.label)}</span>
+                            {/each}
                           {/if}
+                          {t('operatorDetails')}
                         </summary>
                         <div class="table-details-body">
                           {#if organization.self_created}<span class="chip">{t('operatorSelfCreated')}</span>{/if}
