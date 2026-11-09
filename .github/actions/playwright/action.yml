@@ -2,7 +2,8 @@ name: playwright
 description: Playwright の chromium を入れる。ブラウザは Playwright の版ごとにキャッシュし、apt での依存の導入（--with-deps）は行わない
 
 # 先に ./.github/actions/setup で依存を入れておく（版は pnpm-lock.yaml の @playwright/test で決まる）。
-# キャッシュは PR から main の分を読めるので、main への push と週1回の実行で cache.yml が同じ手順を走らせて温める
+# キャッシュは PR から main の分を読める。cache.yml が温め、main の ci.yml もキーが無ければ検査後に保存する。
+# main に入れた依存もキャッシュの書き手として信頼する（docs/development.md の「CI」）
 runs:
   using: composite
   steps:

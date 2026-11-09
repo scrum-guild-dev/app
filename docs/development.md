@@ -881,14 +881,14 @@ git の保護フックと CI は既存のものを使う。
 
 ## CI
 
-PR ごとに GitHub Actions で回す。`.github/workflows/ci.yml` の各ジョブは `package.json` のスクリプトを呼ぶだけにし、手順をワークフローに持たない。下の表の cache、accepting、ready は、PR の更新ではなく main への push、マージ、Issue の変更、定期で動く別のワークフローで、setup と playwright は各ジョブが使う composite action。
+PR ごとと main への push、毎日 06:43 JST の定期実行、手動実行で GitHub Actions を回す。main は文書だけでも型・lint・整形・ユニットテスト・マイグレーション・通常と開発モードの E2E をすべて検査する。`e2e-repeat` は PR の変更テスト用なので main では走らせない。`.github/workflows/ci.yml` の各ジョブは `package.json` のスクリプトを呼ぶだけにし、手順をワークフローに持たない。下の表の cache、accepting、ready は、PR の更新ではなく main への push、マージ、Issue の変更、定期で動く別のワークフローで、setup と playwright は各ジョブが使う composite action。
 
 | ジョブ | 中身 |
 | --- | --- |
 | changes | 変わったファイルを見て、文書だけの PR か（下の「文書だけの PR」）と、`e2e-dev` を走らせるか（`scripts/changes.ts`）を判定する。足したか変えたファイル（`--diff-filter=AM`）から、`e2e-repeat` が繰り返すテストのファイルも選ぶ（`scripts/changes.ts --repeat`） |
 | setup | 各ジョブの先頭で動く共通の用意（`.github/actions/setup`）。Node を `.node-version` から、pnpm を `packageManager` から入れ（corepack に頼らない）、ロックファイルどおりに依存を入れる |
 | playwright | e2e のジョブの用意（`.github/actions/playwright`）。chromium を入れる。ブラウザ（`~/.cache/ms-playwright`）はキャッシュし、キーは OS のメジャー版（`ImageOS`。`ubuntu24` など。イメージの週ごとの更新では替わらない）、CPU、Playwright の版にする。版を読めなければ止める（キーが版によらなくなると、古いブラウザを戻し続けるため）。`--with-deps` は付けず、apt を通らない。apt の取得は Ubuntu のミラーの速さに左右され、25.9MB に2分を超えた実行があったため（#250）。ランナーのイメージには chromium が動くライブラリが既にあり、画面の書体は @fontsource から自前で配る。システムの日本語の書体が無くても e2e は通る（#250 の CI）。手元で fontconfig から日本語の書体を外した Chromium でも、ログインと組織の画面の日本語は @fontsource の書体で崩れずに出て、見出しが出た時点で書体の読み込みも終わっていた。導入は、キャッシュなしで約8秒、キャッシュに当たれば約3秒（`--with-deps` のときは20秒から2分24秒）。Playwright を上げるかイメージが替わって、e2e がライブラリの不足で落ちたら、`pnpm exec playwright install-deps chromium` を足す |
-| cache | PR が読むキャッシュを main に作る（`.github/workflows/cache.yml`）。キャッシュは作ったブランチと PR のベースのブランチからしか読めず、CI は PR でしか動かないので、main に作らないとどの PR も1回目は外れる。当たるのはベースが `main` の PR だけ。setup と playwright だけを走らせ、Playwright のブラウザと pnpm のストアを温める。動くのは、main への push のうちどちらかのキーか中身が変わりうるもの（ロックファイル、`.node-version`、`package.json`、`.github/actions/`）、週1回の定期（7日読まれないキャッシュは消えるため）、手動の実行。テストは走らせず、`ci-ok` にも含めない。PR の e2e は、main のキャッシュの中身を確かめずに使う。main のキャッシュに書けるのはこのワークフローだけで、`pnpm install` でインストールスクリプトを動かせるのは `pnpm-workspace.yaml` の `allowBuilds` の esbuild と workerd だけなので、この信頼は受け入れる。依存が乗っ取られた疑いがあれば、リポジトリの Actions の Caches から `playwright-` で始まるキャッシュを消し、`cache` を手で動かして作り直す |
+| cache | PR が読むキャッシュを main に作る（`.github/workflows/cache.yml`）。キャッシュは作ったブランチと PR のベースのブランチからしか読めず、PR が最初から利用できるよう main にキャッシュを用意する。当たるのはベースが `main` の PR だけ。setup と playwright だけを走らせ、Playwright のブラウザと pnpm のストアを温める。動くのは、main への push のうちどちらかのキーか中身が変わりうるもの（ロックファイル、`.node-version`、`package.json`、`.github/actions/`）、週1回の定期（7日読まれないキャッシュは消えるため）、手動の実行。テストは走らせず、`ci-ok` にも含めない。PR の e2e は、main のキャッシュの中身を確かめずに使う。main のキャッシュには `cache.yml` と main で動く `ci.yml` が書き込む。`ci.yml` は検査・build・E2E で依存のコードを実行した後の状態も保存しうる。main に入れた依存をキャッシュの書き手としても信頼する前提を受け入れる。依存が乗っ取られた疑いがあれば、リポジトリの Actions の Caches から `playwright-` で始まるキャッシュを消し、`cache` を手で動かして作り直す |
 | check | 型の検査（`tsc`、`svelte-check`。`svelte-check` はコンパイル時の警告でも落とす `--fail-on-warnings`）、lint、整形、Claude のフックのテスト（`node --test .claude/hooks/*.test.mjs`。`CLAUDE_CODE_REMOTE=true` を付けてもう一度走らせ、テストがクラウドのセッションの環境を受け継いで結果の変わる形に戻ったら落とす） |
 | test | `pnpm test:vitest --shard=<i>/2`。マトリクスで2つのシャードに分けて並べる（チェックの名前は `test (1)` と `test (2)`。vitest の `--shard` がファイルを割る。1つのランナーでは、ファイルごとの Workers の実行環境の起動（1ファイル約 3.5 秒）と並びの上限で e2e の最長より長くなったため。#653）。vitest の3つのプロジェクトで動かす（`vitest.config.ts`）。`workers` は API のテストを Workers の実行環境で動かす（`test/`。`@cloudflare/vitest-plugin`。`@cloudflare/vitest-pool-workers` から名前が変わった）。`web` は画面のコードのテストを node の環境で動かす（`src/` の `*.test.ts`。Workers の実行環境では `.svelte` を描けないので、`svelte/server` の `render` で部品を HTML にして確かめる。テストは確かめる対象の隣に置く）。`web-client` は部品の配線（`*.svelte.ts` の `$effect`）を、DOM なしのブラウザ向けの実行で確かめる（`src/` の `*.svelte.test.ts`。環境は `scripts/vitest-client-environment.ts`。`$effect.root` と `flushSync` で動かし、部品そのものは mount しない）。テストの D1 には `test/apply-migrations.ts` が全マイグレーションを当てる。1つのテストファイルの中では、前のテストが入れた行が残るので、一意の列にはテストごとに新しい値を使う。組織の分離のテストを含む。一覧を回す検査（`test/operation-registry-production-<番号>.test.ts`）は、操作の名前で決まる塊（`test/operations/chunks.ts`）に分け、塊ごとに別のファイルで回す。1つのファイルだと、ほかのファイルが終わった後に1つのワーカーで長く走る尾になるため。`scripts/` と `cli/lib/` の `node --test` は、下の `test-node` が走らせる |
 | test-node | `pnpm test:node`。`scripts/*.test.ts` と `cli/lib/*.test.ts` を `node --test` で動かす。`test` と並べて走らせ、PR の待ちを e2e の最長より短くする。seed を一時の D1 に2回流して中身を数える。`scripts/acceptance-video.test.ts` が判定の HTML を chromium で動かすので、Playwright の chromium を入れる（無いとそのテストがスキップされる）。ffmpeg は入れない。受け入れの動画は人の手元で作るので、実録画の寸法を `ffprobe` で確かめるテストと、字幕を合成する `compose.py` のテストは CI では飛ばし、ffmpeg のある手元の `pnpm test` で走る。apt はミラーの速さに左右され、`apt-get install` の段だけで 13 分かかり、ジョブの上限 15 分に迫った実行があった（PR #865。テストそのものは 48 秒）。手元の `pnpm test` は `test:vitest` と `test:node` を順に走らせ、全部が走る |
@@ -980,6 +980,19 @@ ai-review は Claude のサブスクリプションで動かす。手元で `cla
 GitHub Actions の無料枠は、private のリポジトリで月 2,000 分（public のあいだは、標準のランナーに上限が無い）。private に戻したときは、`ready` の定期の実行（1時間ごとで、1回を1分に切り上げて数えるので月約 720 分）も枠に数える。e2e と AI レビューで足りなくなりそうなら、上と同じく対象の PR を絞る。e2e のシャードは、それぞれが準備、Playwright の導入、build を繰り返す（1つあたり約1分）ので、分ける前との差は、4つに分けた3つ分の約3分（`e2e` と `e2e-dev` のそれぞれで、1回あたり）。
 
 PR ごとのプレビュー環境は持たず、Workers Builds の preview builds も有効にしない。`wrangler versions upload` のプレビュー URL は本番と同じ D1 につながり、マージ前のコードが本番のデータに触れるため。見た目の確認は、手元の `pnpm dev` と CI の e2e で行う。
+
+### main の障害通知と復旧
+
+`main-health.yml` が main の `ci` 完了時と毎時23分、手動実行で最新の結果を確認する。失敗・タイムアウト・キャンセルなど正常を確認できない完了結果なら、`main-broken` ラベル付きの「[main障害] CI を復旧する（最優先）」Issue を自動作成する。ラベルが無ければ作る。実行ログ、対象 SHA、失敗したジョブを記録し、障害中の次の失敗・再実行は既存 Issue に1回ずつ追記する。新しい main の CI が未実行・実行中なら復旧扱いにせず、最新 SHA の最新実行が成功したときだけ復旧コメントを付けて自動で閉じる。古い SHA の結果では開閉しない。未実行・実行中・古い SHA で待機する理由は監視のログに出す。最新 SHA の実行が無い状態そのものでは Issue を作らないため、CI が起動しない状態や、`queued`・`in_progress` のまま滞留する状態は自動では検知・通知しない（監視ジョブは成功で終了する）。このログだけでは GitHub の通知は発生しない。ログに未実行・待機が続く場合は Actions の有効状態・起動条件・ランナーの待ち行列を確認し、必要に応じて main の CI を手動実行する。未復旧の Issue を人が閉じても、次の監視で再作成する。
+
+GitHub の通知を受け取る人は、リポジトリの **Watch → Custom → Issues** を有効にする。通知対象を明示する場合は **Settings → Secrets and variables → Actions → Variables** に `MAIN_CI_NOTIFY` を作り、GitHub ユーザー名をカンマ区切りで指定する（`@` は付けない）。作成・失敗追記・復旧コメントでメンションする。空ならメンションしない。bot が作った Issue だけでは全員に通知される保証は無いので、導入時に受信者と通知設定を確認する。
+
+1. 通知を受けた人が Issue の担当者を1人決め、通常の機能開発より復旧を優先する。
+2. 復旧に関係しない main へのマージを止める。この停止は運用ルールであり、Actions がマージを機械的に禁止するものではない。
+3. Issue のログと E2E の trace で原因を調べ、修正または revert の PR を作る。無条件の再実行やテストの無効化だけで済ませない。揺れるテストが再実行で通った場合も、修正用の別 Issue に原因・実行リンクを残す。
+4. 最新の main の CI 成功と復旧通知を確認し、通常の作業を再開する。
+
+この検知はリポジトリの CI が対象。本番の可用性や Workers Builds の失敗は下の運用手順で別途確認する。GitHub Actions 自体の停止、定期実行の遅延、通知ワークフローの失敗は Issue で通知できないため、Actions の失敗通知も有効にしておく。定期実行は既定ブランチが main である前提で、GitHub の都合で遅延・停止する場合がある。
 
 ### CI の e2e が落ちたとき
 
