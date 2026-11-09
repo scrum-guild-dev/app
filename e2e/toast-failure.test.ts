@@ -94,6 +94,7 @@ test('URL を直接開いて木の読み込みが遅いとき、300ms 後に読�
   // 行き先が組織の枠なので、紙ではなく枠の形の骨組みを出す。左のメニューの幅と上の帯の高さは描いた後と同じ。
   // 本文はバックログの組み（絞り込みの行と木の行）
   await expect(boot.locator('.boot-frame')).toBeVisible();
+  await expect(boot.locator('.boot-content')).toHaveCSS('padding-top', '16px');
   await expect(page.locator('html')).toHaveAttribute('data-boot', 'tree');
   await expect(boot.locator('.boot-body .boot-row .is-select')).toHaveCount(4);
   await expect(boot.locator('.boot-skeleton')).toBeHidden();

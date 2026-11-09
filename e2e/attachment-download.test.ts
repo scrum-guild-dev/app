@@ -89,9 +89,12 @@ test('HTML を png と偽って上げても添付として取得し、埋め込�
   expect(response.headers()['content-security-policy']).toContain('sandbox');
   expect(response.headers()['x-content-type-options']).toBe('nosniff');
   await page.goto('/aoba');
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
   await page.evaluate((path) => {
     const link = document.createElement('a');
     link.href = path;
+    // APIのダウンロードはSPAの画面遷移に渡さず、ブラウザが応答のヘッダーで判断する。
+    link.dataset.sveltekitReload = '';
     link.textContent = '添付した HTML を開く';
     document.body.append(link);
   }, path);

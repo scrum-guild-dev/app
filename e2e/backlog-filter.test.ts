@@ -141,7 +141,10 @@ test('担当、エピック、検索で絞り、URL に残る。絞っている�
   // リンクを開いても、同じ絞り込みで出る
   const link = page.url();
   const other = await page.context().newPage();
+  // 新しいタブの load イベントは、SPA が木を読み終えたことを保証しない。初回の応答を待ってから表示を確かめる。
+  const openedTree = waitForResponses(other, '/backlog-tree');
   await other.goto(link);
+  expect((await openedTree).ok()).toBe(true);
   await expect(other.locator('.tree .entry-title')).toHaveText(['請求書を出す']);
   await expect(other.getByRole('combobox', { name: '担当' })).toHaveValue('none');
   await expect(other.getByRole('searchbox', { name: 'タイトルで探す' })).toHaveValue('請求');
