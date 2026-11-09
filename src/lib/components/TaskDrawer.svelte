@@ -1607,7 +1607,7 @@
 >
   {#snippet top()}
     {#if task !== null}
-      <FavoriteButton targetType="task" targetId={task.id} title={task.title} {workspaceId} />
+      <FavoriteButton targetType="task" targetId={task.id} title={task.title} {workspaceId} menuVisible={canWrite} />
       <span class="chip"
         ><Icon name={task.is_imported ? 'link' : 'pen'} />{task.is_imported
           ? t('taskImportedChip', { task: t('task') })

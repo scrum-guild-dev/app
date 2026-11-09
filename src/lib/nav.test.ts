@@ -48,3 +48,16 @@ test('お気に入りはアプリのbaseを保ち、対象の種類とworkspace�
     '/base/aoba/wiki/' + encodeURIComponent('対象/1'),
   );
 });
+
+test.each(['task', 'story', 'epic'] as const)('workspaceを欠いた%sのお気に入りはリンクにしない', (target_type) => {
+  expect(
+    favoriteNavItem('/aoba', {
+      id: 'mark',
+      target_type,
+      target_id: 'one',
+      workspace_id: null,
+      title: '架空の題',
+      created_at: '',
+    }).href,
+  ).toBeNull();
+});

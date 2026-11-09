@@ -146,16 +146,16 @@ export const navSections: NavSection[] = [
 export function favoriteNavItem(
   base: string,
   favorite: import('./favorites.svelte.ts').Favorite,
-): { href: string; icon: IconName } {
+): { href: string | null; icon: IconName } {
   const id = encodeURIComponent(favorite.target_id);
   const workspace = favorite.workspace_id === null ? null : `${base}/w/${encodeURIComponent(favorite.workspace_id)}`;
   switch (favorite.target_type) {
     case 'task':
-      return { href: `${workspace}/tasks/${id}`, icon: 'check' };
+      return { href: workspace === null ? null : `${workspace}/tasks/${id}`, icon: 'check' };
     case 'story':
-      return { href: `${workspace}?story=${id}`, icon: 'board' };
+      return { href: workspace === null ? null : `${workspace}?story=${id}`, icon: 'board' };
     case 'epic':
-      return { href: `${workspace}/epics/${id}`, icon: 'flag' };
+      return { href: workspace === null ? null : `${workspace}/epics/${id}`, icon: 'flag' };
     case 'wiki_page':
       return { href: `${workspace ?? base}/wiki/${id}`, icon: 'file' };
   }

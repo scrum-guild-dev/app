@@ -658,7 +658,9 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
 .favorite-mark:hover { background: var(--color-rule); color: var(--color-fg); }
 .favorite-mark[aria-pressed="true"] { color: var(--color-accent); }
 .favorite-mark[aria-pressed="true"] .ico { fill: currentColor; }
-.favorite-mark[aria-disabled="true"] { cursor: wait; }
+.favorite-mark[aria-disabled="true"] { cursor: not-allowed; }
+.favorite-mark[aria-busy="true"] { cursor: wait; }
+.favorite-mark[aria-disabled="true"]:hover { background: none; }
 .favorite-control { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .favorite-control .field-error { max-width: 28rem; }
 
@@ -877,7 +879,8 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .nav { display: flex; align-items: flex-start; overflow-x: auto; width: 100%; gap: var(--space-1); }
   .nav-item { white-space: nowrap; }
   .nav-item.is-wrapping .nav-item-label { max-width: 12rem; }
-  .nav-favorites { display: flex; flex: none; gap: var(--space-1); }
+  .nav-favorites { display: flex; flex: none; align-items: flex-start; gap: var(--space-1); }
+  .nav-favorites > .nav-group { display: block; flex: none; white-space: nowrap; padding-block: 7px; }
   .nav-favorites .nav-item-label { max-width: 12rem; }
   .topbar, .content {
     padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
@@ -2358,3 +2361,8 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 /* 本文より上、ダイアログ（30）とトースト（40）より下。 */
 .loading-overlay { position: fixed; inset: 0; z-index: 10; overflow: auto; background: var(--page-background); }
 .loading-overlay.is-leaving { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); pointer-events: none; }
+
+/* title を開けないタッチ端末では、項目にフォーカスすると省略した題を全文にする。 */
+@media (hover: none) {
+  .nav-favorites .nav-item:focus .nav-item-label { white-space: normal; overflow-wrap: anywhere; }
+}

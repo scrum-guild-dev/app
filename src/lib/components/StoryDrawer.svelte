@@ -1057,7 +1057,7 @@
   {#snippet top()}
     <span class="chip"><Icon name="check" />{t('story')}</span>
     {#if story !== null}
-      <FavoriteButton targetType="story" targetId={story.id} title={story.title} {workspaceId} />
+      <FavoriteButton targetType="story" targetId={story.id} title={story.title} {workspaceId} menuVisible={canWrite} />
     {/if}
     {#if done}<span class="chip is-ok"><Icon name="check" />{t('done')}</span>{/if}
     {#if canWrite && story !== null && menuItems.length > 0}

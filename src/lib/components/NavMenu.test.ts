@@ -5,7 +5,10 @@ import NavMenu from './NavMenu.svelte';
 import type { Favorite } from '../favorites.svelte.ts';
 
 const { organization, favoriteState } = vi.hoisted(() => ({
-  favoriteState: { current: undefined as { available: boolean; items: Favorite[] } | undefined },
+  favoriteState: {
+    current: undefined as
+      { available: boolean; items: Favorite[]; loadFailed?: boolean; loading?: boolean } | undefined,
+  },
   organization: { name: '架空の組織', kind: 'team' as 'team' | 'personal' },
 }));
 

@@ -62,7 +62,8 @@
     favorites: "お気に入り",
     favoriteAdd: "お気に入りにする",
     favoriteRemove: "お気に入りから外す",
-    favoriteLimit: "お気に入りは20件までです。左のメニューのお気に入りから外してから追加してください。",
+    favoriteLoadFailed: "お気に入りを読み込めませんでした。",
+    favoriteLimit: "お気に入りは20件までです。登録した対象の星を外してから追加してください。",
   signupTitle: "会員登録",
   onboardingStart: "利用開始の設定",
   onboardingProfileInvalid: "表示する名前は1〜100文字、肩書きは100文字以内で入力してください。改行や制御文字は使えません。",
@@ -303,7 +304,7 @@
     epicPageRequest: "概要", epicPagePartyEmpty: "参加者はまだいません。", accountMenuLabel: "{name}。アカウントのメニュー", pageToday: "今日やること", pageMe: "マイプロフィール", pageOrgAdmin: "組織の管理", navInvitationsBadge: "招待 {count}", navInvitationsLabel: "、届いた招待 {count}件", logout: "ログアウト",
     logoutMoving: "ログアウトしています", loggedOut: "ログアウトしました。", logoutFailed: "ログアウトできませんでした。時間をおいてもう一度試してください。",
     markdownPlainNote: "整形せずに表示しています", markdownNewTab: "新しいタブで開きます", markdownCodeRegion: "コード",
-    termsTitle: "利用規約", privacyTitle: "プライバシーポリシー", retry: "もう一度試す", retrying: "読み込んでいます",
+    termsTitle: "利用規約", privacyTitle: "プライバシーポリシー", retry: "もう一度試す", retrying: "読み込んでいます", retryFailed: "まだ読み込めませんでした",
     consentTitle: "同意の確認", consentLead: "{app} を使うには、利用規約とプライバシーポリシーを確認してください。", consentVersion: "版: {version}",
     consentCheckLabel: "利用規約とプライバシーポリシーを確認し、同意します", consentSubmit: "同意して進む", consentContinue: "進む",
     consentUpdated: "規約が更新されました。内容を確認し直してください。", consentCurrent: "現在の版に同意しています。",
@@ -2806,12 +2807,21 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
 
   // ---- 画面の枠 ----
   // [id, アイコン, 名前, ファイル, 件数]。文字列だけの行は見出し
-  function favoriteButtonHtml(marked = false, disabled = false) {
-    return `<button class="favorite-mark" type="button" aria-pressed="${marked}" aria-disabled="${disabled}" aria-label="${t("favoriteAdd")}" title="${t(marked ? "favoriteRemove" : "favoriteAdd")}" data-favorite-demo>${icon("star")}</button>`;
+  function favoriteButtonHtml(marked = false, disabled = false, busy = false) {
+    return `<button class="favorite-mark" type="button" aria-pressed="${marked}" aria-disabled="${disabled}" aria-busy="${busy}" aria-label="${t("favoriteAdd")}" title="${t(marked ? "favoriteRemove" : "favoriteAdd")}" data-favorite-demo>${icon("star")}</button>`;
   }
   function favoritesNavHtml(items = []) {
     if (!items.length) return "";
     return `<div class="nav-favorites"><div class="nav-group"><span class="nav-group-label">${t("favorites")}</span></div>${items.map((item) => `<a class="nav-item" href="${esc(item.href)}" title="${esc(item.title)}">${icon(item.icon)}<span class="nav-item-label">${esc(item.title)}</span></a>`).join("")}</div>`;
+  }
+  // 初回取得失敗→再試行中→再失敗→再試行→成功を、同じ領域で確かめる見本。
+  function favoriteRetryHtml(available = false) {
+    return `<span class="favorite-control" data-favorite-retry-demo data-available="${available}">
+      ${favoriteButtonHtml(available, !available)}
+      <span class="field-error">${t("favoriteLoadFailed")}</span>
+      <button class="btn is-sm" type="button" aria-disabled="false" data-favorite-retry>${t("retry")}</button>
+      <span class="field-hint" role="status"></span>
+    </span>`;
   }
   const PAGES = [
     "organization",
@@ -3203,6 +3213,30 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (hit("data-account-link")) { closeAccountMenu(); return; }
     if (hit("data-account-menu")) { setAccountMenu(!accountMenuOpen, true); return; }
     if (accountMenuOpen && !ev.target.closest(".account-menu")) closeAccountMenu();
+    if ((el = hit("data-favorite-retry"))) {
+      if (el.getAttribute("aria-disabled") === "true") return;
+      const root = el.closest("[data-favorite-retry-demo]");
+      const status = root.querySelector('[role="status"]');
+      const star = root.querySelector("[data-favorite-demo]");
+      el.setAttribute("aria-disabled", "true");
+      if (root.dataset.available !== "true") star.setAttribute("aria-busy", "true");
+      status.textContent = t("retrying");
+      setTimeout(() => {
+        star.setAttribute("aria-busy", "false");
+        el.setAttribute("aria-disabled", "false");
+        if (!root.dataset.failedAgain) {
+          root.dataset.failedAgain = "true";
+          status.textContent = t("retryFailed");
+        } else {
+          root.querySelector(".field-error").hidden = true;
+          star.setAttribute("aria-disabled", "false");
+          if (document.activeElement === el) star.focus();
+          el.hidden = true;
+          status.textContent = "";
+        }
+      }, 700);
+      return;
+    }
     if ((el = hit("data-favorite-demo"))) {
       if (el.getAttribute("aria-disabled") === "true") return;
       const marked = el.getAttribute("aria-pressed") !== "true";
@@ -3748,7 +3782,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   document.addEventListener("pointerdown", () => keyHints.hide(), true);
 
   window.SQ = {
-    favoriteButtonHtml, favoritesNavHtml,
+    favoriteButtonHtml, favoritesNavHtml, favoriteRetryHtml,
     formatTrialStopDateTime,
     first, firstHref, firstSteps, emptyState, art,
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,

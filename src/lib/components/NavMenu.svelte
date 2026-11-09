@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { invalidate } from '$app/navigation';
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
@@ -9,6 +8,7 @@
   import { organizationLabel } from '../organization-label.ts';
   import type { NavigationWorkspace } from '../workspace-navigation.svelte.ts';
   import Icon from './Icon.svelte';
+  import FavoriteLoadStatus from './FavoriteLoadStatus.svelte';
   import { useFavorites } from '../favorites.svelte.ts';
   const favorites = useFavorites();
 
@@ -84,19 +84,24 @@
         {/if}
       {/if}
     {/each}
-    {#if section.heading === undefined && favorites && (!favorites.available || favorites.items.length > 0)}
+    {#if section.heading === undefined && favorites && (favorites.loadFailed || !favorites.available || favorites.items.length > 0)}
       <div class="nav-favorites">
         <div class="nav-group"><span class="nav-group-label">{t('favorites')}</span></div>
-        {#if !favorites.available}
-          <span class="field-error">{t('favoriteLoadFailed')}</span>
-          <button class="btn is-sm" type="button" onclick={() => invalidate('app:favorites')}>{t('retry')}</button>
-        {/if}
+        <FavoriteLoadStatus
+          onrecovered={() =>
+            document
+              .getElementById(NAV_MENU_ID)
+              ?.querySelector<HTMLAnchorElement>('.nav-favorites a, .nav-item')
+              ?.focus()}
+        />
         {#each favorites?.items ?? [] as favorite (`${favorite.target_type}/${favorite.target_id}`)}
           {@const item = favoriteNavItem(resolve('/[slug]', { slug }), favorite)}
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- favoriteNavItem は resolve 済みの組織パスにエンコードした対象だけを足す -->
-          <a class="nav-item" href={item.href} title={favorite.title}>
-            <Icon name={item.icon} /><span class="nav-item-label">{favorite.title}</span>
-          </a>
+          {#if item.href !== null}
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- favoriteNavItem は resolve 済みの組織パスにエンコードした対象だけを足す -->
+            <a class="nav-item" href={item.href} title={favorite.title}>
+              <Icon name={item.icon} /><span class="nav-item-label">{favorite.title}</span>
+            </a>
+          {/if}
         {/each}
       </div>
     {/if}
