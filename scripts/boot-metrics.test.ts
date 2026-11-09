@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { assertBootHeading, bootNetworks, bootTiming, bootTransfers } from './boot-metrics.ts';
+import { assertBootHeading, bootFailureSummary, bootNetworks, bootTiming, bootTransfers } from './boot-metrics.ts';
 
 test('HTTP200のSPAエラー画面を正常な目的画面として測らない', () => {
   for (const headings of [[], ['404'], ['500'], ['見つかりません'], ['読み込めませんでした']]) {
@@ -15,6 +15,7 @@ test('HTMLの応答開始と実際の失敗表示から時間を求め、15秒�
     htmlMs: 4500,
     shownMs: 12200,
     afterHtmlMs: 7700,
+    failed: false,
     failedMs: 0,
   });
   assert.equal(bootTiming(15900, { seen: true, shownMs: 42400, failedAtMs: 32000 }).failedMs, 10400);
@@ -42,4 +43,30 @@ test('同じURLの複数転送も数え、種別と総量が一致する', () =>
 test('Slow 3G の補正後の帯域は40kB/s、遅延は2秒', () => {
   assert.equal(bootNetworks.slow.downloadThroughput, 40000);
   assert.equal(bootNetworks.slow.latency, 2000);
+});
+
+test('一部の試行だけ失敗表示が出た場合も、0のp50に隠さず回数と最大時間を残す', () => {
+  assert.deepEqual(
+    bootFailureSummary([
+      { failed: false, failedMs: 0 },
+      { failed: true, failedMs: 12000 },
+    ]),
+    { failedRuns: 1, runs: 2, maxMs: 12000 },
+  );
+  assert.deepEqual(
+    bootFailureSummary([
+      { failed: false, failedMs: 0 },
+      { failed: false, failedMs: 0 },
+    ]),
+    { failedRuns: 0, runs: 2, maxMs: 0 },
+  );
+  for (const values of [[], [{ failed: false, failedMs: -1 }], [{ failed: true, failedMs: NaN }]])
+    assert.throws(() => bootFailureSummary(values));
+});
+
+test('失敗表示と画面表示が同時刻でも、失敗ありの試行として数える', () => {
+  const timing = bootTiming(1000, { seen: true, shownMs: 2000, failedAtMs: 2000 });
+  assert.equal(timing.failed, true);
+  assert.equal(timing.failedMs, 0);
+  assert.deepEqual(bootFailureSummary([timing]), { failedRuns: 1, runs: 1, maxMs: 0 });
 });

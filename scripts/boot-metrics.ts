@@ -5,6 +5,16 @@ export const bootNetworks = {
 } as const;
 
 export type BootObservation = { seen: boolean; shownMs: number; failedAtMs: number | null };
+export function bootFailureSummary(values: readonly { failed: boolean; failedMs: number }[]) {
+  if (!values.length || values.some((value) => !Number.isFinite(value.failedMs) || value.failedMs < 0)) {
+    throw new Error('失敗表示の観測が不正です');
+  }
+  return {
+    failedRuns: values.filter((value) => value.failed).length,
+    runs: values.length,
+    maxMs: Math.max(...values.map((value) => value.failedMs)),
+  };
+}
 export function assertBootHeading(headings: readonly string[], expected: string) {
   if (!expected.trim() || !headings.some((heading) => heading.trim() === expected.trim())) {
     throw new Error('目的の画面を表示できませんでした（見出しが一致しません）');
@@ -28,6 +38,7 @@ export function bootTiming(responseStart: number, observation: BootObservation) 
     htmlMs: responseStart,
     shownMs: observation.shownMs,
     afterHtmlMs: observation.shownMs - responseStart,
+    failed: observation.failedAtMs !== null,
     failedMs: observation.failedAtMs === null ? 0 : observation.shownMs - observation.failedAtMs,
   };
 }
