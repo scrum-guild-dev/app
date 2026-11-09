@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { t } from '../vocabulary.svelte.ts';
   import { searchOptions, type NavSearchScreen } from '../nav-search.ts';
@@ -13,12 +14,17 @@
   // screens の href と backlogHref は呼び出し側が resolve した経路
   let { screens, backlogHref }: { screens: NavSearchScreen[]; backlogHref: string | null } = $props();
 
+  // 760px 以下では欄を虫眼鏡のボタンに畳み、押すとパンくずの行の下に欄を出す（expanded。CSS が data-open で出し分け、
+  // 広い幅では欄を常に出してボタンを隠す）。Esc で閉じるか欄の外へフォーカスが移ると畳む
   const listId = $props.id();
+  const boxId = `${listId}-box`;
   let query = $state('');
   let open = $state(false);
+  let expanded = $state(false);
   let active = $state(0);
   let input = $state<HTMLInputElement>();
   let root = $state<HTMLElement>();
+  let toggle = $state<HTMLButtonElement>();
   let opener: HTMLElement | null = null;
 
   const shortcut = $derived(/Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘ K' : 'Ctrl K');
@@ -42,8 +48,28 @@
     active = 0;
   }
 
+  // 畳んだ欄は描かれていないので、出してから（tick の後に）フォーカスを移す
+  async function focusInput(): Promise<void> {
+    expanded = true;
+    await tick();
+    input?.focus();
+    input?.select();
+    show();
+  }
+
+  function onToggle(): void {
+    if (expanded) {
+      close(false);
+      toggle?.focus();
+      return;
+    }
+    opener = toggle ?? null;
+    void focusInput();
+  }
+
   function close(restore: boolean): void {
     open = false;
+    expanded = false;
     query = '';
     if (restore) {
       if (opener && opener.isConnected) opener.focus();
@@ -95,22 +121,47 @@
     run: () => {
       if (document.activeElement !== input)
         opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      input?.focus();
-      input?.select();
-      show();
+      void focusInput();
     },
   }));
 
+  // 欄の外へフォーカスが移ったら候補を閉じ、畳む。虫眼鏡のボタンへ移ったときは畳まない（続くボタンの click が畳む）
   function onFocusout(event: FocusEvent): void {
     const next = event.relatedTarget;
-    if (open && root && !(next instanceof Node && root.contains(next))) {
+    if (!root || (next instanceof Node && root.contains(next))) return;
+    if (open) {
       open = false;
       query = '';
     }
+    if (next !== toggle) expanded = false;
   }
 </script>
 
-<div class="nav-search" bind:this={root} onfocusout={onFocusout} role="search" aria-label={t('navSearchLabel')}>
+<button
+  class="nav-search-toggle"
+  type="button"
+  aria-label={t('navSearchLabel')}
+  aria-expanded={expanded}
+  aria-controls={boxId}
+  bind:this={toggle}
+  onmousedown={(event) => {
+    // 開いた欄からフォーカスを動かさない。Safari は押したボタンにフォーカスを移さず、欄の focusout で先に畳んでから
+    // click で開き直してしまうため
+    if (expanded) event.preventDefault();
+  }}
+  onclick={onToggle}
+>
+  <Icon name="search" />
+</button>
+<div
+  class="nav-search"
+  id={boxId}
+  data-open={expanded ? '' : undefined}
+  bind:this={root}
+  onfocusout={onFocusout}
+  role="search"
+  aria-label={t('navSearchLabel')}
+>
   <Icon name="search" />
   <input
     class="nav-search-input"

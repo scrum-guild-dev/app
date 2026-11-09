@@ -67,7 +67,12 @@ for (const width of [320, 390, 760]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto('/aoba');
     const search = page.getByRole('combobox', { name: '画面とタスクを探す' });
-    await search.click();
+    // 760px 以下では欄を虫眼鏡のボタンに畳み、押すとパンくずの行の下に欄を出して欄へフォーカスを移す（#993）
+    const toggle = page.getByRole('button', { name: '画面とタスクを探す' });
+    await expect(search).toBeHidden();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(search).toBeFocused();
     await search.fill('今日');
     const option = page.getByRole('option', { name: '今日やること' });
     await expect(option).toBeVisible();
@@ -83,3 +88,27 @@ for (const width of [320, 390, 760]) {
     await expect(page).toHaveURL(/\/aoba$/);
   });
 }
+
+test('390px で虫眼鏡から開いた欄は、Esc で畳んで虫眼鏡へフォーカスを戻し、Ctrl+K でも開く（#993）', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto('/aoba');
+  const search = page.getByRole('combobox', { name: '画面とタスクを探す' });
+  const toggle = page.getByRole('button', { name: '画面とタスクを探す' });
+  await toggle.click();
+  await expect(search).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(search).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+  // 開いた欄を虫眼鏡でもう一度押すと畳む（押したときに欄の外へのフォーカスで畳んで開き直さない）
+  await toggle.click();
+  await expect(search).toBeFocused();
+  await toggle.click();
+  await expect(search).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await page.keyboard.press('Control+k');
+  await expect(search).toBeFocused();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+});

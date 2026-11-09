@@ -2723,8 +2723,14 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       if (this.options[this.active]) input.setAttribute("aria-activedescendant", `nav-search-${this.options[this.active].id}`); else input.removeAttribute("aria-activedescendant");
       document.getElementById("nav-search-status").textContent = this.options.length ? `${this.options.length}件の候補` : "候補がありません";
     },
+    // 760px 以下では欄を虫眼鏡のボタンに畳み、押すとパンくずの行の下に欄を出す（CSS が data-open で出し分ける。広い幅では欄を常に出す）
+    expand(on) {
+      document.getElementById("nav-search-box")?.toggleAttribute("data-open", on);
+      document.querySelector("[data-nav-search-toggle]")?.setAttribute("aria-expanded", String(on));
+    },
     close(restore) {
       const input = this.input(); if (!input) return;
+      this.expand(false);
       document.getElementById("nav-search-list").hidden = true; input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant");
       input.value = ""; document.getElementById("nav-search-status").textContent = "";
       if (restore) { if (this.opener && this.opener.isConnected) this.opener.focus(); else input.blur(); }
@@ -2748,10 +2754,23 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   document.addEventListener("input", (ev) => { if (ev.target.id === "nav-search-input") { navSearch.active = 0; navSearch.render(); } });
   document.addEventListener("focusin", (ev) => {
     if (ev.target.id === "nav-search-input" && document.getElementById("nav-search-list").hidden) navSearch.render();
-    else if (navSearch.input() && !ev.target.closest(".nav-search") && !document.getElementById("nav-search-list").hidden) navSearch.close(false);
+    else if (navSearch.input() && !ev.target.closest(".nav-search, [data-nav-search-toggle]")
+      && (!document.getElementById("nav-search-list").hidden || document.getElementById("nav-search-box").hasAttribute("data-open"))) navSearch.close(false);
   });
-  document.addEventListener("mousedown", (ev) => { if (ev.target.closest && ev.target.closest("[data-nav-search-go]")) ev.preventDefault(); });
+  // 開いた欄から虫眼鏡を押してもフォーカスを動かさない（欄の外へのフォーカスで先に畳み、click で開き直すのを防ぐ）
+  document.addEventListener("mousedown", (ev) => {
+    if (!ev.target.closest) return;
+    if (ev.target.closest("[data-nav-search-go]")) ev.preventDefault();
+    const toggle = ev.target.closest("[data-nav-search-toggle]");
+    if (toggle && toggle.getAttribute("aria-expanded") === "true") ev.preventDefault();
+  });
   document.addEventListener("click", (ev) => {
+    const toggle = ev.target.closest && ev.target.closest("[data-nav-search-toggle]");
+    if (toggle) {
+      if (toggle.getAttribute("aria-expanded") === "true") { navSearch.close(false); toggle.focus(); }
+      else { navSearch.opener = toggle; navSearch.expand(true); navSearch.input().focus(); navSearch.render(); }
+      return;
+    }
     const row = ev.target.closest && ev.target.closest("[data-nav-search-go]");
     if (row) navSearch.go(Number(row.dataset.navSearchGo));
     else if (navSearch.input() && !ev.target.closest(".nav-search")) navSearch.close(false);
@@ -2831,7 +2850,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       // 組織の切り替えは、メニューの外（ブランドの下）の orgMenuHtml
       if (p === "organization") return "";
       if (p === "workspace") return `<div class="nav-group"><span class="nav-group-label">${t("workspace")}</span></div>
-        <div id="ws-menu-slot">${workspaceMenuHtml()}</div>`;
+        <div id="ws-menu-slot" style="display: contents">${workspaceMenuHtml()}</div>`;
       if (typeof p === "string") return `<div class="nav-group"><span class="nav-group-label">${p}</span></div>`;
       const [id, ic, label, href, badge] = p;
       const target = PAGES.indexOf(p) > PAGES.indexOf("workspace") ? `${firstHref(href)}${firstHref(href).includes("?") ? "&" : "?"}workspace=${encodeURIComponent(D.workspace)}` : firstHref(href);
@@ -2906,7 +2925,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function accountMenuHtml({ open = accountMenuOpen, id = "account-menu-list", live = true, busy = false, admin = !!D.organizations.find((org) => org.slug === D.organization)?.admin, invitationCount = (D.receivedInvites || []).length } = {}) {
     const name = user(D.me).name;
     const badge = admin ? t("admin") : "";
-    const who = `${avatarOf(D.me)}${esc(name)}${admin ? `<span class="chip">${t("admin")}</span>` : ""}${emblem(user(D.me).level, true)}`;
+    // 名前、管理者の札、紋章は .me-detail にまとめ、760px 以下ではアバターだけにする
+    const who = `${avatarOf(D.me)}<span class="me-detail">${esc(name)}${admin ? `<span class="chip">${t("admin")}</span>` : ""}${emblem(user(D.me).level, true)}</span>`;
     const label = t("accountMenuLabel").replace("{name}", badge ? `${name}（${badge}）` : name);
     const count = invitationCount;
     const items = `<li><a href="${firstHref("me.html")}" ${page && page.current === "me" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageMe")}</span>${count > 0 ? `<span class="account-menu-badge" aria-hidden="true">${t("navInvitationsBadge").replace("{count}", count)}</span><span class="visually-hidden">${t("navInvitationsLabel").replace("{count}", count)}</span>` : ""}</a></li>${admin ? `<li><a href="${firstHref("admin.html")}" ${page && page.current === "admin" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageOrgAdmin")}</span></a></li>` : ""}`;
@@ -2938,6 +2958,26 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     location.href = firstHref(target, next);
   }
   let page = null;
+  // 760px 以下のメニューの帯（横に送る .nav）。描き直したら今のページの項目が見える位置まで送り、続きがある端に印を付ける
+  // （CSS が端を薄くする）。計算は本番の src/lib/nav-strip.ts と同じ。広い幅の縦の列は横にはみ出さないので、送らず印も付かない
+  const NAV_STRIP_PEEK = 32;
+  function syncNavStrip(scroll) {
+    const nav = document.getElementById("app-nav");
+    if (!nav) return;
+    const item = scroll && nav.querySelector('a.nav-item[aria-current="page"]');
+    if (item && nav.scrollWidth > nav.clientWidth) {
+      const view = nav.getBoundingClientRect(); const box = item.getBoundingClientRect();
+      const group = nav.querySelector(".ws-menu")?.getBoundingClientRect();
+      const start = group && group.left <= box.left && box.right - group.left <= nav.clientWidth - NAV_STRIP_PEEK ? group.left : box.left;
+      if (start < view.left || box.right > view.left + nav.clientWidth) nav.scrollLeft = Math.max(0, nav.scrollLeft + start - view.left - NAV_STRIP_PEEK);
+    }
+    nav.toggleAttribute("data-more-start", nav.scrollLeft > 1);
+    nav.toggleAttribute("data-more-end", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
+  }
+  document.addEventListener("scroll", (ev) => { if (ev.target.id === "app-nav") syncNavStrip(false); }, true);
+  // 書体を読み終えると項目の幅が変わるので、送り位置を測り直す
+  document.fonts?.ready.then(() => syncNavStrip(true));
+  window.addEventListener("resize", () => syncNavStrip(false));
   function redraw() {
     if (!page) return;
     if (!page.operator) {
@@ -2946,6 +2986,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       document.getElementById("breadcrumb-slot").innerHTML = breadcrumbHtml();
       document.getElementById("app-nav").innerHTML = navHtml(page.current, PAGES);
     }
+    syncNavStrip(true);
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
     document.getElementById("content").innerHTML = page.render();
@@ -3008,9 +3049,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       redraw();
       return;
     }
-    const who = `${first ? `<button class="pill" type="button" aria-label="通知 0件">${icon("bell")}</button>`
-          : `<button class="pill" type="button" aria-label="通知 3件">${icon("bell")}<span class="pill-count">3</span></button>`}
-          <span id="account-menu-slot"></span>`;
+    const bell = first ? `<button class="pill" type="button" aria-label="通知 0件">${icon("bell")}</button>`
+      : `<button class="pill" type="button" aria-label="通知 3件">${icon("bell")}<span class="pill-count">3</span></button>`;
     document.getElementById("app").innerHTML = `
     <div class="app">
       <aside class="binding" aria-label="メニュー"><div class="binding-inner">
@@ -3027,11 +3067,15 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       <div class="sheet">
         <div class="topbar">
           <span id="breadcrumb-slot"></span>
-          <div class="nav-search" role="search" aria-label="画面とタスクを探す">${icon("search")}<input class="nav-search-input" id="nav-search-input" type="text" role="combobox" autocomplete="off" spellcheck="false" aria-label="画面とタスクを探す" aria-expanded="false" aria-controls="nav-search-list" aria-autocomplete="list" aria-keyshortcuts="Control+K Meta+K" placeholder="画面やタスクを探す"><kbd class="kbd nav-search-key" aria-hidden="true">${ASSIST_KEY}</kbd><ul class="nav-search-list" id="nav-search-list" role="listbox" aria-label="画面とタスクを探す" hidden></ul><span class="visually-hidden" role="status" id="nav-search-status"></span></div>
-          <button class="pill assist-launch" type="button" data-assist-open>${icon("spark")}<span data-assist-label></span></button>
-          <button class="pill" type="button" data-switch="theme">${icon("moon")}<span data-theme-label></span></button>
-          <button class="pill" type="button" data-switch="first">${icon("redo")}<span>見本: ${firstLabel(first)}</span></button>
-          ${who}
+          <button class="nav-search-toggle" type="button" data-nav-search-toggle aria-label="画面とタスクを探す" aria-expanded="false" aria-controls="nav-search-box">${icon("search")}</button>
+          <div class="nav-search" id="nav-search-box" role="search" aria-label="画面とタスクを探す">${icon("search")}<input class="nav-search-input" id="nav-search-input" type="text" role="combobox" autocomplete="off" spellcheck="false" aria-label="画面とタスクを探す" aria-expanded="false" aria-controls="nav-search-list" aria-autocomplete="list" aria-keyshortcuts="Control+K Meta+K" placeholder="画面やタスクを探す"><kbd class="kbd nav-search-key" aria-hidden="true">${ASSIST_KEY}</kbd><ul class="nav-search-list" id="nav-search-list" role="listbox" aria-label="画面とタスクを探す" hidden></ul><span class="visually-hidden" role="status" id="nav-search-status"></span></div>
+          <div class="topbar-tools">
+            <button class="pill assist-launch" type="button" data-assist-open>${icon("spark")}<span data-assist-label></span></button>
+            <button class="pill" type="button" data-switch="theme">${icon("moon")}<span data-theme-label></span></button>
+            <button class="pill" type="button" data-switch="first">${icon("redo")}<span>見本: ${firstLabel(first)}</span></button>
+            ${bell}
+          </div>
+          <span id="account-menu-slot"></span>
         </div>
         <main class="content" id="content"></main>
       </div>
@@ -3452,7 +3496,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === "k" && !overlay && navSearch.input()) {
       ev.preventDefault();
       if (document.activeElement !== navSearch.input()) navSearch.opener = document.activeElement;
-      navSearch.input().focus(); navSearch.input().select(); navSearch.render(); return;
+      navSearch.expand(true); navSearch.input().focus(); navSearch.input().select(); navSearch.render(); return;
     }
     if (ev.target.id === "nav-search-input" && navSearch.key(ev)) return;
     // 行の「⋯」のメニュー、「/」の小窓、空の行は、それぞれのキーを先に受け持つ
