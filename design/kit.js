@@ -2924,7 +2924,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // ワークスペースの切り替え。組織と同じ開閉と通常のリンクを使い、移動先はバックログ。
   let workspaceMenuOpen = false;
-  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] }, inWorkspaceScreen = !page || !["today", "notifications", "orgwiki", "me", "admin", "operator"].includes(page.current) } = {}) {
+  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] }, inWorkspaceScreen = !page || !["today", "notifications", "orgwiki", "me", "admin", "favorites", "operator"].includes(page.current) } = {}) {
     const name = workspaces.find((w) => w.id === current.id)?.name || current.name;
     const label = t("workspaceSwitchLabel").replace("{name}", name).replace("{workspace}", t("workspace"));
     const listLabel = t("workspaceSwitchListLabel").replace("{workspace}", t("workspace"));
@@ -2980,7 +2980,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function cycleFirst() {
     const order = [null, ...FIRST_ROLES];
     const next = order[(order.indexOf(first) + 1) % order.length];
-    const here = ["me", "admin"].includes(page.current) ? `${page.current}.html` : (PAGES.find((p) => Array.isArray(p) && p[0] === page.current) || [])[3] || "today.html";
+    const here = ACCOUNT_SCREENS[page.current] ? `${page.current}.html` : (PAGES.find((p) => Array.isArray(p) && p[0] === page.current) || [])[3] || "today.html";
     const target = !next || FIRST_PAGES[next].includes(here) ? here : "today.html";
     location.href = firstHref(target, next);
   }

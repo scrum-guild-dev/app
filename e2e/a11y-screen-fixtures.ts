@@ -15,6 +15,8 @@ const FAVORITE_ROWS = (
     ['story', '初めて使う人が招待から最初のタスクまで迷わず進められる'],
     ['epic', 'お気に入りの長い題の見本'.repeat(4) + 'とても長くて空白の無い題が折り返して崩れないことを確かめる'],
     ['wiki_page', 'ふくろう班の開発手順'],
+    // 英数字だけの空白の無い題（字の間で折り返せない）も、行の幅からはみ出さない
+    ['task', 'release-checklist-for-the-owl-team-'.repeat(4)],
   ] as const
 ).map(([target_type, title], index) => ({
   id: `019a0000-0000-7000-8000-00000000f0${index}0`,

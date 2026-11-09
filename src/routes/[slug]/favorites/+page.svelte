@@ -33,10 +33,19 @@
   <title>{t('pageTitle', { page: t('favorites'), app: t('appName') })}</title>
 </svelte:head>
 
-<PageHead title={t('favorites')} />
+<PageHead title={t('favorites')} focusable />
 
 {#if failed}
-  <div class="favorite-control"><FavoriteLoadStatus /></div>
+  <!-- 読めたら案内ごと消えるので、押した「もう一度試す」に置いていたフォーカスを、最初の行（無ければ見出し）へ移す -->
+  <div class="favorite-control">
+    <FavoriteLoadStatus
+      onrecovered={() =>
+        (
+          document.querySelector<HTMLElement>('#content .choice-list a') ??
+          document.querySelector<HTMLElement>('#content h1')
+        )?.focus()}
+    />
+  </div>
 {/if}
 {#if rows.length > 0}
   <div class="choice-list">

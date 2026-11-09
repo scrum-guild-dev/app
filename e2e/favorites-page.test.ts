@@ -21,11 +21,12 @@ function row(index: number, target_type: Favorite['target_type'], title: string,
   };
 }
 
+// 返す順のとおりに並ぶことを確かめるため、id は返す順と逆にし、種類も決まった順にしない（画面が並べ替えると落ちる）
 const ROWS: Favorite[] = [
-  row(1, 'task', '朝会の進め方をまとめる', true),
-  row(2, 'story', '招待から最初のタスクまで迷わず進める', true),
-  row(3, 'epic', '初めて使う人が仕事を始められるようにする', true),
-  row(4, 'wiki_page', 'ふくろう班の開発手順', false),
+  row(4, 'task', '朝会の進め方をまとめる', true),
+  row(3, 'story', '招待から最初のタスクまで迷わず進める', true),
+  row(2, 'epic', '初めて使う人が仕事を始められるようにする', true),
+  row(1, 'wiki_page', 'ふくろう班の開発手順', false),
 ];
 
 test('付けた対象が返った順に、種類と一緒に並び、押すとその対象へ移る', async ({ page, context, baseURL }) => {
@@ -75,7 +76,8 @@ test('一覧を読めないときは理由を出し、もう一度試すと並�
   await unroute();
   await routeOperation(page, favoriteList, { slug: 'aoba' }, (call) => call.fulfill({ favorites: ROWS, marks: [] }));
   await main.getByRole('button', { name: 'もう一度試す' }).click();
-  await expect(main.getByRole('link', { name: /朝会の進め方をまとめる/ })).toBeVisible();
+  // 案内ごとボタンが消えるので、フォーカスは最初の行へ移る（body に落とさない）
+  await expect(main.getByRole('link', { name: /朝会の進め方をまとめる/ })).toBeFocused();
   await expect(main.getByText('お気に入りを読み込めませんでした。')).toHaveCount(0);
 });
 
