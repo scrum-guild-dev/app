@@ -20,7 +20,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // 組織で絞る条件の形。epic は workspace_id を持たず、エピックを通して組織に結ぶ表（epic_party_members）
 type Scope = 'organization' | 'workspace' | 'epic' | 'task' | 'connection' | 'user';
 
-// 外部キーの子から順。xp_grants は自分の表を指す（reverses_grant_id）が、1文で組織の行をまとめて消すので、文の終わりの検査に当たらない
+// 削除と残件数の照合に使う全表の一覧。favorites は Wiki の分割削除より先に専用の文で消し、通常の削除文からは除く。
+// ほかは外部キーの子から順。xp_grants は自分の表を指す（reverses_grant_id）が、1文で組織の行をまとめて消すので、文の終わりの検査に当たらない
 const TABLES: readonly (readonly [table: string, scope: Scope])[] = [
   ['favorites', 'user'],
   ['xp_grants', 'workspace'],
