@@ -1,7 +1,9 @@
 // pnpm dev: vite dev（画面、HMR）と wrangler dev（API）を並べて立てる。vite が /api を wrangler dev へ転送する。
 // pnpm preview（--preview）: build 済みの build/ と API を、本番と同じ配り方で wrangler dev だけで配る。
+// --test-credentials は e2e 専用の架空鍵を渡す。通常の開発では使わない（計測スクリプトも同じ架空鍵を明示する）。
 // どちらかが止まったら残りも止める。ポートがぶつかったときに片方だけ動き続けないようにするため。
 import { spawn, type ChildProcess } from 'node:child_process';
+import { TEST_CREDENTIAL_KEYS } from './test-credential-keys.ts';
 import { devPorts, devPublicOrigin } from './dev-ports.ts';
 
 const preview = process.argv.includes('--preview');
@@ -14,6 +16,9 @@ const wranglerArgs = [
   String(ports.api),
   '--inspector-port',
   String(ports.inspector),
+  ...(process.argv.includes('--test-credentials')
+    ? ['--var', `CONNECTION_CREDENTIAL_KEYS:${TEST_CREDENTIAL_KEYS}`]
+    : []),
   ...(version ? ['--var', `APP_VERSION:${version}`] : []),
   '--var',
   `PUBLIC_ORIGIN:${devPublicOrigin(ports, preview)}`,

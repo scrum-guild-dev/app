@@ -1,5 +1,6 @@
 // 使い捨てのローカル D1 と実際の検索 API で測る。本番と開発中の D1 は使わない。
 // pnpm exec node scripts/wiki-search-bench.ts（先に scripts/prepare.ts）。結果は docs/data-model.md。
+import { TEST_CREDENTIAL_KEYS } from './test-credential-keys.ts';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -59,6 +60,8 @@ try {
       dir,
       '--var',
       `PUBLIC_ORIGIN:${origin}`,
+      '--var',
+      `CONNECTION_CREDENTIAL_KEYS:${TEST_CREDENTIAL_KEYS}`,
     ],
     { stdio: 'ignore' },
   );

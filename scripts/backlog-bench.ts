@@ -8,6 +8,7 @@
 // 当たらない語の検索も測る（索引の選び方で遅くならないかを見る）。読み方ごとに、温める 2 回の後に --runs 回（既定 10）測り、
 // 中央値と最大を出す。時間は API の往復（Worker の処理、D1、JSON の組み立てを含む）
 // 使い方: node scripts/backlog-bench.ts [--runs 10] [--port 9700]（既定は dev-ports.ts の BENCH_PORTS。デバッガーは既定で 9701、--port を替えたら --port + 1）
+import { TEST_CREDENTIAL_KEYS } from './test-credential-keys.ts';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -173,6 +174,8 @@ try {
       dir,
       '--var',
       `PUBLIC_ORIGIN:${origin}`,
+      '--var',
+      `CONNECTION_CREDENTIAL_KEYS:${TEST_CREDENTIAL_KEYS}`,
     ],
     { stdio: 'ignore' },
   );
