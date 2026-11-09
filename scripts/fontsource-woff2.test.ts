@@ -41,6 +41,16 @@ describe('fontsource の woff を外す', () => {
     assert.equal(transform(css, '/repo/node_modules/@fontsource-variable/other/index.css'), null);
   });
 
+  test('可変版の書体名が変わったら黙って代替書体にせず停止する', () => {
+    const transform = fontsourceWoff2Only().transform as (code: string, id: string) => { code: string } | null;
+    for (const css of ["@font-face { font-family: 'Renamed'; }", '@font-face { font-weight: 100 900; }']) {
+      assert.throws(
+        () => transform(css, '/repo/node_modules/@fontsource-variable/noto-sans-jp/index.css'),
+        /Noto Sans JP/,
+      );
+    }
+  });
+
   test('プラグインは @fontsource の CSS だけを書き換える', () => {
     const plugin = fontsourceWoff2Only();
     const transform = plugin.transform as (code: string, id: string) => { code: string } | null;
