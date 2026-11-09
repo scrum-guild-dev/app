@@ -377,6 +377,8 @@ export const dictionary = defineDictionary({
   appName: 'Scrum Guild',
   pageTitle: '{page} - {app}',
   menu: 'メニュー',
+  mobileTabs: 'よく使う画面',
+  mobileMenu: 'すべてのメニュー',
   menuCollapse: 'メニューを畳む',
   menuExpand: 'メニューを広げる',
   breadcrumb: 'パンくず',

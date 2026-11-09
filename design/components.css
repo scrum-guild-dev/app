@@ -901,58 +901,58 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .layout-aside { grid-template-columns: minmax(0, 1fr); }
   .layout-side { position: static; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
 }
+  .mobile-navigation {
+    position: fixed; z-index: 15;
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    left: max(var(--space-4), env(safe-area-inset-left, 0px));
+    right: max(var(--space-4), env(safe-area-inset-right, 0px));
+    display: flex; justify-content: center; align-items: center; gap: var(--space-3);
+    pointer-events: none;
+  }
+  .mobile-tabs {
+    display: flex; align-items: center; gap: var(--space-1); padding: var(--space-2);
+    border: 1px solid var(--color-line); border-radius: 999px;
+    background: var(--color-surface); box-shadow: var(--shadow-float); pointer-events: auto;
+  }
+  .mobile-tab {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 48px; height: 48px; padding: 0; border: 1px solid transparent; border-radius: 50%;
+    color: var(--color-muted); background: transparent; text-decoration: none;
+  }
+  .mobile-tab:hover { background: var(--color-rule); }
+  .mobile-tab[aria-current="page"], .mobile-tab[aria-expanded="true"] {
+    color: var(--color-fg); background: var(--color-sunken); border-color: var(--color-line);
+  }
+  .mobile-tab .ico { width: 22px; height: 22px; }
+  .mobile-menu-arrows { display: grid; font-size: 22px; line-height: 1; }
+  .mobile-create-slot { flex: 0 0 48px; height: 48px; }
+  .mobile-menu {
+    position: fixed; inset: auto 0 calc(96px + env(safe-area-inset-bottom, 0px));
+    margin-inline: auto; padding: 0; width: min(28rem, calc(100% - 2 * var(--space-4)));
+    max-height: calc(100dvh - 120px - env(safe-area-inset-bottom, 0px));
+    overflow: auto; overscroll-behavior: contain; color: var(--color-fg);
+    background: var(--color-surface); border: 1px solid var(--color-line);
+    border-radius: 24px; box-shadow: var(--shadow-float);
+  }
+  .mobile-menu::backdrop { background: rgb(0 0 0 / 25%); }
+  .mobile-menu-sheet { padding: var(--space-4); display: grid; gap: var(--space-3); }
+  .mobile-menu-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+  .mobile-menu-head h2 { margin: 0; font-size: var(--text-lg); }
+  .mobile-menu .icon-btn { min-width: 44px; min-height: 44px; }
+  .mobile-menu .nav { display: grid; gap: 1px; overflow: visible; width: auto; }
+  .mobile-menu .nav-group { display: block; }
+  .mobile-menu .nav-favorites { display: grid; }
+  .mobile-menu .nav-item { white-space: normal; min-width: 44px; min-height: 44px; }
+  .mobile-menu .nav-item-label { overflow-wrap: anywhere; }
+  .mobile-menu .org-menu, .mobile-menu .ws-menu { position: relative; min-width: 0; }
+  /* 切り替えの一覧は面を押し広げる。スクロール領域の外へ切らない。 */
+  .mobile-menu .org-menu-list, .mobile-menu .ws-menu-list { position: static; margin-top: var(--space-2); }
+  .mobile-menu .org-menu-button, .mobile-menu .ws-menu-button { min-height: 44px; }
+
 @media (max-width: 760px) {
-  /* 本文が min-height に届かないとき、余りを本文の行にだけ回す（既定ではメニューの行も伸びて下に空きが出る） */
-  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
-  /* 帯の中のワークスペースの一覧は、綴じを基準に帯の下へ出す（下の .nav .ws-menu-list） */
-  .binding { position: relative; border-right: 0; border-bottom: var(--rule-double); }
-  /* 狭い幅では角のマスの形をやめ、ロゴ、組織の切り替え、メニューを1つの帯に並べる（中身の箱は消す）。
-     ロゴと組織の切り替えを1行目に並べ、メニューの帯を2行目にする */
-  .binding-body { display: contents; }
-  .binding-head { position: static; height: auto; padding: 0; background: none; border-bottom: 0; }
-  .binding-head .brand-art { width: 120px; }
-  .binding-inner {
-    position: static; height: auto; overflow: visible;
-    flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--space-3);
-    padding-block: var(--space-3);
-    padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
-    padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
-  }
-  .nav-group, .binding-foot { display: none; }
-  .nav-toggle { display: none; }
-  .org-menu { flex: 1 1 10rem; }
-  /* 折り返す長い組織名に合わせて、隣の短い項目を縦に伸ばさず上端を揃える。 */
-  .nav { display: flex; align-items: flex-start; overflow-x: auto; width: 100%; gap: var(--space-1); }
-  .nav-item { white-space: nowrap; }
-  .nav-item.is-wrapping .nav-item-label { max-width: 12rem; }
-  /* ワークスペースの切り替えは、帯の中のワークスペースの項目の直前に、今の名前と▾の札で出す。
-     「ワークスペース」の見出しは目には出さず、読み上げの名前（aria-label）に残す */
-  .nav .ws-menu { display: block; flex: none; }
-  .nav .ws-menu-button { display: inline-flex; align-items: center; gap: var(--space-1); width: auto; min-height: 44px; max-width: 12rem; padding-block: 0; }
-  .nav .ws-menu-label { display: none; }
-  /* 一覧は帯のスクロール領域に切られないよう、綴じ（.binding）を基準に帯の下へ重ねて出し、左右の余白の内側へ広げる */
-  .nav .ws-menu-list {
-    position: absolute; z-index: 10; top: 100%; box-shadow: var(--shadow-float);
-    left: max(var(--space-4), env(safe-area-inset-left, 0px)); right: max(var(--space-4), env(safe-area-inset-right, 0px));
-  }
-  /* 横に続きがある側の端を、綴じの地の色で薄く消す（NavMenu が data-more-start、data-more-end を付ける）。
-     mask-image は帯の外へ出す一覧まで切るので使わず、端に貼り付けた幕を重ねる。幕の幅は margin で打ち消し、項目の並びを変えない */
-  /* 幕の幅は、送り位置の peek（src/lib/nav-strip.ts の NAV_STRIP_PEEK、kit.js の同名の値）と同じ px にそろえる。
-     rem にすると、文字を大きくした端末で幕だけ広がり、送った今の項目が幕にかかる */
-  .nav { --nav-strip-peek: 32px; }
-  .nav[data-more-start]::before, .nav[data-more-end]::after {
-    content: ""; position: sticky; z-index: 1; flex: none; align-self: stretch; width: var(--nav-strip-peek); pointer-events: none;
-  }
-  /* 幕も flex の項目なので、幅に加えて隣との gap も打ち消す（打ち消さないと、印が付いた瞬間に項目が gap の分ずれる） */
-  .nav[data-more-start]::before { left: 0; margin-right: calc(-1 * var(--nav-strip-peek) - var(--space-1)); background: linear-gradient(to right, var(--color-sunken), transparent); }
-  .nav[data-more-end]::after { right: 0; margin-left: calc(-1 * var(--nav-strip-peek) - var(--space-1)); background: linear-gradient(to left, var(--color-sunken), transparent); }
-  /* Tab で端の項目へ移ったとき、フォーカスの輪が幕の下に入らないよう、幕の幅だけ内側で止める */
-  .nav { scroll-padding-inline: var(--nav-strip-peek); }
-  /* 強制カラーでは薄くせず、端で欠けた項目だけを合図にする */
-  @media (forced-colors: active) { .nav[data-more-start]::before, .nav[data-more-end]::after { content: none; } }
-  .nav-favorites { display: flex; flex: none; align-items: flex-start; gap: var(--space-1); }
-  .nav-favorites > .nav-group { display: block; flex: none; white-space: nowrap; padding-block: var(--space-2); }
-  .nav-favorites .nav-item-label { max-width: 12rem; }
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr; }
+  .binding { display: none; }
+  .content { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
   .topbar, .content {
     padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
     padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
@@ -975,6 +975,10 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .entry { grid-template-columns: var(--grip-col, ) 32px minmax(0, 1fr); }
   .entry-end { grid-column: -2; flex-wrap: wrap; }
   .notice-facts { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (min-width: 761px) {
+  .mobile-navigation, .mobile-menu { display: none; }
 }
 
 /* ===== 画面の見出しの操作 ===== */
@@ -1948,12 +1952,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   .app.skeleton-frame[data-nav-collapsed="true"] .skeleton-nav { padding-inline: 0; }
 }
 @media (max-width: 760px) {
-  /* 狭い幅の枠は、ロゴと組織の切り替えとメニューの項目の横並びの行を1つの帯に並べる（ワークスペースの区切りは出さない）。
-     上の帯は、パンくず、畳んだ検索の虫眼鏡、アバターだけのアカウントの1段にする */
-  .skeleton-frame .skeleton-nav { display: flex; flex: 1 1 100%; align-items: center; gap: var(--space-4); min-height: 44px; overflow: hidden; }
-  .skeleton-frame .skeleton-nav.is-group { display: none; }
-  .skeleton-frame .skeleton-nav .skeleton-line { flex: none; width: 6rem; }
-  .skeleton-frame .skeleton-line.is-org { flex: 1 1 10rem; }
+  /* 狭い幅では左のメニューを隠し、パンくず・検索・アカウントの帯から始める。 */
   /* アカウントのボタンは指で押す高さ（44px）になるので、帯の外の余白で同じ高さを取る */
   .skeleton-frame .topbar > .skeleton-line.is-account { width: 3.5rem; margin-block: var(--space-2); }
   .skeleton-frame .topbar > .skeleton-line.is-search { flex: none; min-width: 0; width: 44px; height: 44px; }

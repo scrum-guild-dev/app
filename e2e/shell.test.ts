@@ -158,14 +158,15 @@ test('畳んだ列の名前と組織の一覧は、バックログの行に覆�
   ]);
 });
 
-test('760px 以下では、畳んだままでも開閉のボタンが無く、帯の形で出る', async ({ page }) => {
+test('760px 以下では、畳んだままでも下のタブバーと浮きメニューを出す', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(today);
   await page.getByRole('button', { name: 'メニューを畳む' }).click();
   await page.setViewportSize({ width: 390, height: 700 });
   await expect(page.locator('.nav-toggle')).toBeHidden();
-  await expect(page.locator('.binding')).toHaveCSS('border-right-width', '0px');
-  await expect(page.locator('.brand-name')).toBeVisible();
+  await expect(page.locator('.binding')).toHaveCount(0);
+  await expect(page.locator('.mobile-tabs')).toBeVisible();
+  await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
   await expect(page.locator('.nav-item-label').first()).toHaveCSS('opacity', '1');
 });
 

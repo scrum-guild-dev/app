@@ -90,7 +90,7 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
               navContent: el.scrollWidth,
             };
           });
-          expect(read.display).toBe(width <= 760 ? 'flex' : 'grid');
+          expect(read.display).toBe('grid');
           expect(read.icons).toBe(3);
           expect(read.currents).toBe(1);
           expect(read.labels).toBe(1);
@@ -99,11 +99,10 @@ for (const width of [1280, 1024, 761, 760, 390, 320]) {
           expect(read.scroll).toBeLessThanOrEqual(read.width + 1);
           expect(read.left).toBeGreaterThanOrEqual(read.itemLeft);
           expect(read.right).toBeLessThanOrEqual(read.itemRight + 1);
-          if (width <= 760) expect(read.width).toBeLessThanOrEqual(192.1);
           if (width > 760 && index > 0) expect(read.height).toBeGreaterThanOrEqual(read.lineHeight * 2 - 1);
           expect(read.scrollHeight).toBeLessThanOrEqual(read.clientHeight + 1);
-          if (width <= 390) expect(read.navContent).toBeGreaterThan(read.navWidth);
-          // 帯を最後まで送ると、隣の短い項目にも届く。次のテーマのために先頭へ戻す
+          expect(read.navContent).toBeLessThanOrEqual(read.navWidth + 1);
+          // 縦のメニューなので、横に送らず最後の項目まで読める
           await nav.evaluate((el) => {
             el.scrollLeft = el.scrollWidth;
           });
@@ -406,4 +405,37 @@ test('見本の削除の確認: クリア済みのエピックを配下を残し
   await expect(dialog.getByRole('alert')).toContainText('に、エピックの完了を取り消してもらってください');
   await expect(dialog).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('スマホの見本の浮きメニューから組織作成を開ける（#1102）', async ({ page }) => {
+  const files: Record<string, string> = {
+    'today.html': 'text/html',
+    'tokens.css': 'text/css',
+    'components.css': 'text/css',
+    'icons.js': 'text/javascript',
+    'art.js': 'text/javascript',
+    'sample-data.js': 'text/javascript',
+    'kit.js': 'text/javascript',
+  };
+  await page.route('**/__design-mobile/**', async (route) => {
+    const file = new URL(route.request().url()).pathname.split('/').pop()!;
+    if (!files[file]) return route.fulfill({ status: 404, body: '' });
+    await route.fulfill({
+      contentType: files[file],
+      body: readFileSync(new URL(`../design/${file}`, import.meta.url)),
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/__design-mobile/today.html');
+  await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
+  const menu = page.locator('#mobile-menu');
+  await expect(menu.getByRole('heading', { name: 'メニュー', exact: true })).toBeVisible();
+  await expect(menu.getByRole('button', { name: '閉じる', exact: true })).toBeVisible();
+  await menu.locator('.org-menu-button').click();
+  await menu.locator('[data-dialog="createMyOrganization"]').click();
+  await expect(menu).toBeHidden();
+  const create = page.locator('#dialog input').first();
+  await expect(create).toBeFocused();
+  await create.fill('こもれび工房');
+  await expect(create).toHaveValue('こもれび工房');
 });

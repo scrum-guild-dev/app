@@ -26,7 +26,8 @@
 .cat-art { margin: 0; display: grid; justify-items: center; gap: var(--space-2); color: var(--color-muted); font-size: var(--text-xs); }
 .cat-art figcaption { font-family: var(--font-mono); }
 .cat-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
-.cat-nav-frame { min-height: 0; }
+.cat-mobile-navigation .mobile-navigation { position: static; display: flex; }
+.cat-nav-frame { min-height: 0; max-width: 22rem; }
 .cat-nav-frame .binding-inner { position: static; height: auto; }
 .cat-name { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
 .cat-rules { margin: 0; padding-left: 1.2em; font-size: var(--text-sm); display: grid; gap: 4px; max-width: 70ch; }
@@ -269,6 +270,9 @@ const SECTIONS = [
     `<div class="field"><span class="field-label">ゲームの物</span><div class="cat-grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${GAME_ICONS.map(([n, word, tone, role]) => `<div class="icon-cell">${icon(n, tone)}<b>${word}</b><span>${n}</span><span>${role}</span></div>`).join("")}</div></div>
      <div class="field"><span class="field-label">すべて</span><div class="cat-grid" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr))">${(window.SQ_ICONS || []).map((n) => `<div class="icon-cell">${icon(n)}<span>${n}</span></div>`).join("")}</div></div>`,
     ["アイコンは文字の代わりにしない。意味のある操作には文字か aria-label を付ける。", "ゲームの物のアイコンは、経験値、クリア報酬、レベル、感謝の4つの語にだけ使う。エピック、ストーリー、タスクとメニューは業務のアイコンのまま。", "ゲームの物のアイコンの色は、語の色の役割に従う。経験値とレベルは経験値の色（.ico.is-xp）、クリア報酬は段階の色（.tier の中で受ける）、感謝は文字の色。", "レベルの紋章（.emblem）を出す所には crest を重ねない。紋章がレベルの印を兼ねる。", "本番では、同じ描き方の OSS のアイコンセット（Lucide など）に置き換えてよい。"], `&lt;svg class="ico"&gt;&lt;use href="#i-sun"/&gt;&lt;/svg&gt; / .ico.is-xp`)],
+  ["mobile-navigation", "スマホのタブバー", () => block("mobile-navigation", "スマホのタブバーと浮きメニュー", "760px以下で下に浮くタブバー。今日やること、お気に入り、バックログ、すべてのメニューの順。各画面の見本をスマホ幅で開くと、最後のボタンから組織とワークスペースを切り替えられる。",
+    `<div class="cat-mobile-navigation">${SQ.mobileTabsHtml("today", { live: false })}</div>`,
+    ["現在地は背景と枠、aria-currentで示す。各タブは48px四方。", "右の48pxは起票シートのボタンの置き場所。所属先が無いときはバックログを出さない。", "浮きメニューは背景を操作できなくし、Escと外を押すと閉じる。"], ".mobile-navigation .mobile-tabs .mobile-tab / .mobile-menu .mobile-menu-sheet")],
   ["heads", "見出しと集計", () => block("heads", "画面の見出しと集計", "画面の先頭には、見出しと「今気にすること」の件数を置く。画面の主な操作は見出しの右。",
     `${pageHead(D.todayLabel, SQ.sprintLabel("sp14"), [["", "check", "完了", "4 / 24 pt"], ["is-danger", "alert", `${t("due")}切れ`, 1], ["is-warn", "pen", `${t("detail")} 未記入`, 1], ["is-ok", "check", "取り込み元で完了", 0]], `<button class="btn" type="button">延長する</button>`)}
      <div class="section-head"><h2 class="section-title">今日やると決めたもの</h2><span class="section-count">3 件</span><span class="section-hint">印を付けた日が過ぎても、完了にするか印を外すまで残ります</span></div>
@@ -606,19 +610,19 @@ const SECTIONS = [
     ])}</nav>`,
     ["星は44px四方。押されたら塗り、押されていなければ輪郭で示す。", "aria-labelはお気に入りにするのまま、aria-pressedで状態を伝える。titleは次の操作に切り替える。", "メニューの節は組織の画面の後、ワークスペースの前。0件と畳んだ列では出さない。題は1行で省略し、全文をtitleで残す。タッチ端末ではフォーカスすると全文を折り返す。狭い幅の帯でもお気に入りの見出しを残す。", "21件目は付けず、ボタンの近くに上限20件と登録した対象の星を外す案内を出す。", "初回取得に失敗した星は押せない。見本のもう一度試すは、1回目に再失敗、2回目に成功する。もう一度試すのボタンは44px四方以上で、再試行中にも同じ位置に残る。再試行中と再失敗は常設のrole=statusで伝え、成功後は星を操作できる。既に一覧を読めている状態の再取得失敗では、一覧を保ち、星も操作できる。バックグラウンド更新では読み込み文・失敗案内・星のbusyを追加しない。"],
     ".favorite-mark / .favorite-control / .nav-favorites")],
-  ["nav-wrapping", "長い名前を含むメニュー項目", () => block("nav-wrapping", "長い名前を含むメニュー項目", "組織名を含む Wiki など、利用者が付けた名前を全文読めるようにする項目には .nav-item.is-wrapping を使う。画面の幅を変えると、761px 以上では縦のメニュー、760px 以下では横にスクロールできる帯になる。",
+  ["nav-wrapping", "長い名前を含むメニュー項目", () => block("nav-wrapping", "長い名前を含むメニュー項目", "組織名を含む Wiki など、利用者が付けた名前を全文読めるようにする項目には .nav-item.is-wrapping を使う。スマホの浮きメニューでも縦に並べ、長い名前を途中で折り返す。",
     `${[
       ["短い名前", "こもれび工房"],
       ["長い日本語", "こもれび工房の空想都市と星空観測の道具をつくる共同研究開発チーム"],
       ["改行のない英数字80文字", "Komorebi01234567".repeat(5)],
     ].map(([label, name]) => `<div class="field"><span class="field-label">${label}</span>
-      <div class="app cat-nav-frame"><aside class="binding"><div class="binding-inner"><div class="binding-body">
+      <div class="cat-nav-frame mobile-menu-sheet">
         <nav class="nav" aria-label="${label}のメニューの見本">
           <a class="nav-item" href="#nav-wrapping">${icon("inbox")}<span class="nav-item-label">${t("inbox")}</span></a>
           <a class="nav-item is-wrapping" href="#nav-wrapping" aria-current="page">${icon("file")}<span class="nav-item-label">${esc(t("orgWiki").replace("{organization}", name))}</span></a>
           <a class="nav-item" href="#nav-wrapping">${icon("board")}<span class="nav-item-label">${t("backlog")}</span></a>
         </nav>
-      </div></div></aside><div class="sheet"><div class="content"><p>架空の組織名を含む項目を現在のページとして表示。前後の短い項目と、アイコン・文字の配置を比べる。</p></div></div></div>
+      </div><p>架空の組織名を含む項目を現在のページとして表示。前後の短い項目と、アイコン・文字の配置を比べる。</p>
     </div>`).join("")}
     <div class="doc-box"><pre><code>${esc(`<nav class="nav">
   <a class="nav-item is-wrapping" href="wiki.html?scope=organization" aria-current="page">
