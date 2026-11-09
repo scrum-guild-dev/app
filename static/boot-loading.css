@@ -11,6 +11,10 @@
   display: grid;
   place-items: center;
   --boot-shine: rgba(255, 255, 255, 0.7);
+  --boot-fg: #1e1f22;
+  --boot-accent: #0b57d0;
+  --boot-on-accent: #ffffff;
+  --boot-warn: #9a5208;
   background: #f7f7f8;
   color: #5c5f66;
   font-family: 'Noto Sans JP', system-ui, sans-serif;
@@ -28,9 +32,63 @@
 #boot-loading > span {
   grid-area: 1 / 1;
 }
+/* 失敗の表示は、読み込み中の紙（.boot-skeleton）と同じ紙のカードにする（地と線はテーマごとに、下の .boot-skeleton と同じ規則で替える）。
+   アイコンは文を変えずに CSS だけで足す（文は辞書と突き合わせる: scripts/vocabulary.test.ts）。画像にしないのは、CSP の img-src が self だけで
+   data: を通さず、別ファイルは通信が落ちた場面で取れないため。リンクは操作の見た目（.btn.is-primary と同じ色）にする */
 #boot-loading .boot-failed {
   visibility: hidden;
-  animation: boot-failed-show 0s linear 15s forwards;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: min(440px, calc(100% - 32px));
+  padding: 32px 24px;
+  background: #ffffff;
+  border: 1px solid #d6d6da;
+  border-radius: 4px;
+  color: var(--boot-fg);
+  font-size: 1.125rem;
+  font-weight: 700;
+  text-align: center;
+  animation:
+    boot-failed-show 0s linear 15s forwards,
+    boot-failed-in 0.3s ease-out 15s both;
+}
+#boot-loading .boot-failed::before {
+  content: '!';
+  content: '!' / '';
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 8px;
+  border: 2px solid var(--boot-warn);
+  border-radius: 50%;
+  color: var(--boot-warn);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+#boot-loading .boot-failed a {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 8px 20px;
+  border-radius: 4px;
+  background: var(--boot-accent);
+  color: var(--boot-on-accent);
+  font-size: 0.875rem;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+#boot-loading .boot-failed a:hover {
+  filter: brightness(1.1);
+}
+#boot-loading .boot-failed a:focus-visible {
+  outline: 2px solid var(--boot-accent);
+  outline-offset: 2px;
 }
 /* 待つ文は読み上げのためだけに置き（見えない）、見えるのは骨組み（LoadingSheet と同じ、紙に灰色の帯）。どちらも 15 秒で隠す */
 #boot-loading .boot-wait {
@@ -416,6 +474,26 @@ html[data-boot] #boot-loading .boot-frame {
     visibility: visible;
   }
 }
+@keyframes boot-failed-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #boot-loading .boot-failed {
+    animation: boot-failed-show 0s linear 15s forwards;
+  }
+}
+@media (forced-colors: active) {
+  #boot-loading .boot-failed::before {
+    border-color: CanvasText;
+    color: CanvasText;
+  }
+  #boot-loading .boot-failed a {
+    border: 1px solid ButtonText;
+  }
+}
 @keyframes boot-wait-hide {
   to {
     visibility: hidden;
@@ -428,10 +506,14 @@ html[data-boot] #boot-loading .boot-frame {
 @media (prefers-color-scheme: dark) {
   #boot-loading {
     --boot-shine: rgba(83, 83, 85, 0.7);
+    --boot-fg: #ececef;
+    --boot-accent: #7aa7ff;
+    --boot-on-accent: #0b1220;
+    --boot-warn: #f0a85a;
     background: #121214;
     color: #a2a2ab;
   }
-  #boot-loading .boot-skeleton {
+  #boot-loading :is(.boot-skeleton, .boot-failed) {
     background: #1a1a1d;
     border-color: #37373d;
   }
@@ -455,10 +537,14 @@ html[data-boot] #boot-loading .boot-frame {
 }
 html[data-theme='simple_light'] #boot-loading {
   --boot-shine: rgba(255, 255, 255, 0.7);
+  --boot-fg: #1e1f22;
+  --boot-accent: #0b57d0;
+  --boot-on-accent: #ffffff;
+  --boot-warn: #9a5208;
   background: #f7f7f8;
   color: #5c5f66;
 }
-html[data-theme='simple_light'] #boot-loading .boot-skeleton {
+html[data-theme='simple_light'] #boot-loading :is(.boot-skeleton, .boot-failed) {
   background: #ffffff;
   border-color: #d6d6da;
 }
@@ -476,10 +562,14 @@ html[data-theme='simple_light'] #boot-loading :is(.boot-binding, .boot-corner, .
 }
 html[data-theme='simple_dark'] #boot-loading {
   --boot-shine: rgba(83, 83, 85, 0.7);
+  --boot-fg: #ececef;
+  --boot-accent: #7aa7ff;
+  --boot-on-accent: #0b1220;
+  --boot-warn: #f0a85a;
   background: #121214;
   color: #a2a2ab;
 }
-html[data-theme='simple_dark'] #boot-loading .boot-skeleton {
+html[data-theme='simple_dark'] #boot-loading :is(.boot-skeleton, .boot-failed) {
   background: #1a1a1d;
   border-color: #37373d;
 }
@@ -499,6 +589,10 @@ html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-corner, .b
    --color-sunken、--color-line と --rule-double）。枠の外の紙（.boot-skeleton）も同じテーマの面と線にする */
 html[data-theme='medieval'] #boot-loading {
   --boot-shine: rgba(255, 255, 255, 0.7);
+  --boot-fg: #1c2633;
+  --boot-accent: #1f3a5f;
+  --boot-on-accent: #ffffff;
+  --boot-warn: #9a5208;
   background: #f3f4f1;
   color: #5b6672;
 }
@@ -521,7 +615,7 @@ html[data-theme='medieval'] #boot-loading :is(.boot-corner, .boot-topbar, .boot-
 html[data-theme='medieval'] #boot-loading .boot-frame i {
   background: #c9cfd3;
 }
-html[data-theme='medieval'] #boot-loading .boot-skeleton {
+html[data-theme='medieval'] #boot-loading :is(.boot-skeleton, .boot-failed) {
   background: #fbfbf8;
   border-color: #c9cfd3;
 }
@@ -530,6 +624,10 @@ html[data-theme='medieval'] #boot-loading .boot-skeleton i {
 }
 html[data-theme='modern'] #boot-loading {
   --boot-shine: rgba(72, 78, 90, 0.7);
+  --boot-fg: #dce9f7;
+  --boot-accent: #4cc8ff;
+  --boot-on-accent: #04121c;
+  --boot-warn: #ffb35c;
   background: #060a12;
   color: #8ea6c0;
 }
@@ -542,7 +640,7 @@ html[data-theme='modern'] #boot-loading :is(.boot-binding, .boot-corner, .boot-t
 html[data-theme='modern'] #boot-loading .boot-frame i {
   background: #1f3b5c;
 }
-html[data-theme='modern'] #boot-loading .boot-skeleton {
+html[data-theme='modern'] #boot-loading :is(.boot-skeleton, .boot-failed) {
   background: #0b1322;
   border-color: #1f3b5c;
 }
