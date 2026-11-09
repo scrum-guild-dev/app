@@ -47,8 +47,12 @@ for (const path of ['/login', '/signup']) {
   }
 }
 
-for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-  test(`押下中だけ濃淡が変わり、押せない部品は変わらない: ${reducedMotion}`, async ({ page }) => {
+for (const [reducedMotion, forcedColors] of [
+  ['no-preference', 'none'],
+  ['reduce', 'none'],
+  ['reduce', 'active'],
+] as const) {
+  test(`押下中だけ濃淡が変わり、押せない部品は変わらない: ${reducedMotion} / ${forcedColors}`, async ({ page }) => {
     // 本番と見本が共有する CSS を、操作の副作用の無い部品に当てる。
     await page.route('**/__press-feedback', (route) =>
       route.fulfill({
@@ -61,10 +65,11 @@ ${readFileSync(new URL('../design/components.css', import.meta.url), 'utf8')}</s
           <button class="done-btn" aria-label="完了">✓</button>
           <button class="chip chip-btn">担当</button><button class="chip chip-btn is-unset">未設定</button>
           <button class="pill">通知</button><button class="pill" aria-pressed="true">選択済み</button>
+          <button class="chip chip-btn" aria-disabled="true">変更不可</button>
           <button class="btn" disabled>無効</button><button class="btn" aria-disabled="true">待機</button>`,
       }),
     );
-    await page.emulateMedia({ reducedMotion });
+    await page.emulateMedia({ reducedMotion, forcedColors });
     await page.goto('/__press-feedback');
     for (const theme of A11Y_THEMES) {
       await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
@@ -75,6 +80,7 @@ ${readFileSync(new URL('../design/components.css', import.meta.url), 'utf8')}</s
         });
         const before = await button.evaluate((element) => ({
           shadow: getComputedStyle(element).boxShadow,
+          outline: getComputedStyle(element).outline,
           background: getComputedStyle(element).backgroundImage,
           backgroundColor: getComputedStyle(element).backgroundColor,
           color: getComputedStyle(element).color,
@@ -86,8 +92,10 @@ ${readFileSync(new URL('../design/components.css', import.meta.url), 'utf8')}</s
         const disabled = await button.evaluate(
           (element) => (element as HTMLButtonElement).disabled || element.getAttribute('aria-disabled') === 'true',
         );
-        if (disabled) await expect(button).toHaveCSS('box-shadow', before.shadow);
-        else await expect(button).not.toHaveCSS('box-shadow', before.shadow);
+        const property = forcedColors === 'active' ? 'outline' : 'box-shadow';
+        const previous = forcedColors === 'active' ? before.outline : before.shadow;
+        if (disabled) await expect(button).toHaveCSS(property, previous);
+        else await expect(button).not.toHaveCSS(property, previous);
         await expect(button).toHaveCSS('background-image', before.background);
         await expect(button).toHaveCSS('background-color', before.backgroundColor);
         await expect(button).toHaveCSS('color', before.color);
@@ -97,7 +105,7 @@ ${readFileSync(new URL('../design/components.css', import.meta.url), 'utf8')}</s
         expect(during!.width).toBe(before.width);
         expect(during!.height).toBe(before.height);
         await page.mouse.up();
-        await expect(button).toHaveCSS('box-shadow', before.shadow);
+        await expect(button).toHaveCSS(property, previous);
       }
     }
   });
