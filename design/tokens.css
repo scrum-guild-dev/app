@@ -37,6 +37,11 @@
 
   --radius-full: 999px;
 
+  /* スマホのタブバー。本文、メニュー、トーストが同じ高さを空ける。 */
+  --mobile-tab-size: 48px;
+  --mobile-bar-height: calc(var(--mobile-tab-size) + 2 * var(--space-2) + 2px);
+  --mobile-navigation-clearance: calc(var(--mobile-bar-height) + 2 * var(--space-4));
+
   /* ---- 動き ---- */
   --duration-fast: 120ms;
   --duration-stamp: 260ms;
