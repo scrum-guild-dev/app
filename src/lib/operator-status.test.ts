@@ -49,3 +49,13 @@ test('招待期限切れを停止より先に見せ、自分用には管理者�
 test('期限が無い行と停止していない行に、期限切れや解約を誤って付けない', () => {
   expect(operatorStatuses({ ...regular, trial_expired: true, purge_on: '2026-12-01' })).toEqual([]);
 });
+
+test.each(['none', 'pending'] as const)('自分用の%sは管理者の状態を付けない', (admin_status) => {
+  expect(operatorStatuses({ ...regular, kind: 'personal', admin_status })).toEqual([]);
+});
+
+test('停止中と指名待ちが重なると停止を先に見せる', () => {
+  expect(
+    operatorStatuses({ ...regular, suspended_at: '2026-11-01', admin_status: 'pending' }).map((status) => status.code),
+  ).toEqual(['suspended', 'adminPending']);
+});
