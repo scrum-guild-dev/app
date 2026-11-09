@@ -396,7 +396,10 @@ test('「[」と「]」で前後のストーリーへ移り、端では止まる
   const first = await openStory(page, SEED_STORY_TITLES[0]);
 
   // 開き方にページ全体と新しいタブは無い
-  await expect(first.getByRole('group', { name: '開き方' }).getByRole('button')).toHaveText(['横', '真ん中']);
+  const modes = first.getByRole('group', { name: '開き方' }).getByRole('button');
+  await expect(modes).toHaveCount(2);
+  await expect(modes.nth(0)).toHaveAccessibleName('横');
+  await expect(modes.nth(1)).toHaveAccessibleName('真ん中');
   await expect(first.getByRole('group', { name: '前後のストーリー' })).toBeVisible();
   await expect(first.getByRole('button', { name: '前のストーリー' })).toHaveAttribute('aria-disabled', 'true');
 

@@ -121,7 +121,17 @@ test('見本のバックログ: ストーリーの題のリンクで引き出し
   const drawer = page.locator('#drawer');
   await expect(drawer).toBeVisible();
   // 開き方は横と真ん中だけ。前後と、受け入れ基準、本文、期日、リンク、完了の帯が出る
-  await expect(drawer.locator('[data-drawer-mode]')).toHaveText(['横', '真ん中']);
+  // 中身はアイコンだけで、名前は aria-label と title に持つ
+  const modes = drawer.locator('[data-drawer-mode]');
+  await expect(modes).toHaveCount(2);
+  for (const [i, [name, icon]] of [
+    ['横', 'panel'],
+    ['真ん中', 'centered'],
+  ].entries()) {
+    await expect(modes.nth(i)).toHaveAttribute('aria-label', name);
+    await expect(modes.nth(i)).toHaveAttribute('title', name);
+    await expect(modes.nth(i).locator(`use[href="#i-${icon}"]`)).toHaveCount(1);
+  }
   await expect(drawer.locator('[data-drawer-step]')).toHaveCount(2);
   await expect(drawer.locator('#drawer-edit-title')).toHaveValue(first!);
   await expect(drawer.locator('#drawer-edit-ac')).toBeVisible();

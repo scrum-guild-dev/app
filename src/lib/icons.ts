@@ -51,6 +51,11 @@ export const icons = {
     '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7z"/>',
   send: '<path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/>',
   panel: '<path d="M4 4h16v16H4zM14 4v16"/>',
+  // 引き出しの開き方の「真ん中」。Lucide の square-square（https://lucide.dev/icons/square-square、lucide-static 1.70.0、ISC。licenses/lucide.txt）
+  centered: '<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/>',
+  // 引き出しの開き方の「ページ全体」。Lucide の maximize（https://lucide.dev/icons/maximize、lucide-static 1.70.0、ISC）。Feather 由来で MIT も適用（licenses/lucide.txt）
+  maximize:
+    '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
   // ゲームの物（経験値、クリア報酬、レベル）。感謝は heart。使う範囲は docs/design.md の「ゲームの物のアイコン」
   crystal: '<path d="M8 4h8l4 5-8 11L4 9z"/><path d="M4 9h16M9 9l3 11 3-11M10 4L9 9M14 4l1 5"/>',
   chest: '<path d="M4 11h16v9H4z"/><path d="M4 11V9a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2"/><path d="M10 11v3h4v-3"/>',
