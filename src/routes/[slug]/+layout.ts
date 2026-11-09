@@ -21,9 +21,7 @@ import type { LayoutLoad } from './$types';
 // 組織に入れる人で、組織の選択の届いた招待にこの slug があるとき（別のワークスペースから招待が届いた）だけ、同じく invitation-list を読み、
 // 件数を invitationCount に入れる（メニューの「マイプロフィール」の印に出す）。招待が無い人は追加の呼び出しをしない。読めなかったときは 0（印を出さない）。
 // url は 401 と terms_required のときだけ読む（読むと、移るたびにこの load が走り直る）
-export const load: LayoutLoad = async ({ params, fetch, url, depends }) => {
-  // 題・削除・復元・所属と閉鎖の変化を、既存画面の再取得と揃える。通常の画面移動では再取得しない。
-  depends('app:favorites', 'app:backlog-tree', 'app:wiki', 'app:workspace', 'app:today', 'app:epic-detail');
+export const load: LayoutLoad = async ({ params, fetch, url }) => {
   const favoritesRequestedAt = performance.now();
   const [organization, accountOrganizations, notice, favorites] = await Promise.all([
     callOperation(organizationInfo, {}, { slug: params.slug, fetcher: fetch }),

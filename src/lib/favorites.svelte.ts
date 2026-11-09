@@ -1,12 +1,36 @@
-import { getContext, setContext } from 'svelte';
+import { getContext, setContext, untrack } from 'svelte';
 import type { OutputOf } from '../shared/operations/define.ts';
 import { favoriteList, favoriteSet } from '../shared/operations/favorite.ts';
 import { callOperation } from './api.ts';
+import { onOperationWrite } from './operation-events.ts';
 
 export type Favorite = OutputOf<typeof favoriteList>['favorites'][number];
 export type FavoriteTarget = Pick<Favorite, 'target_type' | 'target_id' | 'workspace_id' | 'title'> & {
   menuVisible?: boolean;
 };
+const changedTargets = new Set([
+  'task-update',
+  'task-delete',
+  'task-restore',
+  'task-move',
+  'story-update',
+  'story-delete',
+  'story-move',
+  'epic-update',
+  'epic-delete',
+  'epic-move',
+  'workspace-wiki-update',
+  'workspace-wiki-delete',
+  'org-wiki-update',
+  'org-wiki-delete',
+  'workspace-close',
+  'workspace-reopen',
+  'membership-leave',
+  'membership-role-update',
+  'user-admin-update',
+  'user-disable',
+  'user-enable',
+]);
 const key = Symbol('favorites');
 type Source = {
   scope: string;
@@ -22,7 +46,62 @@ export class Favorites {
     { source: Source['items']; scope: string; target: FavoriteTarget; marked: boolean; completedAt: number }[]
   >([]);
   private pending = $state<string[]>([]);
+  private cached = $state.raw<Source | null>(null);
+  private request = 0;
+  private refreshState = $state.raw<{ scope: string; loading: boolean; failed: boolean } | null>(null);
   constructor(private source: () => Source) {}
+  private currentSource(): Source {
+    const source = this.source();
+    const cached = this.cached;
+    return cached?.scope === source.scope &&
+      (!source.available || (cached.requestedAt ?? 0) >= (source.requestedAt ?? 0))
+      ? cached
+      : source;
+  }
+  // layout の成功を覚える。一時失敗では直前の一覧を捨てない。
+  sync(): void {
+    const source = this.source();
+    const cached = untrack(() => this.cached);
+    if (source.available && (cached?.scope !== source.scope || (source.requestedAt ?? 0) > (cached.requestedAt ?? 0)))
+      this.cached = source;
+  }
+  watch(): () => void {
+    this.sync();
+    return onOperationWrite((event) => {
+      if (event.slug === this.source().slug && changedTargets.has(event.name)) void this.refresh();
+    });
+  }
+  get loading() {
+    return this.refreshState?.scope === this.source().scope && this.refreshState.loading;
+  }
+  get loadFailed() {
+    return this.refreshState?.scope === this.source().scope
+      ? this.refreshState.failed
+      : !this.currentSource().available;
+  }
+  async refresh(): Promise<void> {
+    const source = this.source();
+    const request = ++this.request;
+    const requestedAt = performance.now();
+    this.refreshState = { scope: source.scope, loading: true, failed: false };
+    try {
+      const result = await callOperation(favoriteList, {}, { slug: source.slug });
+      if (request !== this.request || this.source().scope !== source.scope) return;
+      if (result.ok) {
+        this.cached = {
+          ...source,
+          items: result.data.favorites,
+          marks: result.data.marks,
+          available: true,
+          requestedAt,
+        };
+      }
+      this.refreshState = { scope: source.scope, loading: false, failed: !result.ok };
+    } catch {
+      if (request === this.request && this.source().scope === source.scope)
+        this.refreshState = { scope: source.scope, loading: false, failed: true };
+    }
+  }
   // 後から届いた一覧でも、読み取り開始が保存成功より前なら新しい本人の操作を保つ。
   private applies(change: (typeof this.changes)[number], source: Source): boolean {
     return (
@@ -31,10 +110,10 @@ export class Favorites {
     );
   }
   get available() {
-    return this.source().available;
+    return this.currentSource().available;
   }
   private get allItems(): (Favorite & { menuVisible?: boolean })[] {
-    const source = this.source();
+    const source = this.currentSource();
     let items: (Favorite & { menuVisible?: boolean })[] = source.items;
     for (const change of this.changes) {
       if (!this.applies(change, source)) continue;
@@ -49,7 +128,7 @@ export class Favorites {
     return this.allItems.filter((item) => item.menuVisible !== false);
   }
   marked(type: Favorite['target_type'], id: string) {
-    const source = this.source();
+    const source = this.currentSource();
     const change = this.changes.findLast(
       (change) => this.applies(change, source) && change.target.target_type === type && change.target.target_id === id,
     );
@@ -62,7 +141,7 @@ export class Favorites {
     return this.pending.includes(`${this.source().scope}/${type}/${id}`);
   }
   async toggle(target: FavoriteTarget) {
-    const source = this.source();
+    const source = this.currentSource();
     const token = `${source.scope}/${target.target_type}/${target.target_id}`;
     if (!source.available || this.pending.includes(token)) return null;
     const marked = !this.marked(target.target_type, target.target_id);
@@ -74,7 +153,7 @@ export class Favorites {
         { slug: source.slug },
       );
       if (result.ok && this.source().scope === source.scope) {
-        const current = this.source();
+        const current = this.currentSource();
         this.changes = [
           ...this.changes.filter(
             (change) =>

@@ -141,3 +141,80 @@ test('書き込み成功より前に始まった古い一覧応答で星を戻�
     clock.mockRestore();
   }
 });
+
+test('題・削除・復元の成功はお気に入りだけを再取得し、星や今日やるの操作では取得しない', async () => {
+  const { notifyOperationWrite } = await import('./operation-events.ts');
+  const { favorites } = setup();
+  const stop = favorites.watch();
+  call.mockResolvedValue({ ok: true, data: { favorites: [], marks: [] } });
+  try {
+    for (const name of ['favorite-set', 'task-today-mark', 'task-assign']) notifyOperationWrite({ name, slug: 'aoba' });
+    notifyOperationWrite({ name: 'task-delete', slug: 'sakura' });
+    expect(call).not.toHaveBeenCalled();
+    for (const name of ['task-update', 'task-delete', 'task-restore', 'org-wiki-update', 'workspace-close']) {
+      notifyOperationWrite({ name, slug: 'aoba' });
+      await Promise.resolve();
+    }
+    expect(call).toHaveBeenCalledTimes(5);
+    for (const [definition] of call.mock.calls) expect(definition.name).toBe('favorite-list');
+    stop();
+    notifyOperationWrite({ name: 'task-delete', slug: 'aoba' });
+    expect(call).toHaveBeenCalledTimes(5);
+  } finally {
+    stop();
+  }
+});
+
+test('再取得の失敗は正常な一覧と星を残し、再試行の失敗・待機・復旧を分ける', async () => {
+  const row: Favorite = { ...target, id: 'mark', created_at: '' };
+  const { favorites } = setup([row]);
+  favorites.sync();
+  call.mockResolvedValue({ ok: false, status: 500, error: null });
+  const refresh = favorites.refresh();
+  expect(favorites.loading).toBe(true);
+  await refresh;
+  expect(favorites.loading).toBe(false);
+  expect(favorites.loadFailed).toBe(true);
+  expect(favorites.available).toBe(true);
+  expect(favorites.marked('task', 'one')).toBe(true);
+  expect(favorites.items).toEqual([row]);
+  call.mockResolvedValue({ ok: true, data: { favorites: [], marks: [] } });
+  await favorites.refresh();
+  expect(favorites.loadFailed).toBe(false);
+  expect(favorites.items).toEqual([]);
+});
+
+test('後から始まった再取得が先に完了したら、古い失敗応答で状態を戻さない', async () => {
+  let finish!: (result: { ok: false; status: number; error: null }) => void;
+  call.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { favorites } = setup();
+  const first = favorites.refresh();
+  call.mockResolvedValue({ ok: true, data: { favorites: [], marks: [] } });
+  await favorites.refresh();
+  finish({ ok: false, status: 500, error: null });
+  await first;
+  expect(favorites.loading).toBe(false);
+  expect(favorites.loadFailed).toBe(false);
+});
+
+test('別組織に移動してから届いた一覧を混ぜない', async () => {
+  let finish!: (result: { ok: true; data: { favorites: Favorite[]; marks: [] } }) => void;
+  call.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { favorites, replace } = setup();
+  const pending = favorites.refresh();
+  replace({ scope: 'sakura/person', slug: 'sakura', items: [], available: true });
+  finish({ ok: true, data: { favorites: [{ ...target, id: 'one', created_at: '' }], marks: [] } });
+  await pending;
+  expect(favorites.items).toEqual([]);
+  expect(favorites.loading).toBe(false);
+});

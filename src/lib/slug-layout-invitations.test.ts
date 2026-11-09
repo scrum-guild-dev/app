@@ -105,14 +105,7 @@ test('発行の知らせは専用の操作で読み、読めなくても組織�
   expect(failure.data.invitationCount).toBe(0);
 });
 
-test('お気に入り対象の変更だけを依存として登録し、通知の再取得は登録しない', async () => {
+test('日常の書き込みの再取得を組織の枠の load に依存させない', async () => {
   const { depends } = await run({ [orgPath]: organization, [minePath]: mine([]) });
-  expect(depends).toHaveBeenCalledWith(
-    'app:favorites',
-    'app:backlog-tree',
-    'app:wiki',
-    'app:workspace',
-    'app:today',
-    'app:epic-detail',
-  );
+  expect(depends).not.toHaveBeenCalled();
 });

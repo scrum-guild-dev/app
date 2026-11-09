@@ -1,6 +1,6 @@
 <script lang="ts">
   import { provideFavorites } from '../../lib/favorites.svelte.ts';
-  import type { Snippet } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import AccountMenu from '../../lib/components/AccountMenu.svelte';
@@ -32,7 +32,7 @@
 
   const organization = $derived(data.organization);
   const emptyFavorites: import('../../lib/favorites.svelte.ts').Favorite[] = [];
-  provideFavorites(() => ({
+  const favorites = provideFavorites(() => ({
     scope: `${data.slug}/${organization?.me.id ?? ''}`,
     slug: data.slug,
     items: data.favorites ?? emptyFavorites,
@@ -40,6 +40,8 @@
     requestedAt: data.favoritesRequestedAt,
     available: organization !== null && data.favorites !== null,
   }));
+  $effect(() => favorites.sync());
+  onMount(() => favorites.watch());
   // 招待の画面。組織に入れず招待だけがある人には、どの経路でも招待の画面を出す（data.invitationInbox）。
   // /<slug>/invitations のページ（page.data に invitationPage がある）は、組織に入れる人にも枠を出さずにページだけを出す
   const inbox = $derived(organization ? null : data.invitationInbox);
