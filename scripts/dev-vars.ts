@@ -1,18 +1,18 @@
 // pnpm dev と pnpm preview の起動時に、.dev.vars に .dev.vars.example の鍵が足りないかを見る（scripts/dev.ts が呼ぶ）。
 // .dev.vars は git の外にあるので、.dev.vars.example に後から足した鍵が手元に届かず、
 // /api/health の 503 などで初めて気づくことがある。比べるのは鍵の名前だけで、値は返さず、文にも入れない。
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-// 行頭（空白と export は許す）の NAME= だけを鍵に数える。# で始まる行（任意の鍵の例）は数えない
-const KEY_LINE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/;
+// wrangler は .dev.vars を同梱の dotenv（16.x）で読む。鍵の数え方を wrangler とずらさないため、その行の正規表現を写す
+// （`KEY: value` の区切り、引用符で囲んだ複数行の値、`.` と `-` を含む鍵、行末の # のコメント）。# で始まる行は鍵にならない
+const DOTENV_LINE =
+  /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/gm;
 
 export function devVarKeys(text: string): Set<string> {
   const keys = new Set<string>();
-  for (const line of text.split(/\r?\n/)) {
-    const key = KEY_LINE.exec(line)?.[1];
-    if (key) keys.add(key);
-  }
+  // dotenv と同じく、CRLF と CR だけの改行を LF にそろえてから読む
+  for (const match of text.replace(/\r\n?/g, '\n').matchAll(DOTENV_LINE)) keys.add(match[1]!);
   return keys;
 }
 
@@ -30,29 +30,40 @@ export function missingDevVarsMessage(missing: readonly string[]): string {
   ].join('\n');
 }
 
-function readIfExists(path: string): string | undefined {
+// node の型の除去（strip-only）は parameter property を受け付けないので、文だけを持つ
+class UnreadableDevVarsError extends Error {
+  constructor(file: string, code: string) {
+    super(`${file} を読めませんでした（${code}）`);
+  }
+}
+
+// 無いもの（壊れたリンクも ENOENT）と、通常のファイルでないもの（パイプやデバイスで起動が止まらないように）は読まない。
+// CI の e2e は .dev.vars なしで立てる
+function readIfFile(dir: string, file: string): string | undefined {
+  const path = join(dir, file);
   try {
+    if (!statSync(path).isFile()) return undefined;
     return readFileSync(path, 'utf8');
   } catch (error) {
-    // 無いファイル（壊れたリンクも ENOENT）は比べない。CI の e2e は .dev.vars なしで立てる
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw error;
+    const code = (error as NodeJS.ErrnoException).code ?? 'unknown';
+    if (code === 'ENOENT') return undefined;
+    // 理由のコードとファイルの名前だけを持ち、パスと中身は出さない
+    throw new UnreadableDevVarsError(file, code);
   }
 }
 
 // dir は wrangler を起動するディレクトリ。wrangler はそこの .dev.vars を読む。
-// 警告の文を返す（足りなければ）。.dev.vars か .dev.vars.example が無いときと、読めないときは比べない
+// 足りない鍵があれば警告の文を返す。どちらかが無いときは比べず、読めないときは起動を止めずにその旨を返す
 export function checkDevVars(dir: string, provided: Iterable<string> = []): string | undefined {
-  let example: string | undefined;
-  let actual: string | undefined;
   try {
-    example = readIfExists(join(dir, '.dev.vars.example'));
-    actual = readIfExists(join(dir, '.dev.vars'));
+    const example = readIfFile(dir, '.dev.vars.example');
+    if (example === undefined) return undefined;
+    const actual = readIfFile(dir, '.dev.vars');
+    if (actual === undefined) return undefined;
+    const missing = missingDevVarKeys(example, actual, provided);
+    return missing.length > 0 ? missingDevVarsMessage(missing) : undefined;
   } catch (error) {
-    // 起動を止めない。理由（権限など）のコードだけを出し、中身は出さない
-    return `.dev.vars を読めず、鍵がそろっているかを確かめられませんでした（${(error as NodeJS.ErrnoException).code ?? 'unknown'}）`;
+    if (!(error instanceof UnreadableDevVarsError)) throw error;
+    return `${error.message}。鍵がそろっているかを確かめられません（ファイルの権限と、リンクの先を確かめてください）`;
   }
-  if (example === undefined || actual === undefined) return undefined;
-  const missing = missingDevVarKeys(example, actual, provided);
-  return missing.length > 0 ? missingDevVarsMessage(missing) : undefined;
 }
