@@ -18,6 +18,7 @@
   import type { BacklogChoices } from '../../shared/operations/task/backlog-tree.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
+  import NarrowDisclosure from './NarrowDisclosure.svelte';
 
   // バックログの絞り込みの帯（見本の design/backlog.html の .toolbar。role="search"）。検索の欄と、担当、区分、リポジトリ、エピックの
   // 選択欄（1つだけ選ぶ select。先頭が「すべて」、末尾が「なし」。担当は先頭に「自分」、離脱した人には「（離脱済み）」を添える）。
@@ -146,6 +147,8 @@
     searchInputEl?.focus();
   }
 
+  const selectedCount = $derived(Object.values(selected).filter((value) => value !== '').length);
+
   const filtering = $derived(isFiltering(filter) || isFiltering(current()));
 
   type Option = { value: string; label: string };
@@ -178,7 +181,7 @@
   ]);
 </script>
 
-<div class="toolbar" role="search" aria-label={t('filterLabel', { backlog: t('backlog') })}>
+<div class="toolbar is-collapsible" role="search" aria-label={t('filterLabel', { backlog: t('backlog') })}>
   <label class="search">
     <Icon name="search" />
     <input
@@ -195,20 +198,22 @@
       onkeydown={searchKeydown}
     />
   </label>
-  {#each selects as select (select.key)}
-    <select class="select" aria-label={select.label} bind:value={selected[select.key]} onchange={send}>
-      <option value="">{t('filterAll', { label: select.label })}</option>
-      {#each select.options as option (option.value)}
-        <option value={option.value}>{option.label}</option>
-      {/each}
-      {#if selected[select.key] !== '' && !select.options.some((option) => option.value === selected[select.key])}
-        <!-- 一覧を読めなかった区分とリポジトリは、消えたかどうか分からないので「選んでいる値」で残す -->
-        <option value={selected[select.key]}
-          >{select.unloaded ? t('filterSelectedUnloaded') : t('filterUnknown')}</option
-        >
-      {/if}
-    </select>
-  {/each}
+  <NarrowDisclosure label={selectedCount ? t('backlogFiltersCount', { count: selectedCount }) : t('backlogFilters')}>
+    {#each selects as select (select.key)}
+      <select class="select" aria-label={select.label} bind:value={selected[select.key]} onchange={send}>
+        <option value="">{t('filterAll', { label: select.label })}</option>
+        {#each select.options as option (option.value)}
+          <option value={option.value}>{option.label}</option>
+        {/each}
+        {#if selected[select.key] !== '' && !select.options.some((option) => option.value === selected[select.key])}
+          <!-- 一覧を読めなかった区分とリポジトリは、消えたかどうか分からないので「選んでいる値」で残す -->
+          <option value={selected[select.key]}
+            >{select.unloaded ? t('filterSelectedUnloaded') : t('filterUnknown')}</option
+          >
+        {/if}
+      </select>
+    {/each}
+  </NarrowDisclosure>
   {#if filtering}
     <span class="toolbar-end">
       <button class="btn is-sm is-quiet" type="button" onclick={clearAndFocus}

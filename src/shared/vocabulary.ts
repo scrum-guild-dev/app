@@ -581,6 +581,11 @@ export const dictionary = defineDictionary({
   filterResultNone: '当たるものはありません',
   // 絞っている間、帯の下に出す。ポイントの合計と完了の件数は絞る前の値のため
   filterTotalsNote: '{points}と件数は、絞る前の全体の値です',
+  backlogSummary: '集計',
+  backlogFilters: '絞り込み',
+  backlogFiltersCount: '絞り込み（{count}）',
+  backlogPriority: '上ほど優先',
+  backlogOrderHelp: '並べ替えの使い方',
   filterClear: '絞り込みを外す',
   // 検索の文字が上限を超えたとき（帯の下に出し、読み直さない）
   searchTooLong: '検索の文字は {max} 字までです',

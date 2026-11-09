@@ -8,6 +8,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import Icon from './Icon.svelte';
+  import NarrowDisclosure from './NarrowDisclosure.svelte';
 
   // kit.js の pageHead。画面の見出し（h1）、上の小さな見出し、集計、右上の操作。
   // focusable は、画面を移った後や、操作した行が消えた後に見出しへフォーカスを置く画面（作ったワークスペースの画面、今日やること）が付ける。
@@ -19,6 +20,7 @@
     actions,
     meta,
     focusable = false,
+    narrowSummary,
   }: {
     title: string;
     eyebrow?: string;
@@ -26,10 +28,11 @@
     actions?: Snippet;
     meta?: Snippet;
     focusable?: boolean;
+    narrowSummary?: string;
   } = $props();
 </script>
 
-<header class="page-head">
+<header class="page-head" class:is-compact={!!narrowSummary}>
   {#if eyebrow}<span class="page-eyebrow">{eyebrow}</span>{/if}
   <div class="page-head-row">
     <!-- tabindex="-1" は、プログラムからフォーカスを置くため（キーボードの Tab 順には入らない）。値は -1 か未指定だけ -->
@@ -37,10 +40,9 @@
     <h1 class="page-title" tabindex={focusable ? -1 : undefined}>{title}</h1>
     {#if actions}<div class="page-actions">{@render actions()}</div>{/if}
   </div>
-  {#if tallies.length > 0}
+  {#snippet counts(items: Tally[])}
     <dl class="tally">
-      <!-- 同じラベルが2つあっても落ちないよう、key は添字にする（並びは画面が決め、入れ替えない） -->
-      {#each tallies as tally, index (index)}
+      {#each items as tally, index (index)}
         <div class={tally.count && tally.tone ? `is-${tally.tone}` : undefined}>
           <dt>
             {#if tally.icon}<Icon name={tally.icon} />{/if}{tally.label}
@@ -49,6 +51,17 @@
         </div>
       {/each}
     </dl>
+  {/snippet}
+  {#if narrowSummary}
+    <div class="page-head-metrics">
+      {#if tallies.length > 0}{@render counts(tallies.slice(0, 1))}{/if}
+      <NarrowDisclosure label={narrowSummary}>
+        {#if tallies.length > 1}{@render counts(tallies.slice(1))}{/if}
+        {#if meta}<div class="page-head-meta">{@render meta()}</div>{/if}
+      </NarrowDisclosure>
+    </div>
+  {:else}
+    {#if tallies.length > 0}{@render counts(tallies)}{/if}
+    {#if meta}{@render meta()}{/if}
   {/if}
-  {#if meta}{@render meta()}{/if}
 </header>

@@ -19,7 +19,7 @@
 <script>
 "use strict";
 // バックログ: エピック、ストーリー、タスクの木。並びが優先順位
-const { D, t, icon, pageHead, treeEpic, treeStory, entry } = SQ;
+const { D, t, icon, pageHead, treeEpic, treeStory, entry, narrowDisclosure } = SQ;
 
 // 絞り込みの帯。選択欄は1つだけ選ぶ select で、先頭が「すべて」、末尾が「なし」。担当は先頭に「自分」を置き、
 // 今所属している人の後に、離脱した人のうち未完了のタスクの担当に残っている人を「（離脱済み）」を添えて並べる。
@@ -30,12 +30,13 @@ function filterBar(open) {
   const opt = (value, label) => `<option value="${SQ.esc(value)}">${SQ.esc(label)}</option>`;
   const current = D.members.filter((m) => !m.left).map((m) => m.who);
   const leftWithTasks = [...new Set(open.map((x) => x.who).filter((who) => who && !current.includes(who)))];
-  return `<div class="toolbar" role="search" aria-label="${SQ.esc(t("filterLabel").replace("{backlog}", t("backlog")))}" id="backlog-filter">
+  return `<div class="toolbar is-collapsible" role="search" aria-label="${SQ.esc(t("filterLabel").replace("{backlog}", t("backlog")))}" id="backlog-filter">
       <label class="search" for="q">${icon("search")}<input id="q" type="search" placeholder="${t("backlogSearch")}" aria-label="${t("backlogSearch")}"></label>
-      <select class="select" id="f-who" aria-label="${t("assignee")}">${all(t("assignee"))}${opt("me", t("filterMe"))}${current.map((who) => opt(who, D.users[who].name)).join("")}${leftWithTasks.map((who) => opt(who, `${D.users[who].name}${t("leftMember")}`)).join("")}${opt("none", t("unassigned"))}</select>
+      ${narrowDisclosure(t("backlogFilters"), `      <select class="select" id="f-who" aria-label="${t("assignee")}">${all(t("assignee"))}${opt("me", t("filterMe"))}${current.map((who) => opt(who, D.users[who].name)).join("")}${leftWithTasks.map((who) => opt(who, `${D.users[who].name}${t("leftMember")}`)).join("")}${opt("none", t("unassigned"))}</select>
       <select class="select" id="f-cat" aria-label="${t("category")}">${all(t("category"))}${Object.entries(D.categories).map(([id, c]) => opt(id, c.name)).join("")}${opt("none", t("categoryNone").replace("{category}", t("category")))}</select>
       <select class="select" id="f-repo" aria-label="リポジトリ">${all("リポジトリ")}${Object.entries(D.repositories).map(([id, r]) => opt(id, r.name)).join("")}${opt("none", t("filterNoRepository"))}</select>
       <select class="select" id="f-epic" aria-label="${t("epic")}">${all(t("epic"))}${Object.entries(D.epics).map(([id, e]) => opt(id, e.title)).join("")}${opt("none", t("filterNoEpic").replace("{epic}", t("epic")))}</select>
+`)}
       <span class="toolbar-end" id="f-clear" hidden><button class="btn is-sm is-quiet" type="button">${icon("x")}${t("filterClear")}</button></span>
     </div>`;
 }
@@ -46,8 +47,10 @@ document.addEventListener("input", (ev) => {
   if (!bar) return;
   const filtering = [...bar.querySelectorAll("select")].some((s) => s.value !== "") || bar.querySelector("#q").value.trim() !== "";
   bar.querySelector("#f-clear").hidden = !filtering;
-  document.getElementById("order-note").innerHTML = filtering ? SQ.esc(t("backlogFilterOrderNote"))
-    : `上にあるものほど優先します。${t("epic")}、${t("story")}、${t("task")}は、行の「⋯」のメニューの「上へ」「下へ」か、行の中にフォーカスを置いて Alt と ↑ ↓ で並べ替えます。<span class="drag-note">行の先頭のつまみをドラッグしても並べ替えられます。</span>`;
+  const count = [...bar.querySelectorAll("select")].filter((s) => s.value !== "").length;
+  bar.querySelector(".narrow-disclosure-toggle").textContent = count ? t("backlogFiltersCount").replace("{count}", count) : t("backlogFilters");
+  document.getElementById("order-help").hidden = filtering;
+  document.getElementById("filter-order-note").hidden = !filtering;
   document.getElementById("totals-note").hidden = !filtering;
   // 「上へ」「下へ」を隠す（エピックの行は「親を移す」を持たないので、どちらも隠れる）
   document.querySelectorAll('.row-menu-list [data-order]:not([data-order="swap"])').forEach((b) => (b.closest("li").hidden = filtering));
@@ -88,11 +91,12 @@ SQ.mount("backlog", () => {
       ["is-warn", "pen", `${t("detail")} 未記入`, open.filter((x) => x.unfilled).length],
       ["is-warn", "", "未見積もり", open.filter((x) => x.pts == null).length],
       ["", "", `${t("sprint")}に入っていない`, open.filter((x) => !x.sprint).length],
-    ], "", SQ.teamXp())}
+    ], "", SQ.teamXp(), t("backlogSummary"))}
     ${D.definitionOfDone.length ? `<details class="dod"><summary>${t("dod")}</summary><div class="doc-box"><ul>${D.definitionOfDone.map((d) => `<li>${SQ.esc(d)}</li>`).join("")}</ul></div></details>` : ""}
     <section class="section" aria-label="${t("backlog")}の${t("task")}">
     ${filterBar(open)}
-    <p class="action-note" id="order-note">上にあるものほど優先します。${t("epic")}、${t("story")}、${t("task")}は、行の「⋯」のメニューの「上へ」「下へ」か、行の中にフォーカスを置いて Alt と ↑ ↓ で並べ替えます。<span class="drag-note">行の先頭のつまみをドラッグしても並べ替えられます。</span></p>
+    <div class="order-help" id="order-help"><span class="order-priority">${t("backlogPriority")}</span>${narrowDisclosure(t("backlogOrderHelp"), `<p class="action-note" id="order-note">上にあるものほど優先します。${t("epic")}、${t("story")}、${t("task")}は、行の「⋯」のメニューの「上へ」「下へ」か、行の中にフォーカスを置いて Alt と ↑ ↓ で並べ替えます。<span class="drag-note">行の先頭のつまみをドラッグしても並べ替えられます。</span></p>`)}</div>
+    <p class="action-note" id="filter-order-note" hidden>${t("backlogFilterOrderNote")}</p>
     <p class="action-note" id="totals-note" hidden>${t("filterTotalsNote").replace("{points}", t("points"))}</p>
     <div class="tree">
       ${treeEpic("e1", { order: { first: true }, draft: true, storyOpts: () => ({ draft: true }) })}

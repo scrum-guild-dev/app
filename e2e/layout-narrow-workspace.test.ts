@@ -10,6 +10,8 @@ import { expect, test } from './fixtures.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
 import {
   LAYOUT_THEMES,
+  A11Y_THEMES,
+  expectNoA11yViolations,
   NARROW_VIEWPORT,
   applyTheme,
   createWorkspace,
@@ -44,6 +46,91 @@ test('バックログが 390px で横にはみ出さず、押せる要素が 44p
     await expect(page.getByRole('link', { name: 'ポイント付与のバッチを作る' })).toBeVisible();
     await expectWorkspaceWords(page, w);
   });
+});
+
+// #1095: 上部の補助情報を閉じた初期表示では、木の先頭2行を切らずに見せる。
+// 2行にはエピックとストーリーを含む。未完了タスクだけを数える条件ではない。
+test('バックログの先頭2行が390×844pxに入り、補助情報を各1回で開ける（4つの見た目）', async ({ page }) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(WORKSPACE);
+  await expect(page.locator('.tree-row').first()).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const header = page.locator('.page-head');
+  const bar = page.getByRole('search', { name: 'バックログの絞り込み' });
+  const summary = header.getByRole('button', { name: '集計', exact: true });
+  const filters = bar.getByRole('button', { name: '絞り込み', exact: true });
+  const help = page.getByRole('button', { name: '並べ替えの使い方', exact: true });
+  for (const theme of A11Y_THEMES) {
+    await applyTheme(page, theme);
+    await page.evaluate(() => scrollTo(0, 0));
+    for (const button of [summary, filters, help]) await expect(button).toHaveAttribute('aria-expanded', 'false');
+    await expect(bar.getByRole('searchbox')).toBeVisible();
+    await expect(header.getByText('未完了のタスク', { exact: true })).toBeVisible();
+    await expect(header.locator('.team-xp')).toBeHidden();
+    for (const label of ['詳細 未記入', '未見積もり', 'スプリントに入っていない']) {
+      await expect(header.getByText(label, { exact: true })).toBeHidden();
+    }
+    await expect(page.getByText('上ほど優先', { exact: true })).toBeVisible();
+    await expect(bar.getByRole('combobox')).toHaveCount(0);
+    const rows = await page.locator('.tree-row, .tree .entry').evaluateAll((elements) =>
+      elements
+        .filter((element) => element.getBoundingClientRect().height > 0)
+        .slice(0, 2)
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return { top: rect.top, bottom: rect.bottom };
+        }),
+    );
+    expect(rows, theme).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.top, theme).toBeGreaterThanOrEqual(0);
+      expect(row.bottom, theme).toBeLessThanOrEqual(NARROW_VIEWPORT.height);
+    }
+    await expectNoA11yViolations(page, 'backlog');
+    for (const button of [summary, filters, help]) await button.click();
+    for (const button of [summary, filters, help]) await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await expect(header.locator('.team-xp')).toBeVisible();
+    for (const label of ['詳細 未記入', '未見積もり', 'スプリントに入っていない']) {
+      const item = header.locator('.tally > div').filter({ has: page.getByText(label, { exact: true }) });
+      await expect(item.locator('dt')).toBeVisible();
+      await expect(item.locator('dd')).toBeVisible();
+      await expect(item.locator('dd')).toHaveText(/^\d+$/);
+    }
+    await expect(bar.getByRole('combobox')).toHaveCount(4);
+    await expect(page.locator('.order-help .action-note')).toBeVisible();
+    expect(await findOverflowViolations(page), theme).toEqual([]);
+    expect(await findTargetSizeViolations(page), theme).toEqual([]);
+    await expectNoA11yViolations(page, 'backlog');
+    for (const button of [summary, filters, help]) await button.click();
+  }
+});
+
+test('390pxで閉じた絞り込みにも条件数と解除を残し、広い幅では開く操作が要らない', async ({ page }) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(`${WORKSPACE}?assignee=me&repository=none`);
+  const bar = page.getByRole('search', { name: 'バックログの絞り込み' });
+  const filters = bar.getByRole('button', { name: '絞り込み（2）', exact: true });
+  await expect(filters).toHaveAttribute('aria-expanded', 'false');
+  await expect(bar.getByRole('combobox')).toHaveCount(0);
+  await filters.click();
+  await expect(bar.getByRole('combobox', { name: '担当', exact: true })).toHaveValue('me');
+  await expect(bar.getByRole('combobox', { name: 'リポジトリ', exact: true })).toHaveValue('none');
+  await filters.click();
+  await bar.getByRole('button', { name: '絞り込みを外す', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${WORKSPACE}$`));
+  await expect(bar.getByRole('searchbox')).toBeFocused();
+  await expect(bar.getByRole('button', { name: '絞り込み', exact: true })).toHaveAttribute('aria-expanded', 'false');
+  await expect(bar.getByRole('button', { name: '絞り込みを外す', exact: true })).toHaveCount(0);
+  for (const width of [761, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(bar.getByRole('combobox')).toHaveCount(4);
+    await expect(page.locator('.page-head .team-xp')).toBeVisible();
+    await expect(page.locator('.page-head .page-eyebrow')).toBeVisible();
+    await expect(page.locator('.order-help .action-note')).toBeVisible();
+    await expect(page.locator('.narrow-disclosure-toggle:visible')).toHaveCount(0);
+  }
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await expect(bar.getByRole('combobox')).toHaveCount(0);
 });
 
 test('エピックの画面が 390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({ page }) => {

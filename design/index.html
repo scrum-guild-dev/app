@@ -273,6 +273,11 @@ const SECTIONS = [
      <div class="section-head"><h2 class="section-title">今日やると決めたもの</h2><span class="section-count">3 件</span><span class="section-hint">印を付けた日が過ぎても、完了にするか印を外すまで残ります</span></div>
      ${SQ.foldedSection("fold-sample", `進行中の${t("sprint")}`, 2, SQ.book(SQ.tasksWhere((x) => x.who === D.me && !x.doneAt).slice(0, 2), { showWs: true }))}`,
     ["件数が0の集計は色を付けない。", "初めは閉じて件数だけ出す区分は foldedSection（details と summary）で作る。見出しの行を押すと開き、開いたら「開くと一覧を表示」を隠す。狭い幅と指で押す画面では、見出しの行を44px の高さにする。", "持ち越した行の日数は、book の opts.meta に渡した1行（.props-note）で添える。"], ".page-head .page-eyebrow .page-head-row .page-title .page-actions .tally / .section-head .section-title .section-count .section-hint / .section.is-folded SQ.foldedSection(id, title, count, body)")],
+  ["narrow-info", "狭い幅だけ畳む補助情報", () => block("narrow-info", "狭い幅だけ畳む補助情報", "検索などの主な操作を残し、補助情報は760px以下だけ畳む。761px以上はボタンを出さず常時表示する。",
+    `<div class="section">${pageHead("受託開発チーム", t("backlog"), [["", "board", `未完了の${t("task")}`, 8], ["is-warn", "pen", `${t("detail")} 未記入`, 3], ["is-warn", "", "未見積もり", 2], ["", "", `${t("sprint")}に入っていない`, 4]], "", SQ.teamXp(), t("backlogSummary"))}
+      <div class="toolbar is-collapsible"><label class="search">${icon("search")}<input type="search" aria-label="補助情報の見本の検索" placeholder="タイトルで探す"></label>${SQ.narrowDisclosure(t("backlogFilters"), `<select class="select" aria-label="補助情報の見本の担当"><option>担当: すべて</option><option>自分</option></select>`)}</div>
+      <div class="order-help"><span class="order-priority">${t("backlogPriority")}</span>${SQ.narrowDisclosure(t("backlogOrderHelp"), `<p class="action-note">上にあるものほど優先します。行のメニューから並べ替えます。</p>`)}</div></div>`,
+    ["初期状態は閉じる。開閉状態は画面内だけに持ち、URLやDBに保存しない。", "NarrowDisclosure.svelteのlabelにボタンの名前、childrenに内容を渡す。見本はSQ.narrowDisclosure(label, body)。", "ボタンはaria-expandedとaria-controlsで内容に結ぶ。閉じた内容は表示とTab順から外す。押せる範囲は44px以上。", "バックログはPageHeadのnarrowSummaryで未完了件数だけを残し、ほかの集計と経験値を畳む。絞り込みを閉じても適用中の条件数と解除操作を隠さない。"], ".narrow-disclosure .narrow-disclosure-toggle .narrow-disclosure-body / NarrowDisclosure.svelte")],
   ["buttons", "ボタン", () => block("buttons", "ボタン", "1つの面に主ボタン（is-primary）は1つまで。ボタン、完了の丸、属性のチップ、pill は、押している間だけ濃淡が変わる（動きを減らす設定でも同じ）。",
     `<div class="cat-row">
       <button class="btn is-primary" type="button">${icon("check")}${t("complete")}</button>
