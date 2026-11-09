@@ -111,6 +111,7 @@ async function readTask(db: OrganizationDb, workspaceId: string, taskId: string)
           'tasks.created_by',
           'tasks.assignee_user_id',
           'tasks.today_on',
+          'tasks.column_id',
           'assignee.name as assignee_name',
           'assignee.disabled_at as assignee_disabled_at',
           'assignee_membership.id as assignee_membership_id',
@@ -235,10 +236,55 @@ export const taskDetailOperation = implement(taskDetail, async ({ db, actor, wor
     ),
   );
   if (settings === undefined) throw new ApiError(404, 'not_found');
+  // 親と列は、同じワークスペースの削除していない行だけを読む。
+  const parent =
+    task.story_id === null
+      ? undefined
+      : await db.first(
+          db.statement((q) =>
+            q
+              .selectFrom('stories')
+              .leftJoin('epics', (join) =>
+                join
+                  .onRef('epics.id', '=', 'stories.epic_id')
+                  .on('epics.workspace_id', '=', workspace.workspaceId)
+                  .on('epics.deleted_at', 'is', null),
+              )
+              .select(['stories.id', 'stories.title', 'epics.id as epic_id', 'epics.title as epic_title'])
+              .where('stories.id', '=', task.story_id!)
+              .where('stories.workspace_id', '=', workspace.workspaceId)
+              .where('stories.deleted_at', 'is', null),
+          ),
+        );
+  const columns =
+    task.sprint_id === null || task.sprint_status === null || task.tray !== 'backlog'
+      ? []
+      : await db.rows(
+          db.statement((q) =>
+            q
+              .selectFrom('board_columns')
+              .select(['id', 'name', 'is_done'])
+              .where('workspace_id', '=', workspace.workspaceId)
+              .where('deleted_at', 'is', null)
+              .orderBy('is_done')
+              .orderBy('position')
+              .orderBy('id'),
+          ),
+        );
+  // ボードと同じく、完了は完了列、列が無い／削除済みなら先頭の未完了列へ置く。
+  const column =
+    task.completed_at !== null
+      ? columns.find((c) => c.is_done === 1)
+      : (columns.find((c) => c.id === task.column_id) ?? columns.find((c) => c.is_done === 0));
   // 削除していない決まった欄と値。未記入は、完了していないタスクで、値の無い欄があるとき（backlog-tree の unfilled と同じ判定）
   const fields = await readTaskFields(db, workspace.workspaceId, task.id);
   return {
     task: await detailOf(db, task, actor, workspace),
+    column: column === undefined ? null : { id: column.id, name: column.name, is_done: column.is_done === 1 },
+    story: parent === undefined ? null : { id: parent.id, title: parent.title },
+    epic:
+      parent?.epic_id == null || parent.epic_title === null ? null : { id: parent.epic_id, title: parent.epic_title },
+    today_on: task.today_on,
     fields,
     unfilled: task.tray === 'backlog' && task.completed_at === null && fields.some((field) => field.value_md === null),
     in_backlog: task.tray === 'backlog',

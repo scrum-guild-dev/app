@@ -2,7 +2,7 @@
 // 組織の分離と権限の種類ごとの許可と拒否は、一覧を回す test/operation-registry.test.ts が確かめる
 import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { taskComplete, taskTodayMark } from '../src/shared/operations/task/index.ts';
+import { inboxToBacklog, taskComplete, taskTodayMark } from '../src/shared/operations/task/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb, verifyWorkspace } from '../src/server/db/index.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
@@ -62,6 +62,33 @@ function mine(target: Target, overrides: Parameters<typeof createTask>[3] = {}) 
 }
 
 describe('task-today-mark', () => {
+  test('受信箱では今日やるの印を付けられず、バックログへ移した後は同じタスクに付けられる', async () => {
+    const target = await createTarget();
+    const task = await mine(target, { tray: 'inbox', is_imported: 1, created_by: null });
+
+    const rejected = await mark(target, task.id, true);
+    expect(rejected.status).toBe(404);
+    expect(await errorCodeOf(rejected)).toBe('not_found');
+    expect(await rowOf(target, task.id)).toEqual(task);
+    expect(await logsOf(target, task.id)).toEqual([]);
+
+    const moved = await post(app, inboxToBacklog, {
+      slug: target.slug,
+      token: target.member.token,
+      body: { workspace_id: target.workspace.id, items: [{ task_id: task.id }] },
+    });
+    expect(moved.status).toBe(200);
+
+    const marked = await mark(target, task.id, true);
+    expect(marked.status).toBe(200);
+    const body = (await marked.json()) as MarkBody;
+    expect(body).toEqual({ task_id: task.id, today_on: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+    expect((await rowOf(target, task.id))!.today_on).toBe(body.today_on);
+    const logs = await logsOf(target, task.id);
+    expect(logs).toHaveLength(2);
+    expect(logs.map((log) => JSON.parse(log.changes_json))).toContainEqual({ today_on: [null, body.today_on] });
+  });
+
   test('印を付けると today_on にワークスペースのタイムゾーンの今日が入り、履歴に前と後を残す', async () => {
     const target = await createTarget();
     const task = await mine(target);

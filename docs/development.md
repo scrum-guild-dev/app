@@ -32,6 +32,7 @@
 - 本文の種類: ファイルのバイトを受ける操作は `body: 'binary'` を付ける。組織の中の `write` だけに付けられ、それ以外の範囲やモード、`'binary'` 以外の値は `assertOperationDefinition` が断る。入力の JSON は `encodeURIComponent(JSON.stringify(input))` でヘッダー `X-Operation-Input` に入れ、同じ zod のスキーマで検証する。ヘッダーが無い、復号や JSON の解析に失敗、スキーマに合わないときは 400 の `invalid_input`。申告の `Content-Type` は読まない。入力の後、ワークスペースの前に `Content-Length` を確かめ、無い、10進の整数でない、0 なら 400、52428800 を超えれば本文を読まずに 413（どちらも `invalid_input`）。処理には未読のストリームと検証した長さ、リクエストの `c.env.ATTACHMENTS` を `binary` で渡し、失敗のログに使う `requestId` を並べて渡す。CLI と MCP は JSON の本文でしか呼べないので、`operation-list` とそこから作る MCP の道具には出さず、API トークンの呼び出しも 403 で断る（`tokenAllows` が一覧と呼び出しの両方を決める）。保存の詳細は `docs/data-model.md` の `attachments`。
 - 応答の種類: ファイルを返す操作は `response: 'binary'` を付ける。`permission: 'organization'` の直下の `read` だけに付けられ、`body` や `workspace: true` とは併用しない。登録の関数が `GET /api/<slug>/<名前>/:id` を作り、入力はパスの `{ id }` を zod で検証する（本文、クエリ、`X-Operation-Input` は読まない）。出力は `Response` のスキーマで検証し、本文を読み切らず返す。`operationPath(定義, slug, { id })` が参照用の URL を作り、第3引数を省くと `:id` のテンプレートになる。`operationMethod()` はこの操作だけ `GET`、ほかは `POST`。CLI と MCP の一覧から外し、API トークンも 403 にする。処理に渡す `download` は R2 の binding、`Range`、`If-Range`、HEAD かどうかだけを持つ。認証と同意、組織の確かめは共通の入口で行い、添付のワークスペースと本人の権限は、その組織で絞った処理の問い合わせが確かめる。HEAD も同じ入口と権限を通す。
 - 回数の上限: 重い操作（手動の同期など）には、定義に `rateLimit: { max, windowSeconds }` を付ける。登録の関数が、権限の検査の後、入力を読む前に、アカウントと操作ごとに `rate_limits` の `operation:<操作の名前>:<アカウントの ID>` で数え、窓の中で `max` を超えた呼び出しは 429 の `rate_limited` で断る（処理は動かない）。窓の最初の呼び出しから `windowSeconds` たつと数え直す。数えるのは1文の upsert で、並行した呼び出しも取りこぼさない（`src/server/auth/rate-limit.ts`）。アプリ側のレート制限は、ログイン、画面のエラーの送信（`POST /api/client-errors`）、手動の同期、接続の登録と範囲の候補・保存（`connection-create`、`connection-scope-candidates`、`connection-scopes-save`。取り込み元に問い合わせる）、招待する人の解決（`invitee-resolve` と `invitation-create`。GitHub に問い合わせる）、完成の定義の変更（`workspace-dod-update`。10 万字の本文を書く）、コメントの作成と編集、API トークンの発行と取消、添付ファイルを上げる操作（`attachment-upload`。組織の合計の上限と掃除が入るまでの仮の蓋）にだけ設ける（並びの正は `docs/requirements.md` の「運用」）。ログインは GET の例外なので定義に付けず、`login:<IP>` で数える（「GitHub のログインと取り込み」）。パスワードのログインも直に書く例外なので定義に付けず、`password:<IP>` と `password-email:<メールアドレスのハッシュ>` で数える（「パスワードのログイン」）。画面のエラーの送信も直に書く例外なので定義に付けず、`client-error:<IP>` で数える（「本番で壊れたことに気づく」）。手動の同期の「接続ごとに5分に1回」は `connections.last_manual_sync_at` で判定し、この項目とは別。
+- 画面の待つ上限: 画面（`src/lib/api.ts` の `callOperation`）は、`read` の操作の応答を本文の読み終わりまで 10 秒（`READ_TIMEOUT_MS`）待ち、超えたら中断して通信の失敗（`status: 0`）として返す。`write` は打ち切らない。外（GitHub、取り込み元）に問い合わせる `read` には、定義に `clientTimeoutMs`（ミリ秒）を付け、サーバーが外への上限で返す 503 より長く待つ（`connection-scope-candidates` は頁送りの締め切り 60 秒に 1 回分の 10 秒を足して 80 秒、`invitee-resolve` と `resolve-github-user` は 1 回の 10 秒に対して 20 秒）。`read` 以外の操作、正の整数でない値、`setTimeout` の最大（2^31 - 1）を超える値は `assertOperationDefinition` が断る。サーバーの処理の時間は縛らない
 - 処理: `src/server/operations/` で `implement(定義, 処理)` の形に書き、`src/server/operations/index.ts` の一覧に足す。Hono のルートは、この一覧を `createApp()` が1つの関数（`operationsApp()`）で登録する。ルートを直に書かない。仮の操作は本番の一覧に入れず、テストの中で定義する。
 - 直に書く例外（GET のルートと、招待の URL の画面のフォームの POST、画面のエラーの送信）: `/api/health` と、ログインの開始 `GET /api/auth/<手段>/start?return_to=<パス>` と戻り先 `GET /api/auth/<手段>/callback`、招待の URL から Google のログインを始める `POST /api/auth/google/start`（`src/server/auth/login-routes.ts`）。ログインの3つは手段（GitHub か Google）へ移し、手段から戻るブラウザの移動（リダイレクト）で、JSON の応答を返す操作の形に合わない。POST は `/invite` の画面のフォームから送る `application/x-www-form-urlencoded` の本文（欄 `claim_token`）に秘密を持ち、302 で Google へ移す。fetch で認可の URL を JSON で受ける形にしないのは、Google へ移す開始が2通りになり、ほかのサイトからの防ぎを Origin の検査で作り直すことになるため。Origin の検査は掛けず（ほかのサイトからの移動で呼ばれる）、ログインの CSRF は state の Cookie で止める（「GitHub のログインと取り込み」）。失敗は JSON のエラーではなく `/login?error=<理由>` へのリダイレクトで返す。画面で捕まえていない例外と Promise の拒否を送る `POST /api/client-errors`（`src/server/client-errors.ts`）も例外にする。今の操作の定義はどれもログインが前提で、ログインと招待の画面が壊れて誰も入れない故障を拾えないため。Origin の検査は操作と同じに掛け、セッションは読まない（「本番で壊れたことに気づく」）。メールアドレスとパスワードでログインする `POST /api/auth/password/login`（`src/server/auth/password-login.ts`）も、同じ理由（ログイン前の人が呼ぶ）で例外にする。OAuth の道（`login-routes.ts`）の外に置き、ログインの画面が fetch で JSON を送り、JSON で答える。Origin の検査は操作と同じに掛け、加えて `Sec-Fetch-Site` があれば `same-origin` だけを受ける（「パスワードのログイン」）。ログアウトと「自分」を返す口（`logout`、`me`）は例外にせず、操作の定義で作る（`src/shared/operations/session/`）。
 - URL: `POST /api/<slug>/<操作の名前>`。組織の外の操作（ログインだけ、運用者）は `POST /api/<操作の名前>`。JSON を返す読み取りも POST にし、キャッシュせず Origin を検査する。画像・動画とダウンロードの `response: 'binary'` だけは上の GET の形にする。通常の操作の入力は JSON の本文で、`Content-Type: application/json` を要る。`body: 'binary'` の操作の入力は、上のヘッダーで運ぶ。URL は名前から作り、定義に持たせない。名前は英小文字と数字をハイフンでつないだ1語（`task-title` など）で、一覧で重ならない。URL の形は `operationPath()` に1つだけ持ち、画面と登録の関数が同じ値を使う。
@@ -165,12 +166,12 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 
 ### 書体
 
-- 書体は `@fontsource` の4つのパッケージ（`biz-udpgothic`、`zen-old-mincho`、`ibm-plex-mono`、`chakra-petch`）から、`src/routes/+layout.svelte` が使う太さだけを import する。太さは見本（`design/today.html`）の Google Fonts の URL と同じ（BIZ UDPGothic 400 と 700、Zen Old Mincho 700 と 900、IBM Plex Mono 400 と 500、Chakra Petch 500、600、700）。
+- 書体は `@fontsource/noto-sans-jp` から、`src/routes/+layout.svelte` が 400、500、600、700、900 を import する。全テーマの本文・見出し・数字に共通で使い、見本の Google Fonts の URL も同じ太さにする。
 - Google Fonts は使わない。利用者の IP を外へ出さず、CSP に外の先を足さない。書体のファイルは build が `build/_app/immutable/assets/` に書き出し、自分の Worker から配る。
 - パッケージは `devDependencies` に置く。書体のファイルは build のときに CSS から拾って `build/` に書き出すだけで、Worker の実行時には要らない。
-- 日本語の書体は文字の範囲ごとに約120のファイルに分かれ（`unicode-range`）、ブラウザは使う文字のファイルだけを読む。build の出力は woff2 が514ファイル、`build/` 全体で約530ファイル、約13MB になる（Workers Static Assets の上限は20,000ファイル）。
+- 日本語の書体は文字の範囲ごとに約120のファイルに分かれ（`unicode-range`）、ブラウザは使う文字のファイルだけを読む。使う太さの分だけ build に書き出す（Workers Static Assets の上限は20,000ファイル）。
 - `@fontsource` の CSS は woff2 と woff の両方を `src` に書くが、woff は使われない。woff を `build/` に出さないため、`scripts/fontsource-woff2.ts` の Vite プラグインが、CSS を Vite に渡す前に woff の指定を外す（実際の CSS での確認は `scripts/fontsource-woff2.test.ts`）。
-- 書体の CSS は1本にまとまり、約440KB（gzip で約136KB）。`index.html` の `<link rel="stylesheet">` から読むので描画を止めるが、この大きさと止まることは受け入れた。理由は2つ。1つは、日本語の書体を文字の範囲で分けて読む以上、範囲の一覧（`unicode-range`）を CSS に持つ構造が避けられないこと（Google Fonts の CSS も同じ構造）。もう1つは、ファイル名にハッシュが入って `immutable` でキャッシュされ、2回目からの読み込みが軽いこと。
+- 書体の CSS は1本にまとまり、文字範囲と太さの定義を含む。`index.html` の `<link rel="stylesheet">` から読むので描画を止めるが、この大きさと止まることは受け入れた。理由は2つ。1つは、日本語の書体を文字の範囲で分けて読む以上、範囲の一覧（`unicode-range`）を CSS に持つ構造が避けられないこと（Google Fonts の CSS も同じ構造）。もう1つは、ファイル名にハッシュが入って `immutable` でキャッシュされ、2回目からの読み込みが軽いこと。
 - Vite は小さいファイルを `data:` の URI にして CSS へ埋め込むが、CSP の `font-src`（`default-src 'self'`）は `data:` を通さない。`vite.config.ts` の `build.assetsInlineLimit` を 0 にして、すべてファイルとして出す。
 - 太さを足すときは、見本の Google Fonts の URL も同じ PR で直す。
 
@@ -182,6 +183,7 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 - `static/theme-init.js` は同期で読むので、小さなファイルでも読み終えるまで HTML の解析が止まる。`_headers` では `Cache-Control` を指定せず、Cloudflare の既定（毎回確かめる）のまま配る。描画のたびに「変わっていないか」の問い合わせが1往復増えるが、ファイルは数百バイトで、ちらつきを無くす利点が上回るので受け入れた。名前にハッシュを入れて `immutable` にすれば往復は無くなる一方、`app.html` から名前を引く仕掛けが要り、遅れが問題になってから足せば足りる。
 - テーマのキーと値は `src/shared/theme.ts` と同じにする。`scripts/theme.test.ts` が、`static/theme-init.js` を偽の `localStorage` で動かして確かめる。
 - `static/boot-loading.css` も同じ性質（`src/app.html` の head が読み、URL を直接開いた最初の読み込みの `#boot-loading` の見た目を持つ。デザインシステムの CSS が届く前に要るので、画面ごとの CSS を持たない決まりの例外）。
+- `static/boot-shape.js` も同期で読む同じ性質のファイル。`src/app.html` の `#boot-loading` の後に置き、URL から骨組みの形（組織の枠の画面ごとの形か、枠の外の紙）を選んで `html` に `data-boot`（畳んだ左のメニューなら `data-boot-nav` も）を付け、本文の骨組みを固定の文字列で組み立てる。往復は `theme-init.js` と同じく1つ増える。形と URL の対応は `src/lib/loading-shape.ts`（画面を移るときの `LoadingSheet`）と同じにし、`scripts/boot-shape.test.ts` が全画面の URL と、形ごとの帯の数、`static/boot-loading.css` にクラスの描き方があることを確かめる。`static/boot-loading.css` は枠の寸法（左のメニュー 240px と 64px、上の帯 60px、本文の余白）と、各テーマの地、面、線の色を `design/` から写して持つ。`design/` の枠の寸法かテーマの色を変えるときは、ここも合わせる（e2e の `toast-failure.test.ts` が、左のメニューの幅、上の帯、画面の見出しの位置の一致を確かめる）。画面が描かれたら `src/routes/+layout.svelte` が `#boot-loading` と `data-boot` を取り除く。
 - 画面が動き出してからの切り替えとストアは `src/lib/theme.svelte.ts`。本物の値は組織の枠が入れる。組織の操作の結果の `me.theme`（`users.theme`）、なければ `organization.theme`（`organizations.theme`）を `setTheme` に渡すので、`data-theme` と `localStorage` が同じ値になる（`src/lib/organization.svelte.ts`）。組織を切り替えたときも同じで、切り替えた先の値に替わる。
 
 ### 架空のデータ
@@ -351,8 +353,9 @@ vite の転送先も同じ値から作るので、画面は自分のワークツ
 
 この節は、人の端末とクラウドのセッションの e2e の仕組みを説明する。ローカルのセッションは e2e を走らせず、PR の CI に任せる（「開発の流れ」と「CI の e2e が落ちたとき」）。
 
-`pnpm e2e` は、実行のたびに `pnpm preview` と同じ中身（`pnpm build && node scripts/dev.ts --preview`）で build し直してサーバーを立て、終わると止める（`playwright.config.ts`、`scripts/e2e-server.ts`）。通った結果も落ちた結果も、今のコードで build したサーバーのものにするため（#132）。
+`pnpm e2e` は、実行のたびに `pnpm preview` に `--test-credentials` を足した中身（`pnpm build && node scripts/dev.ts --preview --test-credentials`）で build し直してサーバーを立て、終わると止める（`playwright.config.ts`、`scripts/e2e-server.ts`）。通った結果も落ちた結果も、今のコードで build したサーバーのものにするため（#132）。
 
+- `--test-credentials` は e2e 専用の固定の架空鍵を Worker へ渡すフラグ。手元のシークレットが無くても health が成功するようにする。通常の `pnpm dev` と `pnpm preview` はこの鍵を渡さず、開発者が設定した鍵を使う。使い捨ての計測サーバーも `scripts/test-credential-keys.ts` の同じ架空鍵を明示して渡す。これらの鍵を本番に使わない
 - 手元では、その実行だけの版（`e2e-<時刻>`。`APP_VERSION` を渡したときは `<渡した版>-e2e-<時刻>`）で build する。サーバーが立った後、`e2e/global-setup.ts` が `/api/health` の版と比べ、違えば seed を入れずに止まる。止まったときの文言は、前の e2e か `pnpm preview` のサーバーが API のポートで答えていることと、探し方（`lsof -i :<ポート>`）を出す。`/api/health` が10秒答えないときも、同じ案内で止まる。2xx 以外を返したときはステータスと立てたサーバーの出力を見る案内で、版の無い応答（JSON でないものを含む）はこのリポジトリでないサーバーを疑う案内で止まる（`scripts/e2e-server.ts` の `e2eGlobalSetup`）。CI は渡した SHA をそのまま使う（ランナーが毎回新しく、前のサーバーが無い）
 - 起動の前に API のポートの `/api/health` に答えるサーバーがあれば、Playwright が `... is already used` で止まる。`pnpm dev` も `pnpm preview` も同じポートの `wrangler dev` を使うので、立てたまま e2e を走らせるときは止めるか、`DEV_PORT_OFFSET` か `.dev-port-offset` でずらす（ワークツリーは名前から導いたオフセットで、本体の作業コピーとは重ならない）
 - ほかのワークツリーの e2e と並べて走らせるときは、並べたそれぞれの `--workers` の合計を、CPU のコアの数の半分（Playwright の既定のワーカーの数）までに割る。例: 8 コアで 2 本並べるならそれぞれ `--workers=2`、4 コアで 2 本ならそれぞれ `--workers=1`。既定のまま並べると、ワーカーだけでコアを使い切り、その上でそれぞれの `workerd` と build も動く。#325 の確かめでは、ワーカーを絞らずに並べた 110 件のうち 44 件が待ちの時間切れで落ち、`--workers=1` では全件通った（#364）。目安を超えたときの備えに、手元では `expect` の既定の待ちを延ばしてある（下の「e2e の書き方」）
@@ -427,6 +430,40 @@ vite の転送先も同じ値から作るので、画面は自分のワークツ
 ### バックログの木を 5 万件で測る
 
 `pnpm bench:backlog`（`scripts/backlog-bench.ts`）は、使い捨ての場所（`--persist-to` の一時ディレクトリ）の D1 に全マイグレーションと seed と 5 万件のタスクのワークスペース（現実の形と最悪の形）を入れ、その D1 で `wrangler dev`（API はポート 9700、デバッガーは 9701。デバッガーは常に `--port` + 1。`--port` を上の範囲の中に替えると、そのオフセットのワークツリーと重なりうるので、替える側が空きを選ぶ。既定の 2 つは、ワークツリーが使う範囲（画面 5173〜5614、API 8787〜9228、デバッガー 9229〜9670）の外に固定してあるので、どのオフセットの開発用のサーバーや `pnpm e2e` を立てたままでも重ならない。`scripts/dev-ports.ts` の `BENCH_PORTS`）を立てて、`backlog-tree` を絞らない、担当、検索などの読み方ごとに測る（#165）。手元の開発用の D1 と本番には触らない。`--runs` で回数（既定 10）を替える。`--prepare-only <場所>` は、その場所の D1 に入れて終える（測らず、消さない）ので、遅い文を `wrangler d1 execute DB --local --persist-to <場所> --command "EXPLAIN QUERY PLAN ..."` で見るのに使う。測った数と結論は `docs/data-model.md` の `tasks` の節。木を読む文、索引、絞り込みを変えたら流し直し、数が変わったら書き直す。
+
+### URL を直接開く最初の読み込みを測る
+
+`pnpm bench:boot`（`scripts/boot-bench.ts`）で、本番の build を作り、公開 seed の管理者で `/aoba` を直接開く。API の待ちだけを測る `bench:loading` とは別の計測。Chromium が必要（初回は `pnpm exec playwright install chromium`）。Node と pnpm は指定版を使い、他の build・テスト・計測と同時に走らせない。
+
+既定は Fast 3G と Slow 3G を各2回。`pnpm bench:boot --runs 3 --network both --path /aoba --port 9744 --output /tmp/boot.json` のように変えられる。回線は `fast`、`slow`、`both`。パスは公開 seed の管理者が開ける、見出し h1 のある画面を指定する。`/aoba` は「今日やること」を確認し、他のパスでは `--heading 今日やること` のように目的の h1 の文字も指定する。HTTP 200 の SPA エラー画面を成功に混ぜないため、見出しが一致しない試行は失敗にする。指定ポート、+1（Worker）、+2（デバッガー）を使う。
+
+一時ディレクトリに独立した Wrangler 設定・D1・R2 を作り、マイグレーションと公開 seed・期限付きセッションを入れる。既存のローカル D1 と本番は使わず、Wrangler の作業ディレクトリも一時ディレクトリにして `.dev.vars` と `.env` を探索しない。起動ごとの版を health で照合する。通常終了、失敗、SIGINT・SIGTERM・SIGHUP では自分のブラウザ・サーバーを止めて一時ディレクトリを消す（SIGKILL やホスト停止では後片付けできない）。build/ は計測用の版で作り直される。
+
+Wrangler の assets で本番ビルドを SPA として配り、ループバックのプロキシでテキストを gzip にする（ローカル Wrangler の圧縮有無に依存しないため）。各試行は新規コンテキスト、キャッシュ無効、サービスワーカー無効、1280×900、ja-JP、Asia/Tokyo、シンプル（ライト）、headless Chromium。CDP の帯域制限は DevTools の補正値を含み、Fast は遅延562.5ms・下り180,000B/s・上り84,375B/s、Slow は遅延2,000ms・上下40,000B/s。CPU は制限しない。Cloudflare 本番の配信遅延や Brotli を再現するものではない。
+
+時間は navigation の開始を0とし、HTMLの `responseStart`（最初の応答バイト）・`responseEnd`（受信完了）と、`domContentLoadedEventEnd`（同期スクリプト等を含むDOM準備完了）を分ける。表示は `#boot-loading` が除かれて `#app h1` がある最初の描画フレーム、失敗は実際に `.boot-failed` が見える最初のフレームから表示までを測る。15秒から推算しない。表示完了は主要データを含む画面のマウントで、フォント完了とは別。転送量・リクエスト数は、表示フレームまでに完了したもの（転送中のもののバイト数は含まない）と、フォント完了・500msの network idle までを待った総量を別々に残す。前者はCDPの `Performance.getMetrics` の `NavigationStart` を基点に各転送の完了時刻を表示時刻と比べる。CDP の `loadingFinished.encodedDataLength`（圧縮済みデータとHTTPヘッダーを含む）を種別ごとに集計する。ページの例外・転送失敗・HTTPエラー・想定外のリダイレクト・gzip不成立は成功に混ぜない。
+
+標準出力に各試行の進行と各回線の時刻・DOM準備後の表示時間・転送量の p50（nearest-rank）を出す。失敗表示の p50 が0でも一部の試行で失敗表示が出たことを隠さないよう、表に「失敗あり/試行数」を併記し、JSONには各試行の `failed`（失敗表示が出たか）と、回数・最大時間を残す。失敗の表示時間が0msでも、表示が出たことをフラグで数える。JSONには `runs`・`network`・`port` の指定値、各試行の時刻・ファイル種別とURL別の転送量、実行日時、Node・pnpm・ブラウザ版、HEADと作業ツリーの状態、設定値を残す。未コミットのコードで比較するときは、この状態文字列だけで内容を復元できないため、差分も別途保存する。前後を同じ版のブラウザと計測手順で各2回以上比べ、元の Issue にある1点の実測と条件が違う場合は新しい基準値として区別する。
+
+### 画面の読み込みを測る
+
+`pnpm bench:loading`（`scripts/loading-bench.ts`）で、load を持つ各画面・枠の操作ごとの p50・p95、合計、従のデータを後回しにした場合の短縮見込みを Markdown の表で出す。既定は各 load・発行順ごとの温め2回と計測20回（正順と逆順で各20回）。`pnpm bench:loading --runs 50 --port 9742` で回数とポートを変えられる（デバッガーは指定ポート + 1）。Node と pnpm はこの文書の指定版を使う。他の build・テストや計測と同時に走らせず、2回以上比べる。
+
+一時ディレクトリに独立した Wrangler 設定と D1 を作り、全マイグレーション・seed・計測用データを入れ、`wrangler dev --local` を起動する。既存の `.dev.vars`・`.env` を探索しないよう Wrangler の作業ディレクトリも一時ディレクトリにする。公開 seed の管理者（運用画面だけ運用者）で呼ぶ。設定に使う認証情報の鍵は公開の計測用固定値で、本番用ではない。起動ごとの版の識別子を health で照合し、同じポートの別サーバーを測らない。通常終了、失敗、SIGINT・SIGTERM・SIGHUP では子の終了を待って D1 と設定を消す。POSIX では専用プロセスグループの子孫も止める（SIGKILL やホスト停止では後片付けできない）。既存の手元 D1 と本番は使わない。
+
+追加データは1ワークスペース、エピック10件、ストーリー100件、タスク5,000件（約8割完了、担当・区分・リポジトリを分散）、進行中のスプリント1件と未完了タスク30件、終了したスプリント3件、完了タスク全件の履歴（約4,000件）、1点以上の完了への経験値（約3,200件）、コメント5,000件、組織とワークスペースそれぞれ Wiki 100ページ。fixture の基準時刻は JavaScript で一度だけ決める。完了日時はその直近7日に分散し、直近の完了と経験値・ベロシティの集計を空の表で測らない。seed の行も残す。接続・受信箱・sprint_entries などは seed の量であり、全操作の最悪条件やスプリント加入履歴を網羅するものではない。
+
+画面と操作・主従の対応は `scripts/loading-screens.ts` に置く。load の追加・操作の増減は `scripts/loading-screens.test.ts` が検出するので同時に表を直す。主従は画面の主要コンテンツを出せるかで決める。プロフィールの各節は同格の主として測る。組織の枠の招待件数は、招待ありの条件分岐を強制した別行で、並列群の後に逐次で読む。招待だけの人が組織へ入る失敗経路、管理の節の部品、load を持たない画面、操作をしない最上位の枠は対象外。管理のページは parent の権限確認だけなので「操作なし」。
+
+時間は API 送信から JSON 読み取りまでの往復（ローカル Worker・D1・JSON を含む）。各試行の全応答（逐次の群も含む）を読み終えて全時間を確定してから、操作定義の出力スキーマでまとめて確かめる。検査で失敗した試行を成功の表に混ぜない。これにより、先に返った応答の同期スキーマ検査が同時に動く別の操作の計測へ混ざることも避ける。ブラウザの描画、ネットワークの実運用条件、SvelteKit の実際の load のスケジュールを測るものではない。レイアウトとページは別々で、画面全体の初回表示時間ではなく、その load の待ち時間を比べる。設定は親 load の後に読み始めるため、初回表示では親の待ち時間も必要になる。
+
+分位点は nearest-rank（昇順の `ceil(N × p)` 番目）。各試行の合計は群の開始から各操作が JSON を読み終えるまでの最終完了時刻（逐次の招待件数は先行群の完了後に発行する）。合計の p95 は操作ごとの p95 の最大から作らず、試行ごとの合計から求める。各試行の `max(0, 従の最終完了時刻 − 主の最終完了時刻)` も、正順と逆順それぞれの p50・p95 を**診断値**として出す。
+
+ローカル Worker/D1 が要求を直列に処理する場合、先に発行した操作が先に終わる。両順で差が正になるかという条件だけで、並列の従の重さや後回しの効果は区別できない。したがって並列の従は「判定不能」と表示し、差が0でも「後回しは不要」と結論しない。逐次の従は構造上、主を待たせてからさらに待つため「構造上の候補」と表示するが、実運用の効果量を保証しない。正順をまとめて測ってから逆順を測るので、時間経過・キャッシュと発行順の効果も分離していない。並列の画面の実装可否を決めるには、主だけと主＋従の比較、または実運用に近い同時実行環境での追加測定が必要になる。
+
+今日の画面（`/[slug]`）を含め、計測する操作と主従は `scripts/loading-screens.ts` を正とする。#1018 で今日から外した経験値の読み取りは含めない。
+
+計測した表と判定は [画面の読み込みの計測結果](loading-bench-results.md) に残す。後回しそのものは #1042 の範囲に入れない。
 
 ### 依存を入れたばかりの作業コピー
 
@@ -974,7 +1011,7 @@ PR で変えていない領域のテストが、前の head では通ってい�
 
 - 版は `wrangler deploy` の1回で上げる。`wrangler versions upload` と `versions deploy` の2段にしないのは、`versions upload` が Worker のまだ無い初回に失敗し、cron やルート（triggers）の変更も反映しないため。版を段階的に流さないので、2段に分ける得も無い
 - rollback には必ず版の ID を渡す。`wrangler rollback` は版を指定しないと、直近のデプロイを除いた履歴から 100% で動いていた版を選ぶ。その間に別のデプロイが挟まると、このスクリプトが切り替える直前の版とずれるため
-- 煙のテストが確かめるのは版と DB への疎通。`/api/health` は共通の入口で `SELECT 1` を送り、届けば 200 の `{ status, database, version }`、届かなければ 503 の `unavailable` を返す。503 は失敗として数えるので、D1 に届かない版は上の rollback で戻る（`versionFromHealth` が応答を読む）
+- 煙のテストが確かめるのは版、DB への疎通、接続の認証情報の鍵の形。`/api/health` は共通の入口で `SELECT 1` を送り、届いて鍵の形も正しければ 200 の `{ status, database, credentialKeys, version }`、DB に届かなければ 503 の `unavailable` を返す。鍵が無いか形が違うときも 503 を返し、`credentialKeys` は `unavailable` になる。鍵の数、版、値は返さない。503 は失敗として数えるので、D1 に届かない版は上の rollback で戻る（`versionFromHealth` が応答を読む）
 - 煙のテストの URL はスクリプトの定数（`PRODUCTION_URL`）。ドメインへ移すときに直す
 - マイグレーションは自動では戻さない。戻すかは人が決め、ログのブックマークで Time Travel から戻す（`docs/operations.md` の「戻し方」）
 

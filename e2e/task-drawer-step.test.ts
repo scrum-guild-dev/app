@@ -158,7 +158,10 @@ test('書きかけがあるまま前後へ移ろうとすると確かめる。�
   await addTaskRow(page, '確認 一');
   await addTaskRow(page, '確認 二');
   const drawer = await openDrawer(page, '確認 一');
-  await drawer.getByRole('button', { name: /確認 一/ }).click();
+  await drawer
+    .locator('.drawer-title')
+    .getByRole('button', { name: /確認 一/ })
+    .click();
   const input = drawer.getByRole('textbox', { name: 'タイトル' });
   await input.fill('書きかけ');
 
@@ -293,7 +296,10 @@ test('書きかけを捨てるかの確認を出している間は、] を押し
   await addTaskRow(page, '確認中 一');
   await addTaskRow(page, '確認中 二');
   const drawer = await openDrawer(page, '確認中 一');
-  await drawer.getByRole('button', { name: /確認中 一/ }).click();
+  await drawer
+    .locator('.drawer-title')
+    .getByRole('button', { name: /確認中 一/ })
+    .click();
   await drawer.getByRole('textbox', { name: 'タイトル' }).fill('');
   await stepButton(drawer, '次').click();
   const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか' });

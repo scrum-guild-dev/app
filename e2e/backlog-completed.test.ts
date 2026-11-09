@@ -42,6 +42,7 @@ test('親なしと配下の完了をキーボードで開閉し、詳細を開�
     const completed = waitForResponses(page, '/task-complete');
     await page.getByRole('button', { name: `${done}にする: ${title}`, exact: true }).click();
     await completed;
+    await expect(page.getByRole('status').filter({ hasText: 'タスクを完了にしました' })).toContainText('+40 XP');
   }
   await page.reload();
   let fail = true;

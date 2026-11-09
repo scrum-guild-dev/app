@@ -3,8 +3,10 @@
   import { ATTACHMENT_DELETIONS, type AttachmentDeletions } from '../attachment-context.ts';
   import { attachmentDownload } from '../../shared/operations/attachment/index.ts';
   import { operationPath } from '../../shared/operations/define.ts';
-  import { beforeNavigate, goto } from '$app/navigation';
+  import { beforeNavigate, goto, invalidate } from '$app/navigation';
   import {
+    taskTodayMark,
+    taskTodayMarkConflictReasonOf,
     taskAssign,
     taskComplete,
     taskDelete,
@@ -17,6 +19,7 @@
     type TaskFieldValue,
     type TaskHistoryEntry,
   } from '../../shared/operations/task/index.ts';
+  import type { OutputOf } from '../../shared/operations/define.ts';
   import { memberList } from '../../shared/operations/workspace/index.ts';
   import { categoryRepositoryList, type DefinitionRef } from '../../shared/operations/definition/index.ts';
   import {
@@ -46,6 +49,7 @@
   import { pauseToast, showToast } from '../toast.svelte.ts';
   import { announceRemoved, type RestoreTarget } from '../task-removal.ts';
   import { t } from '../vocabulary.svelte.ts';
+  import TodayMarkButton from './TodayMarkButton.svelte';
   import Avatar from './Avatar.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Drawer from './Drawer.svelte';
@@ -181,12 +185,89 @@
   let attachmentRevision = $state(0);
   const deletedAttachments = $state<AttachmentDeletions>({ urls: [] });
   setContext(ATTACHMENT_DELETIONS, deletedAttachments);
+  let taskContext = $state<Pick<OutputOf<typeof taskDetail>, 'column' | 'story' | 'epic' | 'today_on'>>({
+    column: null,
+    story: null,
+    epic: null,
+    today_on: null,
+  });
+  let marking = $state(false);
+  let assigneeVersion = 0;
+  let savedVersion = 0;
+  let refreshVersion = 0;
+  let latestRefresh: Promise<TaskDetail | null> | null = null;
+  let latestRefreshTaskId: string | null = null;
+  let refreshCloseIfGone = false;
+  const todayReasonId = `${ids}-today-reason`;
+
+  async function toggleToday() {
+    if (marking || todayDisabledReason !== null || task === null) return;
+    const requestedTaskId = taskId;
+    const requestedAssigneeVersion = assigneeVersion;
+    marking = true;
+    try {
+      const result = await callOperation(
+        taskTodayMark,
+        { workspace_id: workspaceId, task_id: requestedTaskId, marked: taskContext.today_on === null },
+        { slug },
+      );
+      if (result.ok) {
+        // 保存済みの印は直ちに反映する。ただし、その間に担当変更が成功して印を消した応答より前へ戻さない。
+        if (alive && taskId === requestedTaskId) {
+          if (requestedAssigneeVersion === assigneeVersion)
+            taskContext = { ...taskContext, today_on: result.data.today_on };
+          const latest = await refresh(true);
+          if (latest === null && alive && taskId === requestedTaskId && !taskGone)
+            showToast(t('todayMarkRefreshFailed'), 'alert');
+        }
+        onchanged();
+        await invalidate('app:today');
+      } else {
+        if (result.status === 409 || result.status === 404) {
+          if (taskId === requestedTaskId) await refresh(true);
+          onchanged();
+          await invalidate('app:today');
+          if (result.error?.code === 'workspace_closed') onstale();
+        }
+        // 削除済みなら gone() が知らせる。競合では、読み直した状態と断られた理由を伝える。
+        if (!taskGone) {
+          const reason = taskTodayMarkConflictReasonOf(result.error?.details);
+          const message =
+            result.error?.code === 'workspace_closed'
+              ? t('workspaceClosedReadOnly', { workspace: t('workspace') })
+              : reason === 'not_assignee'
+                ? t('todayMarkNotAssignee', { assignee: t('assignee') })
+                : reason === 'completed'
+                  ? t('todayMarkDone', { task: t('task'), done: t('done') })
+                  : result.status === 404 && !inBacklog
+                    ? t('todayMarkBacklogOnly', { inbox: t('inbox'), archive: t('archive') })
+                    : t('todayMarkFailed');
+          showToast(message, 'alert');
+        }
+        if (result.status === 401) onstale();
+      }
+    } finally {
+      marking = false;
+    }
+  }
+
   // 期日の印を決める、ワークスペースの今日と週の始まり（task-detail の値。ブラウザの時計に頼らない）
   let clock = $state<{ today: string; weekStart: number } | null>(null);
   // 削除していない決まった欄と値（task-detail の fields。書かれていなければ value_md が null）
   let fields = $state<TaskFieldValue[]>([]);
   // バックログのタスクか。受信箱とアーカイブのタスクには、欄ごとの「未記入」の印を出さない（木の行と件数と同じ範囲）
   let inBacklog = $state(false);
+  const todayDisabledReason = $derived(
+    !canWrite
+      ? t('workspaceClosedReadOnly', { workspace: t('workspace') })
+      : !inBacklog
+        ? t('todayMarkBacklogOnly', { inbox: t('inbox'), archive: t('archive') })
+        : task?.completed_at != null
+          ? t('todayMarkCompleted', { done: t('done'), task: t('task') })
+          : currentUserId === null || task?.assignee?.id !== currentUserId
+            ? t('todayMarkOwnOnly', { task: t('task') })
+            : null,
+  );
   let heading = $state<HTMLElement>();
   let retryButton = $state<HTMLButtonElement>();
   let discardDialog = $state<ReturnType<typeof ConfirmDialog>>();
@@ -459,6 +540,12 @@
     if (!alive || mine !== loadVersion) return;
     if (result.ok) {
       task = result.data.task;
+      taskContext = {
+        column: result.data.column,
+        story: result.data.story,
+        epic: result.data.epic,
+        today_on: result.data.today_on,
+      };
       fields = result.data.fields;
       inBacklog = result.data.in_backlog;
       clock = { today: result.data.today, weekStart: result.data.week_start };
@@ -609,9 +696,11 @@
       { slug },
     );
     if (result.ok) {
+      savedVersion++;
       if (alive && task !== null) {
         const saved = result.data.task;
-        const merged: TaskDetail = { ...task, completed_at: saved.completed_at, can_delete: saved.can_delete };
+        // この保存で書いた欄だけを反映する。応答を待つ間の完了・取り消しを古い値で戻さない。
+        const merged: TaskDetail = { ...task };
         for (const key of Object.keys(fields) as (keyof Fields)[]) {
           if (key === 'repository_id') merged.repository = saved.repository;
           else if (key === 'category_id') merged.category = saved.category;
@@ -699,24 +788,50 @@
   }
 
   // 今の値を読み直す。読めなければ今の表示のまま（null）
-  async function refresh(): Promise<TaskDetail | null> {
-    const result = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: taskId }, { slug });
-    if (!result.ok) return null;
-    if (alive) {
-      task = result.data.task;
-      fields = result.data.fields;
-      inBacklog = result.data.in_backlog;
-      clock = { today: result.data.today, weekStart: result.data.week_start };
-      if (canWrite && task.completed_at === null && candidates === null) void loadCandidates();
-      // 別の人の変更を読み直したので、その変更が載った履歴も読み直す
-      void loadHistory();
-    }
-    return result.data.task;
+  function refresh(closeIfGone = false): Promise<TaskDetail | null> {
+    const requestedVersion = ++refreshVersion;
+    const requestedSavedVersion = savedVersion;
+    const requestedTaskId = taskId;
+    // このタスクで削除判定を求めた読み取りは、後発へ譲っても失わない。
+    refreshCloseIfGone = closeIfGone || (latestRefreshTaskId === requestedTaskId && refreshCloseIfGone);
+    latestRefreshTaskId = requestedTaskId;
+    const pending = (async (): Promise<TaskDetail | null> => {
+      const result = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: requestedTaskId }, { slug });
+      // 閉じた後も同じタスクの読めた結果は返す。保存元が成功を失敗や削除と誤認しないため。
+      if (!alive) return result.ok ? result.data.task : null;
+      if (taskId !== requestedTaskId) return null;
+      // 後発の読み取りに表示を譲る場合も、その結果を呼び出し元へ返す。null は読み取り失敗だけを表す。
+      if (requestedVersion !== refreshVersion) return latestRefreshTaskId === requestedTaskId ? latestRefresh : null;
+      if (!result.ok) {
+        if (refreshCloseIfGone && result.status === 404 && alive) gone();
+        return null;
+      }
+      if (alive && taskId === requestedTaskId) {
+        // 途中で保存が通ったら、その後の値を取り直す。古い欄を戻さず、完了状態や権限も取りこぼさない。
+        if (requestedSavedVersion !== savedVersion) return refresh(refreshCloseIfGone);
+        task = result.data.task;
+        fields = result.data.fields;
+        taskContext = {
+          column: result.data.column,
+          story: result.data.story,
+          epic: result.data.epic,
+          today_on: result.data.today_on,
+        };
+        inBacklog = result.data.in_backlog;
+        clock = { today: result.data.today, weekStart: result.data.week_start };
+        if (canWrite && task?.completed_at === null && candidates === null) void loadCandidates();
+        void loadHistory();
+      }
+      return result.data.task;
+    })();
+    latestRefresh = pending;
+    return pending;
   }
 
   // ---- 決まった欄（TaskFieldValues が task-field-set で保存する） ----
   // 書けた。応答の欄だけを入れ替え（別の欄の保存と前後しても、古い値で戻さない）、履歴と木を読み直す
   function fieldSaved(saved: TaskFieldValue): void {
+    savedVersion++;
     if (!alive) {
       onchanged();
       return;
@@ -743,6 +858,12 @@
     if (!latest.ok) return false;
     if (alive) {
       task = latest.data.task;
+      taskContext = {
+        column: latest.data.column,
+        story: latest.data.story,
+        epic: latest.data.epic,
+        today_on: latest.data.today_on,
+      };
       fields = latest.data.fields;
       inBacklog = latest.data.in_backlog;
     }
@@ -845,8 +966,13 @@
       { slug },
     );
     if (result.ok) {
+      savedVersion++;
       if (alive && task !== null) {
         const saved = result.data.task;
+        if (saved.assignee?.id !== task.assignee?.id) {
+          assigneeVersion++;
+          taskContext = { ...taskContext, today_on: null };
+        }
         task = {
           ...task,
           assignee: saved.assignee,
@@ -854,7 +980,7 @@
           can_delete: saved.can_delete,
           can_send_thanks: saved.can_send_thanks,
         };
-        void loadHistory();
+        await refresh();
       }
       showToast(t('taskSaved'), 'check');
       onchanged();
@@ -878,6 +1004,12 @@
       } else {
         if (alive) {
           task = latest.data.task;
+          taskContext = {
+            column: latest.data.column,
+            story: latest.data.story,
+            epic: latest.data.epic,
+            today_on: latest.data.today_on,
+          };
           clock = { today: latest.data.today, weekStart: latest.data.week_start };
           void loadCandidates();
         }
@@ -1261,7 +1393,7 @@
       if (!alive) {
         // 送っている間に閉じられた。通ったら木を読み直して知らせ、失敗は知らせる
         if (result.ok) {
-          showToast(completedMessage(result.data.left_sprint, t), 'check');
+          showToast(completedMessage(result.data.left_sprint, result.data.xp_granted, t), 'check');
           onchanged();
         } else if (result.status !== 409 || result.error?.code !== 'conflict') {
           showToast(t('taskCompleteFailed', { done: t('done') }), 'alert');
@@ -1270,7 +1402,7 @@
       }
       if (result.ok) {
         if (task !== null) task = { ...task, completed_at: result.data.completed_at };
-        showToast(completedMessage(result.data.left_sprint, t), 'check');
+        showToast(completedMessage(result.data.left_sprint, result.data.xp_granted, t), 'check');
         // 戻せるか（reopenable）と、始まっていないスプリントから外れたことを出すため、詳細ごと読み直す（履歴も読み直す）
         await refresh();
         onchanged();
@@ -1537,6 +1669,14 @@
 
     <dl class="props">
       <div>
+        <dt>{t('column')}</dt>
+        <dd>
+          {#if taskContext.column}<span class="status-dot is-wrap"
+              >{taskContext.column.is_done ? t('done') : taskContext.column.name}</span
+            >{:else}—{/if}
+        </dd>
+      </div>
+      <div>
         <dt>
           {#if assigneeEditable}<label for={assigneeId}>{t('assignee')}</label>{:else}{t('assignee')}{/if}
         </dt>
@@ -1683,6 +1823,14 @@
           {#if dueError !== null}
             <span class="field-error" id={dueErrorId} role="alert"><Icon name="alert" />{dueError}</span>
           {/if}
+        </dd>
+      </div>
+      <div>
+        <dt>{t('drawerParent')}</dt>
+        <dd>
+          {#if taskContext.story}<Icon name="flag" />
+            {taskContext.story.title}{#if taskContext.epic}<span class="props-note">{taskContext.epic.title}</span
+              >{/if}{:else}{t('taskParentNone')}{/if}
         </dd>
       </div>
       <div>
@@ -1836,6 +1984,21 @@
           </dd>
         </div>
       {/if}
+      <div>
+        <dt>{t('todayMark')}</dt>
+        <dd>
+          <TodayMarkButton
+            title={task.title}
+            marked={taskContext.today_on !== null}
+            disabled={marking || todayDisabledReason !== null}
+            describedby={todayDisabledReason === null ? undefined : todayReasonId}
+            onclick={toggleToday}
+          />
+          {#if taskContext.today_on !== null}<span>{t('todayMark')}</span>{/if}
+          {#if todayDisabledReason !== null}<span class="props-note" id={todayReasonId}>{todayDisabledReason}</span
+            >{/if}
+        </dd>
+      </div>
     </dl>
 
     <!-- 決まった欄（ワークスペースで定義した欄ごと）。本文の前に置く -->

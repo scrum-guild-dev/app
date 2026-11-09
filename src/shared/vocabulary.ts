@@ -166,6 +166,7 @@ export const dictionary = defineDictionary({
   orgWikiAccess: 'この組織の全員が、読んで書けます。',
   orgWikiTreeLabel: '組織の Wiki のページ',
   wikiPage: 'ページ',
+  wikiPageList: 'ページの一覧',
   wikiRevision: '版',
   wikiChildPage: '子のページ',
   wikiAdd: 'ページを足す',
@@ -408,6 +409,11 @@ export const dictionary = defineDictionary({
   carryDays: '{days}日前に印を付けた',
   // 今日やるの印（太陽のボタン。task-today-mark）。押された状態で付いていることを示し、読み上げの名前は題を添える
   todayMark: '今日やる',
+  drawerParent: '親',
+  taskParentNone: 'なし',
+  todayMarkBacklogOnly: '{inbox}と{archive}では今日やるの印を付け外しできません',
+  todayMarkOwnOnly: '自分が担当する{task}だけ今日やるの印を付け外しできます',
+  todayMarkCompleted: '{done}した{task}の今日やるの印は付け外しできません',
   todayMarkLabel: '{mark}: {title}',
   todayMarked: '今日やると決めました',
   todayUnmarked: '今日やるの印を外しました',
@@ -415,9 +421,9 @@ export const dictionary = defineDictionary({
   todayMarkNotAssignee: '{assignee}が替わったため、今日やるの印を付け外しできませんでした。一覧を読み直します',
   todayMarkDone: 'この{task}は{done}になっているため、印を付け外しできません。一覧を読み直します',
   todayMarkFailed: '今日やるの印を変えられませんでした。もう一度試してください。',
+  todayMarkRefreshFailed:
+    '今日やるの印は保存しましたが、最新の詳細を読み込めませんでした。もう一度読み込んでください。',
   sprintInProgress: '進行中のスプリント',
-  // 今日やることの右の列（経験値とレベル）の読み上げの名前
-  myRecord: '自分の記録',
 
   // 今日やることの空の状態（管理者）。{workspace} と {member} は、辞書の言葉を画面が渡す。
   // 組織にワークスペースが1つも無いときは、最初のワークスペースを作る案内。作る画面の行き先は、その画面を作る Issue で決める
@@ -544,6 +550,8 @@ export const dictionary = defineDictionary({
   backlogPageName: '{backlog}・{name}',
   // 未完了が0件で、完了した親のないタスクがあるとき、折りたたみの行の上に出す
   backlogNoOpenTitle: '未完了の{task}はありません',
+  backlogTallyOpen: '未完了の{task}',
+  backlogTallyUnscheduled: '{sprint}に入っていない',
   backlogNoOpenText: '次の{task}は、下の空の行に題を入れて作ります。',
   // 絞り込みの帯（見本の design/backlog.html の .toolbar）。{label} は選択欄の名前（{assignee}、{category}、リポジトリ、{epic}）
   filterLabel: '{backlog}の絞り込み',
@@ -582,6 +590,7 @@ export const dictionary = defineDictionary({
   doneStamp: '完',
   // 完了の操作の読み上げの名前。同じ名前のボタンが並ぶので、どのタスクかを添える
   taskCompleteLabel: '{complete}: {title}',
+  taskCompletedXp: '+{amount} {unit}',
   taskCompleted: '{task}を{done}にしました',
   taskCompleteFailed: '{done}にできませんでした。もう一度試してください。',
   taskAlreadyDone: 'この{task}は、すでに{done}です',

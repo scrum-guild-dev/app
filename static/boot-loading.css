@@ -1,7 +1,7 @@
 /* 画面の JS が動き出す前（URL を直接開いた最初の読み込み）の、読み込み中の表示（src/app.html の #boot-loading）。
    SvelteKit は最初の load がすべて終わるまで root のレイアウトを描かないので、デザインシステムの部品（LoadingSheet）は使えない。
    デザインシステムの CSS もこの時点では届いていないため、ここに限り自分のオリジンの小さなファイルで、同じ地と文字の色を持つ。
-   値は design/tokens.css のシンプルの --color-bg と --color-fg、--color-muted（OS がダークのときはダーク）と同じにする。
+   値は design/tokens.css のシンプルの --color-bg と --color-fg、--color-muted、--color-surface、--color-sunken、--color-line（OS がダークのときはダーク）と同じにする。
    速い読み込みでは出さないよう、300ms たってから見せる（LoadingSheet の SLOW_MS と同じ）。動きではないので、動きを減らす設定でも同じ。
    画面が描かれたら +layout.svelte が取り除く。 */
 #boot-loading {
@@ -10,9 +10,14 @@
   z-index: 100;
   display: grid;
   place-items: center;
+  --boot-shine: rgba(255, 255, 255, 0.7);
+  --boot-fg: #1e1f22;
+  --boot-accent: #0b57d0;
+  --boot-on-accent: #ffffff;
+  --boot-warn: #9a5208;
   background: #f7f7f8;
   color: #5c5f66;
-  font-family: system-ui, sans-serif;
+  font-family: 'Noto Sans JP', system-ui, sans-serif;
   font-size: 1rem;
   visibility: hidden;
   animation: boot-loading-show 0s linear 300ms forwards;
@@ -27,9 +32,63 @@
 #boot-loading > span {
   grid-area: 1 / 1;
 }
+/* 失敗の表示は、読み込み中の紙（.boot-skeleton）と同じ紙のカードにする（地と線はテーマごとに、下の .boot-skeleton と同じ規則で替える）。
+   アイコンは文を変えずに CSS だけで足す（文は辞書と突き合わせる: scripts/vocabulary.test.ts）。画像にしないのは、CSP の img-src が self だけで
+   data: を通さず、別ファイルは通信が落ちた場面で取れないため。リンクは操作の見た目（.btn.is-primary と同じ色）にする */
 #boot-loading .boot-failed {
   visibility: hidden;
-  animation: boot-failed-show 0s linear 15s forwards;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: min(440px, calc(100% - 32px));
+  padding: 32px 24px;
+  background: #ffffff;
+  border: 1px solid #d6d6da;
+  border-radius: 4px;
+  color: var(--boot-fg);
+  font-size: 1.125rem;
+  font-weight: 700;
+  text-align: center;
+  animation:
+    boot-failed-show 0s linear 15s forwards,
+    boot-failed-in 0.3s ease-out 15s both;
+}
+#boot-loading .boot-failed::before {
+  content: '!';
+  content: '!' / '';
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 8px;
+  border: 2px solid var(--boot-warn);
+  border-radius: 50%;
+  color: var(--boot-warn);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+#boot-loading .boot-failed a {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 8px 20px;
+  border-radius: 4px;
+  background: var(--boot-accent);
+  color: var(--boot-on-accent);
+  font-size: 0.875rem;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+#boot-loading .boot-failed a:hover {
+  filter: brightness(1.1);
+}
+#boot-loading .boot-failed a:focus-visible {
+  outline: 2px solid var(--boot-accent);
+  outline-offset: 2px;
 }
 /* 待つ文は読み上げのためだけに置き（見えない）、見えるのは骨組み（LoadingSheet と同じ、紙に灰色の帯）。どちらも 15 秒で隠す */
 #boot-loading .boot-wait {
@@ -53,11 +112,12 @@
   animation: boot-wait-hide 0s linear 15s forwards;
 }
 #boot-loading .boot-skeleton i {
+  position: relative;
   display: block;
   height: 1em;
+  overflow: hidden;
   border-radius: 4px;
   background: #d6d6da;
-  animation: boot-pulse 1.4s ease-in-out infinite;
 }
 #boot-loading .boot-skeleton i:nth-child(1) {
   height: 1.6em;
@@ -66,19 +126,372 @@
 #boot-loading .boot-skeleton i:nth-child(3) {
   height: 2.5em;
 }
-@keyframes boot-pulse {
-  50% {
-    opacity: 0.45;
+/* 行き先が組織の枠のとき（static/boot-shape.js が html に data-boot="<形>" を付ける）は、紙ではなく枠の形の骨組みを画面いっぱいに出す。
+   左のメニューの幅（240px、畳んだ列は 64px）、上の帯の高さ（60px）、本文の余白は design/components.css の .app、.binding、.topbar、
+   .content と同じにし、本文は行き先の画面の組み（形は src/lib/loading-shape.ts と同じ。2列は .layout-aside の 320px、.layout-wiki、
+   .setting の 260px、.board の 232px の列、.lanes の3列。どれも 1080px 以下で1列）に近づける。デザインシステムの LoadingSheet の
+   .skeleton-frame と同じ並びにして、移る間と最初の読み込みで同じ形を見せる。
+   760px 以下は、ロゴと組織の切り替えとメニューの項目の横並びの帯の下に上の帯を置く */
+#boot-loading .boot-frame {
+  display: none;
+}
+html[data-boot] #boot-loading .boot-skeleton {
+  display: none;
+}
+html[data-boot] #boot-loading .boot-frame {
+  /* 帯の高さは em で決めるので、本物の本文の文字（--text-md）と同じ大きさにする */
+  font-size: 0.875rem;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  overflow: hidden;
+  animation: boot-wait-hide 0s linear 15s forwards;
+}
+#boot-loading .boot-frame :where(b) {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+#boot-loading .boot-frame :where(i) {
+  position: relative;
+  display: block;
+  flex: none;
+  height: 1em;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #d6d6da;
+}
+#boot-loading .boot-frame .is-short {
+  width: 70%;
+}
+#boot-loading .boot-binding {
+  background: #f2f2f3;
+  border-right: 1px solid #d6d6da;
+  padding: 0 16px 20px;
+}
+#boot-loading .boot-binding > i {
+  margin-inline: 8px;
+}
+#boot-loading .boot-corner {
+  justify-content: center;
+  height: 60px;
+  margin: 0 -16px 4px;
+  padding-inline: 24px;
+  border-bottom: 1px solid #d6d6da;
+}
+#boot-loading .boot-corner i {
+  width: 132px;
+  height: 36px;
+}
+#boot-loading .boot-binding > .is-org {
+  height: 60px;
+  margin-inline: 0;
+}
+#boot-loading .boot-binding > .is-group-label {
+  width: 5rem;
+  height: 0.75em;
+  margin-top: 8px;
+}
+#boot-loading .boot-sheet {
+  gap: 0;
+}
+#boot-loading .boot-topbar {
+  flex-direction: row;
+  align-items: center;
+  height: 60px;
+  padding-inline: 32px;
+  border-bottom: 1px solid #d6d6da;
+  gap: 8px;
+}
+#boot-loading .boot-topbar .is-crumb {
+  flex: 0 1 12rem;
+  min-width: 4rem;
+  margin-right: auto;
+}
+#boot-loading .boot-topbar .is-search {
+  flex: 0 1 18rem;
+  min-width: 9rem;
+  height: 36px;
+}
+#boot-loading .boot-topbar .is-account {
+  width: 7rem;
+  height: 28px;
+}
+#boot-loading .boot-content {
+  padding: 8px 32px 40px;
+  gap: 32px;
+}
+#boot-loading .boot-body {
+  gap: 16px;
+}
+#boot-loading .boot-head {
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #d6d6da;
+}
+#boot-loading .boot-head-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+#boot-loading .boot-frame .is-eyebrow {
+  width: 8rem;
+}
+#boot-loading .boot-frame .is-title {
+  width: min(20rem, 60%);
+  height: 1.8em;
+}
+/* 列の向きの flex では flex-basis が高さになるので、横に並ぶ見出しの行の中だけで幅を縮める */
+#boot-loading .boot-head-row .is-title {
+  flex: 0 1 20rem;
+}
+#boot-loading .boot-frame .is-stats {
+  width: min(18rem, 80%);
+}
+#boot-loading .boot-frame .is-heading {
+  width: 10rem;
+  max-width: 100%;
+  height: 1.4em;
+}
+#boot-loading .boot-frame .is-button {
+  width: 7rem;
+  height: 32px;
+}
+#boot-loading .boot-frame .is-input {
+  height: 32px;
+}
+#boot-loading .boot-frame .is-item {
+  height: 40px;
+}
+#boot-loading .boot-frame .is-card {
+  height: 96px;
+}
+#boot-loading .boot-frame .is-panel {
+  height: 280px;
+}
+#boot-loading .boot-frame .is-chart {
+  height: 200px;
+}
+#boot-loading .boot-frame .is-lane {
+  height: 180px;
+}
+#boot-loading .boot-frame .is-label {
+  width: 5rem;
+}
+#boot-loading .boot-frame .is-value {
+  flex: 0 1 14rem;
+  height: 28px;
+}
+#boot-loading .boot-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+#boot-loading .boot-row.is-end {
+  justify-content: flex-end;
+}
+#boot-loading .boot-row .is-input {
+  flex: 1 1 16rem;
+}
+#boot-loading .boot-row .is-select {
+  flex: 0 1 7rem;
+  height: 32px;
+}
+#boot-loading .boot-cols {
+  display: grid;
+  gap: 32px;
+  align-items: start;
+}
+#boot-loading .boot-cols.is-aside {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+#boot-loading .boot-cols.is-wiki {
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+}
+#boot-loading .boot-cols.is-setting {
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 24px;
+  padding-block: 24px;
+}
+#boot-loading .boot-cols.is-lanes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+#boot-loading .boot-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(232px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+#boot-loading .boot-col {
+  gap: 8px;
+  padding: 12px;
+  background: #f2f2f3;
+  border: 1px solid #d6d6da;
+  border-radius: 4px;
+}
+@media (max-width: 1080px) {
+  #boot-loading .boot-cols.is-aside,
+  #boot-loading .boot-cols.is-wiki,
+  #boot-loading .boot-cols.is-setting,
+  #boot-loading .boot-cols.is-lanes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #boot-loading .boot-cols.is-setting {
+    gap: 12px;
+  }
+  #boot-loading .boot-cols.is-wiki {
+    gap: 20px;
+  }
+}
+/* 広い幅でマウスだけで操作する画面は、本物と同じく本文の間と見出しの下を詰める（design/components.css の「広い幅でマウスで操作する画面の詰め」） */
+@media (min-width: 761px) and (pointer: fine) and (not (any-pointer: coarse)) {
+  #boot-loading .boot-content {
+    gap: 24px;
+  }
+  #boot-loading .boot-head {
+    padding-bottom: 16px;
+  }
+}
+/* 強制色では地の色が消えるので、帯を縁で残す */
+@media (forced-colors: active) {
+  #boot-loading .boot-frame i,
+  #boot-loading .boot-skeleton i {
+    box-sizing: border-box;
+    border: 1px solid CanvasText;
+  }
+}
+@media (min-width: 761px) and (hover: hover) {
+  html[data-boot][data-boot-nav='collapsed'] #boot-loading .boot-frame {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+  html[data-boot-nav='collapsed'] #boot-loading .boot-binding {
+    padding-inline: 0;
+    align-items: center;
+  }
+  html[data-boot-nav='collapsed'] #boot-loading .boot-corner {
+    margin-inline: 0;
+    padding-inline: 0;
+    align-self: stretch;
+    align-items: center;
+  }
+  html[data-boot-nav='collapsed'] #boot-loading .boot-binding i {
+    width: 32px;
+    height: 32px;
+    margin-inline: 0;
+  }
+  html[data-boot-nav='collapsed'] #boot-loading .boot-binding > .is-group-label {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  html[data-boot] #boot-loading .boot-frame {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+  #boot-loading .boot-binding {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-right: 0;
+    border-bottom: 1px solid #d6d6da;
+  }
+  #boot-loading .boot-corner {
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border-bottom: 0;
+  }
+  #boot-loading .boot-corner i {
+    width: 168px;
+    height: 60px;
+  }
+  /* 組織の切り替えを1段にし、メニューの項目（最初の3つ）を横並びにする。ワークスペースの区切りより後は出さない */
+  #boot-loading .boot-binding > .is-org {
+    flex: 1 1 100%;
+  }
+  #boot-loading .boot-binding > i:not(.is-org) {
+    width: 6rem;
+    margin: 14px 4px;
+  }
+  #boot-loading .boot-binding > .is-group-label,
+  #boot-loading .boot-binding > .is-group-label ~ i {
+    display: none;
+  }
+  #boot-loading .boot-topbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 60px;
+    padding: 5px 16px;
+  }
+  #boot-loading .boot-topbar .is-account {
+    margin-block: 8px;
+  }
+  #boot-loading .boot-topbar .is-search {
+    flex: 1 1 100%;
+    order: 3;
+    height: 44px;
+  }
+  #boot-loading .boot-content {
+    padding-inline: 16px;
+  }
+}
+/* 帯の上を左から右へ通る明るい波（design/components.css の .skeleton-line::after と同じ。色は --boot-shine で、テーマごとに替える） */
+#boot-loading .boot-skeleton i::after,
+#boot-loading .boot-frame i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--boot-shine), transparent);
+  transform: translateX(-100%);
+  animation: boot-wave 1.6s ease-in-out infinite;
+}
+@keyframes boot-wave {
+  to {
+    transform: translateX(100%);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  #boot-loading .boot-skeleton i {
+  #boot-loading .boot-skeleton i::after,
+  #boot-loading .boot-frame i::after {
     animation: none;
+  }
+}
+@media (forced-colors: active) {
+  #boot-loading .boot-skeleton i::after,
+  #boot-loading .boot-frame i::after {
+    display: none;
   }
 }
 @keyframes boot-failed-show {
   to {
     visibility: visible;
+  }
+}
+@keyframes boot-failed-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #boot-loading .boot-failed {
+    animation: boot-failed-show 0s linear 15s forwards;
+  }
+}
+@media (forced-colors: active) {
+  #boot-loading .boot-failed::before {
+    border-color: CanvasText;
+    color: CanvasText;
+  }
+  #boot-loading .boot-failed a {
+    border: 1px solid ButtonText;
   }
 }
 @keyframes boot-wait-hide {
@@ -92,36 +505,151 @@
 }
 @media (prefers-color-scheme: dark) {
   #boot-loading {
+    --boot-shine: rgba(83, 83, 85, 0.7);
+    --boot-fg: #ececef;
+    --boot-accent: #7aa7ff;
+    --boot-on-accent: #0b1220;
+    --boot-warn: #f0a85a;
     background: #121214;
     color: #a2a2ab;
   }
-  #boot-loading .boot-skeleton {
+  #boot-loading :is(.boot-skeleton, .boot-failed) {
     background: #1a1a1d;
     border-color: #37373d;
   }
   #boot-loading .boot-skeleton i {
     background: #37373d;
   }
+  #boot-loading .boot-frame i {
+    background: #37373d;
+  }
+  #boot-loading .boot-binding,
+  #boot-loading .boot-col {
+    background: #0e0e10;
+  }
+  #boot-loading .boot-binding,
+  #boot-loading .boot-corner,
+  #boot-loading .boot-topbar,
+  #boot-loading .boot-head,
+  #boot-loading .boot-col {
+    border-color: #37373d;
+  }
 }
 html[data-theme='simple_light'] #boot-loading {
+  --boot-shine: rgba(255, 255, 255, 0.7);
+  --boot-fg: #1e1f22;
+  --boot-accent: #0b57d0;
+  --boot-on-accent: #ffffff;
+  --boot-warn: #9a5208;
   background: #f7f7f8;
   color: #5c5f66;
 }
-html[data-theme='simple_light'] #boot-loading .boot-skeleton {
+html[data-theme='simple_light'] #boot-loading :is(.boot-skeleton, .boot-failed) {
   background: #ffffff;
   border-color: #d6d6da;
 }
 html[data-theme='simple_light'] #boot-loading .boot-skeleton i {
   background: #d6d6da;
 }
+html[data-theme='simple_light'] #boot-loading .boot-frame i {
+  background: #d6d6da;
+}
+html[data-theme='simple_light'] #boot-loading :is(.boot-binding, .boot-col) {
+  background: #f2f2f3;
+}
+html[data-theme='simple_light'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
+  border-color: #d6d6da;
+}
 html[data-theme='simple_dark'] #boot-loading {
+  --boot-shine: rgba(83, 83, 85, 0.7);
+  --boot-fg: #ececef;
+  --boot-accent: #7aa7ff;
+  --boot-on-accent: #0b1220;
+  --boot-warn: #f0a85a;
   background: #121214;
   color: #a2a2ab;
 }
-html[data-theme='simple_dark'] #boot-loading .boot-skeleton {
+html[data-theme='simple_dark'] #boot-loading :is(.boot-skeleton, .boot-failed) {
   background: #1a1a1d;
   border-color: #37373d;
 }
 html[data-theme='simple_dark'] #boot-loading .boot-skeleton i {
   background: #37373d;
+}
+html[data-theme='simple_dark'] #boot-loading .boot-frame i {
+  background: #37373d;
+}
+html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-col) {
+  background: #0e0e10;
+}
+html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
+  border-color: #37373d;
+}
+/* 中世風と現代風を覚えた人にも、読み込んだ後と同じ地と色で出す（値は design/tokens.css の各テーマの --color-bg、--color-surface、
+   --color-sunken、--color-line と --rule-double）。枠の外の紙（.boot-skeleton）も同じテーマの面と線にする */
+html[data-theme='medieval'] #boot-loading {
+  --boot-shine: rgba(255, 255, 255, 0.7);
+  --boot-fg: #1c2633;
+  --boot-accent: #1f3a5f;
+  --boot-on-accent: #ffffff;
+  --boot-warn: #9a5208;
+  background: #f3f4f1;
+  color: #5b6672;
+}
+html[data-theme='medieval'] #boot-loading :is(.boot-binding, .boot-col) {
+  background: #e9ebe6;
+}
+html[data-theme='medieval'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
+  border-color: #c9cfd3;
+}
+html[data-theme='medieval'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head) {
+  border-style: double;
+  border-width: 0;
+}
+html[data-theme='medieval'] #boot-loading .boot-binding {
+  border-right-width: 3px;
+}
+html[data-theme='medieval'] #boot-loading :is(.boot-corner, .boot-topbar, .boot-head) {
+  border-bottom-width: 3px;
+}
+html[data-theme='medieval'] #boot-loading .boot-frame i {
+  background: #c9cfd3;
+}
+html[data-theme='medieval'] #boot-loading :is(.boot-skeleton, .boot-failed) {
+  background: #fbfbf8;
+  border-color: #c9cfd3;
+}
+html[data-theme='medieval'] #boot-loading .boot-skeleton i {
+  background: #c9cfd3;
+}
+html[data-theme='modern'] #boot-loading {
+  --boot-shine: rgba(72, 78, 90, 0.7);
+  --boot-fg: #dce9f7;
+  --boot-accent: #4cc8ff;
+  --boot-on-accent: #04121c;
+  --boot-warn: #ffb35c;
+  background: #060a12;
+  color: #8ea6c0;
+}
+html[data-theme='modern'] #boot-loading :is(.boot-binding, .boot-col) {
+  background: #070d18;
+}
+html[data-theme='modern'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
+  border-color: #1f3b5c;
+}
+html[data-theme='modern'] #boot-loading .boot-frame i {
+  background: #1f3b5c;
+}
+html[data-theme='modern'] #boot-loading :is(.boot-skeleton, .boot-failed) {
+  background: #0b1322;
+  border-color: #1f3b5c;
+}
+html[data-theme='modern'] #boot-loading .boot-skeleton i {
+  background: #1f3b5c;
+}
+@media (max-width: 760px) {
+  html[data-theme='medieval'] #boot-loading .boot-binding {
+    border-right-width: 0;
+    border-bottom-width: 3px;
+  }
 }

@@ -624,6 +624,42 @@ export function unfilledCountStatement(db: OrganizationDb, workspaceId: string) 
   );
 }
 
+// 見出しの3集計。絞り込みを適用せず、未完了のバックログ全体を1文で数える。
+export function backlogCountsStatement(db: OrganizationDb, workspaceId: string) {
+  return db.statement((q) =>
+    q
+      .selectFrom('tasks')
+      .select((eb) => [
+        eb.fn.countAll<number>().as('open_count'),
+        eb.fn.count<number>(eb.case().when('tasks.points', 'is', null).then(1).end()).as('unestimated_count'),
+        eb.fn
+          .count<number>(
+            eb
+              .case()
+              .when(
+                eb.not(
+                  eb.exists(
+                    eb
+                      .selectFrom('sprints')
+                      .select('sprints.id')
+                      .whereRef('sprints.id', '=', 'tasks.sprint_id')
+                      .where('sprints.workspace_id', '=', workspaceId)
+                      .where('sprints.deleted_at', 'is', null),
+                  ),
+                ),
+              )
+              .then(1)
+              .end(),
+          )
+          .as('unscheduled_count'),
+      ])
+      .where('tasks.workspace_id', '=', workspaceId)
+      .where('tasks.tray', '=', 'backlog')
+      .where('tasks.deleted_at', 'is', null)
+      .where('tasks.completed_at', 'is', null),
+  );
+}
+
 // 件数に上限を付けない（5 万件で測った数は docs/data-model.md）。
 // ストーリーは親のないものとエピックの下のものを1つの文で読み、epic_id で分ける。削除したエピックの下のストーリーも
 // （その配下のタスクも）読むが、エピックの一覧に親が無いので、どこにも並べずに捨てる。
@@ -652,6 +688,7 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
     rootOpenResult,
     rootDoneResult,
     unfilledResult,
+    countsResult,
     assigneesResult,
   ] = await db.batch([
     db.statement((q) =>
@@ -740,6 +777,7 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
     rootOpenTasksStatement(db, workspaceId, filter),
     rootCompletedCountStatement(db, workspaceId),
     unfilledCountStatement(db, workspaceId),
+    backlogCountsStatement(db, workspaceId),
     // 担当の絞り込みの選択肢。今所属している人（担当にできる人と同じ条件）と、未完了のバックログのタスクの担当に残っている人
     db.statement((q) =>
       q
@@ -910,6 +948,9 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
     // 絞っているときは出さない（画面は折りたたみの1行を出さない）
     completed_count: filtering ? null : Number(rootDoneResult.rows[0]?.count ?? 0),
     unfilled_count: Number(unfilledResult.rows[0]?.count ?? 0),
+    open_count: Number(countsResult.rows[0]?.open_count ?? 0),
+    unestimated_count: Number(countsResult.rows[0]?.unestimated_count ?? 0),
+    unscheduled_count: Number(countsResult.rows[0]?.unscheduled_count ?? 0),
     choices: {
       // 今所属している人を先に、それぞれ名前の順（並べ替えは安定）
       assignees: assigneesResult.rows
@@ -1167,7 +1208,7 @@ export const taskCompleteOperation = implement(taskComplete, async ({ db, actor,
     const thanks = await readTaskThanks(db, workspaceId, taskId);
     const at = now();
     const week = weekRangeIn(timezone, weekStart, at);
-    const { statements, taskIndex } = completeStatements(db, {
+    const { statements, taskIndex, experienceIndex } = completeStatements(db, {
       organizationId,
       workspaceId,
       taskId,
@@ -1182,7 +1223,12 @@ export const taskCompleteOperation = implement(taskComplete, async ({ db, actor,
     });
     const results = await db.batch(statements);
     if ((results[taskIndex]?.changes ?? 0) > 0) {
-      return { task_id: taskId, completed_at: at.toISOString(), left_sprint: placement.kind === 'planned' };
+      return {
+        task_id: taskId,
+        completed_at: at.toISOString(),
+        left_sprint: placement.kind === 'planned',
+        xp_granted: Number(results[experienceIndex]?.rows[0]?.xp_granted ?? 0),
+      };
     }
     // 先に読んだ値ではなく、書いた結果で決める。読んでから書くまでに閉じたなら 409 の workspace_closed、
     // タスクが無い（別の組織のタスクと、バックログに無いタスクを含む）なら 404、完了していれば 409 の conflict。
@@ -1595,7 +1641,22 @@ function completeStatements(db: OrganizationDb, context: CompleteContext) {
         ]
       : []),
   ];
-  return { statements, taskIndex: closeEntry.length };
+  // 同じ batch 内で今回の完了で本人に付いた分だけを合計する。受取人や上限の判定を二重に実装しない。
+  // 更新が負けた要求には固有の completionId の付与が無いため、SUM は 0 になる。
+  const experience = db.statement((q) =>
+    q
+      .selectFrom('xp_grants')
+      .select((eb) => eb.fn.coalesce(eb.fn.sum<number>('amount'), eb.val(0)).as('xp_granted'))
+      .where('workspace_id', '=', workspaceId)
+      .where('task_id', '=', taskId)
+      .where('completion_id', '=', completionId)
+      .where('user_id', '=', userId),
+  );
+  return {
+    statements: [...statements, experience] as const,
+    taskIndex: closeEntry.length,
+    experienceIndex: statements.length,
+  };
 }
 
 // 移す先の並び（親の配下か、親のないタスク）から、移すタスクを除いたもの。完了したタスクも並びに残っているので含める

@@ -12,6 +12,9 @@ export const resolveGithubUser = defineOperation({
   description: 'GitHub のユーザー名をユーザー ID に解決し、ユーザー名、表示名、アバターの URL とともに返す',
   mode: 'read',
   permission: 'operator',
+  // サーバーは GitHub への問い合わせに 10 秒の上限を掛け、届かなければ 503 を返す（src/server/auth/github.ts）。
+  // 画面の既定（10 秒）で先に切ると、GitHub に届かないのに「サーバーに届かない」と出るので、サーバーの 503 を待つ
+  clientTimeoutMs: 20_000,
   input: z.object({ username: z.string().trim().min(1).max(GITHUB_USERNAME_MAX_LENGTH) }),
   output: z.object({
     // GitHub のユーザー ID（10進の文字列）。account_logins.login_subject と同じ値
