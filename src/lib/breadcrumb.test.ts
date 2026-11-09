@@ -15,6 +15,8 @@ test('メニューに無い組織の画面の名前を引く', () => {
   expect(accountScreenKey('/aoba/admin/users', 'aoba', true)).toBe('pageOrgAdmin');
   expect(accountScreenKey('/aoba', 'aoba', true)).toBeNull();
   expect(accountScreenKey('/other/me', 'aoba', true)).toBeNull();
+  expect(accountScreenKey('/aoba/favorites', 'aoba', false)).toBe('favorites');
+  expect(accountScreenKey('/other/favorites', 'aoba', false)).toBeNull();
 });
 
 test('管理者でない人には管理の画面名を出さない', () => {
