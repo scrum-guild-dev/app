@@ -125,6 +125,7 @@ test('全種類の一覧、日時と容量、プレビュー、権限と削除�
   await reloadAttachments(page);
   await imageRow.getByRole('button', { name: '一覧の画像.png を削除', exact: true }).click();
   const confirmation = page.getByRole('dialog', { name: '添付ファイルを削除しますか', exact: true });
+  await expect(confirmation).toContainText('一覧の画像.png');
   await expect(confirmation).toContainText('戻せません');
   await expect(confirmation).toContainText('ファイルが見つかりません');
   await confirmation.getByRole('button', { name: '削除する', exact: true }).click();

@@ -36,6 +36,7 @@
   let loadingMore = $state(false);
   let moreFailed = $state(false);
   let deleting = $state(false);
+  let deleteFileName = $state('');
   let previewOpen = $state(false);
   let selected = $state<File | null>(null);
   let previewFailed = $state(false);
@@ -109,7 +110,9 @@
     preview?.show(trigger);
   }
   async function remove(file: File, trigger: HTMLElement): Promise<void> {
-    if (deleting || !canWrite || !file.deletable || !(await confirm?.ask(trigger))) return;
+    if (deleting || !canWrite || !file.deletable) return;
+    deleteFileName = file.file_name;
+    if (!(await confirm?.ask(trigger))) return;
     deleting = true;
     const result = await callOperation(
       attachmentDelete,
@@ -262,5 +265,6 @@
   cancelLabel={t('cancel')}
   danger
 >
+  <p class="file-name">{deleteFileName}</p>
   <p>{t('attachmentDeleteWarning')}</p>
 </ConfirmDialog>
