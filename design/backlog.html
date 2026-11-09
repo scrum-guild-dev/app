@@ -50,6 +50,11 @@ document.addEventListener("input", (ev) => {
   const count = [...bar.querySelectorAll("select")].filter((s) => s.value !== "").length;
   bar.querySelector(".narrow-disclosure-toggle span").textContent = count ? t("backlogFiltersCount").replace("{count}", count) : t("backlogFilters");
   document.getElementById("order-help").hidden = filtering;
+  if (filtering) {
+    const help = document.querySelector("#order-help .narrow-disclosure-toggle");
+    help.setAttribute("aria-expanded", "false");
+    help.parentElement.dataset.open = "false";
+  }
   document.getElementById("filter-order-note").hidden = !filtering;
   document.getElementById("totals-note").hidden = !filtering;
   // 「上へ」「下へ」を隠す（エピックの行は「親を移す」を持たないので、どちらも隠れる）
