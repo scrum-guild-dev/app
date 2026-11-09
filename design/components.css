@@ -128,6 +128,14 @@ h1, h2, h3 { text-wrap: balance; }
   border-radius: var(--radius-1); border: 1px solid var(--color-line); background: var(--color-surface);
 }
 :is(.org-menu-list, .ws-menu-list)[hidden], .account-menu-list[hidden] { display: none; }
+/* 開くときだけ押した場所から短く出す。hidden への切り替えには退場の待ちを入れない。
+   配置用の transform と干渉しないよう、動きには個別の translate を使う。 */
+:is(.org-menu-list, .ws-menu-list, .account-menu-list):not([hidden]) {
+  opacity: 1; translate: 0 0; transform-origin: top;
+  transition: opacity var(--duration-fast) var(--ease-out), translate var(--duration-fast) var(--ease-out);
+  @starting-style { opacity: 0; translate: 0 -4px; }
+}
+
 :is(.org-menu-list, .ws-menu-list) a, :is(.org-menu-list, .ws-menu-list) button, .account-menu-list a, .account-menu-list button {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2);
   padding: 7px var(--space-2); border-radius: var(--radius-1); color: var(--color-fg); text-decoration: none;
@@ -453,7 +461,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   border: 1px solid var(--color-control-edge); background: var(--color-surface); color: var(--color-fg);
   border-radius: var(--radius-1); padding: 6px 14px; font-size: var(--text-md); font-weight: 700; text-decoration: none;
-  transition: border-color var(--duration-fast), background var(--duration-fast);
+  transition: border-color var(--duration-fast), background var(--duration-fast), opacity var(--duration-fast);
 }
 .btn:hover { border-color: var(--color-muted); }
 .btn.is-primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); letter-spacing: 0.06em; }
@@ -1108,7 +1116,7 @@ label.pick-row:hover { background: var(--color-accent-soft); }
 }
 .lane-fill { display: grid; gap: 4px; padding-block: var(--space-1); }
 .lane-fill-bar { position: relative; height: 8px; background: var(--color-gauge); }
-.lane-fill-bar span { position: absolute; inset: 0 auto 0 0; background: var(--color-accent); }
+.lane-fill-bar span { position: absolute; inset: 0; transform-origin: left; background: var(--color-accent); transition: transform var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out); }
 .lane-fill-bar i { position: absolute; top: -3px; bottom: -3px; border-left: 2px solid var(--color-fg); }
 .lane-fill-bar.is-over span { background: var(--color-danger); }
 /* 入れたポイント、ベロシティを上回った印（.chip.is-danger。色だけで伝えない）、ベロシティの文字。狭い幅では折り返す */
@@ -1530,6 +1538,7 @@ dialog.dialog::backdrop { background: none; }
 }
 .choice-list { display: grid; gap: var(--space-2); }
 .choice { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius-1); background: var(--color-surface); cursor: pointer; }
+.choice { transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out); }
 .choice:has(input:checked) { border-color: var(--color-accent); background: var(--color-accent-soft); }
 .choice input { margin-top: 4px; accent-color: var(--color-accent); }
 /* 選べない選択肢（理由は選択肢の下の .field-hint に出し、input の aria-describedby で結ぶ） */
@@ -1719,6 +1728,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 .step { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: var(--space-3); counter-increment: step; }
 .step::before { content: counter(step); display: grid; place-items: center; width: 28px; height: 28px; border: 1.5px solid var(--color-accent); color: var(--color-accent); border-radius: 50%; font-family: var(--font-mono); font-size: var(--text-sm); }
 .step.is-done::before { content: "✓"; background: var(--color-accent); color: var(--color-on-accent); }
+.step.is-done.is-new::before { animation: hanko-press var(--duration-stamp) var(--ease-out) 1; }
 .step-body { display: grid; gap: var(--space-3); min-width: 0; }
 .step-title { font-weight: 700; padding-top: 3px; min-width: 0; overflow-wrap: anywhere; }
 

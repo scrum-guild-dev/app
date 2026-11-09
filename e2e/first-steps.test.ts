@@ -35,6 +35,45 @@ const ADMIN_STEPS: FirstStep[] = [
   step('register_holiday', false, { optional: true, workspace: null }),
 ];
 
+test('別画面で済ませて戻った手順の丸を1回押し、動きを減らす設定では押さない', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'admin');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.addInitScript(() => {
+    document.addEventListener('animationstart', (event) => {
+      if (
+        event.animationName === 'hanko-press' &&
+        event.target instanceof HTMLElement &&
+        event.target.matches('.step')
+      ) {
+        event.target.dataset.stamped = 'true';
+      }
+    });
+  });
+  await mockOperation(page, firstSteps, { slug: 'aoba' }, { role: 'leader', steps: LEADER_STEPS });
+  await page.goto('/aoba');
+  await panel(page).getByRole('link', { name: 'メンバーを招待する' }).click();
+  await expect(page).toHaveURL(`/aoba/w/${WORKSPACE.id}/members`);
+  // 別ページで招待を作った後の応答。必須のバックログは未完なので面は残る。
+  await mockOperation(
+    page,
+    firstSteps,
+    { slug: 'aoba' },
+    {
+      role: 'leader',
+      steps: LEADER_STEPS.map((item) => (item.key === 'invite_members' ? { ...item, done: true } : item)),
+    },
+  );
+  await page.goBack();
+  const invited = panel(page).locator('.step').filter({ hasText: 'メンバーを招待する' });
+  await expect(invited).toHaveAttribute('data-stamped', 'true');
+  await expect(invited).not.toHaveClass(/is-new/);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await expect(panel(page).locator('.step.is-new')).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await expect(panel(page).locator('.step[data-stamped]')).toHaveCount(0);
+});
+
 function panel(page: Page) {
   return page.getByRole('region', { name: '最初にやること', exact: true });
 }

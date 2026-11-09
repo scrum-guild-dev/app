@@ -628,7 +628,7 @@
     const hint = FIRST_HINT[role]();
     return `<section class="panel" aria-labelledby="first-steps-${role}">
       <div class="panel-title">${art("map", true)}<b id="first-steps-${role}">最初にやること</b>${steps.filter((s) => s.done).length} / ${steps.length} 済み</div>
-      <ol class="steps">${steps.map((s, i) => `<li class="step ${s.done ? "is-done" : ""}"><div class="step-body">
+      <ol class="steps">${steps.map((s, i) => `<li class="step ${s.done ? "is-done is-new" : ""}"><div class="step-body">
         <span class="step-title">${s.title}${s.optional ? ` <span class="chip">任意</span>` : ""}</span>
         <span class="action-note">${s.note}</span>
         ${!s.done && s.action ? `<div class="form-actions">${s.action(i === next ? "is-primary" : "")}</div>` : ""}

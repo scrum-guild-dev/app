@@ -342,6 +342,9 @@ test('ベロシティは延長した回を除いた直近3回の平均で、先�
   await expect(first.locator('.lane-fill-text')).toContainText('入れた 2 pt');
   await expect(first.locator('.lane-fill-text')).toContainText('ベロシティ 7');
   await expect(first.locator('.lane-fill-bar')).toHaveAttribute('aria-label', '入れた 2 pt、ベロシティ 7 pt');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await expect(first.locator('.lane-fill-bar > span')).toHaveCSS('transition-property', 'transform, background-color');
+  await expect(first.locator('.lane-fill-bar > span')).toHaveCSS('transition-duration', '0.12s, 0.12s');
   await expect(first.locator('.lane-fill-bar.is-over, [data-lane-over]')).toHaveCount(0);
   await expect(first.locator('[data-lane-unestimated]')).toHaveCount(0);
   await expect(page.locator('.lane').nth(1).locator('[data-lane-unestimated]')).toHaveText('未見積もり 1 件');
