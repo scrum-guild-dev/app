@@ -1695,16 +1695,20 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 
 /* ===== スケルトン（読み込み中の骨組み） =====
    文字だけの「読み込んでいます」の代わりに、読み込んだ後の形に近い灰色の帯を置く。帯は装飾なので aria-hidden にし、
-   読み上げは role="status" の領域に文字で伝える。動きは明暗の往復だけで、動きを減らす設定では上の規則で止まり、静かな帯のままになる */
+   読み上げは role="status" の領域に文字で伝える。動きは帯の上を左から右へ通る明るい波だけ（::after を transform で動かす）で、
+   動きを減らす設定では上の規則で止まり、波は帯の外（左端の手前）に残って見えず、静かな帯のままになる。
+   波の色は面の色を白へ寄せたもので、明るいテーマでは白に近く、暗いテーマでは帯より少し明るい */
 .skeleton { display: grid; gap: var(--space-3); }
-.skeleton-line { display: block; height: 1em; border-radius: var(--radius-1); background: var(--color-line); animation: skeleton-pulse 1.4s ease-in-out infinite; }
+.skeleton-line { --skeleton-shine: color-mix(in srgb, color-mix(in srgb, var(--color-surface), white 25%) 70%, transparent); position: relative; display: block; height: 1em; overflow: hidden; border-radius: var(--radius-1); background: var(--color-line); }
+.skeleton-line::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent); transform: translateX(-100%); animation: skeleton-wave 1.6s ease-in-out infinite; }
 .skeleton-line.is-title { height: 1.6em; width: 55%; }
 .skeleton-line.is-short { width: 70%; }
 .skeleton-line.is-block { height: 2.5em; }
-@keyframes skeleton-pulse { 50% { opacity: .45; } }
-/* 強制色では地の色が消えるので、帯を縁で残す */
+@keyframes skeleton-wave { to { transform: translateX(100%); } }
+/* 強制色では地の色が消えるので、帯を縁で残す（波は色を持てないので置かない） */
 @media (forced-colors: active) {
   .skeleton-line { border: 1px solid CanvasText; }
+  .skeleton-line::after { display: none; }
 }
 /* 組織の枠へ移る間の骨組み（LoadingSheet の shape）。枠と同じ部品（.app、.binding、.topbar、.content、.page-head）の中に帯を置き、
    左のメニューの幅、上の帯の高さ、本文の余白を読み込んだ後と同じにする。本文は行き先の画面の組み（data-shape）に近い形にし、

@@ -10,6 +10,7 @@
   z-index: 100;
   display: grid;
   place-items: center;
+  --boot-shine: rgba(255, 255, 255, 0.7);
   background: #f7f7f8;
   color: #5c5f66;
   font-family: 'Noto Sans JP', system-ui, sans-serif;
@@ -53,11 +54,12 @@
   animation: boot-wait-hide 0s linear 15s forwards;
 }
 #boot-loading .boot-skeleton i {
+  position: relative;
   display: block;
   height: 1em;
+  overflow: hidden;
   border-radius: 4px;
   background: #d6d6da;
-  animation: boot-pulse 1.4s ease-in-out infinite;
 }
 #boot-loading .boot-skeleton i:nth-child(1) {
   height: 1.6em;
@@ -96,12 +98,13 @@ html[data-boot] #boot-loading .boot-frame {
   min-width: 0;
 }
 #boot-loading .boot-frame :where(i) {
+  position: relative;
   display: block;
   flex: none;
   height: 1em;
+  overflow: hidden;
   border-radius: 4px;
   background: #d6d6da;
-  animation: boot-pulse 1.4s ease-in-out infinite;
 }
 #boot-loading .boot-frame .is-short {
   width: 70%;
@@ -381,15 +384,31 @@ html[data-boot] #boot-loading .boot-frame {
     padding-inline: 16px;
   }
 }
-@keyframes boot-pulse {
-  50% {
-    opacity: 0.45;
+/* 帯の上を左から右へ通る明るい波（design/components.css の .skeleton-line::after と同じ。色は --boot-shine で、テーマごとに替える） */
+#boot-loading .boot-skeleton i::after,
+#boot-loading .boot-frame i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--boot-shine), transparent);
+  transform: translateX(-100%);
+  animation: boot-wave 1.6s ease-in-out infinite;
+}
+@keyframes boot-wave {
+  to {
+    transform: translateX(100%);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  #boot-loading .boot-skeleton i,
-  #boot-loading .boot-frame i {
+  #boot-loading .boot-skeleton i::after,
+  #boot-loading .boot-frame i::after {
     animation: none;
+  }
+}
+@media (forced-colors: active) {
+  #boot-loading .boot-skeleton i::after,
+  #boot-loading .boot-frame i::after {
+    display: none;
   }
 }
 @keyframes boot-failed-show {
@@ -408,6 +427,7 @@ html[data-boot] #boot-loading .boot-frame {
 }
 @media (prefers-color-scheme: dark) {
   #boot-loading {
+    --boot-shine: rgba(83, 83, 85, 0.7);
     background: #121214;
     color: #a2a2ab;
   }
@@ -434,6 +454,7 @@ html[data-boot] #boot-loading .boot-frame {
   }
 }
 html[data-theme='simple_light'] #boot-loading {
+  --boot-shine: rgba(255, 255, 255, 0.7);
   background: #f7f7f8;
   color: #5c5f66;
 }
@@ -454,6 +475,7 @@ html[data-theme='simple_light'] #boot-loading :is(.boot-binding, .boot-corner, .
   border-color: #d6d6da;
 }
 html[data-theme='simple_dark'] #boot-loading {
+  --boot-shine: rgba(83, 83, 85, 0.7);
   background: #121214;
   color: #a2a2ab;
 }
@@ -476,6 +498,7 @@ html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-corner, .b
 /* 中世風と現代風を覚えた人にも、読み込んだ後と同じ地と色で出す（値は design/tokens.css の各テーマの --color-bg、--color-surface、
    --color-sunken、--color-line と --rule-double）。枠の外の紙（.boot-skeleton）も同じテーマの面と線にする */
 html[data-theme='medieval'] #boot-loading {
+  --boot-shine: rgba(255, 255, 255, 0.7);
   background: #f3f4f1;
   color: #5b6672;
 }
@@ -506,6 +529,7 @@ html[data-theme='medieval'] #boot-loading .boot-skeleton i {
   background: #c9cfd3;
 }
 html[data-theme='modern'] #boot-loading {
+  --boot-shine: rgba(72, 78, 90, 0.7);
   background: #060a12;
   color: #8ea6c0;
 }
