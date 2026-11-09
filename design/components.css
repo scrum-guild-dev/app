@@ -1143,9 +1143,11 @@ label.pick-row:hover { background: var(--color-accent-soft); }
   .table.is-stacked td[data-label]::before { content: attr(data-label) "　"; font-family: var(--font-body); font-size: var(--text-xs); color: var(--color-muted); white-space: nowrap; }
   .table.is-stacked td.is-actions { position: static; }
   .table.is-stacked .table-actions { flex-wrap: wrap; justify-content: flex-start; gap: var(--space-1); }
-  .table.is-stacked td.is-actions > .btn.is-sm.is-quiet { margin-inline-start: -11px; }
-  /* 並び全体を引くことで、折り返した行の先頭も本文にそろえる */
-  .table.is-stacked .table-actions:has(> .btn.is-sm.is-quiet:first-child) { margin-inline-start: -11px; }
+  .table.is-stacked td.is-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
+  /* 枠の無い静かな小ボタンだけの並びは、折り返した行の先頭も本文にそろえる。
+     枠付きの操作が混ざるときは並び全体を引かず、先頭の静かな操作だけを補正する */
+  .table.is-stacked .table-actions:not(:has(> :not(.btn.is-sm.is-quiet:not(.is-danger)))) { margin-inline-start: -11px; }
+  .table.is-stacked .table-actions:has(> :not(.btn.is-sm.is-quiet:not(.is-danger))) > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
 }
 
 /* ===== 広い幅でマウスで操作する画面の詰め =====
