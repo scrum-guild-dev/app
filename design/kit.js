@@ -317,6 +317,8 @@
     consentRevisedBoth: "利用規約とプライバシーポリシーが改められました",
     markdownTableRegion: "表", teamXpLabel: "チーム全体の経験値", filterLabel: "{backlog}の絞り込み", backlogSearch: "タイトルで探す",
     filterAll: "{label}: すべて", filterMe: "自分", unassigned: "担当なし", leftMember: "（離脱済み）", categoryNone: "{category}なし",
+    backlogSummary: "集計", backlogFilters: "絞り込み", backlogFiltersCount: "絞り込み（{count}条件）",
+    backlogPriority: "上ほど優先", backlogOrderHelp: "並べ替えの使い方",
     filterNoRepository: "リポジトリなし", filterNoEpic: "{epic}なし", filterClear: "絞り込みを外す",
     backlogFilterOrderNote: "上にあるものほど優先します。絞り込みを外すと並べ替えられます。", backlogNoMatchTitle: "絞り込みに当たるものはありません",
     backlogNoMatchText: "条件を変えるか、絞り込みを外してください。", filterTotalsNote: "{points}と件数は、絞る前の全体の値です",
@@ -683,14 +685,28 @@
     return `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"${current ? ' aria-current="page"' : ""}>${esc(p.title)}<span class="props-note">${esc(path)}</span><span class="props-note">${where === "title" ? "題に一致" : "本文に一致"}</span></a></li>`;
   }
   // meta は集計の下に置く1行（バックログの画面のチーム全体の経験値 teamXp など）
-  function pageHead(eyebrow, title, tallies = [], actions = "", meta = "") {
-    const tally = tallies.length
-      ? `<dl class="tally">${tallies.map(([cls, ic, label, n]) => `<div class="${n ? cls : ""}"><dt>${ic ? icon(ic) : ""}${label}</dt><dd>${n}</dd></div>`).join("")}</dl>`
-      : "";
-    return `<header class="page-head">
+  let narrowDisclosureId = 0;
+  function narrowDisclosure(label, body) {
+    const id = `narrow-disclosure-${++narrowDisclosureId}`;
+    return `<div class="narrow-disclosure" data-open="false"><button class="btn is-sm is-quiet narrow-disclosure-toggle" type="button" aria-expanded="false" aria-controls="${id}">${icon("chevron")}<span>${esc(label)}</span></button><div class="narrow-disclosure-body" id="${id}">${body}</div></div>`;
+  }
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest && event.target.closest(".narrow-disclosure-toggle");
+    if (!button) return;
+    const open = button.getAttribute("aria-expanded") !== "true";
+    button.setAttribute("aria-expanded", String(open));
+    button.parentElement.dataset.open = String(open);
+  });
+  function pageHead(eyebrow, title, tallies = [], actions = "", meta = "", narrowSummary = "") {
+    const counts = (items) => items.length ? `<dl class="tally">${items.map(([cls, ic, label, n]) => `<div class="${n ? cls : ""}"><dt>${ic ? icon(ic) : ""}${label}</dt><dd>${n}</dd></div>`).join("")}</dl>` : "";
+    const compactSummary = tallies.length > 1 || meta ? narrowSummary : "";
+    const metrics = compactSummary
+      ? `<div class="page-head-metrics">${counts(tallies.slice(0, 1))}${narrowDisclosure(compactSummary, `${counts(tallies.slice(1))}${meta ? `<div class="page-head-meta">${meta}</div>` : ""}`)}</div>`
+      : `${counts(tallies)}${meta}`;
+    return `<header class="page-head${compactSummary ? " is-compact" : ""}">
       ${eyebrow ? `<span class="page-eyebrow">${eyebrow}</span>` : ""}
       <div class="page-head-row"><h1 class="page-title">${title}</h1>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
-      ${tally}${meta}
+      ${metrics}
     </header>`;
   }
 
@@ -3864,7 +3880,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer, flashRow,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
     avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
-    card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
+    narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
