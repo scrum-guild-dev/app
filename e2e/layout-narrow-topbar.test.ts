@@ -18,6 +18,10 @@ test.beforeEach(async ({ context, baseURL }) => {
 async function measureFrame(page: Page) {
   return page.evaluate(async () => {
     await document.fonts.ready;
+    // 書体やテーマで項目の幅が変わると、帯（NavMenu の ResizeObserver）が描く前に送り直す。2 フレーム待ってから測る
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // 端の幕の幅（components.css の --nav-strip-peek、src/lib/nav-strip.ts の NAV_STRIP_PEEK）
+    const peek = 32;
     const item = document.querySelector<HTMLElement>('.breadcrumb [aria-current="page"]')!;
     // 省略記号が出たかは、文字の幅と箱の幅で比べる。scrollWidth と clientWidth は整数に丸めるので、1px 未満の縮みを拾えない
     const range = document.createRange();
@@ -27,13 +31,17 @@ async function measureFrame(page: Page) {
     const nav = document.getElementById('app-nav')!;
     const box = nav.getBoundingClientRect();
     const link = nav.querySelector('a.nav-item[aria-current="page"]')!.getBoundingClientRect();
+    const more = { start: nav.hasAttribute('data-more-start'), end: nav.hasAttribute('data-more-end') };
     return {
       clipped: range.getBoundingClientRect().width > item.getBoundingClientRect().width + 0.01,
       gap: account.left - item.getBoundingClientRect().right,
       sameRow: Math.abs(account.top + account.height / 2 - (crumb.top + crumb.height / 2)) < 12,
       linkInStrip: link.left >= box.left - 0.5 && link.right <= box.right + 0.5,
+      // 続きがある側の端には幕が重なるので、今の項目はその幅の内側にある
+      clearOfFade:
+        (!more.start || link.left >= box.left + peek - 0.5) && (!more.end || link.right <= box.right - peek + 0.5),
       scrollable: nav.scrollWidth > nav.clientWidth,
-      more: { start: nav.hasAttribute('data-more-start'), end: nav.hasAttribute('data-more-end') },
+      more,
       contentTop: document.getElementById('content')!.getBoundingClientRect().top,
     };
   });
@@ -60,7 +68,8 @@ for (const [path, name] of [
       expect(result.gap, `${theme}: 今の画面の名前がアカウントのボタンに重なる`).toBeGreaterThanOrEqual(0);
       expect(result.sameRow, `${theme}: アカウントのボタンがパンくずの行に無い`).toBe(true);
       expect(result.linkInStrip, `${theme}: 今のページの項目が帯の外にある`).toBe(true);
-      // ワークスペースの項目は 390px の帯からはみ出し、今の項目まで送るので、左にも右にも続きがある（設定は末尾の項目）
+      expect(result.clearOfFade, `${theme}: 今のページの項目が端の幕にかかる`).toBe(true);
+      // ワークスペースの項目は 390px の帯からはみ出し、今の項目まで送るので、左に続きがある（右は、末尾の設定では無い）
       expect(result.scrollable, `${theme}: 帯がはみ出していない`).toBe(true);
       expect(result.more.start, `${theme}: 左の続きの印が無い`).toBe(true);
       // 以前は y≈324〜340（ロゴ、組織、メニュー、パンくずとアカウント、検索の5段）。いまは約 205px。書体の差に余裕を持たせる
@@ -75,6 +84,7 @@ test('390px の今日やることでは、帯は先頭のままで、右にだ�
   await page.waitForLoadState('networkidle');
   const result = await measureFrame(page);
   expect(result.linkInStrip).toBe(true);
+  expect(result.clearOfFade).toBe(true);
   expect(result.more).toEqual({ start: false, end: true });
 });
 
