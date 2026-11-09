@@ -82,9 +82,9 @@ for (const scope of ['organization', 'workspace'] as const) {
     expect(calls).toBe(0);
     await remove.click();
     await dialog.getByRole('button', { name: '消す', exact: true }).click();
+    await expect(page.locator('.toast:visible')).toContainText(`「${targetTitle}」を消しました。`);
     await expect(page).toHaveURL(outer);
     expect(calls).toBe(1);
-    await expect(page.locator('.toast:visible')).toContainText(`「${targetTitle}」を消しました。`);
     await page.locator('.wiki-page-list > summary').click();
     const outerNode = page
       .locator('.wiki-node')
@@ -295,8 +295,9 @@ for (const scope of ['organization', 'workspace'] as const) {
       });
       await page.getByRole('button', { name: '消す', exact: true }).click();
       await deletion(page).getByRole('button', { name: '消す', exact: true }).click();
-      await expect(page).toHaveURL(destination);
+      // 成功のトーストは遷移前に出て4秒で消える。読み直しの完了を待つ前に確かめる。
       await expect(page.locator('.toast:visible')).toContainText(`「${title}」を消しました。`);
+      await expect(page).toHaveURL(destination);
       await expect(page.getByRole('button', { name: '消す', exact: true })).toHaveCount(0);
       expect(calls).toBe(1);
       const warning = page.getByRole('alert');
