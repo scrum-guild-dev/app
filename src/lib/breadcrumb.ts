@@ -6,8 +6,8 @@ export function workspaceIdOf(path: string): string | null {
 }
 
 // メニューに無い組織の画面（アカウントのメニューから開く画面）の名前。画面の名前は辞書の語で返すため、キーで返す
-export function accountScreenKey(path: string, slug: string): 'pageMe' | 'pageOrgAdmin' | null {
+export function accountScreenKey(path: string, slug: string, isAdmin: boolean): 'pageMe' | 'pageOrgAdmin' | null {
   if (path === `/${slug}/me`) return 'pageMe';
-  if (path === `/${slug}/admin` || path.startsWith(`/${slug}/admin/`)) return 'pageOrgAdmin';
+  if (path === `/${slug}/admin` || path.startsWith(`/${slug}/admin/`)) return isAdmin ? 'pageOrgAdmin' : null;
   return null;
 }

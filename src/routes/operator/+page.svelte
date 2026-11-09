@@ -216,38 +216,80 @@
                 <tr>
                   <td class="is-name">
                     {organization.name}
-                    <span class="chip"
-                      >{organization.kind === 'personal' ? t('operatorKindPersonal') : t('operatorKindTeam')}</span
-                    >
-                    {#if organization.self_created}<span class="chip">{t('operatorSelfCreated')}</span>{/if}
-                    {#if organization.trial_ends_on !== null}
-                      <span class="chip"
-                        >{t('orgTrialEndsOn', { datetime: formatTrialStopDateTime(organization.trial_ends_on) })}</span
-                      >
-                      {#if organization.trial_expired}<span class="chip is-danger"
-                          ><Icon name="alert" />{t('trialExpired')}</span
-                        >{/if}
-                    {/if}
-                    {#if organization.suspended_at}
-                      <span class="chip is-warn"
-                        >{t('operatorSuspended', { date: formatUtcDate(organization.suspended_at) })}</span
-                      >
-                    {/if}
-                    {#if organization.suspended_at && organization.purge_on}
-                      <span class="chip is-danger">{t('operatorPurgeOn', { date: organization.purge_on })}</span>
-                    {/if}
-                    <!-- 自分用は持ち主1人だけなので、管理者の状態の印は出さない -->
-                    {#if organization.kind !== 'personal'}
-                      {#if organization.admin_status === 'none'}
-                        <span class="chip is-danger"><Icon name="alert" />{t('operatorAdminNone', words)}</span>
-                      {:else if organization.admin_status === 'pending'}
-                        <span class="chip is-warn"><Icon name="clock" />{t('operatorAdminPending', words)}</span>
-                      {:else if organization.admin_status === 'expired'}
-                        <span class="chip is-danger"><Icon name="alert" />{t('operatorAdminExpired', words)}</span>
-                      {/if}
+                    {#if organization.self_created || organization.trial_ends_on !== null || organization.suspended_at || (organization.kind !== 'personal' && organization.admin_status !== 'active')}
+                      <details class="table-details">
+                        <summary>
+                          <span class="chip"
+                            >{organization.kind === 'personal'
+                              ? t('operatorKindPersonal')
+                              : t('operatorKindTeam')}</span
+                          >
+                          {#if organization.trial_expired || (organization.suspended_at && organization.purge_on) || (organization.kind !== 'personal' && ['none', 'expired'].includes(organization.admin_status))}
+                            <span class="table-details-alert is-danger"
+                              ><Icon name="alert" /><span class="visually-hidden"
+                                >{organization.trial_expired
+                                  ? t('trialExpired')
+                                  : organization.suspended_at && organization.purge_on
+                                    ? t('operatorPurgeOn', { date: organization.purge_on })
+                                    : organization.admin_status === 'none'
+                                      ? t('operatorAdminNone', words)
+                                      : t('operatorAdminExpired', words)}
+                              </span>{t('detail')}</span
+                            >
+                          {:else if organization.suspended_at || (organization.kind !== 'personal' && organization.admin_status === 'pending')}
+                            <span class="table-details-alert is-warn"
+                              ><Icon name="alert" /><span class="visually-hidden"
+                                >{organization.suspended_at
+                                  ? t('operatorSuspended', { date: formatUtcDate(organization.suspended_at) })
+                                  : t('operatorAdminPending', words)}
+                              </span>{t('detail')}</span
+                            >
+                          {:else}
+                            {t('detail')}
+                          {/if}
+                        </summary>
+                        <div class="table-details-body">
+                          {#if organization.self_created}<span class="chip">{t('operatorSelfCreated')}</span>{/if}
+                          {#if organization.trial_ends_on !== null}
+                            <span class="chip"
+                              >{t('orgTrialEndsOn', {
+                                datetime: formatTrialStopDateTime(organization.trial_ends_on),
+                              })}</span
+                            >
+                            {#if organization.trial_expired}<span class="chip is-danger"
+                                ><Icon name="alert" />{t('trialExpired')}</span
+                              >{/if}
+                          {/if}
+                          {#if organization.suspended_at}
+                            <span class="chip is-warn"
+                              >{t('operatorSuspended', { date: formatUtcDate(organization.suspended_at) })}</span
+                            >
+                          {/if}
+                          {#if organization.suspended_at && organization.purge_on}
+                            <span class="chip is-danger">{t('operatorPurgeOn', { date: organization.purge_on })}</span>
+                          {/if}
+                          <!-- 自分用は持ち主1人だけなので、管理者の状態の印は出さない -->
+                          {#if organization.kind !== 'personal'}
+                            {#if organization.admin_status === 'none'}
+                              <span class="chip is-danger"><Icon name="alert" />{t('operatorAdminNone', words)}</span>
+                            {:else if organization.admin_status === 'pending'}
+                              <span class="chip is-warn"><Icon name="clock" />{t('operatorAdminPending', words)}</span>
+                            {:else if organization.admin_status === 'expired'}
+                              <span class="chip is-danger"><Icon name="alert" />{t('operatorAdminExpired', words)}</span
+                              >
+                            {/if}
+                          {/if}
+                        </div>
+                      </details>
+                    {:else}
+                      <div>
+                        <span class="chip"
+                          >{organization.kind === 'personal' ? t('operatorKindPersonal') : t('operatorKindTeam')}</span
+                        >
+                      </div>
                     {/if}
                     <!-- slug と日時はキーと日付なので等幅の書体（.mono）で出す -->
-                    <br /><span class="props-note"
+                    <span class="props-note"
                       ><span class="mono">{organization.slug}</span> · {t('operatorCreatedLabel')}
                       <span class="mono">{formatDateTime(organization.created_at)}</span></span
                     >
