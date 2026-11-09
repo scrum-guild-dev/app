@@ -1,3 +1,4 @@
+// 最初の読み込みの骨組み（static/boot-shape.js）も読むので、変えるときは合わせる（scripts/boot-shape.test.ts）
 export const NAV_COLLAPSED_KEY = 'sg-nav-collapsed';
 // 左のメニュー（nav）の id。開閉のボタンの aria-controls が指す
 export const NAV_MENU_ID = 'app-nav';

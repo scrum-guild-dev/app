@@ -6,7 +6,6 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import FirstSteps from '../../lib/components/FirstSteps.svelte';
   import Icon from '../../lib/components/Icon.svelte';
-  import LevelPanel from '../../lib/components/LevelPanel.svelte';
   import LoadFailed from '../../lib/components/LoadFailed.svelte';
   import PageHead, { type Tally } from '../../lib/components/PageHead.svelte';
   import { formatTodayLabel } from '../../lib/format-datetime.ts';
@@ -75,7 +74,7 @@
 
   // 今日やることは、閉じていないワークスペースの、本人が担当するタスクだけを読む。行はどれも本人が書き込める行なので、
   // 太陽（印の付け外し）、完了、戻すは全部の行に出す（戻すは、サーバーが reopenable と答えた今日完了の行だけ）。
-  // 操作を送っている行（pendingIds）は、ほかの操作も押しても無視する。通ったら今日の読み取りを読み直す（経験値の列も同じ load で読み直す）。
+  // 操作を送っている行（pendingIds）は、ほかの操作も押しても無視する。通ったら今日の読み取りを読み直す。
   // 失敗は理由をトーストで知らせ、断られた（404、409）ときは読み直して今の区分に移す。ログインが切れた（401）ときは、読み直すと load がログインの画面へ移す
   let pendingIds = $state<string[]>([]);
   // 今この画面で完了にした行。判を押す動き（.is-new）はこの行だけで再生する
@@ -183,7 +182,11 @@
         const focus = '.hanko';
         if (result.ok) {
           if (!justDoneIds.includes(task.id)) justDoneIds = [...justDoneIds, task.id];
-          return { notice: notify(completedMessage(result.data.left_sprint, t), 'check'), reload: true, focus };
+          return {
+            notice: notify(completedMessage(result.data.left_sprint, result.data.xp_granted, t), 'check'),
+            reload: true,
+            focus,
+          };
         }
         if (result.status === 401) return null;
         const refused = gone(result, focus);
@@ -377,22 +380,7 @@
 {:else}
   <!-- 見出しの上に、ブラウザのタイムゾーンの今日の日付を出す。区分の判定はワークスペースのタイムゾーンの今日で、時差のある所から開くと1日ずれうる -->
   <PageHead eyebrow={todayLabel} title={t('pageToday')} {tallies} focusable />
-  {#if data.experience}
-    <div class="layout-aside">
-      <div class="layout-main">{@render main()}</div>
-      <aside class="layout-side" aria-label={t('myRecord')}>
-        <LevelPanel
-          total={data.experience.total}
-          prospective={data.experience.prospective}
-          thanksReceived={data.experience.thanks_received}
-          workspaces={data.experience.workspaces}
-        />
-      </aside>
-    </div>
-  {:else}
-    <!-- 経験値を読めなかったときは右の列ごと省く（列の幅だけ空けない） -->
-    <div class="layout-main">{@render main()}</div>
-  {/if}
+  <div class="layout-main">{@render main()}</div>
   {#if data.organization?.me.is_admin}<WorkspaceCreateDialog
       bind:this={createDialog}
       slug={data.slug}

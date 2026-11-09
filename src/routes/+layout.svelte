@@ -14,6 +14,7 @@
   import ShortcutHelp from '../lib/components/ShortcutHelp.svelte';
   import ShortcutHints from '../lib/components/ShortcutHints.svelte';
   import ToastRegion from '../lib/components/ToastRegion.svelte';
+  import { loadingShape } from '../lib/loading-shape.ts';
   import { shortcuts } from '../lib/shortcuts.svelte.ts';
   import { t } from '../lib/vocabulary.svelte.ts';
 
@@ -24,10 +25,17 @@
   // 短い読み込みでは出さないよう、移り始めから SLOW_MS たっても終わらないときだけ出す
   const SLOW_MS = 300;
   const loadingFromOutside = $derived(navigating.to !== null && !navigating.from?.route.id?.startsWith('/[slug]'));
+  // 行き先が組織の枠の中なら、読み込み中も枠と行き先の本文の組みに近い形で出す（読み込んだ後に組みと位置が変わらないように）
+  const loadingShapeTo = $derived(loadingShape(navigating.to?.route.id));
   let slow = $state(false);
 
   // URL を直接開いた最初の読み込みの表示（src/app.html の #boot-loading）は、画面が描かれたら要らない
-  onMount(() => document.getElementById('boot-loading')?.remove());
+  // （骨組みの形の印 data-boot と data-boot-nav も、以後の画面の開閉と食い違わないよう外す）
+  onMount(() => {
+    document.getElementById('boot-loading')?.remove();
+    delete document.documentElement.dataset.boot;
+    delete document.documentElement.dataset.bootNav;
+  });
 
   $effect(() => {
     if (!loadingFromOutside) return;
@@ -52,7 +60,7 @@
 <!-- 読み込み中を読み上げに伝える。領域は常に置き、中の文字だけを替える -->
 <div class="visually-hidden" role="status">{slow ? t('loading') : ''}</div>
 {#if slow}
-  <LoadingSheet />
+  <LoadingSheet shape={loadingShapeTo} />
 {:else}
   {@render children()}
 {/if}

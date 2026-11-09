@@ -78,7 +78,7 @@ export function rollbackTarget(result: WranglerResult): RollbackTarget {
   return { ok: true, versionId: versions[0].version_id };
 }
 
-// /api/health の応答から version を取る。D1 に届かない版は 503 を返すので、200 以外は失敗として投げ、煙のテストの失敗にする
+// /api/health の応答から version を取る。D1 に届かないか鍵の形が違う版は 503 を返すので、200 以外は失敗として投げ、煙のテストの失敗にする
 export async function versionFromHealth(res: Response): Promise<string> {
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) throw new Error(isErrorBody(body) ? `HTTP ${res.status}（${body.error.code}）` : `HTTP ${res.status}`);

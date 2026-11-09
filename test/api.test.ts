@@ -23,9 +23,40 @@ describe('API', () => {
   test('/api/health は D1 に届けば 200 で版を返す', async () => {
     const res = await exports.default.fetch('http://example.com/api/health');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: 'ok', database: 'ok', version: 'dev' });
+    expect(await res.json()).toEqual({ status: 'ok', database: 'ok', credentialKeys: 'ok', version: 'dev' });
     expectApiHeaders(res);
   });
+
+  test.each([undefined, '', 'not-json', '{}', '{"1":"bad"}'])(
+    '/api/health は不備のある鍵を公開せず 503 にする (%s)',
+    async (raw) => {
+      const broken = { ...env, CONNECTION_CREDENTIAL_KEYS: raw } as unknown as Env;
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const res = await createApp().request('/api/health', {}, broken);
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({
+          status: 'unavailable',
+          database: 'ok',
+          credentialKeys: 'unavailable',
+          version: 'dev',
+          error: { code: 'unavailable', message: 'credential keys unavailable' },
+        });
+        expectApiHeaders(res);
+        expect(error).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(error.mock.calls[0]![0] as string)).toMatchObject({
+          level: 'error',
+          code: 'unavailable',
+          method: 'GET',
+          route: '/api/health',
+          error: 'CredentialKeysError',
+        });
+        if (raw) expect(error.mock.calls.flat().join('\n')).not.toContain(raw);
+      } finally {
+        error.mockRestore();
+      }
+    },
+  );
 
   test('/api/health は D1 に届かなければ 503 の unavailable で、中身を応答にもログにも出さない', async () => {
     // D1 が落ちたときの例外。message には接続の詳細が混ざりうる

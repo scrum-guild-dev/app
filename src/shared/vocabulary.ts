@@ -410,8 +410,6 @@ export const dictionary = defineDictionary({
   todayMarkRefreshFailed:
     '今日やるの印は保存しましたが、最新の詳細を読み込めませんでした。もう一度読み込んでください。',
   sprintInProgress: '進行中のスプリント',
-  // 今日やることの右の列（経験値とレベル）の読み上げの名前
-  myRecord: '自分の記録',
 
   // 今日やることの空の状態（管理者）。{workspace} と {member} は、辞書の言葉を画面が渡す。
   // 組織にワークスペースが1つも無いときは、最初のワークスペースを作る案内。作る画面の行き先は、その画面を作る Issue で決める
@@ -578,6 +576,7 @@ export const dictionary = defineDictionary({
   doneStamp: '完',
   // 完了の操作の読み上げの名前。同じ名前のボタンが並ぶので、どのタスクかを添える
   taskCompleteLabel: '{complete}: {title}',
+  taskCompletedXp: '+{amount} {unit}',
   taskCompleted: '{task}を{done}にしました',
   taskCompleteFailed: '{done}にできませんでした。もう一度試してください。',
   taskAlreadyDone: 'この{task}は、すでに{done}です',
