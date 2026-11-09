@@ -1143,7 +1143,14 @@ label.pick-row:hover { background: var(--color-accent-soft); }
   .table.is-stacked .chip { white-space: normal; }
   .table.is-stacked td[data-label]::before { content: attr(data-label) "　"; font-family: var(--font-body); font-size: var(--text-xs); color: var(--color-muted); white-space: nowrap; }
   .table.is-stacked td.is-actions { position: static; }
-  .table.is-stacked .table-actions { flex-wrap: wrap; justify-content: flex-start; }
+  .table.is-stacked .table-actions { flex-wrap: wrap; justify-content: flex-start; gap: var(--space-1); }
+  /* 静かな危険の操作も文字だけで示す。危険色と押せる箱は保ち、補正で枠だけが本文より外へ出るのを防ぐ */
+  .table.is-stacked .btn.is-sm.is-quiet.is-danger { border-color: transparent; }
+  .table.is-stacked td.is-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
+  /* 枠の無い静かな小ボタンだけの並びは、折り返した行の先頭も本文にそろえる。
+     枠付きの操作が混ざるときは並び全体を引かず、先頭の静かな操作だけを補正する */
+  .table.is-stacked .table-actions:not(:has(> :not(.btn.is-sm.is-quiet:not(.is-danger)))) { margin-inline-start: -11px; }
+  .table.is-stacked .table-actions:has(> :not(.btn.is-sm.is-quiet:not(.is-danger))) > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
 }
 
 /* ===== 広い幅でマウスで操作する画面の詰め =====
@@ -1645,6 +1652,10 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
    止めるのは欄の部品だけで、表（.table-wrap）、callout、空の状態は止めない。`.setting-body` は SectionBoundary で入れ子になるので、親の直下で選ばない */
 .form, .form-row, .input-row, .field, .order-list { max-width: 56rem; }
 .form-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+/* 先頭の静かな小ボタンだけ、枠1pxと左右の余白10pxを外へ出し、文字を本文にそろえる。押せる箱は縮めない */
+.gate-sheet .form-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
+/* 利用開始のフローは左右20pxの余白を持つ48pxのボタン。大きさを保って文字だけそろえる */
+.onboarding .form-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: calc(-1 * var(--space-5) - 1px); }
 
 /* ===== 手順（番号は本当の順番） ===== */
 .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); counter-reset: step; }
@@ -1773,12 +1784,16 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 }
 
 /* ===== ログインの画面（枠の外） ===== */
-.gate { min-height: 100vh; display: grid; place-items: center; padding-block: var(--space-8);
+.gate { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding-block: var(--space-8);
   padding-left: max(var(--space-4), env(safe-area-inset-left, 0px)); padding-right: max(var(--space-4), env(safe-area-inset-right, 0px)); }
 .gate-stack { display: grid; gap: var(--space-6); width: min(440px, 100%); }
 .gate-sheet { width: min(440px, 100%); display: grid; gap: var(--space-5); background: var(--color-surface); border: 1px solid var(--color-line); border-top: var(--edge-top) solid var(--color-accent); box-shadow: var(--shadow-sheet); padding: var(--space-8) var(--space-6); border-radius: var(--radius-1); }
 .gate-brand { display: flex; align-items: center; gap: var(--space-2); }
-.gate-brand .brand-art { width: 240px; }
+/* 240px の箱の内側は232px。画像600pxの左34pxの透明余白と箱のpadding 4pxを引く。
+   左のメニューのロゴには広げず、枠の外の紙だけで絵の左端を本文にそろえる */
+.gate-brand .brand-art { width: 240px; margin-inline-start: calc(-4px - 232px * 34 / 600); }
+/* 会員登録・利用開始のヘッダーは168pxの箱（内側160px） */
+.onboarding-header .gate-brand .brand-art { margin-inline-start: calc(-4px - 160px * 34 / 600); }
 .gate-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-2xl); line-height: var(--leading-tight); }
 .gate-note { font-size: var(--text-xs); color: var(--color-muted); }
 /* 読み込み中の紙の中身（同意の確認）。読み込んだ後と同じ組みを見えないまま置いて（.gate-pending-body。aria-hidden と inert も付ける）
