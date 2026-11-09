@@ -18,13 +18,48 @@ describe('fontsource の woff を外す', () => {
     assert.match(out, /unicode-range: U\+25ee8,U\+25f23;/);
   });
 
-  test('実際の @fontsource の CSS でも woff が残らない', () => {
-    for (const file of [400, 500, 600, 700, 900].map((weight) => `noto-sans-jp/${weight}.css`)) {
-      const css = readFileSync(new URL(`../node_modules/@fontsource/${file}`, import.meta.url), 'utf8');
-      assert.match(css, /\.woff\) format\('woff'\)/, `${file} に woff がある前提が変わった`);
-      const out = dropWoff(css);
-      assert.doesNotMatch(out, /\.woff\)/, file);
-      assert.match(out, /\.woff2\) format\('woff2'\)/, file);
+  test('可変版は全ての文字範囲と太さを保ち、共通の書体名で配る', () => {
+    const css = readFileSync(
+      new URL('../node_modules/@fontsource-variable/noto-sans-jp/index.css', import.meta.url),
+      'utf8',
+    );
+    const transform = fontsourceWoff2Only().transform as (code: string, id: string) => { code: string } | null;
+    const out = transform(css, '/repo/node_modules/@fontsource-variable/noto-sans-jp/index.css?direct')!.code;
+    const faces = out.match(/@font-face\s*\{[^}]+\}/g)!;
+    assert.equal(faces.length, 124);
+    for (const face of faces) {
+      assert.match(face, /font-family: 'Noto Sans JP';/);
+      assert.match(face, /font-weight: 100 900;/);
+      assert.match(face, /font-display: swap;/);
+      assert.match(face, /\.woff2\) format\('woff2-variations'\)/);
+      assert.match(face, /unicode-range: U\+/);
+    }
+    assert.deepEqual(out.match(/unicode-range:[^;]+;/g), css.match(/unicode-range:[^;]+;/g));
+    assert.deepEqual(out.match(/src:[^;]+;/g), css.match(/src:[^;]+;/g));
+    assert.doesNotMatch(out, /Noto Sans JP Variable|\.woff\)/);
+    // 別の可変書体を誤って同じ名前へ変えない。
+    assert.equal(transform(css, '/repo/node_modules/@fontsource-variable/other/index.css'), null);
+  });
+
+  test('可変版の書体名が変わったら黙って代替書体にせず停止する', () => {
+    const transform = fontsourceWoff2Only().transform as (code: string, id: string) => { code: string } | null;
+    for (const css of ["@font-face { font-family: 'Renamed'; }", '@font-face { font-weight: 100 900; }']) {
+      assert.throws(
+        () => transform(css, '/repo/node_modules/@fontsource-variable/noto-sans-jp/index.css'),
+        /Noto Sans JP/,
+      );
+    }
+  });
+
+  test('引用符と空白が異なっても正常な書体名をそろえ、異なる書体との混在は断る', () => {
+    const transform = fontsourceWoff2Only().transform as (code: string, id: string) => { code: string } | null;
+    const id = '/repo/node_modules/@fontsource-variable/noto-sans-jp/index.css';
+    for (const quote of ["'", '"']) {
+      const css = `@font-face { font-family: ${quote}Noto Sans JP Variable${quote}  ; }`;
+      const normalized = transform(css, id)!.code;
+      assert.match(normalized, /font-family: 'Noto Sans JP';/);
+      assert.doesNotMatch(normalized, /Variable/);
+      assert.throws(() => transform(`${css} @font-face { font-family: 'Other'; }`, id), /Noto Sans JP/);
     }
   });
 
