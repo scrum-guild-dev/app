@@ -14,7 +14,7 @@ export type Run = {
 type Issue = { number: number; body: string | null; user: { login: string }; pull_request?: unknown };
 export type Api = <T>(path: string, method?: string, body?: unknown) => Promise<T>;
 
-export async function reconcile(api: Api, notify = ''): Promise<void> {
+export async function reconcile(api: Api, notify = '', log: (message: string) => void = console.log): Promise<void> {
   const latest = async () => {
     const { workflow_runs: runs } = await api<{ workflow_runs: Run[] }>(
       '/actions/workflows/ci.yml/runs?branch=main&per_page=100',
@@ -24,11 +24,23 @@ export async function reconcile(api: Api, notify = ''): Promise<void> {
     );
   };
   const run = await latest();
-  if (!run || run.status !== 'completed') return;
+  if (!run) {
+    log('main の CI は未実行です。Actions の起動条件・有効状態を確認してください。');
+    return;
+  }
+  if (run.status !== 'completed') {
+    log(`main の CI は実行中または待機中です（run=${run.id}、status=${run.status}）。完了を待ちます。`);
+    return;
+  }
 
   const head = await api<{ sha: string }>('/commits/main');
   // 新しい main の検査を待つ。古い成功で閉じたり、古い失敗を新しい障害として通知しない。
-  if (run.head_sha !== head.sha) return;
+  if (run.head_sha !== head.sha) {
+    log(
+      `古い SHA の CI です（run=${run.id}、CI=${run.head_sha}、main=${head.sha}）。最新 main の CI を手動実行するか、起動条件を確認してください。`,
+    );
+    return;
+  }
 
   async function pages<T>(path: string): Promise<T[]> {
     const all: T[] = [];
@@ -59,7 +71,10 @@ export async function reconcile(api: Api, notify = ''): Promise<void> {
   };
 
   if (run.conclusion === 'success') {
-    if (!issues.length) return;
+    if (!issues.length) {
+      log('最新 main の CI は成功済みで、開いている復旧 Issue はありません。');
+      return;
+    }
     // API の読み取り中に push や再実行があれば、次の監視に任せる。
     const current = await latest();
     const currentHead = await api<{ sha: string }>('/commits/main');
@@ -69,8 +84,10 @@ export async function reconcile(api: Api, notify = ''): Promise<void> {
       current.status !== 'completed' ||
       current.conclusion !== 'success' ||
       currentHead.sha !== run.head_sha
-    )
+    ) {
+      log('再確認中に main または CI の結果が変わりました。次の監視で確認します。');
       return;
+    }
     for (const issue of issues) {
       await commentOnce(issue, `最新の main の CI が成功しました。通常の作業を再開できます。\n\n${summary}`);
       await api(`/issues/${issue.number}`, 'PATCH', { state: 'closed', state_reason: 'completed' });

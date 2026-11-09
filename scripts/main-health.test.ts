@@ -151,3 +151,16 @@ test('main の CI と通知の起動条件・権限を保つ', () => {
   assert.deepEqual(monitor.on.workflow_run, { workflows: ['ci'], branches: ['main'], types: ['completed'] });
   assert.deepEqual(monitor.permissions, { contents: 'read', actions: 'read', issues: 'write' });
 });
+
+for (const scenario of ['未実行', '実行中', '古い SHA']) {
+  test(`${scenario} で待機する理由をログに出す`, async () => {
+    const { state, api } = fixture();
+    if (scenario === '未実行') state.runs = [];
+    if (scenario === '実行中') state.runs[0].status = 'in_progress';
+    if (scenario === '古い SHA') state.sha = 'new';
+    const logs: string[] = [];
+    await reconcile(api, '', (message) => logs.push(message));
+    assert.equal(state.writes.length, 0);
+    assert.ok(logs.some((message) => message.includes(scenario)));
+  });
+}
