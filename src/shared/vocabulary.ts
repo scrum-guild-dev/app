@@ -102,6 +102,19 @@ export const dictionary = defineDictionary({
   attachmentAlreadyAttached:
     'すでに保存された添付ファイルがあります。本文は残っています。内容を確認してから保存し直してください。',
 
+  attachmentListTitle: '添付ファイル',
+  attachmentListFailed: '添付ファイルの一覧を読み込めませんでした。',
+  attachmentDeleteAction: '削除する',
+  attachmentDeleteTitle: '添付ファイルを削除しますか',
+  attachmentDeleteWarning:
+    '削除したファイルは戻せません。本文に差し込んだ画像は「ファイルが見つかりません」と表示され、リンクからも開けなくなります。',
+  attachmentDeleteLabel: '{name} を削除',
+  attachmentDownloadLabel: '{name} をダウンロード',
+  attachmentDeleted: '添付ファイルを削除しました。',
+  attachmentDeleteFailed: '削除できませんでした。接続と権限を確認して、もう一度試してください。',
+  attachmentUploaderUnknown: '退会したメンバー',
+  attachmentUploadPlace: 'ファイルを添付する',
+  attachmentAddViaBody: 'ファイルの追加は本文の編集から行えます。',
   attachmentChoose: 'ファイルを選ぶ',
   attachmentRemove: '外す',
   attachmentRemovedImage: '{name} を添付から外しました。本文の画像の記法も外しました。',

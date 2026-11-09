@@ -1,3 +1,4 @@
+import { attachmentListOperation, attachmentDeleteOperation } from './attachment-list-delete.ts';
 import { orgWikiDeleteOperation, workspaceWikiDeleteOperation } from './wiki-delete.ts';
 import { orgWikiMoveOperation, workspaceWikiMoveOperation } from './wiki-move.ts';
 import { orgWikiUploadOperation, workspaceWikiUploadOperation } from './wiki-upload.ts';
@@ -297,6 +298,8 @@ const listedOperations: readonly ImplementedOperation[] = [
   invitationDeclineOperation,
   attachmentUploadOperation,
   attachmentDownloadOperation,
+  attachmentListOperation,
+  attachmentDeleteOperation,
 ];
 
 export const implementedOperations: readonly ImplementedOperation[] = [

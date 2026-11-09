@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, setContext } from 'svelte';
+  import { ATTACHMENT_DELETIONS, type AttachmentDeletions } from '../attachment-context.ts';
+  import { attachmentDownload } from '../../shared/operations/attachment/index.ts';
+  import { operationPath } from '../../shared/operations/define.ts';
   import { beforeNavigate, goto } from '$app/navigation';
   import {
     taskAssign,
@@ -53,6 +56,7 @@
   import Markdown from './Markdown.svelte';
   import RepositoryPicker from './RepositoryPicker.svelte';
   import TaskComments from './TaskComments.svelte';
+  import TaskAttachments from './TaskAttachments.svelte';
   import TaskFieldValues from './TaskFieldValues.svelte';
   import TaskThanks from './TaskThanks.svelte';
 
@@ -174,6 +178,9 @@
 
   let loadState = $state<'loading' | 'ready' | 'failed'>('loading');
   let task = $state<TaskDetail | null>(null);
+  let attachmentRevision = $state(0);
+  const deletedAttachments = $state<AttachmentDeletions>({ urls: [] });
+  setContext(ATTACHMENT_DELETIONS, deletedAttachments);
   // 期日の印を決める、ワークスペースの今日と週の始まり（task-detail の値。ブラウザの時計に頼らない）
   let clock = $state<{ today: string; weekStart: number } | null>(null);
   // 削除していない決まった欄と値（task-detail の fields。書かれていなければ value_md が null）
@@ -620,6 +627,7 @@
         if ('body_md' in fields) bases.body_md = fields.body_md ?? '';
       }
       if (expected === undefined || !alive) showToast(t('taskSaved'), 'check');
+      if (attachmentIds.length > 0 && alive) attachmentRevision++;
       onchanged();
       return null;
     }
@@ -1875,6 +1883,19 @@
         {@render bodyView()}
       {/if}
     </div>
+
+    <TaskAttachments
+      {slug}
+      {workspaceId}
+      {taskId}
+      {canWrite}
+      revision={attachmentRevision}
+      ondeleted={(id) => {
+        deletedAttachments.urls.push(operationPath(attachmentDownload, slug, { id }));
+        onchanged();
+      }}
+      {onstale}
+    />
 
     <!-- 完了の帯（kit.js の drawerHtml の .done-bar）。完了していて戻せるときは、日時の横に「戻す」 -->
     {#if task.completed_at !== null || canWrite || definitionOfDone !== null}
