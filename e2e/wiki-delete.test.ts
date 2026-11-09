@@ -16,6 +16,7 @@ import {
 import { type OutputOf, operationPath } from '../src/shared/operations/define.ts';
 import { organizationInfo } from '../src/shared/operations/organization/index.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
+import { createWikiWorkspace } from './wiki-fixtures.ts';
 
 // 実際に作った親子を消し、ダイアログと保存後の木を同じ流れで確かめる。
 // 子の順序は専用の親の配下で確かめ、復旧は両Wikiの最上段・子ページで確かめる。
@@ -398,9 +399,11 @@ for (const scope of ['organization', 'workspace'] as const) {
 }
 
 for (const scope of ['organization', 'workspace'] as const) {
-  test(`${scope}: 遷移失敗を知らせて取得だけを再試行できる`, async ({ page }) => {
-    if (scope === 'workspace') await createWorkspace(page, `遷移復旧-${crypto.randomUUID().slice(0, 8)}`);
-    const root = scope === 'organization' ? '/aoba/wiki' : new URL(page.url()).pathname + '/wiki';
+  test(`${scope}: 遷移失敗を知らせて取得だけを再試行できる`, async ({ page, baseURL }) => {
+    const root =
+      scope === 'organization'
+        ? '/aoba/wiki'
+        : await createWikiWorkspace(page, baseURL, `遷移復旧-${crypto.randomUUID().slice(0, 8)}`);
     await page.goto(root);
     const parent = await add(page, `遷移の親-${crypto.randomUUID().slice(0, 8)}`);
     const target = await add(page, `遷移前に消す-${crypto.randomUUID().slice(0, 8)}`, true);
