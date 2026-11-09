@@ -1,7 +1,9 @@
+import { sprintBoard } from '../src/shared/operations/sprint/index.ts';
+import { SAMPLE_BOARD } from './sprint-fixture.ts';
 import { backlogTree } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
-import { expectNoA11yViolationsInThemes, signIn } from './helpers.ts';
-import { routeOperation } from './operations.ts';
+import { expectNoA11yViolationsInThemes, signIn, waitForSettled } from './helpers.ts';
+import { mockOperation, routeOperation } from './operations.ts';
 
 const WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 
@@ -80,10 +82,14 @@ for (const { screen, path } of [
   test(`読み込み中の本文に4テーマでaxeの違反が無い（${screen}）`, async ({ page, context, baseURL }) => {
     test.setTimeout(90_000);
     await signIn(context, baseURL, 'admin');
+    if (screen === 'sprint') await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
     await page.goto(path);
     const main = page.locator('main.content');
     await expect(main).toBeVisible();
-    await expect(main.locator('[aria-busy="true"]')).toHaveCount(0);
+    await expect(main.getByRole('heading', { level: 1 }).first()).toBeVisible();
+    if (screen === 'sprint')
+      await expect(page.getByRole('article', { name: 'ポイント付与のバッチを作る' })).toBeVisible();
+    await waitForSettled(page);
     await main.evaluate((node) => node.setAttribute('aria-busy', 'true'));
     await expect(main).toHaveCSS('opacity', '0.95');
     await expectNoA11yViolationsInThemes(page, screen);
