@@ -113,6 +113,7 @@ export const dictionary = defineDictionary({
   attachmentDeleteWarning:
     '削除したファイルは戻せません。本文に差し込んだ画像は「ファイルが見つかりません」と表示され、リンクからも開けなくなります。',
   attachmentDeleteLabel: '{name} を削除',
+  attachmentDownloadAction: 'ダウンロード',
   attachmentDownloadLabel: '{name} をダウンロード',
   attachmentDeleted: '添付ファイルを削除しました。',
   attachmentDeleteFailed: '削除できませんでした。接続と権限を確認して、もう一度試してください。',
