@@ -117,28 +117,31 @@ test('URL を直接開いて木の読み込みが遅いとき、300ms 後に読�
   expect(bootHead.y).toBe(head.y);
 });
 
-test('15 秒たっても描けないときは、読み込み中の文を失敗の文と再読み込みのリンクに替える', async ({
-  page,
-  context,
-  baseURL,
-}) => {
-  // CSS の animation-delay は page.clock では進まないので、実時間で 15 秒待つ
-  test.setTimeout(60_000);
-  await signIn(context, baseURL, 'admin');
-  // 画面の JS が届かない（描けない）まま 15 秒たたせる。API の読み取りを止めると、10 秒で打ち切られて
-  // 読み込みの失敗の画面が描かれ、#boot-loading が消える（src/lib/api.ts の READ_TIMEOUT_MS）。
-  // 止めるのは JS だけにする。/_app/immutable/ の CSS まで止めると、#boot-loading が DOM に現れない（pnpm preview で確かめた）
-  await page.route('**/_app/immutable/**/*.js', () => new Promise<void>(() => {}));
-  await page.goto(WORKSPACE, { waitUntil: 'commit' });
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`15 秒たっても描けないときは、読み込み中の文を失敗の文と再読み込みのリンクに替える（${reducedMotion}）`, async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    // CSS の animation-delay は page.clock では進まないので、実時間で 15 秒待つ
+    test.setTimeout(60_000);
+    await page.emulateMedia({ reducedMotion });
+    await signIn(context, baseURL, 'admin');
+    // 画面の JS が届かない（描けない）まま 15 秒たたせる。API の読み取りを止めると、10 秒で打ち切られて
+    // 読み込みの失敗の画面が描かれ、#boot-loading が消える（src/lib/api.ts の READ_TIMEOUT_MS）。
+    // 止めるのは JS だけにする。/_app/immutable/ の CSS まで止めると、#boot-loading が DOM に現れない（pnpm preview で確かめた）
+    await page.route('**/_app/immutable/**/*.js', () => new Promise<void>(() => {}));
+    await page.goto(WORKSPACE, { waitUntil: 'commit' });
 
-  const boot = page.locator('#boot-loading');
-  // 待つ文は読み上げ用に1pxへ隠す。見える骨組みと、15秒で替わるvisibilityを別に確かめる。
-  await expect(boot.locator('.boot-frame')).toBeVisible();
-  await expect(boot.locator('.boot-wait')).toHaveText('読み込んでいます');
-  await expect(boot.locator('.boot-wait')).toHaveCSS('visibility', 'visible');
-  await expect(boot.getByText('読み込めませんでした')).toBeHidden();
-  await expect(boot.getByText('読み込めませんでした')).toBeVisible({ timeout: 20_000 });
-  await expect(boot.locator('.boot-wait')).toHaveCSS('visibility', 'hidden');
-  await expect(boot.locator('.boot-frame')).toBeHidden();
-  await expect(boot.getByRole('link', { name: 'もう一度試す' })).toBeVisible();
-});
+    const boot = page.locator('#boot-loading');
+    // 待つ文は読み上げ用に1pxへ隠す。見える骨組みと、15秒で替わるvisibilityを別に確かめる。
+    await expect(boot.locator('.boot-frame')).toBeVisible();
+    await expect(boot.locator('.boot-wait')).toHaveText('読み込んでいます');
+    await expect(boot.locator('.boot-wait')).toHaveCSS('visibility', 'visible');
+    await expect(boot.getByText('読み込めませんでした')).toBeHidden();
+    await expect(boot.getByText('読み込めませんでした')).toBeVisible({ timeout: 20_000 });
+    await expect(boot.locator('.boot-wait')).toHaveCSS('visibility', 'hidden');
+    await expect(boot.locator('.boot-frame')).toBeHidden();
+    await expect(boot.getByRole('link', { name: 'もう一度試す' })).toBeVisible();
+  });
+}
