@@ -1,13 +1,13 @@
 // 読み込み中の骨組み（LoadingSheet と、最初の読み込みの #boot-loading）の形を、行き先の画面から決める。
 // 枠の外の画面（ログイン、組織の選択、届いた招待など）は紙の形（null）。組織の枠の中は、行き先の本文の組みに近い形を選ぶ。
 // 最初の読み込みの static/boot-shape.js は import できないので、同じ対応を URL から持つ（scripts/boot-shape.test.ts が突き合わせる）
-export const loadingShapes = ['aside', 'tree', 'board', 'plan', 'list', 'settings', 'wiki', 'task'] as const;
+export const loadingShapes = ['today', 'aside', 'tree', 'board', 'plan', 'list', 'settings', 'wiki', 'task'] as const;
 export type LoadingShape = (typeof loadingShapes)[number];
 
 // route.id ごとの形。組織の枠の中の画面はすべて載せる（scripts/boot-shape.test.ts が確かめる）。載っていないものは紙の形
 const byRoute: Record<string, LoadingShape | null> = {
-  // 今日やること: 本文と右の脇（レベルの欄）の2列
-  '/[slug]': 'aside',
+  // 今日やること: 本文だけの1列（右の脇は無い）
+  '/[slug]': 'today',
   '/[slug]/admin': 'settings',
   // マイプロフィール: 設定の節と右の脇（レベルの欄）の2列
   '/[slug]/me': 'aside',

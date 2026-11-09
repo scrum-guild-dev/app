@@ -62,7 +62,14 @@
           </div>
         {/if}
         <div class="skeleton-body" aria-hidden="true">
-          {#if shape === 'aside'}
+          {#if shape === 'today'}
+            <div class="layout-main skeleton">
+              <span class="skeleton-line is-heading"></span>
+              <span class="skeleton-line is-card"></span>
+              <span class="skeleton-line is-heading"></span>
+              <span class="skeleton-line is-card"></span>
+            </div>
+          {:else if shape === 'aside'}
             <div class="layout-aside">
               <div class="layout-main skeleton">
                 <span class="skeleton-line is-heading"></span>

@@ -19,7 +19,7 @@
 
   function shapeOf(parts) {
     if (parts.length === 0 || outside.indexOf(parts[0]) !== -1) return null;
-    if (parts.length === 1) return 'aside';
+    if (parts.length === 1) return 'today';
     var page = parts[1];
     if (parts.length === 2 && page === 'admin') return 'settings';
     if (parts.length === 2 && page === 'me') return 'aside';
@@ -42,6 +42,7 @@
 
   var card = '<i class="is-card"></i>';
   var bodies = {
+    today: '<i class="is-heading"></i>' + card + '<i class="is-heading"></i>' + card,
     aside:
       '<b class="boot-cols is-aside"><b><i class="is-heading"></i>' +
       card +

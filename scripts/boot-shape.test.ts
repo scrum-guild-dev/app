@@ -85,7 +85,8 @@ describe('最初の読み込みの骨組みの形（static/boot-shape.js）', ()
 
   test('形ごとに本文の骨組みを組み立て、帯の数は移る間の骨組み（LoadingSheet）と同じ', () => {
     const sampleRoute: Record<LoadingShape, string> = {
-      aside: '/[slug]',
+      today: '/[slug]',
+      aside: '/[slug]/me',
       tree: '/[slug]/w/[id]',
       board: '/[slug]/w/[id]/sprint',
       plan: '/[slug]/w/[id]/plan',
@@ -98,6 +99,7 @@ describe('最初の読み込みの骨組みの形（static/boot-shape.js）', ()
     // 形ごとの固定の帯（見出し、カード、脇の欄など）は LoadingSheet.svelte の並びと同じ数を書く。見出しの右のボタン（plan と wiki）も is-button に数える
     const c = loadingShapeCounts;
     const expected: Record<LoadingShape, Record<string, number>> = {
+      today: { 'is-heading': 2, 'is-card': 2 },
       aside: { 'is-heading': 2, 'is-card': 2, 'is-panel': 1 },
       tree: { 'is-input': 1, 'is-select': c.treeSelects, 'is-item': c.treeRows },
       board: { 'boot-col': c.boardColumns, 'is-card': c.boardColumns * 2 },
@@ -168,7 +170,7 @@ describe('最初の読み込みの骨組みの形（static/boot-shape.js）', ()
       },
     });
     assert.doesNotThrow(() => vm.runInContext(script, context));
-    assert.equal(dataset.boot, 'aside');
+    assert.equal(dataset.boot, 'today');
     assert.equal(dataset.bootNav, undefined);
   });
 });
