@@ -387,6 +387,11 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
   display: grid; gap: var(--space-8); align-content: start;
 }
 
+/* 全文を薄くしても補足を読めるよう、待っている間だけ本文の文字色に寄せる。 */
+.content[aria-busy="true"] { opacity: 0.95; --color-muted: var(--color-fg); }
+.content[aria-busy="true"] .team-xp > b,
+.content[aria-busy="true"] .state-badge { color: var(--color-fg); }
+
 /* アカウントの新しいトークンの発行。組織の枠の上部に置き、長い名前も全文を折り返す。 */
 .token-notice {
   margin: var(--space-2) var(--space-8) var(--space-4);
@@ -500,8 +505,15 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 }
 .pill:hover:not([aria-disabled="true"]) { border-color: var(--color-muted); }
 .pill[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
-/* 押した状態は .btn.is-on と同じ（accent-soft の地に accent の枠と文字）。主ボタンの塗りつぶしと紛らわしいので塗りつぶさない。色に加えて太字でも示す */
+/* 押した状態は .btn.is-on と同じ（accent-soft の地に accent の枠と文字）。主ボタンの塗りつぶしと紛らわしいので塗りつぶさない。色に加えて、文字は太字、アイコンは太い線でも示す */
 .pill[aria-pressed="true"], .pill[aria-pressed="true"]:hover { background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent); font-weight: 700; }
+.pill[aria-pressed="true"] .ico { stroke-width: 2.6; }
+/* アイコンだけの .pill（引き出しの開き方）は線の太さの差が小さいので、枠を内側に1本足して二重にし、形でも示す。
+   強制色では地の色と box-shadow が消えるので、内側の outline で残す（フォーカスの輪が出ている間はそちらに譲る） */
+.pill[aria-pressed="true"]:has(> .ico:only-child) { box-shadow: inset 0 0 0 1px var(--color-accent); }
+@media (forced-colors: active) {
+  .pill[aria-pressed="true"]:has(> .ico:only-child):not(:focus-visible) { outline: 1px solid CanvasText; outline-offset: -4px; }
+}
 .pill-count {
   position: absolute; top: -7px; right: -7px; min-width: 17px; height: 17px; padding: 0 4px;
   background: var(--color-stamp); color: var(--color-on-accent); border-radius: var(--radius-full);
@@ -1251,9 +1263,8 @@ label.pick-row:hover { background: var(--color-accent-soft); }
   .drawer-top > .drawer-close { order: 1; margin-left: auto; }
   .drawer-top > .drawer-tools { order: 2; flex-basis: 100%; margin-left: 0; justify-content: flex-start; }
 }
-/* 開き方は押した時点で実行するボタンの組（.pill）。選んでいる形は aria-pressed で示し、色に加えて太字にする */
+/* 開き方は押した時点で実行するアイコンのボタンの組（.pill）。選んでいる形は aria-pressed で示し、色に加えてアイコンの線を太くする */
 .drawer-mode { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); }
-.drawer-mode .pill { white-space: nowrap; }
 /* 前後のタスクへ移るボタンの組（.pill の矢印）。開き方の左に並べる。端の向きは aria-disabled（.pill の見た目）で止める */
 .drawer-steps { display: inline-flex; gap: var(--space-2); }
 .drawer-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-xl); line-height: var(--leading-tight); overflow-wrap: anywhere; }
@@ -1976,6 +1987,10 @@ button.file-name { border: 0; background: none; padding: 0; text-align: left; co
 button.file-name:hover { text-decoration-color: currentColor; }
 .file-meta { font-size: var(--text-xs); color: var(--color-muted); overflow-wrap: anywhere; }
 .file-actions { display: flex; gap: var(--space-1); }
+@media (max-width: 760px), (pointer: coarse) {
+  .file-actions .icon-btn { width: 44px; height: 44px; }
+  .file-name:is(button, a) { min-height: 44px; display: flex; align-items: center; }
+}
 .file-row.is-error { border-color: var(--color-danger); }
 .file-row.is-error > .ico, .file-row.is-error .file-meta { color: var(--color-danger); }
 .file-bar { height: 4px; border-radius: var(--radius-full); background: var(--color-gauge); overflow: hidden; margin-top: 4px; }
@@ -1996,6 +2011,7 @@ button.file-name:hover { text-decoration-color: currentColor; }
 .composer-foot .field-hint { flex: 1 1 200px; }
 /* プレビュー（ダイアログの中） */
 .preview { display: grid; place-items: center; min-height: 240px; border: 1px solid var(--color-line); border-radius: var(--radius-1); overflow: hidden; }
+.preview > img, .preview > video { max-width: 100%; max-height: 60vh; object-fit: contain; }
 .preview .file-art { width: 100%; aspect-ratio: 16 / 10; }
 .dialog-sheet.is-wide { width: min(820px, 100%); }
 /* 使っている量と上限（添付ファイルの合計）。80% を超えたら is-warn、上限に達したら is-full */

@@ -93,6 +93,8 @@ function namedValue(value: unknown): TaskHistoryValue {
 // 1つの値を、欄の形にそろえる。形の合わない値は null にする（欄は落とさない）
 function valueOf(field: string, value: unknown): TaskHistoryValue {
   if (value === null) return null;
+  // 添付の名前や ID は配らず、追加と削除を見分ける件数だけを返す。
+  if (field === 'attachments') return Array.isArray(value) ? value.length : null;
   if (TEXT_FIELDS.has(field)) return typeof value === 'string' ? value : null;
   if (NUMBER_FIELDS.has(field)) return typeof value === 'number' && Number.isFinite(value) ? value : null;
   if (NAMED_FIELDS.has(field)) return namedValue(value);

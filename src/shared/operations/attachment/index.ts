@@ -55,4 +55,47 @@ export const attachmentDownload = defineOperation({
   output: z.instanceof(Response),
 });
 
-export const attachmentOperations: readonly AnyOperationDefinition[] = [attachmentUpload, attachmentDownload];
+export const ATTACHMENT_LIST_PAGE_SIZE = 50;
+const attachmentListCursor = z.object({ attached_at: z.iso.datetime({ precision: 3 }), id: idSchema });
+
+export const attachmentList = defineOperation({
+  name: 'attachment-list',
+  description: 'タスクに付いたファイルを添付した日時と ID の新しい順で50件ずつ返す',
+  permission: 'member',
+  workspace: true,
+  mode: 'read',
+  input: z.object({ workspace_id: idSchema, task_id: idSchema, after: attachmentListCursor.optional() }),
+  output: z.object({
+    next_cursor: attachmentListCursor.optional(),
+    attachments: z.array(
+      z.object({
+        id: z.string(),
+        file_name: z.string(),
+        content_type: z.string(),
+        size_bytes: z.number(),
+        created_at: z.string(),
+        uploaded_by: z.string().nullable(),
+        uploaded_by_name: z.string().nullable(),
+        deletable: z.boolean(),
+      }),
+    ),
+  }),
+});
+
+export const attachmentDelete = defineOperation({
+  name: 'attachment-delete',
+  storage: 'attachments',
+  description: 'タスクの添付ファイルを上げた人かリーダーが消す',
+  permission: 'member',
+  workspace: true,
+  mode: 'write',
+  input: z.object({ workspace_id: idSchema, task_id: idSchema, attachment_id: idSchema }),
+  output: z.object({ id: z.string() }),
+});
+
+export const attachmentOperations: readonly AnyOperationDefinition[] = [
+  attachmentUpload,
+  attachmentDownload,
+  attachmentList,
+  attachmentDelete,
+];

@@ -72,16 +72,33 @@ describe('前後のタスクへ移るボタン', () => {
   });
 });
 
+// 開き方の組の中のボタンを、属性の並びに頼らず名前で引く
+function modeButton(body: string, name: string): string | undefined {
+  const group = body.match(/<span class="drawer-mode"[\s\S]*?<\/span>/)?.[0] ?? '';
+  return group.match(/<button[\s\S]*?<\/button>/g)?.find((b) => b.includes(`aria-label="${name}"`));
+}
+
 describe('開き方の切り替え', () => {
-  test('渡さなければ、横、真ん中、ページ全体、新しいタブの4つを出す', () => {
+  test('渡さなければ、横、真ん中、ページ全体、新しいタブの4つを、名前を持つアイコンのボタンで出す', () => {
     const body = html({});
-    for (const name of ['横', '真ん中', 'ページ全体', '新しいタブ']) expect(body).toContain(`>${name}</button>`);
+    const icons = { 横: 'panel', 真ん中: 'centered', ページ全体: 'maximize', 新しいタブ: 'external' };
+    for (const [name, icon] of Object.entries(icons)) {
+      const button = modeButton(body, name);
+      expect(button).toContain(`title="${name}"`);
+      expect(button).toContain(`<use href="#i-${icon}"`);
+    }
+  });
+
+  test('今描いている形のボタンだけに aria-pressed="true" を付ける', () => {
+    const body = html({ mode: 'center' });
+    expect(body.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(modeButton(body, '真ん中')).toContain('aria-pressed="true"');
   });
 
   test('形を渡せば、その形だけを出す（ストーリーの引き出しは横と真ん中だけ）', () => {
     const body = html({ modes: ['side', 'center'] });
-    expect(body).toContain('>横</button>');
-    expect(body).toContain('>真ん中</button>');
+    expect(body).toContain('aria-label="横"');
+    expect(body).toContain('aria-label="真ん中"');
     expect(body).not.toContain('ページ全体');
     expect(body).not.toContain('新しいタブ');
   });
@@ -89,7 +106,7 @@ describe('開き方の切り替え', () => {
   test('出せる形が1つだけなら、切り替えの組ごと出さない（選べる形が無いのに既定を書き換える入口にしない）', () => {
     const body = html({ modes: ['side'] });
     expect(body).not.toContain('drawer-mode');
-    expect(body).not.toContain('>横</button>');
+    expect(body).not.toContain('aria-label="横"');
     expect(html({ modes: ['side', 'center'] })).toContain('drawer-mode');
   });
 });

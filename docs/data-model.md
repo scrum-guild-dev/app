@@ -35,7 +35,7 @@
 | 接続 | `connections`、`connection_scopes`、`connection_status_mappings` |
 | 計画と作業 | `epics`、`epic_party_members`、`stories`、`tasks`、`task_sources`、`task_source_payloads`、`task_field_values`、`comments`、`attachments`、`sprints`、`sprint_entries` |
 | Wiki | `wiki_pages`、`wiki_page_revisions` |
-| 記録 | `completions`、`thanks`、`xp_grants`、`notifications`、`change_logs` |
+| 記録 | `completions`、`thanks`、`xp_grants`、`notifications`、`favorites`、`change_logs` |
 
 親子の向きの要点。
 
@@ -1034,7 +1034,11 @@
 
 ### attachments
 
+タスクの履歴では添付の追加と削除の両方を表示する。`task-history` の添付の前後の値は ID や名前を返さず件数（元の値が null なら null）とし、削除は前に件数・後に null を返す。 保存時の履歴は `attachments: [null, [{id}, …]]`、削除時は `attachments: [[{id}], null]` とする。
+
 添付ファイルの情報。`migrations/0018_add_attachments.sql` で作る組織の中の表。ファイルの中身は R2 に置く。
+
+`attachment-list` は現在のワークスペース所属者（管理者を含む）が、削除していない同じワークスペースのタスクの確定した添付を読む操作。入力は `workspace_id`、`task_id`、任意の `after: { attached_at, id }`。画像・動画と本文に差し込んだ画像も含め、`attached_at` と `id` の降順で50件ずつ返す。51件目で続きの有無を判定し、続きがある場合だけ `next_cursor` を返す。未添付・別タスク・コメント・ストーリー・エピックの添付を混ぜない。出力は名前・型・容量・上げた人と名前・日時・削除可否。閉じたワークスペースでは削除不可。カーソルの行自体を消しても、添付した日時とIDの境界から続きを読む。 カーソルの日時はミリ秒3桁の UTC の形に限る。表示する上げた日時は `created_at` のままとし、昔上げたファイルを後から付けた場合も最初のページに出る。
 
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
@@ -1376,6 +1380,33 @@ Wiki のページ。組織の Wiki とワークスペースの Wiki で共有す
 - エピックの画面（`epic-detail`）の討伐隊の各行の `level`: メンバーの一覧と同じく、レベルだけを返し、合計は返さない。討伐隊は抜けた人も含むので、今の所属でなく討伐隊の行（`epic_party_members`）の人で絞って、1つの文で読む。
 - 読む量: 明細は `xp_grants_user_confirmed`（`user_id, confirmed_at, id`）を逆順にたどり、`ORDER BY confirmed_at DESC, id DESC` のための一時 B-tree を作らず、条件に合う51行までを読む（50件と続きの有無を確かめる1件）。続きの頁は、カーソルを行値の比較 `(confirmed_at, id) < (?, ?)` で書くので、索引の範囲として直接その位置から読み、カーソルより新しい側の項目は読まない。組織の合計は `xp_grants_user_workspace_amount` の `COVERING INDEX` で本人の `workspace_id` と `amount` を読み、`xp_grants` の表の行は引かない。合計のために読む索引の項目数は本人の明細の総数に比例する。どちらも結合した `workspaces` で組織を確かめる。実際の文が使う索引と、明細の並べ替えが不要なこと、合計が索引だけで読めることは `test/schema.test.ts` の実行計画のテストで確かめる。
 
+### favorites
+
+本人だけのお気に入り。`migrations/0024_add_favorites.sql` で足す組織の中の表。組織は `user_id` の `users.organization_id` で絞る。
+
+| 列 | 型 | 制約 | 説明 |
+| --- | --- | --- | --- |
+| id | TEXT | NOT NULL、PK | UUIDv7 |
+| user_id | TEXT | NOT NULL、FK users | 印を付けた本人 |
+| workspace_id | TEXT | FK workspaces | 対象から写す。組織の Wiki のページだけ空 |
+| task_id | TEXT | FK tasks | |
+| story_id | TEXT | FK stories | |
+| epic_id | TEXT | FK epics | |
+| wiki_page_id | TEXT | FK wiki_pages | |
+| created_at | TEXT | NOT NULL、UTC の ISO 8601 の CHECK | 印を付けた日時 |
+
+- 対象の4列はちょうど1つだけ入る CHECK を付ける。タスク、ストーリー、エピックには `workspace_id` が必要。Wiki の組織・ワークスペースと対象の所属が一致することは、操作が組織で絞って確かめる。
+- 部分一意索引: `(user_id, task_id)`、`(user_id, story_id)`、`(user_id, epic_id)`、`(user_id, wiki_page_id)`（それぞれ対象の列が空でない行だけ）。同じ人の同じ対象は1行。
+- 一覧の索引: `(user_id, created_at)`。`user_id` の外部キーの検査にも使う。外部キーの検査用に、`workspace_id` と対象の4列にも、それぞれその列が空でない行の索引を付ける。
+- `favorite-set` は、そのとき読める対象に本人の印を付け外しする。付ける要求の再送は成功し、行と日時は変えない。閉じたワークスペースでも読める対象は付けられる。外すときは物理削除し、本人の既存の印なら対象が削除済み・所属外・閉じた場合も外せる。読めず本人の印もない対象は、外す要求でも 404 にする。`change_logs` に残さない。
+- 付ける要求を再送する時点で対象が削除済み・所属外になっていれば、印が保存済みでも 404 にする。登録済みであることより、再送時点の閲覧権限と対象の存在を優先する。保存済みの印はそのまま残す。
+- 上限は組織内の本人ごとに20行。非表示の印も数え、21行目は 409 の `favorite_limit`（`details: { used, limit }`）で断る。
+- 今回の一覧は非表示の印の ID を返さず、非表示の印を管理する操作も追加しない。そのため20行すべてが非表示なら一覧が空でも追加は断られ、対象の ID が分からない場合はこの2操作だけでは枠を空けられない。非表示の印を整理する導線は、親ストーリー [#1085](https://github.com/scrum-guild-dev/app/issues/1085) を追跡先として別途検討する。
+- `favorite-list` は本人の行だけを付けた新しい順で返す。削除した対象、所属外のワークスペースの対象（管理者を除く）、閉じたワークスペースの対象は返さない。印は残し、削除の取り消し、所属し直し、開き直しで戻る。取り込みの受信箱・アーカイブにあるタスクも対象にできる。
+- 並びは `created_at DESC, id DESC`。同じミリ秒の登録は ID で順を固定し、そのミリ秒内の実際の登録順までは保証しない。
+- 解約した組織の物理削除では、`users.organization_id` で絞って、Wiki のページとほかの対象、ワークスペース、ユーザーより先に消す。
+- Wiki の保持期限後の掃除はページ行を墓標として残すため、印は消さない。将来ページ行を物理削除する処理を足す場合は、同じ `batch()` でそのページの `favorites` を先に消す。外部キーに `ON DELETE` は付けない。
+
 ### notifications
 
 | 列 | 型 | 制約 | 説明 |
@@ -1439,6 +1470,7 @@ D1 は対話的なトランザクションを持たない。まとめて書く�
 
 | 操作 | 書くもの |
 | --- | --- |
+| お気に入りの付け外し | `favorites` だけを1回の `batch()` で書く。追加は本人・組織・対象の可視性と20行未満を条件にした `INSERT ... SELECT` にし、重複は追加しない。上限の検査も書く文で行い、同時の要求でも20行を超えない。削除は本人と組織で絞る。`change_logs` は書かない |
 | タスクの完了 | `tasks`、`completions`、`xp_grants`（完了、起票、詳細、手助け）、`change_logs`、`notifications`。`sprint_entries` は書かない（進行中のスプリントの中の完了でも行は開いたまま。終了で閉じる）。ただし始まっていないスプリント（と削除したスプリント）の中の完了だけは、同じ `batch()` でスプリントから外す（`sprint_entries` を `removed` で閉じ、`change_logs` に `{"sprint": [前, null]}`）。文と条件は下の「タスクの完了（`task-complete`）の文と条件」 |
 | タスクの作成 | `tasks`、`change_logs`。`tasks` の文は `INSERT ... SELECT ... WHERE EXISTS`（閉じていないワークスペース。担当を指すときは、そのワークスペースに今所属している、無効でなく `login_subject` のある人。親を指すときは、同じワークスペースの削除していない、完了していないストーリー）にし、`change_logs`（担当と親も残す）は作った行があるときだけ入れる。何も入らなければ、閉じていれば 409（`workspace_closed`）、親が完了していれば 409（`conflict`）、そうでなければ 404。担当つきで作るときは、続けて `epic_party_members` と `change_logs` を同じ `batch()` に足す（下の「タスクの担当の変更」の討伐隊の文と同じ。条件のタスクの時刻は作った時刻）。入れ先のスプリントと列（`sprint`）を指すときは、同じ `batch()` で `tasks` の `INSERT` に `sprint_id`、`column_id`、`column_position`（その列の中の末尾）を含め、入れ先の条件（削除していない `planned` か `active` のスプリントと、同じワークスペースの削除していない完了でない列）を `WHERE EXISTS` に足す。`change_logs` の `create` に `sprint`（`[null, {id, name}]`）を残し、最後に `sprint_entries` の入った行を足す（作った行があるときだけ。担当の文は直前の文に頼るので、その後ろに置く）。入れ先が断られたら（終了したスプリントは 409（`conflict`、理由は `closed`）、完了の列は 409（理由は `done_column`）、無いスプリントや列と別のワークスペースや別の組織のものは 404）タスクも作られない |
 | タスクの変更 | `tasks`、`change_logs`。ストーリーの変更と同じ書き方: 先に読んだ今の値と違う欄だけを `UPDATE` の `SET` に入れ（送られない欄は触らない）、条件は `id`、`workspace_id`、`deleted_at IS NULL`、閉じていないワークスペースと、書く欄ごとの `<列> IS :読んだ値`。`change_logs`（`entity_type = 'task'`、`action = 'update'`、変わった列だけの `{"列": [前, 後]}`）は、直前の `UPDATE` が行を変えたときだけ入れる（`INSERT ... SELECT ... WHERE changes() > 0`。下の「直前の文に結ぶ」）。欄は `title`、`points`、`due_on`、`link_url`、`body_md`、`category_id`、`repository_id` で、担当（下の「タスクの担当の変更」）は変えない。区分とリポジトリは、同じワークスペースの削除していないものだけで（書く文の条件にも `EXISTS` を入れる。無ければ 404）、履歴は `{"category": [前, 後]}`、`{"repository": [前, 後]}`（値は `{id, name}` か null）。区分は親のないタスクだけが持ち、親のあるタスクへ送ると読んだ時点で 409（`conflict`、理由は `has_parent`）、書く文は `story_id IS NULL` も条件にする（読んでから書くまでに親の下へ移されたら、次の周の読み直しで 409）。断る変更は読んだ時点で 409（`conflict`）にする: 完了したタスク（`completed_at IS NOT NULL`）のポイント（経験値とスプリントの集計が `completions.points` を使うため。同じ値を送るだけなら断らない）と、取り込んだタスク（`is_imported = 1`）のタイトルとリンク。ポイントを書く文は `completed_at IS NULL` も条件にし、読んでから書くまでに完了にされたら止める（次の周の読み直しで 409）。何も入らなければ、閉じていれば 409（`workspace_closed`）、タスクが無ければ 404、どちらでもなければ（別の要求が先に同じ欄を変えた）読み直して差を作り直し、やり直す（3 回まで。超えたら 409 の `conflict`）。変える欄も添付も無い要求は何も書かず、閉じたワークスペースは 409 にする。`attachment_ids` があれば主文に未添付の件数条件を足し、履歴に `attachments` を含め、履歴の後に付ける文を同じ `batch()` に足す。本文が同じでも添付だけを保存する。断る順は下の「添付を含む保存」に従う。書き始める前の値（`expected`。`title`、`points`、`due_on`、`link_url`、`body_md` の欄ごとで任意。引き出しの自動保存が添える）は、書く欄（今の値と違うもの）のうち添えられた欄が読んだ今の値と違えば、何も書かず 409（`conflict`、`details` は `{"reason": "stale", "current": {欄: 今の値}}`）で断る（閉じたワークスペースは `workspace_closed` が先）。送った値が今の値と同じ欄と、書かない欄は見ない。添えない呼び出し（CLI、MCP）は今のまま後の保存が勝つ。履歴は、同じ人が最新の履歴の行を最初に書いた時刻（行 ID の UUIDv7）から5分以内に同じ1つの欄だけを直すとき、`INSERT` の代わりにその行の `changes_json`（「前」は最初のまま、「後」は今回の値）と `created_at` を `UPDATE` で書き換える（`change_logs` の節の「続けて直した分のまとめ」）。まとめる行は読んだ時点で決め、主文の条件に「その行が読んだ `changes_json` のまま」を足すので、読んでから書くまでに別の要求がその行を変えていたら、主文が通らず読み直してやり直す（`previousStatementChanged` は主文の直後の履歴の文（`INSERT` か `UPDATE`）に結ぶ） |
@@ -1515,7 +1547,7 @@ D1 は対話的なトランザクションを持たない。まとめて書く�
 | 添付ファイルを上げる | `attachment-upload`。入力は `X-Operation-Input` の URL エンコードした JSON。認証、同意、組織、権限、トークンの範囲の後、入力（400）→ `Content-Length`（400 / 413）→ ワークスペース（404 / 403 / 409）の順で本文を読む前に断る。先頭64バイトで種類を判定し、`FixedLengthStream` を通して R2 の `<organization_id>/<workspace_id>/<id>` に書き、続けて組織の入口の `batch()` で付く先のない `attachments` を入れる。応答は `{ id, file_name, content_type, size_bytes, created_at }`。入力、判定、失敗したときの削除の詳細は `attachments` の節 |
 | 書いている途中で上げた添付を付ける | タスク、ストーリー、エピック、コメントの作成と変更の `batch()` の最後に、`attachments`（付く先の列、`attached_at`）の `UPDATE` を足す。別の `batch()` に分けない。保存の主な文は、渡した ID がすべて付けられることを件数で条件にし、付ける文は付く先の行が書けたことを条件にする。ID は1回20件まで。断る順と定期処理との競合は `attachments` の節 |
 | 付く先のない添付を消す（定期処理） | 毎時0分に、停止していない組織ごとに、`attachments` の `DELETE`（その組織のワークスペースで絞り、`workspace_id IN (SELECT id FROM workspaces WHERE organization_id = :組織)`、`id IN (SELECT ... LIMIT 50)` と `attached_at IS NULL` を条件にし、`RETURNING object_key`）、続けて返したキーのうち組織の ID で始まるものを R2 からまとめて消す。50件に届いたら繰り返し、1組織20回まで、定期処理の開始から20秒まで。形は `attachments` の節 |
-| 添付ファイルを消す | `attachments` の削除と `change_logs`、続けて R2 のファイルの削除 |
+| 添付ファイルを消す | `attachment-delete`（入力は `workspace_id`、`task_id`、`attachment_id`）。タスクに確定した `attachments` だけが対象で、上げた本人とリーダー（管理者を含む）だけに許可する。閉じたワークスペースでは書かない。DELETE の条件でも組織・ワークスペース・削除していないタスク・現在の所属と権限・正規の R2 キーを確かめ、実際に削除したときだけ同じ batch で `change_logs`（`entity_type = task`、`entity_id = タスクのID`、`action = update`、`attachments: [[{id}], null]`）を残す。続けて実際に消したキーだけを R2 から消す。R2 失敗は件数だけログに出し、D1 の削除成功を返す。通常の write 操作として API トークン・CLI・MCP からも同じ権限で呼べる |
 | コメントの作成 | `comments`。`comment-create` が `INSERT ... SELECT ... WHERE EXISTS (そのワークスペースの削除していないタスク) AND EXISTS (閉じていないワークスペース)` の1文で入れ、`change_logs` は書かない（行そのものが記録）。`attachment_ids` があれば主文に未添付の件数条件を足し、直後に付ける文を同じ `batch()` に足す。何も入らなければ、閉じていれば 409（`workspace_closed`）、そうでなければ404。添付ありの断る順は下の「添付を含む保存」に従う |
 | コメントの編集 | `comments`（`body_md`、`edited_at`）、`change_logs`（`entity_type = 'comment'`、`action = 'update'`。形は `change_logs` の節）。先にコメントを読み（ワークスペースで絞り、削除していないタスクのコメントだけ。無ければ 404）、書いた本人でなければ 403（`forbidden`）、消えていれば 409（`conflict`、`deleted`）、整えた本文が今と同じで添付も無ければ何も書かない。`attachment_ids` があれば主文に未添付の件数条件を足し、履歴に `attachments` を含め、履歴の後に付ける文を同じ `batch()` に足す。添付だけの保存でも `edited_at` を更新する。断る順は下の「添付を含む保存」に従う。`comments` の文の条件は `id`、`workspace_id`、`author_user_id = :呼んだ人`、`deleted_at IS NULL`、`EXISTS (削除していないタスク)`、閉じていないワークスペースで、`change_logs` は直前の `UPDATE` が行を変えたときだけ入れる（下の「直前の文に結ぶ」）。何も変わらなければ、存在を先に決め、読み直してコメントかタスクが無ければ（読んでから書くまでにタスクが削除された）404、閉じていれば 409（`workspace_closed`）、消されていれば 409（`conflict`、`deleted`。読んでから書くまでにリーダーが消した）。先に読んだ時点でも、無いコメントは閉じたワークスペースでも 404 で、あるコメントへの書き込みだけが `workspace_closed` になる（同じ本文の更新も、閉じていれば `workspace_closed`） |
 | コメントの削除 | `comments`（`body_md` を空文字、`deleted_at`、`deleted_by`）、`change_logs`（`entity_type = 'comment'`、`action = 'delete'`。形は `change_logs` の節）。編集と同じく、先に読んで、無ければ 404、書いた本人でもリーダー（管理者を含む）でもなければ 403、消えていれば 409（`conflict`、`deleted`）。`comments` の文の条件は `id`、`workspace_id`、`deleted_at IS NULL`、`EXISTS (削除していないタスク)`、閉じていないワークスペースで、`change_logs` は直前の `UPDATE` が行を変えたときだけ入れる。何も変わらなければ、編集と同じ順で理由を返す（先に別の要求が消していれば 409 の `deleted` で、履歴は1行だけ）。コメントの添付ファイル（#68）が入ったら、そのコメントの `attachments` の削除をこの `batch()` に足し、続けて R2 のファイルを消す |

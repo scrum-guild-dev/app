@@ -2,8 +2,9 @@
   import '@fontsource-variable/noto-sans-jp';
   import '../../design/tokens.css';
   import '../../design/components.css';
-  import { onMount, untrack, type Snippet } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import { prefersReducedMotion } from '../lib/reduced-motion.ts';
+  import { navigationLoading, navigationLoadingKind } from '../lib/navigation-loading.svelte.ts';
   import { navigating } from '$app/state';
   import ArtSprite from '../lib/components/ArtSprite.svelte';
   import IconSprite from '../lib/components/IconSprite.svelte';
@@ -17,14 +18,9 @@
 
   let { children }: { children: Snippet } = $props();
 
-  // 枠の外の画面（組織の選択、見つからない、運用）から移る間は、読み込み中の表示を出す。
-  // 組織の枠の中から移る間は、今の画面を残す（枠ごと消さない）。
-  // 短い読み込みでは出さないよう、移り始めから SLOW_MS たっても終わらないときだけ出す
-  const SLOW_MS = 300;
-  const loadingFromOutside = $derived(navigating.to !== null && !navigating.from?.route.id?.startsWith('/[slug]'));
-  // 行き先が組織の枠の中なら、読み込み中も枠と行き先の本文の組みに近い形で出す（読み込んだ後に組みと位置が変わらないように）
+  const loadingKind = $derived(navigationLoadingKind(navigating.from, navigating.to));
   const loadingShapeTo = $derived(loadingShape(navigating.to?.route.id));
-  let slow = $state(false);
+  const slow = $derived(navigationLoading.kind === 'outside');
   // 行き先の情報は到着時に消える。退場中に枠を紙へ替えないよう、表示した形を保持する。
   let shownLoadingShape = $state<LoadingShape | null>(null);
 
@@ -77,21 +73,17 @@
   }
 
   $effect(() => {
-    if (!loadingFromOutside) return;
-    const timer = setTimeout(() => {
-      shownLoadingShape = untrack(() => loadingShapeTo);
-      slow = true;
-    }, SLOW_MS);
-    return () => {
-      clearTimeout(timer);
-      slow = false;
-    };
+    const kind = loadingKind;
+    // 枠の中で行き先を替えたら、その移動の開始から300msを数え直す。
+    // 枠の外では、既存の紙を出したまま行き先の形だけ替える。
+    if (kind === 'inside') void navigating.to?.url.pathname;
+    return navigationLoading.begin(kind);
   });
 
   // 待っている間の行き先変更は形だけ替え、表示待ちのタイマーと退場をやり直さない。
   // 到着して行き先が消えた後は、退場中の形を保持する。
   $effect(() => {
-    if (slow && loadingFromOutside) shownLoadingShape = loadingShapeTo;
+    if (slow && loadingKind === 'outside') shownLoadingShape = loadingShapeTo;
   });
 </script>
 
@@ -106,7 +98,7 @@
 <ShortcutHelp />
 <ArtSprite />
 <!-- 読み込み中を読み上げに伝える。領域は常に置き、中の文字だけを替える -->
-<div class="visually-hidden" role="status">{slow ? t('loading') : ''}</div>
+<div class="visually-hidden" role="status">{navigationLoading.kind !== null ? t('loading') : ''}</div>
 {#if slow}
   <div class="loading-overlay" out:loadingOut><LoadingSheet shape={shownLoadingShape} /></div>
 {:else}

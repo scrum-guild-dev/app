@@ -210,6 +210,20 @@ export const AOBA_CLIENT_WORKSPACE_ID = '019a0000-0000-7000-8000-000000000401';
 // 受託開発チームにテストが作ったタスクの題の頭。seed のタスクの題はこれで始まらない
 export const E2E_SEED_TASK_PREFIX = 'e2e の親なしタスク';
 
+export const E2E_FAVORITE_TASK_PREFIX = 'e2e のお気に入り確認';
+
+// API の応答が壊れていても、作成前に決めた UUID でテスト自身のタスクだけを片付ける。
+export async function removeFavoriteTestTask(marker: string): Promise<void> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(marker))
+    throw new Error('お気に入りテストの識別子は UUID で渡す');
+  const task = `SELECT id FROM tasks WHERE workspace_id = '${AOBA_CLIENT_WORKSPACE_ID}' AND title = '${E2E_FAVORITE_TASK_PREFIX} ${marker}'`;
+  await executeLocalD1([
+    `DELETE FROM favorites WHERE task_id IN (${task});`,
+    `DELETE FROM change_logs WHERE workspace_id = '${AOBA_CLIENT_WORKSPACE_ID}' AND entity_type = 'task' AND entity_id IN (${task});`,
+    `DELETE FROM tasks WHERE id IN (${task});`,
+  ]);
+}
+
 // 受託開発チームに、題が E2E_SEED_TASK_PREFIX で始まるタスク（テストが作った行）と、その変更の履歴を消し、seed の状態へ戻す。
 // 親なしのタスクは木の末尾に並ぶので、残ると繰り返しとほかのテストの木に出る。作っただけのタスクが書くのは tasks と
 // change_logs だけ（src/server/operations/task.ts の taskCreateOperation）。変更の履歴は消す対象を tasks から引くので、先に消す

@@ -1,3 +1,5 @@
+import { attachmentListOperation, attachmentDeleteOperation } from './attachment-list-delete.ts';
+import { favoriteListOperation, favoriteSetOperation } from './favorite.ts';
 import { orgWikiDeleteOperation, workspaceWikiDeleteOperation } from './wiki-delete.ts';
 import { orgWikiMoveOperation, workspaceWikiMoveOperation } from './wiki-move.ts';
 import { orgWikiUploadOperation, workspaceWikiUploadOperation } from './wiki-upload.ts';
@@ -143,6 +145,8 @@ import {
 
 // 呼べる操作の一覧（operation-list）が載せる、ほかの操作
 const listedOperations: readonly ImplementedOperation[] = [
+  favoriteListOperation,
+  favoriteSetOperation,
   orgWikiDeleteOperation,
   workspaceWikiDeleteOperation,
   orgWikiUploadOperation,
@@ -297,6 +301,8 @@ const listedOperations: readonly ImplementedOperation[] = [
   invitationDeclineOperation,
   attachmentUploadOperation,
   attachmentDownloadOperation,
+  attachmentListOperation,
+  attachmentDeleteOperation,
 ];
 
 export const implementedOperations: readonly ImplementedOperation[] = [
