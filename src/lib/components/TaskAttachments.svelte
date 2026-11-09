@@ -151,7 +151,9 @@
     <p role="status">{t('retrying')}</p>
   {:else if loadState === 'failed'}
     <p role="alert">{t('attachmentListFailed')}</p>
-    <button class="btn is-sm" type="button" onclick={() => void retry()}>{t('retry')}</button>
+    <div class="form-actions">
+      <button class="btn is-sm" type="button" onclick={() => void retry()}>{t('retry')}</button>
+    </div>
   {:else}
     <div class="files">
       {#if files.length === 0 && !canWrite}<p role="status">{t('attachmentNone')}</p>{/if}
@@ -202,10 +204,16 @@
         </div>
       {/each}
       {#if nextCursor !== undefined}
-        {#if moreFailed}<p role="alert">{t('attachmentMoreFailed')}</p>{/if}
-        <button class="btn is-sm" type="button" disabled={loadingMore || deleting} onclick={() => void load(true)}
-          >{loadingMore ? t('retrying') : moreFailed ? t('retry') : t('attachmentLoadMore')}</button
-        >
+        {#if moreFailed}<p class="field-error" role="alert">{t('attachmentMoreFailed')}</p>{/if}
+        <div class="form-actions">
+          <button
+            class="btn is-sm"
+            type="button"
+            aria-disabled={loadingMore || deleting}
+            onclick={() => void load(true)}
+            >{loadingMore ? t('retrying') : moreFailed ? t('retry') : t('attachmentLoadMore')}</button
+          >
+        </div>
       {/if}
       {#if canWrite}
         <div class="dropzone is-disabled">
