@@ -51,6 +51,18 @@ describe('fontsource の woff を外す', () => {
     }
   });
 
+  test('引用符と空白が異なっても正常な書体名をそろえ、異なる書体との混在は断る', () => {
+    const transform = fontsourceWoff2Only().transform as (code: string, id: string) => { code: string } | null;
+    const id = '/repo/node_modules/@fontsource-variable/noto-sans-jp/index.css';
+    for (const quote of ["'", '"']) {
+      const css = `@font-face { font-family: ${quote}Noto Sans JP Variable${quote}  ; }`;
+      const normalized = transform(css, id)!.code;
+      assert.match(normalized, /font-family: 'Noto Sans JP';/);
+      assert.doesNotMatch(normalized, /Variable/);
+      assert.throws(() => transform(`${css} @font-face { font-family: 'Other'; }`, id), /Noto Sans JP/);
+    }
+  });
+
   test('プラグインは @fontsource の CSS だけを書き換える', () => {
     const plugin = fontsourceWoff2Only();
     const transform = plugin.transform as (code: string, id: string) => { code: string } | null;
