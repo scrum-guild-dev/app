@@ -2063,6 +2063,9 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 
 /* ===== 知らせ（トースト） ===== */
 .toasts { position: fixed; z-index: 40; right: max(var(--space-4), env(safe-area-inset-right, 0px)); bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); display: grid; gap: var(--space-2); }
+@media (max-width: 760px) {
+  .toasts { bottom: calc(var(--mobile-navigation-clearance) + env(safe-area-inset-bottom, 0px)); }
+}
 .toast, .toast-leaving { display: flex; gap: var(--space-2); align-items: center; padding: var(--space-3) var(--space-4); background: var(--color-fg); color: var(--color-bg); border-radius: var(--radius-1); box-shadow: var(--shadow-float); font-size: var(--text-sm); overflow-wrap: anywhere; max-width: min(420px, calc(100vw - 2 * var(--space-4))); animation: toast-in var(--duration-stamp) var(--ease-out) 1; }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 /* 失敗の知らせ（アイコン alert）。成功と同じ反転の地に、危険の薄い色の左の縦線を足し、色でも見分ける（長さは本番が 8 秒にする）。
