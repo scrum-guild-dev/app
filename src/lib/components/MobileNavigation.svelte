@@ -89,7 +89,7 @@
       aria-controls={menuId}
       onclick={show}
     >
-      <span class="mobile-menu-arrows" aria-hidden="true">⌃⌄</span>
+      <span class="mobile-menu-arrows" aria-hidden="true"><Icon name="chevron" /><Icon name="chevron" /></span>
     </button>
   </nav>
   <!-- 起票シートの別ストーリーがこの置き場所にボタンを足す。空の操作は出さない。 -->
