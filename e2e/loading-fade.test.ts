@@ -104,6 +104,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         hidden: false,
         shape: '',
         background: '',
+        title: '',
         scrollTop: 0,
         opacity: [] as number[],
       };
@@ -124,6 +125,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
                 : [],
             );
         seen.shape = overlay.querySelector('[data-shape]')?.getAttribute('data-shape') ?? '';
+        seen.title = document.title;
         seen.background = style.backgroundImage;
         seen.scrollTop = overlay.scrollTop;
         seen.fixed = style.position === 'fixed';
@@ -163,6 +165,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
               hidden: boolean;
               shape: string;
               background: string;
+              title: string;
               scrollTop: number;
               opacity: number[];
             };
@@ -175,6 +178,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       expect(seen.opacity.at(-1)).toBe(0);
       expect(seen.fixed).toBe(true);
       expect(seen.shape).toBe('today');
+      expect(seen.title).toBe(await page.title());
+      expect(seen.title).toContain('今日やること');
       expect(seen.background).toBe(before.background);
       expect(seen.scrollTop).toBe(before.scrollTop);
       expect(seen.hidden).toBe(true);
