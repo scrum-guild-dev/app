@@ -1034,7 +1034,11 @@
 
 ### attachments
 
+タスクの履歴では添付の追加と削除の両方を表示する。`task-history` の添付の前後の値は ID や名前を返さず件数（元の値が null なら null）とし、削除は前に件数・後に null を返す。 保存時の履歴は `attachments: [null, [{id}, …]]`、削除時は `attachments: [[{id}], null]` とする。
+
 添付ファイルの情報。`migrations/0018_add_attachments.sql` で作る組織の中の表。ファイルの中身は R2 に置く。
+
+`attachment-list` は現在のワークスペース所属者（管理者を含む）が、削除していない同じワークスペースのタスクの確定した添付を読む操作。入力は `workspace_id`、`task_id`、任意の `after: { attached_at, id }`。画像・動画と本文に差し込んだ画像も含め、`attached_at` と `id` の降順で50件ずつ返す。51件目で続きの有無を判定し、続きがある場合だけ `next_cursor` を返す。未添付・別タスク・コメント・ストーリー・エピックの添付を混ぜない。出力は名前・型・容量・上げた人と名前・日時・削除可否。閉じたワークスペースでは削除不可。カーソルの行自体を消しても、添付した日時とIDの境界から続きを読む。 カーソルの日時はミリ秒3桁の UTC の形に限る。表示する上げた日時は `created_at` のままとし、昔上げたファイルを後から付けた場合も最初のページに出る。
 
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
@@ -1543,7 +1547,7 @@ D1 は対話的なトランザクションを持たない。まとめて書く�
 | 添付ファイルを上げる | `attachment-upload`。入力は `X-Operation-Input` の URL エンコードした JSON。認証、同意、組織、権限、トークンの範囲の後、入力（400）→ `Content-Length`（400 / 413）→ ワークスペース（404 / 403 / 409）の順で本文を読む前に断る。先頭64バイトで種類を判定し、`FixedLengthStream` を通して R2 の `<organization_id>/<workspace_id>/<id>` に書き、続けて組織の入口の `batch()` で付く先のない `attachments` を入れる。応答は `{ id, file_name, content_type, size_bytes, created_at }`。入力、判定、失敗したときの削除の詳細は `attachments` の節 |
 | 書いている途中で上げた添付を付ける | タスク、ストーリー、エピック、コメントの作成と変更の `batch()` の最後に、`attachments`（付く先の列、`attached_at`）の `UPDATE` を足す。別の `batch()` に分けない。保存の主な文は、渡した ID がすべて付けられることを件数で条件にし、付ける文は付く先の行が書けたことを条件にする。ID は1回20件まで。断る順と定期処理との競合は `attachments` の節 |
 | 付く先のない添付を消す（定期処理） | 毎時0分に、停止していない組織ごとに、`attachments` の `DELETE`（その組織のワークスペースで絞り、`workspace_id IN (SELECT id FROM workspaces WHERE organization_id = :組織)`、`id IN (SELECT ... LIMIT 50)` と `attached_at IS NULL` を条件にし、`RETURNING object_key`）、続けて返したキーのうち組織の ID で始まるものを R2 からまとめて消す。50件に届いたら繰り返し、1組織20回まで、定期処理の開始から20秒まで。形は `attachments` の節 |
-| 添付ファイルを消す | `attachments` の削除と `change_logs`、続けて R2 のファイルの削除 |
+| 添付ファイルを消す | `attachment-delete`（入力は `workspace_id`、`task_id`、`attachment_id`）。タスクに確定した `attachments` だけが対象で、上げた本人とリーダー（管理者を含む）だけに許可する。閉じたワークスペースでは書かない。DELETE の条件でも組織・ワークスペース・削除していないタスク・現在の所属と権限・正規の R2 キーを確かめ、実際に削除したときだけ同じ batch で `change_logs`（`entity_type = task`、`entity_id = タスクのID`、`action = update`、`attachments: [[{id}], null]`）を残す。続けて実際に消したキーだけを R2 から消す。R2 失敗は件数だけログに出し、D1 の削除成功を返す。通常の write 操作として API トークン・CLI・MCP からも同じ権限で呼べる |
 | コメントの作成 | `comments`。`comment-create` が `INSERT ... SELECT ... WHERE EXISTS (そのワークスペースの削除していないタスク) AND EXISTS (閉じていないワークスペース)` の1文で入れ、`change_logs` は書かない（行そのものが記録）。`attachment_ids` があれば主文に未添付の件数条件を足し、直後に付ける文を同じ `batch()` に足す。何も入らなければ、閉じていれば 409（`workspace_closed`）、そうでなければ404。添付ありの断る順は下の「添付を含む保存」に従う |
 | コメントの編集 | `comments`（`body_md`、`edited_at`）、`change_logs`（`entity_type = 'comment'`、`action = 'update'`。形は `change_logs` の節）。先にコメントを読み（ワークスペースで絞り、削除していないタスクのコメントだけ。無ければ 404）、書いた本人でなければ 403（`forbidden`）、消えていれば 409（`conflict`、`deleted`）、整えた本文が今と同じで添付も無ければ何も書かない。`attachment_ids` があれば主文に未添付の件数条件を足し、履歴に `attachments` を含め、履歴の後に付ける文を同じ `batch()` に足す。添付だけの保存でも `edited_at` を更新する。断る順は下の「添付を含む保存」に従う。`comments` の文の条件は `id`、`workspace_id`、`author_user_id = :呼んだ人`、`deleted_at IS NULL`、`EXISTS (削除していないタスク)`、閉じていないワークスペースで、`change_logs` は直前の `UPDATE` が行を変えたときだけ入れる（下の「直前の文に結ぶ」）。何も変わらなければ、存在を先に決め、読み直してコメントかタスクが無ければ（読んでから書くまでにタスクが削除された）404、閉じていれば 409（`workspace_closed`）、消されていれば 409（`conflict`、`deleted`。読んでから書くまでにリーダーが消した）。先に読んだ時点でも、無いコメントは閉じたワークスペースでも 404 で、あるコメントへの書き込みだけが `workspace_closed` になる（同じ本文の更新も、閉じていれば `workspace_closed`） |
 | コメントの削除 | `comments`（`body_md` を空文字、`deleted_at`、`deleted_by`）、`change_logs`（`entity_type = 'comment'`、`action = 'delete'`。形は `change_logs` の節）。編集と同じく、先に読んで、無ければ 404、書いた本人でもリーダー（管理者を含む）でもなければ 403、消えていれば 409（`conflict`、`deleted`）。`comments` の文の条件は `id`、`workspace_id`、`deleted_at IS NULL`、`EXISTS (削除していないタスク)`、閉じていないワークスペースで、`change_logs` は直前の `UPDATE` が行を変えたときだけ入れる。何も変わらなければ、編集と同じ順で理由を返す（先に別の要求が消していれば 409 の `deleted` で、履歴は1行だけ）。コメントの添付ファイル（#68）が入ったら、そのコメントの `attachments` の削除をこの `batch()` に足し、続けて R2 のファイルを消す |

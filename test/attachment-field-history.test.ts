@@ -47,5 +47,5 @@ test.each([null, '今の値'])('欄の値を変えず添付した履歴は添付
   });
   expect(history.status).toBe(200);
   const body = (await history.json()) as { entries: { changes: unknown[] }[] };
-  expect(body.entries[0]?.changes).toEqual([{ field: 'attachments', before: null, after: null }]);
+  expect(body.entries[0]?.changes).toEqual([{ field: 'attachments', before: null, after: 1 }]);
 });

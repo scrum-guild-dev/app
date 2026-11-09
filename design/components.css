@@ -1987,6 +1987,10 @@ button.file-name { border: 0; background: none; padding: 0; text-align: left; co
 button.file-name:hover { text-decoration-color: currentColor; }
 .file-meta { font-size: var(--text-xs); color: var(--color-muted); overflow-wrap: anywhere; }
 .file-actions { display: flex; gap: var(--space-1); }
+@media (max-width: 760px), (pointer: coarse) {
+  .file-actions .icon-btn { width: 44px; height: 44px; }
+  .file-name:is(button, a) { min-height: 44px; display: flex; align-items: center; }
+}
 .file-row.is-error { border-color: var(--color-danger); }
 .file-row.is-error > .ico, .file-row.is-error .file-meta { color: var(--color-danger); }
 .file-bar { height: 4px; border-radius: var(--radius-full); background: var(--color-gauge); overflow: hidden; margin-top: 4px; }
@@ -2007,6 +2011,7 @@ button.file-name:hover { text-decoration-color: currentColor; }
 .composer-foot .field-hint { flex: 1 1 200px; }
 /* プレビュー（ダイアログの中） */
 .preview { display: grid; place-items: center; min-height: 240px; border: 1px solid var(--color-line); border-radius: var(--radius-1); overflow: hidden; }
+.preview > img, .preview > video { max-width: 100%; max-height: 60vh; object-fit: contain; }
 .preview .file-art { width: 100%; aspect-ratio: 16 / 10; }
 .dialog-sheet.is-wide { width: min(820px, 100%); }
 /* 使っている量と上限（添付ファイルの合計）。80% を超えたら is-warn、上限に達したら is-full */

@@ -161,6 +161,21 @@ async function wikiFor(target: Target, organization = false, author = target.mem
 }
 
 export const pointers: Pointers = {
+  'attachment-list': async (target) => ({
+    workspace_id: target.workspace.id,
+    task_id: (await createTask(target.organization, target.workspace.id, target.admin.userId!)).id,
+  }),
+  'attachment-delete': async (target, caller) => {
+    const owner = personOf(target, caller) ?? target.admin;
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!);
+    const row = await createAttachment(target.organization, target.workspace.id, owner.userId!, {
+      task_id: task.id,
+      attached_at: '2026-11-03T00:00:00.000Z',
+    });
+    await env.ATTACHMENTS.put(row.object_key, 'x');
+    return { workspace_id: target.workspace.id, task_id: task.id, attachment_id: row.id };
+  },
+
   'favorite-list': { noReference: {} },
   'favorite-set': async (target) => ({
     target_type: 'wiki_page',

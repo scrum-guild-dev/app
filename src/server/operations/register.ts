@@ -380,6 +380,10 @@ async function execute(
         ? readDownloadInput(c, definition.input)
         : await readInput(c, definition.input, definition.body, definition.maxBodyBytes);
     const binary = definition.body === 'binary' ? { binary: readBinaryBody(c), requestId: c.get('requestId') } : {};
+    const storage =
+      definition.storage === 'attachments'
+        ? { attachmentStorage: { delete: (keys: string | string[]) => c.env.ATTACHMENTS.delete(keys) } }
+        : {};
     const download =
       definition.response === 'binary'
         ? {
@@ -405,10 +409,30 @@ async function execute(
       }
       assertVerifiedWorkspace(workspace);
       await enforceWeightedRateLimit(c, definition, accountId, input);
-      result = await handler({ db, actor, organization, tools, input, workspace, defer: deferred.defer, ...binary });
+      result = await handler({
+        db,
+        actor,
+        organization,
+        tools,
+        input,
+        workspace,
+        defer: deferred.defer,
+        ...binary,
+        ...storage,
+      });
     } else {
       await enforceWeightedRateLimit(c, definition, accountId, input);
-      result = await handler({ db, actor, organization, tools, input, defer: deferred.defer, ...binary, ...download });
+      result = await handler({
+        db,
+        actor,
+        organization,
+        tools,
+        input,
+        defer: deferred.defer,
+        ...binary,
+        ...download,
+        ...storage,
+      });
     }
   }
 
