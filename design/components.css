@@ -476,10 +476,22 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
   --google-bg: #131314; --google-line: #8e918f; --google-fg: #e3e3e3; --google-hover: rgb(227 227 227 / 0.08);
 }
 /* aria-disabled は、押しても何も起きないが、フォーカスは残したいボタン（読み直している最中の「もう一度試す」など） */
-.btn:disabled, .btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; filter: none; }
+/* 面だけを薄くし、文字との比を 4.5:1 以上に保つ。ホバーで操作の色へ戻さない */
+.btn:is(:disabled, [aria-disabled="true"]),
+.btn.is-on:is(:disabled, [aria-disabled="true"]),
+.btn:is(:disabled, [aria-disabled="true"]):hover,
+.btn.is-quiet:is(:disabled, [aria-disabled="true"]):hover {
+  background: var(--color-sunken); background-image: none; border-color: var(--color-line); color: var(--color-muted);
+  cursor: not-allowed; filter: none;
+}
+/* 静かな操作は塗りを足さず点線で無効を示し、選択中は押した印の枠を残す */
+.btn.is-quiet:is(:disabled, [aria-disabled="true"]),
+.btn.is-quiet:is(:disabled, [aria-disabled="true"]):hover { background: transparent; border-color: var(--color-line); border-style: dashed; }
+.btn.is-on:is(:disabled, [aria-disabled="true"]),
+.btn.is-on:is(:disabled, [aria-disabled="true"]):hover { border-color: var(--color-accent); }
 .link-btn { border: 0; background: none; padding: 0; font-size: var(--text-xs); color: var(--color-muted); text-decoration: underline; text-underline-offset: 2px; }
 .link-btn:hover:not([aria-disabled="true"]) { color: var(--color-fg); }
-/* 押しても何も起きないが、フォーカスは残す文字のボタン（.btn の aria-disabled と同じ見た目） */
+/* 押しても何も起きないが、フォーカスは残す文字のボタン */
 .link-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 
 /* 上の帯の小さな切り替え */
@@ -513,7 +525,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
   padding: 7px 10px; font-size: var(--text-body);
 }
 .input:focus, .select:focus, .textarea:focus { outline: 2px solid var(--color-accent); outline-offset: -1px; border-color: var(--color-accent); }
-/* 送っている間のように、押してもフォーカスを失わせたくない押せない選択欄は aria-disabled にする（.btn の aria-disabled と同じ見た目。
+/* 送っている間のように、押してもフォーカスを失わせたくない押せない選択欄は aria-disabled にし、全体を薄くする（
    選んだ値の変更は画面が止めて元に戻す） */
 .select[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .textarea { min-height: 96px; resize: vertical; line-height: var(--leading-body); }
@@ -643,7 +655,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   border: 1.5px dashed var(--color-line); background: var(--color-surface); color: var(--color-faint);
 }
 .done-btn:hover { border-color: var(--color-done); color: var(--color-done); border-style: solid; }
-/* 送っている最中。押しても何も起きないが、フォーカスは残す（.btn の aria-disabled と同じ考え方） */
+/* 送っている最中。押しても何も起きないが、フォーカスは残す（押せない間は全体を薄くする） */
 .done-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .done-btn[aria-disabled="true"]:hover { border-color: var(--color-line); color: var(--color-faint); border-style: dashed; }
 /* 完了の印。シンプルと現代風はチェック、中世風は朱の判子（末尾のテーマの飾り） */
