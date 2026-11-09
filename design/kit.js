@@ -1168,9 +1168,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // 開き方は押した時点で実行するボタンの組。select にすると、矢印キーを押すだけで確認なしに遷移してしまう
   function drawerModeButtons() {
     const narrow = matchMedia("(max-width: 620px)").matches, now = renderedDrawerMode();
-    const buttons = [["side", "横"], ["center", "真ん中"], ["page", "ページ全体"], ["tab", "新しいタブ"]]
+    // 中身はアイコンだけで、名前は aria-label と title に持つ（前後のボタンと同じ形）
+    const buttons = [["side", "横", "panel"], ["center", "真ん中", "centered"], ["page", "ページ全体", "maximize"], ["tab", "新しいタブ", "external"]]
       .filter(([v]) => (v !== "center" || !narrow) && (!isStoryDrawer() || v === "side" || v === "center"))
-      .map(([v, label]) => `<button class="pill" type="button" data-drawer-mode="${v}" aria-pressed="${now === v}">${label}</button>`).join("");
+      .map(([v, label, glyph]) => `<button class="pill" type="button" data-drawer-mode="${v}" aria-label="${label}" title="${label}" aria-pressed="${now === v}">${icon(glyph)}</button>`).join("");
     // 選べる形が1つだけ（ストーリーの狭い幅）なら、切り替えの組ごと出さない（本番の Drawer と同じ）
     return buttons.length < 2 ? "" : `<span class="drawer-mode" role="group" aria-label="開き方">${buttons}</span>`;
   }
