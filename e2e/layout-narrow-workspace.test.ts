@@ -67,6 +67,7 @@ test('バックログの先頭2行が390×844pxに入り、補助情報を各1�
     await expect(bar.getByRole('searchbox')).toBeVisible();
     await expect(header.getByText('未完了のタスク', { exact: true })).toBeVisible();
     await expect(header.locator('.team-xp')).toBeHidden();
+    await expect(page.locator('.breadcrumb')).toContainText('受託開発チーム');
     for (const label of ['詳細 未記入', '未見積もり', 'スプリントに入っていない']) {
       await expect(header.getByText(label, { exact: true })).toBeHidden();
     }

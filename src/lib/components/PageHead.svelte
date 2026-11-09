@@ -44,6 +44,7 @@
   </div>
   {#snippet counts(items: Tally[])}
     <dl class="tally">
+      <!-- 同じラベルが2つあっても落ちないよう、keyは添字にする（並びは画面が決め、入れ替えない） -->
       {#each items as tally, index (index)}
         <div class={tally.count && tally.tone ? `is-${tally.tone}` : undefined}>
           <dt>
