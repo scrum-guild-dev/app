@@ -251,6 +251,8 @@ function todayTask(): TodayTask {
   };
 }
 
+// 日付・担当・完了の応答を固定し、同じ行で成功/失敗/reduced-motionの見た目を確かめる。
+// 完了APIそのものの検査は既存のAPIテストと今日のE2Eが受け持つ。
 for (const reduced of [false, true]) {
   test(`今日の完了に移った行は${reduced ? '動きを減らす設定では光らない' : '成功時だけ光る'}`, async ({
     page,
