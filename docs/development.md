@@ -166,6 +166,8 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 
 ### 書体
 
+可変版の採用理由と初回転送・表示時間の比較は [フォント転送の比較](benchmarks/font-transfer.md)。
+
 - 書体は `@fontsource-variable/noto-sans-jp` から、`src/routes/+layout.svelte` が可変版を1回 import する。400、500、600、700、900 の実際の太さを保ち、擬似太字に置き換えない。全テーマの本文・見出し・数字に共通で使い、見本の Google Fonts の URL も同じ太さにする。
 - Google Fonts は使わない。利用者の IP を外へ出さず、CSP に外の先を足さない。書体のファイルは build が `build/_app/immutable/assets/` に書き出し、自分の Worker から配る。
 - パッケージは `devDependencies` に置く。書体のファイルは build のときに CSS から拾って `build/` に書き出すだけで、Worker の実行時には要らない。
