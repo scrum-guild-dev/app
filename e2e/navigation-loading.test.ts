@@ -20,7 +20,7 @@ test('枠の中の遅い移動は本文だけを薄くし、別のリンクで�
     await page.locator('.binding').getByRole('link', { name: 'バックログ', exact: true }).click();
     const main = page.locator('main.content');
     await expect(main).toHaveAttribute('aria-busy', 'true');
-    await expect(main).toHaveCSS('opacity', '0.6');
+    await expect(main).toHaveCSS('opacity', '0.95');
     await expect(page.locator('.visually-hidden[role="status"]').filter({ hasText: '読み込んでいます' })).toHaveCount(
       1,
     );
@@ -63,7 +63,7 @@ test('読み込み中の本文に4テーマでaxeの違反が無い', async ({ p
   await page.goto(`${WORKSPACE}/sprint`);
   await expect(page.locator('main.content')).toBeVisible();
   await page.locator('main.content').evaluate((main) => main.setAttribute('aria-busy', 'true'));
-  await expect(page.locator('main.content')).toHaveCSS('opacity', '0.6');
+  await expect(page.locator('main.content')).toHaveCSS('opacity', '0.95');
   await expectNoA11yViolationsInThemes(page, 'sprint');
   await expect(page.locator('main.content')).toHaveAttribute('aria-busy', 'true');
 });
