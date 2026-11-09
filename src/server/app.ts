@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { routePath } from 'hono/route';
+import { hasCredentialKeys } from './crypto/credential.ts';
 import type { Health } from '../shared/health.ts';
 import { PASSWORD_LOGIN_ENABLED } from '../shared/password-login-enabled.ts';
 import {
@@ -108,7 +109,7 @@ export function createApp(
     return c.json(errorBody('internal', 'internal error'), 500);
   });
 
-  // 煙のテスト（scripts/deploy.ts）が読む。D1 に届かないときは 503 にして、新しい版の失敗として拾わせる
+  // 煙のテスト（scripts/deploy.ts）が読む。D1 に届かないか鍵の形が違うときは 503 にして拾わせる
   app.get('/health', async (c) => {
     try {
       await pingDatabase(c.env);
@@ -128,7 +129,30 @@ export function createApp(
       );
       return c.json(errorBody('unavailable', 'database unavailable'), 503);
     }
-    const body: Health = { status: 'ok', database: 'ok', version: c.env.APP_VERSION || 'dev' };
+    const version = c.env.APP_VERSION || 'dev';
+    if (!hasCredentialKeys(c.env)) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          code: 'unavailable',
+          requestId: c.get('requestId'),
+          method: c.req.method,
+          route: routePath(c),
+          error: 'CredentialKeysError',
+        }),
+      );
+      return c.json(
+        {
+          ...errorBody('unavailable', 'credential keys unavailable'),
+          status: 'unavailable',
+          database: 'ok',
+          credentialKeys: 'unavailable',
+          version,
+        },
+        503,
+      );
+    }
+    const body: Health = { status: 'ok', database: 'ok', credentialKeys: 'ok', version };
     return c.json(body);
   });
 

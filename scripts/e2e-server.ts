@@ -5,7 +5,8 @@ import { devPorts } from './dev-ports.ts';
 
 type Env = Record<string, string | undefined>;
 
-// webServer の command。package.json の preview と同じ中身を、pnpm のスクリプトを通さずに動かす。
+// サーバーの土台は package.json の preview と同じ。e2eServerCommand が架空鍵の専用フラグを足す。
+// pnpm のスクリプトを通さずに動かす。
 // pnpm を通すと、pnpm がスクリプトを別のプロセスグループで動かし、終わりに Playwright がグループへ送る SIGKILL が
 // wrangler と workerd に届かず、サーバーが残ることがある
 export const E2E_SERVER_COMMAND = 'pnpm build && node scripts/dev.ts --preview';
@@ -18,7 +19,8 @@ export function isDevBuild(env: Env): boolean {
 }
 
 export function e2eServerCommand(env: Env): string {
-  return isDevBuild(env) ? `NODE_ENV=development ${E2E_SERVER_COMMAND}` : E2E_SERVER_COMMAND;
+  const command = `${E2E_SERVER_COMMAND} --test-credentials`;
+  return isDevBuild(env) ? `NODE_ENV=development ${command}` : command;
 }
 
 // 立てたままのサーバーを使い回すのは、手元で E2E_REUSE_SERVER=1 を付けたときだけ。CI では必ずこのコミットで build する

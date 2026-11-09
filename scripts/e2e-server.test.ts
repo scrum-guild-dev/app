@@ -26,19 +26,22 @@ describe('E2E_SERVER_COMMAND', () => {
 });
 
 describe('e2eServerCommand', () => {
-  test('既定は preview と同じ中身', () => {
-    assert.equal(e2eServerCommand({}), E2E_SERVER_COMMAND);
+  test('既定は preview に架空鍵の専用フラグを付ける', () => {
+    assert.equal(e2eServerCommand({}), `${E2E_SERVER_COMMAND} --test-credentials`);
   });
 
   test('E2E_DEV_BUILD=1 のときだけ、build に NODE_ENV=development を付ける', () => {
-    assert.equal(e2eServerCommand({ E2E_DEV_BUILD: '1' }), `NODE_ENV=development ${E2E_SERVER_COMMAND}`);
-    assert.equal(e2eServerCommand({ E2E_DEV_BUILD: 'true' }), E2E_SERVER_COMMAND);
-    assert.equal(e2eServerCommand({ E2E_DEV_BUILD: '0' }), E2E_SERVER_COMMAND);
+    assert.equal(
+      e2eServerCommand({ E2E_DEV_BUILD: '1' }),
+      `NODE_ENV=development ${E2E_SERVER_COMMAND} --test-credentials`,
+    );
+    assert.equal(e2eServerCommand({ E2E_DEV_BUILD: 'true' }), `${E2E_SERVER_COMMAND} --test-credentials`);
+    assert.equal(e2eServerCommand({ E2E_DEV_BUILD: '0' }), `${E2E_SERVER_COMMAND} --test-credentials`);
   });
 
   test('NODE_ENV は最初の build にだけ掛かり、サーバーの起動には掛からない', () => {
     const command = e2eServerCommand({ E2E_DEV_BUILD: '1' });
-    assert.match(command, /^NODE_ENV=development pnpm build && node scripts\/dev\.ts --preview$/);
+    assert.match(command, /^NODE_ENV=development pnpm build && node scripts\/dev\.ts --preview --test-credentials$/);
   });
 });
 

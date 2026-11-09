@@ -11,12 +11,22 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.emulateMedia({ reducedMotion });
     await signIn(context, baseURL, 'admin');
     await page.addInitScript(() => {
-      const seen = { leaving: false, content: false, duration: '', hidden: false, opacity: [] as string[] };
+      const seen = {
+        leaving: false,
+        content: false,
+        duration: '',
+        hidden: false,
+        frame: false,
+        opacity: [] as string[],
+      };
       Object.assign(window, { __bootFade: seen });
       new MutationObserver(() => {
         const boot = document.querySelector<HTMLElement>('#boot-loading.is-leaving');
         if (!boot) return;
         seen.leaving = true;
+        seen.frame =
+          document.documentElement.dataset.boot === 'list' &&
+          getComputedStyle(boot.querySelector('.boot-frame')!).display !== 'none';
         seen.content = document.querySelector('#app h1') !== null;
         seen.duration = getComputedStyle(boot).transitionDuration;
         if (!seen.opacity.length)
@@ -51,9 +61,12 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         ).__bootFade,
     );
     expect(seen.leaving).toBe(reducedMotion === 'no-preference');
+    await expect(page.locator('html')).not.toHaveAttribute('data-boot');
+    await expect(page.locator('html')).not.toHaveAttribute('data-boot-nav');
     if (reducedMotion === 'no-preference') {
       expect(seen.content).toBe(true);
       expect(seen.duration).toBe('0.12s');
+      expect(seen.frame).toBe(true);
       expect(seen.opacity).toEqual(['1', '0']);
       expect(seen.hidden).toBe(true);
     }
@@ -70,7 +83,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       await route.continue();
     });
     await page.evaluate(() => {
-      const seen = { duration: -1, fixed: false, contentTop: -1, hidden: false, opacity: [] as number[] };
+      const seen = { duration: -1, fixed: false, contentTop: -1, hidden: false, shape: '', opacity: [] as number[] };
       Object.assign(window, { __sheetFade: seen });
       new MutationObserver(() => {
         const overlay = document.querySelector<HTMLElement>('.loading-overlay.is-leaving');
@@ -87,6 +100,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
                 ? animation.effect.getKeyframes().map((frame) => Number(frame.opacity))
                 : [],
             );
+        seen.shape = overlay.querySelector('[data-shape]')?.getAttribute('data-shape') ?? '';
         seen.fixed = style.position === 'fixed';
         seen.hidden = overlay.inert && overlay.getAttribute('aria-hidden') === 'true';
         seen.contentTop = heading.getBoundingClientRect().top;
@@ -102,7 +116,14 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       () =>
         (
           window as unknown as {
-            __sheetFade: { duration: number; fixed: boolean; contentTop: number; hidden: boolean; opacity: number[] };
+            __sheetFade: {
+              duration: number;
+              fixed: boolean;
+              contentTop: number;
+              hidden: boolean;
+              shape: string;
+              opacity: number[];
+            };
           }
         ).__sheetFade,
     );
@@ -111,6 +132,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       expect(seen.opacity[0]).toBe(1);
       expect(seen.opacity.at(-1)).toBe(0);
       expect(seen.fixed).toBe(true);
+      expect(seen.shape).toBe('aside');
       expect(seen.hidden).toBe(true);
       expect(seen.contentTop).toBeCloseTo((await heading.boundingBox())!.y, 0);
       await expectNoA11yViolationsInThemes(page, 'today');

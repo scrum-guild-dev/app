@@ -7,6 +7,7 @@ import {
   KEYS_ERROR_MESSAGE,
   decryptCredential,
   encryptCredential,
+  hasCredentialKeys,
 } from '../src/server/crypto/credential.ts';
 
 function key(fill: number): string {
@@ -18,6 +19,7 @@ const PLAIN = 'github_pat_架空のトークン';
 
 describe('接続の認証情報の暗号', () => {
   it('暗号化して復号すると元に戻り、暗号文に現行の鍵の版が付く', async () => {
+    expect(hasCredentialKeys(env12)).toBe(true);
     const sealed = await encryptCredential(env12, PLAIN, 'conn-1');
     expect(sealed.keyVersion).toBe(2);
     expect(sealed.ciphertext).not.toContain('github_pat');
@@ -84,6 +86,7 @@ describe('接続の認証情報の暗号', () => {
       { CONNECTION_CREDENTIAL_KEYS: JSON.stringify({ '1': key(1), '2': 'bad' }) },
     ];
     for (const env of bad) {
+      expect(hasCredentialKeys(env)).toBe(false);
       await expect(encryptCredential(env, PLAIN, 'c')).rejects.toThrow(KEYS_ERROR_MESSAGE);
       await expect(decryptCredential(env, { ciphertext: 'AAAA', keyVersion: 1 }, 'c')).rejects.toBeInstanceOf(
         CredentialKeysError,
