@@ -1,8 +1,12 @@
 import type { Page } from '@playwright/test';
+import type { OutputOf } from '../src/shared/operations/define.ts';
 import type { TodayTask } from '../src/shared/operations/organization/today.ts';
 import { today } from '../src/shared/operations/organization/today.ts';
 import { listOrganizations } from '../src/shared/operations/operator/list-organizations.ts';
 import { organizationResume } from '../src/shared/operations/operator/organization-resume.ts';
+import { organizationSuspend } from '../src/shared/operations/operator/organization-suspend.ts';
+import { organizationSuspensionUpdate } from '../src/shared/operations/operator/organization-suspension-update.ts';
+import { organizationQuotaUpdate } from '../src/shared/operations/operator/organization-quota-update.ts';
 import { taskComplete } from '../src/shared/operations/task/task-complete.ts';
 import { expect, test } from './fixtures.ts';
 import {
@@ -17,7 +21,7 @@ import {
 } from './helpers.ts';
 import { failOperation, routeOperation } from './operations.ts';
 
-type Motion = { name: string; target: string; label: string; duration: string };
+type Motion = { name: string; target: string; element: string; label: string; duration: string };
 
 // 260ms の途中をポーリングせず、操作前からブラウザが発火した演出を記録する。
 async function watchMotion(page: Page): Promise<void> {
@@ -27,12 +31,19 @@ async function watchMotion(page: Page): Promise<void> {
     const record = (event: AnimationEvent | TransitionEvent) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
-      if (!target.matches('.entry, .tree-row, .drawer, .scrim, .dialog-sheet, .table tbody tr')) return;
+      if (
+        !target.matches(
+          '.entry, .tree-row, .drawer, .scrim, .dialog-sheet, .table tbody tr, .table tbody td.is-actions',
+        )
+      )
+        return;
       const animation = event instanceof AnimationEvent;
+      const labelled = target.matches('td') ? target.closest('tr') : target;
       events.push({
         name: animation ? event.animationName : event.propertyName,
         target: target.className,
-        label: target.querySelector('.entry-title, .tree-title a, td')?.textContent?.trim() ?? '',
+        element: target.tagName,
+        label: labelled?.querySelector('.entry-title, .tree-title a, td')?.textContent?.trim() ?? '',
         duration: animation ? getComputedStyle(target).animationDuration : getComputedStyle(target).transitionDuration,
       });
     };
@@ -269,14 +280,135 @@ test('運用の再開に成功して読み直した行だけが光り、失敗�
   await expect
     .poll(
       async () =>
-        (await motions(page)).filter((entry) => entry.name === 'drop-flash' && entry.label.includes('ひばり工房'))
-          .length,
+        (await motions(page)).filter(
+          (entry) => entry.name === 'drop-flash' && entry.element === 'TR' && entry.label.includes('ひばり工房'),
+        ).length,
     )
     .toBe(1);
   await page.reload();
   await waitForSettled(page);
   expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
 });
+
+type ListedOrganization = OutputOf<typeof listOrganizations>['organizations'][number];
+
+function motionOrganization(): ListedOrganization {
+  return {
+    slug: 'motion-organization',
+    name: '合図の組織',
+    kind: 'team',
+    suspended_at: null,
+    purge_on: null,
+    purge_due: false,
+    created_at: '2026-10-01T09:30:00.000Z',
+    admin_status: 'active',
+    seats: { used: 5, limit: 15 },
+    workspace_count: 3,
+    task_count: 12,
+    attachment_quota_bytes: 30 * 1024 ** 3,
+    last_used_at: '2026-10-20T00:12:00.000Z',
+    self_created: false,
+    trial_ends_on: null,
+    trial_expired: false,
+  };
+}
+
+for (const operation of ['停止', '理由変更', '上限変更'] as const) {
+  for (const outcome of ['成功', 'state_changed', 'unavailable'] as const) {
+    test(`運用の${operation}は${outcome === '成功' ? '成功時だけ行と操作セルが一度光る' : `${outcome}では行も操作セルも光らない`}`, async ({
+      page,
+      context,
+      baseURL,
+    }) => {
+      await signIn(context, baseURL, 'operator');
+      await watchMotion(page);
+      const organization = motionOrganization();
+      const other = { ...motionOrganization(), slug: 'untouched', name: '変えない組織' };
+      if (operation === '理由変更') organization.suspended_at = '2026-10-10T00:00:00.000Z';
+      await routeOperation(page, listOrganizations, (call) => call.fulfill({ organizations: [organization, other] }));
+      if (operation === '停止') {
+        await routeOperation(page, organizationSuspend, (call) => {
+          if (outcome !== '成功')
+            return call.fail(
+              outcome === 'state_changed' ? 409 : 404,
+              outcome === 'state_changed' ? 'conflict' : 'not_found',
+            );
+          organization.suspended_at = '2026-11-10T00:00:00.000Z';
+          return call.fulfill({ slug: organization.slug, suspended_at: organization.suspended_at, purge_on: null });
+        });
+      } else if (operation === '理由変更') {
+        await routeOperation(page, organizationSuspensionUpdate, (call) => {
+          if (outcome !== '成功')
+            return call.fail(
+              outcome === 'state_changed' ? 409 : 404,
+              outcome === 'state_changed' ? 'conflict' : 'not_found',
+            );
+          organization.purge_on = '2026-12-10';
+          return call.fulfill({ slug: organization.slug, purge_on: organization.purge_on });
+        });
+      } else {
+        await routeOperation(page, organizationQuotaUpdate, (call) => {
+          if (outcome !== '成功')
+            return call.fail(
+              outcome === 'state_changed' ? 409 : 404,
+              outcome === 'state_changed' ? 'conflict' : 'not_found',
+            );
+          organization.seats.limit = call.input.member_limit;
+          organization.attachment_quota_bytes = call.input.attachment_quota_bytes;
+          return call.fulfill({
+            slug: organization.slug,
+            member_limit: call.input.member_limit,
+            attachment_quota_bytes: call.input.attachment_quota_bytes,
+          });
+        });
+      }
+      await page.goto('/operator');
+      await waitForSettled(page);
+      expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+      const openLabel =
+        operation === '停止'
+          ? '「合図の組織」を停止する'
+          : operation === '理由変更'
+            ? '「合図の組織」の停止の理由を変える'
+            : '「合図の組織」の人数と容量の上限を変える';
+      await page.getByRole('button', { name: openLabel }).click();
+      const dialog = page.getByRole('dialog', {
+        name:
+          operation === '停止'
+            ? '組織を停止する'
+            : operation === '理由変更'
+              ? '停止の理由を変える'
+              : '人数と添付ファイルの上限を変える',
+      });
+      if (operation === '理由変更') await dialog.getByRole('radio', { name: /解約/ }).check();
+      if (operation === '上限変更') await dialog.getByRole('radio', { name: /標準/ }).check();
+      await dialog
+        .getByRole('button', { name: operation === '停止' ? '「合図の組織」を停止する' : '変える', exact: true })
+        .click();
+      await expect(dialog).toBeHidden();
+      await waitForSettled(page);
+      await frames(page);
+      if (outcome === '成功') {
+        // 狭い幅では操作セルが地の色を持つ。行だけでなく、そのセルにも同じ光が出る。
+        await expect
+          .poll(async () =>
+            (await motions(page))
+              .filter((entry) => entry.name === 'drop-flash')
+              .map((entry) => ({ element: entry.element, target: entry.label.includes(organization.name) }))
+              .sort((a, b) => a.element.localeCompare(b.element)),
+          )
+          .toEqual([
+            { element: 'TD', target: true },
+            { element: 'TR', target: true },
+          ]);
+      } else {
+        const notice = outcome === 'state_changed' ? '状態が変わっていました' : '操作できませんでした';
+        await expect(page.getByRole('status').filter({ hasText: notice })).toBeVisible();
+        expect((await motions(page)).filter((entry) => entry.name === 'drop-flash')).toEqual([]);
+      }
+    });
+  }
+}
 
 test('動きを減らす設定では面の出現も追加行の光も出ない', async ({ page, context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
