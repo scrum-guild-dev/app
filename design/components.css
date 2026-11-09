@@ -387,6 +387,11 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
   display: grid; gap: var(--space-8); align-content: start;
 }
 
+/* 全文を薄くしても補足を読めるよう、待っている間だけ本文の文字色に寄せる。 */
+.content[aria-busy="true"] { opacity: 0.95; --color-muted: var(--color-fg); }
+.content[aria-busy="true"] .team-xp > b,
+.content[aria-busy="true"] .state-badge { color: var(--color-fg); }
+
 /* アカウントの新しいトークンの発行。組織の枠の上部に置き、長い名前も全文を折り返す。 */
 .token-notice {
   margin: var(--space-2) var(--space-8) var(--space-4);

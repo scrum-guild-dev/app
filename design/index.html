@@ -632,6 +632,10 @@ const SECTIONS = [
       <div class="field"><span class="field-label">紙の下のボタン、ログアウトを待っているとき</span><div class="form-actions"><button class="btn is-sm is-quiet" type="button" aria-disabled="true">${t("logoutMoving")}</button></div></div></div>`,
     ["開閉は組織の切り替えと同じ。閉じるのは、ボタン、メニューの外を押す、Tab で外へ出る、Esc。メニューの中にフォーカスがあるときに閉じたら、ボタンにフォーカスを戻す。", "確認のダイアログは挟まない。失うのは再ログインの手間だけで、メニューを開く1手が誤操作を防ぐ。", "押したらボタンを止めて「ログアウトしています」にする。通信の失敗と 5xx は、トーストを出して今の画面に留まる（Cookie と行が残ったまま「できた」ように見せない）。", "リストの見た目は組織の切り替えと同じ（CSS で .org-menu-list と並べて書く）にして、帯の高さを変えずに下へ重ねる。広い幅ではボタンの右端に合わせて開き、760px 以下では帯を基準に左右の余白の内側へ広げる（帯が左に寄ってボタンが左端に来ても、画面の外へはみ出さない）。760px 以下と、指で押す画面では、ボタンと項目の高さを 44px 以上にする。", "ボタンには `{名前}。アカウントのメニュー` の読み上げの名前を付ける。管理者のときは名前の後ろに（管理者）を含める。待っている間の文言は、常に置く role=status の領域にも入れて読み上げに伝える。", "ログアウトの項目を押してもメニューは閉じない（待ちの表示を見せるため）。"],
     ".account-menu .account-menu-button .account-menu-list .account-menu-invite .account-menu-badge / a[aria-current=\"page\"] / button[aria-disabled=\"true\"] / SQ.accountMenuHtml()")],
+  ["navigation-loading", "移っている間", () => block("navigation-loading", "移っている間", "組織の中でパスが変わる読み込みが300msを超えたとき、本文だけを薄くする。",
+    `<div class="content" aria-busy="true"><h2 class="section-title">今日やること</h2><p>前の画面を残して、次の画面を読み込んでいます。</p><a class="btn" href="#gate">別の画面へ移る</a></div>`,
+    ["本文とメニューは押せるまま。読み終わったら aria-busy を外す。問い合わせだけの移動では本文を薄くしない。"],
+    '.content[aria-busy="true"]')],
   ["gate", "枠の外の画面", () => block("gate", "枠の外の画面（ゲート）", "ログイン、組織の選択、見つからない、運用の仮の画面のように、左のメニューを出さない画面。.gate が画面いっぱいに中央寄せし、中の .gate-stack が紙（.gate-sheet）を縦に並べる。本番では Gate.svelte が外側、GateSheet.svelte が紙1枚。",
     `<div class="gate-stack">
       <section class="gate-sheet">
