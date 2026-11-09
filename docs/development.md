@@ -431,6 +431,20 @@ vite の転送先も同じ値から作るので、画面は自分のワークツ
 
 `pnpm bench:backlog`（`scripts/backlog-bench.ts`）は、使い捨ての場所（`--persist-to` の一時ディレクトリ）の D1 に全マイグレーションと seed と 5 万件のタスクのワークスペース（現実の形と最悪の形）を入れ、その D1 で `wrangler dev`（API はポート 9700、デバッガーは 9701。デバッガーは常に `--port` + 1。`--port` を上の範囲の中に替えると、そのオフセットのワークツリーと重なりうるので、替える側が空きを選ぶ。既定の 2 つは、ワークツリーが使う範囲（画面 5173〜5614、API 8787〜9228、デバッガー 9229〜9670）の外に固定してあるので、どのオフセットの開発用のサーバーや `pnpm e2e` を立てたままでも重ならない。`scripts/dev-ports.ts` の `BENCH_PORTS`）を立てて、`backlog-tree` を絞らない、担当、検索などの読み方ごとに測る（#165）。手元の開発用の D1 と本番には触らない。`--runs` で回数（既定 10）を替える。`--prepare-only <場所>` は、その場所の D1 に入れて終える（測らず、消さない）ので、遅い文を `wrangler d1 execute DB --local --persist-to <場所> --command "EXPLAIN QUERY PLAN ..."` で見るのに使う。測った数と結論は `docs/data-model.md` の `tasks` の節。木を読む文、索引、絞り込みを変えたら流し直し、数が変わったら書き直す。
 
+### URL を直接開く最初の読み込みを測る
+
+`pnpm bench:boot`（`scripts/boot-bench.ts`）で、本番の build を作り、公開 seed の管理者で `/aoba` を直接開く。API の待ちだけを測る `bench:loading` とは別の計測。Chromium が必要（初回は `pnpm exec playwright install chromium`）。Node と pnpm は指定版を使い、他の build・テスト・計測と同時に走らせない。
+
+既定は Fast 3G と Slow 3G を各2回。`pnpm bench:boot --runs 3 --network both --path /aoba --port 9744 --output /tmp/boot.json` のように変えられる。回線は `fast`、`slow`、`both`。パスは公開 seed の管理者が開ける、見出し h1 のある画面を指定する。`/aoba` は「今日やること」を確認し、他のパスでは `--heading 今日やること` のように目的の h1 の文字も指定する。HTTP 200 の SPA エラー画面を成功に混ぜないため、見出しが一致しない試行は失敗にする。指定ポート、+1（Worker）、+2（デバッガー）を使う。
+
+一時ディレクトリに独立した Wrangler 設定・D1・R2 を作り、マイグレーションと公開 seed・期限付きセッションを入れる。既存のローカル D1 と本番は使わず、Wrangler の作業ディレクトリも一時ディレクトリにして `.dev.vars` と `.env` を探索しない。起動ごとの版を health で照合する。通常終了、失敗、SIGINT・SIGTERM・SIGHUP では自分のブラウザ・サーバーを止めて一時ディレクトリを消す（SIGKILL やホスト停止では後片付けできない）。build/ は計測用の版で作り直される。
+
+Wrangler の assets で本番ビルドを SPA として配り、ループバックのプロキシでテキストを gzip にする（ローカル Wrangler の圧縮有無に依存しないため）。各試行は新規コンテキスト、キャッシュ無効、サービスワーカー無効、1280×900、ja-JP、Asia/Tokyo、シンプル（ライト）、headless Chromium。CDP の帯域制限は DevTools の補正値を含み、Fast は遅延562.5ms・下り180,000B/s・上り84,375B/s、Slow は遅延2,000ms・上下40,000B/s。CPU は制限しない。Cloudflare 本番の配信遅延や Brotli を再現するものではない。
+
+時間は navigation の開始を0とし、HTMLの `responseStart`（最初の応答バイト）・`responseEnd`（受信完了）と、`domContentLoadedEventEnd`（同期スクリプト等を含むDOM準備完了）を分ける。表示は `#boot-loading` が除かれて `#app h1` がある最初の描画フレーム、失敗は実際に `.boot-failed` が見える最初のフレームから表示までを測る。15秒から推算しない。表示完了は主要データを含む画面のマウントで、フォント完了とは別。転送量・リクエスト数は、表示フレームまでに完了したもの（転送中のもののバイト数は含まない）と、フォント完了・500msの network idle までを待った総量を別々に残す。前者はCDPの `Performance.getMetrics` の `NavigationStart` を基点に各転送の完了時刻を表示時刻と比べる。CDP の `loadingFinished.encodedDataLength`（圧縮済みデータとHTTPヘッダーを含む）を種別ごとに集計する。ページの例外・転送失敗・HTTPエラー・想定外のリダイレクト・gzip不成立は成功に混ぜない。
+
+標準出力に各試行の進行と各回線の時刻・DOM準備後の表示時間・転送量の p50（nearest-rank）を出す。JSONには各試行の時刻・ファイル種別とURL別の転送量、実行日時、Node・pnpm・ブラウザ版、HEADと作業ツリーの状態、設定値を残す。未コミットのコードで比較するときは、この状態文字列だけで内容を復元できないため、差分も別途保存する。前後を同じ版のブラウザと計測手順で各2回以上比べ、元の Issue にある1点の実測と条件が違う場合は新しい基準値として区別する。
+
 ### 画面の読み込みを測る
 
 `pnpm bench:loading`（`scripts/loading-bench.ts`）で、load を持つ各画面・枠の操作ごとの p50・p95、合計、従のデータを後回しにした場合の短縮見込みを Markdown の表で出す。既定は各 load・発行順ごとの温め2回と計測20回（正順と逆順で各20回）。`pnpm bench:loading --runs 50 --port 9742` で回数とポートを変えられる（デバッガーは指定ポート + 1）。Node と pnpm はこの文書の指定版を使う。他の build・テストや計測と同時に走らせず、2回以上比べる。

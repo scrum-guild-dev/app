@@ -17,7 +17,7 @@
       <tbody>
         {#each frontmatter.properties as property (property.key)}
           <tr
-            ><th scope="row">{property.key}</th><td
+            ><th scope="row">{property.key}</th><td class="mono"
               >{#if property.value === ''}<span class="props-note">{t('wikiPropertyEmpty')}</span
                 >{:else}{property.value}{/if}</td
             ></tr
