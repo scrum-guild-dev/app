@@ -6,19 +6,19 @@ for (const path of ['/login', '/signup']) {
   for (const provider of ['github', 'google']) {
     test(`${path}: ${provider} への移動を知らせ、連打を止め、戻ったら復元する`, async ({ page }) => {
       await page.setViewportSize(NARROW_VIEWPORT);
-      await page.goto(path);
       const links = page.locator('a[data-sveltekit-reload][href^="/api/auth/"]');
       const selected = links.filter({ has: page.locator(provider === 'github' ? '.ico' : '.google-mark') });
       // ページのハンドラーの後で実際の外部移動だけを止め、既定動作が許された回数を見る。
-      await page.evaluate(() => {
+      await page.addInitScript(() => {
         const results: boolean[] = [];
         Object.assign(window, { pressResults: results });
-        document.addEventListener('click', (event) => {
+        window.addEventListener('click', (event) => {
           if (!(event.target instanceof Element) || !event.target.closest('a[href^="/api/auth/"]')) return;
           results.push(event.defaultPrevented);
           event.preventDefault();
         });
       });
+      await page.goto(path);
       // 別タブの操作は、元の画面を待機中にしない。
       await selected.click({ modifiers: ['Control'] });
       await expect(selected).not.toHaveText('移っています');
@@ -30,16 +30,19 @@ for (const path of ['/login', '/signup']) {
       // aria-disabled のリンクをプログラムから押して、ハンドラーによる防止を確かめる。
       await links.evaluateAll((elements) => elements.forEach((element) => (element as HTMLAnchorElement).click()));
       expect(await page.evaluate(() => Reflect.get(window, 'pressResults'))).toEqual([false, false, true, true]);
+      // root は bfcache 復元時に現在のセッションで読み直す。テストの監視も新しい文書へ登録し直す。
+      const reloaded = page.waitForEvent('load');
+      await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+      await reloaded;
+      await expect(selected).not.toHaveText('移っています');
+      for (const link of await links.all()) await expect(link).toHaveAttribute('aria-disabled', 'false');
       for (const theme of A11Y_THEMES) {
         await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
         expect(await findA11yViolations(page)).toEqual([]);
       }
-      await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
-      await expect(selected).not.toHaveText('移っています');
-      for (const link of await links.all()) await expect(link).toHaveAttribute('aria-disabled', 'false');
       await selected.evaluate((element) => (element as HTMLAnchorElement).click());
       await expect(selected).toHaveText('移っています');
-      expect(await page.evaluate(() => Reflect.get(window, 'pressResults'))).toEqual([false, false, true, true, false]);
+      expect(await page.evaluate(() => Reflect.get(window, 'pressResults'))).toEqual([false]);
     });
   }
 }
