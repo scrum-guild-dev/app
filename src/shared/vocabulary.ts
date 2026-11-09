@@ -103,6 +103,8 @@ export const dictionary = defineDictionary({
   attachmentAlreadyAttached:
     'すでに保存された添付ファイルがあります。本文は残っています。内容を確認してから保存し直してください。',
 
+  attachmentLoadMore: 'さらに読む',
+  attachmentMoreFailed: '続きの添付ファイルを読み込めませんでした。もう一度試してください。',
   attachmentListTitle: '添付ファイル',
   attachmentListFailed: '添付ファイルの一覧を読み込めませんでした。',
   attachmentDeleteAction: '削除する',

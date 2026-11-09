@@ -1,5 +1,5 @@
 // タスクに確定した添付の一覧と削除。別の付く先や未添付は扱わない。
-import { attachmentList, attachmentDelete } from '../../shared/operations/attachment/index.ts';
+import { attachmentDelete } from '../../shared/operations/attachment/index.ts';
 import { previousStatementChanged, type OrganizationDb } from '../db/index.ts';
 import { now } from '../../shared/clock.ts';
 import { uuidv7 } from '../uuid.ts';
@@ -21,41 +21,7 @@ async function requireTask(db: OrganizationDb, workspaceId: string, taskId: stri
   if (task === undefined) throw new ApiError(404, 'not_found');
 }
 
-export const attachmentListOperation = implement(attachmentList, async ({ db, workspace, actor, input }) => {
-  await requireTask(db, workspace.workspaceId, input.task_id);
-  const rows = await db.rows(
-    db.statement((q) =>
-      q
-        .selectFrom('attachments as a')
-        .leftJoin('users as u', (join) =>
-          join.onRef('u.id', '=', 'a.uploaded_by').on('u.organization_id', '=', db.organizationId),
-        )
-        .select([
-          'a.id',
-          'a.file_name',
-          'a.content_type',
-          'a.size_bytes',
-          'a.created_at',
-          'a.uploaded_by',
-          'u.name as uploaded_by_name',
-        ])
-        .where('a.workspace_id', '=', workspace.workspaceId)
-        .where('a.task_id', '=', input.task_id)
-        .where('a.attached_at', 'is not', null)
-        .where('a.comment_id', 'is', null)
-        .where('a.story_id', 'is', null)
-        .where('a.epic_id', 'is', null)
-        .orderBy('a.created_at')
-        .orderBy('a.id'),
-    ),
-  );
-  return {
-    attachments: rows.map((row) => ({
-      ...row,
-      deletable: !workspace.closed && mayDeleteOwned(row.uploaded_by, actor, workspace),
-    })),
-  };
-});
+export { attachmentListOperation } from './attachment-list-page.ts';
 
 export const attachmentDeleteOperation = implement(
   attachmentDelete,

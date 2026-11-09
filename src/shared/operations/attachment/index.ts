@@ -55,14 +55,18 @@ export const attachmentDownload = defineOperation({
   output: z.instanceof(Response),
 });
 
+export const ATTACHMENT_LIST_PAGE_SIZE = 50;
+const attachmentListCursor = z.object({ created_at: z.iso.datetime(), id: idSchema });
+
 export const attachmentList = defineOperation({
   name: 'attachment-list',
-  description: 'タスクに付いた全ファイルの一覧を返す',
+  description: 'タスクに付いたファイルを上げた日時と ID の順で50件ずつ返す',
   permission: 'member',
   workspace: true,
   mode: 'read',
-  input: z.object({ workspace_id: idSchema, task_id: idSchema }),
+  input: z.object({ workspace_id: idSchema, task_id: idSchema, after: attachmentListCursor.optional() }),
   output: z.object({
+    next_cursor: attachmentListCursor.optional(),
     attachments: z.array(
       z.object({
         id: z.string(),

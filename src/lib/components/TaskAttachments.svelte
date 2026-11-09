@@ -32,6 +32,9 @@
   type File = OutputOf<typeof attachmentList>['attachments'][number];
   let files = $state<File[]>([]);
   let loadState = $state<'loading' | 'ready' | 'failed'>('loading');
+  let nextCursor = $state<OutputOf<typeof attachmentList>['next_cursor']>();
+  let loadingMore = $state(false);
+  let moreFailed = $state(false);
   let deleting = $state(false);
   let previewOpen = $state(false);
   let selected = $state<File | null>(null);
@@ -58,20 +61,42 @@
   function url(file: File): string {
     return operationPath(attachmentDownload, slug, { id: file.id });
   }
-  async function load(): Promise<void> {
+  async function load(append = false): Promise<void> {
+    const after = append ? nextCursor : undefined;
+    if (append && (after === undefined || loadingMore || deleting)) return;
     const current = ++request;
-    const result = await callOperation(attachmentList, { workspace_id: workspaceId, task_id: taskId }, { slug });
+    loadingMore = append;
+    moreFailed = false;
+    const result = await callOperation(
+      attachmentList,
+      {
+        workspace_id: workspaceId,
+        task_id: taskId,
+        ...(after === undefined ? {} : { after }),
+      },
+      { slug },
+    );
     if (current !== request) return;
+    loadingMore = false;
     if (result.ok) {
-      files = result.data.attachments;
+      if (append) {
+        const seen = new Set(files.map((file) => file.id));
+        files = [...files, ...result.data.attachments.filter((file) => !seen.has(file.id))];
+      } else files = result.data.attachments;
+      nextCursor = result.data.next_cursor;
       loadState = 'ready';
-    } else loadState = 'failed';
+      if (append && nextCursor === undefined) void restoreFocus();
+    } else if (append) moreFailed = true;
+    else loadState = 'failed';
   }
   $effect(() => {
     const dependencies = [revision, slug, workspaceId, taskId];
     void dependencies;
     untrack(() => {
       loadState = 'loading';
+      loadingMore = false;
+      moreFailed = false;
+      nextCursor = undefined;
       void load();
     });
     return () => {
@@ -98,6 +123,8 @@
     deleting = false;
     if (result.ok) {
       request++;
+      loadingMore = false;
+      moreFailed = false;
       loadState = 'ready';
       files = files.filter((row) => row.id !== file.id);
       if (selected?.id === file.id) {
@@ -170,6 +197,12 @@
           </div>
         </div>
       {/each}
+      {#if nextCursor !== undefined}
+        {#if moreFailed}<p role="alert">{t('attachmentMoreFailed')}</p>{/if}
+        <button class="btn is-sm" type="button" disabled={loadingMore || deleting} onclick={() => void load(true)}
+          >{loadingMore ? t('retrying') : moreFailed ? t('retry') : t('attachmentLoadMore')}</button
+        >
+      {/if}
       {#if canWrite}
         <div class="dropzone is-disabled">
           <Icon name="upload" />
