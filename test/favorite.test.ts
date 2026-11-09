@@ -4,7 +4,7 @@ import { createApp } from '../src/server/app.ts';
 import { orgDb } from '../src/server/db/index.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { favoriteList, favoriteSet } from '../src/shared/operations/favorite.ts';
-import { AT, createEpic, createStory, createTask, uuidv7 } from './factories.ts';
+import { AT, createEpic, createMembership, createStory, createTask, uuidv7 } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
 import { createTarget, type Person, type Target } from './operations/world.ts';
 
@@ -30,7 +30,7 @@ function set(target: Target, kind: Kind, id: string, value = true, person = targ
 async function list(target: Target, person = target.member): Promise<Item[]> {
   const res = await post(app, favoriteList, { slug: target.slug, token: person.token, body: {} });
   expect(res.status).toBe(200);
-  return ((await res.json()) as { favorites: Item[] }).favorites;
+  return favoriteList.output.parse(await res.json()).favorites;
 }
 async function make(target: Target, kind: Kind, workspaceId: string | null = target.workspace.id) {
   if (kind === 'task') return createTask(target.organization, workspaceId!, target.admin.userId!);
@@ -204,7 +204,6 @@ describe('お気に入りの見える範囲', () => {
         ),
       );
     // 他のワークスペースの所属で組織へのアクセス自体は維持する。
-    const { createMembership } = await import('./factories.ts');
     await createMembership(target.organization, target.otherWorkspace.id, target.member.userId!);
     await update(AT);
     expect(await list(target)).toEqual([]);
