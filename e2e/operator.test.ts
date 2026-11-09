@@ -14,7 +14,16 @@ import { organizationSuspend } from '../src/shared/operations/operator/organizat
 import { organizationSuspensionUpdate } from '../src/shared/operations/operator/organization-suspension-update.ts';
 import { resolveGithubUser } from '../src/shared/operations/operator/resolve-github-user.ts';
 import { expect, test } from './fixtures.ts';
-import { expectFocusReturned, signIn, waitForSettled, watchViolations } from './helpers.ts';
+import {
+  A11Y_THEMES,
+  applyTheme,
+  expectNoA11yViolationsInThemes,
+  findOverflowViolations,
+  expectFocusReturned,
+  signIn,
+  waitForSettled,
+  watchViolations,
+} from './helpers.ts';
 import { failOperation, mockOperation, routeOperation } from './operations.ts';
 
 // 1x1 の PNG
@@ -95,6 +104,95 @@ test.describe('運用者', () => {
   test.beforeEach(async ({ context, baseURL }) => {
     await signIn(context, baseURL, 'operator');
   });
+
+  test('閉じた行でも色に頼らず状態と対象の組織を見分けられる', async ({ page }) => {
+    const cases = [
+      {
+        name: 'お試し組織',
+        label: 'お試し期限切れ',
+        icon: 'alert',
+        values: { trial_ends_on: '2026-10-31', trial_expired: true },
+      },
+      {
+        name: '解約組織',
+        label: '解約',
+        icon: 'alert',
+        values: { suspended_at: '2026-11-01T00:00:00.000Z', purge_on: '2026-12-01' },
+      },
+      { name: '不在組織', label: '管理者不在', icon: 'alert', values: { admin_status: 'none' as const } },
+      { name: '招待組織', label: '招待期限切れ', icon: 'alert', values: { admin_status: 'expired' as const } },
+      { name: '停止組織', label: '停止中', icon: 'clock', values: { suspended_at: '2026-11-01T00:00:00.000Z' } },
+      { name: '指名組織', label: '指名待ち', icon: 'clock', values: { admin_status: 'pending' as const } },
+    ];
+    await mockList(
+      page,
+      cases.map((item, index) => organization({ slug: `status-${index}`, name: item.name, ...item.values })),
+    );
+    await page.goto('/operator');
+    const rows = page.locator('.table tbody tr');
+    await expect(rows).toHaveCount(cases.length);
+    for (const [index, item] of cases.entries()) {
+      const summary = rows.nth(index).locator('summary');
+      await expect(summary.locator('.table-details-alert')).toHaveText(item.label);
+      await expect(summary.locator('.table-details-alert use')).toHaveAttribute('href', `#i-${item.icon}`);
+      await expect(summary).toHaveAccessibleName(new RegExp(`${item.name}.*${item.label}`));
+    }
+  });
+
+  for (const width of [1280, 390]) {
+    test(`${width}pxで印の多い行も閉じれば通常行の1.5倍以内で、開くとすべて読める`, async ({ page }) => {
+      await mockList(page, [
+        organization({}),
+        ...(['none', 'pending', 'expired'] as const).map((admin_status, index) =>
+          organization({
+            slug: `many-${index}`,
+            name: `印の多い組織${index}`,
+            self_created: true,
+            trial_ends_on: '2026-10-31',
+            trial_expired: true,
+            suspended_at: '2026-11-01T00:00:00.000Z',
+            purge_on: '2026-12-01',
+            admin_status,
+          }),
+        ),
+      ]);
+      await page.goto('/operator');
+      const rows = page.locator('.table tbody tr');
+      await expect(rows).toHaveCount(4);
+      await expect(rows.first().locator('details')).toHaveCount(0);
+      await expect(rows.nth(1).locator('summary')).toHaveAccessibleName(
+        /印の多い組織0.*お試し期限切れ.*解約.*管理者不在.*停止中/,
+      );
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of A11Y_THEMES) {
+        await applyTheme(page, theme);
+        const normal = (await rows.first().boundingBox())!;
+        if (width === 390) {
+          for (const summary of await rows.locator('summary').all()) {
+            const box = (await summary.boundingBox())!;
+            expect(box.height).toBeGreaterThanOrEqual(44);
+            expect(box.width).toBeGreaterThanOrEqual(44);
+          }
+        }
+        for (const row of (await rows.all()).slice(1)) {
+          expect((await row.boundingBox())!.height).toBeLessThanOrEqual(normal.height * 1.5);
+          await expect(row.locator('summary .is-danger')).toBeVisible();
+        }
+        expect(await findOverflowViolations(page)).toEqual([]);
+        expect(await page.locator('.table-wrap').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      }
+      const details = rows.nth(1).locator('details');
+      await details.locator('summary').focus();
+      await page.keyboard.press('Enter');
+      await expect(details).toHaveAttribute('open', '');
+      await expect(details.locator('.table-details-body .chip')).toHaveCount(6);
+      for (const chip of await details.locator('.table-details-body .chip').all()) await expect(chip).toBeVisible();
+      expect(await findOverflowViolations(page)).toEqual([]);
+      await expectNoA11yViolationsInThemes(page, 'operator-reassign', []);
+      await details.locator('summary').press('Enter');
+      await expect(details).not.toHaveAttribute('open', '');
+    });
+  }
 
   test('お試しの期限と期限を過ぎた印を名前の列に出す', async ({ page }) => {
     await mockList(page, [
@@ -302,6 +400,7 @@ test.describe('運用者', () => {
       const seatCell = page.locator('.table tbody tr').filter({ hasText: 'かもめ社' }).locator('td').nth(1);
       expect(await seatCell.evaluate((el) => getComputedStyle(el, '::before').content)).toContain('人数 / 上限');
       await expect(seatCell.locator('.chip')).toHaveText('上限に達した');
+      for (const summary of await page.locator('.table-details > summary').all()) await summary.click();
       // 印は右端で切れず、行の中で折り返す
       const chips = page.locator('.table tbody .chip');
       await expect(chips.filter({ hasText: '招待の URL は期限切れ' })).toBeVisible();

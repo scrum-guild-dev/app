@@ -120,7 +120,7 @@
   const screenName = $derived.by(() => {
     const found = navScreens.find((screen) => isNavItemCurrent(screen.key, screen.href, current));
     if (found) return found.label;
-    const key = accountScreenKey(current, slug);
+    const key = accountScreenKey(current, slug, isAdmin);
     return key ? t(key) : null;
   });
   const crumbs = $derived([

@@ -166,12 +166,14 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 
 ### 書体
 
-- 書体は `@fontsource/noto-sans-jp` から、`src/routes/+layout.svelte` が 400、500、600、700、900 を import する。全テーマの本文・見出し・数字に共通で使い、見本の Google Fonts の URL も同じ太さにする。
+可変版の採用理由と初回転送・表示時間の比較は [フォント転送の比較](benchmarks/font-transfer.md)。
+
+- 書体は `@fontsource-variable/noto-sans-jp` から、`src/routes/+layout.svelte` が可変版を1回 import する。400、500、600、700、900 の実際の太さを保ち、擬似太字に置き換えない。全テーマの本文・見出し・数字に共通で使い、見本の Google Fonts の URL も同じ太さにする。
 - Google Fonts は使わない。利用者の IP を外へ出さず、CSP に外の先を足さない。書体のファイルは build が `build/_app/immutable/assets/` に書き出し、自分の Worker から配る。
 - パッケージは `devDependencies` に置く。書体のファイルは build のときに CSS から拾って `build/` に書き出すだけで、Worker の実行時には要らない。
-- 日本語の書体は文字の範囲ごとに約120のファイルに分かれ（`unicode-range`）、ブラウザは使う文字のファイルだけを読む。使う太さの分だけ build に書き出す（Workers Static Assets の上限は20,000ファイル）。
-- `@fontsource` の CSS は woff2 と woff の両方を `src` に書くが、woff は使われない。woff を `build/` に出さないため、`scripts/fontsource-woff2.ts` の Vite プラグインが、CSS を Vite に渡す前に woff の指定を外す（実際の CSS での確認は `scripts/fontsource-woff2.test.ts`）。
-- 書体の CSS は1本にまとまり、文字範囲と太さの定義を含む。`index.html` の `<link rel="stylesheet">` から読むので描画を止めるが、この大きさと止まることは受け入れた。理由は2つ。1つは、日本語の書体を文字の範囲で分けて読む以上、範囲の一覧（`unicode-range`）を CSS に持つ構造が避けられないこと（Google Fonts の CSS も同じ構造）。もう1つは、ファイル名にハッシュが入って `immutable` でキャッシュされ、2回目からの読み込みが軽いこと。
+- 日本語の書体は文字の範囲ごとに約120のファイルに分かれ（`unicode-range`）、ブラウザは使う文字のファイルだけを読む。可変版では各範囲の1ファイルで全ての太さを扱う（Workers Static Assets の上限は20,000ファイル）。
+- 可変版は woff2 のみ。`scripts/fontsource-woff2.ts` の Vite プラグインでパッケージの書体名 `Noto Sans JP Variable` を共通トークンの `Noto Sans JP` にそろえる。文字範囲・100〜900の太さ・swap は保つ。静的な `@fontsource` を使う場合の woff 除去も同じプラグインが扱う（`scripts/fontsource-woff2.test.ts`）。
+- 書体の CSS は1本にまとまり、文字範囲と太さの定義を含む。`index.html` の `<link rel="stylesheet">` から読むので描画を止めるが、この大きさと止まることは受け入れた。可変版で太さごとの宣言をまとめても文字範囲の一覧は残る。理由は2つ。1つは、日本語の書体を文字の範囲で分けて読む以上、範囲の一覧（`unicode-range`）を CSS に持つ構造が避けられないこと（Google Fonts の CSS も同じ構造）。もう1つは、ファイル名にハッシュが入って `immutable` でキャッシュされ、2回目からの読み込みが軽いこと。
 - Vite は小さいファイルを `data:` の URI にして CSS へ埋め込むが、CSP の `font-src`（`default-src 'self'`）は `data:` を通さない。`vite.config.ts` の `build.assetsInlineLimit` を 0 にして、すべてファイルとして出す。
 - 太さを足すときは、見本の Google Fonts の URL も同じ PR で直す。
 
@@ -182,8 +184,8 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 - 描く前の先当ては `static/theme-init.js` の役目。`src/app.html` の head が同期（`async` と `defer` なし）で読み、覚えている値を `data-theme` に入れる。インラインにすると CSP のハッシュから漏れて止まるので、自分のオリジンのファイルにしてある。`localStorage` が使えない、値が壊れているときは何もせず、属性なしで描く。
 - `static/theme-init.js` は同期で読むので、小さなファイルでも読み終えるまで HTML の解析が止まる。`_headers` では `Cache-Control` を指定せず、Cloudflare の既定（毎回確かめる）のまま配る。描画のたびに「変わっていないか」の問い合わせが1往復増えるが、ファイルは数百バイトで、ちらつきを無くす利点が上回るので受け入れた。名前にハッシュを入れて `immutable` にすれば往復は無くなる一方、`app.html` から名前を引く仕掛けが要り、遅れが問題になってから足せば足りる。
 - テーマのキーと値は `src/shared/theme.ts` と同じにする。`scripts/theme.test.ts` が、`static/theme-init.js` を偽の `localStorage` で動かして確かめる。
-- `static/boot-loading.css` も同じ性質（`src/app.html` の head が読み、URL を直接開いた最初の読み込みの `#boot-loading` の見た目を持つ。デザインシステムの CSS が届く前に要るので、画面ごとの CSS を持たない決まりの例外）。
-- `static/boot-shape.js` も同期で読む同じ性質のファイル。`src/app.html` の `#boot-loading` の後に置き、URL から骨組みの形（組織の枠の画面ごとの形か、枠の外の紙）を選んで `html` に `data-boot`（畳んだ左のメニューなら `data-boot-nav` も）を付け、本文の骨組みを固定の文字列で組み立てる。往復は `theme-init.js` と同じく1つ増える。形と URL の対応は `src/lib/loading-shape.ts`（画面を移るときの `LoadingSheet`）と同じにし、`scripts/boot-shape.test.ts` が全画面の URL と、形ごとの帯の数、`static/boot-loading.css` にクラスの描き方があることを確かめる。`static/boot-loading.css` は枠の寸法（左のメニュー 240px と 64px、上の帯 60px、本文の余白）と、各テーマの地、面、線の色を `design/` から写して持つ。`design/` の枠の寸法かテーマの色を変えるときは、ここも合わせる（e2e の `toast-failure.test.ts` が、左のメニューの幅、上の帯、画面の見出しの位置の一致を確かめる）。画面が描かれたら `src/routes/+layout.svelte` が `#boot-loading` と `data-boot` を取り除く。
+- `static/boot-loading.css` も同じ性質（`src/app.html` の head が読み、URL を直接開いた最初の読み込みの `#boot-loading` の見た目を持つ。デザインシステムの CSS が届く前に要るので、画面ごとの CSS を持たない決まりの例外）。骨組みが中身に替わるときは、上に重ねて120msの `opacity` で消す（動きを減らす設定と300ms以内の読み込みでは即座に取り除く）。通常は `transitionend` で取り除き、届かないときも400msの予備タイマーで残さない。`boot-loading.css` の退場の時間とイージングは `design/tokens.css` の `--duration-fast`、`--ease-out` の写しで、変更時は両方を合わせる。動きを減らす設定でも、visibility の300ms・15秒の状態切り替えは残す。
+- `static/boot-shape.js` も同期で読む同じ性質のファイル。`src/app.html` の `#boot-loading` の後に置き、URL から骨組みの形（組織の枠の画面ごとの形か、枠の外の紙）を選んで `html` に `data-boot`（畳んだ左のメニューなら `data-boot-nav` も）を付け、本文の骨組みを固定の文字列で組み立てる。往復は `theme-init.js` と同じく1つ増える。形と URL の対応は `src/lib/loading-shape.ts`（画面を移るときの `LoadingSheet`）と同じにし、`scripts/boot-shape.test.ts` が全画面の URL と、形ごとの帯の数、`static/boot-loading.css` にクラスの描き方があることを確かめる。`static/boot-loading.css` は枠の寸法（左のメニュー 240px と 64px、上の帯 60px、本文の余白）と、各テーマの地、面、線の色を `design/` から写して持つ。`design/` の枠の寸法かテーマの色を変えるときは、ここも合わせる（e2e の `toast-failure.test.ts` が、左のメニューの幅、上の帯、画面の見出しの位置の一致を確かめる）。画面が描かれたら `src/routes/+layout.svelte` が `#boot-loading` を短くフェードしてから、`data-boot` と `data-boot-nav` も取り除く。
 - 画面が動き出してからの切り替えとストアは `src/lib/theme.svelte.ts`。本物の値は組織の枠が入れる。組織の操作の結果の `me.theme`（`users.theme`）、なければ `organization.theme`（`organizations.theme`）を `setTheme` に渡すので、`data-theme` と `localStorage` が同じ値になる（`src/lib/organization.svelte.ts`）。組織を切り替えたときも同じで、切り替えた先の値に替わる。
 
 ### 架空のデータ
@@ -685,20 +687,20 @@ Codex が探索する入口は `.agents/skills/`。原本を複製せず、共�
 | `add-operation` | `.claude/skills/add-operation` への相対リンク。API の操作を足す手順を共有する |
 | `d1-migration` | `.claude/skills/d1-migration` への相対リンク。D1 の変更と検証を共有する。Issue や PR への書き込みは直接依頼時の承認の範囲に従う |
 | `find-animation-opportunities`、`review-animations`、`improve-animations` | `.claude/skills/` の同名への相対リンク。外から入れた動きのスキル（下の「外から入れたスキル」）を共有する。同じく外から入れた `impeccable` は Codex では使わないので置かない |
-| `pr` | `.claude/skills/pr` への相対リンク。PR の状態で必要な詳細だけを読み、Codex は AGENTS.md の承認範囲を優先する |
+| `pr` | Codex 用の入口。PR の状態に合う共有手順を読み、承認範囲と E2E の CI 実行方針を優先する |
 | `increment-build` | Codex 用の `SKILL.md`。着手の判定と受け入れ条件は `docs/agent-workflows/` を参照し、実装の進行は Codex が受け持つ |
 | `done-check` | Codex 用の `SKILL.md`。検査・点検基準は `docs/agent-workflows/`、レビューの役割は共有定義を参照し、未コミット・新規ファイルも点検する |
 
 リンクはリポジトリ内の相対パスなので、ワークツリーと clone の中でも同じ原本を指す。
 工程の2つを Claude 用スキル全体へのリンクにしない。Claude の道具呼び出し、自動コミットと PR 作成まで実行してしまうため。
-`sprint-*`、`daily-scrum` などは今回の Codex 用の探索対象には加えていない。必要なときに互換性を確認して追加する。
-特に `daily-scrum` の Claude Artifact 更新と `rename-session` のセッション操作は、そのまま Codex に移せない。
+`backlog-add`、`backlog-refine`、`daily-scrum`、`retro`、`sprint-pick`、`sprint-plan`、`sprint-review`、`sync-base`、`japanese-tech-writing` にも Codex 用の入口を置く。読み替えと対象外のスキルは `.agents/skills/README.md` を参照する。
+`daily-scrum` はデータ取得と点検を行い、Claude Artifact 更新は省く。`sprint-review` は動画を自動撮影せず、CI の成果物や人の画面操作で確認する。
 スキルを直すときは、共通の工程基準は `docs/agent-workflows/`、共有する専門スキルは `.claude/skills/` の原本（外から入れたスキルは除く。下の「外から入れたスキル」）、各製品の進行はそれぞれの入口を直す。
 
 #### 検証と承認
 
 `.claude/` のフックは自動で動かない。整形は変更ファイルに絞って行い、検査のコマンドは `CLAUDE.md` を使う。
-本番操作と秘密ファイルの読み書き、手元の e2e の禁止は `AGENTS.md` の指示で守る。これらを機械的に遮断する Codex 用フックを追加したわけではない。
+本番操作と秘密ファイルの読み書き、E2E を CI で実行する方針は `AGENTS.md` の指示で守る。Codex はクラウドでも E2E の事前実行・preflight・成功記録の照合を PR 前の条件にせず、ユーザーが明示的に依頼した場合だけセッションで実行する。必要な E2E の追加・更新は行い、セッションの検査結果と CI の結果を分けて報告する。これらを機械的に遮断する Codex 用フックを追加したわけではない。
 git の保護フックと CI は既存のものを使う。
 レビューの観点は `.claude/agents/` と `.claude/checklists/` を読み、Codex のサブエージェントへ渡す。実装した本人の自己点検を独立レビューとして数えない。
 必要な独立レビューができなければ未実施と報告し、CI と人が確認できる状態で渡す。
@@ -707,9 +709,10 @@ git の保護フックと CI は既存のものを使う。
 承認が必要な操作の前にローカルの実装・検証と投稿内容の準備を終え、既に承認されたことは聞き直さない。
 `implementer` からは外部へ書き込まず、呼び出し元へ戻す。
 
-新しい Codex セッションで `/skills` または `$` の候補を開き、この5つが見えることを確かめる。
+新しい Codex セッションで `/skills` または `$` の候補を開き、上記のスキルが見えることを確かめる。
 見えなければ作業ディレクトリとリンク先を確かめてから再起動する。
 2026-11-02 に Codex CLI 0.166.0 の `codex debug prompt-input` で、この5つのスキルのメタデータと、直接依頼・委譲を分けた `AGENTS.md` が読み込まれることを確かめた。実際の Issue の実装から PR 作成までを通す確認は別に行う。
+2026-11-09 に、一時の `CODEX_HOME` を使った `codex debug prompt-input` で、今回配置した17個のスキルのメタデータと、E2E を CI で実行する `AGENTS.md` の指示が読み込まれることを確かめた。各スキルを実行して外部操作まで通す検証は行っていない。
 手元の設定の仕様は [OpenAI の AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md)、[スキル](https://learn.chatgpt.com/docs/build-skills)、[設定](https://learn.chatgpt.com/docs/config-file/config-basic) を参照する。
 
 ### クラウド環境
