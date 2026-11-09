@@ -1,9 +1,8 @@
-import { sprintBoard } from '../src/shared/operations/sprint/index.ts';
-import { SAMPLE_BOARD } from './sprint-fixture.ts';
+import { a11yScreens } from './a11y-screen-fixtures.ts';
 import { backlogTree } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
 import { expectNoA11yViolationsInThemes, signIn, waitForSettled } from './helpers.ts';
-import { mockOperation, routeOperation } from './operations.ts';
+import { routeOperation } from './operations.ts';
 
 const WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 
@@ -74,21 +73,15 @@ test('遅い移動の完了で戻り、引き出しでは本文を薄くしな�
 
 // APIの10秒の打ち切りとaxeの所要時間を競合させないよう、配線は上の実遷移、
 // 4テーマの見た目は読み終わった本文に同じ属性を付けた部品の状態で確かめる。
-for (const { screen, path } of [
-  { screen: 'sprint', path: `${WORKSPACE}/sprint` },
-  { screen: 'backlog', path: WORKSPACE },
-  { screen: 'epic', path: `${WORKSPACE}/epics/019a0000-0000-7000-8000-000000000b01` },
-] as const) {
+for (const { screen, path, prepare, ready } of a11yScreens.filter((screen) => screen.path.startsWith('/aoba'))) {
   test(`読み込み中の本文に4テーマでaxeの違反が無い（${screen}）`, async ({ page, context, baseURL }) => {
     test.setTimeout(90_000);
     await signIn(context, baseURL, 'admin');
-    if (screen === 'sprint') await mockOperation(page, sprintBoard, { slug: 'aoba' }, SAMPLE_BOARD);
+    await prepare?.(page);
     await page.goto(path);
     const main = page.locator('main.content');
     await expect(main).toBeVisible();
-    await expect(main.getByRole('heading', { level: 1 }).first()).toBeVisible();
-    if (screen === 'sprint')
-      await expect(page.getByRole('article', { name: 'ポイント付与のバッチを作る' })).toBeVisible();
+    for (const locator of ready(page)) await expect(locator.first()).toBeVisible();
     await waitForSettled(page);
     await main.evaluate((node) => node.setAttribute('aria-busy', 'true'));
     await expect(main).toHaveCSS('opacity', '0.95');
