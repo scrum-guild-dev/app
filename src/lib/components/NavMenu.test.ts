@@ -137,3 +137,11 @@ test('リンクにできる対象が無い一覧では見出しだけの節を�
   const body = render(NavMenu, { props: { current: '/aoba', slug: 'aoba', hasWorkspace: false, isAdmin: false } }).body;
   expect(body).not.toContain('nav-favorites');
 });
+
+test('手動の再試行が続く間は0件へ更新されても操作の節を外さない', () => {
+  favoriteState.current = { available: true, items: [], loadFailed: false, loading: true };
+  const body = render(NavMenu, { props: { current: '/aoba', slug: 'aoba', hasWorkspace: false, isAdmin: false } }).body;
+  expect(body).toContain('nav-favorites');
+  expect(body).toContain('もう一度試す');
+  expect(body).toContain('読み込んでいます');
+});

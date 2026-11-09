@@ -49,6 +49,7 @@ export class Favorites {
   private pending = $state<string[]>([]);
   private cached = $state.raw<Source | null>(null);
   private request = 0;
+  private manualRequest: { scope: string; queued: boolean; promise: Promise<void> } | null = null;
   private refreshState = $state.raw<{ scope: string; loading: boolean; failed: boolean; manual: boolean } | null>(null);
   constructor(private source: () => Source) {}
   private currentSource(): Source {
@@ -64,6 +65,7 @@ export class Favorites {
     const source = this.source();
     const cached = untrack(() => this.cached);
     const refreshing = untrack(() => this.refreshState);
+    if (this.manualRequest && this.manualRequest.scope !== source.scope) this.manualRequest = null;
     if (refreshing && refreshing.scope !== source.scope) {
       this.request++;
       this.refreshState = null;
@@ -93,7 +95,37 @@ export class Favorites {
       !this.refreshState.loading
     );
   }
-  async refresh(userInitiated = false): Promise<void> {
+  // 手動再試行への待ちを共有し、その途中の書き込みは最後にまとめて読み直す。
+  // 待機状態や、クリック側が待つ Promise を背景更新で置き換えない。
+  refresh(userInitiated = false): Promise<void> {
+    const scope = this.source().scope;
+    const active = this.manualRequest;
+    if (active?.scope === scope) {
+      if (!userInitiated) {
+        active.queued = true;
+        if (this.refreshState?.scope === scope)
+          this.refreshState = { ...this.refreshState, loading: true, manual: true };
+      }
+      return active.promise;
+    }
+    if (!userInitiated) return this.readList(false);
+    const manual = { scope, queued: false, promise: Promise.resolve() };
+    this.manualRequest = manual;
+    const work = async () => {
+      do {
+        manual.queued = false;
+        await this.readList(true);
+      } while (manual.queued && this.manualRequest === manual && this.source().scope === scope);
+    };
+    manual.promise = work().finally(() => {
+      if (this.manualRequest === manual) this.manualRequest = null;
+    });
+    return manual.promise;
+  }
+  private queuedManual(scope: string): boolean {
+    return this.manualRequest?.scope === scope && this.manualRequest.queued;
+  }
+  private async readList(userInitiated: boolean): Promise<void> {
     const source = this.source();
     const request = ++this.request;
     const requestedAt = performance.now();
@@ -114,10 +146,20 @@ export class Favorites {
           requestedAt,
         };
       }
-      this.refreshState = { scope: source.scope, loading: false, failed: !result.ok, manual: userInitiated };
+      this.refreshState = {
+        scope: source.scope,
+        loading: userInitiated && this.queuedManual(source.scope),
+        failed: !result.ok,
+        manual: userInitiated,
+      };
     } catch {
       if (request === this.request && this.source().scope === source.scope)
-        this.refreshState = { scope: source.scope, loading: false, failed: true, manual: userInitiated };
+        this.refreshState = {
+          scope: source.scope,
+          loading: userInitiated && this.queuedManual(source.scope),
+          failed: true,
+          manual: userInitiated,
+        };
     }
   }
   // 後から届いた一覧でも、読み取り開始が保存成功より前なら新しい本人の操作を保つ。

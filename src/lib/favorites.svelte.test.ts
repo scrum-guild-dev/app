@@ -256,3 +256,78 @@ test('背景更新は読み上げ用の待機状態を出さず、利用者の�
   expect(favorites.loading).toBe(false);
   expect(favorites.retryFailed).toBe(true);
 });
+
+test.each([true, false])(
+  '手動再試行中の背景更新をまとめ、最後の結果（成功=%s）まで待機とPromiseを保つ',
+  async (succeeds) => {
+    type Reply =
+      | { ok: true; data: { favorites: Favorite[]; marks: Pick<Favorite, 'target_type' | 'target_id'>[] } }
+      | { ok: false; status: number; error: null };
+    let first!: (reply: Reply) => void;
+    let next!: (reply: Reply) => void;
+    call.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          first = resolve;
+        }),
+    );
+    call.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          next = resolve;
+        }),
+    );
+    const { favorites } = setup();
+    let settled = false;
+    const manual = favorites.refresh(true).then(() => {
+      settled = true;
+    });
+    const background = favorites.refresh();
+    const anotherBackground = favorites.refresh();
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(favorites.loading).toBe(true);
+    first({ ok: true, data: { favorites: [], marks: [] } });
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2));
+    expect(favorites.loading).toBe(true);
+    expect(settled).toBe(false);
+    // 手動で連打しても同じ完了を待ち、さらに問い合わせを足さない。
+    const doubleClick = favorites.refresh(true);
+    expect(call).toHaveBeenCalledTimes(2);
+    next(
+      succeeds
+        ? {
+            ok: true,
+            data: {
+              favorites: [{ ...target, id: 'mark', created_at: '' }],
+              marks: [{ target_type: target.target_type, target_id: target.target_id }],
+            },
+          }
+        : { ok: false, status: 500, error: null },
+    );
+    await Promise.all([manual, background, anotherBackground, doubleClick]);
+    expect(favorites.loading).toBe(false);
+    expect(favorites.retryFailed).toBe(!succeeds);
+    expect(favorites.items).toHaveLength(succeeds ? 1 : 0);
+    expect(favorites.marked('task', 'one')).toBe(succeeds);
+  },
+);
+
+test('手動の最初の応答が届いた直後の背景更新も、待機を解除せず合流する', async () => {
+  let finish!: (reply: { ok: true; data: { favorites: []; marks: [] } }) => void;
+  call.mockResolvedValueOnce({ ok: true, data: { favorites: [], marks: [] } });
+  call.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { favorites } = setup();
+  const manual = favorites.refresh(true);
+  await Promise.resolve();
+  const background = favorites.refresh();
+  expect(favorites.loading).toBe(true);
+  await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2));
+  finish({ ok: true, data: { favorites: [], marks: [] } });
+  await Promise.all([manual, background]);
+  expect(favorites.loading).toBe(false);
+});

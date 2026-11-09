@@ -90,7 +90,7 @@
         {/if}
       {/if}
     {/each}
-    {#if section.heading === undefined && favorites && (favorites.loadFailed || !favorites.available || favoriteLinks.length > 0)}
+    {#if section.heading === undefined && favorites && (favorites.loadFailed || favorites.loading || !favorites.available || favoriteLinks.length > 0)}
       <div class="nav-favorites">
         <div class="nav-group"><span class="nav-group-label">{t('favorites')}</span></div>
         <FavoriteLoadStatus
