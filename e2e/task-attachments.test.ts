@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { attachmentList, attachmentUpload } from '../src/shared/operations/attachment/index.ts';
 import { taskCreate, taskUpdate } from '../src/shared/operations/task/index.ts';
 import { workspaceCreate } from '../src/shared/operations/workspace/workspace-create.ts';
@@ -11,6 +12,19 @@ const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSAAAAABJRU5ErkJggg==',
   'base64',
 );
+
+// ナビゲーション完了と、クライアントが一覧を取得し終える時点は別。
+// CI の短い expect 待ちの中に、初回の JS 読み込みと API の待ち時間を含めない。
+function nextAttachmentList(page: Page) {
+  return page.waitForResponse(
+    (response) => response.url().endsWith(`/api/aoba/${attachmentList.name}`) && response.request().method() === 'POST',
+  );
+}
+async function reloadAttachments(page: Page): Promise<void> {
+  const response = nextAttachmentList(page);
+  await page.reload();
+  expect((await response).status()).toBe(200);
+}
 
 test('全種類の一覧、日時と容量、プレビュー、権限と削除後の本文を確かめる', async ({ page, context, baseURL }) => {
   test.setTimeout(90_000);
@@ -31,7 +45,9 @@ test('全種類の一覧、日時と容量、プレビュー、権限と削除�
   expect(created.status()).toBe(200);
   const task = taskCreate.output.parse(await created.json()).task;
   const taskUrl = `/aoba/w/${workspaceId}/tasks/${task.id}`;
+  const initialList = nextAttachmentList(page);
   await page.goto(taskUrl);
+  expect((await initialList).status()).toBe(200);
   const section = page.getByRole('region', { name: '添付ファイル', exact: true });
   await expect(section.locator('.file-row')).toHaveCount(0);
   await expect(section.getByRole('button', { name: 'ファイルを選ぶ', exact: true })).toBeVisible();
@@ -64,7 +80,7 @@ test('全種類の一覧、日時と容量、プレビュー、権限と削除�
     },
   });
   expect(saved.status()).toBe(200);
-  await page.reload();
+  await reloadAttachments(page);
   await expect(section.locator('.file-row')).toHaveCount(3);
   const imageRow = section.locator('.file-row', { hasText: '一覧の画像.png' });
   await expect(imageRow.locator('.file-meta')).toContainText(`${PNG.length}\u00a0B`);
@@ -85,7 +101,7 @@ test('全種類の一覧、日時と容量、プレビュー、権限と削除�
 
   // 上げた人ではないリーダーには削除を出す。
   await signIn(context, baseURL, 'member');
-  await page.reload();
+  await reloadAttachments(page);
   await expect(imageRow.getByRole('button', { name: '一覧の画像.png を削除', exact: true })).toBeVisible();
   // 管理者がリーダーを一般メンバーに替えると、本人以外の削除は消える。
   await signIn(context, baseURL, 'admin');
@@ -95,7 +111,7 @@ test('全種類の一覧、日時と容量、プレビュー、権限と削除�
   });
   expect(role.status()).toBe(200);
   await signIn(context, baseURL, 'member');
-  await page.reload();
+  await reloadAttachments(page);
   await expect(section.locator('.file-row')).toHaveCount(3);
   await expect(section.getByRole('button', { name: '一覧の画像.png を削除', exact: true })).toHaveCount(0);
   const list = await page.request.post(`/api/aoba/${attachmentList.name}`, {
@@ -106,7 +122,7 @@ test('全種類の一覧、日時と容量、プレビュー、権限と削除�
 
   // アップロードした本人である管理者が削除する。画像は本文にも差し込まれている。
   await signIn(context, baseURL, 'admin');
-  await page.reload();
+  await reloadAttachments(page);
   await imageRow.getByRole('button', { name: '一覧の画像.png を削除', exact: true }).click();
   const confirmation = page.getByRole('dialog', { name: '添付ファイルを削除しますか', exact: true });
   await expect(confirmation).toContainText('戻せません');
