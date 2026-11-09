@@ -3,6 +3,7 @@ import { expect, test, type BrowserContext, type Locator, type Page, type Respon
 import { SEED_SESSIONS } from '../seed/sessions.ts';
 import { userList } from '../src/shared/operations/organization/user.ts';
 import { workspaceList } from '../src/shared/operations/workspace/workspace-list.ts';
+import { workspaceCreate } from '../src/shared/operations/workspace/workspace-create.ts';
 import { sessionCookieName } from '../src/shared/session-cookie.ts';
 import { word, type DictionaryKey, type TemplateParams } from '../src/shared/vocabulary.ts';
 import { mockOperation } from './operations.ts';
@@ -671,13 +672,29 @@ export async function mockSeedAdminLists(page: Page): Promise<void> {
 // 管理の画面から、自分をリーダーにワークスペースを作り、完了の表示で「開く」を押してその画面へ移る（admin でログインしている前提）
 export async function createWorkspace(page: Page, name: string): Promise<void> {
   await page.goto('/aoba/admin');
+  // ダイアログの表示と候補の読み込みは別。候補の応答を受けてから選べる状態を確かめる。
+  const candidates = waitForResponses(page, '/workspace-leader-candidates');
   await page.getByRole('button', { name: 'ワークスペースを作る' }).first().click();
+  expect((await candidates).ok()).toBe(true);
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('combobox')).toBeEnabled();
   await dialog.getByLabel('名前').fill(name);
+  const creating = waitForResponses(page, `/${workspaceCreate.name}`);
   await dialog.getByRole('button', { name: '作る' }).click();
+  const created = await creating;
+  expect(created.ok()).toBe(true);
+  const { workspace_id: workspaceId } = workspaceCreate.output.parse(await created.json());
   await expect(dialog.getByRole('heading', { name: 'ワークスペースを作りました' })).toBeVisible();
+  // 「開く」の移動は枠も読み直す。前の画面に残った別の木の応答で待ちを終えないよう、作ったIDで絞る。
+  const openedTree = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/aoba/backlog-tree' &&
+      response.request().method() === 'POST' &&
+      response.request().postDataJSON()?.workspace_id === workspaceId,
+  );
+  void openedTree.catch(() => {});
   await dialog.getByRole('button', { name: '開く' }).click();
+  expect((await openedTree).ok()).toBe(true);
   await expect(page).toHaveURL(/\/aoba\/w\/[0-9a-f-]{36}$/);
   // 見出しは画面の名前（バックログ）、小見出しがワークスペースの名前
   await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible();

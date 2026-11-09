@@ -9,7 +9,8 @@
 html { font-size: 100%; }
 html, body { min-height: 100%; }
 body {
-  margin: 0; background: var(--color-bg); color: var(--color-fg);
+  --page-background: var(--color-bg);
+  margin: 0; background: var(--page-background); color: var(--color-fg);
   font-family: var(--font-body); font-size: var(--text-body); line-height: var(--leading-body);
   -webkit-font-smoothing: antialiased;
 }
@@ -379,7 +380,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 }
 .me { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); padding-left: var(--space-2); min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .content {
-  padding-block: var(--space-2) var(--space-10);
+  padding-block: var(--space-4) var(--space-10);
   padding-left: max(var(--space-8), env(safe-area-inset-left, 0px));
   padding-right: max(var(--space-8), env(safe-area-inset-right, 0px));
   width: 100%;
@@ -989,7 +990,15 @@ button.tree-folded[aria-expanded="true"] .ico { transform: rotate(90deg); }
 /* 一覧の幅が狭いとき（メニューの横で 760px を少し超える幅など）は、画面の幅でなく一覧の幅で、行の右端（期日、ポイント、担当、
    並べ替え、完了の操作）を題の下へ折り返す。右端が横に並んだままだと、題の列が数文字の幅に縮むため */
 .tree, .book { container-type: inline-size; }
-@container (max-width: 640px) {
+.tree { container-name: tree; }
+.book { container-name: book; }
+/* 台帳は木より右端が短いので、520px を超えれば横に並べる */
+@container book (max-width: 520px) {
+  .entry { grid-template-columns: var(--grip-col, ) 32px minmax(0, 1fr); }
+  .entry-end { grid-column: -2; flex-wrap: wrap; }
+  .entry:has(.entry-meta) { row-gap: 2px; }
+}
+@container tree (max-width: 640px) {
   .entry { grid-template-columns: var(--grip-col, ) 32px minmax(0, 1fr); }
   .entry-end { grid-column: -2; flex-wrap: wrap; }
   /* 「今日やる」の太陽（.sun）の無いバックログの木（.tree）の行は、空の 32px の列を持たず、題とチップに幅を返す（受信箱の選ぶ欄と「今日やること」の一覧は、行の左端を揃えるので列を残す）（390px で 44px 広がり、題の下の印が 1 行に収まる） */
@@ -1142,7 +1151,14 @@ label.pick-row:hover { background: var(--color-accent-soft); }
   .table.is-stacked .chip { white-space: normal; }
   .table.is-stacked td[data-label]::before { content: attr(data-label) "　"; font-family: var(--font-body); font-size: var(--text-xs); color: var(--color-muted); white-space: nowrap; }
   .table.is-stacked td.is-actions { position: static; }
-  .table.is-stacked .table-actions { flex-wrap: wrap; justify-content: flex-start; }
+  .table.is-stacked .table-actions { flex-wrap: wrap; justify-content: flex-start; gap: var(--space-1); }
+  /* 静かな危険の操作も文字だけで示す。危険色と押せる箱は保ち、補正で枠だけが本文より外へ出るのを防ぐ */
+  .table.is-stacked .btn.is-sm.is-quiet.is-danger { border-color: transparent; }
+  .table.is-stacked td.is-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
+  /* 枠の無い静かな小ボタンだけの並びは、折り返した行の先頭も本文にそろえる。
+     枠付きの操作が混ざるときは並び全体を引かず、先頭の静かな操作だけを補正する */
+  .table.is-stacked .table-actions:not(:has(> :not(.btn.is-sm.is-quiet:not(.is-danger)))) { margin-inline-start: -11px; }
+  .table.is-stacked .table-actions:has(> :not(.btn.is-sm.is-quiet:not(.is-danger))) > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
 }
 
 /* ===== 広い幅でマウスで操作する画面の詰め =====
@@ -1560,7 +1576,11 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 /* 一覧が広いまま指で押す画面（タブレットの横置きなど）では、行の右端が題の下へ折り返さないまま 44px のボタンが並ぶ。
    題の列に 12rem を先に取り、右端は残りの幅に収まらなければ中で折り返す（右端の列は max-content まで、題の列を押しのけない） */
 @media (pointer: coarse) and (min-width: 761px) {
-  @container (min-width: 641px) {
+  @container book (min-width: 521px) {
+    .entry { grid-template-columns: var(--grip-col, ) 32px minmax(12rem, 1fr) minmax(0, max-content); }
+    .entry-end { flex-wrap: wrap; justify-content: flex-end; }
+  }
+  @container tree (min-width: 641px) {
     .entry { grid-template-columns: var(--grip-col, ) 32px minmax(12rem, 1fr) minmax(0, max-content); }
     .entry-end { flex-wrap: wrap; justify-content: flex-end; }
   }
@@ -1644,6 +1664,10 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
    止めるのは欄の部品だけで、表（.table-wrap）、callout、空の状態は止めない。`.setting-body` は SectionBoundary で入れ子になるので、親の直下で選ばない */
 .form, .form-row, .input-row, .field, .order-list { max-width: 56rem; }
 .form-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+/* 先頭の静かな小ボタンだけ、枠1pxと左右の余白10pxを外へ出し、文字を本文にそろえる。押せる箱は縮めない */
+.gate-sheet .form-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
+/* 利用開始のフローは左右20pxの余白を持つ48pxのボタン。大きさを保って文字だけそろえる */
+.onboarding .form-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: calc(-1 * var(--space-5) - 1px); }
 
 /* ===== 手順（番号は本当の順番） ===== */
 .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); counter-reset: step; }
@@ -1772,12 +1796,16 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 }
 
 /* ===== ログインの画面（枠の外） ===== */
-.gate { min-height: 100vh; display: grid; place-items: center; padding-block: var(--space-8);
+.gate { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding-block: var(--space-8);
   padding-left: max(var(--space-4), env(safe-area-inset-left, 0px)); padding-right: max(var(--space-4), env(safe-area-inset-right, 0px)); }
 .gate-stack { display: grid; gap: var(--space-6); width: min(440px, 100%); }
 .gate-sheet { width: min(440px, 100%); display: grid; gap: var(--space-5); background: var(--color-surface); border: 1px solid var(--color-line); border-top: var(--edge-top) solid var(--color-accent); box-shadow: var(--shadow-sheet); padding: var(--space-8) var(--space-6); border-radius: var(--radius-1); }
 .gate-brand { display: flex; align-items: center; gap: var(--space-2); }
-.gate-brand .brand-art { width: 240px; }
+/* 240px の箱の内側は232px。画像600pxの左34pxの透明余白と箱のpadding 4pxを引く。
+   左のメニューのロゴには広げず、枠の外の紙だけで絵の左端を本文にそろえる */
+.gate-brand .brand-art { width: 240px; margin-inline-start: calc(-4px - 232px * 34 / 600); }
+/* 会員登録・利用開始のヘッダーは168pxの箱（内側160px） */
+.onboarding-header .gate-brand .brand-art { margin-inline-start: calc(-4px - 160px * 34 / 600); }
 .gate-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-2xl); line-height: var(--leading-tight); }
 .gate-note { font-size: var(--text-xs); color: var(--color-muted); }
 /* 読み込み中の紙の中身（同意の確認）。読み込んだ後と同じ組みを見えないまま置いて（.gate-pending-body。aria-hidden と inert も付ける）
@@ -2205,7 +2233,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 :root[data-theme="medieval"] .emblem.is-sm { --emblem-w1: 1px; --emblem-w2: 2px; text-shadow: none; }
 
 /* 現代風: 端末のウィンドウの光 */
-:root[data-theme="modern"] body { background: radial-gradient(1200px 600px at 75% -10%, rgb(76 200 255 / 0.09), transparent 70%) fixed, var(--color-bg); }
+:root[data-theme="modern"] body { --page-background: radial-gradient(1200px 600px at 75% -10%, rgb(76 200 255 / 0.09), transparent 70%) fixed, var(--color-bg); }
 :root[data-theme="modern"] .hanko { background: none; box-shadow: 0 0 10px -3px var(--color-done); }
 /* 要素自身の背景は文字と合う面の色にする（axe は擬似要素の背景を見ず、要素の背景を地として読むため）。縁は ::before（inset 0）が描く */
 :root[data-theme="modern"] .emblem {
@@ -2285,3 +2313,8 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   .onboarding-header .btn { font-size: var(--text-xs); padding-inline: var(--space-3); }
   .onboarding-stage { padding-block: var(--space-8); }
 }
+
+/* 表示中から同じスクロール領域と背景を保ち、中身の上で退場する。 */
+/* 本文より上、ダイアログ（30）とトースト（40）より下。 */
+.loading-overlay { position: fixed; inset: 0; z-index: 10; overflow: auto; background: var(--page-background); }
+.loading-overlay.is-leaving { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); pointer-events: none; }

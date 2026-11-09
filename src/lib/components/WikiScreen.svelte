@@ -462,7 +462,14 @@
 {:else}
   <div class="layout-wiki">
     <aside class="wiki-side">
-      <details class="wiki-page-list" bind:open={pageListOpen}>
+      <!-- 狭い幅で閉じたときの toggle が幅変更後に届いても、広い幅の一覧を閉じない。 -->
+      <details
+        class="wiki-page-list"
+        ontoggle={(event) => {
+          if (!narrowWiki) event.currentTarget.open = true;
+        }}
+        bind:open={pageListOpen}
+      >
         <summary>{t('wikiPageList')}</summary>
         <div class="wiki-list-content">
           {#if data.wikiPages !== null}{#key wiki.rootHref}<WikiSearch
