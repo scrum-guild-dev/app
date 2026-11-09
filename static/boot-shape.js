@@ -7,7 +7,7 @@
 // #boot-loading の後に置いて同期で読む（本文の骨組みを #boot-loading の中に組み立てるため）。骨組みが見える 300ms より前に終わる。
 // インラインにすると CSP のハッシュから漏れて止まるので、自分のオリジンのファイルにしてある。中身は固定の文字列だけで、URL の値は入れない
 (function () {
-  var outside = ['consent', 'invite', 'login', 'operator', 'privacy', 'signup', 'terms'];
+  var outside = ['auth', 'consent', 'invite', 'login', 'operator', 'privacy', 'signup', 'terms'];
   var workspacePages = {
     connections: 'list',
     inbox: 'list',
