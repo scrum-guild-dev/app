@@ -22,7 +22,7 @@
     <div id="app">%sveltekit.body%</div>
     <!-- URL を直接開いた最初の読み込みで、300ms たっても画面が描けないときだけ見える（static/boot-loading.css）。
          SvelteKit は最初の load が終わるまで画面を描かないため。文は辞書の loading、loadFailedTitle、retry と同じ（scripts/vocabulary.test.ts）。
-         15 秒たっても描けないときは、CSS だけで失敗の文と再読み込みのリンクに替える。画面が描かれたら src/routes/+layout.svelte が取り除く。
+         15 秒たっても描けないときは、CSS だけで失敗の文と再読み込みのリンクに替える。画面が描かれたら src/routes/+layout.svelte が120msで抜いてから取り除く（動きを減らす設定では即座に取り除く）。
          見えるのは骨組み（スケルトン。枠の外は紙の .boot-skeleton、組織の枠の中は左のメニューと上の帯と画面ごとの本文の .boot-frame。static/boot-shape.js が選ぶ）で、文（.boot-wait）は読み上げのために見えないまま置く -->
     <div id="boot-loading" role="status">
       <span class="boot-wait">読み込んでいます</span>
