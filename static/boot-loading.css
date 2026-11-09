@@ -90,7 +90,7 @@
   outline: 2px solid var(--boot-accent);
   outline-offset: 2px;
 }
-/* 待つ文は読み上げのためだけに置き（見えない）、見えるのは骨組み（LoadingSheet と同じ、紙に灰色の帯）。どちらも 15 秒で隠す */
+/* 待つ文は読み上げのためだけに置き（見えない）、見えるのは骨組み（LoadingSheet に近い、紙に灰色の帯）。どちらも 15 秒で隠す */
 #boot-loading .boot-wait {
   position: absolute;
   width: 1px;
