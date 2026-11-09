@@ -105,7 +105,7 @@ h1, h2, h3 { text-wrap: balance; }
 .nav-badge { margin-left: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
 /* 組織とワークスペースの切り替え。共通のボタンとリンクの一覧。
    選ぶと画面が移るので select にしない（矢印キーで選んだだけで移ってしまう）。
-   組織は狭い幅でも出す。ワークスペースは畳んだ列で隠し、760px 以下はメニューの帯の中の札にする（下の狭い画面の規則）。 */
+   組織は狭い幅でも出す。ワークスペースは畳んだ列で隠し、760px 以下は浮きメニューの中に出す（下の狭い画面の規則）。 */
 :is(.org-menu, .ws-menu) { display: grid; gap: var(--space-1); min-width: 0; }
 :is(.org-menu-button, .ws-menu-button) {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--space-2);
@@ -152,7 +152,7 @@ h1, h2, h3 { text-wrap: balance; }
 .org-menu-note { flex-basis: 100%; font-size: var(--text-xs); color: var(--color-muted); }
 /* 組織ではない行（組織の一覧へ戻るリンクと、押すとダイアログを開く「組織を作る」）は、組織の行より控えめにする */
 :is(.org-menu-list, .ws-menu-list) .is-aside a, :is(.org-menu-list, .ws-menu-list) .is-aside button { color: var(--color-muted); }
-/* 狭い幅と、指で押す画面では、押す所を 44px 以上にする。左のメニューのロゴと項目（狭い幅では上の帯に並ぶ）も同じ */
+/* 狭い幅と、指で押す画面では、押す所を 44px 以上にする。左のメニューのロゴと項目（狭い幅では項目を浮きメニューに出す）も同じ */
 @media (max-width: 760px), (pointer: coarse) {
   :is(.org-menu-list, .ws-menu-list) a, :is(.org-menu-list, .ws-menu-list) button, .account-menu-list a, .account-menu-list button, .account-menu-button { min-height: 44px; }
   .nav-toggle { width: 44px; height: 44px; }
@@ -197,7 +197,7 @@ h1, h2, h3 { text-wrap: balance; }
 @media (hover: none) {
   .nav-toggle { display: none; }
 }
-/* 761px 以上でホバーのできる端末だけ、左のメニューを 64px のアイコン列へ畳む。狭い画面では上の帯の形を保つ */
+/* 761px 以上でホバーのできる端末だけ、左のメニューを 64px のアイコン列へ畳む。狭い画面では下のタブバーと浮きメニューを使う */
 @media (min-width: 761px) and (hover: hover) {
   .app[data-nav-collapsed="true"] .org-menu-button:focus-visible .nav-tip { display: grid; }
   /* 項目の名前の札。開閉のボタンの札（.nav-tip）と同じ見た目 */
@@ -901,6 +901,8 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .layout-aside { grid-template-columns: minmax(0, 1fr); }
   .layout-side { position: static; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
 }
+/* 部品の見た目は全幅で定義し、表示は下のメディアクエリで切り替える。
+   カタログは広い幅でもスマホ用部品の静止見本を並べるため。 */
   .mobile-navigation {
     position: fixed; z-index: 15;
     bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));

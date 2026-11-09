@@ -187,16 +187,9 @@ export async function findOverflowViolations(page: Page): Promise<LayoutViolatio
 }
 
 // 横に送る設計の入れ物。design/components.css で overflow-x: auto を明示しているもの。中の要素が画面の右端を越えても、
-// 入れ物の中で横に送れるので許す（組織の管理のワークスペースの表、狭い幅の上の帯のメニュー、Markdown の本文の表とコードなど）。
+// 入れ物の中で横に送れるので許す（組織の管理のワークスペースの表、Markdown の本文の表とコードなど）。
 // 部品を足して横に送る入れ物を作ったら、ここにも足す
-export const LAYOUT_SCROLL_CONTAINERS = [
-  '.table-wrap',
-  '.board-wrap',
-  '.nav',
-  '.doc-box',
-  '.doc-box pre',
-  '.doc-table',
-];
+export const LAYOUT_SCROLL_CONTAINERS = ['.table-wrap', '.board-wrap', '.doc-box', '.doc-box pre', '.doc-table'];
 
 // 2つの検査は、要素のセレクタの作り方を共有するので、1つの evaluate にまとめる。counted は調べた要素の数
 // （押せる要素か、文字を持つ要素）。0 件なら画面が描けていないまま測ったことになる（createLayoutCheck が落とす）
