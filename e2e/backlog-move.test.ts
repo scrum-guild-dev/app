@@ -668,7 +668,9 @@ test('狭い幅ではつまみを出さず、題の列も空けない', async ({
   await expect(page.locator('.drag-note')).toBeVisible();
   await page.setViewportSize({ width: 390, height: 900 });
   await expect(page.locator('.entry .grip')).toBeHidden();
-  // つまみに触れる案内の文も隠し、「上へ」「下へ」の案内は残す
+  // 狭い幅では短い優先順の案内を残し、詳しい操作方法は1回で開ける。
+  await expect(page.getByText('上ほど優先', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '並べ替えの使い方', exact: true }).click();
   await expect(page.locator('.drag-note')).toBeHidden();
   await expect(page.getByText(/上にあるものほど優先します/)).toBeVisible();
   // つまみの列を空けないので、題は左端から始まる
