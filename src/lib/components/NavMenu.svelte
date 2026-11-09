@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { tick, type Snippet } from 'svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { NAV_MENU_ID } from '../nav-collapse.svelte.ts';
@@ -75,7 +75,16 @@
   $effect(() => {
     void current;
     void workspace?.id;
-    scrollToCurrent();
+    void nav;
+    let live = true;
+    // ほかの部品の action が出現のクラスを付け終えてから測る。
+    // 先に幅を読むと、まだ is-motion の無い引き出しの初期スタイルが確定する。
+    void tick().then(() => {
+      if (live) scrollToCurrent();
+    });
+    return () => {
+      live = false;
+    };
   });
 
   // 書体を読み終えると項目の幅が変わるので、送り位置を測り直す

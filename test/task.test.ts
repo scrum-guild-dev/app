@@ -4,7 +4,7 @@ import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, test } from 'vitest';
 import { setFixedNow } from '../src/shared/clock.ts';
 import { XP_TASK_COMPLETED, XP_TASK_CREATED } from '../src/shared/experience.ts';
-import { backlogTree, taskComplete, taskCreate } from '../src/shared/operations/task/index.ts';
+import { backlogTree, taskComplete, taskCreate, taskDetail } from '../src/shared/operations/task/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb, verifyWorkspace } from '../src/server/db/index.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
@@ -113,6 +113,72 @@ describe('task-create', () => {
       action: 'create',
     });
   });
+
+  test.each([
+    ['Markdown と改行の正規化', '\r\n    コード\r\n\r## 手順\r\n- 確かめる  \r\n', '    コード\n\n## 手順\n- 確かめる'],
+    ['1万字の絵文字', '😀'.repeat(10_000), '😀'.repeat(10_000)],
+    ['省略', undefined, null],
+    ['null', null, null],
+    ['空', '', null],
+    ['空白だけ', ' \t\r\n  ', null],
+  ])('本文（%s）を作成時に保存し、詳細と作成の履歴で読める', async (_name, bodyMd, expected) => {
+    const target = await createTarget();
+    const res = await post(app, taskCreate, {
+      slug: target.slug,
+      token: target.member.token,
+      body: {
+        workspace_id: target.workspace.id,
+        title: '本文付きのタスク',
+        ...(bodyMd === undefined ? {} : { body_md: bodyMd }),
+      },
+    });
+    expect(res.status).toBe(200);
+    const { task } = taskCreate.output.parse(await res.json());
+    const detail = await post(app, taskDetail, {
+      slug: target.slug,
+      token: target.member.token,
+      body: { workspace_id: target.workspace.id, task_id: task.id },
+    });
+    expect(detail.status).toBe(200);
+    expect(taskDetail.output.parse(await detail.json()).task.body_md).toBe(expected);
+    const records = await recordsOf(target, task.id);
+    expect(records.task!.body_md).toBe(expected);
+    expect(records.logs).toHaveLength(1);
+    const changes = JSON.parse(records.logs[0]!.changes_json);
+    if (expected === null) expect(changes).not.toHaveProperty('body_md');
+    else expect(changes.body_md).toEqual([null, expected]);
+  });
+
+  test.each(['あ'.repeat(10_001), '😀'.repeat(10_001), '本文\u0000末尾', '本文\u200b末尾'])(
+    '使えない本文（%#）は400で断り、タスクも履歴も作らない',
+    async (bodyMd) => {
+      const target = await createTarget();
+      const res = await post(app, taskCreate, {
+        slug: target.slug,
+        token: target.member.token,
+        body: { workspace_id: target.workspace.id, title: '作られないタスク', body_md: bodyMd },
+      });
+      expect(res.status).toBe(400);
+      expect(await errorCodeOf(res)).toBe('invalid_input');
+      const db = orgDb(env, target.organization.verified);
+      expect(
+        await db.rows(
+          db.statement((q) => q.selectFrom('tasks').select('id').where('workspace_id', '=', target.workspace.id)),
+        ),
+      ).toEqual([]);
+      expect(
+        await db.rows(
+          db.statement((q) =>
+            q
+              .selectFrom('change_logs')
+              .select('id')
+              .where('organization_id', '=', target.organization.id)
+              .where('workspace_id', '=', target.workspace.id),
+          ),
+        ),
+      ).toEqual([]);
+    },
+  );
 
   test('担当は、そのワークスペースに今所属している人だけ。ほかの人は 404 で、何も書かない', async () => {
     const target = await createTarget();
@@ -370,6 +436,7 @@ describe('task-create の親のストーリー', () => {
         input: {
           workspace_id: target.workspace.id,
           title: 'x',
+          body_md: '競合した作成の本文',
           points: null,
           assignee_user_id: null,
           story_id: story.id,
@@ -1317,6 +1384,7 @@ describe('task-complete', () => {
       const context = await staleContext(target, target.member, {
         workspace_id: target.workspace.id,
         title: '見積もりを送る',
+        body_md: '閉じた作成の本文',
         points: 3,
         assignee_user_id: null,
         story_id: null,

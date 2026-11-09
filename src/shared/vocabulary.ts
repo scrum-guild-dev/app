@@ -17,6 +17,9 @@ export const dictionary = defineDictionary({
   favoriteLimit: 'お気に入りは20件までです。登録した対象の星を外してから追加してください。',
   favoriteLoadFailed: 'お気に入りを読み込めませんでした。',
   favoriteFailed: 'お気に入りを変更できませんでした。もう一度お試しください。',
+  favoritesEmpty: 'お気に入りはまだありません',
+  favoritesEmptyText: '{task}、{story}、{epic}、Wiki のページの星を押すと、ここに並びます。',
+  favoriteKindWikiPage: 'Wiki のページ',
 
   onboardingBlockedTitle: '利用開始を再開できません',
   onboardingStart: '利用開始の設定',
@@ -581,6 +584,11 @@ export const dictionary = defineDictionary({
   filterResultNone: '当たるものはありません',
   // 絞っている間、帯の下に出す。ポイントの合計と完了の件数は絞る前の値のため
   filterTotalsNote: '{points}と件数は、絞る前の全体の値です',
+  backlogSummary: '集計',
+  backlogFilters: '絞り込み',
+  backlogFiltersCount: '絞り込み（{count}条件）',
+  backlogPriority: '上ほど優先',
+  backlogOrderHelp: '並べ替えの使い方',
   filterClear: '絞り込みを外す',
   // 検索の文字が上限を超えたとき（帯の下に出し、読み直さない）
   searchTooLong: '検索の文字は {max} 字までです',

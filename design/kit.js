@@ -64,6 +64,9 @@
     favoriteRemove: "お気に入りから外す",
     favoriteLoadFailed: "お気に入りを読み込めませんでした。",
     favoriteLimit: "お気に入りは20件までです。登録した対象の星を外してから追加してください。",
+    favoritesEmpty: "お気に入りはまだありません",
+    favoritesEmptyText: "{task}、{story}、{epic}、Wiki のページの星を押すと、ここに並びます。",
+    favoriteKindWikiPage: "Wiki のページ",
   signupTitle: "会員登録",
   onboardingStart: "利用開始の設定",
   onboardingProfileInvalid: "表示する名前は1〜100文字、肩書きは100文字以内で入力してください。改行や制御文字は使えません。",
@@ -314,6 +317,8 @@
     consentRevisedBoth: "利用規約とプライバシーポリシーが改められました",
     markdownTableRegion: "表", teamXpLabel: "チーム全体の経験値", filterLabel: "{backlog}の絞り込み", backlogSearch: "タイトルで探す",
     filterAll: "{label}: すべて", filterMe: "自分", unassigned: "担当なし", leftMember: "（離脱済み）", categoryNone: "{category}なし",
+    backlogSummary: "集計", backlogFilters: "絞り込み", backlogFiltersCount: "絞り込み（{count}条件）",
+    backlogPriority: "上ほど優先", backlogOrderHelp: "並べ替えの使い方",
     filterNoRepository: "リポジトリなし", filterNoEpic: "{epic}なし", filterClear: "絞り込みを外す",
     backlogFilterOrderNote: "上にあるものほど優先します。絞り込みを外すと並べ替えられます。", backlogNoMatchTitle: "絞り込みに当たるものはありません",
     backlogNoMatchText: "条件を変えるか、絞り込みを外してください。", filterTotalsNote: "{points}と件数は、絞る前の全体の値です",
@@ -680,14 +685,28 @@
     return `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"${current ? ' aria-current="page"' : ""}>${esc(p.title)}<span class="props-note">${esc(path)}</span><span class="props-note">${where === "title" ? "題に一致" : "本文に一致"}</span></a></li>`;
   }
   // meta は集計の下に置く1行（バックログの画面のチーム全体の経験値 teamXp など）
-  function pageHead(eyebrow, title, tallies = [], actions = "", meta = "") {
-    const tally = tallies.length
-      ? `<dl class="tally">${tallies.map(([cls, ic, label, n]) => `<div class="${n ? cls : ""}"><dt>${ic ? icon(ic) : ""}${label}</dt><dd>${n}</dd></div>`).join("")}</dl>`
-      : "";
-    return `<header class="page-head">
+  let narrowDisclosureId = 0;
+  function narrowDisclosure(label, body) {
+    const id = `narrow-disclosure-${++narrowDisclosureId}`;
+    return `<div class="narrow-disclosure" data-open="false"><button class="btn is-sm is-quiet narrow-disclosure-toggle" type="button" aria-expanded="false" aria-controls="${id}">${icon("chevron")}<span>${esc(label)}</span></button><div class="narrow-disclosure-body" id="${id}">${body}</div></div>`;
+  }
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest && event.target.closest(".narrow-disclosure-toggle");
+    if (!button) return;
+    const open = button.getAttribute("aria-expanded") !== "true";
+    button.setAttribute("aria-expanded", String(open));
+    button.parentElement.dataset.open = String(open);
+  });
+  function pageHead(eyebrow, title, tallies = [], actions = "", meta = "", narrowSummary = "") {
+    const counts = (items) => items.length ? `<dl class="tally">${items.map(([cls, ic, label, n]) => `<div class="${n ? cls : ""}"><dt>${ic ? icon(ic) : ""}${label}</dt><dd>${n}</dd></div>`).join("")}</dl>` : "";
+    const compactSummary = tallies.length > 1 || meta ? narrowSummary : "";
+    const metrics = compactSummary
+      ? `<div class="page-head-metrics">${counts(tallies.slice(0, 1))}${narrowDisclosure(compactSummary, `${counts(tallies.slice(1))}${meta ? `<div class="page-head-meta">${meta}</div>` : ""}`)}</div>`
+      : `${counts(tallies)}${meta}`;
+    return `<header class="page-head${compactSummary ? " is-compact" : ""}">
       ${eyebrow ? `<span class="page-eyebrow">${eyebrow}</span>` : ""}
       <div class="page-head-row"><h1 class="page-title">${title}</h1>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
-      ${tally}${meta}
+      ${metrics}
     </header>`;
   }
 
@@ -2520,11 +2539,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D.stories.s2 && `「${D.stories.s2.title}」の${t("task")}を全部今の${t("sprint")}に入れて`,
     `${t("organization")}の人数の上限を 50 人に上げて`,
   ].filter(Boolean);
+  // メニューに無い組織の画面（アカウントのメニューから開く画面と、お気に入りの一覧）の名前のキー。本番の breadcrumb.ts の accountScreenKey
+  const ACCOUNT_SCREENS = { me: "pageMe", admin: "pageOrgAdmin", favorites: "favorites" };
   // 開いている画面。タスクの詳細を開いていればそのタスク
   function assistContext() {
     if (drawer.id) return `${drawerNoun()}「${esc(drawerItem().title)}」`;
     if (!page) return esc(Object.values(D.workspaces)[0]?.name || "");
-    if (["me", "admin"].includes(page.current)) return t(page.current === "me" ? "pageMe" : "pageOrgAdmin");
+    if (ACCOUNT_SCREENS[page.current]) return t(ACCOUNT_SCREENS[page.current]);
     if (page.current === "sprint" && D.sprints.sp14) return esc(sprintLabel("sp14"));
     const p = PAGES.find((x) => Array.isArray(x) && x[0] === page.current);
     const inWs = PAGES.indexOf(p) > PAGES.indexOf("workspace");
@@ -2940,7 +2961,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // ワークスペースの切り替え。組織と同じ開閉と通常のリンクを使い、移動先はバックログ。
   let workspaceMenuOpen = false;
-  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] }, inWorkspaceScreen = !page || !["today", "notifications", "orgwiki", "me", "admin", "operator"].includes(page.current) } = {}) {
+  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] }, inWorkspaceScreen = !page || !["today", "notifications", "orgwiki", "me", "admin", "favorites", "operator"].includes(page.current) } = {}) {
     const name = workspaces.find((w) => w.id === current.id)?.name || current.name;
     const label = t("workspaceSwitchLabel").replace("{name}", name).replace("{workspace}", t("workspace"));
     const listLabel = t("workspaceSwitchListLabel").replace("{workspace}", t("workspace"));
@@ -2997,7 +3018,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function cycleFirst() {
     const order = [null, ...FIRST_ROLES];
     const next = order[(order.indexOf(first) + 1) % order.length];
-    const here = ["me", "admin"].includes(page.current) ? `${page.current}.html` : (PAGES.find((p) => Array.isArray(p) && p[0] === page.current) || [])[3] || "today.html";
+    const here = ACCOUNT_SCREENS[page.current] ? `${page.current}.html` : (PAGES.find((p) => Array.isArray(p) && p[0] === page.current) || [])[3] || "today.html";
     const target = !next || FIRST_PAGES[next].includes(here) ? here : "today.html";
     location.href = firstHref(target, next);
   }
@@ -3078,7 +3099,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       crumbs.push({ label: D.workspaces[D.workspace].name, href: `${firstHref("backlog.html")}${first ? "&" : "?"}workspace=${encodeURIComponent(D.workspace)}` });
     }
     if (index >= 0) crumbs.push({ label: PAGES[index][2]().replace(/&amp;/g, "&"), current: true });
-    else if (["me", "admin"].includes(page.current)) crumbs.push({ label: t(page.current === "me" ? "pageMe" : "pageOrgAdmin"), current: true });
+    else if (ACCOUNT_SCREENS[page.current]) crumbs.push({ label: t(ACCOUNT_SCREENS[page.current]), current: true });
     return crumbs;
   }
   // 画面の見本を組み立てる。render は中身の HTML を返す関数。
@@ -3859,7 +3880,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer, flashRow,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
     avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
-    card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
+    narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
