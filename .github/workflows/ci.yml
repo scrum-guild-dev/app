@@ -163,9 +163,8 @@ jobs:
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-${{ matrix.shard }}
-          # 落ちたジョブを再実行すると同じ名前で上げ直すため
-          overwrite: true
+          name: e2e-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          # 再実行前の trace を残すため、実行回数ごとに別名で保存する
           path: |
             test-results/
             playwright-report/
@@ -201,8 +200,7 @@ jobs:
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-dev-${{ matrix.shard }}
-          overwrite: true
+          name: e2e-dev-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: |
             test-results/
             playwright-report/
@@ -251,8 +249,7 @@ jobs:
       - if: ${{ !cancelled() && steps.count.outputs.run == 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-repeat-${{ matrix.shard }}
-          overwrite: true
+          name: e2e-repeat-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: |
             test-results/
             playwright-report/
