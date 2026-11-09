@@ -75,9 +75,13 @@
     onclick={() => (open = !open)}
   >
     <span class="me">
-      <Avatar {userId} {name} />{name}
-      {#if isAdmin}<span class="chip">{t('admin')}</span>{/if}
-      <Emblem {level} small />
+      <Avatar {userId} {name} />
+      <!-- 760px 以下では隠してアバターだけにする（読み上げの名前は aria-label に残る） -->
+      <span class="me-detail"
+        >{name}
+        {#if isAdmin}<span class="chip">{t('admin')}</span>{/if}
+        <Emblem {level} small /></span
+      >
     </span>
     {#if invitationCount > 0}<span class="account-menu-invite" aria-hidden="true"></span>{/if}
     <Icon name="chevron" />

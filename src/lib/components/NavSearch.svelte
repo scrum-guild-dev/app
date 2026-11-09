@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { t } from '../vocabulary.svelte.ts';
   import { searchOptions, type NavSearchScreen } from '../nav-search.ts';
@@ -13,12 +14,17 @@
   // screens の href と backlogHref は呼び出し側が resolve した経路
   let { screens, backlogHref }: { screens: NavSearchScreen[]; backlogHref: string | null } = $props();
 
+  // 760px 以下では欄を虫眼鏡のボタンに畳み、押すとパンくずの行の下に欄を出す（expanded。CSS が data-open で出し分け、
+  // 広い幅では欄を常に出してボタンを隠す）。Esc で閉じるか欄の外へフォーカスが移ると畳む
   const listId = $props.id();
+  const boxId = `${listId}-box`;
   let query = $state('');
   let open = $state(false);
+  let expanded = $state(false);
   let active = $state(0);
   let input = $state<HTMLInputElement>();
   let root = $state<HTMLElement>();
+  let toggle = $state<HTMLButtonElement>();
   let opener: HTMLElement | null = null;
 
   const shortcut = $derived(/Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘ K' : 'Ctrl K');
@@ -42,11 +48,32 @@
     active = 0;
   }
 
+  // 畳んだ欄は描かれていないので、出してから（tick の後に）フォーカスを移す
+  async function focusInput(): Promise<void> {
+    expanded = true;
+    await tick();
+    input?.focus();
+    input?.select();
+    show();
+  }
+
+  function onToggle(): void {
+    if (expanded) {
+      close(false);
+      toggle?.focus();
+      return;
+    }
+    opener = toggle ?? null;
+    void focusInput();
+  }
+
   function close(restore: boolean): void {
     open = false;
+    expanded = false;
     query = '';
     if (restore) {
-      if (opener && opener.isConnected) opener.focus();
+      // 開いた場所が見えないとき（虫眼鏡から開いた後に 761px 以上へ広げ、虫眼鏡が隠れた）は、フォーカスを移せないので欄から外す
+      if (opener && opener.isConnected && opener.getClientRects().length > 0) opener.focus();
       else input?.blur();
     }
     opener = null;
@@ -95,22 +122,52 @@
     run: () => {
       if (document.activeElement !== input)
         opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      input?.focus();
-      input?.select();
-      show();
+      void focusInput();
     },
   }));
 
+  // 欄の外へフォーカスが移ったら候補を閉じ、畳む。Shift+Tab で虫眼鏡へ戻ったときも畳む（マウスで虫眼鏡を押したときは、
+  // ボタンの mousedown がフォーカスを動かさないので、ここは通らず click が畳む）
   function onFocusout(event: FocusEvent): void {
     const next = event.relatedTarget;
-    if (open && root && !(next instanceof Node && root.contains(next))) {
+    if (!root || (next instanceof Node && root.contains(next))) return;
+    // ほかのウィンドウやタブへ移ったとき（画面の中にフォーカスの行き先が無く、文書がフォーカスを失った）は、欄と打った文字を残す。
+    // 戻ると欄にフォーカスが戻る
+    if (next === null && !document.hasFocus()) return;
+    if (open) {
       open = false;
       query = '';
     }
+    expanded = false;
   }
 </script>
 
-<div class="nav-search" bind:this={root} onfocusout={onFocusout} role="search" aria-label={t('navSearchLabel')}>
+<button
+  class="nav-search-toggle"
+  type="button"
+  aria-label={t('navSearchLabel')}
+  aria-expanded={expanded}
+  aria-controls={boxId}
+  aria-keyshortcuts={ariaKeyshortcuts(SEARCH_KEYS)}
+  bind:this={toggle}
+  onmousedown={(event) => {
+    // 開いた欄からフォーカスを動かさない。Safari は押したボタンにフォーカスを移さず、欄の focusout で先に畳んでから
+    // click で開き直してしまうため
+    if (expanded) event.preventDefault();
+  }}
+  onclick={onToggle}
+>
+  <Icon name="search" />
+</button>
+<div
+  class="nav-search"
+  id={boxId}
+  data-open={expanded ? '' : undefined}
+  bind:this={root}
+  onfocusout={onFocusout}
+  role="search"
+  aria-label={t('navSearchLabel')}
+>
   <Icon name="search" />
   <input
     class="nav-search-input"

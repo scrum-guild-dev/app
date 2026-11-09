@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import type { FirstStep, FirstStepKey, FirstStepRole } from '../../shared/operations/organization/first-steps.ts';
   import { t } from '../vocabulary.svelte.ts';
+  import { firstStepMotion } from '../first-step-motion.ts';
   import Art from './Art.svelte';
   import Icon from './Icon.svelte';
 
@@ -10,12 +11,14 @@
   // 主ボタンは、まだ済んでいない最初の必須の手順にだけ付ける。ワークスペースを作る手順は、押すと onCreateWorkspace を呼ぶ（ダイアログは画面が持つ）
   let {
     slug,
+    memberId,
     role,
     steps,
     organizationName = '',
     onCreateWorkspace,
   }: {
     slug: string;
+    memberId: string;
     role: FirstStepRole;
     steps: FirstStep[];
     organizationName?: string;
@@ -182,7 +185,11 @@
   </div>
   <ol class="steps">
     {#each rows as row, index (row.key)}
-      <li class="step" class:is-done={row.done}>
+      <li
+        class="step"
+        class:is-done={row.done}
+        use:firstStepMotion={{ key: `${slug}/${memberId}/${role}/${row.key}`, done: row.done }}
+      >
         <div class="step-body">
           <span class="step-title"
             >{#if row.done}<span class="visually-hidden">{t('firstStepDone')}: </span>{/if}{row.title}{#if row.optional}

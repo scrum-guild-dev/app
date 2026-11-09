@@ -7,6 +7,8 @@ const THEMES = ['simple_light', 'simple_dark', 'medieval', 'modern'] as const;
 // 24 回読み直して e2e で2番目に重いファイルになっていた）。どのテーマで落ちたかは test.step の名前で分かる
 for (const width of [1280, 1024, 761, 760, 390, 320]) {
   test(`長い名前のメニューの見本: ${width}px / 4つのテーマ`, async ({ page }) => {
+    // 4テーマの比較と既存幅との再比較は、CIのtraceで合計30秒近く掛かる。各検査の待ちは増やさず、全体に余裕を持たせる。
+    test.setTimeout(60_000);
     // カタログはアプリの配信対象外なので、共有の見本ファイルをそのまま返す。
     const files: Record<string, string> = {
       'index.html': 'text/html',

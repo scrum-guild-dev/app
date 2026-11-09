@@ -416,12 +416,12 @@ html[data-boot] #boot-loading .boot-frame {
     border-bottom: 0;
   }
   #boot-loading .boot-corner i {
-    width: 168px;
-    height: 60px;
+    width: 120px;
+    height: 40px;
   }
-  /* 組織の切り替えを1段にし、メニューの項目（最初の3つ）を横並びにする。ワークスペースの区切りより後は出さない */
+  /* ロゴと組織の切り替えを1段に並べ、メニューの項目（最初の3つ）を次の段に横並びにする。ワークスペースの区切りより後は出さない */
   #boot-loading .boot-binding > .is-org {
-    flex: 1 1 100%;
+    flex: 1 1 10rem;
   }
   #boot-loading .boot-binding > i:not(.is-org) {
     width: 6rem;
@@ -437,12 +437,18 @@ html[data-boot] #boot-loading .boot-frame {
     min-height: 60px;
     padding: 5px 16px;
   }
+  /* パンくず、畳んだ検索の虫眼鏡、アバターだけのアカウントの1段 */
+  #boot-loading .boot-topbar .is-crumb {
+    flex: 1 1 12rem;
+  }
   #boot-loading .boot-topbar .is-account {
+    width: 3.5rem;
     margin-block: 8px;
   }
   #boot-loading .boot-topbar .is-search {
-    flex: 1 1 100%;
-    order: 3;
+    flex: none;
+    min-width: 0;
+    width: 44px;
     height: 44px;
   }
   #boot-loading .boot-content {
