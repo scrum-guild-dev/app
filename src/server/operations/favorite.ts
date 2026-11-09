@@ -244,5 +244,6 @@ export const favoriteSetOperation = implement(favoriteSet, async (context) => {
   if (stored.rows.length > 0) return { is_favorite: true };
   const used = Number(usage.rows[0]?.used ?? 0);
   if (used >= LIMIT) throw new ApiError(409, 'favorite_limit', { used, limit: LIMIT });
+  // 同じ batch の通常の結果では到達しない防御分岐。上限未満を上限超過として扱わない。
   throw new ApiError(409, 'conflict');
 });
