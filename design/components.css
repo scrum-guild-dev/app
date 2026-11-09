@@ -1537,8 +1537,7 @@ dialog.dialog::backdrop { background: none; }
   .comment-head:has(.comment-actions) { margin-bottom: var(--space-3); }
 }
 .choice-list { display: grid; gap: var(--space-2); }
-.choice { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius-1); background: var(--color-surface); cursor: pointer; }
-.choice { transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out); }
+.choice { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius-1); background: var(--color-surface); cursor: pointer; transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out); }
 .choice:has(input:checked) { border-color: var(--color-accent); background: var(--color-accent-soft); }
 .choice input { margin-top: 4px; accent-color: var(--color-accent); }
 /* 選べない選択肢（理由は選択肢の下の .field-hint に出し、input の aria-describedby で結ぶ） */

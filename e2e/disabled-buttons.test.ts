@@ -66,6 +66,8 @@ test('押せない同意ボタンは4テーマと狭い幅でも文字が読め�
   await checkbox.check();
   await expect(button).toHaveCSS('transition-duration', '0s');
   await expect(page.locator('.choice.is-consent')).toHaveCSS('transition-duration', '0s');
+  await checkbox.uncheck();
+  await expect(button).toHaveAttribute('aria-disabled', 'true');
   await expectNoA11yViolationsInThemes(page, 'consent');
 });
 
