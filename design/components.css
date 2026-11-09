@@ -944,13 +944,16 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     max-height: calc(100dvh - var(--mobile-navigation-clearance) - var(--space-6) - env(safe-area-inset-bottom, 0px));
     overflow: auto; overscroll-behavior: contain; color: var(--color-fg);
     background: var(--color-surface); border: 1px solid var(--color-line);
-    border-radius: var(--radius-show); box-shadow: var(--shadow-float);
+    border-radius: var(--radius-2); box-shadow: var(--shadow-float);
   }
-  .mobile-menu::backdrop { background: rgb(10 15 20 / 0.4); }
+  .mobile-menu::backdrop { background: var(--color-scrim); }
   html:has(dialog.mobile-menu:modal) { overflow: hidden; }
   .mobile-menu-sheet { padding: var(--space-4); display: grid; gap: var(--space-3); }
   .mobile-menu-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
   .mobile-menu-head h2 { margin: 0; font-size: var(--text-lg); }
+  @media (forced-colors: active) {
+    .mobile-tab[aria-current="page"]::after { background: CanvasText; forced-color-adjust: none; }
+  }
   .mobile-menu .icon-btn { min-width: 44px; min-height: 44px; }
   .mobile-menu .nav { display: grid; gap: 1px; overflow: visible; width: auto; }
   .mobile-menu .nav-group { display: block; }
@@ -1376,7 +1379,7 @@ label.pick-row:hover { background: var(--color-accent-soft); }
 .action-note { font-size: var(--text-xs); color: var(--color-muted); max-width: 72ch; }
 
 /* ===== タスクの詳細（引き出し） ===== */
-.scrim { position: fixed; inset: 0; background: rgb(10 15 20 / 0.4); z-index: 20; }
+.scrim { position: fixed; inset: 0; background: var(--color-scrim); z-index: 20; }
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 21; width: min(620px, 100%);
   background: var(--color-surface); border-left: var(--rule-double); box-shadow: var(--shadow-float); overflow-y: auto;
@@ -2072,7 +2075,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 /* ===== 知らせ（トースト） ===== */
 .toasts { position: fixed; z-index: 40; right: max(var(--space-4), env(safe-area-inset-right, 0px)); bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); display: grid; gap: var(--space-2); }
 @media (max-width: 760px) {
-  .toasts { bottom: calc(var(--mobile-navigation-clearance) + env(safe-area-inset-bottom, 0px)); }
+  html:has(.mobile-navigation) .toasts { bottom: calc(var(--mobile-navigation-clearance) + env(safe-area-inset-bottom, 0px)); }
 }
 .toast, .toast-leaving { display: flex; gap: var(--space-2); align-items: center; padding: var(--space-3) var(--space-4); background: var(--color-fg); color: var(--color-bg); border-radius: var(--radius-1); box-shadow: var(--shadow-float); font-size: var(--text-sm); overflow-wrap: anywhere; max-width: min(420px, calc(100vw - 2 * var(--space-4))); animation: toast-in var(--duration-stamp) var(--ease-out) 1; }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
