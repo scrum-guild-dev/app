@@ -306,6 +306,8 @@ test.describe('高さの低い窓の畳んだ左のメニュー', () => {
       await org.click();
       const list = page.getByRole('list', { name: '入れる組織' });
       await expect(list).toBeVisible();
+      // 入場の120msが終わった最終位置で、アンカーへの追従を測る。
+      await expect(list).toHaveCSS('translate', /^0px(?: 0px)?$/);
       const listBox = await list.boundingBox();
       const orgBox = await org.boundingBox();
       if (!listBox || !orgBox) throw new Error('組織の切り替えの位置が取れない');
