@@ -379,7 +379,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 }
 .me { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); padding-left: var(--space-2); min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .content {
-  padding-block: var(--space-2) var(--space-10);
+  padding-block: var(--space-4) var(--space-10);
   padding-left: max(var(--space-8), env(safe-area-inset-left, 0px));
   padding-right: max(var(--space-8), env(safe-area-inset-right, 0px));
   width: 100%;
@@ -989,7 +989,15 @@ button.tree-folded[aria-expanded="true"] .ico { transform: rotate(90deg); }
 /* 一覧の幅が狭いとき（メニューの横で 760px を少し超える幅など）は、画面の幅でなく一覧の幅で、行の右端（期日、ポイント、担当、
    並べ替え、完了の操作）を題の下へ折り返す。右端が横に並んだままだと、題の列が数文字の幅に縮むため */
 .tree, .book { container-type: inline-size; }
-@container (max-width: 640px) {
+.tree { container-name: tree; }
+.book { container-name: book; }
+/* 台帳は木より右端が短いので、520px を超えれば横に並べる */
+@container book (max-width: 520px) {
+  .entry { grid-template-columns: var(--grip-col, ) 32px minmax(0, 1fr); }
+  .entry-end { grid-column: -2; flex-wrap: wrap; }
+  .entry:has(.entry-meta) { row-gap: 2px; }
+}
+@container tree (max-width: 640px) {
   .entry { grid-template-columns: var(--grip-col, ) 32px minmax(0, 1fr); }
   .entry-end { grid-column: -2; flex-wrap: wrap; }
   /* 「今日やる」の太陽（.sun）の無いバックログの木（.tree）の行は、空の 32px の列を持たず、題とチップに幅を返す（受信箱の選ぶ欄と「今日やること」の一覧は、行の左端を揃えるので列を残す）（390px で 44px 広がり、題の下の印が 1 行に収まる） */
