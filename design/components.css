@@ -531,6 +531,25 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
   font-family: var(--font-mono); font-size: 10px; line-height: 17px; text-align: center;
 }
 
+/* 押している間だけ濃淡で知らせる。位置や大きさを動かさず、動きを減らす設定でも残す。
+   内側の縁だけを濃くし、文字の地・枠・ロゴの色を保つ。押せない部品には当てない。 */
+:is(.btn, .done-btn, .chip-btn, .pill):active:not(:disabled):not([aria-disabled="true"]) {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+/* アイコンだけの選択済み pill は、選択の輪を残して、その内側に押下の輪を足す。 */
+.pill[aria-pressed="true"]:has(> .ico:only-child):active:not(:disabled):not([aria-disabled="true"]) {
+  box-shadow: inset 0 0 0 1px var(--color-accent), inset 0 0 0 2px var(--color-surface), inset 0 0 0 3px currentColor;
+}
+
+/* box-shadow が消える強制色モードでも、押下中は内側の輪で知らせる。 */
+@media (forced-colors: active) {
+  :is(.btn, .done-btn, .chip-btn, .pill):active:not(:disabled):not([aria-disabled="true"]),
+  .pill[aria-pressed="true"]:has(> .ico:only-child):active:not(:disabled):not([aria-disabled="true"]) {
+    outline: 2px solid Highlight; outline-offset: -4px;
+  }
+}
+
 /* ===== 入力 ===== */
 .field { display: grid; gap: 6px; }
 .field-label { font-size: var(--text-md); font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
