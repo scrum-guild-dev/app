@@ -16,6 +16,7 @@ test('初期状態と表示対象の関係を支援技術に伝える', () => {
   const body = html();
   const controlled = /aria-controls="([^"]+)"/.exec(body)![1];
   expect(body).toContain('aria-expanded="false"');
+  expect(body).toMatch(/<svg[^>]*aria-hidden="true"/);
   expect(body).toContain(`id="${controlled}"`);
   expect(body).toContain('補助情報');
 });
