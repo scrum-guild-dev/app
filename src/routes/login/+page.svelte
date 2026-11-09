@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import Gate from '../../lib/components/Gate.svelte';
@@ -8,6 +9,7 @@
   import LegalLinks from '../../lib/components/LegalLinks.svelte';
   import { submitPasswordLogin } from '../../lib/password-login.ts';
   import { t } from '../../lib/vocabulary.svelte.ts';
+  import { ExternalAuthNavigation } from '../../lib/external-auth-navigation.svelte.ts';
   import { PASSWORD_LOGIN_ENABLED } from '../../shared/password-login-enabled.ts';
   import type { DictionaryKey } from '../../shared/vocabulary.ts';
   import { safeReturnTo } from '../../shared/return-to.ts';
@@ -28,28 +30,8 @@
   const githubStartHref = $derived(`/api/auth/github/start?return_to=${encodeURIComponent(returnTo)}`);
   const googleStartHref = $derived(`/api/auth/google/start?return_to=${encodeURIComponent(returnTo)}`);
 
-  let moving = $state<'github' | 'google' | null>(null);
-  function startExternal(event: MouseEvent, provider: 'github' | 'google'): void {
-    if (moving) {
-      event.preventDefault();
-      return;
-    }
-    // 別のタブやウィンドウで開くときは、この画面を待機中にしない。
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.shiftKey ||
-      event.altKey
-    )
-      return;
-    moving = provider;
-  }
-
-  function restore(event: PageTransitionEvent): void {
-    if (event.persisted) moving = null;
-  }
+  const externalAuth = new ExternalAuthNavigation();
+  onDestroy(() => externalAuth.reset());
 
   // 自分のキーだけで引く（constructor や __proto__ のような継承したキーで、辞書に無い値を引かない）
   const errorKey = $derived.by(() => {
@@ -101,7 +83,10 @@
   }
 </script>
 
-<svelte:window onpageshow={restore} />
+<svelte:window
+  onpageshow={(event) => event.persisted && externalAuth.reset()}
+  onpagehide={() => externalAuth.reset()}
+/>
 
 <svelte:head>
   <title>{t('pageTitle', { page: t('loginTitle'), app: t('appName') })}</title>
@@ -134,17 +119,17 @@
       class="btn is-wide"
       href={githubStartHref}
       data-sveltekit-reload
-      aria-disabled={moving !== null}
-      onclick={(event) => startExternal(event, 'github')}
-      ><Icon name="git" />{moving === 'github' ? t('authMoving') : t('loginWithGithub')}</a
+      aria-disabled={externalAuth.moving !== null}
+      onclick={(event) => externalAuth.start(event, 'github')}
+      ><Icon name="git" />{externalAuth.moving === 'github' ? t('authMoving') : t('loginWithGithub')}</a
     >
     <a
       class="btn is-wide is-google"
       href={googleStartHref}
       data-sveltekit-reload
-      aria-disabled={moving !== null}
-      onclick={(event) => startExternal(event, 'google')}
-      ><GoogleMark />{moving === 'google' ? t('authMoving') : t('loginWithGoogle')}</a
+      aria-disabled={externalAuth.moving !== null}
+      onclick={(event) => externalAuth.start(event, 'google')}
+      ><GoogleMark />{externalAuth.moving === 'google' ? t('authMoving') : t('loginWithGoogle')}</a
     >
     <!-- eslint-enable svelte/no-navigation-without-resolve -->
     <!-- 閉じている間（PASSWORD_LOGIN_ENABLED が偽）は、区切りもフォームも出さない。API の口も閉じている（src/server/app.ts） -->
