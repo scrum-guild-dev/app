@@ -51,6 +51,8 @@ test('別画面で済ませて戻った手順の丸を1回押し、動きを減�
   });
   await mockOperation(page, firstSteps, { slug: 'aoba' }, { role: 'leader', steps: LEADER_STEPS });
   await page.goto('/aoba');
+  await expect(panel(page).locator('.step.is-done')).toHaveCount(1);
+  await expect(panel(page).locator('.step[data-stamped]')).toHaveCount(0);
   await panel(page).getByRole('link', { name: 'メンバーを招待する' }).click();
   await expect(page).toHaveURL(`/aoba/w/${WORKSPACE.id}/members`);
   // 別ページで招待を作った後の応答。必須のバックログは未完なので面は残る。
@@ -67,6 +69,7 @@ test('別画面で済ませて戻った手順の丸を1回押し、動きを減�
   const invited = panel(page).locator('.step').filter({ hasText: 'メンバーを招待する' });
   await expect(invited).toHaveAttribute('data-stamped', 'true');
   await expect(invited).not.toHaveClass(/is-new/);
+  await expect(panel(page).locator('.step[data-stamped]')).toHaveCount(1);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.reload();
   await expect(panel(page).locator('.step.is-new')).toHaveCount(0);

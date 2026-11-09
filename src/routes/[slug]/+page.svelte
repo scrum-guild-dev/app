@@ -329,6 +329,7 @@
   {#if data.firstSteps !== null && data.firstSteps.role !== null && data.firstSteps.steps.length > 0 && (data.firstSteps.role !== 'admin' || data.organization?.me.is_admin)}
     <FirstSteps
       slug={data.slug}
+      memberId={data.organization?.me.id ?? ''}
       role={data.firstSteps.role}
       steps={data.firstSteps.steps}
       organizationName={data.organization ? organizationLabel(data.organization.organization) : ''}

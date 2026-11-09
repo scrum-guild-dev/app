@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import type { FirstStep, FirstStepKey, FirstStepRole } from '../../shared/operations/organization/first-steps.ts';
   import { t } from '../vocabulary.svelte.ts';
+  import { firstStepMotion } from '../first-step-motion.ts';
   import Art from './Art.svelte';
   import Icon from './Icon.svelte';
 
@@ -10,12 +11,14 @@
   // 主ボタンは、まだ済んでいない最初の必須の手順にだけ付ける。ワークスペースを作る手順は、押すと onCreateWorkspace を呼ぶ（ダイアログは画面が持つ）
   let {
     slug,
+    memberId,
     role,
     steps,
     organizationName = '',
     onCreateWorkspace,
   }: {
     slug: string;
+    memberId: string;
     role: FirstStepRole;
     steps: FirstStep[];
     organizationName?: string;
@@ -24,27 +27,6 @@
 
   // 今日やるの印を付ける口は、印と完了を足す Issue（今日やることの3本目）まで画面に無い。押せない手順を案内しないよう、それまで出さない
   const NOT_YET: readonly FirstStepKey[] = ['mark_today'];
-
-  // 別画面で済ませて戻った丸も1回押す。済みが同じままの読み直しでは繰り返さない。
-  function completionMotion(node: HTMLElement, done: boolean) {
-    let previous = done;
-    const finish = () => node.classList.remove('is-new');
-    const press = (completed: boolean) =>
-      node.classList.toggle('is-new', completed && !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-    press(done);
-    node.addEventListener('animationend', finish);
-    node.addEventListener('animationcancel', finish);
-    return {
-      update(next: boolean) {
-        if (next !== previous) press(next);
-        previous = next;
-      },
-      destroy() {
-        node.removeEventListener('animationend', finish);
-        node.removeEventListener('animationcancel', finish);
-      },
-    };
-  }
 
   const titleId = $props.id();
   const shown = $derived(steps.filter((step) => !NOT_YET.includes(step.key)));
@@ -203,7 +185,11 @@
   </div>
   <ol class="steps">
     {#each rows as row, index (row.key)}
-      <li class="step" class:is-done={row.done} use:completionMotion={row.done}>
+      <li
+        class="step"
+        class:is-done={row.done}
+        use:firstStepMotion={{ key: `${slug}/${memberId}/${role}/${row.key}`, done: row.done }}
+      >
         <div class="step-body">
           <span class="step-title"
             >{#if row.done}<span class="visually-hidden">{t('firstStepDone')}: </span>{/if}{row.title}{#if row.optional}
