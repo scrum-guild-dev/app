@@ -200,3 +200,44 @@ for (const mode of ['hidden', 'missing-transitionend'] as const) {
     if (mode === 'missing-transitionend') expect(seen.elapsed).toBeGreaterThanOrEqual(180);
   });
 }
+
+test('移動中に行き先の形が変わっても骨組みを消して出し直さない', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'admin');
+  await page.goto('/');
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await routeOperation(page, organizationInfo, { slug: 'aoba' }, async (call) => {
+    await gate;
+    await call.passThrough();
+  });
+  await page.getByRole('link', { name: /あおば開発/ }).click();
+  await expect(page.locator('.loading-overlay .skeleton-frame')).toHaveAttribute('data-shape', 'today');
+  await page.evaluate(() => {
+    const original = document.querySelector('.loading-overlay')!;
+    const seen = { original, left: false };
+    Object.assign(window, { __redirectLoading: seen });
+    new MutationObserver(() => {
+      if (original.classList.contains('is-leaving')) seen.left = true;
+    }).observe(document.body, { attributes: true, subtree: true });
+  });
+  try {
+    // 同じ外側の画面から、先の読み込みが終わる前に別の行き先へ移る。
+    await page.evaluate((href) => {
+      const link = document.createElement('a');
+      link.href = href;
+      document.body.append(link);
+      link.click();
+      link.remove();
+    }, WORKSPACE);
+    await expect(page.locator('.loading-overlay .skeleton-frame')).toHaveAttribute('data-shape', 'tree');
+    const kept = await page.evaluate(() => {
+      const seen = (window as unknown as { __redirectLoading: { original: Element; left: boolean } }).__redirectLoading;
+      return seen.original.isConnected && document.querySelector('.loading-overlay') === seen.original && !seen.left;
+    });
+    expect(kept).toBe(true);
+  } finally {
+    release();
+  }
+  await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.loading-overlay')).toHaveCount(0);
+});

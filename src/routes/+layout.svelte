@@ -6,7 +6,7 @@
   import '@fontsource/noto-sans-jp/900.css';
   import '../../design/tokens.css';
   import '../../design/components.css';
-  import { onMount, type Snippet } from 'svelte';
+  import { onMount, untrack, type Snippet } from 'svelte';
   import { prefersReducedMotion } from '../lib/reduced-motion.ts';
   import { navigating } from '$app/state';
   import ArtSprite from '../lib/components/ArtSprite.svelte';
@@ -81,15 +81,20 @@
 
   $effect(() => {
     if (!loadingFromOutside) return;
-    const shape = loadingShapeTo;
     const timer = setTimeout(() => {
-      shownLoadingShape = shape;
+      shownLoadingShape = untrack(() => loadingShapeTo);
       slow = true;
     }, SLOW_MS);
     return () => {
       clearTimeout(timer);
       slow = false;
     };
+  });
+
+  // 待っている間の行き先変更は形だけ替え、表示待ちのタイマーと退場をやり直さない。
+  // 到着して行き先が消えた後は、退場中の形を保持する。
+  $effect(() => {
+    if (slow && loadingFromOutside) shownLoadingShape = loadingShapeTo;
   });
 </script>
 
