@@ -243,13 +243,14 @@
   {#snippet footer(close)}
     <button class="btn is-primary" type="button" onclick={close}>{t('attachmentDismiss')}</button>
     {#if selected !== null}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve 添付の配信 URL -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve 添付の配信 URL -->
       <a
         class="btn"
         href={url(selected)}
         download={selected.file_name}
         aria-label={t('attachmentDownloadLabel', { name: selected.file_name })}>{t('attachmentDownloadAction')}</a
       >
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
       {#if canWrite && selected.deletable}
         <button
           class="btn"
