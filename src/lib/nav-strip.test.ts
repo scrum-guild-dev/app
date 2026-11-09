@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_STRIP_PEEK, navStripEdges, navStripScrollLeft } from './nav-strip.ts';
+import { NAV_STRIP_EDGE_SLACK, NAV_STRIP_PEEK, navStripEdges, navStripScrollLeft } from './nav-strip.ts';
 
 const view = { scrollLeft: 0, left: 16, width: 358 };
 
@@ -17,6 +17,15 @@ describe('navStripScrollLeft', () => {
 
   it('左に送ってあるときは、左端の幕（peek の幅）に重なる項目を見えているとみなさず送る', () => {
     expect(navStripScrollLeft({ ...view, scrollLeft: 200 }, { left: 20, right: 120 }, null)).toBe(200 + 20 - 16 - 32);
+  });
+
+  it('左に送ったかの境目は続きの印と同じ遊び: 1px までは左の幕が無いとみなし、それを超えたら peek を残す', () => {
+    const item = { left: 20, right: 120 };
+    expect(navStripScrollLeft({ ...view, scrollLeft: NAV_STRIP_EDGE_SLACK }, item, null)).toBeNull();
+    expect(navStripEdges(NAV_STRIP_EDGE_SLACK, 358, 1100).start).toBe(false);
+    // 送り量が 1.5px しか無いので、幕を避けて送ると先頭（0）まで戻り、左の幕も消える
+    expect(navStripScrollLeft({ ...view, scrollLeft: 1.5 }, item, null)).toBe(0);
+    expect(navStripEdges(1.5, 358, 1100).start).toBe(true);
   });
 
   it('先頭（送っていない）なら左端に幕は出ないので、左端ちょうどの項目は送らない', () => {

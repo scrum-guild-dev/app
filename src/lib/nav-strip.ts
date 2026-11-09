@@ -3,6 +3,9 @@
 
 // 手前の項目を欠けて見せる幅。左にも項目があると分かるようにする
 export const NAV_STRIP_PEEK = 32;
+// 端に届いたとみなす遊び。小数の誤差で端に届いても続きありとしないため。左に送ってあるか（左の幕が出るか）の判定と、
+// 続きの印（navStripEdges）で同じ値を使い、幕の有無と送り位置の判定をそろえる
+export const NAV_STRIP_EDGE_SLACK = 1;
 
 export type NavStripView = { scrollLeft: number; left: number; width: number };
 export type NavStripBox = { left: number; right: number };
@@ -22,16 +25,19 @@ export function navStripScrollLeft(
   const start = fitsWithGroup ? group.left : item.left;
   // 札（収まるとき）から項目までが、端の幕（peek の幅）にかからずに見えていれば送らない。
   // 左の幕は左に送ってあるとき（続きがあるとき）だけ出るので、先頭のままなら左端ちょうどでも見えているとみなす
-  const leftEdge = view.left + (view.scrollLeft > 1 ? peek : 0);
+  const leftEdge = view.left + (view.scrollLeft > NAV_STRIP_EDGE_SLACK ? peek : 0);
   if (start >= leftEdge && item.right <= view.left + view.width - peek) return null;
   return Math.max(0, view.scrollLeft + start - view.left - peek);
 }
 
-// 左と右に送れる続きがあるか。小数の誤差で端に届いても続きありとしないよう、1px の遊びを持つ
+// 左と右に送れる続きがあるか。NAV_STRIP_EDGE_SLACK の遊びを持つ
 export function navStripEdges(
   scrollLeft: number,
   clientWidth: number,
   scrollWidth: number,
 ): { start: boolean; end: boolean } {
-  return { start: scrollLeft > 1, end: scrollLeft + clientWidth < scrollWidth - 1 };
+  return {
+    start: scrollLeft > NAV_STRIP_EDGE_SLACK,
+    end: scrollLeft + clientWidth < scrollWidth - NAV_STRIP_EDGE_SLACK,
+  };
 }
