@@ -10,7 +10,7 @@ test('4テーマで日本語と数字の全ての太さを自前の書体で描�
   await signIn(context, baseURL, 'admin');
   await page.goto('/aoba');
   await expect(page.getByRole('heading', { name: '今日やること', exact: true })).toBeVisible();
-  // 今日の一覧は空になりうる。数値の検査はpoints=5のseedタスク801があるバックログで行う。
+  // 今日の一覧は空になりうる。数値の検査はseedのストーリー集計があるバックログで行う。
   await page.goto('/aoba/w/019a0000-0000-7000-8000-000000000401');
   await expect(page.getByText('ポイント付与のバッチを作る', { exact: true }).first()).toBeVisible();
   for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
@@ -18,7 +18,7 @@ test('4テーマで日本語と数字の全ての太さを自前の書体で描�
     for (const [selector, weight] of [
       ['h1', theme === 'medieval' ? '900' : '700'],
       ['body', '400'],
-      ['.pts', '500'],
+      ['.tree-ratio', '400'],
     ]) {
       const element = page.locator(selector).first();
       await expect(element).toBeVisible();
