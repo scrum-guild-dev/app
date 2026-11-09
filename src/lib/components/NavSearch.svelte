@@ -131,6 +131,9 @@
   function onFocusout(event: FocusEvent): void {
     const next = event.relatedTarget;
     if (!root || (next instanceof Node && root.contains(next))) return;
+    // ほかのウィンドウやタブへ移ったとき（画面の中にフォーカスの行き先が無く、文書がフォーカスを失った）は、欄と打った文字を残す。
+    // 戻ると欄にフォーカスが戻る
+    if (next === null && !document.hasFocus()) return;
     if (open) {
       open = false;
       query = '';
