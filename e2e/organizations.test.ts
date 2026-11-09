@@ -117,6 +117,8 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
       await expect(page.getByRole('heading', { level: 1, name: '組織が見つかりません' })).toBeVisible();
       await expect(page).toHaveTitle('組織が見つかりません - Scrum Guild');
       await expect(page.locator('.nav')).toHaveCount(0);
+      // 見出しが出た後も骨組みは120ms退場する。比較するのは退場後の同じ最終画面。
+      await expect(page.locator('#boot-loading, .loading-overlay')).toHaveCount(0);
       screens.push(await page.locator('body').innerText());
     }
     expect(screens[0]).toBe(screens[1]);
