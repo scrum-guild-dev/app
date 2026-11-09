@@ -6,7 +6,8 @@
   import '@fontsource/noto-sans-jp/900.css';
   import '../../design/tokens.css';
   import '../../design/components.css';
-  import { onMount, type Snippet } from 'svelte';
+  import { onMount, untrack, type Snippet } from 'svelte';
+  import { prefersReducedMotion } from '../lib/reduced-motion.ts';
   import { navigating } from '$app/state';
   import ArtSprite from '../lib/components/ArtSprite.svelte';
   import IconSprite from '../lib/components/IconSprite.svelte';
@@ -14,7 +15,7 @@
   import ShortcutHelp from '../lib/components/ShortcutHelp.svelte';
   import ShortcutHints from '../lib/components/ShortcutHints.svelte';
   import ToastRegion from '../lib/components/ToastRegion.svelte';
-  import { loadingShape } from '../lib/loading-shape.ts';
+  import { loadingShape, type LoadingShape } from '../lib/loading-shape.ts';
   import { shortcuts } from '../lib/shortcuts.svelte.ts';
   import { t } from '../lib/vocabulary.svelte.ts';
 
@@ -28,22 +29,73 @@
   // 行き先が組織の枠の中なら、読み込み中も枠と行き先の本文の組みに近い形で出す（読み込んだ後に組みと位置が変わらないように）
   const loadingShapeTo = $derived(loadingShape(navigating.to?.route.id));
   let slow = $state(false);
+  // 行き先の情報は到着時に消える。退場中に枠を紙へ替えないよう、表示した形を保持する。
+  let shownLoadingShape = $state<LoadingShape | null>(null);
 
   // URL を直接開いた最初の読み込みの表示（src/app.html の #boot-loading）は、画面が描かれたら要らない
   // （骨組みの形の印 data-boot と data-boot-nav も、以後の画面の開閉と食い違わないよう外す）
   onMount(() => {
-    document.getElementById('boot-loading')?.remove();
-    delete document.documentElement.dataset.boot;
-    delete document.documentElement.dataset.bootNav;
+    const boot = document.getElementById('boot-loading');
+    const removeBoot = () => {
+      boot?.remove();
+      delete document.documentElement.dataset.boot;
+      delete document.documentElement.dataset.bootNav;
+    };
+    if (!boot) {
+      removeBoot();
+      return;
+    }
+    // 300ms より前に終わったときは、隠れたまま取り除く。
+    if (prefersReducedMotion() || getComputedStyle(boot).visibility !== 'visible') {
+      removeBoot();
+      return;
+    }
+    const remove = () => {
+      clearTimeout(timer);
+      boot.removeEventListener('transitionend', ended);
+      removeBoot();
+    };
+    const ended = (event: TransitionEvent) => {
+      if (event.target === boot && event.propertyName === 'opacity') remove();
+    };
+    boot.inert = true;
+    boot.setAttribute('aria-hidden', 'true');
+    boot.addEventListener('transitionend', ended);
+    // 通常は120msの transitionend で外す。描画の遅れに余裕を取り、届かなくても残さない。
+    const timer = setTimeout(remove, 400);
+    boot.classList.add('is-leaving');
+    return remove;
   });
+
+  function loadingOut(node: HTMLElement) {
+    if (prefersReducedMotion()) return { duration: 0 };
+    // クラスを付ける前に opacity: 1 の状態を確定し、CSS の transition を開始する。
+    const fast = parseFloat(getComputedStyle(node).getPropertyValue('--duration-fast'));
+    node.classList.add('is-leaving');
+    node.inert = true;
+    node.setAttribute('aria-hidden', 'true');
+    // Svelte は退場中の DOM の保持だけを受け持つ。動きは共通 CSS のトークンで揃える。
+    return {
+      duration: Number.isFinite(fast) ? fast : 120,
+    };
+  }
 
   $effect(() => {
     if (!loadingFromOutside) return;
-    const timer = setTimeout(() => (slow = true), SLOW_MS);
+    const timer = setTimeout(() => {
+      shownLoadingShape = untrack(() => loadingShapeTo);
+      slow = true;
+    }, SLOW_MS);
     return () => {
       clearTimeout(timer);
       slow = false;
     };
+  });
+
+  // 待っている間の行き先変更は形だけ替え、表示待ちのタイマーと退場をやり直さない。
+  // 到着して行き先が消えた後は、退場中の形を保持する。
+  $effect(() => {
+    if (slow && loadingFromOutside) shownLoadingShape = loadingShapeTo;
   });
 </script>
 
@@ -60,7 +112,7 @@
 <!-- 読み込み中を読み上げに伝える。領域は常に置き、中の文字だけを替える -->
 <div class="visually-hidden" role="status">{slow ? t('loading') : ''}</div>
 {#if slow}
-  <LoadingSheet shape={loadingShapeTo} />
+  <div class="loading-overlay" out:loadingOut><LoadingSheet shape={shownLoadingShape} /></div>
 {:else}
   {@render children()}
 {/if}
