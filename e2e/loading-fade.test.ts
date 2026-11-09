@@ -1,4 +1,5 @@
 // #1040: 骨組みの退場と、中身が同時に出てもレイアウトを押し下げないこと。
+import { organizationInfo } from '../src/shared/operations/organization/index.ts';
 import { backlogTree } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
 import { expectNoA11yViolationsInThemes, signIn } from './helpers.ts';
@@ -25,7 +26,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         if (!boot) return;
         seen.leaving = true;
         seen.frame =
-          document.documentElement.dataset.boot === 'list' &&
+          document.documentElement.dataset.boot === 'tree' &&
           getComputedStyle(boot.querySelector('.boot-frame')!).display !== 'none';
         seen.content = document.querySelector('#app h1') !== null;
         seen.duration = getComputedStyle(boot).transitionDuration;
@@ -50,13 +51,20 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.goto(WORKSPACE, { waitUntil: 'commit' });
     await expect(page.locator('#boot-loading')).toBeVisible();
     release();
-    await expect(page.locator('#app h1')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('#boot-loading')).toHaveCount(0);
     const seen = await page.evaluate(
       () =>
         (
           window as unknown as {
-            __bootFade: { leaving: boolean; content: boolean; duration: string; hidden: boolean; opacity: string[] };
+            __bootFade: {
+              leaving: boolean;
+              content: boolean;
+              duration: string;
+              hidden: boolean;
+              frame: boolean;
+              opacity: string[];
+            };
           }
         ).__bootFade,
     );
@@ -73,14 +81,18 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   });
 
   test(`組織への移動の紙は重ねて消える（${reducedMotion}）`, async ({ page, context, baseURL }) => {
+    // 4テーマの axe は開発用ビルドでも最後まで検査する。フェードの時間の期待値は120msのまま。
+    if (reducedMotion === 'no-preference') test.setTimeout(90_000);
     await page.emulateMedia({ reducedMotion });
     await signIn(context, baseURL, 'admin');
     await page.goto('/');
     let release = () => {};
     const gate = new Promise<void>((resolve) => (release = resolve));
-    await page.route('**/api/aoba/organization', async (route) => {
+    await routeOperation(page, organizationInfo, { slug: 'aoba' }, async (call) => {
       await gate;
-      await route.continue();
+      const body = await call.fetch();
+      body.organization.theme = 'modern';
+      await call.fulfill(body);
     });
     await page.evaluate(() => {
       const seen = { duration: -1, fixed: false, contentTop: -1, hidden: false, shape: '', opacity: [] as number[] };
@@ -107,11 +119,12 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       }).observe(document.body, { subtree: true, childList: true, attributes: true });
     });
     await page.getByRole('link', { name: /あおば開発/ }).click();
-    await expect(page.locator('.loading-overlay .skeleton')).toBeVisible();
+    await expect(page.locator('.loading-overlay .skeleton-frame')).toBeVisible();
     release();
     const heading = page.getByRole('heading', { level: 1, name: '今日やること' });
-    await expect(heading).toBeVisible();
+    await expect(heading).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('.loading-overlay')).toHaveCount(0);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'modern');
     const seen = await page.evaluate(
       () =>
         (
@@ -132,7 +145,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       expect(seen.opacity[0]).toBe(1);
       expect(seen.opacity.at(-1)).toBe(0);
       expect(seen.fixed).toBe(true);
-      expect(seen.shape).toBe('aside');
+      expect(seen.shape).toBe('today');
       expect(seen.hidden).toBe(true);
       expect(seen.contentTop).toBeCloseTo((await heading.boundingBox())!.y, 0);
       await expectNoA11yViolationsInThemes(page, 'today');
@@ -178,7 +191,7 @@ for (const mode of ['hidden', 'missing-transitionend'] as const) {
       }).observe(document.body, { subtree: true, attributes: true, childList: true });
     });
     release();
-    await expect(page.locator('#app h1')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible({ timeout: 15_000 });
     await expect(boot).toHaveCount(0);
     const seen = await page.evaluate(
       () => (window as unknown as { __bootRemoval: { leaving: boolean; elapsed: number } }).__bootRemoval,
