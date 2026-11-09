@@ -11,6 +11,17 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 }
 
 export const dictionary = defineDictionary({
+  createSheet: '起票',
+  createSheetReloadFailed: '作成済みですが、一覧を読み直せませんでした。画面を開き直してください。',
+  createKind: '作る種類',
+  createSheetCreated: '{kind}「{title}」を作りました',
+  createSheetOpen: '作ったものを開く',
+  createChoicesFailed: '属性を読み込めませんでした。もう一度試してください。',
+  createSheetUnavailable: '作る先が終了しているか、書き込む権限がありません。書いた内容は写して残せます。',
+  createSheetConflict: '親が完了・中止された可能性があります。親を選び直してください。',
+  createSheetGone: '親や担当が見つかりません。属性を読み直して選び直してください。',
+  createSheetFailed: '作れませんでした。入力を残しています。もう一度試してください。',
+
   favorites: 'お気に入り',
   favoriteAdd: 'お気に入りにする',
   favoriteRemove: 'お気に入りから外す',

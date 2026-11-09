@@ -61,6 +61,26 @@
   const DICT = {
     menu: "メニュー",
     close: "閉じる",
+    taskTitleRequired: "タイトルを入れてください",
+    fieldTitle: "タイトル",
+    taskTitlePlaceholder: "何をするか",
+    fieldBody: "本文",
+    taskParent: "親の{story}",
+    storyCreateSubmit: "作る",
+    discardTitle: "書きかけを捨てますか",
+    discardText: "保存していない変更があります。捨てると元に戻せません。",
+    discardKeep: "書き続ける",
+    discardConfirm: "捨てる",
+    createSheet: "起票",
+    createSheetReloadFailed: "作成済みですが、一覧を読み直せませんでした。画面を開き直してください。",
+    createKind: "作る種類",
+    createSheetCreated: "{kind}「{title}」を作りました",
+    createSheetOpen: "作ったものを開く",
+    createChoicesFailed: "属性を読み込めませんでした。もう一度試してください。",
+    createSheetUnavailable: "作る先が終了しているか、書き込む権限がありません。書いた内容は写して残せます。",
+    createSheetConflict: "親が完了・中止された可能性があります。親を選び直してください。",
+    createSheetGone: "親や担当が見つかりません。属性を読み直して選び直してください。",
+    createSheetFailed: "作れませんでした。入力を残しています。もう一度試してください。",
     mobileTabs: "よく使う画面",
     mobileMenu: "すべてのメニュー",
     favorites: "お気に入り",
@@ -2926,10 +2946,96 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       return `<a class="nav-item${id === "orgwiki" ? " is-wrapping" : ""}" href="${target}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
     }).join("");
   }
+  // 全画面の起票の見本。属性は横に送り、種類を替えても題と本文を保つ。
+  function createSheetChip(label, values) {
+    return `<span class="row-menu"><button class="chip chip-btn is-unset" type="button" data-row-menu data-create-chip="${esc(label)}" aria-label="${esc(label)}: 未設定" aria-haspopup="menu" aria-expanded="false"><span class="chip-text">${esc(label)}</span></button><ul class="account-menu-list row-menu-list" role="menu" aria-label="${esc(label)}を選ぶ" hidden>${["なし", ...values].map((text, index) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${index === 0}" data-create-option>${esc(text)}</button></li>`).join("")}</ul></span>`;
+  }
+  function createSheetHtml() {
+    return `<dialog class="create-sheet" aria-label="${t("createSheet")}" data-create-sheet>
+      <form class="create-sheet-form">
+        <header class="create-sheet-head">
+          <button class="icon-btn" type="button" aria-label="${t("close")}" data-create-close>${icon("x")}</button>
+          <div class="create-sheet-kind" role="group" aria-label="${t("createKind")}">
+            <button class="btn is-sm is-on" type="button" aria-pressed="true" data-create-kind="task">${t("task")}</button>
+            <button class="btn is-sm" type="button" aria-pressed="false" data-create-kind="story">${t("story")}</button>
+          </div>
+          <button class="btn is-primary create-sheet-submit" type="submit" aria-label="${t("storyCreateSubmit")}" aria-disabled="true" aria-describedby="create-sheet-reason">${icon("up")}</button>
+        </header>
+        <div class="create-sheet-body">
+          <p class="muted" id="create-sheet-reason">${t("taskTitleRequired")}</p>
+          <label class="field"><span class="label">${t("fieldTitle")}</span><input class="input create-sheet-title" name="title" placeholder="${t("taskTitlePlaceholder")}"></label>
+          <label class="field"><span class="label">${t("fieldBody")}</span><textarea class="textarea" name="body"></textarea></label>
+          <div class="create-sheet-attrs" data-create-task>
+            ${createSheetChip(t("taskParent").replace("{story}", t("story")), ["架空の親ストーリー"])}
+            ${createSheetChip(t("assignee"), ["架空の担当"])}
+            ${createSheetChip(t("points"), [0,1,2,3,5,8,13].map(String))}
+          </div>
+          <div class="create-sheet-attrs" data-create-story hidden>
+            ${createSheetChip(t("epic"), ["架空のエピック"])}
+            <label class="chip">${t("due")}<input class="input" type="date"></label>
+          </div>
+        </div>
+      </form>
+    </dialog>`;
+  }
+  document.addEventListener("click", (event) => {
+    const opener = event.target.closest("[data-create-sheet-open]");
+    if (!opener) return;
+    document.querySelector("[data-create-sheet]")?.remove();
+    document.body.insertAdjacentHTML("beforeend", createSheetHtml());
+    const sheet = document.querySelector("[data-create-sheet]");
+    const title = sheet.querySelector('[name="title"]');
+    const body = sheet.querySelector('[name="body"]');
+    let kind = "task";
+    const finish = () => { sheet.close(); sheet.remove(); opener.focus(); };
+    const close = () => {
+      if (!title.value && !body.value) return finish();
+      const confirm = document.createElement("dialog");
+      confirm.className = "dialog";
+      confirm.setAttribute("aria-label", t("discardTitle"));
+      confirm.innerHTML = `<div class="dialog-sheet"><div class="dialog-head"><h2>${t("discardTitle")}</h2></div><div class="dialog-body"><p>${t("discardText")}</p></div><div class="dialog-foot"><button class="btn is-primary" data-keep>${t("discardKeep")}</button><button class="btn" data-discard>${t("discardConfirm")}</button></div></div>`;
+      document.body.append(confirm);
+      confirm.querySelector("[data-keep]").onclick = () => { confirm.close(); confirm.remove(); };
+      confirm.querySelector("[data-discard]").onclick = () => { confirm.close(); confirm.remove(); finish(); };
+      confirm.oncancel = () => { confirm.remove(); };
+      confirm.showModal(); confirm.querySelector("[data-keep]").focus();
+    };
+    sheet.addEventListener("click", event => {
+      const option = event.target.closest("[data-create-option]");
+      if (!option) return;
+      const root = option.closest(".row-menu");
+      const button = root.querySelector("[data-create-chip]");
+      const text = option.textContent;
+      button.querySelector(".chip-text").textContent = text === "なし" ? button.dataset.createChip : text;
+      button.classList.toggle("is-unset", text === "なし");
+      button.setAttribute("aria-label", `${button.dataset.createChip}: ${text}`);
+      root.querySelectorAll("[data-create-option]").forEach(item => item.setAttribute("aria-checked", String(item === option)));
+    });
+    sheet.querySelector("[data-create-close]").onclick = close;
+    sheet.oncancel = (event) => { event.preventDefault(); close(); };
+    title.oninput = () => {
+      const empty = !title.value.trim();
+      sheet.querySelector('[type="submit"]').setAttribute("aria-disabled", String(empty));
+      sheet.querySelector("#create-sheet-reason").hidden = !empty;
+    };
+    sheet.querySelectorAll("[data-create-kind]").forEach(button => button.onclick = () => {
+      kind = button.dataset.createKind;
+      sheet.querySelectorAll("[data-create-kind]").forEach(item => {
+        item.setAttribute("aria-pressed", String(item === button)); item.classList.toggle("is-on", item === button);
+      });
+      sheet.querySelector("[data-create-task]").hidden = kind !== "task";
+      sheet.querySelector("[data-create-story]").hidden = kind !== "story";
+    });
+    sheet.querySelector("form").onsubmit = (event) => {
+      event.preventDefault(); if (!title.value.trim()) return;
+      const name = title.value.trim(); finish(); toast(esc(t("createSheetCreated").replace("{kind}", t(kind)).replace("{title}", name)));
+    };
+    sheet.showModal(); title.focus();
+  });
   function mobileTabsHtml(current, { live = true } = {}) {
     const tabs = [["today", "sun", "pageToday", "today.html"], ["favorites", "star", "favorites", "favorites.html"],
       ...(Object.keys(D.workspaces).length ? [["backlog", "board", "backlog", `backlog.html?workspace=${encodeURIComponent(D.workspace)}`]] : [])];
-    return `<div class="mobile-navigation"><nav class="mobile-tabs" aria-label="${t("mobileTabs")}">${tabs.map(([id, ic, key, href]) => `<a class="mobile-tab" href="${firstHref(href)}" aria-label="${t(key)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}</a>`).join("")}<button class="mobile-tab" type="button" aria-label="${t("mobileMenu")}" aria-haspopup="dialog" aria-expanded="false" ${live ? 'data-mobile-menu-open aria-controls="mobile-menu"' : ""}><span class="mobile-menu-arrows" aria-hidden="true">${icon("chevron")}${icon("chevron")}</span></button></nav><div class="mobile-create-slot"></div></div>`;
+    return `<div class="mobile-navigation"><nav class="mobile-tabs" aria-label="${t("mobileTabs")}">${tabs.map(([id, ic, key, href]) => `<a class="mobile-tab" href="${firstHref(href)}" aria-label="${t(key)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}</a>`).join("")}<button class="mobile-tab" type="button" aria-label="${t("mobileMenu")}" aria-haspopup="dialog" aria-expanded="false" ${live ? 'data-mobile-menu-open aria-controls="mobile-menu"' : ""}><span class="mobile-menu-arrows" aria-hidden="true">${icon("chevron")}${icon("chevron")}</span></button></nav><div class="mobile-create-slot"><button class="mobile-create" type="button" aria-label="${t("createSheet")}" data-create-sheet-open>${icon("plus")}</button></div></div>`;
   }
   // 中身を複製せず、狭い幅では同じ組織切り替えと nav をダイアログに移す。
   function syncMobileMenu() {
@@ -3901,7 +4007,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   document.addEventListener("pointerdown", () => keyHints.hide(), true);
 
   window.SQ = {
-    mobileTabsHtml, favoriteButtonHtml, favoritesNavHtml, favoriteRetryHtml, favoriteBackgroundHtml,
+    createSheetHtml, mobileTabsHtml, favoriteButtonHtml, favoritesNavHtml, favoriteRetryHtml, favoriteBackgroundHtml,
     formatTrialStopDateTime,
     first, firstHref, firstSteps, emptyState, art,
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
