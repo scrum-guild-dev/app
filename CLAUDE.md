@@ -35,6 +35,7 @@ Node は `.node-version`（26）、pnpm は `package.json` の `packageManager` 
 - 空の D1 に全マイグレーションを当て、seed を2回流して確かめる: `pnpm db:migrate:fresh`
 - Wiki の検索を測る: `pnpm exec node scripts/wiki-search-bench.ts`（使い捨てのローカルD1で5,000ページの検索と走査上限の拒否を測る。`docs/development.md` の「Wiki の検索を測る」）
 - 画面の読み込みを測る: `pnpm bench:loading`（使い捨て D1 で各 load の主・従の操作と合計の p50・p95 を測る。`docs/development.md` の「画面の読み込みを測る」）
+- URL を直接開く最初の読み込みを測る: `pnpm bench:boot`（本番ビルド・gzip・使い捨て D1・Chromium で Fast/Slow 3G の表示時間と転送量を測る。`docs/development.md` の「URL を直接開く最初の読み込みを測る」）
 - バックログの木を 5 万件で測る: `pnpm bench:backlog`（使い捨ての D1 で `wrangler dev --local` を立てて測る。`docs/development.md` の「バックログの木を 5 万件で測る」）
 - 手元の D1 にマイグレーションを当て、全部の行を消して seed を入れ直す: `pnpm db:seed`（ログインに使うトークンは `seed/sessions.ts`）
 - seed のセッションでログインした手元の画面を、見えるブラウザで開く: `pnpm dev:open [--preview] [who] [path]`（例 `pnpm dev:open admin /aoba`。先に `pnpm db:seed` と `pnpm dev` を済ませる。ポートは `pnpm dev` と同じ決め方。環境変数 `DEV_PORT_OFFSET` で立てたときだけ同じ値を付ける）
