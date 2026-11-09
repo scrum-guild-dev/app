@@ -296,7 +296,6 @@ describe('node scripts/e2e-shard.ts', () => {
   });
 
   test('不正な引数と空のシャードは非 0 で、標準出力に何も出さない', () => {
-    // ファイルより1つ多く分ければ最後は必ず空。テスト追加で固定の99/99が埋まるのを避ける。
     const emptyShard = String(listE2eFiles().length + 1);
     for (const args of [
       [],

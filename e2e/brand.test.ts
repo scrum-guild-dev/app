@@ -21,7 +21,34 @@ async function expectHorizontalBrand(page: Page): Promise<void> {
   expect(box.width).toBeGreaterThan(100);
   expect(Math.abs(box.width / box.height - 3)).toBeLessThan(0.02);
   const parent = (await art.locator('..').boundingBox())!;
-  expect(box.x).toBeGreaterThanOrEqual(parent.x);
+  if (await art.evaluate((el) => el.parentElement?.classList.contains('gate-brand'))) {
+    // 枠の外では透明な左余白を外へ出している。素材そのもののアルファを読み、絵が切れず本文とそろうことを測る。
+    const opaqueLeft = await logo.evaluate((element) => {
+      const img = element as HTMLImageElement;
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const context = canvas.getContext('2d')!;
+      context.drawImage(img, 0, 0);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let left = canvas.width;
+      for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < left; x++) {
+          if (pixels[(y * canvas.width + x) * 4 + 3] > 0) {
+            left = x;
+            break;
+          }
+        }
+      }
+      return left / canvas.width;
+    });
+    expect(opaqueLeft).toBeLessThan(1);
+    expect(Math.abs(box.x + box.width * opaqueLeft - parent.x)).toBeLessThan(1);
+    // 透明な余白も画面の外へは出さない。
+    expect(box.x).toBeGreaterThanOrEqual(0);
+  } else {
+    expect(box.x).toBeGreaterThanOrEqual(parent.x);
+  }
   expect(box.x + box.width).toBeLessThanOrEqual(parent.x + parent.width + 1);
   expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   // 画像内の文字は読ませず、サービス名を1回だけ残す
