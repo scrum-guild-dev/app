@@ -176,6 +176,12 @@ export const pointers: Pointers = {
     return { workspace_id: target.workspace.id, task_id: task.id, attachment_id: row.id };
   },
 
+  'favorite-list': { noReference: {} },
+  'favorite-set': async (target) => ({
+    target_type: 'wiki_page',
+    target_id: await wikiFor(target, true),
+    is_favorite: true,
+  }),
   'org-wiki-delete': async (target, caller) => ({
     page_id: await wikiFor(target, true, personOf(target, caller) ?? target.admin),
   }),
