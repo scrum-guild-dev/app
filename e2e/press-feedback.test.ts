@@ -65,6 +65,7 @@ ${readFileSync(new URL('../design/components.css', import.meta.url), 'utf8')}</s
           <button class="done-btn" aria-label="完了">✓</button>
           <button class="chip chip-btn">担当</button><button class="chip chip-btn is-unset">未設定</button>
           <button class="pill">通知</button><button class="pill" aria-pressed="true">選択済み</button>
+          <button class="pill" aria-pressed="true" aria-label="選択済みの通知"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16" /></svg></button>
           <button class="chip chip-btn" aria-disabled="true">変更不可</button>
           <button class="btn" disabled>無効</button><button class="btn" aria-disabled="true">待機</button>`,
       }),

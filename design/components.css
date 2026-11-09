@@ -529,6 +529,11 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
   box-shadow: inset 0 0 0 2px currentColor;
 }
 
+/* アイコンだけの選択済み pill は、選択の輪を残して、その内側に押下の輪を足す。 */
+.pill[aria-pressed="true"]:has(> .ico:only-child):active:not(:disabled):not([aria-disabled="true"]) {
+  box-shadow: inset 0 0 0 1px var(--color-accent), inset 0 0 0 2px var(--color-surface), inset 0 0 0 3px currentColor;
+}
+
 /* box-shadow が消える強制色モードでも、押下中は内側の輪で知らせる。 */
 @media (forced-colors: active) {
   :is(.btn, .done-btn, .chip-btn, .pill):active:not(:disabled):not([aria-disabled="true"]) {
