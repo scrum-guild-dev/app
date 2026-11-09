@@ -92,6 +92,8 @@ test('HTML を png と偽って上げても添付として取得し、埋め込�
   await page.evaluate((path) => {
     const link = document.createElement('a');
     link.href = path;
+    // API の添付は画面のルーターを通さず、Content-Disposition をブラウザに処理させる。
+    link.dataset.sveltekitReload = '';
     link.textContent = '添付した HTML を開く';
     document.body.append(link);
   }, path);
