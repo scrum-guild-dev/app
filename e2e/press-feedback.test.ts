@@ -19,6 +19,7 @@ for (const path of ['/login', '/signup']) {
         });
       });
       await page.goto(path);
+      await page.clock.install();
       // 別タブの操作は、元の画面を待機中にしない。
       await selected.click({ modifiers: ['Control'] });
       await expect(selected).not.toHaveText('移っています');
@@ -26,13 +27,18 @@ for (const path of ['/login', '/signup']) {
       await selected.focus();
       await page.keyboard.press('Enter');
       await expect(selected).toHaveText('移っています');
-      await expect(page.getByRole('status')).toHaveText(
+      await expect(page.getByRole('status').filter({ hasText: 'へ移っています' })).toHaveText(
         `${provider === 'github' ? 'GitHub' : 'Google'} へ移っています`,
       );
       for (const link of await links.all()) await expect(link).toHaveAttribute('aria-disabled', 'true');
       // aria-disabled のリンクをプログラムから押して、ハンドラーによる防止を確かめる。
       await links.evaluateAll((elements) => elements.forEach((element) => (element as HTMLAnchorElement).click()));
       expect(await page.evaluate(() => Reflect.get(window, 'pressResults'))).toEqual([false, false, true, true]);
+      // 遷移を中断したままでも10秒後には押し直せる。
+      await page.clock.fastForward(10_000);
+      for (const link of await links.all()) await expect(link).toHaveAttribute('aria-disabled', 'false');
+      await selected.evaluate((element) => (element as HTMLAnchorElement).click());
+      await expect(selected).toHaveText('移っています');
       // root は bfcache 復元時に現在のセッションで読み直す。テストの監視も新しい文書へ登録し直す。
       const reloaded = page.waitForEvent('load');
       await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
@@ -45,7 +51,7 @@ for (const path of ['/login', '/signup']) {
       }
       await selected.evaluate((element) => (element as HTMLAnchorElement).click());
       await expect(selected).toHaveText('移っています');
-      await expect(page.getByRole('status')).toHaveText(
+      await expect(page.getByRole('status').filter({ hasText: 'へ移っています' })).toHaveText(
         `${provider === 'github' ? 'GitHub' : 'Google'} へ移っています`,
       );
       expect(await page.evaluate(() => Reflect.get(window, 'pressResults'))).toEqual([false]);
@@ -113,6 +119,13 @@ ${readFileSync(new URL('../design/components.css', import.meta.url), 'utf8')}</s
         expect(during!.height).toBe(before.height);
         await page.mouse.up();
         await expect(button).toHaveCSS(property, previous);
+        if (!disabled && forcedColors === 'none') {
+          await button.focus();
+          await page.keyboard.down('Space');
+          await expect(button).not.toHaveCSS(property, previous);
+          await page.keyboard.up('Space');
+          await expect(button).toHaveCSS(property, previous);
+        }
       }
     }
   });
