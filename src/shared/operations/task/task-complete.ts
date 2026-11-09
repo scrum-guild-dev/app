@@ -10,11 +10,16 @@ import { defineOperation } from '../define.ts';
 export const taskComplete = defineOperation({
   name: 'task-complete',
   description:
-    'タスクを完了にする。完了の記録と、ポイントが 1 以上のときの経験値（起票と完了）、変更の履歴も同時に書く',
+    'タスクを完了にする。完了の記録と、ポイントが 1 以上のときの経験値（起票と完了）、変更の履歴も同時に書く。xp_granted に今回付与した経験値の合計（起票・完了・手助け、完了した本人の分だけ）を返す',
   mode: 'write',
   permission: 'member',
   workspace: true,
   input: z.object({ workspace_id: idSchema, task_id: idSchema }),
   // left_sprint は、始まっていないスプリント（か削除したスプリント）に入っていて、完了でそこから外れたか。画面が一言添える
-  output: z.object({ task_id: z.string(), completed_at: z.string(), left_sprint: z.boolean() }),
+  output: z.object({
+    task_id: z.string(),
+    completed_at: z.string(),
+    left_sprint: z.boolean(),
+    xp_granted: z.number().int().nonnegative(),
+  }),
 });

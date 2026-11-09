@@ -1378,7 +1378,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       ${drawerTitleHtml(x)}
       ${x.srcDone && !x.doneAt ? `<div class="callout is-ok">${icon("check")}<span>取り込み元で完了になりました。完了にするかはここで決めます。</span></div>` : ""}
       <dl class="props">
-        <div><dt>${t("column")}</dt><dd>${colName(x) ? `<span class="status-dot">${esc(colName(x))}</span>` : "—"}</dd></div>
+        <div><dt>${t("column")}</dt><dd>${colName(x) ? `<span class="status-dot is-wrap">${esc(colName(x))}</span>` : "—"}</dd></div>
         <div><dt>${t("assignee")}</dt><dd>${drawerAssigneeHtml(x)}</dd></div>
         <div><dt>${t("points")}</dt><dd>${drawerPointsHtml(x)}</dd></div>
         <div><dt>${t("due")}</dt><dd>${drawerDueHtml(x)}</dd></div>
@@ -3198,6 +3198,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const x = task(el.dataset.done);
       x.doneAt = "10/20 10:12"; if (x.sprint && x.col) x.prevCol = x.col, x.col = "done";
       stamped.add(x.id); redrawAll();
+      toast(`${icon("check")}<span>${t("task")}を${t("done")}にしました${x.pts > 0 ? "\n+40 XP" : ""}</span>`);
       document.querySelector(`#content [data-undo="${x.id}"]`)?.focus();
       return;
     }
