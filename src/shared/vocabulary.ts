@@ -17,6 +17,9 @@ export const dictionary = defineDictionary({
   favoriteLimit: 'お気に入りは20件までです。登録した対象の星を外してから追加してください。',
   favoriteLoadFailed: 'お気に入りを読み込めませんでした。',
   favoriteFailed: 'お気に入りを変更できませんでした。もう一度お試しください。',
+  favoritesEmpty: 'お気に入りはまだありません',
+  favoritesEmptyText: '{task}、{story}、{epic}、Wiki のページの星を押すと、ここに並びます。',
+  favoriteKindWikiPage: 'Wiki のページ',
 
   onboardingBlockedTitle: '利用開始を再開できません',
   onboardingStart: '利用開始の設定',

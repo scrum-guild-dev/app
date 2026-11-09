@@ -64,6 +64,9 @@
     favoriteRemove: "お気に入りから外す",
     favoriteLoadFailed: "お気に入りを読み込めませんでした。",
     favoriteLimit: "お気に入りは20件までです。登録した対象の星を外してから追加してください。",
+    favoritesEmpty: "お気に入りはまだありません",
+    favoritesEmptyText: "{task}、{story}、{epic}、Wiki のページの星を押すと、ここに並びます。",
+    favoriteKindWikiPage: "Wiki のページ",
   signupTitle: "会員登録",
   onboardingStart: "利用開始の設定",
   onboardingProfileInvalid: "表示する名前は1〜100文字、肩書きは100文字以内で入力してください。改行や制御文字は使えません。",
@@ -2536,11 +2539,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D.stories.s2 && `「${D.stories.s2.title}」の${t("task")}を全部今の${t("sprint")}に入れて`,
     `${t("organization")}の人数の上限を 50 人に上げて`,
   ].filter(Boolean);
+  // メニューに無い組織の画面（アカウントのメニューから開く画面と、お気に入りの一覧）の名前のキー。本番の breadcrumb.ts の accountScreenKey
+  const ACCOUNT_SCREENS = { me: "pageMe", admin: "pageOrgAdmin", favorites: "favorites" };
   // 開いている画面。タスクの詳細を開いていればそのタスク
   function assistContext() {
     if (drawer.id) return `${drawerNoun()}「${esc(drawerItem().title)}」`;
     if (!page) return esc(Object.values(D.workspaces)[0]?.name || "");
-    if (["me", "admin"].includes(page.current)) return t(page.current === "me" ? "pageMe" : "pageOrgAdmin");
+    if (ACCOUNT_SCREENS[page.current]) return t(ACCOUNT_SCREENS[page.current]);
     if (page.current === "sprint" && D.sprints.sp14) return esc(sprintLabel("sp14"));
     const p = PAGES.find((x) => Array.isArray(x) && x[0] === page.current);
     const inWs = PAGES.indexOf(p) > PAGES.indexOf("workspace");
@@ -2956,7 +2961,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // ワークスペースの切り替え。組織と同じ開閉と通常のリンクを使い、移動先はバックログ。
   let workspaceMenuOpen = false;
-  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] }, inWorkspaceScreen = !page || !["today", "notifications", "orgwiki", "me", "admin", "operator"].includes(page.current) } = {}) {
+  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] }, inWorkspaceScreen = !page || !["today", "notifications", "orgwiki", "me", "admin", "favorites", "operator"].includes(page.current) } = {}) {
     const name = workspaces.find((w) => w.id === current.id)?.name || current.name;
     const label = t("workspaceSwitchLabel").replace("{name}", name).replace("{workspace}", t("workspace"));
     const listLabel = t("workspaceSwitchListLabel").replace("{workspace}", t("workspace"));
@@ -3013,7 +3018,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function cycleFirst() {
     const order = [null, ...FIRST_ROLES];
     const next = order[(order.indexOf(first) + 1) % order.length];
-    const here = ["me", "admin"].includes(page.current) ? `${page.current}.html` : (PAGES.find((p) => Array.isArray(p) && p[0] === page.current) || [])[3] || "today.html";
+    const here = ACCOUNT_SCREENS[page.current] ? `${page.current}.html` : (PAGES.find((p) => Array.isArray(p) && p[0] === page.current) || [])[3] || "today.html";
     const target = !next || FIRST_PAGES[next].includes(here) ? here : "today.html";
     location.href = firstHref(target, next);
   }
@@ -3094,7 +3099,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       crumbs.push({ label: D.workspaces[D.workspace].name, href: `${firstHref("backlog.html")}${first ? "&" : "?"}workspace=${encodeURIComponent(D.workspace)}` });
     }
     if (index >= 0) crumbs.push({ label: PAGES[index][2]().replace(/&amp;/g, "&"), current: true });
-    else if (["me", "admin"].includes(page.current)) crumbs.push({ label: t(page.current === "me" ? "pageMe" : "pageOrgAdmin"), current: true });
+    else if (ACCOUNT_SCREENS[page.current]) crumbs.push({ label: t(ACCOUNT_SCREENS[page.current]), current: true });
     return crumbs;
   }
   // 画面の見本を組み立てる。render は中身の HTML を返す関数。

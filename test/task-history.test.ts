@@ -132,7 +132,13 @@ describe('task-history', () => {
     const created = (await call(
       target,
       taskCreate,
-      { title: '見積もりを送る', points: 3, assignee_user_id: target.member.userId, story_id: parent.id },
+      {
+        title: '見積もりを送る',
+        body_md: '起票時の秘密の本文',
+        points: 3,
+        assignee_user_id: target.member.userId,
+        story_id: parent.id,
+      },
       target.member,
       at(1),
     )) as { task: { id: string } };
@@ -200,6 +206,7 @@ describe('task-history', () => {
         actor: member,
         changes: [
           { field: 'title', before: null, after: '見積もりを送る' },
+          { field: 'body_md', before: null, after: null },
           { field: 'points', before: null, after: 3 },
           { field: 'assignee', before: null, after: { id: target.member.userId!, name: '若葉 湊' } },
           { field: 'story', before: null, after: { id: parent.id, name: '見積もりの準備' } },

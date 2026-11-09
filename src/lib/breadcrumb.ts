@@ -5,9 +5,14 @@ export function workspaceIdOf(path: string): string | null {
   return match ? match[1] : null;
 }
 
-// メニューに無い組織の画面（アカウントのメニューから開く画面）の名前。画面の名前は辞書の語で返すため、キーで返す
-export function accountScreenKey(path: string, slug: string, isAdmin: boolean): 'pageMe' | 'pageOrgAdmin' | null {
+// メニューに無い組織の画面（アカウントのメニューから開く画面と、お気に入りの一覧）の名前。画面の名前は辞書の語で返すため、キーで返す
+export function accountScreenKey(
+  path: string,
+  slug: string,
+  isAdmin: boolean,
+): 'pageMe' | 'pageOrgAdmin' | 'favorites' | null {
   if (path === `/${slug}/me`) return 'pageMe';
+  if (path === `/${slug}/favorites`) return 'favorites';
   if (path === `/${slug}/admin` || path.startsWith(`/${slug}/admin/`)) return isAdmin ? 'pageOrgAdmin' : null;
   return null;
 }
