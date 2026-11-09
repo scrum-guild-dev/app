@@ -1,4 +1,4 @@
-// タスクの確定した添付を、日時と ID の安定した順で50件ずつ読む。
+// タスクの確定した添付を、付けた日時と ID の新しい順で50件ずつ読む。
 import { ATTACHMENT_LIST_PAGE_SIZE, attachmentList } from '../../shared/operations/attachment/index.ts';
 import { ApiError } from '../errors.ts';
 import { implement } from './implement.ts';
@@ -29,6 +29,7 @@ export const attachmentListOperation = implement(attachmentList, async ({ db, wo
           'a.content_type',
           'a.size_bytes',
           'a.created_at',
+          'a.attached_at',
           'a.uploaded_by',
           'u.name as uploaded_by_name',
         ])
@@ -41,13 +42,13 @@ export const attachmentListOperation = implement(attachmentList, async ({ db, wo
         .$if(input.after !== undefined, (qb) =>
           qb.where((eb) =>
             eb.or([
-              eb('a.created_at', '>', input.after!.created_at),
-              eb.and([eb('a.created_at', '=', input.after!.created_at), eb('a.id', '>', input.after!.id)]),
+              eb('a.attached_at', '<', input.after!.attached_at),
+              eb.and([eb('a.attached_at', '=', input.after!.attached_at), eb('a.id', '<', input.after!.id)]),
             ]),
           ),
         )
-        .orderBy('a.created_at')
-        .orderBy('a.id')
+        .orderBy('a.attached_at', 'desc')
+        .orderBy('a.id', 'desc')
         .limit(ATTACHMENT_LIST_PAGE_SIZE + 1),
     ),
   );
@@ -59,7 +60,7 @@ export const attachmentListOperation = implement(attachmentList, async ({ db, wo
   return {
     attachments,
     ...(rows.length > ATTACHMENT_LIST_PAGE_SIZE && last !== undefined
-      ? { next_cursor: { created_at: last.created_at, id: last.id } }
+      ? { next_cursor: { attached_at: last.attached_at!, id: last.id } }
       : {}),
   };
 });

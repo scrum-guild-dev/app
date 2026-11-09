@@ -56,11 +56,11 @@ export const attachmentDownload = defineOperation({
 });
 
 export const ATTACHMENT_LIST_PAGE_SIZE = 50;
-const attachmentListCursor = z.object({ created_at: z.iso.datetime(), id: idSchema });
+const attachmentListCursor = z.object({ attached_at: z.iso.datetime({ precision: 3 }), id: idSchema });
 
 export const attachmentList = defineOperation({
   name: 'attachment-list',
-  description: 'タスクに付いたファイルを上げた日時と ID の順で50件ずつ返す',
+  description: 'タスクに付いたファイルを添付した日時と ID の新しい順で50件ずつ返す',
   permission: 'member',
   workspace: true,
   mode: 'read',

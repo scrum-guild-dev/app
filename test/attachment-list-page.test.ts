@@ -10,7 +10,7 @@ import { createTarget } from './operations/world.ts';
 
 const app = createApp([attachmentListOperation]);
 const AT = '2026-11-01T00:00:00.000Z';
-type Cursor = { created_at: string; id: string };
+type Cursor = { attached_at: string; id: string };
 
 async function fixture(count: number, variedTime = false) {
   const target = await createTarget();
@@ -20,7 +20,7 @@ async function fixture(count: number, variedTime = false) {
     files.push(
       await createAttachment(target.organization, target.workspace.id, target.member.userId!, {
         task_id: task.id,
-        attached_at: AT,
+        attached_at: variedTime && index % 2 === 0 ? '2026-11-02T00:00:00.000Z' : AT,
         file_name: `資料${index}.txt`,
         created_at: variedTime && index % 2 === 0 ? '2026-11-02T00:00:00.000Z' : AT,
       }),
@@ -54,12 +54,15 @@ test('同じ日時の51件をID順で50件と1件に分け、重複も欠落も�
   const { files, read } = await fixture(51);
   const first = await read();
   expect(first.attachments).toHaveLength(50);
-  expect(first.next_cursor).toEqual({ created_at: AT, id: first.attachments[49]!.id });
+  expect(first.next_cursor).toEqual({ attached_at: AT, id: first.attachments[49]!.id });
   const second = await read(first.next_cursor);
   expect(second.attachments).toHaveLength(1);
   expect(second).not.toHaveProperty('next_cursor');
   expect([...first.attachments, ...second.attachments].map((file) => file.id)).toEqual(
-    files.map((file) => file.id).sort(),
+    files
+      .map((file) => file.id)
+      .sort()
+      .reverse(),
   );
 });
 
@@ -75,7 +78,7 @@ test('日時とIDで101件を3ページに分け、ほかのタスクと未添�
   const second = await read(first.next_cursor);
   const third = await read(second.next_cursor);
   expect([first.attachments.length, second.attachments.length, third.attachments.length]).toEqual([50, 50, 1]);
-  const ordered = [...files].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  const ordered = [...files].sort((a, b) => b.attached_at!.localeCompare(a.attached_at!) || b.id.localeCompare(a.id));
   expect([...first.attachments, ...second.attachments, ...third.attachments].map((file) => file.id)).toEqual(
     ordered.map((file) => file.id),
   );
@@ -96,13 +99,50 @@ test('カーソルの行が削除されても、その日時とIDの後から読
   ]);
   const second = await read(cursor);
   expect(second.attachments).toHaveLength(1);
-  expect(second.attachments[0]!.id > cursor.id).toBe(true);
+  expect(second.attachments[0]!.id < cursor.id).toBe(true);
   expect(second).not.toHaveProperty('next_cursor');
 });
 
 test('存在しない任意のカーソルも、その境界の後にある同じタスクだけを返す', async () => {
   const { read, files } = await fixture(2);
-  const page = await read({ created_at: '2000-01-01T00:00:00.000Z', id: '存在しないID' });
-  expect(page.attachments.map((file) => file.id)).toEqual(files.map((file) => file.id).sort());
-  expect(await read({ created_at: '2100-01-01T00:00:00.000Z', id: '存在しないID' })).toEqual({ attachments: [] });
+  const page = await read({ attached_at: '2100-01-01T00:00:00.000Z', id: '存在しないID' });
+  expect(page.attachments.map((file) => file.id)).toEqual(
+    files
+      .map((file) => file.id)
+      .sort()
+      .reverse(),
+  );
+  expect(await read({ attached_at: '2000-01-01T00:00:00.000Z', id: '存在しないID' })).toEqual({ attachments: [] });
+});
+
+test('50件を超えても、新しく付けたファイルと昔上げて後から付けたファイルを先頭で確認できる', async () => {
+  const { target, task, read } = await fixture(51);
+  const recent = await createAttachment(target.organization, target.workspace.id, target.member.userId!, {
+    task_id: task.id,
+    created_at: '2026-11-03T00:00:00.000Z',
+    attached_at: '2026-11-03T00:00:00.000Z',
+  });
+  expect((await read()).attachments[0]?.id).toBe(recent.id);
+  const late = await createAttachment(target.organization, target.workspace.id, target.member.userId!, {
+    task_id: task.id,
+    created_at: '2026-10-01T00:00:00.000Z',
+    attached_at: '2026-11-04T00:00:00.000Z',
+  });
+  const page = await read();
+  expect(page.attachments.slice(0, 2).map((file) => file.id)).toEqual([late.id, recent.id]);
+  expect(page.attachments[0]?.created_at).toBe('2026-10-01T00:00:00.000Z');
+});
+
+test('ミリ秒を省いたカーソルを拒み、同じ秒の行を飛ばさない', async () => {
+  const { target, task } = await fixture(1);
+  const response = await post(app, attachmentList, {
+    slug: target.slug,
+    token: target.member.token,
+    body: {
+      workspace_id: target.workspace.id,
+      task_id: task.id,
+      after: { attached_at: '2026-11-01T00:00:00Z', id: '境界' },
+    },
+  });
+  expect(response.status).toBe(400);
 });
