@@ -16,6 +16,7 @@ import {
 import { type OutputOf, operationPath } from '../src/shared/operations/define.ts';
 import { organizationInfo } from '../src/shared/operations/organization/index.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
+import { createWikiWorkspace } from './wiki-fixtures.ts';
 
 // 実際に作った親子を消し、ダイアログと保存後の木を同じ流れで確かめる。
 // 子の順序は専用の親の配下で確かめ、復旧は両Wikiの最上段・子ページで確かめる。
@@ -82,9 +83,10 @@ for (const scope of ['organization', 'workspace'] as const) {
     expect(calls).toBe(0);
     await remove.click();
     await dialog.getByRole('button', { name: '消す', exact: true }).click();
+    await expect(page.locator('.toast:visible')).toContainText(`「${targetTitle}」を消しました。`);
     await expect(page).toHaveURL(outer);
     expect(calls).toBe(1);
-    await expect(page.locator('.toast:visible')).toContainText(`「${targetTitle}」を消しました。`);
+    await page.locator('.wiki-page-list > summary').click();
     const outerNode = page
       .locator('.wiki-node')
       .filter({ has: page.getByRole('link', { name: outerTitle, exact: true }) })
@@ -107,6 +109,7 @@ for (const scope of ['organization', 'workspace'] as const) {
       );
     } else {
       await expect(page.getByRole('heading', { name: outerTitle, level: 2, exact: true })).toBeVisible();
+      await page.locator('.wiki-page-list > summary').click();
       await page.getByRole('button', { name: `${outerTitle}を開く`, exact: true }).click();
       await expect(outerNode.locator(':scope > ul > li > .wiki-node > a')).toHaveText([siblingTitle, childTitle]);
     }
@@ -262,7 +265,10 @@ test('終了したワークスペースでは自分のページも消すボタ�
     closed_at: '2026-11-03T00:00:00.000Z',
   }));
   await page.goto(url);
-  await expect(page.getByText('終了したワークスペースの Wiki は読むだけです。', { exact: true })).toBeVisible();
+  await expect(page.getByText(/に終了しました。読み取り専用です。/)).toHaveCount(1);
+  await expect(page.getByText('終了したワークスペースの Wiki は読むだけです。', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '編集する', exact: true })).toHaveCount(0);
+  await expect(page.locator('.page-head > .props-note')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '消す', exact: true })).toHaveCount(0);
 });
 
@@ -290,8 +296,9 @@ for (const scope of ['organization', 'workspace'] as const) {
       });
       await page.getByRole('button', { name: '消す', exact: true }).click();
       await deletion(page).getByRole('button', { name: '消す', exact: true }).click();
-      await expect(page).toHaveURL(destination);
+      // 成功のトーストは遷移前に出て4秒で消える。読み直しの完了を待つ前に確かめる。
       await expect(page.locator('.toast:visible')).toContainText(`「${title}」を消しました。`);
+      await expect(page).toHaveURL(destination);
       await expect(page.getByRole('button', { name: '消す', exact: true })).toHaveCount(0);
       expect(calls).toBe(1);
       const warning = page.getByRole('alert');
@@ -392,9 +399,11 @@ for (const scope of ['organization', 'workspace'] as const) {
 }
 
 for (const scope of ['organization', 'workspace'] as const) {
-  test(`${scope}: 遷移失敗を知らせて取得だけを再試行できる`, async ({ page }) => {
-    if (scope === 'workspace') await createWorkspace(page, `遷移復旧-${crypto.randomUUID().slice(0, 8)}`);
-    const root = scope === 'organization' ? '/aoba/wiki' : new URL(page.url()).pathname + '/wiki';
+  test(`${scope}: 遷移失敗を知らせて取得だけを再試行できる`, async ({ page, baseURL }) => {
+    const root =
+      scope === 'organization'
+        ? '/aoba/wiki'
+        : await createWikiWorkspace(page, baseURL, `遷移復旧-${crypto.randomUUID().slice(0, 8)}`);
     await page.goto(root);
     const parent = await add(page, `遷移の親-${crypto.randomUUID().slice(0, 8)}`);
     const target = await add(page, `遷移前に消す-${crypto.randomUUID().slice(0, 8)}`, true);
