@@ -221,7 +221,7 @@ html[data-boot] #boot-loading .boot-frame {
   height: 28px;
 }
 #boot-loading .boot-content {
-  padding: 8px 32px 40px;
+  padding: 16px 32px 40px;
   gap: 32px;
 }
 #boot-loading .boot-body {
