@@ -105,7 +105,7 @@ h1, h2, h3 { text-wrap: balance; }
 .nav-badge { margin-left: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
 /* 組織とワークスペースの切り替え。共通のボタンとリンクの一覧。
    選ぶと画面が移るので select にしない（矢印キーで選んだだけで移ってしまう）。
-   組織は狭い幅でも出し、ワークスペースは760px以下と畳んだ列で隠す。 */
+   組織は狭い幅でも出す。ワークスペースは畳んだ列で隠し、760px 以下はメニューの帯の中の札にする（下の狭い画面の規則）。 */
 :is(.org-menu, .ws-menu) { display: grid; gap: var(--space-1); min-width: 0; }
 :is(.org-menu-button, .ws-menu-button) {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--space-2);
@@ -152,10 +152,11 @@ h1, h2, h3 { text-wrap: balance; }
   a.breadcrumb-item { display: block; line-height: 44px; min-width: 44px; }
   /* 組織とワークスペースのリンクは、押せる幅 44px より縮めない（長い名前は省略して、44px を下限に縮む） */
   .breadcrumb li:not(:last-child) { min-width: calc(44px + 1.25rem); }
-  /* 今の画面の名前は、組織とワークスペースが下限まで縮んでから縮む（組織とワークスペースの縮む割合を上げる。最後の項目を 1 未満にすると、
-     縮む分の一部しか配られず帯からはみ出す）。読める幅（3.5rem）を下限にする */
-  .breadcrumb li:not(:last-child) { flex-shrink: 100; }
-  .breadcrumb li:last-child { min-width: 3.5rem; }
+  /* 今の画面の名前は、組織とワークスペースが下限まで縮んでから縮む。組織とワークスペースは下限を基準の幅にして余りの幅だけ伸ばし
+     （名前の幅で止める）、今の画面の名前は幅が足りないときだけ縮む。縮む割合で分けると、今の画面の名前も 1px 未満だけ縮んで省略記号が出る。
+     読める幅（3.5rem）を下限にする */
+  .breadcrumb li:not(:last-child) { flex: 1 1 0; max-width: max-content; }
+  .breadcrumb li:last-child { flex: 0 1 auto; min-width: 3.5rem; }
 }
 
 @media (min-width: 761px) {
@@ -313,6 +314,8 @@ h1, h2, h3 { text-wrap: balance; }
 }
 .account-menu-button:hover, .account-menu-button[aria-expanded="true"] { border-color: var(--color-line); background: var(--color-surface); }
 .account-menu-button .me { padding-left: 0; }
+/* 表示名、管理者の札、紋章。760px 以下では隠してアバターだけにする */
+.me-detail { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .account-menu-button > .ico { color: var(--color-muted); transform: rotate(90deg); }
 .account-menu-button[aria-expanded="true"] > .ico { transform: rotate(-90deg); }
 .account-menu-list {
@@ -366,7 +369,19 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .nav-search-list li[aria-selected="true"] { background: var(--color-accent-soft); color: var(--color-accent); font-weight: 700; }
 .nav-search-list .is-backlog { border-top: 1px solid var(--color-line); }
 .nav-search-list .nav-search-empty { color: var(--color-muted); cursor: default; }
+/* 760px 以下で検索を畳んだときの虫眼鏡のボタン。押すとパンくずの行の下に欄を出す。広い幅では欄を常に出すので隠す */
+.nav-search-toggle {
+  display: none; place-items: center; flex: none; width: 44px; height: 44px; padding: 0;
+  border: 1px solid transparent; border-radius: var(--radius-1); background: none; color: var(--color-muted); cursor: pointer;
+}
+.nav-search-toggle:hover, .nav-search-toggle[aria-expanded="true"] { border-color: var(--color-line); background: var(--color-surface); color: var(--color-fg); }
+/* 見本だけの道具の入れ物。広い幅では入れ物を消し、帯の項目として並べる */
+.topbar-tools { display: contents; }
+/* 見本のワークスペースの切り替えの入れ物（kit.js が描き直すため）。本番には無いので、箱を消して .ws-menu を .nav の直接の子と同じに並べる */
+#ws-menu-slot { display: contents; }
 @media (max-width: 760px) {
+  .nav-search-toggle { display: inline-grid; }
+  .nav-search:not([data-open]) { display: none; }
   .nav-search { flex: 1 1 100%; order: 3; }
   .nav-search-input { min-height: 44px; font-size: var(--text-body); }
   .nav-search-list li { min-height: 44px; display: flex; align-items: center; }
@@ -375,7 +390,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* 761px 以上では帯を1段に固定し、十字の罫がずれないようにする。幅が足りないときはパンくずが縮む */
 @media (min-width: 761px) {
   .topbar { flex-wrap: nowrap; }
-  .topbar > :not(.breadcrumb, #breadcrumb-slot, .account-menu, .nav-search) { flex: none; }
+  .topbar > :not(.breadcrumb, #breadcrumb-slot, .account-menu, .nav-search), .topbar-tools > * { flex: none; }
   /* 長い表示名は、折り返さず右を切って受ける（帯の高さと十字の罫を保つ） */
   .topbar > .account-menu { flex: 0 1 auto; min-width: 0; }
   .account-menu-button { max-width: 100%; }
@@ -881,11 +896,13 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
 @media (max-width: 760px) {
   /* 本文が min-height に届かないとき、余りを本文の行にだけ回す（既定ではメニューの行も伸びて下に空きが出る） */
   .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
-  .binding { border-right: 0; border-bottom: var(--rule-double); }
-  /* 狭い幅では角のマスの形をやめ、ロゴ、組織の切り替え、メニューを1つの帯に並べる（中身の箱は消す） */
+  /* 帯の中のワークスペースの一覧は、綴じを基準に帯の下へ出す（下の .nav .ws-menu-list） */
+  .binding { position: relative; border-right: 0; border-bottom: var(--rule-double); }
+  /* 狭い幅では角のマスの形をやめ、ロゴ、組織の切り替え、メニューを1つの帯に並べる（中身の箱は消す）。
+     ロゴと組織の切り替えを1行目に並べ、メニューの帯を2行目にする */
   .binding-body { display: contents; }
   .binding-head { position: static; height: auto; padding: 0; background: none; border-bottom: 0; }
-  .binding-head .brand-art { width: 168px; }
+  .binding-head .brand-art { width: 120px; }
   .binding-inner {
     position: static; height: auto; overflow: visible;
     flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--space-3);
@@ -893,13 +910,38 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
     padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
   }
-  .ws-menu, .nav-group, .binding-foot { display: none; }
+  .nav-group, .binding-foot { display: none; }
   .nav-toggle { display: none; }
-  .org-menu { flex: 1 1 12rem; }
+  .org-menu { flex: 1 1 10rem; }
   /* 折り返す長い組織名に合わせて、隣の短い項目を縦に伸ばさず上端を揃える。 */
   .nav { display: flex; align-items: flex-start; overflow-x: auto; width: 100%; gap: var(--space-1); }
   .nav-item { white-space: nowrap; }
   .nav-item.is-wrapping .nav-item-label { max-width: 12rem; }
+  /* ワークスペースの切り替えは、帯の中のワークスペースの項目の直前に、今の名前と▾の札で出す。
+     「ワークスペース」の見出しは目には出さず、読み上げの名前（aria-label）に残す */
+  .nav .ws-menu { display: block; flex: none; }
+  .nav .ws-menu-button { display: inline-flex; align-items: center; gap: var(--space-1); width: auto; min-height: 44px; max-width: 12rem; padding-block: 0; }
+  .nav .ws-menu-label { display: none; }
+  /* 一覧は帯のスクロール領域に切られないよう、綴じ（.binding）を基準に帯の下へ重ねて出し、左右の余白の内側へ広げる */
+  .nav .ws-menu-list {
+    position: absolute; z-index: 10; top: 100%; box-shadow: var(--shadow-float);
+    left: max(var(--space-4), env(safe-area-inset-left, 0px)); right: max(var(--space-4), env(safe-area-inset-right, 0px));
+  }
+  /* 横に続きがある側の端を、綴じの地の色で薄く消す（NavMenu が data-more-start、data-more-end を付ける）。
+     mask-image は帯の外へ出す一覧まで切るので使わず、端に貼り付けた幕を重ねる。幕の幅は margin で打ち消し、項目の並びを変えない */
+  /* 幕の幅は、送り位置の peek（src/lib/nav-strip.ts の NAV_STRIP_PEEK、kit.js の同名の値）と同じ px にそろえる。
+     rem にすると、文字を大きくした端末で幕だけ広がり、送った今の項目が幕にかかる */
+  .nav { --nav-strip-peek: 32px; }
+  .nav[data-more-start]::before, .nav[data-more-end]::after {
+    content: ""; position: sticky; z-index: 1; flex: none; align-self: stretch; width: var(--nav-strip-peek); pointer-events: none;
+  }
+  /* 幕も flex の項目なので、幅に加えて隣との gap も打ち消す（打ち消さないと、印が付いた瞬間に項目が gap の分ずれる） */
+  .nav[data-more-start]::before { left: 0; margin-right: calc(-1 * var(--nav-strip-peek) - var(--space-1)); background: linear-gradient(to right, var(--color-sunken), transparent); }
+  .nav[data-more-end]::after { right: 0; margin-left: calc(-1 * var(--nav-strip-peek) - var(--space-1)); background: linear-gradient(to left, var(--color-sunken), transparent); }
+  /* Tab で端の項目へ移ったとき、フォーカスの輪が幕の下に入らないよう、幕の幅だけ内側で止める */
+  .nav { scroll-padding-inline: var(--nav-strip-peek); }
+  /* 強制カラーでは薄くせず、端で欠けた項目だけを合図にする */
+  @media (forced-colors: active) { .nav[data-more-start]::before, .nav[data-more-end]::after { content: none; } }
   .nav-favorites { display: flex; flex: none; align-items: flex-start; gap: var(--space-1); }
   .nav-favorites > .nav-group { display: block; flex: none; white-space: nowrap; padding-block: var(--space-2); }
   .nav-favorites .nav-item-label { max-width: 12rem; }
@@ -909,6 +951,13 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   }
   .topbar { justify-content: flex-start; position: relative; z-index: auto; }
   .breadcrumb { min-width: 6rem; }
+  /* アカウントのボタンはアバターと▾だけにし、パンくずに幅を残す。表示名は読み上げの名前と一覧の「マイプロフィール」で分かる */
+  .account-menu-button .me-detail { display: none; }
+  /* 所属していない管理者の印（帯の直接の子の .chip）は、パンくずの行に並べると幅が足りずアカウントのボタンを2行目へ押し出すので、
+     帯の最後の行へ回す */
+  .topbar > .chip { order: 4; }
+  /* 見本だけの道具（テーマ、見本の切り替えなど）は、パンくずの行に並べず、帯の最後の行にまとめる */
+  .topbar-tools { display: flex; flex-wrap: wrap; gap: var(--space-2); order: 4; flex-basis: 100%; }
   /* アカウントのメニューの一覧は、ボタンではなく帯を基準に、左右の余白の内側へ広げる（ボタンが左に寄っても画面の外へ出ない） */
   .account-menu { position: static; }
   .account-menu-list {
@@ -1864,14 +1913,15 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 }
 @media (max-width: 760px) {
   /* 狭い幅の枠は、ロゴと組織の切り替えとメニューの項目の横並びの行を1つの帯に並べる（ワークスペースの区切りは出さない）。
-     検索の欄は上の帯の2段目に全幅で置く */
+     上の帯は、パンくず、畳んだ検索の虫眼鏡、アバターだけのアカウントの1段にする */
   .skeleton-frame .skeleton-nav { display: flex; flex: 1 1 100%; align-items: center; gap: var(--space-4); min-height: 44px; overflow: hidden; }
   .skeleton-frame .skeleton-nav.is-group { display: none; }
   .skeleton-frame .skeleton-nav .skeleton-line { flex: none; width: 6rem; }
-  .skeleton-frame .skeleton-line.is-org { flex: 1 1 12rem; }
+  .skeleton-frame .skeleton-line.is-org { flex: 1 1 10rem; }
   /* アカウントのボタンは指で押す高さ（44px）になるので、帯の外の余白で同じ高さを取る */
-  .skeleton-frame .topbar > .skeleton-line.is-account { margin-block: var(--space-2); }
-  .skeleton-frame .topbar > .skeleton-line.is-search { flex: 1 1 100%; order: 3; height: 44px; }
+  .skeleton-frame .topbar > .skeleton-line.is-account { width: 3.5rem; margin-block: var(--space-2); }
+  .skeleton-frame .topbar > .skeleton-line.is-search { flex: none; min-width: 0; width: 44px; height: 44px; }
+  .skeleton-frame .topbar > .skeleton-line.is-crumb { flex: 1 1 12rem; }
 }
 
 /* ===== ログインの画面（枠の外） ===== */
