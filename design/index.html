@@ -648,7 +648,7 @@ const SECTIONS = [
         </section>
       </div>
     </div>
-    <div class="gate is-reading" style="min-height:0">
+    <div class="gate is-reading" style="min-height:0; grid-template-columns:minmax(0,1fr)">
       <div class="gate-stack">
         <section class="gate-sheet">
           <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
@@ -664,7 +664,7 @@ const SECTIONS = [
           <div class="form-actions" role="group" aria-label="関連するページ"><a class="btn is-sm" href="#">プライバシーポリシー</a><button class="btn is-sm is-quiet" type="button">前の画面に戻る</button></div>
         </section>
       </div>
-      <div class="doc-box"><pre><code>${esc('<div class="loading-overlay">LoadingSheet の中身</div>')}</code></pre></div>
+      <div class="doc-box" style="width:100%"><pre><code>${esc('<div class="loading-overlay">LoadingSheet の中身</div>')}</code></pre></div>
       <section class="gate-sheet" style="margin-top:var(--space-6); width:min(440px,100%)">
         <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
         <h1 class="visually-hidden">読み込んでいます</h1>
