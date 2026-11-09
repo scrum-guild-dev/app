@@ -910,14 +910,17 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   }
   /* 横に続きがある側の端を、綴じの地の色で薄く消す（NavMenu が data-more-start、data-more-end を付ける）。
      mask-image は帯の外へ出す一覧まで切るので使わず、端に貼り付けた幕を重ねる。幕の幅は margin で打ち消し、項目の並びを変えない */
+  /* 幕の幅は、送り位置の peek（src/lib/nav-strip.ts の NAV_STRIP_PEEK、kit.js の同名の値）と同じ px にそろえる。
+     rem にすると、文字を大きくした端末で幕だけ広がり、送った今の項目が幕にかかる */
+  .nav { --nav-strip-peek: 32px; }
   .nav[data-more-start]::before, .nav[data-more-end]::after {
-    content: ""; position: sticky; z-index: 1; flex: none; align-self: stretch; width: 2rem; pointer-events: none;
+    content: ""; position: sticky; z-index: 1; flex: none; align-self: stretch; width: var(--nav-strip-peek); pointer-events: none;
   }
   /* 幕も flex の項目なので、幅に加えて隣との gap も打ち消す（打ち消さないと、印が付いた瞬間に項目が gap の分ずれる） */
-  .nav[data-more-start]::before { left: 0; margin-right: calc(-2rem - var(--space-1)); background: linear-gradient(to right, var(--color-sunken), transparent); }
-  .nav[data-more-end]::after { right: 0; margin-left: calc(-2rem - var(--space-1)); background: linear-gradient(to left, var(--color-sunken), transparent); }
+  .nav[data-more-start]::before { left: 0; margin-right: calc(-1 * var(--nav-strip-peek) - var(--space-1)); background: linear-gradient(to right, var(--color-sunken), transparent); }
+  .nav[data-more-end]::after { right: 0; margin-left: calc(-1 * var(--nav-strip-peek) - var(--space-1)); background: linear-gradient(to left, var(--color-sunken), transparent); }
   /* Tab で端の項目へ移ったとき、フォーカスの輪が幕の下に入らないよう、幕の幅だけ内側で止める */
-  .nav { scroll-padding-inline: 2rem; }
+  .nav { scroll-padding-inline: var(--nav-strip-peek); }
   /* 強制カラーでは薄くせず、端で欠けた項目だけを合図にする */
   @media (forced-colors: active) { .nav[data-more-start]::before, .nav[data-more-end]::after { content: none; } }
   .nav-favorites { display: flex; flex: none; align-items: flex-start; gap: var(--space-1); }
