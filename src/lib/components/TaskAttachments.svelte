@@ -175,7 +175,7 @@
             {/if}
             <span class="file-meta"
               ><span class="mono">{attachmentSize(file.size_bytes)}</span>・{file.uploaded_by_name ??
-                t('attachmentUploaderUnknown')}・<time datetime={file.created_at}
+                t('attachmentUploaderUnknown')}・<time class="mono" datetime={file.created_at}
                 >{formatDateTime(file.created_at)}</time
               ></span
             >
@@ -191,7 +191,7 @@
             <!-- eslint-enable svelte/no-navigation-without-resolve -->
             {#if canWrite && file.deletable}
               <button
-                class="icon-btn"
+                class="icon-btn is-danger"
                 type="button"
                 disabled={deleting}
                 aria-label={t('attachmentDeleteLabel', { name: file.file_name })}
