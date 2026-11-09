@@ -154,6 +154,7 @@
     <button class="btn is-sm" type="button" onclick={() => void retry()}>{t('retry')}</button>
   {:else}
     <div class="files">
+      {#if files.length === 0 && !canWrite}<p role="status">{t('attachmentNone')}</p>{/if}
       {#each files as file (file.id)}
         <div class="file-row">
           <Icon
