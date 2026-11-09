@@ -9,7 +9,8 @@
 html { font-size: 100%; }
 html, body { min-height: 100%; }
 body {
-  margin: 0; background: var(--color-bg); color: var(--color-fg);
+  --page-background: var(--color-bg);
+  margin: 0; background: var(--page-background); color: var(--color-fg);
   font-family: var(--font-body); font-size: var(--text-body); line-height: var(--leading-body);
   -webkit-font-smoothing: antialiased;
 }
@@ -2197,7 +2198,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 :root[data-theme="medieval"] .emblem.is-sm { --emblem-w1: 1px; --emblem-w2: 2px; text-shadow: none; }
 
 /* 現代風: 端末のウィンドウの光 */
-:root[data-theme="modern"] body { background: radial-gradient(1200px 600px at 75% -10%, rgb(76 200 255 / 0.09), transparent 70%) fixed, var(--color-bg); }
+:root[data-theme="modern"] body { --page-background: radial-gradient(1200px 600px at 75% -10%, rgb(76 200 255 / 0.09), transparent 70%) fixed, var(--color-bg); }
 :root[data-theme="modern"] .hanko { background: none; box-shadow: 0 0 10px -3px var(--color-done); }
 /* 要素自身の背景は文字と合う面の色にする（axe は擬似要素の背景を見ず、要素の背景を地として読むため）。縁は ::before（inset 0）が描く */
 :root[data-theme="modern"] .emblem {
@@ -2278,5 +2279,6 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   .onboarding-stage { padding-block: var(--space-8); }
 }
 
-/* 読み込みの退場だけを中身の上に重ね、紙の高さを残さない。 */
-.loading-overlay.is-leaving { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); position: fixed; inset: 0; z-index: 100; overflow: auto; background: var(--color-bg); pointer-events: none; }
+/* 表示中から同じスクロール領域と背景を保ち、中身の上で退場する。 */
+.loading-overlay { position: fixed; inset: 0; z-index: 100; overflow: auto; background: var(--page-background); }
+.loading-overlay.is-leaving { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); pointer-events: none; }

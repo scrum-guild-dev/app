@@ -83,6 +83,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`組織への移動の紙は重ねて消える（${reducedMotion}）`, async ({ page, context, baseURL }) => {
     // 4テーマの axe は開発用ビルドでも最後まで検査する。フェードの時間の期待値は120msのまま。
     if (reducedMotion === 'no-preference') test.setTimeout(90_000);
+    if (reducedMotion === 'no-preference') await page.setViewportSize({ width: 1280, height: 320 });
     await page.emulateMedia({ reducedMotion });
     await signIn(context, baseURL, 'admin');
     await page.goto('/');
@@ -92,10 +93,20 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       await gate;
       const body = await call.fetch();
       body.organization.theme = 'modern';
+      body.me.theme = null;
       await call.fulfill(body);
     });
     await page.evaluate(() => {
-      const seen = { duration: -1, fixed: false, contentTop: -1, hidden: false, shape: '', opacity: [] as number[] };
+      const seen = {
+        duration: -1,
+        fixed: false,
+        contentTop: -1,
+        hidden: false,
+        shape: '',
+        background: '',
+        scrollTop: 0,
+        opacity: [] as number[],
+      };
       Object.assign(window, { __sheetFade: seen });
       new MutationObserver(() => {
         const overlay = document.querySelector<HTMLElement>('.loading-overlay.is-leaving');
@@ -113,6 +124,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
                 : [],
             );
         seen.shape = overlay.querySelector('[data-shape]')?.getAttribute('data-shape') ?? '';
+        seen.background = style.backgroundImage;
+        seen.scrollTop = overlay.scrollTop;
         seen.fixed = style.position === 'fixed';
         seen.hidden = overlay.inert && overlay.getAttribute('aria-hidden') === 'true';
         seen.contentTop = heading.getBoundingClientRect().top;
@@ -120,6 +133,20 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     });
     await page.getByRole('link', { name: /あおば開発/ }).click();
     await expect(page.locator('.loading-overlay .skeleton-frame')).toBeVisible();
+    let before = { background: '', pageBackground: '', scrollTop: 0 };
+    if (reducedMotion === 'no-preference') {
+      before = await page.evaluate(() => {
+        document.documentElement.dataset.theme = 'modern';
+        const overlay = document.querySelector<HTMLElement>('.loading-overlay')!;
+        overlay.scrollTop = 60;
+        const pageBackground = getComputedStyle(document.body).backgroundImage;
+        const background = getComputedStyle(overlay).backgroundImage;
+        return { background, pageBackground, scrollTop: overlay.scrollTop };
+      });
+      expect(before.background).toBe(before.pageBackground);
+      expect(before.background).toContain('radial-gradient');
+      expect(before.scrollTop).toBeGreaterThan(0);
+    }
     release();
     const heading = page.getByRole('heading', { level: 1, name: '今日やること' });
     await expect(heading).toBeVisible({ timeout: 15_000 });
@@ -135,6 +162,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
               contentTop: number;
               hidden: boolean;
               shape: string;
+              background: string;
+              scrollTop: number;
               opacity: number[];
             };
           }
@@ -146,6 +175,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       expect(seen.opacity.at(-1)).toBe(0);
       expect(seen.fixed).toBe(true);
       expect(seen.shape).toBe('today');
+      expect(seen.background).toBe(before.background);
+      expect(seen.scrollTop).toBe(before.scrollTop);
       expect(seen.hidden).toBe(true);
       expect(seen.contentTop).toBeCloseTo((await heading.boundingBox())!.y, 0);
       await expectNoA11yViolationsInThemes(page, 'today');
