@@ -201,6 +201,7 @@
     wikiDeleteRefreshFailed: "ページは消しましたが、画面を読み直せませんでした。Wikiを読み直してください。",
 
     wikiAccess: "このワークスペースのメンバー全員が、読んで書けます。",
+    wikiPageList: "ページの一覧",
     wikiClosed: "終了したワークスペースの Wiki は読むだけです。",
     wikiTreeLabel: "ワークスペースの Wiki のページ",
     wikiTreeEmpty: "まだありません",
