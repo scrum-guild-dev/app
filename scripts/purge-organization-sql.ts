@@ -7,6 +7,7 @@
 // - どの文にも「その組織が解約で停止していて、消す予定日を過ぎている」の EXISTS を付ける。一時的な停止、停止していない組織、
 //   予定日の当日より前の組織、無い ID では何も消えない
 // - 外部キーの子から順に消し、organizations の行を最後に消す。途中で止まっても、同じ順で流し直せば続きから消える
+// - favorites と Wiki は先頭の専用の文で消し、残りは TABLES の順で消す。Wiki の2表は TABLES に含めず別に件数を照合する
 // - 共通の表のうち消すのは organizations の行だけ。accounts、account_logins、sessions、api_tokens、oauth_states、rate_limits は消さない
 //   （アカウントはほかの組織でも使う。アカウントをどうするかは #407。セッションと API トークンはアカウントに結ぶ。入れる組織を失った人の
 //   セッションとトークンは、その人の次のリクエストか期限切れで消える）
@@ -18,10 +19,12 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // 組織で絞る条件の形。epic は workspace_id を持たず、エピックを通して組織に結ぶ表（epic_party_members）
-type Scope = 'organization' | 'workspace' | 'epic' | 'task' | 'connection';
+type Scope = 'organization' | 'workspace' | 'epic' | 'task' | 'connection' | 'user';
 
-// 外部キーの子から順。xp_grants は自分の表を指す（reverses_grant_id）が、1文で組織の行をまとめて消すので、文の終わりの検査に当たらない
+// 通常の削除と残件数の照合に使う表の一覧（Wiki の2表は別枠）。favorites は Wiki より先に専用の文で消し、通常の削除文からは除く。
+// ほかは外部キーの子から順。xp_grants は自分の表を指す（reverses_grant_id）が、1文で組織の行をまとめて消すので、文の終わりの検査に当たらない
 const TABLES: readonly (readonly [table: string, scope: Scope])[] = [
+  ['favorites', 'user'],
   ['xp_grants', 'workspace'],
   ['thanks', 'workspace'],
   ['attachments', 'workspace'],
@@ -62,6 +65,7 @@ function quotedId(organizationId: string): string {
 function scopeOf(scope: Scope, id: string): string {
   const workspaces = `SELECT id FROM workspaces WHERE organization_id = ${id}`;
   if (scope === 'organization') return `organization_id = ${id}`;
+  if (scope === 'user') return `user_id IN (SELECT id FROM users WHERE organization_id = ${id})`;
   if (scope === 'workspace') return `workspace_id IN (${workspaces})`;
   if (scope === 'task') return `task_id IN (SELECT id FROM tasks WHERE workspace_id IN (${workspaces}))`;
   if (scope === 'connection')
@@ -74,6 +78,8 @@ export function purgeOrganizationStatements(organizationId: string): string[] {
   const id = quotedId(organizationId);
   const guard = `EXISTS (SELECT 1 FROM organizations WHERE id = ${id} AND suspended_at IS NOT NULL AND purge_on IS NOT NULL AND purge_on < date('now'))`;
   return [
+    // 組織の Wiki の印は workspace_id が空なので、本人の組織で絞る。対象より先に消す。
+    `DELETE FROM favorites WHERE ${scopeOf('user', id)} AND ${guard}`,
     ...[
       'organization_id = ' + id,
       'workspace_id IN (SELECT id FROM workspaces WHERE organization_id = ' + id + ')',
@@ -91,7 +97,9 @@ export function purgeOrganizationStatements(organizationId: string): string[] {
     // 取り込み元の応答は1件が最大512KBで、上限いっぱいの組織では0.5GB前後になる。1文で消すと30秒の上限に当たりうるので、
     // Wiki の版と同じく1文32件に分ける（流し方は docs/operations.md の「解約した組織のデータを消す」）。下の全件の文は、残りを拾う
     `DELETE FROM task_source_payloads WHERE task_id IN (SELECT p.task_id FROM task_source_payloads p WHERE p.task_id IN (SELECT id FROM tasks WHERE workspace_id IN (SELECT id FROM workspaces WHERE organization_id = ${id})) ORDER BY p.task_id LIMIT 32) AND ${guard}`,
-    ...TABLES.map(([table, scope]) => `DELETE FROM ${table} WHERE ${scopeOf(scope, id)} AND ${guard}`),
+    ...TABLES.filter(([table]) => table !== 'favorites').map(
+      ([table, scope]) => `DELETE FROM ${table} WHERE ${scopeOf(scope, id)} AND ${guard}`,
+    ),
     `DELETE FROM organizations WHERE id = ${id} AND ${guard}`,
   ];
 }

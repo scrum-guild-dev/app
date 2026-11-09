@@ -92,6 +92,16 @@ export const commonTableColumns = {
 } as const;
 
 export const organizationTableColumns = {
+  favorites: {
+    id: text,
+    user_id: text,
+    workspace_id: textOrNull,
+    task_id: textOrNull,
+    story_id: textOrNull,
+    epic_id: textOrNull,
+    wiki_page_id: textOrNull,
+    created_at: text,
+  },
   wiki_pages: {
     id: text,
     organization_id: textOrNull,
