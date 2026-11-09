@@ -10,8 +10,26 @@ import { sessionCookieName } from '../src/shared/session-cookie.ts';
 import { sessionInserts } from './seed.ts';
 import { isBenchHealth, trackServer } from './loading-server.ts';
 import { percentile } from './loading-stats.ts';
-import { assertBootHeading, bootNetworks, bootTiming, bootTransfers, type BootResource } from './boot-metrics.ts';
+import {
+  assertBootHeading,
+  bootFailureSummary,
+  bootNetworks,
+  bootTiming,
+  bootTransfers,
+  type BootResource,
+} from './boot-metrics.ts';
 import { bootProxy } from './boot-proxy.ts';
+
+type BootSample = ReturnType<typeof bootTiming> &
+  ReturnType<typeof bootTransfers> & {
+    profile: keyof typeof bootNetworks;
+    run: number;
+    responseEndMs: number;
+    domReadyMs: number;
+    afterDomReadyMs: number;
+    completedAtDisplay: ReturnType<typeof bootTransfers>;
+    resources: (BootResource & { finishedAtMs: number })[];
+  };
 
 function option(name: string, fallback: string) {
   const index = process.argv.indexOf(name);
@@ -159,7 +177,7 @@ try {
     proxy.listen(port, '127.0.0.1', resolve);
   });
   browser = await chromium.launch({ headless: true });
-  const samples = [];
+  const samples: BootSample[] = [];
   const networks = network === 'both' ? (['fast', 'slow'] as const) : [network as keyof typeof bootNetworks];
   for (const profile of networks)
     for (let run = 1; run <= runs; run++) {
@@ -302,6 +320,9 @@ try {
     head: command('git', ['rev-parse', 'HEAD']).trim(),
     changes: command('git', ['status', '--porcelain']),
     route,
+    runs,
+    network,
+    port,
     expectedHeading,
     viewport: { width: 1280, height: 900 },
     locale: 'ja-JP',
@@ -309,22 +330,27 @@ try {
     theme: 'simple_light',
     compression: 'gzip',
     networks: bootNetworks,
+    failureSummaries: networks.map((profile) => ({
+      profile,
+      ...bootFailureSummary(samples.filter((sample) => sample.profile === profile)),
+    })),
     samples,
   };
   writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
   console.log(
-    '| 回線 | HTML応答開始 p50 ms | DOM準備 p50 ms | 表示 p50 ms | DOM準備後 p50 ms | 失敗表示 p50 ms | 表示までに完了 kB/件 | 安定後 kB/件 |',
+    '| 回線 | HTML応答開始 p50 ms | DOM準備 p50 ms | 表示 p50 ms | DOM準備後 p50 ms | 失敗表示 p50 ms | 失敗あり/試行数 | 表示までに完了 kB/件 | 安定後 kB/件 |',
   );
-  console.log('| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
+  console.log('| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (const profile of networks) {
     const rows = samples.filter((sample) => sample.profile === profile);
+    const failures = bootFailureSummary(rows);
     const median = (key: 'htmlMs' | 'domReadyMs' | 'shownMs' | 'afterDomReadyMs' | 'failedMs' | 'bytes' | 'requests') =>
       percentile(
         rows.map((row) => row[key]),
         0.5,
       );
     console.log(
-      `| ${profile} | ${median('htmlMs').toFixed(0)} | ${median('domReadyMs').toFixed(0)} | ${median('shownMs').toFixed(0)} | ${median('afterDomReadyMs').toFixed(0)} | ${median('failedMs').toFixed(0)} | ${(
+      `| ${profile} | ${median('htmlMs').toFixed(0)} | ${median('domReadyMs').toFixed(0)} | ${median('shownMs').toFixed(0)} | ${median('afterDomReadyMs').toFixed(0)} | ${median('failedMs').toFixed(0)} | ${failures.failedRuns}/${failures.runs} | ${(
         percentile(
           rows.map((row) => row.completedAtDisplay.bytes),
           0.5,
