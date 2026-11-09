@@ -2,6 +2,7 @@ import { createRawSnippet } from 'svelte';
 import { render } from 'svelte/server';
 import { expect, test, vi } from 'vitest';
 import AppShell from './AppShell.svelte';
+import { navigationLoading } from '../navigation-loading.svelte.ts';
 
 vi.mock('$app/state', () => ({
   page: { data: { organization: { organization: { name: '架空の組織', kind: 'team' } } } },
@@ -92,4 +93,19 @@ test('上の帯に検索の欄があり、ワークスペースの画面では�
   }).body;
   expect(body).toMatch(/<input[^>]*role="combobox"[^>]*aria-label="画面とタスクを探す"/);
   expect(body).toContain('aria-keyshortcuts="Control+K Meta+K"');
+});
+
+test('枠の中の遅い移動だけ本文をbusyにし、操作を止めない', () => {
+  try {
+    for (const kind of [null, 'outside', 'inside'] as const) {
+      navigationLoading.kind = kind;
+      const body = shell('/aoba');
+      const main = body.match(/<main\b[^>]*>/)?.[0] ?? '';
+      expect(main.includes('aria-busy="true"')).toBe(kind === 'inside');
+      expect(main).not.toContain('inert');
+      expect(main).not.toContain('aria-hidden');
+    }
+  } finally {
+    navigationLoading.kind = null;
+  }
 });
