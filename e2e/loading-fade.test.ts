@@ -224,7 +224,7 @@ for (const mode of ['hidden', 'missing-transitionend'] as const) {
       const boot = document.querySelector<HTMLElement>('#boot-loading')!;
       const seen = { leaving: false, started: 0, elapsed: 0, fallbackDelay: 0 };
       const schedule = window.setTimeout;
-      window.setTimeout = ((handler, delay, ...args) => {
+      window.setTimeout = ((handler: TimerHandler, delay?: number, ...args: unknown[]) => {
         // 退場の準備後、クラスを付ける直前に登録する削除タイマーを観測する。
         if (boot.inert && !boot.classList.contains('is-leaving')) seen.fallbackDelay = delay ?? 0;
         return schedule(handler, delay, ...args);
