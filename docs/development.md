@@ -181,7 +181,7 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 - 描く前の先当ては `static/theme-init.js` の役目。`src/app.html` の head が同期（`async` と `defer` なし）で読み、覚えている値を `data-theme` に入れる。インラインにすると CSP のハッシュから漏れて止まるので、自分のオリジンのファイルにしてある。`localStorage` が使えない、値が壊れているときは何もせず、属性なしで描く。
 - `static/theme-init.js` は同期で読むので、小さなファイルでも読み終えるまで HTML の解析が止まる。`_headers` では `Cache-Control` を指定せず、Cloudflare の既定（毎回確かめる）のまま配る。描画のたびに「変わっていないか」の問い合わせが1往復増えるが、ファイルは数百バイトで、ちらつきを無くす利点が上回るので受け入れた。名前にハッシュを入れて `immutable` にすれば往復は無くなる一方、`app.html` から名前を引く仕掛けが要り、遅れが問題になってから足せば足りる。
 - テーマのキーと値は `src/shared/theme.ts` と同じにする。`scripts/theme.test.ts` が、`static/theme-init.js` を偽の `localStorage` で動かして確かめる。
-- `static/boot-loading.css` も同じ性質（`src/app.html` の head が読み、URL を直接開いた最初の読み込みの `#boot-loading` の見た目を持つ。デザインシステムの CSS が届く前に要るので、画面ごとの CSS を持たない決まりの例外）。
+- `static/boot-loading.css` も同じ性質（`src/app.html` の head が読み、URL を直接開いた最初の読み込みの `#boot-loading` の見た目を持つ。デザインシステムの CSS が届く前に要るので、画面ごとの CSS を持たない決まりの例外）。骨組みが中身に替わるときは、上に重ねて120msの `opacity` で消す（動きを減らす設定と300ms以内の読み込みでは即座に取り除く）。`boot-loading.css` の退場の時間とイージングは `design/tokens.css` の `--duration-fast`、`--ease-out` の写しで、変更時は両方を合わせる。動きを減らす設定でも、visibility の300ms・15秒の状態切り替えは残す。
 - 画面が動き出してからの切り替えとストアは `src/lib/theme.svelte.ts`。本物の値は組織の枠が入れる。組織の操作の結果の `me.theme`（`users.theme`）、なければ `organization.theme`（`organizations.theme`）を `setTheme` に渡すので、`data-theme` と `localStorage` が同じ値になる（`src/lib/organization.svelte.ts`）。組織を切り替えたときも同じで、切り替えた先の値に替わる。
 
 ### 架空のデータ

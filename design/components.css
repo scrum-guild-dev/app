@@ -2207,3 +2207,6 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   .onboarding-header .btn { font-size: var(--text-xs); padding-inline: var(--space-3); }
   .onboarding-stage { padding-block: var(--space-8); }
 }
+
+/* 読み込みの退場だけを中身の上に重ね、紙の高さを残さない。 */
+.loading-overlay.is-leaving { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); position: fixed; inset: 0; z-index: 100; overflow: auto; background: var(--color-bg); pointer-events: none; }

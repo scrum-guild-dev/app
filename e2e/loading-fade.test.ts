@@ -1,0 +1,167 @@
+// #1040: 骨組みの退場と、中身が同時に出てもレイアウトを押し下げないこと。
+import { backlogTree } from '../src/shared/operations/task/index.ts';
+import { expect, test } from './fixtures.ts';
+import { expectNoA11yViolationsInThemes, signIn } from './helpers.ts';
+import { routeOperation } from './operations.ts';
+
+const WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`直接開いた骨組みは中身の描画後に消える（${reducedMotion}）`, async ({ page, context, baseURL }) => {
+    await page.emulateMedia({ reducedMotion });
+    await signIn(context, baseURL, 'admin');
+    await page.addInitScript(() => {
+      const seen = { leaving: false, content: false, duration: '', hidden: false, opacity: [] as string[] };
+      Object.assign(window, { __bootFade: seen });
+      new MutationObserver(() => {
+        const boot = document.querySelector<HTMLElement>('#boot-loading.is-leaving');
+        if (!boot) return;
+        seen.leaving = true;
+        seen.content = document.querySelector('#app h1') !== null;
+        seen.duration = getComputedStyle(boot).transitionDuration;
+        if (!seen.opacity.length)
+          seen.opacity = boot
+            .getAnimations()
+            .filter((animation) => animation instanceof CSSTransition && animation.transitionProperty === 'opacity')
+            .flatMap((animation) =>
+              animation.effect instanceof KeyframeEffect
+                ? animation.effect.getKeyframes().map((frame) => String(frame.opacity))
+                : [],
+            );
+        seen.hidden = boot.inert && boot.getAttribute('aria-hidden') === 'true';
+      }).observe(document, { subtree: true, childList: true, attributes: true });
+    });
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    await routeOperation(page, backlogTree, { slug: 'aoba' }, async (call) => {
+      await gate;
+      await call.passThrough();
+    });
+    await page.goto(WORKSPACE, { waitUntil: 'commit' });
+    await expect(page.locator('#boot-loading')).toBeVisible();
+    release();
+    await expect(page.locator('#app h1')).toBeVisible();
+    await expect(page.locator('#boot-loading')).toHaveCount(0);
+    const seen = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __bootFade: { leaving: boolean; content: boolean; duration: string; hidden: boolean; opacity: string[] };
+          }
+        ).__bootFade,
+    );
+    expect(seen.leaving).toBe(reducedMotion === 'no-preference');
+    if (reducedMotion === 'no-preference') {
+      expect(seen.content).toBe(true);
+      expect(seen.duration).toBe('0.12s');
+      expect(seen.opacity).toEqual(['1', '0']);
+      expect(seen.hidden).toBe(true);
+    }
+  });
+
+  test(`組織への移動の紙は重ねて消える（${reducedMotion}）`, async ({ page, context, baseURL }) => {
+    await page.emulateMedia({ reducedMotion });
+    await signIn(context, baseURL, 'admin');
+    await page.goto('/');
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    await page.route('**/api/aoba/organization', async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await page.evaluate(() => {
+      const seen = { duration: -1, fixed: false, contentTop: -1, hidden: false, opacity: [] as number[] };
+      Object.assign(window, { __sheetFade: seen });
+      new MutationObserver(() => {
+        const overlay = document.querySelector<HTMLElement>('.loading-overlay.is-leaving');
+        const heading = document.querySelector('h1:not(.visually-hidden)');
+        if (!overlay || !heading) return;
+        const style = getComputedStyle(overlay);
+        seen.duration = parseFloat(style.transitionDuration) * 1000;
+        if (!seen.opacity.length)
+          seen.opacity = overlay
+            .getAnimations()
+            .filter((animation) => animation instanceof CSSTransition && animation.transitionProperty === 'opacity')
+            .flatMap((animation) =>
+              animation.effect instanceof KeyframeEffect
+                ? animation.effect.getKeyframes().map((frame) => Number(frame.opacity))
+                : [],
+            );
+        seen.fixed = style.position === 'fixed';
+        seen.hidden = overlay.inert && overlay.getAttribute('aria-hidden') === 'true';
+        seen.contentTop = heading.getBoundingClientRect().top;
+      }).observe(document.body, { subtree: true, childList: true, attributes: true });
+    });
+    await page.getByRole('link', { name: /あおば開発/ }).click();
+    await expect(page.locator('.loading-overlay .skeleton')).toBeVisible();
+    release();
+    const heading = page.getByRole('heading', { level: 1, name: '今日やること' });
+    await expect(heading).toBeVisible();
+    await expect(page.locator('.loading-overlay')).toHaveCount(0);
+    const seen = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __sheetFade: { duration: number; fixed: boolean; contentTop: number; hidden: boolean; opacity: number[] };
+          }
+        ).__sheetFade,
+    );
+    if (reducedMotion === 'no-preference') {
+      expect(seen.duration).toBe(120);
+      expect(seen.opacity[0]).toBe(1);
+      expect(seen.opacity.at(-1)).toBe(0);
+      expect(seen.fixed).toBe(true);
+      expect(seen.hidden).toBe(true);
+      expect(seen.contentTop).toBeCloseTo((await heading.boundingBox())!.y, 0);
+      await expectNoA11yViolationsInThemes(page, 'today');
+    } else {
+      expect(seen.duration).toBeLessThanOrEqual(0);
+    }
+  });
+}
+
+for (const mode of ['hidden', 'missing-transitionend'] as const) {
+  test(`最初の骨組みを残さない（${mode}）`, async ({ page, context, baseURL }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await signIn(context, baseURL, 'admin');
+    if (mode === 'hidden') {
+      // 実行環境の速さによらず、300ms より前と同じ「まだ非表示」の分岐を通す。
+      await page.route('**/boot-loading.css', async (route) => {
+        const response = await route.fetch();
+        await route.fulfill({ response, body: (await response.text()).replace('linear 300ms', 'linear 86400s') });
+      });
+    }
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    await routeOperation(page, backlogTree, { slug: 'aoba' }, async (call) => {
+      await gate;
+      await call.passThrough();
+    });
+    await page.goto(WORKSPACE, { waitUntil: 'commit' });
+    const boot = page.locator('#boot-loading');
+    await expect(boot).toBeAttached();
+    if (mode === 'hidden') await expect(boot).toBeHidden();
+    else await expect(boot).toBeVisible();
+    await page.evaluate(() => {
+      const boot = document.querySelector('#boot-loading')!;
+      const seen = { leaving: false, started: 0, elapsed: 0 };
+      Object.assign(window, { __bootRemoval: seen });
+      boot.addEventListener('transitionend', (event) => event.stopImmediatePropagation(), true);
+      new MutationObserver(() => {
+        if (boot.classList.contains('is-leaving') && !seen.leaving) {
+          seen.leaving = true;
+          seen.started = performance.now();
+        }
+        if (!boot.isConnected && seen.started && !seen.elapsed) seen.elapsed = performance.now() - seen.started;
+      }).observe(document.body, { subtree: true, attributes: true, childList: true });
+    });
+    release();
+    await expect(page.locator('#app h1')).toBeVisible();
+    await expect(boot).toHaveCount(0);
+    const seen = await page.evaluate(
+      () => (window as unknown as { __bootRemoval: { leaving: boolean; elapsed: number } }).__bootRemoval,
+    );
+    expect(seen.leaving).toBe(mode === 'missing-transitionend');
+    if (mode === 'missing-transitionend') expect(seen.elapsed).toBeGreaterThanOrEqual(180);
+  });
+}

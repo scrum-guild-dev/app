@@ -31,7 +31,7 @@
   visibility: hidden;
   animation: boot-failed-show 0s linear 15s forwards;
 }
-/* 待つ文は読み上げのためだけに置き（見えない）、見えるのは骨組み（LoadingSheet と同じ、紙に灰色の帯）。どちらも 15 秒で隠す */
+/* 待つ文は読み上げのためだけに置き（見えない）、見えるのは骨組み（LoadingSheet に近い、紙に灰色の帯）。どちらも 15 秒で隠す */
 #boot-loading .boot-wait {
   position: absolute;
   width: 1px;
@@ -72,6 +72,17 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  /* visibility の時間切り替えは動きではない。共通 CSS の animation: none に消されないよう残す。 */
+  #boot-loading {
+    animation: boot-loading-show 0s linear 300ms forwards !important;
+  }
+  #boot-loading .boot-failed {
+    animation: boot-failed-show 0s linear 15s forwards !important;
+  }
+  #boot-loading .boot-wait,
+  #boot-loading .boot-skeleton {
+    animation: boot-wait-hide 0s linear 15s forwards !important;
+  }
   #boot-loading .boot-skeleton i {
     animation: none;
   }
@@ -124,4 +135,17 @@ html[data-theme='simple_dark'] #boot-loading .boot-skeleton {
 }
 html[data-theme='simple_dark'] #boot-loading .boot-skeleton i {
   background: #37373d;
+}
+
+/* design/tokens.css の --duration-fast と --ease-out の写し。
+   デザインシステムの CSS が届く前にも使うので、ここでは値を持つ。 */
+#boot-loading.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  #boot-loading.is-leaving {
+    transition: none;
+  }
 }

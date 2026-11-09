@@ -7,6 +7,7 @@
   import '../../design/tokens.css';
   import '../../design/components.css';
   import { onMount, type Snippet } from 'svelte';
+  import { prefersReducedMotion } from '../lib/reduced-motion.ts';
   import { navigating } from '$app/state';
   import ArtSprite from '../lib/components/ArtSprite.svelte';
   import IconSprite from '../lib/components/IconSprite.svelte';
@@ -27,7 +28,42 @@
   let slow = $state(false);
 
   // URL を直接開いた最初の読み込みの表示（src/app.html の #boot-loading）は、画面が描かれたら要らない
-  onMount(() => document.getElementById('boot-loading')?.remove());
+  onMount(() => {
+    const boot = document.getElementById('boot-loading');
+    if (!boot) return;
+    // 300ms より前に終わったときは、隠れたまま取り除く。
+    if (prefersReducedMotion() || getComputedStyle(boot).visibility !== 'visible') {
+      boot.remove();
+      return;
+    }
+    const remove = () => {
+      clearTimeout(timer);
+      boot.removeEventListener('transitionend', ended);
+      boot.remove();
+    };
+    const ended = (event: TransitionEvent) => {
+      if (event.target === boot && event.propertyName === 'opacity') remove();
+    };
+    boot.inert = true;
+    boot.setAttribute('aria-hidden', 'true');
+    boot.addEventListener('transitionend', ended);
+    // タブの非表示などで transitionend が届かなくても残さない。
+    const timer = setTimeout(remove, 200);
+    boot.classList.add('is-leaving');
+    return remove;
+  });
+
+  function loadingOut(node: HTMLElement) {
+    // クラスを付ける前に opacity: 1 の状態を確定し、CSS の transition を開始する。
+    const fast = parseFloat(getComputedStyle(node).getPropertyValue('--duration-fast'));
+    node.classList.add('is-leaving');
+    node.inert = true;
+    node.setAttribute('aria-hidden', 'true');
+    // Svelte は退場中の DOM の保持だけを受け持つ。動きは共通 CSS のトークンで揃える。
+    return {
+      duration: prefersReducedMotion() ? 0 : Number.isFinite(fast) ? fast : 120,
+    };
+  }
 
   $effect(() => {
     if (!loadingFromOutside) return;
@@ -52,7 +88,7 @@
 <!-- 読み込み中を読み上げに伝える。領域は常に置き、中の文字だけを替える -->
 <div class="visually-hidden" role="status">{slow ? t('loading') : ''}</div>
 {#if slow}
-  <LoadingSheet />
+  <div class="loading-overlay" out:loadingOut><LoadingSheet /></div>
 {:else}
   {@render children()}
 {/if}
