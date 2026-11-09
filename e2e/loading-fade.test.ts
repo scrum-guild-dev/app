@@ -221,8 +221,14 @@ for (const mode of ['hidden', 'missing-transitionend'] as const) {
     if (mode === 'hidden') await expect(boot).toBeHidden();
     else await expect(boot).toBeVisible();
     await page.evaluate(() => {
-      const boot = document.querySelector('#boot-loading')!;
-      const seen = { leaving: false, started: 0, elapsed: 0 };
+      const boot = document.querySelector<HTMLElement>('#boot-loading')!;
+      const seen = { leaving: false, started: 0, elapsed: 0, fallbackDelay: 0 };
+      const schedule = window.setTimeout;
+      window.setTimeout = ((handler, delay, ...args) => {
+        // 退場の準備後、クラスを付ける直前に登録する削除タイマーを観測する。
+        if (boot.inert && !boot.classList.contains('is-leaving')) seen.fallbackDelay = delay ?? 0;
+        return schedule(handler, delay, ...args);
+      }) as typeof window.setTimeout;
       Object.assign(window, { __bootRemoval: seen });
       boot.addEventListener('transitionend', (event) => event.stopImmediatePropagation(), true);
       new MutationObserver(() => {
@@ -237,10 +243,15 @@ for (const mode of ['hidden', 'missing-transitionend'] as const) {
     await expect(page.getByRole('heading', { level: 1, name: 'バックログ' })).toBeVisible({ timeout: 15_000 });
     await expect(boot).toHaveCount(0);
     const seen = await page.evaluate(
-      () => (window as unknown as { __bootRemoval: { leaving: boolean; elapsed: number } }).__bootRemoval,
+      () =>
+        (window as unknown as { __bootRemoval: { leaving: boolean; elapsed: number; fallbackDelay: number } })
+          .__bootRemoval,
     );
     expect(seen.leaving).toBe(mode === 'missing-transitionend');
-    if (mode === 'missing-transitionend') expect(seen.elapsed).toBeGreaterThanOrEqual(180);
+    if (mode === 'missing-transitionend') {
+      expect(seen.fallbackDelay).toBe(400);
+      expect(seen.elapsed).toBeGreaterThanOrEqual(380);
+    }
   });
 }
 

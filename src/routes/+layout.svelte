@@ -61,8 +61,8 @@
     boot.inert = true;
     boot.setAttribute('aria-hidden', 'true');
     boot.addEventListener('transitionend', ended);
-    // タブの非表示などで transitionend が届かなくても残さない。
-    const timer = setTimeout(remove, 200);
+    // 通常は120msの transitionend で外す。描画の遅れに余裕を取り、届かなくても残さない。
+    const timer = setTimeout(remove, 400);
     boot.classList.add('is-leaving');
     return remove;
   });
