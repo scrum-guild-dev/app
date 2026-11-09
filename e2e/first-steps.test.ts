@@ -71,9 +71,29 @@ test('別画面で済ませて戻った手順の丸を1回押し、動きを減�
   await expect(invited).not.toHaveClass(/is-new/);
   await expect(panel(page).locator('.step[data-stamped]')).toHaveCount(1);
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  await mockOperation(
+    page,
+    firstSteps,
+    { slug: 'aoba' },
+    {
+      role: 'leader',
+      steps: LEADER_STEPS.map((item) =>
+        item.key === 'invite_members' || item.key === 'start_sprint' ? { ...item, done: true } : item,
+      ),
+    },
+  );
   await page.reload();
+  // 新たに済んだ手順を含む面の描画を待ち、JS 側も演出を付けないことを確かめる。
+  await expect(panel(page).locator('.step.is-done')).toHaveCount(3);
   await expect(panel(page).locator('.step.is-new')).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  expect(
+    await panel(page).evaluate(async (element) => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      return element.getAnimations({ subtree: true }).length;
+    }),
+  ).toBe(0);
   await expect(panel(page).locator('.step[data-stamped]')).toHaveCount(0);
 });
 
