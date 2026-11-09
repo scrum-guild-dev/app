@@ -153,6 +153,7 @@ export const dictionary = defineDictionary({
   orgWikiAccess: 'この組織の全員が、読んで書けます。',
   orgWikiTreeLabel: '組織の Wiki のページ',
   wikiPage: 'ページ',
+  wikiPageList: 'ページの一覧',
   wikiRevision: '版',
   wikiChildPage: '子のページ',
   wikiAdd: 'ページを足す',
@@ -992,6 +993,13 @@ export const dictionary = defineDictionary({
   // 名前の列の種類の印（自分用の組織は kind が personal、それ以外はチーム用）。自分用の行は人数 / 上限と管理者の状態を出さない
   operatorKindTeam: 'チーム用',
   operatorKindPersonal: '自分用',
+  operatorDetails: '詳細',
+  operatorStatusTrialExpired: 'お試し期限切れ',
+  operatorStatusCancellation: '解約',
+  operatorStatusAdminNone: '{admin}不在',
+  operatorStatusAdminExpired: '招待期限切れ',
+  operatorStatusSuspended: '停止中',
+  operatorStatusAdminPending: '指名待ち',
   // 組織ごとの集計の列。{workspace} {task} は辞書の同じ名前の項目で埋める
   operatorColumnSeats: '人数 / 上限',
   operatorColumnWorkspaces: '{workspace}の数',

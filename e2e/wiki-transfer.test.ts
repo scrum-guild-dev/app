@@ -1,9 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures.ts';
-import { createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { signIn, watchViolations } from './helpers.ts';
 import { resetWikiRateLimits } from './local-d1.ts';
 import { failOperation, routeOperation } from './operations.ts';
 import { orgWikiUpload } from '../src/shared/operations/wiki/index.ts';
+import { createWikiWorkspace } from './wiki-fixtures.ts';
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
@@ -11,11 +12,13 @@ test.beforeEach(async ({ context, baseURL }) => {
 });
 
 for (const scope of ['organization', 'workspace'] as const) {
-  test(`${scope}: 不正なファイルを外して一括作成し、.mdを落として上げ直せる`, async ({ page }) => {
+  test(`${scope}: 不正なファイルを外して一括作成し、.mdを落として上げ直せる`, async ({ page, baseURL }) => {
     const violations = await watchViolations(page);
     const suffix = `${test.info().repeatEachIndex}-${test.info().retry}-${crypto.randomUUID().slice(0, 8)}`;
-    if (scope === 'workspace') await createWorkspace(page, `Wiki取り込みの確認-${suffix}`);
-    const root = scope === 'organization' ? '/aoba/wiki' : new URL(page.url()).pathname + '/wiki';
+    const root =
+      scope === 'organization'
+        ? '/aoba/wiki'
+        : await createWikiWorkspace(page, baseURL, `Wiki取り込みの確認-${suffix}`);
     await page.goto(root);
     const title = `手順-${suffix}`;
     const markdown = `---\ntitle: "${title}"\nowner: 青葉\n---\n# 本文\n手順を残す\n`;
