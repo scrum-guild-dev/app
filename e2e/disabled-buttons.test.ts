@@ -80,13 +80,17 @@ async function buttonColors(button: Locator) {
     };
     const foreground = luminance(style.color);
     // 静かな操作は透明な面を保つので、その下の不透明な面との比を測る。
-    let surface: Element | null = element;
-    let surfaceColor = style.backgroundColor;
-    while (surface && surfaceColor === 'rgba(0, 0, 0, 0)') {
-      surface = surface.parentElement;
-      if (surface) surfaceColor = getComputedStyle(surface).backgroundColor;
-    }
-    const background = luminance(surfaceColor);
+    const surfaceColor = (start: Element | null) => {
+      for (let current = start; current; current = current.parentElement) {
+        const color = getComputedStyle(current).backgroundColor;
+        if (color !== 'rgba(0, 0, 0, 0)') return color;
+      }
+      return 'rgb(255, 255, 255)';
+    };
+    const background = luminance(surfaceColor(element));
+    const parentBackground = luminance(surfaceColor(element.parentElement));
+    const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    const border = luminance(style.borderTopColor);
     const palette = document.createElement('span');
     palette.style.cssText =
       'color:var(--color-accent);background:var(--color-on-accent);border-color:var(--color-line)';
@@ -97,7 +101,8 @@ async function buttonColors(button: Locator) {
     const line = paletteStyle.borderTopColor;
     palette.remove();
     return {
-      ratio: (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05),
+      ratio: contrast(foreground, background),
+      borderRatio: Math.min(contrast(border, background), contrast(border, parentBackground)),
       opacity: style.opacity,
       background: style.backgroundColor,
       color: style.color,
@@ -161,8 +166,9 @@ test('停止の送信中は危険操作と取り消しの文字が4テーマで�
         const disabled = await buttonColors(button);
         expect(disabled.ratio, `${theme} ${name}`).toBeGreaterThanOrEqual(4.5);
         expect(disabled.opacity).toBe('1');
-        const border = name === 'やめる' ? 'rgba(0, 0, 0, 0)' : disabled.line;
+        const border = disabled.line;
         expect(disabled.border).toBe(border);
+        if (name === 'やめる') await expect(button).toHaveCSS('border-top-style', 'dashed');
         expect(disabled.filter).toBe('none');
         await button.hover();
         await expect(button).toHaveCSS('color', disabled.color);
@@ -178,18 +184,19 @@ test('停止の送信中は危険操作と取り消しの文字が4テーマで�
 });
 
 // 共通CSSの部品検証。実画面の送信中に加え、選択中と静かな操作のnative/ARIA無効も守る。
-test('選択中の無効ボタンは印を残し、静かな無効ボタンは枠を足さず、親の面が違っても文字が読める', async ({ page }) => {
+test('選択中の無効ボタンは印を残し、静かな無効ボタンは点線で区別し、親の面が違っても文字が読める', async ({ page }) => {
   test.setTimeout(90_000);
   await page.setContent('<main><div id="plate"></div></main>');
   for (const sheet of ['tokens', 'components']) {
     await page.addStyleTag({ content: await readFile(new URL(`../design/${sheet}.css`, import.meta.url), 'utf8') });
   }
   await page.locator('#plate').evaluate((element) => {
-    for (const variant of ['is-quiet', 'is-quiet is-danger', 'is-on']) {
+    for (const variant of ['is-quiet', 'is-quiet is-danger', 'is-on', 'is-quiet is-on']) {
       for (const aria of [false, true]) {
         const button = document.createElement('button');
         button.className = `btn ${variant}`;
         button.textContent = '操作';
+        if (variant.includes('is-on')) button.setAttribute('aria-pressed', 'true');
         if (aria) button.setAttribute('aria-disabled', 'true');
         else button.disabled = true;
         element.append(button);
@@ -208,7 +215,8 @@ test('選択中の無効ボタンは印を残し、静かな無効ボタンは�
           await page.mouse.move(width - 1, 899);
           const disabled = await buttonColors(button);
           const selected = await button.evaluate((element) => element.classList.contains('is-on'));
-          const background = selected
+          const quiet = await button.evaluate((element) => element.classList.contains('is-quiet'));
+          const background = !quiet
             ? await button.evaluate((element) => {
                 const probe = document.createElement('span');
                 probe.style.backgroundColor = 'var(--color-sunken)';
@@ -218,15 +226,19 @@ test('選択中の無効ボタンは印を残し、静かな無効ボタンは�
                 return color;
               })
             : 'rgba(0, 0, 0, 0)';
-          const border = selected ? disabled.accent : 'rgba(0, 0, 0, 0)';
+          const border = selected ? disabled.accent : disabled.line;
+          const borderStyle = quiet ? 'dashed' : 'solid';
           expect(disabled.ratio, `${theme} ${surface} ${width}px`).toBeGreaterThanOrEqual(4.5);
           expect(disabled.opacity).toBe('1');
+          if (selected) expect(disabled.borderRatio, `${theme} ${surface} 選択枠`).toBeGreaterThanOrEqual(3);
           await expect(button).toHaveCSS('background-color', background);
           await expect(button).toHaveCSS('border-top-color', border);
+          await expect(button).toHaveCSS('border-top-style', borderStyle);
           await expect(button).toHaveCSS('filter', 'none');
           await button.hover({ force: true });
           await expect(button).toHaveCSS('background-color', background);
           await expect(button).toHaveCSS('border-top-color', border);
+          await expect(button).toHaveCSS('border-top-style', borderStyle);
           await expect(button).toHaveCSS('color', disabled.color);
           await expect(button).toHaveCSS('filter', 'none');
         }
