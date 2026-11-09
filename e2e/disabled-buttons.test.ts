@@ -30,20 +30,33 @@ test('押せない同意ボタンは4テーマと狭い幅でも文字が読め�
     await page.setViewportSize({ width, height: 900 });
     for (const theme of A11Y_THEMES) {
       await applyTheme(page, theme);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await page.mouse.move(0, 0);
       const disabled = await buttonColors(button);
       expect(disabled.ratio, `${theme} ${width}px`).toBeGreaterThanOrEqual(4.5);
       expect(disabled.opacity).toBe('1');
+      expect(disabled.border).toBe(disabled.line);
+      expect(disabled.filter).toBe('none');
       await button.hover();
       await expect(button).toHaveCSS('background-color', disabled.background);
       await expect(button).toHaveCSS('color', disabled.color);
+      await expect(button).toHaveCSS('border-top-color', disabled.line);
+      await expect(button).toHaveCSS('filter', 'none');
+      await button.evaluate((element) => {
+        element.removeAttribute('data-disabled-clicked');
+        element.addEventListener('click', () => element.setAttribute('data-disabled-clicked', 'true'), { once: true });
+      });
       await button.click({ force: true });
+      await expect(button).toHaveAttribute('data-disabled-clicked', 'true');
       await expect(checkbox).not.toBeChecked();
       await expect(page).toHaveURL(/\/consent$/);
       await checkbox.check();
       await expect(button).not.toHaveAttribute('aria-disabled', 'true');
-      await expect(button).not.toHaveCSS('background-color', disabled.background);
+      await expect(button).toHaveCSS('background-color', disabled.accent);
+      await expect(button).toHaveCSS('color', disabled.onAccent);
       await checkbox.uncheck();
       await expect(button).toHaveAttribute('aria-disabled', 'true');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     }
   }
   await expectNoA11yViolationsInThemes(page, 'consent');
@@ -140,16 +153,24 @@ test('停止の送信中は危険操作と取り消しの文字が4テーマで�
   try {
     for (const theme of A11Y_THEMES) {
       await applyTheme(page, theme);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       for (const name of ['停止しています', 'やめる']) {
         const button = dialog.getByRole('button', { name });
         await expect(button).toHaveAttribute('aria-disabled', 'true');
+        await page.mouse.move(0, 0);
         const disabled = await buttonColors(button);
         expect(disabled.ratio, `${theme} ${name}`).toBeGreaterThanOrEqual(4.5);
         expect(disabled.opacity).toBe('1');
+        const border = name === 'やめる' ? 'rgba(0, 0, 0, 0)' : disabled.line;
+        expect(disabled.border).toBe(border);
+        expect(disabled.filter).toBe('none');
         await button.hover();
         await expect(button).toHaveCSS('color', disabled.color);
         await expect(button).toHaveCSS('background-color', disabled.background);
+        await expect(button).toHaveCSS('border-top-color', border);
+        await expect(button).toHaveCSS('filter', 'none');
       }
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     }
   } finally {
     release();
