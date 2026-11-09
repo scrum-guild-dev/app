@@ -64,3 +64,97 @@ test('ブラウザへ圧縮後のバイト列を送り、CookieとOriginとPOST�
     ]);
   }
 });
+
+test('origin-form以外のリクエスト先は上流fetchより前に400で拒否する', async () => {
+  const proxy = bootProxy(1);
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const originalFetch = globalThis.fetch;
+  let fetched = 0;
+  globalThis.fetch = async () => {
+    fetched++;
+    return new Response('unexpected upstream');
+  };
+  try {
+    for (const target of ['@example.invalid/', 'http://example.invalid/', '//example.invalid/']) {
+      const status = await new Promise<number | undefined>((resolve, reject) => {
+        get({ hostname: '127.0.0.1', port: (proxy.address() as AddressInfo).port, path: target }, (response) => {
+          response.resume();
+          response.on('end', () => resolve(response.statusCode));
+        }).on('error', reject);
+      });
+      assert.equal(status, 400, target);
+    }
+    assert.equal(fetched, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    proxy.closeAllConnections();
+    await new Promise<void>((resolve) => proxy.close(() => resolve()));
+  }
+});
+
+test('非テキストとgzip非対応は圧縮せず、3xxと上流切断をそのまま判定できる', async () => {
+  const binary = Buffer.from([0, 255, 1, 254]);
+  const upstream = createServer((request, response) => {
+    if (request.url === '/disconnect') {
+      request.socket.destroy();
+      return;
+    }
+    if (request.url === '/redirect') {
+      response.statusCode = 302;
+      response.setHeader('location', '/destination');
+    }
+    response.setHeader('content-type', request.url === '/font' ? 'font/woff2' : 'text/css');
+    response.end(request.url === '/font' ? binary : 'sample');
+  });
+  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const proxy = bootProxy((upstream.address() as AddressInfo).port);
+  try {
+    await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+    for (const [route, encoding, status] of [
+      ['/font', 'gzip', 200],
+      ['/style', '', 200],
+      ['/redirect', '', 302],
+      ['/disconnect', '', 502],
+    ] as const) {
+      const result = await new Promise<{
+        status: number | undefined;
+        encoding: string | undefined;
+        location: string | undefined;
+        body: Buffer;
+      }>((resolve, reject) => {
+        get(
+          {
+            hostname: '127.0.0.1',
+            port: (proxy.address() as AddressInfo).port,
+            path: route,
+            headers: { 'accept-encoding': encoding },
+          },
+          (response) => {
+            const chunks: Buffer[] = [];
+            response.on('data', (chunk) => chunks.push(chunk));
+            response.on('end', () =>
+              resolve({
+                status: response.statusCode,
+                encoding: response.headers['content-encoding'],
+                location: response.headers.location,
+                body: Buffer.concat(chunks),
+              }),
+            );
+          },
+        ).on('error', reject);
+      });
+      assert.equal(result.status, status);
+      assert.equal(result.encoding, undefined);
+      if (route === '/font') assert.deepEqual(result.body, binary);
+      if (route === '/redirect') assert.equal(result.location, '/destination');
+      if (route === '/disconnect') assert.equal(result.body.toString(), 'boot bench upstream failed');
+    }
+  } finally {
+    proxy.closeAllConnections();
+    upstream.closeAllConnections();
+    await Promise.all([
+      new Promise<void>((resolve) => proxy.close(() => resolve())),
+      new Promise<void>((resolve) => upstream.close(() => resolve())),
+    ]);
+  }
+});
