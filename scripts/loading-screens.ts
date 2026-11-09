@@ -24,7 +24,7 @@ export const screens: Screen[] = [
     after: [op('invitation-list', {}, true)],
     note: '並列群の完了後に招待の件数を読む条件分岐を再現する。',
   },
-  { route: '/[slug]', operations: [op('today'), op('experience-summary', {}, true), op('first-steps', {}, true)] },
+  { route: '/[slug]', operations: [op('today'), op('first-steps', {}, true)] },
   { route: '/[slug]/admin', operations: [], note: 'parent() の権限確認だけ。節の部品の読み込みは load 外。' },
   {
     route: '/[slug]/invitations',

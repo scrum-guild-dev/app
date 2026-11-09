@@ -82,6 +82,17 @@ function parseKeys(env: object): Map<number, Uint8Array> {
   return keys;
 }
 
+// health には読めるかだけを返す。鍵の数、版、値は公開しない。
+export function hasCredentialKeys(env: object): boolean {
+  try {
+    parseKeys(env);
+    return true;
+  } catch (error) {
+    if (!(error instanceof CredentialKeysError)) throw error;
+    return false;
+  }
+}
+
 function currentVersion(keys: Map<number, Uint8Array>): number {
   return Math.max(...keys.keys());
 }
