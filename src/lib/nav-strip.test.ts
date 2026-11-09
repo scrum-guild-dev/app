@@ -15,6 +15,14 @@ describe('navStripScrollLeft', () => {
     );
   });
 
+  it('左に送ってあるときは、左端の幕（peek の幅）に重なる項目を見えているとみなさず送る', () => {
+    expect(navStripScrollLeft({ ...view, scrollLeft: 200 }, { left: 20, right: 120 }, null)).toBe(200 + 20 - 16 - 32);
+  });
+
+  it('先頭（送っていない）なら左端に幕は出ないので、左端ちょうどの項目は送らない', () => {
+    expect(navStripScrollLeft(view, { left: 16, right: 120 }, null)).toBeNull();
+  });
+
   it('peek を省くと NAV_STRIP_PEEK（見本の kit.js と同じ 32px）を使う', () => {
     expect(NAV_STRIP_PEEK).toBe(32);
     expect(navStripScrollLeft(view, { left: 945, right: 1040 }, null)).toBe(945 - 16 - 32);

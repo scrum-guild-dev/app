@@ -2995,9 +2995,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (item && nav.scrollWidth > nav.clientWidth) {
       const view = nav.getBoundingClientRect(); const box = item.getBoundingClientRect();
       const group = nav.querySelector(".ws-menu")?.getBoundingClientRect();
-      // 右端も peek を残す（続きがあると端に幕が重なるため）
+      // 両端に peek を残す（続きがあると端に幕が重なるため。左の幕は左に送ってあるときだけ出る）
       const start = group && group.left <= box.left && box.right - group.left <= nav.clientWidth - 2 * NAV_STRIP_PEEK ? group.left : box.left;
-      if (start < view.left || box.right > view.left + nav.clientWidth - NAV_STRIP_PEEK) nav.scrollLeft = Math.max(0, nav.scrollLeft + start - view.left - NAV_STRIP_PEEK);
+      if (start < view.left + (nav.scrollLeft > 1 ? NAV_STRIP_PEEK : 0) || box.right > view.left + nav.clientWidth - NAV_STRIP_PEEK) nav.scrollLeft = Math.max(0, nav.scrollLeft + start - view.left - NAV_STRIP_PEEK);
     }
     nav.toggleAttribute("data-more-start", nav.scrollLeft > 1);
     nav.toggleAttribute("data-more-end", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);

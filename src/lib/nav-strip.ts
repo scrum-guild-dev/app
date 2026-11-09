@@ -20,8 +20,10 @@ export function navStripScrollLeft(
   const room = view.width - 2 * peek;
   const fitsWithGroup = group !== null && group.left <= item.left && item.right - group.left <= room;
   const start = fitsWithGroup ? group.left : item.left;
-  // 札（収まるとき）から項目までが、右端の peek にかからずに見えていれば送らない
-  if (start >= view.left && item.right <= view.left + view.width - peek) return null;
+  // 札（収まるとき）から項目までが、端の幕（peek の幅）にかからずに見えていれば送らない。
+  // 左の幕は左に送ってあるとき（続きがあるとき）だけ出るので、先頭のままなら左端ちょうどでも見えているとみなす
+  const leftEdge = view.left + (view.scrollLeft > 1 ? peek : 0);
+  if (start >= leftEdge && item.right <= view.left + view.width - peek) return null;
   return Math.max(0, view.scrollLeft + start - view.left - peek);
 }
 
