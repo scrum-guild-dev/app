@@ -108,8 +108,9 @@
   }}
   onclose={() => {
     if (!dialog.open) {
+      // close() は同期で復帰済み。遅れて届く close で遷移後のフォーカスを奪わない。
+      if (open) trigger.focus();
       open = false;
-      trigger.focus();
     }
   }}
   onpointerdown={(event) => {

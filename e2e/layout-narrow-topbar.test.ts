@@ -171,3 +171,28 @@ test('760pxまでタブを出し、761px以上では既存の枠・検索・表�
     }
   }
 });
+
+test('浮きメニューを開く間は背景を送らず、本番の組織作成を操作できる', async ({ page }) => {
+  await page.goto('/aoba');
+  await page.locator('#content').evaluate((element) => {
+    element.style.minHeight = '200vh';
+  });
+  await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
+  await expect(page.locator('html')).toHaveCSS('overflow-y', 'hidden');
+  const position = await page.evaluate(() => scrollY);
+  await page.mouse.move(2, 2);
+  await page.mouse.wheel(0, 400);
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(await page.evaluate(() => scrollY)).toBe(position);
+  const menu = page.getByRole('dialog', { name: 'すべてのメニュー', exact: true });
+  await menu.locator('.org-menu-button').click();
+  await menu.getByRole('button', { name: '組織を作る', exact: true }).click();
+  const create = page.getByRole('dialog', { name: '組織を作る', exact: true });
+  await create.getByLabel('組織の名前', { exact: true }).fill('こもれび工房');
+  await expect(create.getByLabel('組織の名前', { exact: true })).toHaveValue('こもれび工房');
+  await create.getByRole('button', { name: 'やめる', exact: true }).click();
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(page.locator('html')).not.toHaveCSS('overflow-y', 'hidden');
+});

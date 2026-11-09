@@ -922,7 +922,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     width: var(--mobile-tab-size); height: var(--mobile-tab-size); padding: 0; border: 1px solid transparent; border-radius: var(--radius-full);
     color: var(--color-muted); background: transparent; text-decoration: none;
   }
-  .mobile-tab:hover { background: var(--color-rule); }
+  @media (hover: hover) { .mobile-tab:hover { background: var(--color-rule); } }
   .mobile-tab[aria-current="page"], .mobile-tab[aria-expanded="true"] {
     color: var(--color-fg); background: var(--color-sunken); border-color: var(--color-line);
   }
@@ -947,6 +947,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     border-radius: var(--radius-show); box-shadow: var(--shadow-float);
   }
   .mobile-menu::backdrop { background: rgb(10 15 20 / 0.4); }
+  html:has(.mobile-menu[open]) { overflow: hidden; }
   .mobile-menu-sheet { padding: var(--space-4); display: grid; gap: var(--space-3); }
   .mobile-menu-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
   .mobile-menu-head h2 { margin: 0; font-size: var(--text-lg); }
