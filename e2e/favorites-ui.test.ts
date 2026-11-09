@@ -1,5 +1,5 @@
-// #1087: 画面とナビの同期。お気に入りは応答を隔離し、対象は専用ワークスペースの実データを使う。
-// API の保存・権限・削除復元は favorites.test.ts が確かめる。実行は CI に任せる。
+// #1087: 画面とナビの同期。対象は専用ワークスペースの実データを使う。
+// 各画面と失敗時は応答を隔離し、末尾の往復・閉鎖ケースはお気に入りの実 API を通す。実行は CI に任せる。
 import type { Page } from '@playwright/test';
 import { operationPath, type AnyOperationDefinition, type OutputOf } from '../src/shared/operations/define.ts';
 import { favoriteList, favoriteSet } from '../src/shared/operations/favorite.ts';
@@ -118,13 +118,17 @@ for (const kind of ['task', 'task-drawer', 'story', 'epic', 'org-wiki', 'workspa
     const link = page.locator('.nav-favorites').getByRole('link', { name: item.row.title, exact: true });
     await expect(link).toHaveAttribute('href', item.href);
     await expect(link).toHaveAttribute('title', item.row.title);
+    // 今と同じ URL を押す再読み込みでなく、別画面からお気に入りの行き先へ戻れることを確かめる。
+    await page.getByRole('link', { name: '今日やること', exact: true }).click();
+    await expect(page).toHaveURL(new URL('/aoba', baseURL).href);
     await link.click();
     await expect(page).toHaveURL(new URL(item.href, baseURL).href);
     await expect(star).toHaveAttribute('aria-pressed', 'true');
+    const readsBeforeRemove = reads;
     await star.click();
     await expect(star).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('.nav-favorites')).toHaveCount(0);
-    expect(reads).toBe(initialReads);
+    expect(reads).toBe(readsBeforeRemove);
   });
 }
 
@@ -157,11 +161,14 @@ test('お気に入りのタスクを削除するとナビから消え、取り�
   const initialReads = reads;
   await drawer.getByRole('button', { name: 'このタスクを削除する', exact: true }).click();
   await expect(drawer).toBeHidden();
+  const deletedToast = page.locator('.toasts:visible .toast', { hasText: `「${item.row.title}」を削除しました` });
+  const undo = deletedToast.getByRole('button', { name: '取り消す', exact: true });
+  // 一覧の再取得を待つ間にトーストの表示時間が尽きないよう、取り消すへフォーカスを置く。
+  await undo.focus();
   await expect(page.locator('.nav-favorites')).toHaveCount(0);
   expect(reads).toBeGreaterThan(initialReads);
   const afterDeleteReads = reads;
-  const deletedToast = page.locator('.toasts:visible .toast', { hasText: `「${item.row.title}」を削除しました` });
-  await deletedToast.getByRole('button', { name: '取り消す', exact: true }).click();
+  await undo.click();
   await expect(page.locator('.nav-favorites').getByRole('link', { name: item.row.title, exact: true })).toBeVisible();
   expect(reads).toBeGreaterThan(afterDeleteReads);
 });
@@ -185,40 +192,55 @@ test('畳んだメニューでは節を隠し、上限の拒否は星の近く�
   await star.click();
   await expect(star).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByRole('alert')).toContainText(
-    'お気に入りは20件までです。左のメニューのお気に入りから外してから追加してください。',
+    'お気に入りは20件までです。登録した対象の星を外してから追加してください。',
   );
   await expect(section.getByRole('link')).toHaveCount(1);
 });
 
-test('閉じたワークスペースの既存の星を外し、付け直してもメニューには出さない', async ({ page, context, baseURL }) => {
+test('実APIで星を付けてナビから開き、閉じたワークスペースでも印を外して付け直せる', async ({
+  page,
+  context,
+  baseURL,
+}) => {
   if (!baseURL) throw new Error('baseURL が無い');
   await signIn(context, baseURL, 'admin');
   const item = await target(page, baseURL, 'task');
-  await create(page, baseURL, workspaceClose, { workspace_id: item.row.workspace_id });
-  let marked = true;
-  await routeOperation(page, favoriteList, { slug: 'aoba' }, async (call) => {
-    await call.fulfill({ favorites: [], marks: marked ? listOutput([item.row]).marks : [] });
-  });
-  await routeOperation(page, favoriteSet, { slug: 'aoba' }, async (call) => {
-    expect(call.input.target_id).toBe(item.row.target_id);
-    marked = call.input.is_favorite;
-    await call.fulfill({ is_favorite: marked });
-  });
-  await page.goto(item.initial);
-  const star = page.getByRole('button', { name: 'お気に入りにする', exact: true });
-  await expect(star).toHaveAttribute('aria-pressed', 'true');
-  await expect(star).toHaveAttribute('aria-disabled', 'false');
-  await expect(page.locator('.nav-favorites')).toHaveCount(0);
-  await star.click();
-  await expect(star).toHaveAttribute('aria-pressed', 'false');
-  expect(marked).toBe(false);
-  await star.click();
-  await expect(star).toHaveAttribute('aria-pressed', 'true');
-  expect(marked).toBe(true);
-  await expect(page.locator('.nav-favorites')).toHaveCount(0);
-  await page.reload();
-  await expect(star).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.nav-favorites')).toHaveCount(0);
+  const ownMark = { target_type: item.row.target_type, target_id: item.row.target_id };
+  try {
+    await page.goto(item.initial);
+    const star = page.getByRole('button', { name: 'お気に入りにする', exact: true });
+    const link = page.locator('.nav-favorites').getByRole('link', { name: item.row.title, exact: true });
+    await expect(star).toHaveAttribute('aria-pressed', 'false');
+    await star.click();
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    await expect(link).toBeVisible();
+    await page.getByRole('link', { name: '今日やること', exact: true }).click();
+    await expect(page).toHaveURL(new URL('/aoba', baseURL).href);
+    await link.click();
+    await expect(page).toHaveURL(new URL(item.href, baseURL).href);
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    await create(page, baseURL, workspaceClose, { workspace_id: item.row.workspace_id });
+    // request fixture による外部の変更は画面への通知を通らないため、明示的に読み直す。
+    await page.reload();
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    await expect(star).toHaveAttribute('aria-disabled', 'false');
+    await expect(link).toHaveCount(0);
+    const closedList = await create(page, baseURL, favoriteList, {});
+    expect(closedList.marks).toContainEqual(ownMark);
+    expect(closedList.favorites.some((row) => row.target_id === item.row.target_id)).toBe(false);
+    await star.click();
+    await expect(star).toHaveAttribute('aria-pressed', 'false');
+    expect((await create(page, baseURL, favoriteList, {})).marks).not.toContainEqual(ownMark);
+    await star.click();
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    await expect(link).toHaveCount(0);
+    await page.reload();
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    await expect(link).toHaveCount(0);
+  } finally {
+    // 実際に保存した本人の印は、失敗時にも外し、繰り返し実行で20件を消費しない。
+    await create(page, baseURL, favoriteSet, { ...ownMark, is_favorite: false });
+  }
 });
 
 test('一覧の読み込み失敗を星の近くに示し、再試行すると既存の印が戻る', async ({ page, context, baseURL }) => {
