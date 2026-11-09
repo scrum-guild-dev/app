@@ -422,7 +422,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
    中でスクロールさせると、面の影とフォーカスの輪が切れ、押せる要素の無い脇は読み上げとキーボードで動かせない */
 .layout-side.is-static { position: static; }
 /* 同じ画面の値を読み直している間は、木（.tree[aria-busy]）と同じく薄くして、古い値のまま止まっていないことを見せる */
-.layout-aside[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) ease-out; }
+.layout-aside[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) var(--ease-out); }
 
 /* ===== 画面の見出しと集計 ===== */
 .page-head { display: grid; gap: var(--space-3); padding-bottom: var(--space-5); border-bottom: var(--rule-double); }
@@ -982,7 +982,7 @@ a.brand { color: inherit; text-decoration: none; }
 .tree { background: var(--color-surface); border: 1px solid var(--color-line); border-left: var(--rule-double); border-radius: var(--radius-1); }
 .tree > * + * { border-top: 1px solid var(--color-line); }
 /* 絞り込みを変えて読み直している間は、前の木を残したまま少し薄くする（操作はできる） */
-.tree[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) ease-out; }
+.tree[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) var(--ease-out); }
 /* 右端が横に並ぶ幅では、題の列に 12rem を先に取り、右端は残りの幅に収まらなければ中で折り返す（指で押す画面の 44px のボタンでも、
    題の列を押しのけない） */
 .tree-row {
@@ -1658,7 +1658,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   to { outline-color: transparent; }
 }
 .entry.is-dropped, .tree-row.is-dropped, .order-list li.is-dropped, .card.is-dropped {
-  outline: 1px solid transparent; outline-offset: -1px; animation: drop-flash var(--duration-flash) ease-out;
+  outline: 1px solid transparent; outline-offset: -1px; animation: drop-flash var(--duration-flash) var(--ease-out);
 }
 /* スプリントのカードと列のドラッグ。つかむ場所はカード全体（ドラッグできるカードは draggable="true"）で、題のリンクとボタンは押すだけ。
    before / after はカードとカードの間の線（カードの幅いっぱい）。線は隙間（--space-2 = 8px）の真ん中に引く。
@@ -1961,7 +1961,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   display: grid; place-items: center; width: 112px; height: 112px; border-radius: 50%;
   border: 3px solid var(--color-done); color: var(--color-done); background: var(--color-ok-soft);
   font-family: var(--font-display); font-weight: var(--weight-display); font-size: 24px; letter-spacing: 0.1em;
-  animation: hanko-press 420ms var(--ease-out) 1;
+  animation: hanko-press var(--duration-celebrate) var(--ease-out) 1;
 }
 .celebrate-title { overflow-wrap: anywhere; max-width: 100%; font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-xl); }
 .celebrate-reward { font-family: var(--font-stat); font-weight: 700; font-size: var(--text-lg); color: var(--color-xp); }
@@ -2305,7 +2305,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   width: auto; height: auto; border-radius: var(--radius-1); padding: var(--space-3) var(--space-6);
   border: 1px solid var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft);
   box-shadow: 0 0 24px -4px var(--color-accent); text-shadow: 0 0 10px var(--color-accent);
-  animation: system-in 420ms var(--ease-out) 1;
+  animation: system-in var(--duration-celebrate) var(--ease-out) 1;
 }
 @keyframes system-in {
   0% { opacity: 0; transform: scaleY(0.2); filter: brightness(2); }
