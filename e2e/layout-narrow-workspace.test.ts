@@ -129,8 +129,11 @@ test('390pxで閉じた絞り込みにも条件数と解除を残し、広い幅
     await expect(page.locator('.order-help .action-note')).toBeVisible();
     await expect(page.locator('.narrow-disclosure-toggle:visible')).toHaveCount(0);
   }
-  await page.setViewportSize(NARROW_VIEWPORT);
-  await expect(bar.getByRole('combobox')).toHaveCount(0);
+  for (const width of [760, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(bar.getByRole('combobox')).toHaveCount(0);
+    await expect(bar.getByRole('button', { name: '絞り込み', exact: true })).toBeVisible();
+  }
 });
 
 test('エピックの画面が 390px で横にはみ出さず、押せる要素が 44px 四方で押せる', async ({ page }) => {

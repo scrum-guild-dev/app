@@ -696,10 +696,11 @@
   });
   function pageHead(eyebrow, title, tallies = [], actions = "", meta = "", narrowSummary = "") {
     const counts = (items) => items.length ? `<dl class="tally">${items.map(([cls, ic, label, n]) => `<div class="${n ? cls : ""}"><dt>${ic ? icon(ic) : ""}${label}</dt><dd>${n}</dd></div>`).join("")}</dl>` : "";
-    const metrics = narrowSummary
-      ? `<div class="page-head-metrics">${counts(tallies.slice(0, 1))}${narrowDisclosure(narrowSummary, `${counts(tallies.slice(1))}${meta ? `<div class="page-head-meta">${meta}</div>` : ""}`)}</div>`
+    const compactSummary = tallies.length > 1 || meta ? narrowSummary : "";
+    const metrics = compactSummary
+      ? `<div class="page-head-metrics">${counts(tallies.slice(0, 1))}${narrowDisclosure(compactSummary, `${counts(tallies.slice(1))}${meta ? `<div class="page-head-meta">${meta}</div>` : ""}`)}</div>`
       : `${counts(tallies)}${meta}`;
-    return `<header class="page-head${narrowSummary ? " is-compact" : ""}">
+    return `<header class="page-head${compactSummary ? " is-compact" : ""}">
       ${eyebrow ? `<span class="page-eyebrow">${eyebrow}</span>` : ""}
       <div class="page-head-row"><h1 class="page-title">${title}</h1>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
       ${metrics}

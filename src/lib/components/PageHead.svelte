@@ -30,9 +30,11 @@
     focusable?: boolean;
     narrowSummary?: string;
   } = $props();
+
+  const compactSummary = $derived(tallies.length > 1 || meta ? narrowSummary : undefined);
 </script>
 
-<header class="page-head" class:is-compact={!!narrowSummary}>
+<header class="page-head" class:is-compact={!!compactSummary}>
   {#if eyebrow}<span class="page-eyebrow">{eyebrow}</span>{/if}
   <div class="page-head-row">
     <!-- tabindex="-1" は、プログラムからフォーカスを置くため（キーボードの Tab 順には入らない）。値は -1 か未指定だけ -->
@@ -52,10 +54,10 @@
       {/each}
     </dl>
   {/snippet}
-  {#if narrowSummary}
+  {#if compactSummary}
     <div class="page-head-metrics">
       {#if tallies.length > 0}{@render counts(tallies.slice(0, 1))}{/if}
-      <NarrowDisclosure label={narrowSummary}>
+      <NarrowDisclosure label={compactSummary}>
         {#if tallies.length > 1}{@render counts(tallies.slice(1))}{/if}
         {#if meta}<div class="page-head-meta">{@render meta()}</div>{/if}
       </NarrowDisclosure>
