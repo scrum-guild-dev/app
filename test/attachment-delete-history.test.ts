@@ -32,11 +32,11 @@ test('添付削除は履歴を1件残し、再度の削除では増やさない'
         .selectAll()
         .where('organization_id', '=', target.organization.id)
         .where('workspace_id', '=', target.workspace.id)
-        .where('entity_type', '=', 'attachment')
-        .where('entity_id', '=', row.id),
+        .where('entity_type', '=', 'task')
+        .where('entity_id', '=', task.id),
     ),
   );
   expect(logs).toHaveLength(1);
-  expect(logs[0]).toMatchObject({ actor_user_id: target.member.userId, action: 'delete' });
-  expect(JSON.parse(logs[0]!.changes_json!)).toEqual({ task_id: [task.id, null] });
+  expect(logs[0]).toMatchObject({ actor_user_id: target.member.userId, action: 'update' });
+  expect(JSON.parse(logs[0]!.changes_json!)).toEqual({ attachments: [[{ id: row.id }], null] });
 });

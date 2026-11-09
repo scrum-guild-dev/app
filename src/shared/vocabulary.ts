@@ -97,6 +97,7 @@ export const dictionary = defineDictionary({
   onboardingBack: '戻る',
   onboardingProgress: '利用開始のステップ',
   historyAttachmentsAdded: '添付ファイルを追加した',
+  historyAttachmentsDeleted: '添付ファイルを削除した',
   attachmentImageMissing: 'ファイルが見つかりません',
   attachmentMissing: '添付ファイルが見つかりません。本文を残したまま、ファイルをもう一度追加してください。',
   attachmentAlreadyAttached:
