@@ -157,12 +157,19 @@ test('積んだ行に枠付き操作が混ざっても折り返した枠は本�
     table.className = 'table is-stacked';
     table.style.width = '200px';
     table.innerHTML =
-      '<tbody><tr><td class="is-actions"><span class="table-actions is-wrap"><button class="btn is-sm is-quiet">再開する</button><button class="btn is-sm">管理者を指名</button><button class="btn is-sm is-danger">停止する</button></span></td></tr><tr><td class="is-actions"><button class="btn is-sm is-quiet">先頭</button><button class="btn is-sm is-quiet">次</button></td></tr></tbody>';
+      '<tbody><tr><td class="is-actions"><span class="table-actions is-wrap"><button class="btn is-sm is-quiet is-danger">停止する</button><button class="btn is-sm">管理者を指名</button><button class="btn is-sm is-danger">停止する</button></span></td></tr><tr><td class="is-actions"><button class="btn is-sm is-quiet is-danger">先頭</button><button class="btn is-sm is-quiet">次</button></td></tr></tbody>';
     document.body.append(table);
     const actions = table.querySelector('.table-actions')!;
     const left = actions.closest('td')!.getBoundingClientRect().left;
+    const first = actions.querySelector('button')!;
+    const range = document.createRange();
+    range.selectNodeContents(first);
     const result = {
       group: actions.getBoundingClientRect().left - left,
+      firstText: range.getBoundingClientRect().left - left,
+      quietDangerBorders: [...table.querySelectorAll('.btn.is-quiet.is-danger')].map(
+        (button) => getComputedStyle(button).borderLeftColor,
+      ),
       bordered: [...actions.querySelectorAll('.btn:not(.is-quiet)')].map(
         (button) => button.getBoundingClientRect().left - left,
       ),
@@ -172,6 +179,8 @@ test('積んだ行に枠付き操作が混ざっても折り返した枠は本�
     return result;
   });
   expect(offsets.group).toBe(0);
+  expect(Math.abs(offsets.firstText)).toBeLessThan(1);
+  expect(offsets.quietDangerBorders).toEqual(['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)']);
   for (const offset of offsets.bordered) expect(offset).toBeGreaterThanOrEqual(0);
   expect(offsets.nextMargin).toBe('0px');
 });

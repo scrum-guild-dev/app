@@ -1143,6 +1143,8 @@ label.pick-row:hover { background: var(--color-accent-soft); }
   .table.is-stacked td[data-label]::before { content: attr(data-label) "　"; font-family: var(--font-body); font-size: var(--text-xs); color: var(--color-muted); white-space: nowrap; }
   .table.is-stacked td.is-actions { position: static; }
   .table.is-stacked .table-actions { flex-wrap: wrap; justify-content: flex-start; gap: var(--space-1); }
+  /* 静かな危険の操作も文字だけで示す。危険色と押せる箱は保ち、補正で枠だけが本文より外へ出るのを防ぐ */
+  .table.is-stacked .btn.is-sm.is-quiet.is-danger { border-color: transparent; }
   .table.is-stacked td.is-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
   /* 枠の無い静かな小ボタンだけの並びは、折り返した行の先頭も本文にそろえる。
      枠付きの操作が混ざるときは並び全体を引かず、先頭の静かな操作だけを補正する */
