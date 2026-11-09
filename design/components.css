@@ -130,8 +130,8 @@ h1, h2, h3 { text-wrap: balance; }
 :is(.org-menu-list, .ws-menu-list)[hidden], .account-menu-list[hidden] { display: none; }
 /* 開くときだけ押した場所から短く出す。hidden への切り替えには退場の待ちを入れない。
    配置用の transform と干渉しないよう、動きには個別の translate を使う。 */
-:is(.org-menu-list, .ws-menu-list, .account-menu-list):not([hidden]) {
-  opacity: 1; translate: 0 0; transform-origin: top;
+:is(.org-menu-list, .ws-menu-list, .account-menu-list):not(.row-menu-list):not([hidden]) {
+  opacity: 1; translate: 0 0;
   transition: opacity var(--duration-fast) var(--ease-out), translate var(--duration-fast) var(--ease-out);
   @starting-style { opacity: 0; translate: 0 -4px; }
 }
