@@ -16,7 +16,12 @@ export function fontsourceWoff2Only(): Plugin {
     enforce: 'pre',
     transform(code, id) {
       const file = id.split('?')[0];
-      if (!file.endsWith('.css') || !file.includes('/@fontsource/')) return null;
+      if (!file.endsWith('.css')) return null;
+      // 可変版も同じ書体名で使い、見本と共通のトークンを変えない。
+      if (file.includes('/@fontsource-variable/noto-sans-jp/')) {
+        return { code: code.replaceAll("'Noto Sans JP Variable'", "'Noto Sans JP'"), map: null };
+      }
+      if (!file.includes('/@fontsource/')) return null;
       return { code: dropWoff(code), map: null };
     },
   };
