@@ -5,6 +5,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { TEST_CREDENTIAL_KEYS } from './test-credential-keys.ts';
 import { devPorts, devPublicOrigin } from './dev-ports.ts';
+import { checkDevVars } from './dev-vars.ts';
 
 const preview = process.argv.includes('--preview');
 const ports = devPorts(process.env);
@@ -23,6 +24,12 @@ const wranglerArgs = [
   '--var',
   `PUBLIC_ORIGIN:${devPublicOrigin(ports, preview)}`,
 ];
+
+// wrangler は起動したディレクトリの .dev.vars を読むので、同じ場所で鍵の名前を比べる。足りなくても起動は止めない。
+// --var で渡す鍵は .dev.vars に無くてよい
+const varKeys = wranglerArgs.flatMap((arg, i) => (wranglerArgs[i - 1] === '--var' ? [arg.split(':', 1)[0]!] : []));
+const devVarsWarning = checkDevVars(process.cwd(), varKeys);
+if (devVarsWarning) console.error(devVarsWarning);
 
 const commands: [string, string[]][] = preview
   ? [['wrangler', wranglerArgs]]

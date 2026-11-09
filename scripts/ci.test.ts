@@ -90,6 +90,7 @@ describe('needsDevBuild', () => {
     // build と e2e のサーバー、CI の用意、e2e が開くデータ
     'scripts/dev.ts',
     'scripts/dev-ports.ts',
+    'scripts/dev-vars.ts',
     'scripts/test-credential-keys.ts',
     'scripts/write-headers.ts',
     'scripts/db-seed.ts',

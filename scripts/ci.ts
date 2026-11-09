@@ -39,7 +39,7 @@ const devBuildPatterns: RegExp[] = [
   /^vite\.config\.ts$/,
   /^playwright\.config\.ts$/,
   /^wrangler\.jsonc$/,
-  /^scripts\/(e2e-server|e2e-run|dev-warnings|dev|dev-ports|test-credential-keys|write-headers|headers|db-seed|local-d1-retry)\.ts$/,
+  /^scripts\/(e2e-server|e2e-run|dev-warnings|dev|dev-ports|dev-vars|test-credential-keys|write-headers|headers|db-seed|local-d1-retry)\.ts$/,
   /^\.github\/workflows\/ci\.yml$/,
   /^\.github\/actions\//,
 ];
