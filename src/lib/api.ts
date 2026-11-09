@@ -1,3 +1,4 @@
+import { notifyOperationWrite } from './operation-events.ts';
 import { redirectOrganizationReauth } from './login-redirect.ts';
 import { isErrorBody, type ErrorBody } from '../shared/errors.ts';
 import { isHealth, type Health } from '../shared/health.ts';
@@ -62,7 +63,10 @@ export async function callOperation<D extends AnyOperationDefinition>(
   // 本文を読む途中で打ち切ると、json() の失敗として NOT_JSON に落ちる。応答の status ではなく通信の失敗にする
   if (body === NOT_JSON && controller?.signal.aborted === true) return UNREACHABLE;
   // サーバーが出力のスキーマで検証し、変換まで済ませた値を返す。ここで同じスキーマに通し直すと、変換が二重に掛かる
-  if (res.ok && body !== NOT_JSON) return { ok: true, data: body as OutputOf<D> };
+  if (res.ok && body !== NOT_JSON) {
+    if (definition.mode === 'write' && slug !== undefined) notifyOperationWrite({ name: definition.name, slug });
+    return { ok: true, data: body as OutputOf<D> };
+  }
   const error = isErrorBody(body) ? body.error : null;
   redirectOrganizationReauth(slug, res.status, error?.code);
   return { ok: false, status: res.status, error };

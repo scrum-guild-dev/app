@@ -50,6 +50,7 @@
   import { announceRemoved, type RestoreTarget } from '../task-removal.ts';
   import { t } from '../vocabulary.svelte.ts';
   import TodayMarkButton from './TodayMarkButton.svelte';
+  import FavoriteButton from './FavoriteButton.svelte';
   import Avatar from './Avatar.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Drawer from './Drawer.svelte';
@@ -110,6 +111,7 @@
     currentUserId,
     taskId,
     canWrite,
+    workspaceClosed = false,
     definitionOfDone,
     onclose,
     onchanged,
@@ -130,6 +132,7 @@
     currentUserId: string | null;
     taskId: string;
     canWrite: boolean;
+    workspaceClosed?: boolean;
     // ワークスペースの完成の定義（Markdown）。空なら null で、完了の操作の横に何も出さない
     definitionOfDone: string | null;
     // 閉じる。画面の枠が `?task=` を外し、フォーカスを行へ戻す
@@ -1614,6 +1617,13 @@
 >
   {#snippet top()}
     {#if task !== null}
+      <FavoriteButton
+        targetType="task"
+        targetId={task.id}
+        title={task.title}
+        {workspaceId}
+        menuVisible={!workspaceClosed}
+      />
       <span class="chip"
         ><Icon name={task.is_imported ? 'link' : 'pen'} />{task.is_imported
           ? t('taskImportedChip', { task: t('task') })

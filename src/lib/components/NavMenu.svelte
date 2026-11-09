@@ -3,11 +3,14 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { NAV_MENU_ID } from '../nav-collapse.svelte.ts';
-  import { GO_KEYS, isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
+  import { GO_KEYS, favoriteNavItem, isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { organizationLabel } from '../organization-label.ts';
   import type { NavigationWorkspace } from '../workspace-navigation.svelte.ts';
   import Icon from './Icon.svelte';
+  import FavoriteLoadStatus from './FavoriteLoadStatus.svelte';
+  import { useFavorites } from '../favorites.svelte.ts';
+  const favorites = useFavorites();
 
   // kit.js の navHtml。current は今の画面のパス、slug は今の組織。画面のある項目だけを出す（nav.ts の visibleNav）。
   // アカウントと組織の入口は上の帯の AccountMenu に置く。所属するワークスペースが無い人（hasWorkspace が偽）には、組織の画面だけを出す。
@@ -31,6 +34,12 @@
     workspace?: NavigationWorkspace;
     workspaceSwitcher?: Snippet;
   } = $props();
+
+  const favoriteLinks = $derived(
+    (favorites?.items ?? [])
+      .map((favorite) => ({ favorite, item: favoriteNavItem(resolve('/[slug]', { slug }), favorite) }))
+      .filter(({ item }) => item.href !== null),
+  );
 
   const sections = $derived(
     visibleNav(undefined, {
@@ -81,5 +90,25 @@
         {/if}
       {/if}
     {/each}
+    {#if section.heading === undefined && favorites && (favorites.loadFailed || favorites.loading || !favorites.available || favoriteLinks.length > 0)}
+      <div class="nav-favorites">
+        <div class="nav-group"><span class="nav-group-label">{t('favorites')}</span></div>
+        <FavoriteLoadStatus
+          onrecovered={() =>
+            (
+              document.getElementById(NAV_MENU_ID)?.querySelector<HTMLAnchorElement>('.nav-favorites a') ??
+              document.getElementById(NAV_MENU_ID)?.querySelector<HTMLAnchorElement>('.nav-item')
+            )?.focus()}
+        />
+        {#each favoriteLinks as { favorite, item } (`${favorite.target_type}/${favorite.target_id}`)}
+          {#if item.href !== null}
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- favoriteNavItem は resolve 済みの組織パスにエンコードした対象だけを足す -->
+            <a class="nav-item" href={item.href} title={favorite.title}>
+              <Icon name={item.icon} /><span class="nav-item-label">{favorite.title}</span>
+            </a>
+          {/if}
+        {/each}
+      </div>
+    {/if}
   {/each}
 </nav>
