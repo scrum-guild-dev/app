@@ -154,6 +154,10 @@ test.describe('組織の中（アカウントのメニュー）', () => {
       await page.goto('/aoba');
       await accountButton(page).click();
       await expect(logoutItem(page)).toBeVisible();
+      // translate の途中では上下の座標の差に丸め誤差が出る。移動が終わってから測る。
+      await page.locator('.account-menu .account-menu-list').evaluate(async (list) => {
+        await Promise.all(list.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
+      });
       const inside = await page.evaluate(() => {
         const list = document.querySelector('.account-menu-list')!.getBoundingClientRect();
         const item = document.querySelector('.account-menu-list button')!.getBoundingClientRect();
