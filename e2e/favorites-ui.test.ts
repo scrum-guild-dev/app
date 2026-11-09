@@ -162,7 +162,7 @@ test('お気に入りのタスクを削除するとナビから消え、取り�
   await drawer.getByRole('button', { name: 'このタスクを削除する', exact: true }).click();
   await expect(drawer).toBeHidden();
   const deletedToast = page.locator('.toasts:visible .toast', { hasText: `「${item.row.title}」を削除しました` });
-  const undo = deletedToast.getByRole('button', { name: '取り消す', exact: true });
+  const undo = deletedToast.getByRole('button', { name: '取り消す' });
   // 一覧の再取得を待つ間にトーストの表示時間が尽きないよう、取り消すへフォーカスを置く。
   await undo.focus();
   await expect(page.locator('.nav-favorites')).toHaveCount(0);
@@ -265,4 +265,79 @@ test('一覧の読み込み失敗を星の近くに示し、再試行すると�
   await expect(control).not.toContainText('お気に入りを読み込めませんでした。');
   await expect(page.locator('.nav-favorites').getByRole('link', { name: item.row.title, exact: true })).toBeVisible();
   expect(reads).toBe(2);
+});
+
+test('取得済みの一覧の更新に失敗しても再試行のボタンを保ち、失敗はその場、成功は星へフォーカスする', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  if (!baseURL) throw new Error('baseURL が無い');
+  await signIn(context, baseURL, 'admin');
+  const item = await target(page, baseURL, 'task');
+  let reads = 0;
+  let releaseFailure!: () => void;
+  let releaseSuccess!: () => void;
+  const failureGate = new Promise<void>((resolve) => {
+    releaseFailure = resolve;
+  });
+  const successGate = new Promise<void>((resolve) => {
+    releaseSuccess = resolve;
+  });
+  await routeOperation(page, favoriteList, { slug: 'aoba' }, async (call) => {
+    reads++;
+    if (reads === 1) await call.fulfill(listOutput([]));
+    else if (reads === 2) await call.fail(500, 'internal');
+    else if (reads === 3) {
+      await failureGate;
+      await call.fail(500, 'internal');
+    } else {
+      await successGate;
+      await call.fulfill(listOutput([]));
+    }
+  });
+  await failOperation(page, favoriteSet, { slug: 'aoba' }, 409, 'favorite_limit', { details: { used: 20, limit: 20 } });
+  try {
+    await page.goto(item.initial);
+    const control = page.locator('.favorite-control');
+    const star = control.getByRole('button', { name: 'お気に入りにする', exact: true });
+    await expect(star).toHaveAttribute('aria-disabled', 'false');
+    // 実際のタイトル保存の通知で一覧だけを更新し、その更新を失敗させる。
+    await page.locator('.drawer-title').getByRole('button').click();
+    const title = page.getByRole('textbox', { name: 'タイトル', exact: true });
+    await title.fill(`${item.row.title}-改訂`);
+    await title.press('Enter');
+    await expect(control).toContainText('お気に入りを読み込めませんでした。');
+    await expect(star).toHaveAttribute('aria-disabled', 'false');
+    await star.click();
+    // 一覧更新の失敗と、星の操作で断られた理由を両方読むことができる。
+    await expect(control.getByRole('alert')).toContainText(
+      'お気に入りは20件までです。登録した対象の星を外してから追加してください。',
+    );
+    const retry = control.getByRole('button', { name: 'もう一度試す', exact: true });
+    const originalRetry = await retry.elementHandle();
+    await retry.focus();
+    await retry.click();
+    await expect.poll(() => reads).toBe(3);
+    await expect(retry).toHaveAttribute('aria-disabled', 'true');
+    await expect(retry).toBeFocused();
+    expect(await originalRetry!.evaluate((element) => element.isConnected)).toBe(true);
+    await expect(control.getByRole('status')).toHaveText('読み込んでいます');
+    releaseFailure();
+    await expect(retry).toHaveAttribute('aria-disabled', 'false');
+    await expect(retry).toBeFocused();
+    await expect(control.getByRole('status')).toHaveText('まだ読み込めませんでした');
+    await retry.click();
+    await expect.poll(() => reads).toBe(4);
+    await expect(retry).toHaveAttribute('aria-disabled', 'true');
+    await expect(retry).toBeFocused();
+    expect(await originalRetry!.evaluate((element) => element.isConnected)).toBe(true);
+    releaseSuccess();
+    await expect(retry).toHaveCount(0);
+    await expect(star).toBeFocused();
+    await expect(control).not.toContainText('お気に入りを読み込めませんでした。');
+  } finally {
+    releaseFailure();
+    releaseSuccess();
+  }
 });
