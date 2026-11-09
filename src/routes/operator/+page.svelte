@@ -233,10 +233,10 @@
                               class="table-details-alert"
                               class:is-danger={primaryStatus.tone === 'danger'}
                               class:is-warn={primaryStatus.tone === 'warn'}
-                              ><Icon name={primaryStatus.icon} />{t(primaryStatus.label)}</span
+                              ><Icon name={primaryStatus.icon} />{t(primaryStatus.label, words)}</span
                             >
                             {#each statuses.slice(1) as status (status.code)}
-                              <span class="visually-hidden">、{t(status.label)}</span>
+                              <span class="visually-hidden">、{t(status.label, words)}</span>
                             {/each}
                           {/if}
                           {t('operatorDetails')}

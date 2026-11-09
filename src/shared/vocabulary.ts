@@ -996,7 +996,7 @@ export const dictionary = defineDictionary({
   operatorDetails: '詳細',
   operatorStatusTrialExpired: 'お試し期限切れ',
   operatorStatusCancellation: '解約',
-  operatorStatusAdminNone: '管理者不在',
+  operatorStatusAdminNone: '{admin}不在',
   operatorStatusAdminExpired: '招待期限切れ',
   operatorStatusSuspended: '停止中',
   operatorStatusAdminPending: '指名待ち',

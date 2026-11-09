@@ -32,7 +32,7 @@ function organizationStatuses(k) {
   return [
     k.trialEndsOn && k.trialExpired && { label: "お試し期限切れ", tone: "danger", icon: "alert" },
     k.suspended && k.purgeOn && { label: "解約", tone: "danger", icon: "alert" },
-    !k.personal && !k.admins && { label: "管理者不在", tone: "danger", icon: "alert" },
+    !k.personal && !k.admins && { label: `${t("admin")}不在`, tone: "danger", icon: "alert" },
     !k.personal && k.adminExpired && { label: "招待期限切れ", tone: "danger", icon: "alert" },
     k.suspended && { label: "停止中", tone: "warn", icon: "clock" },
     !k.personal && k.adminPending && { label: "指名待ち", tone: "warn", icon: "clock" },
