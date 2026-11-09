@@ -2280,5 +2280,6 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 }
 
 /* 表示中から同じスクロール領域と背景を保ち、中身の上で退場する。 */
-.loading-overlay { position: fixed; inset: 0; z-index: 100; overflow: auto; background: var(--page-background); }
+/* 本文より上、ダイアログ（30）とトースト（40）より下。 */
+.loading-overlay { position: fixed; inset: 0; z-index: 10; overflow: auto; background: var(--page-background); }
 .loading-overlay.is-leaving { opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); pointer-events: none; }
