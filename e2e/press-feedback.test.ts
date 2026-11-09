@@ -26,6 +26,9 @@ for (const path of ['/login', '/signup']) {
       await selected.focus();
       await page.keyboard.press('Enter');
       await expect(selected).toHaveText('移っています');
+      await expect(page.getByRole('status')).toHaveText(
+        `${provider === 'github' ? 'GitHub' : 'Google'} へ移っています`,
+      );
       for (const link of await links.all()) await expect(link).toHaveAttribute('aria-disabled', 'true');
       // aria-disabled のリンクをプログラムから押して、ハンドラーによる防止を確かめる。
       await links.evaluateAll((elements) => elements.forEach((element) => (element as HTMLAnchorElement).click()));
@@ -42,6 +45,9 @@ for (const path of ['/login', '/signup']) {
       }
       await selected.evaluate((element) => (element as HTMLAnchorElement).click());
       await expect(selected).toHaveText('移っています');
+      await expect(page.getByRole('status')).toHaveText(
+        `${provider === 'github' ? 'GitHub' : 'Google'} へ移っています`,
+      );
       expect(await page.evaluate(() => Reflect.get(window, 'pressResults'))).toEqual([false]);
     });
   }

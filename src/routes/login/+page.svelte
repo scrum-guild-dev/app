@@ -88,6 +88,12 @@
   onpagehide={() => externalAuth.reset()}
 />
 
+<div class="visually-hidden" role="status">
+  {externalAuth.moving
+    ? t('authMovingProvider', { provider: externalAuth.moving === 'github' ? 'GitHub' : 'Google' })
+    : ''}
+</div>
+
 <svelte:head>
   <title>{t('pageTitle', { page: t('loginTitle'), app: t('appName') })}</title>
 </svelte:head>
