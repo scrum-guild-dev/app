@@ -6,6 +6,11 @@ import { gzipSync } from 'node:zlib';
 // 接続先とlistenは呼び出し側が作ったループバックのサーバーだけ。
 export function bootProxy(upstreamPort: number) {
   return createServer(async (request, response) => {
+    if (!request.url?.startsWith('/') || request.url.startsWith('//')) {
+      response.statusCode = 400;
+      response.end('boot bench requires an origin-form path');
+      return;
+    }
     try {
       const headers = new Headers();
       for (const name of ['content-type', 'cookie', 'origin', 'accept']) {
@@ -14,7 +19,7 @@ export function bootProxy(upstreamPort: number) {
       }
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
-      const result = await fetch(`http://127.0.0.1:${upstreamPort}${request.url ?? '/'}`, {
+      const result = await fetch(`http://127.0.0.1:${upstreamPort}${request.url}`, {
         method: request.method,
         headers,
         body: ['GET', 'HEAD'].includes(request.method ?? 'GET') ? undefined : Buffer.concat(chunks),
