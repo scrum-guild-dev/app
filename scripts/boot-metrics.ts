@@ -5,11 +5,15 @@ export const bootNetworks = {
 } as const;
 
 export type BootObservation = { seen: boolean; shownMs: number; failedAtMs: number | null };
-export function bootFailureSummary(values: readonly number[]) {
-  if (!values.length || values.some((value) => !Number.isFinite(value) || value < 0)) {
+export function bootFailureSummary(values: readonly { failed: boolean; failedMs: number }[]) {
+  if (!values.length || values.some((value) => !Number.isFinite(value.failedMs) || value.failedMs < 0)) {
     throw new Error('失敗表示の観測が不正です');
   }
-  return { failedRuns: values.filter((value) => value > 0).length, runs: values.length, maxMs: Math.max(...values) };
+  return {
+    failedRuns: values.filter((value) => value.failed).length,
+    runs: values.length,
+    maxMs: Math.max(...values.map((value) => value.failedMs)),
+  };
 }
 export function assertBootHeading(headings: readonly string[], expected: string) {
   if (!expected.trim() || !headings.some((heading) => heading.trim() === expected.trim())) {
@@ -34,6 +38,7 @@ export function bootTiming(responseStart: number, observation: BootObservation) 
     htmlMs: responseStart,
     shownMs: observation.shownMs,
     afterHtmlMs: observation.shownMs - responseStart,
+    failed: observation.failedAtMs !== null,
     failedMs: observation.failedAtMs === null ? 0 : observation.shownMs - observation.failedAtMs,
   };
 }

@@ -332,7 +332,7 @@ try {
     networks: bootNetworks,
     failureSummaries: networks.map((profile) => ({
       profile,
-      ...bootFailureSummary(samples.filter((sample) => sample.profile === profile).map((sample) => sample.failedMs)),
+      ...bootFailureSummary(samples.filter((sample) => sample.profile === profile)),
     })),
     samples,
   };
@@ -343,7 +343,7 @@ try {
   console.log('| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (const profile of networks) {
     const rows = samples.filter((sample) => sample.profile === profile);
-    const failures = bootFailureSummary(rows.map((row) => row.failedMs));
+    const failures = bootFailureSummary(rows);
     const median = (key: 'htmlMs' | 'domReadyMs' | 'shownMs' | 'afterDomReadyMs' | 'failedMs' | 'bytes' | 'requests') =>
       percentile(
         rows.map((row) => row[key]),
