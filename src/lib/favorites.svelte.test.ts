@@ -350,3 +350,15 @@ test('手動の最初の応答が届いた直後の背景更新も、待機を�
   await Promise.all([manual, background]);
   expect(favorites.loading).toBe(false);
 });
+
+test('手動の読み直しが完了する境目の背景更新は、新しい読み直しとして確実に実行する', async () => {
+  call.mockResolvedValue({ ok: true, data: { favorites: [], marks: [] } });
+  const { favorites } = setup();
+  const manual = favorites.refresh(true);
+  await Promise.resolve();
+  await Promise.resolve();
+  const background = favorites.refresh();
+  await Promise.all([manual, background]);
+  expect(call).toHaveBeenCalledTimes(2);
+  expect(favorites.loading).toBe(false);
+});

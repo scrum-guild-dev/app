@@ -112,14 +112,17 @@ export class Favorites {
     const manual = { scope, queued: false, promise: Promise.resolve() };
     this.manualRequest = manual;
     const work = async () => {
-      do {
-        manual.queued = false;
-        await this.readList(true);
-      } while (manual.queued && this.manualRequest === manual && this.source().scope === scope);
+      try {
+        do {
+          manual.queued = false;
+          await this.readList(true);
+        } while (manual.queued && this.manualRequest === manual && this.source().scope === scope);
+      } finally {
+        // 完了 Promise の後処理に回すと、その間の背景更新を失うので、ここで一続きに解除する。
+        if (this.manualRequest === manual) this.manualRequest = null;
+      }
     };
-    manual.promise = work().finally(() => {
-      if (this.manualRequest === manual) this.manualRequest = null;
-    });
+    manual.promise = work();
     return manual.promise;
   }
   private acceptRequest(request: number, scope: string): boolean {
