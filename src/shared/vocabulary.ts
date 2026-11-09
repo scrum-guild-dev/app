@@ -1259,6 +1259,7 @@ export const dictionary = defineDictionary({
     'この{organization}に入るには、ログインし直してください。API トークンも、ログインし直してから発行し直す必要があります。',
   loginLead:
     'いずれかの{organization}に所属しているか、招待されている人がログインできます。招待されたときの手段でログインしてください。初めての人は、下の会員登録から始められます。',
+  authMoving: '移っています',
   loginWithGithub: 'GitHub でログイン',
   loginWithGoogle: 'Google でログイン',
   loginNote:

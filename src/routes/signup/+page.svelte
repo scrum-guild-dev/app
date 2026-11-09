@@ -25,12 +25,38 @@
   onMount(resetToDefaults);
   const githubStartHref = $derived(`/api/auth/github/start?${startQuery}`);
   const googleStartHref = $derived(`/api/auth/google/start?${startQuery}`);
+
+  let moving = $state<'github' | 'google' | null>(null);
+  function startExternal(event: MouseEvent, provider: 'github' | 'google'): void {
+    if (moving) {
+      event.preventDefault();
+      return;
+    }
+    // 別のタブやウィンドウで開くときは、この画面を待機中にしない。
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    moving = provider;
+  }
+
+  function restore(event: PageTransitionEvent): void {
+    if (event.persisted) moving = null;
+  }
+
   // ログインの画面へ戻る。戻り先が `/` でなければ引き継ぐ
   const loginQuery = $derived(returnTo === '/' ? '' : `?return_to=${encodeURIComponent(returnTo)}`);
 
   // ほかの文言に混ぜる言葉。organization は辞書の項目
   const words = $derived({ organization: t('organization') });
 </script>
+
+<svelte:window onpageshow={restore} />
 
 <svelte:head>
   <title>{t('pageTitle', { page: t('signupTitle'), app: t('appName') })}</title>
@@ -45,12 +71,24 @@
       <div class="onboarding-heading"><h1 id="signup-title">{t('signupTitle')}</h1></div>
       <p>{t('signupLead', words)}</p>
       <!-- 画面の経路ではなく Worker の GET。resolve() は経路の ID を要るので通さず、data-sveltekit-reload で直に開く -->
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-      <a class="btn is-wide" href={githubStartHref} data-sveltekit-reload><Icon name="git" />{t('signupWithGithub')}</a>
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-      <a class="btn is-wide is-google" href={googleStartHref} data-sveltekit-reload
-        ><GoogleMark />{t('signupWithGoogle')}</a
+      <!-- eslint-disable svelte/no-navigation-without-resolve -->
+      <a
+        class="btn is-wide"
+        href={githubStartHref}
+        data-sveltekit-reload
+        aria-disabled={moving !== null}
+        onclick={(event) => startExternal(event, 'github')}
+        ><Icon name="git" />{moving === 'github' ? t('authMoving') : t('signupWithGithub')}</a
       >
+      <a
+        class="btn is-wide is-google"
+        href={googleStartHref}
+        data-sveltekit-reload
+        aria-disabled={moving !== null}
+        onclick={(event) => startExternal(event, 'google')}
+        ><GoogleMark />{moving === 'google' ? t('authMoving') : t('signupWithGoogle')}</a
+      >
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
       <p class="gate-note">{t('signupNote', words)}</p>
       <div class="form-actions">
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- 経路は resolve() で解決し、引き継ぐ return_to のクエリだけを足している -->
