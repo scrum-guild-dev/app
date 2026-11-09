@@ -10,9 +10,15 @@ test('ワークスペースの画面の経路だけから ID を取り出す', (
 });
 
 test('メニューに無い組織の画面の名前を引く', () => {
-  expect(accountScreenKey('/aoba/me', 'aoba')).toBe('pageMe');
-  expect(accountScreenKey('/aoba/admin', 'aoba')).toBe('pageOrgAdmin');
-  expect(accountScreenKey('/aoba/admin/users', 'aoba')).toBe('pageOrgAdmin');
-  expect(accountScreenKey('/aoba', 'aoba')).toBeNull();
-  expect(accountScreenKey('/other/me', 'aoba')).toBeNull();
+  expect(accountScreenKey('/aoba/me', 'aoba', true)).toBe('pageMe');
+  expect(accountScreenKey('/aoba/admin', 'aoba', true)).toBe('pageOrgAdmin');
+  expect(accountScreenKey('/aoba/admin/users', 'aoba', true)).toBe('pageOrgAdmin');
+  expect(accountScreenKey('/aoba', 'aoba', true)).toBeNull();
+  expect(accountScreenKey('/other/me', 'aoba', true)).toBeNull();
+});
+
+test('管理者でない人には管理の画面名を出さない', () => {
+  expect(accountScreenKey('/aoba/admin', 'aoba', false)).toBeNull();
+  expect(accountScreenKey('/aoba/admin/users', 'aoba', false)).toBeNull();
+  expect(accountScreenKey('/aoba/me', 'aoba', false)).toBe('pageMe');
 });

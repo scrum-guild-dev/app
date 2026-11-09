@@ -685,20 +685,20 @@ Codex が探索する入口は `.agents/skills/`。原本を複製せず、共�
 | `add-operation` | `.claude/skills/add-operation` への相対リンク。API の操作を足す手順を共有する |
 | `d1-migration` | `.claude/skills/d1-migration` への相対リンク。D1 の変更と検証を共有する。Issue や PR への書き込みは直接依頼時の承認の範囲に従う |
 | `find-animation-opportunities`、`review-animations`、`improve-animations` | `.claude/skills/` の同名への相対リンク。外から入れた動きのスキル（下の「外から入れたスキル」）を共有する。同じく外から入れた `impeccable` は Codex では使わないので置かない |
-| `pr` | `.claude/skills/pr` への相対リンク。PR の状態で必要な詳細だけを読み、Codex は AGENTS.md の承認範囲を優先する |
+| `pr` | Codex 用の入口。PR の状態に合う共有手順を読み、承認範囲と E2E の CI 実行方針を優先する |
 | `increment-build` | Codex 用の `SKILL.md`。着手の判定と受け入れ条件は `docs/agent-workflows/` を参照し、実装の進行は Codex が受け持つ |
 | `done-check` | Codex 用の `SKILL.md`。検査・点検基準は `docs/agent-workflows/`、レビューの役割は共有定義を参照し、未コミット・新規ファイルも点検する |
 
 リンクはリポジトリ内の相対パスなので、ワークツリーと clone の中でも同じ原本を指す。
 工程の2つを Claude 用スキル全体へのリンクにしない。Claude の道具呼び出し、自動コミットと PR 作成まで実行してしまうため。
-`sprint-*`、`daily-scrum` などは今回の Codex 用の探索対象には加えていない。必要なときに互換性を確認して追加する。
-特に `daily-scrum` の Claude Artifact 更新と `rename-session` のセッション操作は、そのまま Codex に移せない。
+`backlog-add`、`backlog-refine`、`daily-scrum`、`retro`、`sprint-pick`、`sprint-plan`、`sprint-review`、`sync-base`、`japanese-tech-writing` にも Codex 用の入口を置く。読み替えと対象外のスキルは `.agents/skills/README.md` を参照する。
+`daily-scrum` はデータ取得と点検を行い、Claude Artifact 更新は省く。`sprint-review` は動画を自動撮影せず、CI の成果物や人の画面操作で確認する。
 スキルを直すときは、共通の工程基準は `docs/agent-workflows/`、共有する専門スキルは `.claude/skills/` の原本（外から入れたスキルは除く。下の「外から入れたスキル」）、各製品の進行はそれぞれの入口を直す。
 
 #### 検証と承認
 
 `.claude/` のフックは自動で動かない。整形は変更ファイルに絞って行い、検査のコマンドは `CLAUDE.md` を使う。
-本番操作と秘密ファイルの読み書き、手元の e2e の禁止は `AGENTS.md` の指示で守る。これらを機械的に遮断する Codex 用フックを追加したわけではない。
+本番操作と秘密ファイルの読み書き、E2E を CI で実行する方針は `AGENTS.md` の指示で守る。Codex はクラウドでも E2E の事前実行・preflight・成功記録の照合を PR 前の条件にせず、ユーザーが明示的に依頼した場合だけセッションで実行する。必要な E2E の追加・更新は行い、セッションの検査結果と CI の結果を分けて報告する。これらを機械的に遮断する Codex 用フックを追加したわけではない。
 git の保護フックと CI は既存のものを使う。
 レビューの観点は `.claude/agents/` と `.claude/checklists/` を読み、Codex のサブエージェントへ渡す。実装した本人の自己点検を独立レビューとして数えない。
 必要な独立レビューができなければ未実施と報告し、CI と人が確認できる状態で渡す。
@@ -707,9 +707,10 @@ git の保護フックと CI は既存のものを使う。
 承認が必要な操作の前にローカルの実装・検証と投稿内容の準備を終え、既に承認されたことは聞き直さない。
 `implementer` からは外部へ書き込まず、呼び出し元へ戻す。
 
-新しい Codex セッションで `/skills` または `$` の候補を開き、この5つが見えることを確かめる。
+新しい Codex セッションで `/skills` または `$` の候補を開き、上記のスキルが見えることを確かめる。
 見えなければ作業ディレクトリとリンク先を確かめてから再起動する。
 2026-11-02 に Codex CLI 0.166.0 の `codex debug prompt-input` で、この5つのスキルのメタデータと、直接依頼・委譲を分けた `AGENTS.md` が読み込まれることを確かめた。実際の Issue の実装から PR 作成までを通す確認は別に行う。
+2026-11-09 に、一時の `CODEX_HOME` を使った `codex debug prompt-input` で、今回配置した17個のスキルのメタデータと、E2E を CI で実行する `AGENTS.md` の指示が読み込まれることを確かめた。各スキルを実行して外部操作まで通す検証は行っていない。
 手元の設定の仕様は [OpenAI の AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md)、[スキル](https://learn.chatgpt.com/docs/build-skills)、[設定](https://learn.chatgpt.com/docs/config-file/config-basic) を参照する。
 
 ### クラウド環境

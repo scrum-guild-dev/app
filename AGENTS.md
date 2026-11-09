@@ -26,8 +26,8 @@ Codex の進行役が **`implementer` として実装を委譲したときだけ
 
 ## スキルと点検の原本
 
-Codex 用の入口は `.agents/skills/`。`add-operation`、`d1-migration`、`pr`、外から入れた動きのスキル（`find-animation-opportunities`、`review-animations`、`improve-animations`。`docs/development.md` の「外から入れたスキル」）は `.claude/skills/` の原本への相対リンクで共有する。
-`increment-build` と `done-check` は Codex 向けの入口を持つ。共通の着手・受け入れ・検査・点検基準は `docs/agent-workflows/`、レビューの役割とチェックリストは `.claude/` の共有定義を参照する。
+Codex 用の入口は `.agents/skills/`。`add-operation`、`d1-migration`、外から入れた動きのスキル（`find-animation-opportunities`、`review-animations`、`improve-animations`。`docs/development.md` の「外から入れたスキル」）は `.claude/skills/` の原本への相対リンクで共有する。
+`increment-build`、`done-check`、`pr` とバックログ・スクラム関連のスキルは Codex 向けの入口を持つ。追加した入口と Claude 固有操作の読み替えは `.agents/skills/README.md` を参照する。共通の着手・受け入れ・検査・点検基準は `docs/agent-workflows/`、レビューの役割とチェックリストは `.claude/` の共有定義を参照する。
 同名の Claude 用スキルを Codex の工程として直接実行しない。
 
 `.claude/agents/` のレビュー定義は、点検の観点として読める。Claude の `model`、`tools`、`effort` は Codex のエージェント設定としては扱わない。
@@ -40,7 +40,7 @@ Codex 用の入口は `.agents/skills/`。`add-operation`、`d1-migration`、`pr
 
 - wrangler の本番の操作（`deploy`、`versions deploy`、`rollback`）と、`--remote` を付けた `wrangler d1` を打たない。wrangler の設定に remote の binding を足さない
 - `.dev.vars` と `.env`、ホームの `~/.wrangler` と `~/.config/.wrangler` を読まず、書き込まない
-- ローカルのセッションは e2e を走らせない。クラウドでは PR 作成前に `pnpm e2e:preflight [base-ref] --files … --reason …` を通す（`docs/development.md` の「クラウドで PR 前に e2e を確かめる」）。対象の通常・開発・関連する繰り返しを確認する。全件は CI に任せ、必要時だけ `--all --reason …` で明示する。`e2e:preflight` を実行して Playwright が無いとして終了コード 3 が返ったときだけ e2e を省いて PR を作り、本文に未実施の理由と対象を書いて CI で担保する。3 以外の失敗は省く理由にしない。必要なテストを差分に足し、PR の CI も通す
+- E2E テストはローカル・クラウドとも CI で実行する。ユーザーから明示的に依頼された場合のみ、このセッションで実行する。`pnpm e2e:preflight` とその `--verify` は PR 前の必須条件にしない。変更に必要な E2E は追加・更新し、CI の `e2e`、`e2e-dev`、`e2e-repeat` で確認する。関連するユニットテスト・静的解析・型チェックはこのセッションで実行する。ローカルの検査結果と CI の結果は分け、CI を確認できなければ未検証と報告する。参照先の Claude 用手順に事前実行や成功記録の照合があっても、この方針を優先する。
 - `pkill` を使わない。自分で起動したプロセスだけを、その PID や実行セッションで止める
 - 自動整形は走らない。変更したファイルだけをプロジェクトの Prettier 設定で整形し、`.prettierignore` に従う。無関係の差分を含む作業コピー全体へ `pnpm format` を掛けない
 - 終わる前に、コミット済みの差分、未コミットの差分、新規ファイルを確かめ、変更に合う `CLAUDE.md` の検査を走らせる。実施できなかった検査と独立レビューは、通ったものと分けて報告する
