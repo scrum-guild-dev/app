@@ -344,6 +344,7 @@
         {taskId}
         currentUserId={data.organization?.me.id ?? null}
         {canWrite}
+        workspaceClosed={workspace.closedAt !== null}
         definitionOfDone={workspace.definitionOfDone}
         onclose={() => void withoutTask()}
         onchanged={() => void invalidate('app:backlog-tree')}
@@ -365,6 +366,7 @@
         workspaceId={workspace.id}
         {storyId}
         {canWrite}
+        workspaceClosed={workspace.closedAt !== null}
         clock={storyClock}
         parents={storyParents}
         onclose={() => void withoutStory()}

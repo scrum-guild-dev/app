@@ -13,6 +13,7 @@
   import EpicRequesterDialog from '../../../../../../lib/components/EpicRequesterDialog.svelte';
   import EpicRewardDialog from '../../../../../../lib/components/EpicRewardDialog.svelte';
   import EpicTier from '../../../../../../lib/components/EpicTier.svelte';
+  import FavoriteButton from '../../../../../../lib/components/FavoriteButton.svelte';
   import Icon from '../../../../../../lib/components/Icon.svelte';
   import LoadFailed from '../../../../../../lib/components/LoadFailed.svelte';
   import Markdown from '../../../../../../lib/components/Markdown.svelte';
@@ -287,6 +288,7 @@
   {/snippet}
   {#snippet actions()}
     {@render backLink()}
+    <FavoriteButton targetType="epic" targetId={epic.id} title={epic.title} workspaceId={workspace.id} />
     {#if canWrite}
       <!-- 引き出しはワークスペースの枠が置く（`?epic_id=<ID>`）。閉じたら、このリンクへフォーカスを戻す -->
       <!-- eslint-disable svelte/no-navigation-without-resolve -- href は resolve した経路に ?epic_id=<ID> を足したもの -->

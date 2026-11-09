@@ -585,6 +585,19 @@ const SECTIONS = [
       <div class="field"><span class="field-label">所属していない管理者（先頭は押せない現在地の行）</span><div style="max-width:240px">${SQ.workspaceMenuHtml({ open: true, id: "cat-ws-admin", live: false, current: { id: "sample-other", name: "架空の管理対象チーム" } })}</div></div></div>`,
     ["ボタンで開き、Tab でリンクを選び、Enter で移る。矢印キーだけでは移らない。", "Esc、外側を押す、Tab で外へ出る、リンクを押すと閉じる。中にフォーカスがあればボタンへ戻す。", "一覧の高さは 40vh まで。組織の切り替えと同じスタイルで、長い名前は折り返す。"],
     ".ws-menu .ws-menu-button .ws-menu-list / SQ.workspaceMenuHtml()")],
+  ["favorites", "お気に入り", () => block("favorites", "お気に入り", "本人だけの印。星を押すと、塗りと押された状態が切り替わる。",
+    `<div class="cat-row"><span class="favorite-control">${SQ.favoriteButtonHtml()}</span><span class="favorite-control">${SQ.favoriteButtonHtml(true)}</span><span class="favorite-control">${SQ.favoriteButtonHtml(true, true, true)}</span></div>
+    <div>${SQ.favoriteRetryHtml()}</div>
+    <div>${SQ.favoriteRetryHtml(true)}</div>
+    <div><span class="field-label">バックグラウンド更新中（状態を保つ見本）</span>${SQ.favoriteBackgroundHtml()}</div>
+    <div class="favorite-control">${SQ.favoriteButtonHtml()}<span class="field-error" role="status">${t("favoriteLimit")}</span></div>
+    <nav class="nav" aria-label="お気に入りの見本">${SQ.favoritesNavHtml([
+      { icon: "check", title: "朝会の進め方をまとめる", href: "task.html" },
+      { icon: "flag", title: "初めて使う人が仕事を始められるようにする", href: "epic.html" },
+      { icon: "file", title: "ふくろう班の開発手順と長い名前のページの見本", href: "wiki.html" },
+    ])}</nav>`,
+    ["星は44px四方。押されたら塗り、押されていなければ輪郭で示す。", "aria-labelはお気に入りにするのまま、aria-pressedで状態を伝える。titleは次の操作に切り替える。", "メニューの節は組織の画面の後、ワークスペースの前。0件と畳んだ列では出さない。題は1行で省略し、全文をtitleで残す。タッチ端末ではフォーカスすると全文を折り返す。狭い幅の帯でもお気に入りの見出しを残す。", "21件目は付けず、ボタンの近くに上限20件と登録した対象の星を外す案内を出す。", "初回取得に失敗した星は押せない。見本のもう一度試すは、1回目に再失敗、2回目に成功する。もう一度試すのボタンは44px四方以上で、再試行中にも同じ位置に残る。再試行中と再失敗は常設のrole=statusで伝え、成功後は星を操作できる。既に一覧を読めている状態の再取得失敗では、一覧を保ち、星も操作できる。バックグラウンド更新では読み込み文・失敗案内・星のbusyを追加しない。"],
+    ".favorite-mark / .favorite-control / .nav-favorites")],
   ["nav-wrapping", "長い名前を含むメニュー項目", () => block("nav-wrapping", "長い名前を含むメニュー項目", "組織名を含む Wiki など、利用者が付けた名前を全文読めるようにする項目には .nav-item.is-wrapping を使う。画面の幅を変えると、761px 以上では縦のメニュー、760px 以下では横にスクロールできる帯になる。",
     `${[
       ["短い名前", "こもれび工房"],

@@ -148,15 +148,25 @@ export const favoriteListOperation = implement(favoriteList, async (context) => 
     ),
   );
   const resolved = new Map<string, { title: string; workspace_id: string | null }>();
+  const marked = new Set<string>();
   await Promise.all(
     kinds.map(async (kind) => {
       const ids = stored.flatMap((row) => (row[columns[kind]] === null ? [] : [row[columns[kind]]!]));
       if (ids.length === 0) return;
-      const rows = await db.rows(db.statement((q) => visibleTargets(q, context, kind, ids, true)));
+      const [rows, readable] = await Promise.all([
+        db.rows(db.statement((q) => visibleTargets(q, context, kind, ids, true))),
+        db.rows(db.statement((q) => visibleTargets(q, context, kind, ids, false))),
+      ]);
       for (const row of rows) resolved.set(`${kind}:${row.target_id}`, row);
+      for (const row of readable) marked.add(`${kind}:${row.target_id}`);
     }),
   );
   return {
+    marks: stored.flatMap((row) => {
+      const kind = kinds.find((candidate) => row[columns[candidate]] !== null)!;
+      const id = row[columns[kind]]!;
+      return marked.has(`${kind}:${id}`) ? [{ target_type: kind, target_id: id }] : [];
+    }),
     favorites: stored.flatMap((row) => {
       const kind = kinds.find((candidate) => row[columns[candidate]] !== null)!;
       const id = row[columns[kind]]!;
