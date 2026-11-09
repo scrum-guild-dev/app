@@ -118,7 +118,7 @@
 
 <!-- 背景を押して閉じるのは、押し始めと離した所の両方が dialog 自身のときだけ。キーボードでは Esc で閉じられる -->
 <dialog
-  class="dialog"
+  class="dialog is-motion"
   bind:this={dialog}
   aria-labelledby={titleId}
   oncancel={(event) => {

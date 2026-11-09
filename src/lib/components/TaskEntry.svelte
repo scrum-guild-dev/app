@@ -1,5 +1,6 @@
 <script lang="ts">
   import TodayMarkButton from './TodayMarkButton.svelte';
+  import { flashRow } from '../flash-row.ts';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { tick } from 'svelte';
@@ -67,6 +68,8 @@
     clock,
     done = false,
     justDone = false,
+    addedFlash = false,
+    flash = 0,
     pending = false,
     canComplete = true,
     onComplete,
@@ -91,6 +94,8 @@
     clock: { today: string; weekStart: number };
     done?: boolean;
     justDone?: boolean;
+    addedFlash?: boolean;
+    flash?: number;
     pending?: boolean;
     canComplete?: boolean;
     onComplete?: (task: BacklogTask) => void;
@@ -599,7 +604,8 @@
   class:is-done={done}
   class:has-grip={hasGrip}
   class:is-dragging={dnd?.isDragging('task', task.id)}
-  class:is-dropped={dnd?.isFlashing('task', task.id)}
+  class:is-dropped={addedFlash || dnd?.isFlashing('task', task.id)}
+  use:flashRow={flash}
   onkeydown={keydown}
   data-row-id={task.id}
   data-drop={dnd?.markOf(dropRow)}

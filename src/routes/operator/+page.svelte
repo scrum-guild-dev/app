@@ -4,6 +4,7 @@
   import { invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { callOperation } from '../../lib/api.ts';
+  import { flashRow } from '../../lib/flash-row.ts';
   import CreateOrganizationDialog from '../../lib/components/CreateOrganizationDialog.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Gate from '../../lib/components/Gate.svelte';
@@ -52,10 +53,21 @@
   let quotaDialog = $state<ReturnType<typeof OrganizationQuotaDialog>>();
   // 上限の変更の対象の組織の名前。ダイアログの結果のトーストに使う
   let quotaName = $state('');
+  let quotaSlug = $state('');
   // 停止の確認の対象。ダイアログの結果を受けるとき、どの行だったかを名前で知らせるのに使う
   let suspending = $state<{ slug: string; name: string; currentKind?: SuspensionKind } | null>(null);
   // 再開を送っている行
   let resumingSlug = $state<string | null>(null);
+  let rowFlashes = $state<Record<string, number>>({});
+
+  // 成功した操作の対象だけ、最新の一覧を表示してから光らせる。
+  // 失敗や単なる再読み込みは stamp を更新しない。
+  async function reloadAndFlash(slug?: string): Promise<void> {
+    await invalidateAll();
+    if (slug !== undefined && !data.failed && data.organizations.some((row) => row.slug === slug)) {
+      rowFlashes = { ...rowFlashes, [slug]: performance.now() };
+    }
+  }
 
   const words = $derived({
     organization: t('organization'),
@@ -95,7 +107,7 @@
       } else {
         showToast(t('operatorResumeFailed', words), 'alert');
       }
-      await invalidateAll();
+      await reloadAndFlash(result.ok ? row.slug : undefined);
     } finally {
       resumingSlug = null;
     }
@@ -120,7 +132,7 @@
       });
       return;
     } else showToast(t('operatorUnavailable', { name }), 'alert');
-    void invalidateAll();
+    void reloadAndFlash(outcome === 'done' ? suspending?.slug : undefined);
   }
 
   // 管理者の指名し直しのダイアログが purge_due を受けた（開いた後に予定日を過ぎた）。扱いは再開と同じ
@@ -150,7 +162,7 @@
     if (outcome === 'done') showToast(t('operatorQuotaDone', { name }), 'check');
     else if (outcome === 'state_changed') showToast(t('operatorStateChanged', { name }), 'alert');
     else showToast(t('operatorUnavailable', { name }), 'alert');
-    void invalidateAll();
+    void reloadAndFlash(outcome === 'done' ? quotaSlug : undefined);
   }
 
   function changeQuota(
@@ -159,6 +171,7 @@
   ): void {
     if (resumingSlug !== null) return;
     quotaName = row.name;
+    quotaSlug = row.slug;
     quotaDialog?.show(row, trigger);
   }
 
@@ -216,7 +229,7 @@
               {#each data.organizations as organization (organization.slug)}
                 {@const statuses = operatorStatuses(organization)}
                 {@const primaryStatus = statuses[0]}
-                <tr>
+                <tr use:flashRow={rowFlashes[organization.slug] ?? 0}>
                   <td class="is-name">
                     {organization.name}
                     {#if organization.self_created || organization.trial_ends_on !== null || statuses.length > 0}

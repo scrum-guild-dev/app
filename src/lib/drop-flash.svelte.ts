@@ -1,6 +1,6 @@
-// 落とした行を、少しのあいだ光らせる印（.is-dropped）の状態。BacklogDnd と ListDnd が使う。
-// 光らせる長さは design/tokens.css の --duration-flash（800ms）より少し長くして、演出の終わりまで印を残す
-export const FLASH_MS = 900;
+// 落とした行と足した行を、少しのあいだ光らせる印（.is-dropped）の状態。BacklogDnd、ListDnd、バックログの追加行が使う。
+import { FLASH_MS } from './flash-duration.ts';
+export { FLASH_MS } from './flash-duration.ts';
 
 export class DropFlash<T> {
   // 光らせている行

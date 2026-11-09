@@ -1293,6 +1293,18 @@ label.pick-row:hover { background: var(--color-accent-soft); }
   position: relative; inset: auto; z-index: auto; width: 100%; max-width: 960px;
   margin-inline: auto; border: 0; box-shadow: none; overflow: visible;
 }
+/* 見本と本番の Drawer/Dialog が is-motion で出現を有効にする。
+   hidden から出るときだけ始め、前後への移動や中身の描き直しでは繰り返さない。
+   退場は即時にするので、閉じた面が操作やフォーカスを妨げない。 */
+.drawer.is-motion:not(.is-page) {
+  transition: transform var(--duration-stamp) var(--ease-out), opacity var(--duration-stamp) var(--ease-out);
+}
+.scrim.is-motion { transition: opacity var(--duration-fast) var(--ease-out); }
+@starting-style {
+  .drawer.is-motion:not(.is-page) { transform: translateX(24px); opacity: 0; }
+  .drawer.is-motion.is-center:not(.is-page) { transform: translateY(8px); }
+  .scrim.is-motion { opacity: 0; }
+}
 .drawer-top { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .drawer-tools { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-2); }
 /* 閉じるは .drawer-top の直接の子で、DOM では最後（広い幅の見た目と Tab の順が同じ）。tools が空（狭い幅のストーリーなど）のときは tools を畳み、閉じるを右端に寄せる */
@@ -1463,6 +1475,7 @@ dialog.dialog::backdrop { background: none; }
   border-radius: var(--radius-1); box-shadow: var(--shadow-float);
   display: grid; gap: var(--space-4); padding: var(--space-5) var(--space-6) var(--space-6);
 }
+.dialog.is-motion .dialog-sheet { animation: toast-in var(--duration-stamp) var(--ease-out) 1; }
 .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .dialog-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-xl); line-height: var(--leading-tight); min-width: 0; overflow-wrap: anywhere; }
 .dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); font-size: var(--text-sm); overflow-wrap: anywhere; }
@@ -1676,9 +1689,11 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   from { background-color: var(--color-accent-soft); outline-color: var(--color-accent); }
   to { outline-color: transparent; }
 }
-.entry.is-dropped, .tree-row.is-dropped, .order-list li.is-dropped, .card.is-dropped {
+.entry.is-dropped, .tree-row.is-dropped, .order-list li.is-dropped, .card.is-dropped, .table tr.is-dropped {
   outline: 1px solid transparent; outline-offset: -1px; animation: drop-flash var(--duration-flash) var(--ease-out);
 }
+/* 操作の列は横スクロールの下の列を隠す地を持つので、行の光を同じ時間だけ重ねる。 */
+.table tr.is-dropped > td.is-actions { animation: drop-flash var(--duration-flash) var(--ease-out); }
 /* スプリントのカードと列のドラッグ。つかむ場所はカード全体（ドラッグできるカードは draggable="true"）で、題のリンクとボタンは押すだけ。
    before / after はカードとカードの間の線（カードの幅いっぱい）。線は隙間（--space-2 = 8px）の真ん中に引く。
    絶対配置の基準はカードの枠の内側（padding box）で、枠が 1px あるので、隙間の真ん中は内側の端から 5px 外（枠の外へ 4px + 枠 1px）。

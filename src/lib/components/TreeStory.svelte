@@ -45,6 +45,7 @@
     nested = false,
     remaining = 0,
     pending = false,
+    addedFlash = false,
     parentFinished = false,
     onComplete,
     onReopen,
@@ -67,6 +68,7 @@
     nested?: boolean;
     remaining?: number;
     pending?: boolean;
+    addedFlash?: boolean;
     parentFinished?: boolean;
     onComplete?: (story: BacklogStory) => void;
     onReopen?: (story: BacklogStory) => void;
@@ -169,7 +171,7 @@
     class="tree-row is-story"
     class:is-root={!nested}
     class:has-grip={hasGrip}
-    class:is-dropped={dnd?.isFlashing('story', story.id)}
+    class:is-dropped={addedFlash || dnd?.isFlashing('story', story.id)}
     onkeydown={keydown}
     data-row-id={story.id}
     data-drop={dropMark === 'into' ? 'into' : undefined}

@@ -9,6 +9,7 @@
   import { useShortcut } from '../shortcuts.svelte.ts';
   import { stepFocusTarget } from '../task-order.ts';
   import { modalState } from '../toast.svelte.ts';
+  import { drawerMotion } from '../drawer-motion.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
 
@@ -162,6 +163,7 @@
   class:is-center={shownMode === 'center'}
   class:is-page={!modal}
   bind:this={drawerElement}
+  use:drawerMotion={scrimElement}
   role={modal ? 'dialog' : 'region'}
   aria-modal={modal ? true : undefined}
   aria-labelledby={labelledBy}
