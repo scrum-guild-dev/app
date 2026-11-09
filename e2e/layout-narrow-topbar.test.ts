@@ -187,7 +187,7 @@ test('浮きメニューを開く間は背景を送らず、本番の組織作�
   const menu = page.getByRole('dialog', { name: 'すべてのメニュー', exact: true });
   await menu.locator('.org-menu-button').click();
   await menu.getByRole('button', { name: '組織を作る', exact: true }).click();
-  const create = page.getByRole('dialog', { name: '組織を作る', exact: true });
+  const create = page.getByRole('dialog', { name: '自分の組織を作る', exact: true });
   await create.getByLabel('組織の名前', { exact: true }).fill('こもれび工房');
   await expect(create.getByLabel('組織の名前', { exact: true })).toHaveValue('こもれび工房');
   await create.getByRole('button', { name: 'やめる', exact: true }).click();
