@@ -1648,7 +1648,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 .form, .form-row, .input-row, .field, .order-list { max-width: 56rem; }
 .form-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 /* 先頭の静かな小ボタンだけ、枠1pxと左右の余白10pxを外へ出し、文字を本文にそろえる。押せる箱は縮めない */
-.form-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
+.gate-sheet .form-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: -11px; }
 /* 利用開始のフローは左右20pxの余白を持つ48pxのボタン。大きさを保って文字だけそろえる */
 .onboarding .form-actions > .btn.is-sm.is-quiet:first-child { margin-inline-start: calc(-1 * var(--space-5) - 1px); }
 

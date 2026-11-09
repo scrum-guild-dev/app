@@ -119,3 +119,18 @@ test('390px の管理と運用で静かな操作が積んだ行の左端にそ�
     }
   }
 });
+
+test('ダイアログの静かな操作には枠の外の補正を適用しない', async ({ page }) => {
+  await page.goto('/login');
+  await expect(page.locator('.gate-title')).toBeVisible();
+  const margin = await page.evaluate(() => {
+    const panel = document.createElement('div');
+    panel.className = 'dialog';
+    panel.innerHTML = '<div class="form-actions"><button class="btn is-sm is-quiet">もう一度試す</button></div>';
+    document.body.append(panel);
+    const margin = getComputedStyle(panel.querySelector('button')!).marginInlineStart;
+    panel.remove();
+    return margin;
+  });
+  expect(margin).toBe('0px');
+});
