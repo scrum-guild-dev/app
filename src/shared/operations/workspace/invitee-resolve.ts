@@ -20,6 +20,9 @@ export const inviteeResolve = defineOperation({
   permission: 'leader',
   workspace: true,
   rateLimit: { max: 30, windowSeconds: 600 },
+  // サーバーは GitHub への問い合わせに 10 秒の上限を掛け、届かなければ 503 を返す（src/server/auth/github.ts）。
+  // 画面の既定（10 秒）で先に切ると、GitHub に届かないのに「サーバーに届かない」と出るので、サーバーの 503 を待つ
+  clientTimeoutMs: 20_000,
   input: z.object({
     workspace_id: idSchema,
     provider: inviteProviderSchema,

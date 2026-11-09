@@ -153,6 +153,7 @@ export const dictionary = defineDictionary({
   orgWikiAccess: 'この組織の全員が、読んで書けます。',
   orgWikiTreeLabel: '組織の Wiki のページ',
   wikiPage: 'ページ',
+  wikiPageList: 'ページの一覧',
   wikiRevision: '版',
   wikiChildPage: '子のページ',
   wikiAdd: 'ページを足す',

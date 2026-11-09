@@ -23,11 +23,23 @@
     <!-- URL を直接開いた最初の読み込みで、300ms たっても画面が描けないときだけ見える（static/boot-loading.css）。
          SvelteKit は最初の load が終わるまで画面を描かないため。文は辞書の loading、loadFailedTitle、retry と同じ（scripts/vocabulary.test.ts）。
          15 秒たっても描けないときは、CSS だけで失敗の文と再読み込みのリンクに替える。画面が描かれたら src/routes/+layout.svelte が取り除く。
-         見えるのは骨組み（スケルトン。.boot-skeleton）で、文（.boot-wait）は読み上げのために見えないまま置く -->
+         見えるのは骨組み（スケルトン。枠の外は紙の .boot-skeleton、組織の枠の中は左のメニューと上の帯と画面ごとの本文の .boot-frame。static/boot-shape.js が選ぶ）で、文（.boot-wait）は読み上げのために見えないまま置く -->
     <div id="boot-loading" role="status">
       <span class="boot-wait">読み込んでいます</span>
       <span class="boot-skeleton" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="boot-frame" aria-hidden="true"
+        ><b class="boot-binding"
+          ><b class="boot-corner"><i></i></b><i class="is-org"></i><i></i><i class="is-short"></i
+          ><i class="is-group-label"></i><i class="is-org"></i><i class="is-short"></i><i></i><i class="is-short"></i
+          ><i></i><i class="is-short"></i></b
+        ><b class="boot-sheet"
+          ><b class="boot-topbar"><i class="is-crumb"></i><i class="is-search"></i><i class="is-account"></i></b
+          ><b class="boot-content"></b></b
+      ></span>
       <span class="boot-failed">読み込めませんでした <a href="">もう一度試す</a></span>
     </div>
+    <!-- 骨組みの形を行き先に合わせ、本文の骨組みを .boot-content に組み立てる（組織の枠の中の画面ごとの形か、枠の外の紙か）。
+         上の #boot-loading を読むので、その後に async や defer を付けずに置く。骨組みが見える 300ms より前に終わる -->
+    <script src="%sveltekit.assets%/boot-shape.js"></script>
   </body>
 </html>
