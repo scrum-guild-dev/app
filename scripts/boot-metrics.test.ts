@@ -43,3 +43,10 @@ test('Slow 3G の補正後の帯域は40kB/s、遅延は2秒', () => {
   assert.equal(bootNetworks.slow.downloadThroughput, 40000);
   assert.equal(bootNetworks.slow.latency, 2000);
 });
+
+test('一部の試行だけ失敗表示が出た場合も、0のp50に隠さず回数と最大時間を残す', async () => {
+  const { bootFailureSummary } = await import('./boot-metrics.ts');
+  assert.deepEqual(bootFailureSummary([0, 12000]), { failedRuns: 1, runs: 2, maxMs: 12000 });
+  assert.deepEqual(bootFailureSummary([0, 0]), { failedRuns: 0, runs: 2, maxMs: 0 });
+  for (const values of [[], [-1], [NaN]]) assert.throws(() => bootFailureSummary(values));
+});

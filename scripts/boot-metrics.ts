@@ -5,6 +5,12 @@ export const bootNetworks = {
 } as const;
 
 export type BootObservation = { seen: boolean; shownMs: number; failedAtMs: number | null };
+export function bootFailureSummary(values: readonly number[]) {
+  if (!values.length || values.some((value) => !Number.isFinite(value) || value < 0)) {
+    throw new Error('失敗表示の観測が不正です');
+  }
+  return { failedRuns: values.filter((value) => value > 0).length, runs: values.length, maxMs: Math.max(...values) };
+}
 export function assertBootHeading(headings: readonly string[], expected: string) {
   if (!expected.trim() || !headings.some((heading) => heading.trim() === expected.trim())) {
     throw new Error('目的の画面を表示できませんでした（見出しが一致しません）');
