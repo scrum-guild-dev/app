@@ -106,8 +106,10 @@ test('15 秒たっても描けないときは、読み込み中の文を失敗�
   // CSS の animation-delay は page.clock では進まないので、実時間で 15 秒待つ
   test.setTimeout(60_000);
   await signIn(context, baseURL, 'admin');
-  // 木が返らない（描けない）まま 15 秒たたせる
-  await routeOperation(page, backlogTree, { slug: 'aoba' }, () => new Promise<void>(() => {}));
+  // 画面の JS が届かない（描けない）まま 15 秒たたせる。API の読み取りを止めると、10 秒で打ち切られて
+  // 読み込みの失敗の画面が描かれ、#boot-loading が消える（src/lib/api.ts の READ_TIMEOUT_MS）。
+  // 止めるのは JS だけにする。/_app/immutable/ の CSS まで止めると、#boot-loading が DOM に現れない（pnpm preview で確かめた）
+  await page.route('**/_app/immutable/**/*.js', () => new Promise<void>(() => {}));
   await page.goto(WORKSPACE, { waitUntil: 'commit' });
 
   const boot = page.locator('#boot-loading');
