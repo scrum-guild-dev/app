@@ -151,7 +151,12 @@ export const attachmentDeleteOperation = implement(
       throw new ApiError(409, 'conflict');
     }
     // D1 で実際に消したキーだけを消す。本文の参照は残し、以後の配信は404にする。
-    await attachmentStorage.delete(removed.object_key);
+    try {
+      await attachmentStorage.delete(removed.object_key);
+    } catch {
+      // D1 の削除は確定済み。後処理の失敗を操作の失敗にせず、秘密を含まない件数だけを記録する。
+      console.error(JSON.stringify({ level: 'error', code: 'internal', operation: 'attachment-delete', count: 1 }));
+    }
     return { id: removed.id };
   },
 );
