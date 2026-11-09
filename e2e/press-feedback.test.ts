@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures.ts';
-import { A11Y_THEMES, findA11yViolations, NARROW_VIEWPORT } from './helpers.ts';
+import { A11Y_THEMES, applyTheme, findA11yViolations, NARROW_VIEWPORT } from './helpers.ts';
 
 for (const path of ['/login', '/signup']) {
   for (const provider of ['github', 'google']) {
@@ -46,7 +46,7 @@ for (const path of ['/login', '/signup']) {
       await expect(selected).not.toHaveText('移っています');
       for (const link of await links.all()) await expect(link).toHaveAttribute('aria-disabled', 'false');
       for (const theme of A11Y_THEMES) {
-        await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
+        await applyTheme(page, theme);
         expect(await findA11yViolations(page)).toEqual([]);
       }
       await selected.evaluate((element) => (element as HTMLAnchorElement).click());
@@ -85,7 +85,7 @@ ${readFileSync(new URL('../design/components.css', import.meta.url), 'utf8')}</s
     await page.emulateMedia({ reducedMotion, forcedColors });
     await page.goto('/__press-feedback');
     for (const theme of A11Y_THEMES) {
-      await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
+      await applyTheme(page, theme);
       for (const button of await page.locator('button').all()) {
         await button.hover();
         await button.evaluate(async (element) => {
