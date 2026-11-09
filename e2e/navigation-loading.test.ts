@@ -52,18 +52,41 @@ test('遅い移動の完了で戻り、引き出しでは本文を薄くしな�
   await expect(page.locator('main.content')).not.toHaveAttribute('aria-busy');
   await page.getByRole('link', { name: 'ポイント付与のバッチを作る', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(page.locator('main.content')).not.toHaveAttribute('aria-busy');
+  const stayedReady = await page.locator('main.content').evaluate(
+    (main) =>
+      new Promise<boolean>((resolve) => {
+        let busy = main.getAttribute('aria-busy') === 'true';
+        const observer = new MutationObserver((records) => {
+          // oldValueも見るので、同じ描画内でtrue→削除と変わっても見逃さない。
+          busy ||= records.some((record) => record.oldValue === 'true') || main.getAttribute('aria-busy') === 'true';
+        });
+        observer.observe(main, { attributes: true, attributeFilter: ['aria-busy'], attributeOldValue: true });
+        setTimeout(() => {
+          observer.disconnect();
+          resolve(!busy);
+        }, 600);
+      }),
+  );
+  expect(stayedReady).toBe(true);
 });
 
 // APIの10秒の打ち切りとaxeの所要時間を競合させないよう、配線は上の実遷移、
 // 4テーマの見た目は読み終わった本文に同じ属性を付けた部品の状態で確かめる。
-test('読み込み中の本文に4テーマでaxeの違反が無い', async ({ page, context, baseURL }) => {
-  test.setTimeout(90_000);
-  await signIn(context, baseURL, 'admin');
-  await page.goto(`${WORKSPACE}/sprint`);
-  await expect(page.locator('main.content')).toBeVisible();
-  await page.locator('main.content').evaluate((main) => main.setAttribute('aria-busy', 'true'));
-  await expect(page.locator('main.content')).toHaveCSS('opacity', '0.95');
-  await expectNoA11yViolationsInThemes(page, 'sprint');
-  await expect(page.locator('main.content')).toHaveAttribute('aria-busy', 'true');
-});
+for (const { screen, path } of [
+  { screen: 'sprint', path: `${WORKSPACE}/sprint` },
+  { screen: 'backlog', path: WORKSPACE },
+  { screen: 'epic', path: `${WORKSPACE}/epics/019a0000-0000-7000-8000-000000000b01` },
+] as const) {
+  test(`読み込み中の本文に4テーマでaxeの違反が無い（${screen}）`, async ({ page, context, baseURL }) => {
+    test.setTimeout(90_000);
+    await signIn(context, baseURL, 'admin');
+    await page.goto(path);
+    const main = page.locator('main.content');
+    await expect(main).toBeVisible();
+    await expect(main.locator('[aria-busy="true"]')).toHaveCount(0);
+    await main.evaluate((node) => node.setAttribute('aria-busy', 'true'));
+    await expect(main).toHaveCSS('opacity', '0.95');
+    await expectNoA11yViolationsInThemes(page, screen);
+    await expect(main).toHaveAttribute('aria-busy', 'true');
+  });
+}
