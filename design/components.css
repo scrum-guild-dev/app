@@ -2559,9 +2559,9 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
    local の背景が端の影を覆うので、続きのある側だけ影が見える。 */
 @media (max-width: 760px) {
   @container tree (max-width: 640px) {
-    .tree .entry-end:has(> .entry-attributes) { display: flex; min-width: 0; width: 100%; flex-wrap: nowrap; gap: var(--space-2); row-gap: 0; }
-    .tree .entry-attributes { display: block; min-width: 0; flex: 1; }
-    .tree .entry-chips {
+    .tree .entry.has-attrs .entry-end { display: flex; min-width: 0; width: 100%; flex-wrap: nowrap; gap: var(--space-2); row-gap: 0; }
+    .tree .entry.has-attrs .entry-attributes { display: block; min-width: 0; flex: 1; }
+    .tree .entry.has-attrs .entry-chips {
       display: flex; align-items: center; gap: var(--space-2); overflow-x: auto;
       min-height: 44px; padding: 2px; scrollbar-width: thin;
       background:
@@ -2570,16 +2570,16 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
         linear-gradient(to right, var(--color-control-edge), transparent) left center / 12px 100% scroll no-repeat,
         linear-gradient(to left, var(--color-control-edge), transparent) right center / 12px 100% scroll no-repeat;
     }
-    .tree .entry:hover .entry-chips { --entry-chip-cover: color-mix(in srgb, var(--color-accent-soft) 45%, var(--color-surface)); }
+    .tree .entry.has-attrs:hover .entry-chips { --entry-chip-cover: color-mix(in srgb, var(--color-accent-soft) 45%, var(--color-surface)); }
     /* 強調の背景は時間で変わるため、強調中だけ覆いを外す。mask は固定位置のメニューまで切るので使わない。 */
-    .tree .entry.is-dropped .entry-chips { background: none; }
-    .tree .entry-chips > * { flex: none; }
-    .tree .entry-chips .chip-btn { min-width: 44px; min-height: 44px; }
-    .tree .entry-chips .chip-btn::after { content: none; }
-    .tree .entry-chips .chip-btn:focus-visible { outline-offset: -2px; }
-    .tree .entry-actions { display: flex; flex: none; align-items: center; gap: var(--space-2); }
-    .tree .entry-actions .done-btn { min-width: 44px; min-height: 44px; }
-    .tree .entry:not(:has(.entry-meta)):has(.chip-btn) { row-gap: 12px; }
+    .tree .entry.has-attrs.is-dropped .entry-chips { background: none; }
+    .tree .entry.has-attrs .entry-chips > * { flex: none; }
+    .tree .entry.has-attrs .entry-chips .chip-btn { min-width: 44px; min-height: 44px; }
+    .tree .entry.has-attrs .entry-chips .chip-btn::after { content: none; }
+    .tree .entry.has-attrs .entry-chips .chip-btn:focus-visible { outline-offset: -2px; }
+    .tree .entry.has-attrs .entry-actions { display: flex; flex: none; align-items: center; gap: var(--space-2); }
+    .tree .entry.has-attrs .entry-actions .done-btn { min-width: 44px; min-height: 44px; }
+    .tree .entry.has-attrs:not(:has(.entry-meta)) { row-gap: 12px; }
   }
 }
 

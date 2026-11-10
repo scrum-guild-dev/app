@@ -298,6 +298,28 @@ test('バックログのタスクの行が 390px で今より低く、チップ�
   }
 });
 
+// 書き込めない行は属性の横送りを持たず、表示だけの情報をそのまま読める。
+test('終了したバックログの行は属性の横送りを持たず、390pxでも読める', async ({ page }) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await rewriteOperation(page, workspaceInfo, { slug: 'aoba' }, (output) => ({
+    ...output,
+    closed_at: '2026-10-20T00:00:00.000Z',
+  }));
+  await page.goto(WORKSPACE);
+  const row = page.locator('.entry', {
+    has: page.getByRole('link', { name: 'ポイント付与のバッチを作る', exact: true }),
+  });
+  await expect(row).toBeVisible();
+  await expect(row.locator('.chip-btn')).toHaveCount(0);
+  await expect(row.locator('.entry-chips')).not.toHaveAttribute('role', 'group');
+  for (const theme of A11Y_THEMES) {
+    await applyTheme(page, theme);
+    expect(await row.locator('.entry-chips').evaluate((el) => getComputedStyle(el).display)).toBe('contents');
+    expect(await findOverflowViolations(page)).toEqual([]);
+    await expectNoA11yViolations(page, 'backlog');
+  }
+});
+
 // ストーリーの行（題のリンクと右端の段）と、受信箱の行（選ぶ欄、題、右端）の 390px の並び（#999）。
 // 題の広げた押せる範囲が右端のボタンの範囲に重ならないことと、受信箱の選ぶ欄が題と同じ段に並ぶことを確かめる
 test('ストーリーの行の題と右端のボタンの押せる範囲が重ならず、受信箱の行は選ぶ欄と題が同じ段に並ぶ', async ({

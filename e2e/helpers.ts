@@ -197,7 +197,7 @@ export const LAYOUT_SCROLL_CONTAINERS = [
   '.doc-box',
   '.doc-box pre',
   '.doc-table',
-  '.tree .entry-chips',
+  '.tree .entry.has-attrs .entry-chips',
 ];
 
 // 2つの検査は、要素のセレクタの作り方を共有するので、1つの evaluate にまとめる。counted は調べた要素の数

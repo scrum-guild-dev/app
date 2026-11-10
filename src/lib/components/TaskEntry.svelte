@@ -601,6 +601,7 @@
 <!-- data-row-id は、画面が読み直した後に同じ行の操作へフォーカスを戻すのに使う -->
 <div
   class="entry"
+  class:has-attrs={attrs !== undefined}
   class:is-done={done}
   class:has-grip={hasGrip}
   class:is-dragging={dnd?.isDragging('task', task.id)}
@@ -659,7 +660,11 @@
   </div>
   <div class="entry-end">
     <div class="entry-attributes">
-      <div class="entry-chips" role="group" aria-label={task.title}>
+      <div
+        class="entry-chips"
+        role={attrs !== undefined ? 'group' : undefined}
+        aria-label={attrs !== undefined ? task.title : undefined}
+      >
         {#if attrs === undefined && task.due_on !== null}
           <DueChip dueOn={task.due_on} today={clock.today} weekStart={clock.weekStart} {done} />
         {/if}

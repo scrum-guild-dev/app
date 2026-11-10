@@ -582,7 +582,7 @@
       : `<button class="sun" type="button" data-sun="${x.id}" aria-pressed="${x.todayOn === D.today}" aria-label="今日やる: ${esc(x.title)}" title="今日やる" aria-disabled="false">${icon("sun")}</button>`;
     const title = opts.noLink ? `<span class="entry-title">${titleOf(x)}</span>` : `<a class="entry-title" href="#" data-task="${x.id}">${titleOf(x)}</a>`;
     const mark = opts.mark || {};
-    return `<div class="entry ${x.doneAt ? "is-done" : ""}${opts.order ? " has-grip" : ""}${mark.state ? ` ${mark.state}` : ""}"${dropAttr(mark)}>
+    return `<div class="entry ${x.doneAt ? "is-done" : ""}${opts.order ? " has-grip" : ""}${compact ? " has-attrs" : ""}${mark.state ? ` ${mark.state}` : ""}"${dropAttr(mark)}>
       ${opts.order ? gripCell(Boolean(x.doneAt)) : ""}${lead}
       <div class="entry-main">
         ${title}
@@ -594,7 +594,7 @@
           ${taskFlags(x)}${opts.meta ? opts.meta(x) : ""}
         </span>
       </div>
-      <div class="entry-end"><div class="entry-attributes"><div class="entry-chips" role="group" aria-label="${esc(x.title)}">${compact ? attrChip(x, "due") + attrChip(x, "repo") + attrChip(x, "cat") : taskDue(x)}${opts.hidePts ? "" : compact ? attrChip(x, "pts") : pts(x.pts)}${opts.showAssignee ? (compact ? attrChip(x, "who") : avatarOf(x.who)) : ""}</div></div><div class="entry-actions">${compact ? rowMenu(x.title, [
+      <div class="entry-end"><div class="entry-attributes"><div class="entry-chips"${compact ? ` role="group" aria-label="${esc(x.title)}"` : ""}>${compact ? attrChip(x, "due") + attrChip(x, "repo") + attrChip(x, "cat") : taskDue(x)}${opts.hidePts ? "" : compact ? attrChip(x, "pts") : pts(x.pts)}${opts.showAssignee ? (compact ? attrChip(x, "who") : avatarOf(x.who)) : ""}</div></div><div class="entry-actions">${compact ? rowMenu(x.title, [
         { attr: `data-sun="${x.id}"`, label: x.todayOn === D.today ? "今日やるを外す" : "今日やる", icon: "sun" },
         ...orderItems(opts.order),
         { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除する`, icon: "trash", danger: true },
