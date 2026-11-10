@@ -1,14 +1,47 @@
 // 一本道: 管理者がワークスペースを作る → タスクを作る → 完了にする → その行に完了の印 → 読み直すと折りたたみの件数が 1。
 // 詳細の引き出しで完了にしたタスクは、完了の帯の「戻す」で戻せる。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。CSP の違反も確かめる
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { addStoryRow, addTaskRow, createWorkspace, signIn, watchViolations } from './helpers.ts';
+import { taskUpdate } from '../src/shared/operations/task/task-update.ts';
+import { routeOperation } from './operations.ts';
+import { addStoryRow, addTaskRow, createWorkspace, signIn, waitForResponses, watchViolations } from './helpers.ts';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
 test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
+
+// 担当・ポイントは木を読み直さない。別の欄の保存で、古い木が遅れて届く状況を作る。
+async function saveLinkFromDrawer(page: Page, title: string): Promise<void> {
+  await page.locator('.entry', { hasText: title }).getByRole('link', { name: title, exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: title, exact: true });
+  await drawer.getByRole('button', { name: /リンクを足す/ }).click();
+  const input = drawer.getByRole('textbox', { name: 'リンク' });
+  await input.fill('https://example.com/stale-read');
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const unroute = await routeOperation(page, taskUpdate, { slug: 'aoba' }, async (call) => {
+    await gate;
+    await call.passThrough();
+  });
+  const saved = waitForResponses(page, '/task-update');
+  const sending = page.waitForRequest((request) => request.url().endsWith('/task-update'));
+  try {
+    await input.press('Enter');
+    await sending;
+    // task のクエリを外す移動を先に終え、保存後の読み直しが別の読み直しに置き換わらないようにする。
+    await drawer.getByRole('button', { name: '閉じる', exact: true }).click();
+    await expect(drawer).toBeHidden();
+  } finally {
+    release();
+  }
+  await saved;
+  await unroute();
+}
 
 test('作ったワークスペース: タスクを作って完了にすると、その行に完了の印が出て、読み直すと折りたたみの件数に入る', async ({
   page,
@@ -163,7 +196,7 @@ test('木にもとからあるタスク: 完了の応答より前に始まった
   const row = page.locator('.entry', { hasText: '木にもとからある行' });
   await expect(row).toHaveCount(1);
 
-  // ポイントの保存のあとの読み直し（木を読む要求）を、完了より前に出したまま止める
+  // リンクの保存のあとの読み直し（木を読む要求）を、完了より前に出したまま止める
   let release!: () => void;
   const gate = new Promise<void>((resolve) => (release = resolve));
   let held = 0;
@@ -173,8 +206,7 @@ test('木にもとからあるタスク: 完了の応答より前に始まった
     await gate;
     await route.fulfill({ response: await route.fetch() });
   });
-  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
-  await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
+  await saveLinkFromDrawer(page, '木にもとからある行');
   await expect.poll(() => held).toBe(1);
 
   await row.getByRole('button', { name: /完了にする/ }).click();
@@ -200,7 +232,7 @@ test('絞り込み中に木にもとからあるタスクを完了にして、�
   const row = page.locator('.entry', { hasText: '絞られる行' });
   await expect(row).toHaveCount(1);
 
-  // ポイントの保存のあとの読み直し（木を読む要求）を、完了より前に出したまま止める
+  // リンクの保存のあとの読み直し（木を読む要求）を、完了より前に出したまま止める
   let release!: () => void;
   const gate = new Promise<void>((resolve) => (release = resolve));
   let held = 0;
@@ -209,8 +241,7 @@ test('絞り込み中に木にもとからあるタスクを完了にして、�
     await gate;
     await route.fulfill({ response: await route.fetch() });
   });
-  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
-  await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
+  await saveLinkFromDrawer(page, '絞られる行');
   await expect.poll(() => held).toBe(1);
 
   await row.getByRole('button', { name: /完了にする/ }).click();
@@ -239,7 +270,7 @@ test('絞り込み中にストーリーの下のタスクを完了にして、�
   const result = page.getByRole('status').filter({ hasText: '1 件に絞りました' });
   await expect(result).toHaveCount(1);
 
-  // ポイントの保存のあとの読み直しを、完了より前に出したまま止める
+  // リンクの保存のあとの読み直しを、完了より前に出したまま止める
   let release!: () => void;
   const gate = new Promise<void>((resolve) => (release = resolve));
   let held = 0;
@@ -249,8 +280,7 @@ test('絞り込み中にストーリーの下のタスクを完了にして、�
     await gate;
     await route.fulfill({ response: await route.fetch() });
   });
-  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
-  await page.getByRole('menuitemradio', { name: '3 pt', exact: true }).click();
+  await saveLinkFromDrawer(page, '絞られる子の行');
   await expect.poll(() => held).toBe(1);
 
   await row.getByRole('button', { name: /完了にする/ }).click();
