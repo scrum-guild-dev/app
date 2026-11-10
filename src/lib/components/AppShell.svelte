@@ -15,7 +15,7 @@
   import { useShortcut } from '../shortcuts.svelte.ts';
   import { GO_KEYS, isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
   import { organizationLabel } from '../organization-label.ts';
-  import BrandMark from './BrandMark.svelte';
+  import BrandSymbol from './BrandSymbol.svelte';
   import Breadcrumb from './Breadcrumb.svelte';
   import NavMenu from './NavMenu.svelte';
   import NavSearch from './NavSearch.svelte';
@@ -26,9 +26,9 @@
   const createSheetId = $props.id();
   let createSheet = $state<ReturnType<typeof CreateSheet>>();
 
-  // kit.js の mount が組む画面の枠。左上の角のマス（ロゴ）と全幅の上の帯が十字に分かれ、左のメニュー（綴じ）と本文（帳面）が続く。
-  // slug は今の組織で、組織の中の画面だけが使う。
-  // 組織の切り替え（ブランドの下）、ワークスペースの切り替え、アシスタントのボタンは置き場所だけで、中身は snippet で渡す。
+  // kit.js の mount が組む画面の枠。左上の角のマス（マーク、組織の切り替え、開閉のボタン）と全幅の上の帯が十字に分かれ、
+  // 左のメニュー（綴じ）と本文（帳面）が続く。slug は今の組織で、組織の中の画面だけが使う。
+  // 組織の切り替え（角のマス。760px 以下は浮きメニューの先頭）、ワークスペースの切り替え、アシスタントのボタンは置き場所だけで、中身は snippet で渡す。
   // workspace はメニューの対象。「今日やること」など組織の画面でも渡す。
   // 761px 以上の上の帯の左はパンくず（組織 › ワークスペース › 画面）。assistant と account は右に並べる。
   // スマホは PageHead の右に検索と account を移し、PageHead が無い画面だけ代わりの見出しを置く
@@ -181,9 +181,10 @@
       <div class="binding-inner">
         <div class="binding-head">
           <a class="brand" href={resolve('/[slug]', { slug })}>
-            <BrandMark />
+            <BrandSymbol />
             <span class="visually-hidden">{t('appName')}</span>
           </a>
+          {#if organizationSwitcher}{@render organizationSwitcher()}{/if}
           <button
             class="nav-toggle"
             type="button"
@@ -197,7 +198,6 @@
           </button>
         </div>
         <div class="binding-body">
-          {#if organizationSwitcher}{@render organizationSwitcher()}{/if}
           <NavMenu {current} {slug} {hasWorkspace} {isAdmin} {workspace} {workspaceSwitcher} />
         </div>
       </div>

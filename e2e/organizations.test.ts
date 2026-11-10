@@ -493,7 +493,9 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
   }) => {
     await mockOperation(page, myOrganizations, AOBA_WITH_INVITATION);
     await page.goto('/aoba');
-    await expect(menuButton(page).locator('.chip')).toHaveText('届いた招待あり');
+    // 角のマスは1行に収めるため、チップの代わりに点の印で示し、読み上げの名前で伝える
+    await expect(menuButton(page).locator('.org-menu-invite')).toBeVisible();
+    await expect(menuButton(page).locator('.chip')).toBeHidden();
     await expect(menuButton(page)).toHaveAttribute('aria-label', /届いた招待あり/);
     await menuButton(page).click();
     await expect(menuLinks(page)).toHaveCount(2);

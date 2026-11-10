@@ -77,14 +77,6 @@ export const uiExclusions: readonly UiExclusion[] = [
   ).flatMap((screen): UiExclusion[] => [
     {
       check: 'label-content-name-mismatch',
-      selector: '.org-menu-button',
-      screen,
-      reason:
-        '組織を切り替えるボタンの aria-label が、見える「組織」と組織の名前の並びを含まない。文言の決め直しが要る',
-      issue: HEADER_MENU_LABEL_ISSUE,
-    },
-    {
-      check: 'label-content-name-mismatch',
       selector: '.account-menu-button',
       screen,
       reason:

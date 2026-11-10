@@ -55,6 +55,25 @@ async function expectHorizontalBrand(page: Page): Promise<void> {
   await expect(art.locator('..').getByText('Scrum Guild', { exact: true })).toHaveCount(1);
 }
 
+// 組織の枠の左上の角のマスは、横組みではなくマーク単体を白い枠の中に出し、角のマスの高さに収める
+async function expectCornerSymbol(page: Page): Promise<void> {
+  const brand = page.locator('.binding-head .brand');
+  const art = brand.locator('.brand-art');
+  const symbol = art.locator('.brand-mark');
+  await expect(art).toHaveAttribute('aria-hidden', 'true');
+  await expect(art).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(brand.locator('.brand-name')).toHaveCount(0);
+  await expect(symbol).toBeVisible();
+  await expect(symbol).toHaveAttribute('alt', '');
+  await expect.poll(() => symbol.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBe(629);
+  const box = (await symbol.boundingBox())!;
+  const head = (await page.locator('.binding-head').boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(head.x);
+  expect(box.y).toBeGreaterThanOrEqual(head.y);
+  expect(box.y + box.height).toBeLessThanOrEqual(head.y + head.height);
+  await expect(brand).toHaveAccessibleName('Scrum Guild');
+}
+
 for (const screen of [
   { path: '/login', who: null },
   { path: '/', who: 'admin' },
@@ -69,14 +88,16 @@ for (const screen of [
     if (screen.who) await signIn(context, baseURL, screen.who);
     await page.goto(screen.path);
     await expect(page).toHaveURL(new URL(screen.path, baseURL).href);
-    await expect(page.locator('.brand-art')).toBeVisible();
+    await expect(page.locator('.brand-art').first()).toBeVisible();
     for (const width of [320, 390, 1024, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       for (const theme of themes) {
         await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
         if (screen.path.startsWith('/aoba') && width <= 760) {
-          await expect(page.locator('.brand-art')).toHaveCount(0);
+          await expect(page.locator('.brand-art')).toBeHidden();
           await expect(page.locator('.mobile-tabs')).toBeVisible();
+        } else if (screen.path.startsWith('/aoba')) {
+          await expectCornerSymbol(page);
         } else {
           await expectHorizontalBrand(page);
         }
@@ -85,24 +106,31 @@ for (const screen of [
   });
 }
 
-test('畳んだメニューはマーク単体で名前を保ち、狭い幅ではロゴを隠す', async ({ page, context, baseURL }) => {
+test('畳んだメニューの角のマスは組織のボタンのマークだけを出し、狭い幅ではロゴを隠す', async ({
+  page,
+  context,
+  baseURL,
+}) => {
   await signIn(context, baseURL, 'member');
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/aoba');
   const brand = page.getByRole('link', { name: 'Scrum Guild', exact: true });
   await expect(brand).toHaveAttribute('href', '/aoba');
-  await expectHorizontalBrand(page);
+  await expectCornerSymbol(page);
   await page.getByRole('button', { name: 'メニューを畳む' }).click();
+  const org = page.locator('.binding-head .org-menu-button');
   for (const theme of themes) {
     await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-    await expect(brand.locator('.brand-name')).toHaveJSProperty('offsetWidth', 1);
-    const symbol = brand.locator('.brand-mark');
+    // マークのリンクは隠し、組織のボタンの中のマークを見せる（押すと組織の一覧）
+    await expect(brand).toBeHidden();
+    const symbol = org.locator('.brand-mark');
     await expect(symbol).toBeVisible();
+    await expect(org.locator('.brand-art')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
     await expect.poll(() => symbol.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBe(629);
     const box = (await symbol.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(64);
-    await expect(brand).toHaveAccessibleName('Scrum Guild');
+    await expect(org).toHaveAccessibleName('あおば開発。組織を切り替える');
   }
   await page.setViewportSize({ width: 390, height: 700 });
   await expect(brand).toHaveCount(0);
