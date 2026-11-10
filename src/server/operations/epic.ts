@@ -36,7 +36,7 @@ const EDITABLE_FIELDS = ['title', 'body_md', 'due_on', 'link_url'] as const;
 // 同時の更新に負けたときにやり直す回数の上限。超えたら 409 の conflict（story-update と同じ）
 const MAX_UPDATE_ATTEMPTS = 3;
 
-type EpicRow = EpicDetail & { category_name: string | null; created_by: string };
+type EpicRow = EpicDetail & { category_name: string | null; created_by: string; completed_at: string | null };
 
 // 削除していないエピックの、ダイアログが出す欄と、区分の名前（履歴に残す）。ワークスペースで必ず絞る
 async function readEpic(db: OrganizationDb, workspaceId: string, epicId: string): Promise<EpicRow | undefined> {
@@ -57,6 +57,7 @@ async function readEpic(db: OrganizationDb, workspaceId: string, epicId: string)
           'epics.link_url',
           'epics.category_id',
           'epics.created_by',
+          'epics.completed_at',
           'categories.name as category_name',
         ])
         .where('epics.id', '=', epicId)
@@ -81,7 +82,7 @@ function detailOf(row: EpicRow): EpicDetail {
 export const epicGetOperation = implement(epicGet, async ({ db, actor, workspace, input }) => {
   const epic = await readEpic(db, workspace.workspaceId, input.epic_id);
   if (epic === undefined) throw new ApiError(404, 'not_found');
-  return { epic: detailOf(epic), ...(await epicDeletion(db, actor, workspace, epic)) };
+  return { epic: detailOf(epic), completed_at: epic.completed_at, ...(await epicDeletion(db, actor, workspace, epic)) };
 });
 
 export const epicCreateOperation = implement(epicCreate, async ({ db, actor, workspace, input }) => {

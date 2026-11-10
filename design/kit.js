@@ -1751,6 +1751,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // ポイントと期日は、選んだら保存する（保存のボタンは無い）
   document.addEventListener("change", (ev) => {
+    if (ev.target.name === "d-del") { const b = document.querySelector("[data-delete-needs-choice]"); b?.setAttribute("aria-disabled", "false"); b?.removeAttribute("aria-describedby"); }
     const el = ev.target.closest && ev.target.closest("[data-drawer-pts], [data-drawer-due]");
     if (!el || !drawer.id) return;
     const x = drawerItem();
@@ -2159,8 +2160,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // エピックとストーリーの削除の確認（本番の TreeDeleteDialog）。kind は "epic" か "story"。
   // opts.empty は配下の無い形（選択肢を出さない）、opts.leaderOnly は「まとめて削除する」を選べない形（リーダーでない人で、他の人の作った配下がある）。
-  // opts.cleared はクリア済みで配下のあるエピックの形（配下なしの opts.empty とは組み合わせない。見本の e1 は未完了だが、クリア済みのつもりで見る）。「配下を親なしで残す」のまま「削除する」を押すと 409 の epic_finished で断られ、
-  // 理由を確認の中の role="alert" に出して確認は閉じない（まとめて削除できない人には、依頼主かリーダーに完了の取り消しを頼む文を出す）。「まとめて削除する」を選べば削除できる。
+  // opts.cleared はクリア済みで配下のあるエピックの形（配下なしの opts.empty とは組み合わせない。見本の e1 は未完了だが、クリア済みのつもりで見る）。
+  // 「配下を親なしで残す」は最初から選べず（disabled）、理由を選択肢の下の .field-hint に出す（サーバーは 409 の epic_finished で断るが、確認を開く時点で止める）。
+  // 取り消せない「配下もまとめて削除する」は既定で選ばず（どちらも未選択）、選ぶまで「削除する」は aria-disabled で押せない（理由の .field-hint を aria-describedby で結ぶ）。
+  // まとめて削除できない人（opts.leaderOnly）は、どちらも選べず、依頼主かリーダーに完了の取り消しを頼む文を出し、「削除する」は押せないまま。
   // 見本は1枠のダイアログなので、元のエピックのダイアログを置き換えて開く。ストーリーは引き出しの「⋯」から、引き出しの上に開く。
   // 本番は元のダイアログの上に重ねて開き、開いたときに get を読み直して件数と可否を差し替える
   function treeDeleteDialog(kind, id, opts = {}) {
@@ -2180,25 +2183,17 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
        ${has
          ? `<div class="field"><span class="field-label" id="d-del-label">配下の扱い</span>
            <div class="choice-list" role="radiogroup" aria-labelledby="d-del-label">
-             <label class="choice"><input type="radio" name="d-del" checked><div><b>配下を親なしで残す</b><span>${keep}</span></div></label>
+             <label class="choice"><input type="radio" name="d-del"${opts.cleared ? ` disabled aria-describedby="d-del-cleared"` : " checked"}><div><b>配下を親なしで残す</b><span>${keep}</span></div></label>
              <label class="choice"><input type="radio" name="d-del"${opts.leaderOnly ? ` disabled aria-describedby="d-del-leader"` : ""}><div><b>配下もまとめて削除する</b><span>${all}</span></div></label>
-           </div>${opts.leaderOnly ? `<span class="field-hint" id="d-del-leader">配下に他の人が作ったものがあるため、まとめて削除できるのは${t("leader")}だけです。</span>` : ""}</div>`
+           </div>${opts.cleared ? `<span class="field-hint" id="d-del-cleared">${opts.leaderOnly
+             ? `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。${t("requester")}か${t("leader")}に、${t("epic")}の${t("done")}を取り消してもらってください。`
+             : `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先に${t("epic")}の${t("done")}を取り消してください。`}</span>` : ""}${opts.leaderOnly ? `<span class="field-hint" id="d-del-leader">配下に他の人が作ったものがあるため、まとめて削除できるのは${t("leader")}だけです。</span>` : ""}</div>`
          : `<p class="field-hint">配下の${t(kind === "epic" ? "story" : "task")}はありません。</p>`}
        <p class="field-hint">完了の記録と経験値は残ります。</p>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button>${opts.cleared
-        ? `<button class="btn is-danger" type="button" data-delete-cleared>削除する</button>`
+        ? `<button class="btn is-danger" type="button" aria-disabled="true" aria-describedby="d-del-cleared"${opts.leaderOnly ? "" : " data-delete-needs-choice"}>削除する</button>`
         : `<button class="btn is-danger" type="button" data-close-dialog${kind === "story" ? ` data-close-story-drawer="${id}"` : ""} data-toast="${t(kind)}を削除しました">削除する</button>`}`);
     document.querySelector(".dialog-sheet").classList.add("is-danger");
-  }
-  // クリア済みのエピックを配下を残して削除しようとして断られた形（本番の TreeDeleteDialog の 409 epic_finished）。確認は閉じず、理由を role="alert" に出す
-  function treeDeleteClearedRefused(el) {
-    const body = el.closest("#dialog").querySelector(".dialog-body");
-    const all = body.querySelectorAll("input[name=d-del]")[1];
-    if (all && all.checked) { closeDialog(); toast(`${icon("check")}${t("epic")}を削除しました`); return; }
-    body.querySelector("[data-delete-refused]")?.remove();
-    body.insertAdjacentHTML("beforeend", `<div class="callout is-danger" role="alert" data-delete-refused>${icon("alert")}<span>${all && !all.disabled
-      ? `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先に${t("epic")}の${t("done")}を取り消してください。`
-      : `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。${t("requester")}か${t("leader")}に、${t("epic")}の${t("done")}を取り消してもらってください。`}</span></div>`);
   }
   // エピックの作成と変更のダイアログ（本番の EpicDialog）。欄はストーリーのダイアログから受け入れ基準を除いたもの。
   // 見本のカタログ（「ダイアログと演出」）と、木のエピックの行の題から開く（本番には無く、木の空の行で作り、引き出しで直す）。依頼主、クリア報酬、討伐隊はエピックの画面（#65）で直す。
@@ -3727,7 +3722,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
     if ((el = hit("data-drawer-mode"))) { changeDrawerMode(el.dataset.drawerMode); return; }
     if ((el = hit("data-drawer-step"))) { stepDrawer(Number(el.dataset.drawerStep), false, true); return; }
-    if ((el = hit("data-delete-cleared"))) { treeDeleteClearedRefused(el); return; }
+    if ((el = hit("data-delete-needs-choice"))) {
+      if (el.getAttribute("aria-disabled") !== "true") { closeDialog(); toast(`${icon("check")}${t("epic")}を削除しました`); }
+      return;
+    }
     if (hit("data-discard-draft")) {
       const next = pendingDrawer;
       closeDialog();

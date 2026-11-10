@@ -3,7 +3,7 @@
 // クリアできる状態は epic-detail の応答を書き換えて作る。
 // 書き込みの応答は差し替えて確かめるので、seed の行は書き換えない（ほかのファイルと並べて走るため）。
 // 演出は動きを減らす設定（reducedMotion: 'reduce'）では出さず、トーストだけにする
-import { epicComplete, epicDelete, epicDetail, epicReopen } from '../src/shared/operations/epic/index.ts';
+import { epicComplete, epicDelete, epicDetail, epicGet, epicReopen } from '../src/shared/operations/epic/index.ts';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { chooseRowAction, signIn, watchViolations } from './helpers.ts';
@@ -144,8 +144,70 @@ test('取り消しが断られたら、理由ごとにトーストで知らせ�
   await expect(page.locator('.toasts:visible .toast').last()).toContainText('このエピックは完了していません');
 });
 
-test('クリア済みで配下のあるエピックを、配下を残して削除すると断られ、理由を出して確認を閉じない', async ({ page }) => {
-  await failOperation(page, epicDelete, AOBA, 409, 'epic_finished');
+test('クリア済みで配下のあるエピックの削除の確認は、配下を親なしで残すを選べず、理由を出して、まとめて削除が選ばれている', async ({
+  page,
+}) => {
+  await rewriteOperation(page, epicGet, AOBA, (output) => ({ ...output, completed_at: CLEARED_AT }));
+  await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
+  await page.getByRole('link', { name: 'エピックを直す' }).click();
+  const drawer = page.getByRole('dialog', { name: EPIC_TITLE, exact: true });
+  await expect(drawer).toBeVisible();
+  await chooseRowAction(drawer, EPIC_TITLE, 'このエピックを削除する');
+  const confirm = page.getByRole('dialog', { name: 'エピックを削除する' });
+  const keep = confirm.getByRole('radio', { name: /配下を親なしで残す/ });
+  await expect(keep).toBeDisabled();
+  await expect(keep).toHaveAccessibleDescription(
+    '完了したエピックは、配下のストーリーを親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先にエピックの完了を取り消してください。',
+  );
+  // 取り消せない方を既定で選ばない。選ぶまで「削除する」は押せない
+  const all = confirm.getByRole('radio', { name: /配下もまとめて削除する/ });
+  await expect(all).not.toBeChecked();
+  await expect(keep).not.toBeChecked();
+  const submit = confirm.getByRole('button', { name: '削除する' });
+  await expect(submit).toHaveAttribute('aria-disabled', 'true');
+  await all.check();
+  await expect(submit).toHaveAttribute('aria-disabled', 'false');
+});
+
+test('クリア済みでまとめて削除もできない人は、削除するを押しても送らない', async ({ page }) => {
+  let sent = 0;
+  await routeOperation(page, epicDelete, AOBA, async (call) => {
+    sent++;
+    await call.fulfill({ epic_id: EPIC_ID });
+  });
+  await rewriteOperation(page, epicGet, AOBA, (output) => ({
+    ...output,
+    completed_at: CLEARED_AT,
+    can_delete_children: false,
+  }));
+  await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
+  await page.getByRole('link', { name: 'エピックを直す' }).click();
+  const drawer = page.getByRole('dialog', { name: EPIC_TITLE, exact: true });
+  await expect(drawer).toBeVisible();
+  await chooseRowAction(drawer, EPIC_TITLE, 'このエピックを削除する');
+  const confirm = page.getByRole('dialog', { name: 'エピックを削除する' });
+  await expect(confirm.getByRole('radio', { name: /配下を親なしで残す/ })).toBeDisabled();
+  await expect(confirm.getByRole('radio', { name: /配下もまとめて削除する/ })).toBeDisabled();
+  const submit = confirm.getByRole('button', { name: '削除する' });
+  await expect(submit).toHaveAttribute('aria-disabled', 'true');
+  await submit.click({ force: true });
+  await page.waitForLoadState('networkidle');
+  await expect(confirm).toBeVisible();
+  expect(sent).toBe(0);
+});
+
+test('読み込んだ後にクリアされたエピックを、配下を残して削除すると断られ、理由を出して確認を閉じない', async ({
+  page,
+}) => {
+  // 開いたときは未クリア。断られた後は、別の人がクリアした後の値（completed_at あり）を返す
+  let clearedByOther = false;
+  await routeOperation(page, epicDelete, AOBA, async (call) => {
+    clearedByOther = true;
+    await call.fail(409, 'epic_finished');
+  });
+  await rewriteOperation(page, epicGet, AOBA, (output) =>
+    clearedByOther ? { ...output, completed_at: CLEARED_AT } : output,
+  );
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   await page.getByRole('link', { name: 'エピックを直す' }).click();
   const drawer = page.getByRole('dialog', { name: EPIC_TITLE, exact: true });
@@ -155,9 +217,15 @@ test('クリア済みで配下のあるエピックを、配下を残して削�
   await expect(confirm.getByRole('radio', { name: /配下を親なしで残す/ })).toBeChecked();
   await confirm.getByRole('button', { name: '削除する' }).click();
   await expect(
-    confirm.getByText(
-      '完了したエピックは、配下のストーリーを親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先にエピックの完了を取り消してください。',
-    ),
+    confirm.locator('.field-hint', {
+      hasText:
+        '完了したエピックは、配下のストーリーを親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先にエピックの完了を取り消してください。',
+    }),
   ).toBeVisible();
   await expect(confirm).toBeVisible();
+  // 読み直して、続けて同じ断りを繰り返さないよう「残す」を選べなくする
+  const keepAfter = confirm.getByRole('radio', { name: /配下を親なしで残す/ });
+  await expect(keepAfter).toBeDisabled();
+  await expect(keepAfter).not.toBeChecked();
+  await expect(confirm.getByRole('button', { name: '削除する' })).toHaveAttribute('aria-disabled', 'true');
 });
