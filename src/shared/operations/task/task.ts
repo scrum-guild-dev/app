@@ -16,6 +16,8 @@ export const taskDetailSchema = z.object({
   // 担当。いなければ null。left は、今そのワークスペースに所属していない（抜けた、無効にされた）こと。
   // 抜けた人でも名前を残し、画面は「（離脱済み）」を添える
   assignee: z.object({ id: z.string(), name: z.string(), left: z.boolean() }).nullable(),
+  // 依頼先。完了したタスクでは名簿から削除した人の名前も返す
+  delegatee: definitionRefSchema.nullable(),
   // 取り込んだタスク。タイトルとリンクは直せない
   is_imported: z.boolean(),
   // 完了した日時。完了したタスクのポイントは直せない

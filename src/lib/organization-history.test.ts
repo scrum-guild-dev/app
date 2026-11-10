@@ -33,6 +33,11 @@ describe('historyEventText', () => {
       [{ kind: 'workspace_closed', workspace_name: null }, 'ワークスペースを終了しました'],
       [{ kind: 'workspace_reopened', workspace_name: null }, 'ワークスペースを再開しました'],
       [{ kind: 'workspace_reopened', workspace_name: '旧サイト保守' }, 'ワークスペース「旧サイト保守」を再開しました'],
+      [{ kind: 'delegatee_created', name: 'アサヒ' }, '依頼先「アサヒ」を追加しました'],
+      [{ kind: 'delegatee_created', name: null }, '依頼先を追加しました'],
+      [{ kind: 'delegatee_renamed', name: 'ナツメ' }, '依頼先の名前を「ナツメ」に変更しました'],
+      [{ kind: 'delegatee_renamed', name: null }, '依頼先の名前を変更しました'],
+      [{ kind: 'delegatee_deleted' }, '依頼先を削除しました'],
       [{ kind: 'other' }, '組織を変更しました'],
     ];
     for (const [event, text] of cases) {

@@ -158,7 +158,7 @@ describe('seedSql', () => {
 
 // 空の D1 に流して中身を数える。wrangler の手元の D1 を使うので数秒かかる
 describe('pnpm db:seed', () => {
-  test('2回流しても通り、組織6つ（e2e の組織の設定だけが使うくもラボと、パスワードのログインだけが使うゆず書房とみなも舎を含む）、セッション15本（同じアカウントの2本目を含む）、組織の無い運用者が入る', () => {
+  test('2回流しても通り、自分用を含む組織7つと依頼先つきのタスク、全セッション、組織の無い運用者が入る', () => {
     const persistTo = mkdtempSync(path.join(tmpdir(), 'scrum-guild-seed-test-'));
     const root = fileURLToPath(new URL('..', import.meta.url));
     const wrangler = path.join(root, 'node_modules', '.bin', 'wrangler');
@@ -175,6 +175,12 @@ describe('pnpm db:seed', () => {
       const query = `SELECT
         (SELECT count(*) FROM organizations) AS organizations,
         (SELECT count(*) FROM sessions) AS sessions,
+        (SELECT count(*) FROM organizations WHERE kind = 'personal') AS personal_organizations,
+        (SELECT count(*) FROM delegatees WHERE organization_id = '019a0000-0000-7000-8000-000000000207' AND deleted_at IS NULL) AS personal_delegatees,
+        (SELECT count(*) FROM tasks t JOIN workspaces w ON w.id = t.workspace_id
+          JOIN delegatees d ON d.id = t.delegatee_id
+          WHERE w.organization_id = '019a0000-0000-7000-8000-000000000207' AND d.organization_id = w.organization_id
+          AND t.assignee_user_id = '019a0000-0000-7000-8000-000000000316') AS delegated_tasks,
         (SELECT count(*) FROM users u JOIN account_logins l ON l.account_id = u.account_id
           WHERE l.login_provider || ':' || l.login_subject = '${SEED_OPERATOR_LOGIN_ID}') AS operator_users,
         (SELECT count(*) FROM account_logins
@@ -189,7 +195,10 @@ describe('pnpm db:seed', () => {
       assert.equal(result.status, 0, result.stderr);
       const [row] = (JSON.parse(result.stdout) as { results: Record<string, number>[] }[])[0].results;
       assert.deepEqual(row, {
-        organizations: 6,
+        organizations: 7,
+        personal_organizations: 1,
+        personal_delegatees: 2,
+        delegated_tasks: 1,
         sessions: sessions.length,
         operator_users: 0,
         operator_logins: 1,

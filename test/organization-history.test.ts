@@ -416,6 +416,53 @@ describe('organization-history', () => {
         { kind: 'other' },
       ],
       [userLog({ login_subject: [null, '424242000004'] }), { kind: 'other' }],
+      // 名簿の現在の行へ結ばず、記録の名前だけを返す。削除は名前を保存していない。
+      [
+        {
+          entity_type: 'delegatee',
+          entity_id: uuidv7(),
+          action: 'create',
+          changes_json: JSON.stringify({ name: [null, 'アサヒ'] }),
+        },
+        { kind: 'delegatee_created', name: 'アサヒ' },
+      ],
+      [
+        {
+          entity_type: 'delegatee',
+          entity_id: uuidv7(),
+          action: 'update',
+          changes_json: JSON.stringify({ name: ['アサヒ', 'ナツメ'] }),
+        },
+        { kind: 'delegatee_renamed', name: 'ナツメ' },
+      ],
+      [
+        {
+          entity_type: 'delegatee',
+          entity_id: uuidv7(),
+          action: 'delete',
+          changes_json: JSON.stringify({ deleted_at: [null, minutesLater(0)] }),
+        },
+        { kind: 'delegatee_deleted' },
+      ],
+      [
+        {
+          entity_type: 'delegatee',
+          entity_id: uuidv7(),
+          action: 'create',
+          changes_json: JSON.stringify({ name: [null, 42] }),
+        },
+        { kind: 'delegatee_created', name: null },
+      ],
+      [
+        {
+          entity_type: 'delegatee',
+          entity_id: uuidv7(),
+          action: 'update',
+          changes_json: JSON.stringify({ name: ['アサヒ'] }),
+        },
+        { kind: 'delegatee_renamed', name: null },
+      ],
+      [{ entity_type: 'delegatee', entity_id: uuidv7(), action: 'archive' }, { kind: 'other' }],
       // 知らない組
       [userLog({ theme: [null, 'simple'] }), { kind: 'other' }],
       [userLog({}, 'delete'), { kind: 'other' }],

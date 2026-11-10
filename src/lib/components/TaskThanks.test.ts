@@ -5,6 +5,7 @@ import TaskThanks from './TaskThanks.svelte';
 
 const task: TaskDetail = {
   id: 'task',
+  delegatee: null,
   title: '調査する',
   body_md: null,
   points: null,

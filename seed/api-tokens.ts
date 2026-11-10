@@ -25,6 +25,12 @@ export const SEED_API_TOKENS = {
     scope: 'read',
     description: 'あおば開発の一般のユーザー（ハルカ）の読み取りのトークン。書き込みの操作は 403',
   },
+  personalWrite: {
+    token: 'sgp_dev-seed-personal-write00000000000000000000',
+    accountId: '019a0000-0000-7000-8000-000000000115',
+    scope: 'write',
+    description: '自分用の組織（personal）の本人（ユズキ）の書き込みのトークン',
+  },
   operatorWrite: {
     token: 'sgp_dev-seed-operator-write00000000000000000000',
     accountId: '019a0000-0000-7000-8000-000000000104',
