@@ -11,6 +11,24 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 }
 
 export const dictionary = defineDictionary({
+  delegateeTitle: '依頼先',
+  delegateeNone: '依頼先なし',
+  delegateeNew: '新しい依頼先の名前',
+  delegateeAdd: '「{name}」を足す',
+  delegateeSave: '名前を保存する',
+  delegateeRemove: '削除する',
+  delegateeCancel: 'やめる',
+  delegateeDeleteTitle: '依頼先を削除しますか',
+  delegateeDeleteText:
+    '「{name}」を名簿から削除し、未完了のタスクから外します。元には戻せません。完了したタスクには名前が残ります。',
+  delegateeFailed: '依頼先を更新できませんでした。名前の重複や名簿の上限を確認し、もう一度試してください。',
+  delegateeLoadFailed: '依頼先を読み込めませんでした',
+  delegateeRefreshFailed: '依頼先の一覧を更新できませんでした',
+  delegateeEmpty: '依頼先はまだありません',
+  delegateeDesc: 'タスクの引き出しで足した依頼先の名前を直したり、削除できます。',
+  delegateeBusy: '保存しています',
+  delegateeInvalid: '名前は1〜50文字で入力してください。改行や制御文字は使えません。',
+
   createSheet: '起票',
   createSheetReloadFailed: '作成済みですが、一覧を読み直せませんでした。画面を開き直してください。',
   createKind: '作る種類',
