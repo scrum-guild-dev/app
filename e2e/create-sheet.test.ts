@@ -7,7 +7,7 @@ import { operationPath, type AnyOperationDefinition, type OutputOf } from '../sr
 import { workspaceCreate } from '../src/shared/operations/workspace/workspace-create.ts';
 import { storyCreate, storyGet } from '../src/shared/operations/story/index.ts';
 import { epicCreate } from '../src/shared/operations/epic/index.ts';
-import { taskCreate, taskDetail } from '../src/shared/operations/task/index.ts';
+import { backlogTree, taskCreate, taskDetail } from '../src/shared/operations/task/index.ts';
 
 async function create<D extends AnyOperationDefinition>(
   page: Page,
@@ -209,4 +209,65 @@ test('書きかけで戻るのをやめれば残り、捨てて戻った後も�
   await expect(page).toHaveURL(new URL(`/aoba/w/${workspace_id}`, baseURL).href);
   await page.evaluate(() => history.forward());
   await expect(page).toHaveURL(new URL('/aoba', baseURL).href);
+});
+
+for (const [status, code, message] of [
+  [400, 'invalid_input', '入力を受け付けられませんでした'],
+  [403, 'forbidden', '書き込む権限がありません'],
+  [404, 'not_found', '親や担当が見つかりません'],
+  [409, 'conflict', '親が完了・中止された可能性があります'],
+] as const) {
+  test(`起票が ${status} で断られても本文を残し、理由へフォーカスを置く`, async ({ page, context, baseURL }) => {
+    if (!baseURL) throw new Error('baseURL が無い');
+    await signIn(context, baseURL, 'admin');
+    await setup(page, baseURL);
+    await routeOperation(page, taskCreate, { slug: 'aoba' }, (call) => call.fail(status, code));
+    await page.getByRole('button', { name: '起票', exact: true }).click();
+    const sheet = page.getByRole('dialog', { name: '起票', exact: true });
+    await sheet.getByLabel('タイトル', { exact: true }).fill('失敗時の題');
+    await sheet.getByLabel('本文', { exact: true }).fill('残して読み直す本文');
+    await sheet.getByRole('button', { name: '作る', exact: true }).click();
+    const failure = sheet.getByRole('alert');
+    await expect(failure).toContainText(message);
+    await expect(failure).toBeFocused();
+    await expect(failure).toBeInViewport();
+    await expect(sheet.getByLabel('本文', { exact: true })).toHaveValue('残して読み直す本文');
+  });
+}
+
+test('404 の後で候補から消えた親を解除し、親なしで再送できる', async ({ page, context, baseURL }) => {
+  if (!baseURL) throw new Error('baseURL が無い');
+  await signIn(context, baseURL, 'admin');
+  const { story } = await setup(page, baseURL);
+  let removed = false;
+  await rewriteOperation(page, backlogTree, { slug: 'aoba' }, (output) =>
+    removed
+      ? {
+          ...output,
+          stories: output.stories.filter((row) => row.id !== story.id),
+          epics: output.epics.map((epic) => ({ ...epic, stories: epic.stories.filter((row) => row.id !== story.id) })),
+        }
+      : output,
+  );
+  await routeOperation(page, taskCreate, { slug: 'aoba' }, async (call) => {
+    if (!removed) {
+      expect(call.input.story_id).toBe(story.id);
+      removed = true;
+      await call.fail(404, 'not_found');
+    } else {
+      expect(call.input.story_id).toBeNull();
+      await call.passThrough();
+    }
+  });
+  await page.getByRole('button', { name: '起票', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: '起票', exact: true });
+  await sheet.getByLabel('タイトル', { exact: true }).fill('親を読み直して作る');
+  const parent = sheet.getByRole('button', { name: /^親のストーリー:/ });
+  await expect(parent).not.toHaveAttribute('aria-disabled', 'true');
+  await parent.click();
+  await sheet.getByRole('menuitemradio', { name: story.title, exact: true }).click();
+  await sheet.getByRole('button', { name: '作る', exact: true }).click();
+  await expect(parent).toHaveAccessibleName('親のストーリー: 未設定');
+  await sheet.getByRole('button', { name: '作る', exact: true }).click();
+  await expect(sheet).not.toBeVisible();
 });
