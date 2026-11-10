@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { page } from '$app/state';
+  import TaskDelegatee from './TaskDelegatee.svelte';
   import { tick, setContext, untrack } from 'svelte';
   import { taskAttributes } from '../task-attributes.svelte.ts';
   import { ATTACHMENT_DELETIONS, type AttachmentDeletions } from '../attachment-context.ts';
@@ -1635,6 +1637,31 @@
           {/if}
         </dd>
       </div>
+      {#if page.data.organization?.organization.kind === 'personal'}
+        <TaskDelegatee
+          {slug}
+          {workspaceId}
+          {taskId}
+          value={task.delegatee}
+          editable={assigneeEditable && inBacklog && !workspaceClosed}
+          onfailed={async (status, code) => {
+            if (code === 'workspace_closed') onstale();
+            if (status === 404 || status === 409) await refresh(true);
+          }}
+          onsaved={async () => {
+            if (!alive || task === null) {
+              onchanged();
+              return false;
+            }
+            savedVersion++;
+            assigneeVersion++;
+            // ほかの保存と同じ世代管理で読み直し、遅い応答で新しい担当を戻さない。
+            const saved = await refresh();
+            onchanged();
+            return saved !== null;
+          }}
+        />
+      {/if}
       <div>
         <dt id={pointsLabelId}>{t('points')}</dt>
         <dd>
