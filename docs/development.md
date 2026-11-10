@@ -1006,10 +1006,22 @@ GitHub の通知を受け取る人は、リポジトリの **Watch → Custom �
 
 テスト開始前の seed でローカル D1 の `SQLITE_BUSY` が出たときは、同じ操作を500ms、1000ms待って最大2回再試行する。ロック以外の失敗と再試行後の失敗はそのまま CI を落とす。
 
-1. 落ちたジョブのログを読む。GitHub の MCP の `get_job_logs`（`gh run view <run_id> --log-failed` でもよい）で、落ちたテストの名前、`expect` の失敗の文言、スタックを見る
+1. 落ちたジョブのログを読む。GitHub の MCP の `get_job_logs`（`gh run view <run_id> --log-failed` でもよい）で、落ちたテストの名前、`expect` の失敗の文言、スタックを見る。ログの末尾の `[e2e-stall]` の行で、その時刻にサーバーが止まっていたかを確かめる（下の「サーバーの止まりの記録」）
 2. 足りなければ、ジョブの成果物（`e2e-<i>-attempt-<n>`、`e2e-dev-<i>-attempt-<n>`、`e2e-repeat-<i>-attempt-<n>`。`<n>` は実行回数。再実行前の trace も上書きせず14 日残る）の `playwright-report/` と `test-results/` を `gh run download <run_id> -n e2e-<i>-attempt-<n>` で取り、trace を `pnpm exec playwright show-trace <trace.zip>` で読む（`show-trace` は止めない）。落ちたテストの画面は `test-failed-<n>.png` にある。成果物が取れない環境（プロキシで止まるクラウドのセッションなど）では、ログだけで直し、足りなければ手順 4 で人に頼む
 3. 直して、すべてコミットしてから1回にまとめて push する。CI が走り直す
 4. 2回続けて直せなかったら、人に手元での再現を頼む。落ちたテストの名前、ログと trace で分かったこと、試した直しを添える
+
+#### サーバーの止まりの記録
+
+CI の e2e では、手元の `wrangler dev` がまとめて数秒応答しなくなり、その間に 5 秒の `expect` が切れることがある（#1146）。止まる場所を切り分けるため、`e2e/global-setup.ts` が seed の後から全テストの終わりまで、次の3か所を 0.5 秒おきに Playwright の親プロセスから問い合わせ（`scripts/e2e-stall-probe.ts`）、1 秒以上かかったものを終わりにログへ出す。1か所の問い合わせは前の応答を待ってから送るので、止まりは1件の長い問い合わせとして出る。
+
+| 名前 | 問い合わせ先 | 通る所 |
+| --- | --- | --- |
+| `asset` | `/theme-init.js` | assets だけ（Worker を通らない） |
+| `worker` | `/api/e2e-stall-probe`（操作の無いパスの 404） | Worker（D1 に触れない） |
+| `d1` | `/api/health` | Worker と D1 |
+
+行は `[e2e-stall] <始めた時刻（UTC）> <名前> <かかった時間> <HTTP ステータスか例外の名前>` の形で、止まりが無ければ問い合わせた回数と「該当なし」の1行だけを出す。落ちたテストの時刻と重なる行があれば、3か所のどれまで止まったかで、workerd ごと（`asset` も止まる）、Worker（`worker` から）、D1（`d1` だけ）のどこが止まったかが分かる。
 
 PR で変えていない領域のテストが、前の head では通っていたコードで落ちたときは、失敗したジョブを1回だけ走らせ直す（`pr/feedback.md` の手順 5）。`e2e-repeat` が落ちて2回目から必ず落ちるなら、揺れでなく「e2e の書き方」の繰り返しに耐える決まりに反している。
 

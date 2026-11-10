@@ -4,7 +4,8 @@
 // seed は --local だけを付ける（本番の D1 には入れない。scripts/db-seed.ts）
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { DEV_WARNING_CODE, e2eGlobalSetup } from '../scripts/e2e-server.ts';
+import { DEV_WARNING_CODE, e2eGlobalSetup, e2eHealthURL } from '../scripts/e2e-server.ts';
+import { formatStallReport, startStallProbe } from '../scripts/e2e-stall-probe.ts';
 
 // build した画面の JS（build/_app の下の .js）のどれかに、開発時の警告を出すコードがあるか（E2E_DEV_BUILD=1 のときだけ呼ぶ）。
 // build/_app が無ければ（build の外で立てたサーバーを使い回した）、ENOENT でなく理由の分かる文で止める
@@ -16,7 +17,8 @@ function hasDevWarningCode(): boolean {
   return files.some((file) => DEV_WARNING_CODE.test(readFileSync(`build/_app/${file}`, 'utf8')));
 }
 
-export default async function globalSetup(): Promise<void> {
+// 返す関数は、Playwright がすべてのテストの後に global teardown として呼ぶ
+export default async function globalSetup(): Promise<() => Promise<void>> {
   // 版は playwright.config.ts が決めて process.env に置く
   await e2eGlobalSetup(process.env, {
     fetchHealth: (url, signal) => fetch(url, { signal }),
@@ -27,4 +29,9 @@ export default async function globalSetup(): Promise<void> {
     },
     hasDevWarningCode,
   });
+  // サーバーが応答しなくなる時間を、テストの間ずっと測り、終わりにログへ出す（scripts/e2e-stall-probe.ts）
+  const probe = startStallProbe(new URL(e2eHealthURL(process.env)).origin);
+  return async () => {
+    for (const line of formatStallReport(await probe.stop())) console.log(line);
+  };
 }
