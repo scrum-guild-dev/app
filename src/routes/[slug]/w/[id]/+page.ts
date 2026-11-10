@@ -5,6 +5,7 @@ import { startBacklogRead } from '../../../../lib/backlog-tallies.ts';
 import { isUnauthenticated, loginUrl } from '../../../../lib/login-redirect.ts';
 import { categoryRepositoryList } from '../../../../shared/operations/definition/index.ts';
 import { experienceTeamTotal } from '../../../../shared/operations/experience/index.ts';
+import { delegateeList } from '../../../../shared/operations/organization/index.ts';
 import { backlogTree } from '../../../../shared/operations/task/index.ts';
 import type { PageLoad } from './$types';
 
@@ -17,18 +18,23 @@ import type { PageLoad } from './$types';
 // SvelteKit は読んだ問い合わせのキーだけを見るので、引き出しの `?task=` が替わっても、この load は走り直らない。
 // url の残りは 401 のときだけ読む（読むと、移るたびにこの load が走り直る）。
 // `app:backlog-tree` は、引き出しが欄を保存した後に、木だけを読み直す印（枠の読み直しが一時的に失敗しても、引き出しと書きかけを失わないため）。
-// チーム全体の経験値（teamTotal）は木と並べて読み、読めなければ null で、見出しに出さないだけにする（画面は壊さない）
-export const load: PageLoad = async ({ params, fetch, url, depends }) => {
+// チーム全体の経験値（teamTotal）は木と並べて読み、読めなければ null で、見出しに出さないだけにする（画面は壊さない）。
+// 自分用の組織だけ、依頼先の名簿（delegatee-list。行の依頼先のチップと絞り込みの帯の候補）を、組織の枠（parent()）を待ってから
+// 木と並べて読む。delegatees はチーム用の組織では undefined（チップも絞り込みも出さない）、読めなければ null
+export const load: PageLoad = async ({ params, fetch, url, depends, parent }) => {
   depends('app:backlog-tree');
   // 読み直しを始めた時刻。画面で足した行が、この木に無いのを「消えた」と決めてよいかを、足した時刻との前後で決める
   const loadedAt = performance.now();
   const readVersion = startBacklogRead();
   const filter = filterFromParams(url.searchParams);
   const options = { slug: params.slug, fetcher: fetch };
-  const [result, definitions, teamTotal] = await Promise.all([
+  const [result, definitions, teamTotal, delegatees] = await Promise.all([
     callOperation(backlogTree, { workspace_id: params.id, ...filterInput(filter) }, options),
     callOperation(categoryRepositoryList, { workspace_id: params.id }, options),
     callOperation(experienceTeamTotal, { workspace_id: params.id }, options),
+    parent().then(({ organization }) =>
+      organization?.organization.kind === 'personal' ? callOperation(delegateeList, {}, options) : undefined,
+    ),
   ]);
   if (isUnauthenticated(result)) redirect(307, loginUrl(url));
   return {
@@ -38,5 +44,6 @@ export const load: PageLoad = async ({ params, fetch, url, depends }) => {
     filter,
     definitions: definitions.ok ? definitions.data : null,
     teamTotal: teamTotal.ok ? teamTotal.data.total : null,
+    delegatees: delegatees === undefined ? undefined : delegatees.ok ? delegatees.data.delegatees : null,
   };
 };

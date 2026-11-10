@@ -1302,6 +1302,7 @@
           },
           onStale: () => void invalidateAll(),
           definitions: data.definitions,
+          delegatees: data.delegatees,
         }
       : undefined}
   />
@@ -1421,6 +1422,8 @@
           categories={data.definitions?.categories ?? []}
           repositories={data.definitions?.repositories ?? []}
           definitionsFailed={data.definitions === null}
+          delegatees={data.delegatees === undefined ? undefined : (data.delegatees ?? [])}
+          delegateesFailed={data.delegatees === null}
           onchange={(next) => void applyFilter(next)}
         />
       {/if}
