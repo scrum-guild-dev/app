@@ -281,14 +281,14 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
   });
 
   test('組織の外から組織へ移る間は読み込み中を出し、移ったら組織の値を当てる', async ({ page }) => {
-    await patchOrganization(page, 'aoba', (body) => {
-      body.organization.theme = 'modern';
-    });
     await mockOperation(page, myOrganizations, AOBA_WITH_INVITATION);
     await page.goto('/');
+    // 遅らせてから、組織の既定のテーマを書き換えて返す。同じ URL に route を2つ張ると、後に張った方が本物へ流して
+    // 先の書き換えが効かないので、1つの route で待ちと書き換えをする
     await routeOperation(page, organizationInfo, AOBA, async (call) => {
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      await call.passThrough();
+      const output = await call.fetch();
+      await call.fulfill({ ...output, organization: { ...output.organization, theme: 'modern' } });
     });
     await page.getByRole('link', { name: /あおば開発/ }).click();
     // 少し遅れて、見出しと題名を持つ読み込み中の表示を出す。読み上げの領域は常に置いてあり、文字だけが替わる
@@ -305,6 +305,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     const loadingMain = await shownBox(page.locator('.layout-main'));
     await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
     await expect(page.locator('.skeleton-frame')).toHaveCount(0);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'modern');
     const loadedBinding = await shownBox(page.locator('.binding'));
     const loadedTopbar = await shownBox(page.locator('.topbar'));
     const loadedHead = await shownBox(page.locator('.page-head'));
