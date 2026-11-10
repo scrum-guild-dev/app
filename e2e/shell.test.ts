@@ -757,7 +757,7 @@ test('/api/health は D1 に届いて 200 で版を返す', async ({ request }) 
   expect(await res.json()).toEqual({ status: 'ok', database: 'ok', credentialKeys: 'ok', version });
 });
 
-// 狭い幅では上の帯から始まり、短い本文の余りは sheet が受け取る。
+// 狭い幅では本文の見出しから始まり、短い本文の余りは sheet が受け取る。
 for (const width of [390, 672]) {
   test(`幅 ${width}px で本文が短くても、上に旧メニューの空きが出ない`, async ({ page }) => {
     const height = 2000;
@@ -768,10 +768,11 @@ for (const width of [390, 672]) {
     expect(pageHeight, '画面の内容が高さを超えたので、height を上げる').toBeLessThanOrEqual(height);
     await expect(page.locator('.binding')).toHaveCount(0);
     const sheet = await page.locator('.sheet').boundingBox();
-    const topbar = await page.locator('.topbar').boundingBox();
-    if (!sheet || !topbar) throw new Error('枠の要素の位置が取れない');
+    await expect(page.locator('.topbar')).toHaveCount(0);
+    const heading = await page.locator('.page-title').boundingBox();
+    if (!sheet || !heading) throw new Error('枠の要素の位置が取れない');
     expect(sheet.y).toBeCloseTo(0, 0);
-    expect(topbar.y).toBeCloseTo(0, 0);
+    expect(heading.y).toBeGreaterThanOrEqual(16);
     expect(sheet.y + sheet.height).toBeCloseTo(height, 0);
     await expect(page.locator('.mobile-tabs')).toBeVisible();
   });
@@ -899,61 +900,8 @@ test('ワークスペースの画面のパンくずから、組織とワーク�
   await expect(page).toHaveURL('/aoba');
 });
 
-test('760px 以下でもパンくずが横にはみ出さず、リンクは押せる大きさ', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 800 });
-  await page.goto(`/aoba/w/${AOBA_WORKSPACE_ID}/sprint`);
-  const crumbs = page.getByRole('navigation', { name: 'パンくず' });
-  await expect(crumbs).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  for (const link of await crumbs.getByRole('link').all()) {
-    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  }
-});
-
-test('760px 以下で組織とワークスペースの名前が長くても、今の画面の名前は読める幅で残る', async ({ page }) => {
-  await page.setViewportSize({ width: 551, height: 800 });
-  await page.goto(`/aoba/w/${AOBA_WORKSPACE_ID}/sprint`);
-  const crumbs = page.getByRole('navigation', { name: 'パンくず' });
-  await expect(crumbs).toBeVisible();
-  const longName = '架空の長い名前0123456789012345678901234567890123456789';
-  await crumbs.locator('a.breadcrumb-item').evaluateAll((links, name) => {
-    for (const link of links) link.textContent = name;
-  }, longName);
-  const current = crumbs.locator('[aria-current="page"]');
-  await expect(current).toHaveText('スプリント');
-  const widths = async () => ({
-    scrollable: await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    links: await Promise.all(
-      (await crumbs.locator('a.breadcrumb-item').all()).map(async (link) => (await link.boundingBox())!.width),
-    ),
-  });
-  const { scrollable, links } = await widths();
-  // 今の画面の名前は省略されず全文が収まる幅（scrollWidth が clientWidth を超えない）
-  expect(await current.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-  expect(scrollable).toBe(true);
-  // 組織とワークスペースのリンクは 44px 以上を保つ
-  for (const width of links) expect(width).toBeGreaterThanOrEqual(44);
-});
-
-test('760px 以下で今の画面の名前が長くても、パンくずはアカウントのメニューに重ならない', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 800 });
-  await page.goto(`/aoba/w/${AOBA_WORKSPACE_ID}/sprint`);
-  const crumbs = page.getByRole('navigation', { name: 'パンくず' });
-  await expect(crumbs).toBeVisible();
-  await crumbs.locator('.breadcrumb-item').evaluateAll((items) => {
-    for (const item of items) item.textContent = '架空の長い名前0123456789012345678901234567890123456789';
-  });
-  const overlaps = await page.evaluate(() => {
-    const account = document.querySelector('.account-menu-button')!.getBoundingClientRect();
-    return [...document.querySelectorAll('.breadcrumb .breadcrumb-item')].filter((item) => {
-      const box = item.getBoundingClientRect();
-      return (
-        box.left < account.right && box.right > account.left && box.top < account.bottom && box.bottom > account.top
-      );
-    }).length;
-  });
-  expect(overlaps).toBe(0);
-});
+// 760px 以下ではパンくずを出さない。大きな見出しと入口、長い名前の折り返しは
+// layout-narrow-breadcrumb.test.ts で各テーマと境界幅を検査する。
 
 test.describe('指で押す画面の 761px 以上', () => {
   test.use({ hasTouch: true, viewport: { width: 1024, height: 800 } });

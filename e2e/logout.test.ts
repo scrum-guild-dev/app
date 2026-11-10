@@ -34,6 +34,8 @@ test.describe('組織の中（アカウントのメニュー）', () => {
     await restoreSeedSession('adminLogout');
     expect(await meWith('adminLogout')).toBe(200);
 
+    // スマホの丸いアカウントの入口からも、同じ実セッションのログアウトを確かめる（#1103）。
+    await page.setViewportSize({ width: 390, height: 844 });
     await signIn(context, baseURL, 'adminLogout');
     await page.goto('/aoba');
     await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
