@@ -20,9 +20,14 @@ const future = () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString
 
 // 既存の同時実行・全削除の検査は同時刻に作ったセッションを使う。
 // 時刻の異なるセッションの回復は credentials-recovery.test.ts で確かめる。
-async function createSessionWithToken(accountId: string, overrides: Parameters<typeof createSessionFixture>[1] = {}) {
-  const [existing] = await sessionRowsOf(accountId);
-  return createSessionFixture(accountId, { created_at: existing!.created_at, ...overrides });
+async function otherSession(
+  person: Awaited<ReturnType<typeof createLoginPerson>>,
+  overrides: Parameters<typeof createSessionFixture>[1] = {},
+) {
+  const currentHash = await hashSessionToken(person.token);
+  const current = (await sessionRowsOf(person.accountId)).find((row) => row.token_hash === currentHash);
+  if (current === undefined) throw new Error('同時刻の基準にするセッションが無い');
+  return createSessionFixture(person.accountId, { created_at: current.created_at, ...overrides });
 }
 
 type Counts = { revoked_sessions: number; revoked_tokens: number };
@@ -32,7 +37,7 @@ const callMe = (token: string) => post(app, me, { token });
 describe('並行', () => {
   test('同じセッションから同時に2回実行しても、件数の合計は実際の行数と同じ（二重に数えない）', async () => {
     const person = await createLoginPerson();
-    for (let i = 0; i < 3; i++) await createSessionWithToken(person.accountId);
+    for (let i = 0; i < 3; i++) await otherSession(person);
     for (let i = 0; i < 2; i++) await insertApiToken(person.accountId, { expiresAt: future() });
 
     const responses = await Promise.all([revokeAll(person.token), revokeAll(person.token)]);
@@ -49,7 +54,7 @@ describe('並行', () => {
 describe('件数と行の数が大きいとき', () => {
   test('150件のセッションと150件のトークンでも、件数は行数と一致し、今のセッションだけ残る', async () => {
     const person = await createLoginPerson();
-    await Promise.all(Array.from({ length: 150 }, () => createSessionWithToken(person.accountId)));
+    await Promise.all(Array.from({ length: 150 }, () => otherSession(person)));
     await Promise.all(Array.from({ length: 150 }, () => insertApiToken(person.accountId, { expiresAt: future() })));
     const res = await revokeAll(person.token);
     expect(res.status).toBe(200);
@@ -124,8 +129,8 @@ describe('deleteOtherSessionsOf の境界', () => {
 
   test('ほかのアカウントのハッシュを今のセッションとして渡すと、0 を返し、その人のセッションも渡したハッシュの行も消えない', async () => {
     const [person, bystander] = await Promise.all([createLoginPerson(), createLoginPerson()]);
-    const theirs = await createSessionWithToken(bystander.accountId);
-    await createSessionWithToken(person.accountId);
+    const theirs = await otherSession(bystander);
+    await otherSession(person);
     const mineBefore = await sessionRowsOf(person.accountId);
     const theirsBefore = await sessionRowsOf(bystander.accountId);
     const deleted = await deleteOtherSessionsOf(db(), person.accountId, theirs.row.token_hash);
@@ -168,8 +173,8 @@ describe('#767 を崩す', () => {
 
   test('3つのセッションが Promise.all で同時に実行しても、ちょうど1つが残り、それは件数を返した側で、件数の合計は行数と同じ', async () => {
     const person = await createLoginPerson();
-    const b = await createSessionWithToken(person.accountId);
-    const c = await createSessionWithToken(person.accountId);
+    const b = await otherSession(person);
+    const c = await otherSession(person);
     for (let i = 0; i < 3; i++) await insertApiToken(person.accountId, { expiresAt: future() });
     const tokens = [person.token, b.token, c.token];
 
@@ -189,8 +194,8 @@ describe('#767 を崩す', () => {
 
   test('入れ子の割り込み: B と C が認証を通った後に A が全部を終えると、C も B も 200 で 0 と 0、A だけが残り、revoked_at は A の値のまま', async () => {
     const person = await createLoginPerson();
-    const b = await createSessionWithToken(person.accountId);
-    const c = await createSessionWithToken(person.accountId);
+    const b = await otherSession(person);
+    const c = await otherSession(person);
     const { hash } = await insertApiToken(person.accountId, { expiresAt: future() });
     let first: Counts | undefined;
     let revokedAt: string | null | undefined;
@@ -221,8 +226,8 @@ describe('#767 を崩す', () => {
 
   test('logout との競合: B の認証の後に B 自身が logout すると、B の全失効は 200 で 0 と 0、ほかのセッションもトークンも残る', async () => {
     const person = await createLoginPerson();
-    const b = await createSessionWithToken(person.accountId);
-    const c = await createSessionWithToken(person.accountId);
+    const b = await otherSession(person);
+    const c = await otherSession(person);
     const { hash } = await insertApiToken(person.accountId, { expiresAt: future() });
     const paused = pausedAfterAuth(async () => {
       expect((await post(app, logout, { token: b.token })).status).toBeLessThan(300);
@@ -239,7 +244,7 @@ describe('#767 を崩す', () => {
 
   test('盗まれた Cookie が先に通って本人が 0 件になっても、本人がログインし直してもう一度実行すれば、盗まれたセッションを締め出せる', async () => {
     const owner = await createLoginPerson();
-    const stolen = await createSessionWithToken(owner.accountId);
+    const stolen = await otherSession(owner);
     const paused = pausedAfterAuth(async () => {
       expect((await (await revokeAll(stolen.token)).json()) as Counts).toEqual({
         revoked_sessions: 1,
@@ -252,7 +257,7 @@ describe('#767 を崩す', () => {
     expect(await ownerRes.json()).toEqual({ revoked_sessions: 0, revoked_tokens: 0 });
     expect((await callMe(owner.token)).status).toBe(401);
 
-    const relogin = await createSessionWithToken(owner.accountId);
+    const relogin = await createSessionFixture(owner.accountId);
     expect(await (await revokeAll(relogin.token)).json()).toEqual({ revoked_sessions: 1, revoked_tokens: 0 });
     expect(await hashesOf(owner.accountId)).toEqual([relogin.row.token_hash]);
     expect((await callMe(stolen.token)).status).toBe(401);
@@ -263,7 +268,7 @@ describe('#767 を崩す', () => {
 
     test('大文字の16進にした今のセッションのハッシュを渡すと、行と一致しない（BINARY の比較）ので、セッションもトークンも何も変えない', async () => {
       const person = await createLoginPerson();
-      await createSessionWithToken(person.accountId);
+      await otherSession(person);
       const { hash } = await insertApiToken(person.accountId, { expiresAt: future() });
       const upper = (await hashSessionToken(person.token)).toUpperCase();
       const before = await sessionRowsOf(person.accountId);
@@ -280,7 +285,7 @@ describe('#767 を崩す', () => {
 
     test('今のセッションの行は期限を見ない: 期限切れでも行があれば、ほかのセッションを消しトークンを取り消す（条件は token_hash と account_id だけ）', async () => {
       const person = await createLoginPerson();
-      const expired = await createSessionWithToken(person.accountId, {
+      const expired = await otherSession(person, {
         expires_at: new Date(Date.now() - 1000).toISOString(),
       });
       await insertApiToken(person.accountId, { expiresAt: future() });
@@ -296,7 +301,7 @@ describe('#767 を崩す', () => {
 
     test('操作の書き込みは2文だけの1つの batch() で、セッションの削除、トークンの取り消しの順。どちらも今のセッションの行の EXISTS を持つ', async () => {
       const person = await createLoginPerson();
-      await createSessionWithToken(person.accountId);
+      await otherSession(person);
       const batches: (readonly string[])[] = [];
       const recording = envWithD1Hooks(testEnv, { beforeBatch: (sqls) => void batches.push(sqls) });
       expect((await revokeAllIn(person.token, recording)).status).toBe(200);
