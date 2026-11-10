@@ -24,6 +24,7 @@ type Scope = 'organization' | 'workspace' | 'epic' | 'task' | 'connection' | 'us
 // 通常の削除と残件数の照合に使う表の一覧（Wiki の2表は別枠）。favorites は Wiki より先に専用の文で消し、通常の削除文からは除く。
 // ほかは外部キーの子から順。xp_grants は自分の表を指す（reverses_grant_id）が、1文で組織の行をまとめて消すので、文の終わりの検査に当たらない
 const TABLES: readonly (readonly [table: string, scope: Scope])[] = [
+  ['notifications', 'user'],
   ['favorites', 'user'],
   ['xp_grants', 'workspace'],
   ['thanks', 'workspace'],

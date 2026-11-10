@@ -142,6 +142,7 @@ test('管理者の指名し直しのダイアログを開いた状態に axe の
             workspace_count: 1,
             task_count: 12,
             attachment_quota_bytes: 32212254720,
+            attachment_used_bytes: 0,
             last_used_at: null,
           },
         ],

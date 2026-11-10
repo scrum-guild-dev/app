@@ -11,6 +11,8 @@ const byRoute: Record<string, LoadingShape | null> = {
   '/[slug]/admin': 'settings',
   // お気に入り: 見出しと行の並び
   '/[slug]/favorites': 'list',
+  // 通知: 見出しと知らせの行の並び
+  '/[slug]/notifications': 'list',
   // マイプロフィール: 設定の節と右の脇（レベルの欄）の2列
   '/[slug]/me': 'aside',
   // 届いた招待は、組織に入れる人にも枠を出さない紙の画面

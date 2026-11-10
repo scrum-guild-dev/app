@@ -349,7 +349,65 @@ export type OrganizationUsage = {
   workspaceCount: number;
   taskCount: number;
   lastUsedAt: string | null;
+  attachmentBytes: number;
 };
+
+// 容量の対象を先に組織で絞り、保持中の削除ページと閉じたワークスペースも数える。
+// 組織の ID は2か所に束縛するので、呼び出し側で上限の半分に区切る。
+function storageCountsStatement(db: OrganizationEntry, organizationIds: readonly string[]) {
+  return db.statement((q) =>
+    q
+      .with('storage_workspaces', (q) =>
+        q.selectFrom('workspaces').select(['id', 'organization_id']).where('organization_id', 'in', organizationIds),
+      )
+      .with('storage_pages', (q) =>
+        q
+          .selectFrom('wiki_pages')
+          .select(['id', 'organization_id', 'title', 'body_md'])
+          .$narrowType<{ organization_id: string }>()
+          .where('organization_id', 'in', organizationIds)
+          .unionAll(
+            q
+              .selectFrom('wiki_pages')
+              .innerJoin('storage_workspaces', 'storage_workspaces.id', 'wiki_pages.workspace_id')
+              .select([
+                'wiki_pages.id',
+                'storage_workspaces.organization_id',
+                'wiki_pages.title',
+                'wiki_pages.body_md',
+              ]),
+          ),
+      )
+      .with('storage_bytes', (q) =>
+        q
+          .selectFrom('attachments')
+          .innerJoin('storage_workspaces', 'storage_workspaces.id', 'attachments.workspace_id')
+          .select(['storage_workspaces.organization_id', 'attachments.size_bytes as bytes'])
+          .unionAll(
+            q
+              .selectFrom('storage_pages')
+              .select([
+                'organization_id',
+                sql<number>`length(CAST(title AS BLOB)) + length(CAST(body_md AS BLOB))`.as('bytes'),
+              ]),
+          )
+          .unionAll(
+            q
+              .selectFrom('wiki_page_revisions')
+              .innerJoin('storage_pages', 'storage_pages.id', 'wiki_page_revisions.page_id')
+              .select([
+                'storage_pages.organization_id',
+                sql<number>`length(CAST(wiki_page_revisions.title AS BLOB)) + length(CAST(wiki_page_revisions.body_md AS BLOB))`.as(
+                  'bytes',
+                ),
+              ]),
+          ),
+      )
+      .selectFrom('storage_bytes')
+      .select(['organization_id', sql<number>`sum(bytes)`.as('bytes')])
+      .groupBy('organization_id'),
+  );
+}
 
 // ワークスペースの数、タスクの数、最後に使われた日時を数える文。どれも organization_id IN (...) で絞り、組織ごとに GROUP BY する
 export function usageCountsStatements(db: OrganizationEntry, organizationIds: readonly string[]) {
@@ -400,13 +458,20 @@ export async function organizationUsageIn(
   const usage = new Map(
     organizationIds.map((id): [string, Omit<OrganizationUsage, 'seatsUsed'>] => [
       id,
-      { workspaceCount: 0, taskCount: 0, lastUsedAt: null },
+      { workspaceCount: 0, taskCount: 0, lastUsedAt: null, attachmentBytes: 0 },
     ]),
   );
   const seats = await seatHoldersIn(entries, organizationIds, now);
   for (const db of entries) {
-    for (const chunk of chunksOf(organizationIds, MAX_BOUND_PARAMETERS)) {
-      const [workspaces, tasks, users] = await db.batch(usageCountsStatements(db, chunk));
+    for (const chunk of chunksOf(organizationIds, Math.floor(MAX_BOUND_PARAMETERS / 2))) {
+      const [workspaces, tasks, users, storage] = await db.batch([
+        ...usageCountsStatements(db, chunk),
+        storageCountsStatement(db, chunk),
+      ] as const);
+      for (const row of storage.rows) {
+        const total = usage.get(row.organization_id);
+        if (total !== undefined) total.attachmentBytes += Number(row.bytes);
+      }
       for (const row of workspaces.rows) {
         const total = usage.get(row.organization_id);
         if (total !== undefined) total.workspaceCount += Number(row.count);
@@ -425,7 +490,7 @@ export async function organizationUsageIn(
   }
   return new Map(
     organizationIds.map((id): [string, OrganizationUsage] => {
-      const total = usage.get(id) ?? { workspaceCount: 0, taskCount: 0, lastUsedAt: null };
+      const total = usage.get(id) ?? { workspaceCount: 0, taskCount: 0, lastUsedAt: null, attachmentBytes: 0 };
       return [id, { seatsUsed: seats.get(id)?.size ?? 0, ...total }];
     }),
   );
@@ -742,6 +807,27 @@ function userClaimStatements(db: OrganizationEntry, c: ClaimContext, name: strin
         .where('login_provider', '=', login.provider)
         .where('login_subject', '=', login.subject)
         .where((eb) => userClaimIsOpen(eb, c)),
+    ),
+    // 待っていた行を実際に消せるときだけ、その受信通知も同じ batch で先に消す。
+    db.statement((q) =>
+      q.deleteFrom('notifications').where(
+        'user_id',
+        'in',
+        q
+          .selectFrom('users')
+          .select('id')
+          .where('id', '=', pending.id)
+          .where('organization_id', '=', pending.organizationId)
+          .where('login_subject', 'is', null)
+          .where('disabled_at', 'is', null)
+          .where('claim_token_hash', '=', c.tokenHash)
+          .where('claim_expires_at', '>', nowIso)
+          .where((eb) =>
+            eb.exists(
+              sameLoginUsers(eb, c).select('su.id').where('su.is_admin', '=', 1).where('su.disabled_at', 'is', null),
+            ),
+          ),
+      ),
     ),
     // 統合した後に、待っていた行を消す。統合先が無効でない管理者になっていることも条件にする
     db.statement((q) =>

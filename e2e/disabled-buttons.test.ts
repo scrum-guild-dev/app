@@ -145,6 +145,7 @@ test('停止の送信中は危険操作と取り消しの文字が4テーマで�
         workspace_count: 3,
         task_count: 1284,
         attachment_quota_bytes: 32212254720,
+        attachment_used_bytes: 0,
         last_used_at: '2026-10-20T00:12:00.000Z',
         self_created: false,
         trial_ends_on: null,

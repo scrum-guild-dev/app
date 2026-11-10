@@ -47,6 +47,14 @@
 
 手元の `wrangler dev` と vitest の Workers の実行環境は R2 を模擬する。本番のバケットには触らず、手元用のバケットを Cloudflare に作る必要はない。
 
+### 容量警告と通知の定期処理
+
+毎分の処理は、組織の通知済み・配信待ち・容量確認待ちの印を持つ組織だけを集計し、80%未満への復帰と通知の再試行を行う。保存応答は集計・配信を待たず、失敗時は `attachment_quota_check_pending_at` または `attachment_quota_warning_pending_at` が残る。通常の `organization` の読み取りでは容量を集計せず、管理画面の節が `include_storage: true` を明示したときだけ読む。
+
+1回の容量確認は10組織、1組織5バッチ（各50人を1文）まで。既読90日超の通知の掃除は別に全組織を10件ずつ確認する。停止した組織は対象外。`job: "attachment-quota-warning"` の失敗ログと、`reason: "容量の変更待ちの記録または通知処理に失敗した"` のログを調べ、次の回で印と未配信の人が減ることを確かめる。変更待ちの初回登録が失敗すると defer で1回再試行するが、その登録も失敗した場合は未登録のままとなる。保存自体は取り消さず、ログの例外名と共通 DB の障害を調べる。本文・受取人・資格情報はログに出さない。
+
+R2 の `system/attachment-quota-warning-cursor` と `system/notification-cleanup-cursor` は各処理の続きの組織 ID を持つ内部オブジェクトで、添付ではない。組織の容量や削除対象には含めない。末尾まで処理すると空に戻り、次の回は先頭から始める。詳細は `docs/data-model.md` の `notifications`。
+
 ### Workers Builds の接続
 
 Workers & Pages の「Create application」→「Continue with GitHub」で、リポジトリ `scrum-guild-dev/app` を選び、Project name を `scrum-guild`（`wrangler.jsonc` の `name` と同じ）にして作る。Worker が既にあるときは、その Worker の Settings の Builds でつなぐ。GitHub の Cloudflare のアプリには、このリポジトリと紹介サイトのリポジトリ `scrum-guild-dev/website` だけを許可する。紹介サイトの Worker `scrum-guild-website` の Builds の設定は、`scrum-guild-dev/website` の README の「デプロイ」に書く。
@@ -346,7 +354,7 @@ rollback で戻るのは、版が持つものすべて。コードと設定の�
 次のものは戻らない。
 
 - D1 のデータとスキーマ（下の「DB を戻す」）
-- cron やルート（triggers）の変更。`wrangler deploy` が版と一緒に反映する。triggers を変えた版を戻すときは、手元（上の「手元の準備」）で戻し先の版のコミットを checkout し、その `wrangler.jsonc` で `wrangler triggers deploy` を実行して当て直す。今の `main` で実行すると、戻したい triggers をもう一度当てるだけになる。今の `wrangler.jsonc` の triggers は、毎分（`* * * * *`）の期限切れの行の掃除と、毎時 0 分（`0 * * * *`）のお試しの期限切れの停止と未添付ファイルの掃除、という2つの式
+- cron やルート（triggers）の変更。`wrangler deploy` が版と一緒に反映する。triggers を変えた版を戻すときは、手元（上の「手元の準備」）で戻し先の版のコミットを checkout し、その `wrangler.jsonc` で `wrangler triggers deploy` を実行して当て直す。今の `main` で実行すると、戻したい triggers をもう一度当てるだけになる。今の `wrangler.jsonc` の triggers は、毎分（`* * * * *`）の期限切れ・保持期限後の行の掃除と容量警告の再試行、および毎時 0 分（`0 * * * *`）のお試しの期限切れの停止と未添付ファイルの掃除、という2つの式
 
 ### DB を戻す
 

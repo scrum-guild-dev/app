@@ -1232,13 +1232,18 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 使っている量と上限。80% を超えたら is-warn、上限に達したら is-full
   // opts.unit は量の単位（既定 GB）、opts.note は下に添える文
+  function storageBytes(bytes) {
+    if (bytes < 1024 ** 2) return `${bytes.toLocaleString("ja-JP")}\u00a0B`;
+    const unit = bytes >= 1024 ** 3 ? 1024 ** 3 : 1024 ** 2;
+    return `${(Math.floor(bytes / unit * 10) / 10).toLocaleString("ja-JP")}\u00a0${unit === 1024 ** 3 ? "GB" : "MB"}`;
+  }
   function meter(used, quota, opts = {}) {
     const unit = opts.unit || "GB";
-    const pct = Math.min(100, Math.round((used / quota) * 100));
-    const key = used >= quota ? "is-full" : pct >= 80 ? "is-warn" : "";
+    const pct = Math.min(100, Math.floor((used / quota) * 100));
+    const key = used >= quota ? "is-full" : used / quota > 0.8 ? "is-warn" : "";
     const label = `上限 ${quota} ${unit} のうち ${used} ${unit}（${pct}%）`;
     const state = key === "is-full" ? `<span class="chip is-danger">${icon("alert")}上限に達しています</span>`
-      : key ? `<span class="chip is-warn">${icon("alert")}上限の ${pct}%</span>` : `<span class="props-note">上限の ${pct}%</span>`;
+      : key ? `<span class="chip is-warn">${icon("alert")}${opts.storage ? "上限の80%を超えています" : `上限の ${pct}%`}</span>` : `<span class="props-note">上限の ${pct}%</span>`;
     if (opts.small) {
       return `<div class="meter meter-small ${key}"><span class="meter-small-top"><span class="mono">${used} / ${quota} ${unit}</span>${key ? `<span class="verdict is-over">${icon("alert")}${pct}%</span>` : ""}</span>
         <div class="meter-bar" role="img" aria-label="${label}"><span style="width:${pct}%"></span></div></div>`;
@@ -2598,9 +2603,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     },
     // 人数と添付ファイルの上限の変更（本番の OrganizationQuotaDialog）。今の上限に合う段階を選んだ状態で開く。
     // 「ほかの値」の欄は、「ほかの値」を選んでいる間だけ出す（data-quota-choice の change）。
-    // 添付ファイルの今の合計と、合計に関わる注意（合計が下がるまで添付できない、80% の通知）は #68 まで出さない
+    // 添付ファイルと Wiki の今の合計と、上限を上下するときの注意を出す
     changeQuota: () => openDialog("人数と添付ファイルの上限を変える",
-      `<p class="wrap-anywhere">「あおば開発」の上限を変えます。今は人数 5&nbsp;人（上限 15&nbsp;人）、添付ファイルの上限 30&nbsp;GB です。</p>
+      `<p class="wrap-anywhere">「あおば開発」の上限を変えます。今は人数 5&nbsp;人（上限 15&nbsp;人）、添付ファイルと Wiki の合計 ${D.storage.used}&nbsp;GB（上限 30&nbsp;GB）です。</p>
        <div class="field"><span class="field-label" id="d-ql">新しい上限</span>
          <div class="choice-list" role="radiogroup" aria-labelledby="d-ql">
            <label class="choice"><input type="radio" name="d-q" value="small" data-quota-choice checked><div><b>小さい${t("organization")}</b><span>15&nbsp;人・30&nbsp;GB</span></div></label>
@@ -2613,6 +2618,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
        </div>
        <p class="field-hint" id="d-qu">今の上限です。別の値を選ぶと変えられます。</p>
        <p class="field-hint">人数を今より小さくしても、今いる人はそのまま残り、上限を下回るまで新しい人の招待と管理者への指名だけを止めます。</p>
+       <p class="field-hint">容量の上限を今の合計より小さくすると、合計が下がるまで新しく添付できません。上限を上げて合計が80%を下回ると、次に80%を超えたときに管理者へまた通知します。</p>
        <p class="field-hint">上限の変更は${t("organization")}の変更の履歴に、運用者の操作として残ります。</p>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" id="d-qs" aria-disabled="true" aria-describedby="d-qu">変える</button>`),
     suspendOrganization: () => {
@@ -4282,7 +4288,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     attrChipExamples, avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead, mobilePageHead,
     narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
-    filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
+    filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter, storageBytes,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
     enableAssistOnCatalog: () => { assistOnCatalog = true; },
   };

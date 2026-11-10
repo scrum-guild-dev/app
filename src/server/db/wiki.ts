@@ -46,6 +46,53 @@ export function organizationStorageBytes(db: OrganizationDb): RawBuilder<number>
   )`;
 }
 
+// 管理者に返す容量の内訳。Wiki は題と本文の UTF-8 バイト数で、過去版と削除後の保持分を含める。
+// 80%通知や変更待ちの印がある組織だけで、R2へ流す前の明らかな超過を断るために使う。
+// 最後の上限の守りは、insertUploadedAttachmentの同じSQL文内の条件が担う。
+export async function attachmentFitsQuota(db: OrganizationDb, quota: number, incomingBytes: number): Promise<boolean> {
+  const row = await db.first(
+    db.statement((q) =>
+      q.selectNoFrom(sql<number>`${organizationStorageBytes(db)} + ${incomingBytes} <= ${quota}`.as('fits')),
+    ),
+  );
+  return Number(row?.fits ?? 0) === 1;
+}
+
+export async function readOrganizationStorageUsage(db: OrganizationDb) {
+  const wikiBytes = (condition: RawBuilder<boolean>) => sql<number>`(
+    WITH scoped_pages AS (SELECT id, title, body_md FROM wiki_pages WHERE ${condition})
+    SELECT coalesce(sum(bytes), 0) FROM (
+      SELECT length(CAST(title AS BLOB)) + length(CAST(body_md AS BLOB)) AS bytes FROM scoped_pages
+      UNION ALL
+      SELECT length(CAST(r.title AS BLOB)) + length(CAST(r.body_md AS BLOB)) FROM wiki_page_revisions r INNER JOIN scoped_pages p ON p.id = r.page_id
+    )
+  )`;
+  const [organizationWiki, workspaces] = await db.batch([
+    db.statement((q) => q.selectNoFrom(wikiBytes(sql<boolean>`organization_id = ${db.organizationId}`).as('bytes'))),
+    db.statement((q) =>
+      q
+        .selectFrom('workspaces as w')
+        .select([
+          'w.id',
+          'w.name',
+          'w.closed_at',
+          sql<number>`${wikiBytes(sql<boolean>`workspace_id = w.id`)} + (SELECT coalesce(sum(size_bytes), 0) FROM attachments WHERE workspace_id = w.id)`.as(
+            'used_bytes',
+          ),
+        ])
+        .where('w.organization_id', '=', db.organizationId)
+        .orderBy('w.name')
+        .orderBy('w.id'),
+    ),
+  ] as const);
+  const organizationWikiBytes = Number(organizationWiki.rows[0]?.bytes ?? 0);
+  return {
+    used_bytes: organizationWikiBytes + workspaces.rows.reduce((sum, row) => sum + Number(row.used_bytes), 0),
+    organization_wiki_bytes: organizationWikiBytes,
+    workspaces: workspaces.rows.map((row) => ({ ...row, used_bytes: Number(row.used_bytes) })),
+  };
+}
+
 const pageColumns = [
   'id',
   'parent_id',

@@ -23,6 +23,8 @@ test('お試しの管理者は管理の先頭で期限と残りの日数を見�
   await expect(section).not.toContainText('UTC');
   await expect(section).toContainText(`残り ${result.trial!.days_left} 日`);
   await expect(section).toContainText('継続して使うには、運用者に問い合わせてください。');
+  // 同じ organization 操作を読む容量の節も待ち、差し替え中の応答をテスト終了で切らない。
+  await expect(page.getByRole('region', { name: '添付ファイルと Wiki の容量' }).locator('table')).toBeVisible();
   expect(await collect()).toEqual([]);
 });
 
@@ -54,5 +56,6 @@ for (const days_left of [0, -1]) {
     await expect(section).toContainText('2028/03/01 09:00 ごろに止まります');
     await expect(section).toContainText(days_left === 0 ? '今日までです' : 'お試しの期限を過ぎています');
     await expect(section).not.toContainText('残り');
+    await expect(page.getByRole('region', { name: '添付ファイルと Wiki の容量' }).locator('table')).toBeVisible();
   });
 }

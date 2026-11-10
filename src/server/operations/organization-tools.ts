@@ -5,6 +5,9 @@
 // 道具は権限ごとに分けず、組織の中のすべての操作に渡す。道具の中で入った人（actor）を確かめ、承諾待ちの招待だけの人の操作からは
 // 自分のログインの読み取り（myLogins）のほかの道具を使えず、組織の設定の書き込みは管理者の操作からだけ使える。
 // 当たらない呼び出しは処理の誤りなので、投げて 500 にする
+import { now } from '../../shared/clock.ts';
+import { reconcileAttachmentQuota } from '../storage/quota-warning.ts';
+import type { Defer } from './implement.ts';
 import { INVITE_PATH } from '../../shared/claim-token.ts';
 import type { InviteeResolver } from '../auth/login-method.ts';
 import { decryptCredential, encryptCredential, type EncryptedCredential } from '../crypto/credential.ts';
@@ -18,6 +21,7 @@ import {
 import { syncConnection, type SyncResult } from '../import/sync.ts';
 import {
   commonDb,
+  markAttachmentQuotaCheck,
   readOrganizationRow,
   userAvatarsOf,
   writeOrganizationSettings,
@@ -36,6 +40,8 @@ export type OrganizationTools = {
   inviteUrl(claimToken: string): string;
   // 自分の組織の行のうち、入るときに引かない値（人数の上限）
   readOrganization(): Promise<OrganizationRow>;
+  // 成功後は変更待ちの記録だけを待ち、通知をdeferへ渡す。容量拒否時のmarkOnlyは記録だけ行い、cronへ任せる。
+  reconcileAttachmentQuota(options?: { markOnly?: boolean }): Promise<void>;
   // 自分の組織の言葉づかいと既定のテーマを、停止しておらず、先に読んだ値（from）のままなら書く（渡した項目と updated_at だけ）。
   // 管理者の操作からだけ呼ぶ。書けたら written、入ってから書くまでに停止されていたら suspended（呼び出し側は 403 にする）、
   // 別の要求が先に変えていたら conflict（409 にする）。変更の記録（change_logs）は書かない。
@@ -75,6 +81,9 @@ export function organizationTools(
   actor: OrganizationActor,
   inviteeResolver: (provider: string) => InviteeResolver | undefined,
   importFetcher: typeof fetch,
+  defer: Defer = (task) => {
+    void task();
+  },
 ): OrganizationTools {
   // 承諾待ちの招待だけの人は、組織の中を読む操作に通らない（register.ts の checkOrganizationPermission）。道具もその人には使わせない
   const member = <T>(use: () => T): T => {
@@ -86,6 +95,43 @@ export function organizationTools(
     inviteeResolver: (provider) => member(() => inviteeResolver(provider)),
     inviteUrl: (claimToken) => member(() => `${new URL(env.PUBLIC_ORIGIN).origin}${INVITE_PATH}#${claimToken}`),
     readOrganization: () => member(() => readOrganizationRow(env, db)),
+    reconcileAttachmentQuota: (options = {}) =>
+      member(async () => {
+        const logFailure = (error: unknown) =>
+          console.error(
+            JSON.stringify({
+              level: 'error',
+              code: 'internal',
+              operation: 'attachment-quota-warning',
+              reason: '容量の変更待ちの記録または通知処理に失敗した',
+              error: error instanceof Error ? error.name : typeof error,
+            }),
+          );
+        const queueCheck = (retryMark: boolean) =>
+          defer(async () => {
+            try {
+              if (retryMark && !(await markAttachmentQuotaCheck(env, db.organizationId, now()))) return;
+              await reconcileAttachmentQuota(env, db.organizationId, now());
+            } catch (error) {
+              logFailure(error);
+            }
+          });
+        try {
+          if (!(await markAttachmentQuotaCheck(env, db.organizationId, now()))) return;
+          if (options.markOnly === true) return;
+          queueCheck(false);
+        } catch (error) {
+          logFailure(error);
+          if (options.markOnly === true) return;
+          // 印の登録だけが一度失敗しても、保存の応答を待たせず一度だけ登録からやり直す。
+          // 共通DBへの印登録が2回とも失敗した場合までは、永続的な配信を保証しない。
+          try {
+            queueCheck(true);
+          } catch (error) {
+            logFailure(error);
+          }
+        }
+      }),
     writeOrganizationSettings: (change, now) =>
       member(() => {
         if (!actor.isAdmin) throw new Error('管理者でない人の操作から、組織の設定を書いた');

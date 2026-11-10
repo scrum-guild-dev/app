@@ -11,11 +11,11 @@ export const adminStatuses = ['none', 'pending', 'expired', 'active'] as const;
 export type AdminStatus = (typeof adminStatuses)[number];
 
 // 組織をまたぐ一覧。組織の中のデータ（人の名前、ID、ログインの ID など）は返さず、組織ごとの集計（数と日時）だけを返す。
-// 集計の数え方は docs/data-model.md の users の節の、運用者の組織の一覧の集計を書いた箇条書き。添付ファイルの合計は出さない（#68 で足す）
+// 集計の数え方は docs/data-model.md の users の節の、運用者の組織の一覧の集計を書いた箇条書き。添付と Wiki の容量を含む
 export const listOrganizations = defineOperation({
   name: 'list-organizations',
   description:
-    '組織の一覧を返す。slug、名前、お試しの期限とそれを過ぎたか、停止した日時、データを消す予定日とそれを過ぎたか、作った日時、管理者の状態と、組織ごとの集計（人数と上限、閉じていないワークスペースの数、削除していないタスクの数、添付ファイルの上限、最後に使われた日時）だけで、組織の中のデータは返さない',
+    '組織の一覧を返す。slug、名前、お試しの期限とそれを過ぎたか、停止した日時、データを消す予定日とそれを過ぎたか、作った日時、管理者の状態と、組織ごとの集計（人数と上限、閉じていないワークスペースの数、削除していないタスクの数、添付ファイルと Wiki の合計と上限、最後に使われた日時）だけで、組織の中のデータは返さない',
   mode: 'read',
   permission: 'operator',
   input: z.object({}),
@@ -43,7 +43,9 @@ export const listOrganizations = defineOperation({
         workspace_count: z.number().int(),
         // 削除していない（deleted_at が空）タスクの数。受信箱、アーカイブ、閉じたワークスペースの分も含める
         task_count: z.number().int(),
-        // 添付ファイルの上限（バイト）。organizations.attachment_quota_bytes のまま。使った量の合計は出さない（#68）
+        // 添付ファイルと Wiki の合計（保持中の削除ページ・過去版と閉じたワークスペースを含む）
+        attachment_used_bytes: z.number().int(),
+        // 添付ファイルの上限（バイト）。organizations.attachment_quota_bytes のまま。
         attachment_quota_bytes: z.number().int(),
         // 組織の人（無効にした人も含む）が最後に使った日時（users.last_seen_at の最大）。だれも使っていなければ null
         last_used_at: z.string().nullable(),

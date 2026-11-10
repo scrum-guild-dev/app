@@ -35,6 +35,7 @@ async function upload({ db, actor, tools, input }: ContextOf<typeof orgWikiUploa
     await checkParent();
     throw new ApiError(409, 'attachment_quota_exceeded');
   }
+  await tools.reconcileAttachmentQuota();
   return { pages };
 }
 export const orgWikiUploadOperation = implement(orgWikiUpload, (context) =>

@@ -29,7 +29,15 @@ describe('ROUTE_IDS', () => {
   });
 
   test('今ある画面の route.id を含む', () => {
-    for (const id of ['/', '/login', '/invite', '/[slug]', '/[slug]/w/[id]/plan', '/operator']) {
+    for (const id of [
+      '/',
+      '/login',
+      '/invite',
+      '/[slug]',
+      '/[slug]/notifications',
+      '/[slug]/w/[id]/plan',
+      '/operator',
+    ]) {
       expect(ROUTE_IDS).toContain(id);
     }
   });

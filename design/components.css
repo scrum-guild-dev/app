@@ -51,10 +51,11 @@ h1, h2, h3 { text-wrap: balance; }
   display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin;
 }
-/* 綴じの中身（組織の切り替え、メニュー、足跡）。角のマスの下に続く */
+/* 綴じの中身（組織の切り替え、メニュー、足跡）。角のマスの下に続く。
+   項目の44pxは保ち、節の余白を詰めて通知を含む既定の並びを高さ800pxに収める。低い画面は内側全体を送る */
 .binding-body {
-  flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-5);
-  padding-block: var(--space-5);
+  flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-3);
+  padding-block: var(--space-4);
   padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
   padding-right: var(--space-4);
 }
@@ -85,7 +86,7 @@ h1, h2, h3 { text-wrap: balance; }
 .nav-tip { display: none; }
 
 .nav { display: grid; gap: 1px; }
-.nav-group { font-size: var(--text-xs); color: var(--color-muted); letter-spacing: var(--tracking-label); padding: var(--space-4) var(--space-2) var(--space-1); }
+.nav-group { font-size: var(--text-xs); color: var(--color-muted); letter-spacing: var(--tracking-label); padding: var(--space-2) var(--space-2) var(--space-1); }
 .nav-item {
   position: relative;
   display: flex; align-items: center; gap: var(--space-3);
@@ -1900,6 +1901,10 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 .feed-main { display: grid; gap: 2px; min-width: 0; }
 .feed-text { font-size: var(--text-sm); overflow-wrap: anywhere; }
 .feed-at { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
+/* 知らせの操作は、見本・カタログ・本番で同じ44pxのタッチ領域を持つ。 */
+@media (max-width: 760px), (pointer: coarse) {
+  .feed .btn { min-width: 44px; min-height: 44px; }
+}
 
 /* ===== 空の状態 ===== */
 .empty { display: grid; gap: var(--space-2); justify-items: center; text-align: center; padding: var(--space-10) var(--space-4); color: var(--color-muted); border: 1px dashed var(--color-line); border-radius: var(--radius-1); }

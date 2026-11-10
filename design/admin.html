@@ -90,17 +90,20 @@ SQ.mount("admin", () => `
         <tbody>${A.workspaces.map((w) => `<tr><td class="is-name">${esc(w.name)}${w.closed ? ` <span class="chip">終了 ${w.closed}</span>` : ""}${!w.closed && !w.leaders ? ` <span class="chip is-warn">${t("leader")}がいない</span>` : ""}</td>
           <td class="is-num" data-label="${t("member")}数">${w.members}</td><td class="is-num" data-label="${t("leader")}数">${w.leaders}</td><td class="mono" data-label="作った日">${w.created}</td>
           <td class="is-actions">${w.closed ? `<button class="btn is-sm is-quiet" type="button" data-toast="${t("workspace")}を再開しました">再開する</button>` : `<button class="btn is-sm is-quiet" type="button" data-dialog="closeWorkspace">終了する</button>`}</td></tr>`).join("")}</tbody></table></div>`)}
-    ${setting("添付ファイル", `${t("task")}、${t("story")}、${t("epic")}、コメントに添付したファイルの合計。上限は運用者が決めます。上限に達すると、どの${t("workspace")}でも新しく添付できなくなります。`, `
-      ${meter(D.storage.used, D.storage.quota)}
-      ${D.storage.used / D.storage.quota >= 0.8 ? `<div class="callout is-warn">${icon("alert")}<span>上限の 80% を超えています。不要なファイルを消すか、運用者に上限を上げてもらってください。ファイルを消せるのは、上げた人と各${t("workspace")}の${t("leader")}です。</span></div>` : ""}
-      ${D.storage.byWorkspace.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>${t("workspace")}</th><th class="is-num">ファイル</th><th class="is-num">合計</th></tr></thead>
-        <tbody>${D.storage.byWorkspace.map(([ws, n, gb]) => `<tr><td>${esc(D.workspaces[ws].name)}</td><td class="is-num">${n} 件</td><td class="is-num">${gb} GB</td></tr>`).join("")}</tbody></table></div>` : ""}`)}
+    ${setting("添付ファイルと Wiki の容量", `組織の添付ファイルと Wiki の最新本文・過去版の合計。上限は運用者が決めます。上限に達すると、どの${t("workspace")}でも新しく添付できなくなります。`, `
+      ${meter(D.storage.used, D.storage.quota, { storage: true, note: `縦の線は80%の位置です。超えると${t("admin")}に通知します。` })}
+      <span class="props-note">${Math.round(D.storage.used * 1024 ** 3).toLocaleString("ja-JP")} バイト使用中</span>
+      ${D.storage.used >= D.storage.quota ? `<div class="callout is-danger">${icon("alert")}<span>容量の上限に達したため、新しく添付できません。上げた人か${t("workspace")}の${t("leader")}が不要な添付ファイルを消すか、運用者に上限の引き上げを依頼すると添付できます。</span></div>` : D.storage.used / D.storage.quota > 0.8 ? `<div class="callout is-warn">${icon("alert")}<span>上限の80%を超えています。上げた人か${t("workspace")}の${t("leader")}が不要な添付ファイルを消すか、運用者に上限の引き上げを依頼してください。</span></div>` : ""}
+      <p class="field-hint">終了したワークスペースと、削除後30日の保持中の Wiki も含みます。Wiki は題と本文を数えます。</p>
+      <div class="table-wrap"><table class="table is-stacked"><thead><tr><th>内訳</th><th class="is-num">使用量</th></tr></thead>
+        <tbody><tr><td class="is-name wrap-anywhere">組織の Wiki</td><td class="is-num" data-label="使用量">${SQ.storageBytes(D.storage.organizationWikiBytes || 0)}</td></tr>${D.storage.byWorkspace.map(([ws, n, gb]) => `<tr><td class="is-name wrap-anywhere">${esc(D.workspaces[ws].name)}${D.workspaces[ws].closed ? ` <span class="chip">終了済み</span>` : ""}</td><td class="is-num" data-label="使用量">${SQ.storageBytes(Math.round(gb * 1024 ** 3))}</td></tr>`).join("")}</tbody></table></div>`)}
     ${new URLSearchParams(location.search).has("personal") ? setting(t("delegatee"), t("delegateeDesc"), `
       <div class="form">${D.delegatees.length ? D.delegatees.map((row) => `<form class="field" aria-labelledby="delegatee-label-${row.id}" data-delegatee-rename="${row.id}">
         <label class="field-label" id="delegatee-label-${row.id}" for="delegatee-${row.id}">${esc(row.name)}</label>
         <input class="input" id="delegatee-${row.id}" value="${esc(row.name)}" maxlength="50" required>
         <div class="form-actions"><button class="btn is-sm" type="submit">${t("delegateeSave")}</button><button class="btn is-sm is-danger" type="button" data-delegatee-delete="${row.id}">${t("delegateeRemove")}</button></div>
       </form>`).join("") : SQ.emptyState("users", t("delegateeEmpty"), t("delegateeEmptyText"))}</div>`) : ""}
+
     ${setting("組織の休日", `祝日など、すべての${t("workspace")}に効く休日。日付の一覧を貼り付けて、まとめて登録できます。`, `
       <div class="field"><label class="field-label" for="paste">貼り付けて登録</label><textarea class="textarea" id="paste" aria-describedby="paste-hint" placeholder="2027-02-11 建国記念の日&#10;2027-02-23 天皇誕生日"></textarea><span class="field-hint" id="paste-hint">1行に1日。日付（2026-11-03 か 2026/11/3、2000〜2099 年）のあとに、空白、タブ、カンマで区切って名前を書けます。表計算から写した行は、名前より後の列を読みません。登録済みの日付は飛ばします。</span></div>
       <div class="form-actions"><button class="btn" type="button" data-toast="2 日を登録しました">登録する</button></div>

@@ -24,6 +24,7 @@
     if (parts.length === 2 && page === 'admin') return 'settings';
     if (parts.length === 2 && page === 'me') return 'aside';
     if (parts.length === 2 && page === 'favorites') return 'list';
+    if (parts.length === 2 && page === 'notifications') return 'list';
     if (page === 'wiki' && parts.length <= 3) return 'wiki';
     if (page !== 'w' || parts.length < 3) return null;
     if (parts.length === 3) return 'tree';

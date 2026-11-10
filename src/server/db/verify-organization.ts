@@ -7,7 +7,8 @@
 // 組織を確かめる処理（リクエストの組織が存在し、ログインした人が入れること。停止していないかは入口を渡すかどうかを決める）は enter-organization.ts。
 // このほかに作るのは、組織の作成の関数（create-organization.ts。挿入した組織の ID だけ）と、運用者の履歴の関数
 // （operator-change-log.ts。履歴を1行足すだけで、作った結果は関数の外へ出さない）。
-// 定期処理の履歴（scheduled-change-log.ts）と未添付の行の掃除（cleanup-attachments.ts）も、
+// 定期処理の履歴（scheduled-change-log.ts）、未添付の行の掃除（cleanup-attachments.ts）、
+// 容量警告と既読通知の掃除（attachment-quota-warning.ts）も、
 // 共通の表で確認した組織の ID から、この関数の中だけで使う入口を作る。
 // ワークスペースを組織のものと確かめた結果は verify-workspace.ts に、同じ作りで置く
 const issueToken = Symbol('issue');
