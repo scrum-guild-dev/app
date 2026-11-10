@@ -46,8 +46,7 @@ export function organizationStorageBytes(db: OrganizationDb): RawBuilder<number>
   )`;
 }
 
-// 管理者に返す容量の内訳。Wiki は題と本文の UTF-8 バイト数で、過去版と削除後の保持分を含める。
-// 80%通知や変更待ちの印がある組織だけで、R2へ流す前の明らかな超過を断るために使う。
+// R2へ流す前の明らかな超過を断るために使う。印のある組織と小さい容量上限で呼ぶ。
 // 最後の上限の守りは、insertUploadedAttachmentの同じSQL文内の条件が担う。
 export async function attachmentFitsQuota(db: OrganizationDb, quota: number, incomingBytes: number): Promise<boolean> {
   const row = await db.first(
@@ -58,6 +57,7 @@ export async function attachmentFitsQuota(db: OrganizationDb, quota: number, inc
   return Number(row?.fits ?? 0) === 1;
 }
 
+// 管理者に返す容量の内訳。Wiki は題と本文の UTF-8 バイト数で、過去版と削除後の保持分を含める。
 export async function readOrganizationStorageUsage(db: OrganizationDb) {
   const wikiBytes = (condition: RawBuilder<boolean>) => sql<number>`(
     WITH scoped_pages AS (SELECT id, title, body_md FROM wiki_pages WHERE ${condition})

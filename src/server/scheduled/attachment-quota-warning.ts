@@ -4,7 +4,6 @@ import { reconcileAttachmentQuota } from '../storage/quota-warning.ts';
 const CURSOR_KEY = 'system/attachment-quota-warning-cursor';
 const CLEANUP_CURSOR_KEY = 'system/notification-cleanup-cursor';
 const MAX_ORGANIZATIONS = 10;
-const MAX_NOTIFICATION_BATCHES = 5;
 const TIME_BUDGET_MS = 20_000;
 
 // 容量を読むのは通知済み・配信待ち・変更待ちだけ。10組織×5配信batch（各50人を1文）の上限でD1呼出を制限する。
@@ -44,10 +43,7 @@ export async function attachmentQuotaWarningJob(env: Env, at: Date): Promise<voi
       processed++;
       try {
         if (cleanup) await cleanupReadNotifications(env, organization.id, cutoff, 1000);
-        else
-          await reconcileAttachmentQuota(env, organization.id, at, {
-            maxNotificationBatches: MAX_NOTIFICATION_BATCHES,
-          });
+        else await reconcileAttachmentQuota(env, organization.id, at);
       } catch (error) {
         failures++;
         console.error(

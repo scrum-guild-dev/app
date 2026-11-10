@@ -14,7 +14,7 @@ import { organizationInfo } from '../src/shared/operations/organization/index.ts
 import { AT, createAttachment, createOrganization, createUser, createWorkspace } from './factories.ts';
 import { post } from './operations/harness.ts';
 import { createTarget, testEnv } from './operations/world.ts';
-import { generatedStream, recordingBucket, upload } from './attachment-helpers.ts';
+import { generatedStream, MAX_BYTES, recordingBucket, upload } from './attachment-helpers.ts';
 import { errorCodeOf } from './operations/harness.ts';
 
 const at = new Date('2026-11-10T08:00:00.000Z');
@@ -285,10 +285,18 @@ describe('容量を確かめる処理の負荷', () => {
     const common = commonDb(env);
     await common.batch([
       common.statement((q) =>
-        q.updateTable('organizations').set({ attachment_quota_bytes: 1000 }).where('id', '=', target.organization.id),
+        q
+          .updateTable('organizations')
+          .set({ attachment_quota_bytes: 6 * MAX_BYTES })
+          .where('id', '=', target.organization.id),
       ),
     ]);
-    await createAttachment(target.organization, target.workspace.id, target.member.userId!, { size_bytes: 995 });
+    // 小上限の事前確認とは別に、従来の原子的なDB拒否を通すため、最大添付の5倍より大きい上限にする。
+    for (let index = 0; index < 6; index++) {
+      await createAttachment(target.organization, target.workspace.id, target.member.userId!, {
+        size_bytes: MAX_BYTES - (index === 5 ? 5 : 0),
+      });
+    }
     const first = recordingBucket();
     const firstResponse = await upload(target, { env: first.env });
     expect(firstResponse.status).toBe(409);

@@ -1,6 +1,10 @@
 // 添付ファイルの操作の処理（定義は src/shared/operations/attachment/index.ts）
 import { now } from '../../shared/clock.ts';
-import { attachmentDownload, attachmentUpload } from '../../shared/operations/attachment/index.ts';
+import {
+  ATTACHMENT_MAX_BYTES,
+  attachmentDownload,
+  attachmentUpload,
+} from '../../shared/operations/attachment/index.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
 import { actorUserIdOf, throwIfClosed } from './write-guards.ts';
@@ -8,6 +12,8 @@ import { insertUploadedAttachment, attachmentFitsQuota } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { sniffContentType } from '../attachments/sniff.ts';
 import { downloadAttachment } from '../attachments/download.ts';
+
+const SMALL_ATTACHMENT_QUOTA_MAX_BYTES = 5 * ATTACHMENT_MAX_BYTES;
 
 export const attachmentDownloadOperation = implement(attachmentDownload, async ({ db, actor, input, download }) => {
   if (actor.userId === null) throw new ApiError(404, 'not_found');
@@ -87,9 +93,12 @@ export const attachmentUploadOperation = implement(
     // R2 に書く前に閉じる（書いた後の NOT NULL 違反で、消すだけの書き込みをしない）
     const uploadedBy = actorUserIdOf(actor);
     const { attachmentQuotaBytes, attachmentQuotaNeedsCheck } = await tools.readOrganization();
+    // 上限が1ファイルの5倍以下なら、使用量80%未満でも1ファイルで残量を超えうる。
+    // 大きい上限で印がない通常要求には、この事前集計を増やさない。
     if (
       binary.contentLength > attachmentQuotaBytes ||
-      (attachmentQuotaNeedsCheck && !(await attachmentFitsQuota(db, attachmentQuotaBytes, binary.contentLength)))
+      ((attachmentQuotaNeedsCheck || attachmentQuotaBytes <= SMALL_ATTACHMENT_QUOTA_MAX_BYTES) &&
+        !(await attachmentFitsQuota(db, attachmentQuotaBytes, binary.contentLength)))
     ) {
       await throwIfClosed(db, workspace.workspaceId);
       throw new ApiError(409, 'attachment_quota_exceeded');

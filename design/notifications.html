@@ -12,6 +12,7 @@
 </head>
 <body>
 <div id="app"></div>
+<p id="notification-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
 <script src="icons.js"></script>
 <script src="art.js"></script>
 <script src="sample-data.js"></script>
@@ -25,7 +26,19 @@ let unreadOnly = false;
 let loading = true;
 let limit = 2;
 const pageSize = 2;
-function finishLoading() { loading = false; SQ.redraw(); }
+let focusAfterLoading = false;
+let loadingTimer;
+function announceResults() {
+  const count = D.notifications.filter((n) => !unreadOnly || !n.read).slice(0, limit).length;
+  const unread = D.notifications.filter((n) => !n.read).length;
+  document.getElementById("notification-status").textContent = loading ? "読み込んでいます" : `表示中の通知 ${count} 件。全体の未読 ${unread} 件。`;
+}
+function scheduleLoading() { clearTimeout(loadingTimer); loadingTimer = setTimeout(finishLoading, 300); }
+function finishLoading() {
+  loading = false; SQ.redraw(); announceResults();
+  if (focusAfterLoading) document.querySelector("[data-filter]:checked")?.focus();
+  focusAfterLoading = false;
+}
 
 SQ.mount("notifications", () => {
   const all = D.notifications.filter((n) => !unreadOnly || !n.read);
@@ -45,24 +58,26 @@ SQ.mount("notifications", () => {
     ${!loading && more ? `<div class="form-actions"><button class="btn is-sm" type="button" data-more>続きを読む</button></div>` : !loading && limit > pageSize ? `<p class="action-note" tabindex="-1" id="notification-end">通知をすべて表示しました</p>` : ""}
     <p class="action-note">現在の実装は、容量が上限の80%を超えたときの管理者宛ての通知と、個別の既読です。ほかの種類の行は今後の通知の見本です。</p>`;
 });
-setTimeout(finishLoading, 300);
+announceResults();
+scheduleLoading();
 
 document.addEventListener("click", (ev) => {
   const r = ev.target.closest("[data-read]");
   if (r) {
     D.notifications[+r.dataset.read].read = true;
-    SQ.redraw();
-    document.querySelector("[data-read]")?.focus();
+    SQ.redraw(); announceResults();
+    (document.querySelector("[data-read]") || document.querySelector("[data-more]") || document.querySelector("[data-filter]:checked"))?.focus();
   }
   const f = ev.target.closest("[data-filter]");
   if (f) {
     unreadOnly = f.dataset.filter === "unread";
     limit = pageSize;
     loading = true;
-    SQ.redraw();
-    setTimeout(finishLoading, 300);
+    focusAfterLoading = true;
+    SQ.redraw(); announceResults();
+    scheduleLoading();
   }
-  if (ev.target.closest("[data-more]")) { limit += pageSize; SQ.redraw(); document.getElementById("notification-end")?.focus(); }
+  if (ev.target.closest("[data-more]")) { limit += pageSize; SQ.redraw(); announceResults(); (document.getElementById("notification-end") || document.querySelector("[data-more]"))?.focus(); }
 });
 </script>
 </body>
