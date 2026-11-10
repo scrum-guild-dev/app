@@ -2,19 +2,28 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import type { OutputOf } from '../src/shared/operations/define.ts';
-import { myOrganizations, type organizationInfo } from '../src/shared/operations/organization/index.ts';
+import { listOrganizations } from '../src/shared/operations/operator/index.ts';
+import { myOrganizations, organizationInfo } from '../src/shared/operations/organization/index.ts';
 import { findA11yViolations, shownBox, signIn, watchViolations } from './helpers.ts';
-import { rewriteOperation } from './operations.ts';
+import { failOperation, mockOperation, rewriteOperation, routeOperation } from './operations.ts';
+
+const AOBA = { slug: 'aoba' };
 
 // 組織の操作の応答を書き換える。サーバーの応答をそのまま取り、必要な項目だけ上書きして返す
 async function patchOrganization(page: Page, slug: string, patch: (body: OutputOf<typeof organizationInfo>) => void) {
-  await page.route(`**/api/${slug}/organization`, async (route) => {
-    const response = await route.fetch();
-    const body = (await response.json()) as OutputOf<typeof organizationInfo>;
-    patch(body);
-    await route.fulfill({ response, json: body });
+  await rewriteOperation(page, organizationInfo, { slug }, (output) => {
+    patch(output);
+    return output;
   });
 }
+
+// 入れる組織があおば開発だけで、つばめ商会からの招待が届いている人の my-organizations
+const AOBA_WITH_INVITATION: OutputOf<typeof myOrganizations> = {
+  organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
+  invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
+  suspended: [],
+  operator: false,
+};
 
 // 組織の切り替え（メニューの上の開閉するメニュー）
 const menuButton = (page: Page) => page.locator('.org-menu-button');
@@ -142,14 +151,21 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
   });
 
   // 見つからないのは、API が not_found の 404 を返したときだけ
-  for (const [name, response] of [
-    ['503 の unavailable', { status: 503, json: { error: { code: 'unavailable', message: 'x' } } }],
-    ['403 の forbidden', { status: 403, json: { error: { code: 'forbidden', message: 'x' } } }],
-    ['not_found 以外の code の 404', { status: 404, json: { error: { code: 'invalid_input', message: 'x' } } }],
-    ['JSON でない 404', { status: 404, body: 'Not Found', contentType: 'text/plain' }],
+  for (const [name, answer] of [
+    ['503 の unavailable', (page: Page) => failOperation(page, organizationInfo, AOBA, 503, 'unavailable')],
+    ['403 の forbidden', (page: Page) => failOperation(page, organizationInfo, AOBA, 403, 'forbidden')],
+    ['not_found 以外の code の 404', (page: Page) => failOperation(page, organizationInfo, AOBA, 404, 'invalid_input')],
+    // API のエラーの形でない本文は、ヘルパーの抜け道（call.route）で返す
+    [
+      'JSON でない 404',
+      (page: Page) =>
+        routeOperation(page, organizationInfo, AOBA, (call) =>
+          call.route.fulfill({ status: 404, body: 'Not Found', contentType: 'text/plain' }),
+        ),
+    ],
   ] as const) {
     test(`${name}は、見つからない画面ではなく読み込みの失敗を出す`, async ({ page }) => {
-      await page.route('**/api/aoba/organization', (route) => route.fulfill(response));
+      await answer(page);
       await page.goto('/aoba');
       await expect(page.getByRole('heading', { level: 1, name: '読み込めませんでした' })).toBeVisible();
       await expect(page.getByRole('heading', { name: '組織が見つかりません' })).toHaveCount(0);
@@ -161,9 +177,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
   test('403 の organization_suspended は、停止している組織の画面を出し、組織の一覧へ戻れる。見つからない画面とは別', async ({
     page,
   }) => {
-    await page.route('**/api/aoba/organization', (route) =>
-      route.fulfill({ status: 403, json: { error: { code: 'organization_suspended', message: 'x' } } }),
-    );
+    await failOperation(page, organizationInfo, AOBA, 403, 'organization_suspended');
     const collect = await watchViolations(page);
     await page.goto('/aoba');
     await expect(page.getByRole('heading', { level: 1, name: '組織は停止しています' })).toBeVisible();
@@ -179,24 +193,15 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
 
   // #639: サーバーは理由付きの 401 を返さなくなった。届いても、理由を付けずにログインの画面へ移し、何も出さない
   test('理由（suspended）を持つ 401 も、理由なしでログインの画面へ移す', async ({ page }) => {
-    await page.route('**/api/aoba/organization', (route) =>
-      route.fulfill({ status: 403, json: { error: { code: 'organization_suspended', message: 'x' } } }),
-    );
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({
-        status: 401,
-        json: { error: { code: 'unauthenticated', message: 'x', details: { reason: 'suspended' } } },
-      }),
-    );
+    await failOperation(page, organizationInfo, AOBA, 403, 'organization_suspended');
+    await failOperation(page, myOrganizations, 401, 'unauthenticated', { details: { reason: 'suspended' } });
     await page.goto('/aoba');
     await expect(page).toHaveURL('/login?return_to=%2Faoba');
     await expect(page.getByRole('alert')).toHaveCount(0);
   });
 
   test('理由を持たない 401 は、理由なしでログインの画面へ移す', async ({ page }) => {
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({ status: 401, json: { error: { code: 'unauthenticated', message: 'x' } } }),
-    );
+    await failOperation(page, myOrganizations, 401, 'unauthenticated');
     await page.goto('/aoba');
     await expect(page).toHaveURL('/login?return_to=%2Faoba');
     await expect(page.getByRole('alert')).toHaveCount(0);
@@ -206,15 +211,15 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     page,
   }) => {
     let calls = 0;
-    await page.route('**/api/aoba/organization', async (route) => {
+    await routeOperation(page, organizationInfo, AOBA, async (call) => {
       calls += 1;
       if (calls <= 2) {
         // 2回目（最初の「もう一度試す」）は、少し待ってからまた失敗する
         if (calls === 2) await new Promise((resolve) => setTimeout(resolve, 600));
-        await route.fulfill({ status: 503, json: { error: { code: 'unavailable', message: 'x' } } });
+        await call.fail(503, 'unavailable');
         return;
       }
-      await route.continue();
+      await call.passThrough();
     });
     await page.goto('/aoba');
     await expect(page).toHaveTitle('読み込めませんでした - Scrum Guild');
@@ -279,20 +284,11 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     await patchOrganization(page, 'aoba', (body) => {
       body.organization.theme = 'modern';
     });
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({
-        json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
-          invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
-          suspended: [],
-          operator: false,
-        },
-      }),
-    );
+    await mockOperation(page, myOrganizations, AOBA_WITH_INVITATION);
     await page.goto('/');
-    await page.route('**/api/aoba/organization', async (route) => {
+    await routeOperation(page, organizationInfo, AOBA, async (call) => {
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      await route.continue();
+      await call.passThrough();
     });
     await page.getByRole('link', { name: /あおば開発/ }).click();
     // 少し遅れて、見出しと題名を持つ読み込み中の表示を出す。読み上げの領域は常に置いてあり、文字だけが替わる
@@ -323,16 +319,7 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
   });
 
   test('読み込み中の表示は、移り始めてから 300ms たつまで出さない', async ({ page }) => {
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({
-        json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
-          invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
-          suspended: [],
-          operator: false,
-        },
-      }),
-    );
+    await mockOperation(page, myOrganizations, AOBA_WITH_INVITATION);
     await page.goto('/');
     // 実際の読み込みの速さは CI で揺れるので、出たかどうかではなく、押してから出るまでの時間を見る
     await page.evaluate(() => {
@@ -472,19 +459,19 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
   });
 
   test('組織が多いときは、一覧が画面の高さの 40% までで、中でスクロールする', async ({ page }) => {
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({
-        json: {
-          organizations: [
-            { slug: 'aoba', name: 'あおば開発', kind: 'team' },
-            ...Array.from({ length: 14 }, (_, index) => ({ slug: `k${index}`, name: `組織${index}`, kind: 'team' })),
-          ],
-          invitations: [],
-          suspended: [],
-          operator: false,
-        },
-      }),
-    );
+    await mockOperation(page, myOrganizations, {
+      organizations: [
+        { slug: 'aoba', name: 'あおば開発', kind: 'team' },
+        ...Array.from({ length: 14 }, (_, index) => ({
+          slug: `k${index}`,
+          name: `組織${index}`,
+          kind: 'team' as const,
+        })),
+      ],
+      invitations: [],
+      suspended: [],
+      operator: false,
+    });
     await page.setViewportSize({ width: 1280, height: 600 });
     await page.goto('/aoba');
     await menuButton(page).click();
@@ -503,16 +490,7 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
   test('1組織でも届いた招待があれば、ボタンに印を出し、一覧へ戻る行に招待が届いていることを添える', async ({
     page,
   }) => {
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({
-        json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
-          invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
-          suspended: [],
-          operator: false,
-        },
-      }),
-    );
+    await mockOperation(page, myOrganizations, AOBA_WITH_INVITATION);
     await page.goto('/aoba');
     await expect(menuButton(page).locator('.chip')).toHaveText('届いた招待あり');
     await expect(menuButton(page)).toHaveAttribute('aria-label', /届いた招待あり/);
@@ -533,24 +511,18 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await expect(menuButton(page)).not.toContainText('操作の名前');
 
     // 一覧に今の組織が無いときだけ、組織の操作の名前を使う
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({
-        json: {
-          organizations: [{ slug: 'hibari', name: 'ひばり工房', kind: 'team' }],
-          invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
-          suspended: [],
-          operator: false,
-        },
-      }),
-    );
+    await mockOperation(page, myOrganizations, {
+      ...AOBA_WITH_INVITATION,
+      organizations: [{ slug: 'hibari', name: 'ひばり工房', kind: 'team' }],
+    });
     await page.goto('/aoba');
     await expect(menuButton(page)).toContainText('操作の名前');
   });
 
   test('別の組織へ移っている間は、ボタンに「移っています」を出す', async ({ page }) => {
-    await page.route('**/api/hibari/organization', async (route) => {
+    await routeOperation(page, organizationInfo, { slug: 'hibari' }, async (call) => {
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      await route.continue();
+      await call.passThrough();
     });
     await page.goto('/aoba');
     await menuButton(page).click();
@@ -612,19 +584,15 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     const longUser = 'ミナトミナトミナト'.repeat(10);
     await page.setViewportSize({ width: 390, height: 800 });
 
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({
-        json: {
-          organizations: [
-            { slug: longSlug, name: longName, kind: 'team' },
-            { slug: 'aoba', name: 'あおば開発', kind: 'team' },
-          ],
-          invitations: [{ organization_name: longName, slug: longSlug }],
-          suspended: [],
-          operator: false,
-        },
-      }),
-    );
+    await mockOperation(page, myOrganizations, {
+      organizations: [
+        { slug: longSlug, name: longName, kind: 'team' },
+        { slug: 'aoba', name: 'あおば開発', kind: 'team' },
+      ],
+      invitations: [{ organization_name: longName, slug: longSlug }],
+      suspended: [],
+      operator: false,
+    });
     await page.goto('/');
     await expect(page.locator('a.choice').first()).toBeVisible();
     const select = await overflowOf(page);
@@ -669,11 +637,9 @@ test.describe('ログインしていない人と、組織が無い人', () => {
 
   test('入れる組織が無い運用者は、運用の画面へ移す', async ({ page, context, baseURL }) => {
     await signIn(context, baseURL, 'operator');
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({ json: { organizations: [], invitations: [], suspended: [], operator: true } }),
-    );
+    await mockOperation(page, myOrganizations, { organizations: [], invitations: [], suspended: [], operator: true });
     // e2e の Worker には運用者の一覧が無いので、運用の画面が取る組織の一覧も差し替える（e2e/operator.test.ts）
-    await page.route('**/api/list-organizations', (route) => route.fulfill({ json: { organizations: [] } }));
+    await mockOperation(page, listOrganizations, { organizations: [] });
     await page.goto('/');
     await expect(page).toHaveURL(/\/operator$/);
     await expect(page.getByRole('heading', { level: 1, name: '運用' })).toBeVisible();
@@ -686,16 +652,7 @@ test.describe('ログインしていない人と、組織が無い人', () => {
     baseURL,
   }) => {
     await signIn(context, baseURL, 'member');
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({
-        json: {
-          organizations: [{ slug: 'aoba', name: 'あおば開発', kind: 'team' }],
-          invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
-          suspended: [],
-          operator: false,
-        },
-      }),
-    );
+    await mockOperation(page, myOrganizations, AOBA_WITH_INVITATION);
     await page.goto('/');
     await expect(page).toHaveURL(/\/$/);
     await expect(page.locator('a.choice')).toHaveText([/あおば開発/, /つばめ商会/]);
@@ -711,16 +668,7 @@ test.describe('ログインしていない人と、組織が無い人', () => {
     baseURL,
   }) => {
     await signIn(context, baseURL, 'member');
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({
-        json: {
-          organizations: [],
-          invitations: [{ organization_name: 'つばめ商会', slug: 'tsubame' }],
-          suspended: [],
-          operator: false,
-        },
-      }),
-    );
+    await mockOperation(page, myOrganizations, { ...AOBA_WITH_INVITATION, organizations: [] });
     await page.goto('/');
     await expect(page.getByText('まだ入れる組織がありません')).toBeVisible();
     await expect(page.getByText('届いた招待から組織を選び、承諾すると入れます。')).toBeVisible();
@@ -730,9 +678,7 @@ test.describe('ログインしていない人と、組織が無い人', () => {
 
   test('入れる組織も招待も無い人には、空の状態を出す', async ({ page, context, baseURL }) => {
     await signIn(context, baseURL, 'member');
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({ json: { organizations: [], invitations: [], suspended: [], operator: false } }),
-    );
+    await mockOperation(page, myOrganizations, { organizations: [], invitations: [], suspended: [], operator: false });
     await page.goto('/');
     await expect(page.getByText('入れる組織がありません')).toBeVisible();
   });
@@ -743,9 +689,7 @@ test.describe('ログインしていない人と、組織が無い人', () => {
     baseURL,
   }) => {
     await signIn(context, baseURL, 'member');
-    await page.route('**/api/my-organizations', (route) =>
-      route.fulfill({ status: 503, json: { error: { code: 'unavailable', message: 'x' } } }),
-    );
+    await failOperation(page, myOrganizations, 503, 'unavailable');
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1, name: '読み込めませんでした' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'もう一度試す' })).toBeEnabled();

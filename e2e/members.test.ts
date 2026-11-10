@@ -3,11 +3,21 @@
 import type { Page } from '@playwright/test';
 import type { OutputOf } from '../src/shared/operations/define.ts';
 import { organizationInfo } from '../src/shared/operations/organization/index.ts';
+import {
+  invitationCreate,
+  inviteeResolve,
+  memberList,
+  membershipLeave,
+  membershipRoleUpdate,
+  workspaceInfo,
+} from '../src/shared/operations/workspace/index.ts';
 import { expect, test } from './fixtures.ts';
 import { createWorkspace, expectFocusReturned, expectModalFocus, signIn, watchViolations } from './helpers.ts';
 import { E2E_GOOGLE_INVITE_EMAIL, removeE2eGoogleInvitations, restoreKaedeInvitation } from './local-d1.ts';
-import { rewriteOperation } from './operations.ts';
+import { failOperation, mockOperation, rewriteOperation, routeOperation, type OperationCall } from './operations.ts';
 
+const AOBA = { slug: 'aoba' };
+const HIBARI = { slug: 'hibari' };
 const AOBA_WORKSPACE_ID = '019a0000-0000-7000-8000-000000000401';
 const HARUKA_USER_ID = '019a0000-0000-7000-8000-000000000302';
 const MEMBERS_PATH = `/aoba/w/${AOBA_WORKSPACE_ID}/members`;
@@ -91,21 +101,15 @@ test.describe('リーダー（あおば開発のミナト）', () => {
   test('人数が上限に達していると、理由と管理者に相談するよう出し、まだ数えられていない人は招待できず、数えられている人は招待できる', async ({
     page,
   }) => {
-    await page.route('**/api/aoba/member-list', async (route) => {
-      const response = await route.fetch();
-      const json = (await response.json()) as Record<string, unknown>;
-      await route.fulfill({ response, json: { ...json, seats: { used: 15, limit: 15 } } });
-    });
+    await rewriteOperation(page, memberList, AOBA, (output) => ({ ...output, seats: { used: 15, limit: 15 } }));
     let counted = false;
-    await page.route('**/api/aoba/invitee-resolve', (route) =>
-      route.fulfill({
-        json: {
-          login_subject: counted ? '9000000000000102' : '9000000000000401',
-          login_name: counted ? 'haruka--seed' : 'tsumugi--seed',
-          display_name: null,
-          avatar_url: null,
-          already_counted: counted,
-        },
+    await routeOperation(page, inviteeResolve, AOBA, (call) =>
+      call.fulfill({
+        login_subject: counted ? '9000000000000102' : '9000000000000401',
+        login_name: counted ? 'haruka--seed' : 'tsumugi--seed',
+        display_name: null,
+        avatar_url: null,
+        already_counted: counted,
       }),
     );
     await page.goto(MEMBERS_PATH);
@@ -137,20 +141,14 @@ test.describe('リーダー（あおば開発のミナト）', () => {
   });
 
   test('招待の送信が上限で断られたら、上限の枠を知らせてフォーカスを移す', async ({ page }) => {
-    await page.route('**/api/aoba/invitee-resolve', (route) =>
-      route.fulfill({
-        json: {
-          login_subject: '9000000000000401',
-          login_name: 'tsumugi--seed',
-          display_name: null,
-          avatar_url: null,
-          already_counted: false,
-        },
-      }),
-    );
-    await page.route('**/api/aoba/invitation-create', (route) =>
-      route.fulfill({ status: 409, json: { error: { code: 'member_limit_reached', message: 'x' } } }),
-    );
+    await mockOperation(page, inviteeResolve, AOBA, {
+      login_subject: '9000000000000401',
+      login_name: 'tsumugi--seed',
+      display_name: null,
+      avatar_url: null,
+      already_counted: false,
+    });
+    await failOperation(page, invitationCreate, AOBA, 409, 'member_limit_reached');
     await page.goto(MEMBERS_PATH);
     await page.getByLabel('GitHub のユーザー名').fill('tsumugi--seed');
     await page.getByRole('button', { name: '確かめる' }).click();
@@ -165,20 +163,14 @@ test.describe('リーダー（あおば開発のミナト）', () => {
   });
 
   test('招待を断られたら、理由をユーザー名の欄に出し、確かめ直すまで招待できない', async ({ page }) => {
-    await page.route('**/api/aoba/invitee-resolve', (route) =>
-      route.fulfill({
-        json: {
-          login_subject: '9000000000000102',
-          login_name: 'haruka--seed',
-          display_name: 'ハルカ',
-          avatar_url: null,
-          already_counted: true,
-        },
-      }),
-    );
-    await page.route('**/api/aoba/invitation-create', (route) =>
-      route.fulfill({ status: 409, json: { error: { code: 'already_member', message: 'x' } } }),
-    );
+    await mockOperation(page, inviteeResolve, AOBA, {
+      login_subject: '9000000000000102',
+      login_name: 'haruka--seed',
+      display_name: 'ハルカ',
+      avatar_url: null,
+      already_counted: true,
+    });
+    await failOperation(page, invitationCreate, AOBA, 409, 'already_member');
     await page.goto(MEMBERS_PATH);
     await page.getByLabel('GitHub のユーザー名').fill('haruka--seed');
     await page.getByRole('button', { name: '確かめる' }).click();
@@ -193,13 +185,13 @@ test.describe('リーダー（あおば開発のミナト）', () => {
   test('Google の招待の失敗は、メールアドレスの欄か送信の下に出し、書かれたか分からないときは新しい URL の出し方を添える', async ({
     page,
   }) => {
-    const responses = [
-      { status: 409, json: { error: { code: 'already_invited', message: 'x' } } },
+    const responses: ((call: OperationCall<typeof invitationCreate>) => Promise<void>)[] = [
+      (call) => call.fail(409, 'already_invited'),
       // 到達しない応答（Google の招待で invite が null）も、失敗として出す
-      { status: 200, json: { invitation_id: '019a0000-0000-7000-8000-00000000fffe', login_name: 'x', invite: null } },
-      { status: 500, json: { error: { code: 'internal', message: 'x' } } },
+      (call) => call.fulfill({ invitation_id: '019a0000-0000-7000-8000-00000000fffe', login_name: 'x', invite: null }),
+      (call) => call.fail(500, 'internal'),
     ];
-    await page.route('**/api/aoba/invitation-create', (route) => route.fulfill(responses.shift()!));
+    await routeOperation(page, invitationCreate, AOBA, (call) => responses.shift()!(call));
     await page.goto(MEMBERS_PATH);
     await page.getByRole('radio', { name: 'Google' }).check();
     const email = page.getByLabel('Google のメールアドレス');
@@ -226,25 +218,15 @@ test.describe('リーダー（あおば開発のミナト）', () => {
   });
 
   test('Google の招待が上限で断られても、GitHub で確かめた数えられている人は招待できるまま', async ({ page }) => {
-    await page.route('**/api/aoba/member-list', async (route) => {
-      const response = await route.fetch();
-      const json = (await response.json()) as Record<string, unknown>;
-      await route.fulfill({ response, json: { ...json, seats: { used: 15, limit: 15 } } });
+    await rewriteOperation(page, memberList, AOBA, (output) => ({ ...output, seats: { used: 15, limit: 15 } }));
+    await mockOperation(page, inviteeResolve, AOBA, {
+      login_subject: '9000000000000102',
+      login_name: 'haruka--seed',
+      display_name: null,
+      avatar_url: null,
+      already_counted: true,
     });
-    await page.route('**/api/aoba/invitee-resolve', (route) =>
-      route.fulfill({
-        json: {
-          login_subject: '9000000000000102',
-          login_name: 'haruka--seed',
-          display_name: null,
-          avatar_url: null,
-          already_counted: true,
-        },
-      }),
-    );
-    await page.route('**/api/aoba/invitation-create', (route) =>
-      route.fulfill({ status: 409, json: { error: { code: 'member_limit_reached', message: 'x' } } }),
-    );
+    await failOperation(page, invitationCreate, AOBA, 409, 'member_limit_reached');
     await page.goto(MEMBERS_PATH);
     await page.getByLabel('GitHub のユーザー名').fill('haruka--seed');
     await page.getByRole('button', { name: '確かめる' }).click();
@@ -269,20 +251,13 @@ test.describe('リーダー（あおば開発のミナト）', () => {
   test('アバターのある人は画像、無い人は頭文字の円で出る', async ({ page }) => {
     const collect = await watchViolations(page);
     // seed のログインはアバターを持たないので、member-list の応答にアバターを足し、アバターのホストへは出ずに画像を差し替える
-    await page.route('**/api/aoba/member-list', async (route) => {
-      const response = await route.fetch();
-      const json = (await response.json()) as { members: { name: string }[] };
-      await route.fulfill({
-        response,
-        json: {
-          ...json,
-          members: json.members.map((member) => ({
-            ...member,
-            avatar_url: member.name === 'ミナト' ? 'https://avatars.githubusercontent.com/u/7300001' : null,
-          })),
-        },
-      });
-    });
+    await rewriteOperation(page, memberList, AOBA, (output) => ({
+      ...output,
+      members: output.members.map((member) => ({
+        ...member,
+        avatar_url: member.name === 'ミナト' ? 'https://avatars.githubusercontent.com/u/7300001' : null,
+      })),
+    }));
     await page.route('https://avatars.githubusercontent.com/**', (route) =>
       route.fulfill({ body: PIXEL, contentType: 'image/png' }),
     );
@@ -303,16 +278,14 @@ test.describe('リーダー（あおば開発のミナト）', () => {
   test('「外す」は確かめのダイアログを挟んで送り、外した人を一覧から消してトーストで知らせる', async ({ page }) => {
     const collect = await watchViolations(page);
     let sent: unknown = null;
-    await page.route('**/api/aoba/membership-leave', (route) => {
-      sent = route.request().postDataJSON();
-      return route.fulfill({ json: { user_id: HARUKA_USER_ID } });
+    await routeOperation(page, membershipLeave, AOBA, (call) => {
+      sent = call.input;
+      return call.fulfill({ user_id: HARUKA_USER_ID });
     });
-    await page.route('**/api/aoba/member-list', async (route) => {
-      const response = await route.fetch();
-      const json = (await response.json()) as { members: { id: string }[] };
-      const members = sent === null ? json.members : json.members.filter((member) => member.id !== HARUKA_USER_ID);
-      await route.fulfill({ response, json: { ...json, members } });
-    });
+    await rewriteOperation(page, memberList, AOBA, (output) => ({
+      ...output,
+      members: sent === null ? output.members : output.members.filter((member) => member.id !== HARUKA_USER_ID),
+    }));
     await page.goto(MEMBERS_PATH);
     const rows = page.getByRole('table', { name: '所属している人の一覧' }).locator('tbody tr');
     await expect(rows).toHaveCount(2);
@@ -345,12 +318,9 @@ test.describe('リーダー（あおば開発のミナト）', () => {
   test('外すのに失敗したら同じ行のボタンへフォーカスを戻し、自分の離脱が 404（先に抜けていた）なら抜けたのと同じく組織のトップへ移る', async ({
     page,
   }) => {
-    await page.route('**/api/aoba/membership-leave', (route) => {
-      const body = route.request().postDataJSON() as { user_id: string };
-      return body.user_id === HARUKA_USER_ID
-        ? route.fulfill({ status: 500, json: { error: { code: 'internal', message: 'x' } } })
-        : route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'x' } } });
-    });
+    await routeOperation(page, membershipLeave, AOBA, (call) =>
+      call.input.user_id === HARUKA_USER_ID ? call.fail(500, 'internal') : call.fail(404, 'not_found'),
+    );
     await page.goto(MEMBERS_PATH);
     const remove = page.getByRole('button', { name: 'ハルカを外す' });
     await remove.click();
@@ -374,9 +344,7 @@ test.describe('リーダー（あおば開発のミナト）', () => {
 
   // 一般のメンバーが別のタブで先に抜けていたときは、登録の関数の member の権限で 403 になる。それも抜けたのと同じく扱う
   test('自分の離脱が 403（先に抜けていた）でも、抜けたのと同じく組織のトップへ移る', async ({ page }) => {
-    await page.route('**/api/aoba/membership-leave', (route) =>
-      route.fulfill({ status: 403, json: { error: { code: 'forbidden', message: 'x' } } }),
-    );
+    await failOperation(page, membershipLeave, AOBA, 403, 'forbidden');
     await page.goto(MEMBERS_PATH);
     await page.getByRole('button', { name: '受託開発チームから抜ける' }).click();
     await page
@@ -391,20 +359,18 @@ test.describe('リーダー（あおば開発のミナト）', () => {
     page,
   }) => {
     let called = false;
-    await page.route('**/api/aoba/membership-role-update', (route) => {
+    await routeOperation(page, membershipRoleUpdate, AOBA, (call) => {
       called = true;
-      return route.abort();
+      return call.abort();
     });
     // ハルカだけがリーダーの一覧にする（管理者のミナトは一般でも付け替えられる）
-    await page.route('**/api/aoba/member-list', async (route) => {
-      const response = await route.fetch();
-      const json = (await response.json()) as { members: { id: string; role: string }[] };
-      const members = json.members.map((member) => ({
+    await rewriteOperation(page, memberList, AOBA, (output) => ({
+      ...output,
+      members: output.members.map((member) => ({
         ...member,
-        role: member.id === HARUKA_USER_ID ? 'leader' : 'member',
-      }));
-      await route.fulfill({ response, json: { ...json, members } });
-    });
+        role: member.id === HARUKA_USER_ID ? ('leader' as const) : ('member' as const),
+      })),
+    }));
     await page.goto(MEMBERS_PATH);
     const role = page.getByRole('combobox', { name: 'ハルカのロール' });
     await expect(role).toHaveValue('leader');
@@ -424,33 +390,31 @@ test.describe('リーダー（あおば開発のミナト）', () => {
 
   test('ロールの選択欄で付け替え、先に変わっていて断られたら、トーストで知らせて今の値に戻す', async ({ page }) => {
     const sent: unknown[] = [];
-    let reply: { status: number; json: unknown } = { status: 200, json: {} };
-    let harukaRole = 'member';
-    await page.route('**/api/aoba/membership-role-update', (route) => {
-      const body = route.request().postDataJSON() as { role: string };
-      sent.push(body);
-      if (reply.status === 200) harukaRole = body.role;
-      return route.fulfill({ status: reply.status, json: reply.json });
+    // 付け替えを通すか、先に変わっていたとして 409 で断るか
+    let accept = true;
+    let harukaRole: 'leader' | 'member' = 'member';
+    await routeOperation(page, membershipRoleUpdate, AOBA, (call) => {
+      sent.push(call.input);
+      if (!accept) return call.fail(409, 'conflict');
+      harukaRole = call.input.role;
+      return call.fulfill({ user_id: call.input.user_id, role: call.input.role });
     });
-    await page.route('**/api/aoba/member-list', async (route) => {
-      const response = await route.fetch();
-      const json = (await response.json()) as { members: { id: string; role: string }[] };
-      const members = json.members.map((member) =>
+    await rewriteOperation(page, memberList, AOBA, (output) => ({
+      ...output,
+      members: output.members.map((member) =>
         member.id === HARUKA_USER_ID ? { ...member, role: harukaRole } : member,
-      );
-      await route.fulfill({ response, json: { ...json, members } });
-    });
+      ),
+    }));
     await page.goto(MEMBERS_PATH);
     const role = page.getByRole('combobox', { name: 'ハルカのロール' });
 
-    reply = { status: 200, json: { user_id: HARUKA_USER_ID, role: 'leader' } };
     await role.selectOption('leader');
     await expect(page.locator('.toasts:visible .toast')).toHaveText('ハルカをリーダーにしました');
     expect(sent).toEqual([{ workspace_id: AOBA_WORKSPACE_ID, user_id: HARUKA_USER_ID, role: 'leader' }]);
     await expect(page.locator('.tally > div').nth(1)).toHaveText('リーダー 2');
     await expect(role).toHaveValue('leader');
 
-    reply = { status: 409, json: { error: { code: 'conflict', message: 'x' } } };
+    accept = false;
     // 断られた後の一覧の読み直しを待ってから終える（読み直しが壊れても通らないように）。
     // 付け替えた後の読み直しは、上の tally が変わった時点で終わっているので、待つのは 409 の後の読み直し
     const reloaded = page.waitForResponse('**/api/aoba/member-list');
@@ -502,11 +466,10 @@ test.describe('リーダー（あおば開発のミナト）', () => {
   });
 
   test('終了したワークスペースでは、ロールの選択欄も外す、抜けるも出さない', async ({ page }) => {
-    await page.route('**/api/aoba/workspace', async (route) => {
-      const response = await route.fetch();
-      const json = (await response.json()) as Record<string, unknown>;
-      await route.fulfill({ response, json: { ...json, closed_at: '2026-10-25T00:00:00.000Z' } });
-    });
+    await rewriteOperation(page, workspaceInfo, AOBA, (output) => ({
+      ...output,
+      closed_at: '2026-10-25T00:00:00.000Z',
+    }));
     await page.goto(MEMBERS_PATH);
     const members = page.getByRole('table', { name: '所属している人の一覧' });
     await expect(members.locator('tbody tr')).toHaveCount(2);
@@ -521,44 +484,40 @@ test.describe('リーダー（あおば開発のミナト）', () => {
     await page.setViewportSize({ width: 390, height: 800 });
     const longName = 'ミナト'.repeat(12);
     const longLogin = 'minato-minato-minato-minato-minato-minato@example.com';
-    await page.route('**/api/aoba/member-list', (route) =>
-      route.fulfill({
-        json: {
-          members: [
-            {
-              id: AOBA_WORKSPACE_ID,
-              name: longName,
-              role: 'leader',
-              joined_on: '2026-10-01',
-              avatar_url: null,
-              level: 12,
-            },
-          ],
-          // Google の招待は手段の列に期限か「期限切れ」が並び、その列も広がる
-          invitations: [
-            {
-              id: 'i1',
-              login_name: longLogin,
-              login_provider: 'google',
-              role: 'member',
-              invited_on: '2026-10-19',
-              expires_on: '2026-11-02',
-              expired: false,
-            },
-            {
-              id: 'i2',
-              login_name: longLogin,
-              login_provider: 'google',
-              role: 'leader',
-              invited_on: '2026-09-30',
-              expires_on: '2026-10-14',
-              expired: true,
-            },
-          ],
-          seats: { used: 3, limit: 15 },
+    await mockOperation(page, memberList, AOBA, {
+      members: [
+        {
+          id: AOBA_WORKSPACE_ID,
+          name: longName,
+          role: 'leader',
+          joined_on: '2026-10-01',
+          avatar_url: null,
+          level: 12,
         },
-      }),
-    );
+      ],
+      // Google の招待は手段の列に期限か「期限切れ」が並び、その列も広がる
+      invitations: [
+        {
+          id: 'i1',
+          login_name: longLogin,
+          login_provider: 'google',
+          role: 'member',
+          invited_on: '2026-10-19',
+          expires_on: '2026-11-02',
+          expired: false,
+        },
+        {
+          id: 'i2',
+          login_name: longLogin,
+          login_provider: 'google',
+          role: 'leader',
+          invited_on: '2026-09-30',
+          expires_on: '2026-10-14',
+          expired: true,
+        },
+      ],
+      seats: { used: 3, limit: 15 },
+    });
     await page.goto(MEMBERS_PATH);
     const invitationsTable = page.getByRole('table', { name: '承諾待ちの招待の一覧' });
     const membersTable = page.getByRole('table', { name: '所属している人の一覧' });
@@ -661,9 +620,9 @@ test.describe('一般のユーザー（あおば開発のハルカ）', () => {
     page,
   }) => {
     let called = false;
-    await page.route('**/api/aoba/membership-leave', (route) => {
+    await routeOperation(page, membershipLeave, AOBA, (call) => {
       called = true;
-      return route.abort();
+      return call.abort();
     });
     await setOwnWorkspaces(page, []);
     await page.goto(MEMBERS_PATH);
@@ -814,17 +773,13 @@ test.describe('リーダー（ひばり工房のリン）', () => {
     await expect(invitations.locator('tbody tr')).toHaveCount(1);
     await expect(invitations.locator('tbody tr').first()).toContainText('kaede--seed');
 
-    await page.route('**/api/hibari/invitee-resolve', (route) =>
-      route.fulfill({
-        json: {
-          login_subject: '9000000000000301',
-          login_name: 'nagi--seed',
-          display_name: '凪',
-          avatar_url: null,
-          already_counted: false,
-        },
-      }),
-    );
+    await mockOperation(page, inviteeResolve, HIBARI, {
+      login_subject: '9000000000000301',
+      login_name: 'nagi--seed',
+      display_name: '凪',
+      avatar_url: null,
+      already_counted: false,
+    });
     await page.getByLabel('GitHub のユーザー名').fill('nagi--seed');
     await page.getByRole('button', { name: '確かめる' }).click();
     const resolved = page.locator('.choice');
@@ -835,26 +790,34 @@ test.describe('リーダー（ひばり工房のリン）', () => {
 
     // 招待した後の読み直しに、招待した人を足して返す（本物の招待は GitHub に問い合わせるので作れない）
     let sent: unknown;
-    await page.route('**/api/hibari/invitation-create', (route) => {
-      sent = route.request().postDataJSON();
-      return route.fulfill({
-        json: { invitation_id: '019a0000-0000-7000-8000-00000000ffff', login_name: 'nagi--seed', invite: null },
+    await routeOperation(page, invitationCreate, HIBARI, (call) => {
+      sent = call.input;
+      return call.fulfill({
+        invitation_id: '019a0000-0000-7000-8000-00000000ffff',
+        login_name: 'nagi--seed',
+        invite: null,
       });
     });
-    await page.route('**/api/hibari/member-list', async (route) => {
-      const response = await route.fetch();
-      const json = (await response.json()) as { invitations: unknown[]; seats: { used: number; limit: number } };
-      json.invitations.push({
-        id: '019a0000-0000-7000-8000-00000000ffff',
-        login_name: 'nagi--seed',
-        login_provider: 'github',
-        role: 'leader',
-        invited_on: '2026-10-20',
-        expires_on: null,
-        expired: false,
-      });
-      json.seats.used += 1;
-      await route.fulfill({ response, json });
+    // リーダーには invitations と seats が配列と値で返る。null なら書き換えずに落とす
+    const unrouteMemberList = await rewriteOperation(page, memberList, HIBARI, (output) => {
+      if (output.invitations === null || output.seats === null)
+        throw new Error('リーダーの member-list が招待を返さない');
+      return {
+        ...output,
+        invitations: [
+          ...output.invitations,
+          {
+            id: '019a0000-0000-7000-8000-00000000ffff',
+            login_name: 'nagi--seed',
+            login_provider: 'github' as const,
+            role: 'leader' as const,
+            invited_on: '2026-10-20',
+            expires_on: null,
+            expired: false,
+          },
+        ],
+        seats: { ...output.seats, used: output.seats.used + 1 },
+      };
     });
     await page.getByRole('button', { name: '招待する' }).click();
     await expect(page.locator('.toasts:visible .toast')).toHaveText('nagi--seed を招待しました');
@@ -876,7 +839,7 @@ test.describe('リーダー（ひばり工房のリン）', () => {
     // 入力は空に戻り、続けて招待できるようユーザー名の欄へフォーカスが戻る
     await expect(page.getByLabel('GitHub のユーザー名')).toHaveValue('');
     await expect(page.getByLabel('GitHub のユーザー名')).toBeFocused();
-    await page.unroute('**/api/hibari/member-list');
+    await unrouteMemberList();
 
     // seed の招待を本物の API で取り消す。読み直した一覧から消える
     await page.getByRole('button', { name: 'kaede--seed への招待を取り消す' }).click();
