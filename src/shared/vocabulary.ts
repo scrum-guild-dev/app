@@ -166,6 +166,7 @@ export const dictionary = defineDictionary({
   attachmentEmpty: '空のファイルは添付できません（0 MB）。',
 
   slashMenuLabel: 'Markdown を入れる',
+  markdownToolbar: '本文の書式',
   slashHeading: '見出し',
   slashTodo: 'チェックリスト',
   slashBullet: '箇条書き',

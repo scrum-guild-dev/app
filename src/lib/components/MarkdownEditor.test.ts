@@ -17,4 +17,14 @@ test('既存の本文欄は指定を省くと添付の入口を保つ', () => {
   const body = render(MarkdownEditor, { props }).body;
   expect(body).toContain('type="file"');
   expect(body).toContain('class="dropzone"');
+  expect(body).not.toContain('class="markdown-toolbar"');
+});
+
+test('指定した本文欄だけに、名前を持つ4つの書式ボタンを出す', () => {
+  const body = render(MarkdownEditor, { props: { ...props, toolbar: true, readonly: true } }).body;
+  expect(body).toContain('class="markdown-toolbar"');
+  for (const name of ['箇条書き', 'チェックリスト', 'コード', '引用']) {
+    expect(body).toContain(`aria-label="${name}"`);
+  }
+  expect(body.match(/<button[^>]* disabled/g)?.length).toBe(5);
 });
