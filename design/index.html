@@ -94,7 +94,7 @@ const GAME_ICONS = [
 const COLORS = [
   ["地と線", [["地", "--color-bg", "画面の地"], ["面", "--color-surface", "台帳、面、入力欄"], ["一段下", "--color-sunken", "メニュー、列、タグ"], ["枠", "--color-line", "記録の区切り線（カード、表、メニューの境）"], ["操作部品の枠", "--color-control-edge", "入力欄、選択欄、検索、ボタンの枠（地と 3:1 以上）"],["罫", "--color-rule", "行を分ける線"]]],
   ["文字", [["文字", "--color-fg", "本文"], ["弱", "--color-muted", "補足、ラベル"], ["淡", "--color-faint", "押す前の操作、未入力"]]],
-  ["役割", [["操作", "--color-accent", "操作、選択、進み"], ["操作の淡", "--color-accent-soft", "選択の地"], ["完了", "--color-done", "完了の印、クリア"], ["印", "--color-stamp", "依頼主の印、通知の数"], ["経験値", "--color-xp", "経験値とレベル、レイドだけ"], ["経験値の淡", "--color-xp-soft", "今日やるの地"], ["お気に入り", "--color-favorite", "塗った星だけ"]]],
+  ["役割", [["操作", "--color-accent", "操作、選択、進み"], ["操作の淡", "--color-accent-soft", "選択の地"], ["完了", "--color-done", "完了の印、クリア"], ["印", "--color-stamp", "作成者の印、通知の数"], ["経験値", "--color-xp", "経験値とレベル、エピックだけ"], ["経験値の淡", "--color-xp-soft", "今日やるの地"], ["お気に入り", "--color-favorite", "塗った星だけ"]]],
   ["状態", [["危", "--color-danger", "期限切れ、重量オーバー"], ["注", "--color-warn", "今週が期限、未記入"], ["良", "--color-ok", "取り込み元で完了、余力あり"]]],
   ["クリア報酬の段階", [["小", "--color-tier-small", "銅。段階の印（.tier）だけ"], ["中", "--color-tier-medium", "銀。段階の印（.tier）だけ"], ["大", "--color-tier-large", "金。段階の印（.tier）だけ"]]],
 ];
@@ -116,7 +116,7 @@ const SCREENS = [
   ["backlog.html", () => t("backlog"), "エピック、ストーリー、タスクの木"],
   ["sprint.html", () => t("sprint"), "列とカード、ゴール、延長と終了"],
   ["plan.html", () => t("plan"), "ベロシティ、先のスプリント、積載量"],
-  ["epic.html", () => t("epic"), "依頼書、討伐隊、達成目標"],
+  ["epic.html", () => t("epic"), "概要、参加者、達成目標"],
   ["wiki.html", "Wiki", "ワークスペースの Wiki。木、ページ、編集、版の一覧、.md のアップロード"],
   ["wiki.html?scope=organization", "Wiki（組織）", "組織の Wiki。組織の全員が見て、書ける"],
   ["capacity.html", () => t("capacity"), "メンバー × 月、スプリント"],
@@ -236,7 +236,7 @@ const SECTIONS = [
   ["screens", "画面の見本", () => block("screens", "画面の見本", "部品だけで組んだ画面。メニューから行き来でき、タスクを押すと詳細が開く。各画面の上の帯の「見本」で、使い込んだ状態と最初の日（一般、リーダー、管理者）を切り替えられる。",
     `<div class="screens">${SCREENS.map(([href, name, note]) => `<a href="${href}"><b>${typeof name === "function" ? name() : name}</b><span>${note}</span></a>`).join("")}</div>`)],
   ["colors", "色", () => block("colors", "色", "色は役割で名前を付ける。部品は tokens.css の変数だけを使い、素の値を書かない。テーマを切り替えると、同じ名前のまま値が入れ替わる。",
-    colorBlock(), ["完了の色は完了の印とクリアだけ、経験値の色は経験値とレベルとレイドだけに使い、他の意味を持たせない。", "状態の色は、必ずアイコンか文字と一緒に使う（色だけで区別しない）。", "操作の色は操作と選択と進みの色。飾りには使わない。"])],
+    colorBlock(), ["完了の色は完了の印とクリアだけ、経験値の色は経験値とレベルとエピックだけに使い、他の意味を持たせない。", "状態の色は、必ずアイコンか文字と一緒に使う（色だけで区別しない）。", "操作の色は操作と選択と進みの色。飾りには使わない。"])],
   ["type", "文字", () => block("type", "文字", "書体は Noto Sans JP に統一し、用途を4つの変数で表す。",
     `<div>
       <div class="type-row"><span class="cat-name">--font-display<br>2xl / --weight-display</span><span class="page-title">今日やること</span></div>
@@ -480,9 +480,9 @@ const SECTIONS = [
     `<div class="cat-row"><span class="field-hint">親なしの段が空のとき、行をつかんでいる間だけ出す落とし先（.tree-slot の中の .dropzone）。重ねると .is-over で囲み、離すと親なしの末尾に入る。つかんでいないときは出さない</span></div>`,
     ["つかむ場所は行の先頭のつまみ（.grip。飾りで aria-hidden）だけ。題の文字は選べ、ボタンを押すつもりで動き出さない。キーボードと読み上げの人は、行の「上へ」「下へ」と Alt と ↑ ↓ を使う。", "つまみの列は、書き込めるときだけ行（.entry、.tree-row）に .has-grip を付けて空ける。つかめない行（完了にした直後の行）は .grip.is-off で列だけ空ける。狭い幅（760px 以下）と指で押す画面（pointer: coarse）では、つまみを出さず、列も空けない。", "落とす位置は [data-drop] で示す。before と after は行と行の間の線（--color-accent の 2px と左端の小さな丸）で、その行の字下げ（--row-indent）から始める。into は親の行（タスクを運ぶときのストーリーの行、ストーリーを運ぶときのエピックの行）の囲みで、.dropzone.is-over と同じ --color-accent の枠と --color-accent-soft の地。落とせない場所には何も示さない。", "エピックは親を持たず、エピックの段（完了と中止したエピックも含む）の中で並べ替える。運ぶときはエピックの行の前後にだけ線を出し、線は配下を含めた塊（.tree-group）の上端と下端に、エピックの段の字下げから引く。エピックの行の真ん中に重ねても囲みは出さない（囲みはストーリーを運ぶときだけ）。ストーリー、タスク、折りたたみの行、親なしの段の落とし先には何も示さない。", "親なしの段（親なしのタスク、親のないストーリー）が空のときは、その種類の行をつかんでいる間だけ、段の場所に落とし先（.tree-slot の .dropzone）を出す。", "つかんだ行は元の位置で薄くする（.is-dragging）。落とした行は、背景を --color-accent-soft から地の色へ約 0.8 秒（--duration-flash）で戻し、--color-accent の 1px の枠も同じ長さで消して光らせる（.is-dropped。地と accent-soft の差が小さいテーマでも見えるように）。prefers-reduced-motion のときは光らせず、薄くするのも切り替えだけにする。", "並べ替えの案内（.action-note）のうち、つまみのドラッグに触れる文は .drag-note に入れ、つまみを出さない条件（狭い幅と指で押す画面）では隠す。", "色は既存のトークンだけで、4つのテーマに新しい色は足さない。"],
     ".grip .grip.is-off / .entry.has-grip .tree-row.has-grip / [data-drop=before] [data-drop=after] [data-drop=into] / .tree-slot .dropzone.is-over / .is-dragging .is-dropped / .action-note .drag-note")],
-  ["notices", "貼り紙", () => block("notices", "貼り紙", "掲示する物（スプリントゴール、レイド）は、上辺に太い線を引いた紙として見せる。レイドは金、クリア済みは朱。",
+  ["notices", "貼り紙", () => block("notices", "貼り紙", "掲示する物（スプリントゴール、エピック）は、上辺に太い線を引いた紙として見せる。エピックは金、クリア済みは朱。",
     `<div class="notice-grid">${sprintNotice("sp14")}${raidNotice("e1")}${raidNotice("e2", { cleared: true })}</div>`,
-    ["依頼主の名前の横に朱の「印」を添える。", "クリアしたレイドには「済」の判子を押す。", "スプリントゴールの文（.notice-title.is-goal）は、書いた改行を残し（white-space: pre-line）、長い語は折り返す。ゴールを書かずに始めたスプリントは、貼り紙を出さない。"], ".notice .is-raid .is-cleared / .notice-label .notice-title .notice-title.is-goal .notice-meta .notice-facts .notice-foot / .day-ticks / .progress / .seal")],
+    ["作成者の名前の横に朱の「印」を添える。", "クリアしたエピックには「済」の判子を押す。", "スプリントゴールの文（.notice-title.is-goal）は、書いた改行を残し（white-space: pre-line）、長い語は折り返す。ゴールを書かずに始めたスプリントは、貼り紙を出さない。"], ".notice .is-raid .is-cleared / .notice-label .notice-title .notice-title.is-goal .notice-meta .notice-facts .notice-foot / .day-ticks / .progress / .seal")],
   ["records", "記録", () => block("records", "記録（レベルと積載量）", "計器の見た目。経験値のゲージは10の目盛り、積載量は5%の目盛りで、許容幅の両端を縦線で示す。",
     `<div class="two">${levelPanel()}<section class="panel"><div class="panel-title"><b>${t("capacity")}</b>判定の5つ</div>${capacityRows()}${load("社内ツール", "配分 40%", 30.4, 30.0, { lead: avatarOf("u1") })}</section></div>` +
     `<div class="cat-row">${SQ.teamXp()}<span class="field-hint">チーム全体の経験値（バックログの画面の見出しの中）</span></div>` +
@@ -520,7 +520,7 @@ const SECTIONS = [
   "done": true
 }</td></tr></tbody></table></div>`,
     ["表の見出しの下は二重罫。", "自由なキーと値の表は .table.is-properties。キーは等幅の行見出しにし、長い文字列は折り返し、値の改行を保つ（Wiki の frontmatter の見本）。", "名前の列には is-name を付ける（th と td の両方）。名前が1字ずつ折れるほど縮まないよう最小幅を持ち、足りない幅は .table-wrap の横スクロールで受ける。", "利用者が付けた長い名前（空白の無い30字以上、メールアドレスなど）が入る列は、人の名前に .person.is-wrap、等幅の文字に .mono.is-wrap を付けて折り返す（下の表）。付けた列だけが縮み、右の列を押し出さない。.mono.is-wrap の列には is-name を付けない（最小幅が、幅の狭い画面で表をはみ出させるため）。代わりに .mono.is-wrap は 6 文字分の最小幅を持つ。", "利用者が付けた名前を文の中に含む本文のセル（変更の履歴の内容）は、td に is-wrap を付けて、空白の無い長い名前も途中で折る（3つ目の表）。12 文字分の最小幅を持つ。", "行ごとの操作の列には is-actions を付ける（th と td の両方）。狭い幅で表が横にはみ出しても、操作を右端に固定して隠さない。", "狭い幅と指で押す画面では、表の中の小さいボタン（.btn.is-sm）も 44px 四方以上にする。", "操作が2つ並ぶ行がある表は、table に is-stacked を付け、操作を .table-actions で包む（4つ目の表）。操作の列が無くても、狭い幅で列に収まらない文の列を持つ表（変更の履歴。3つ目の表）にも is-stacked を付ける。760px 以下では列をやめ、1行を縦に積む（名前、ほかの列、操作の順）。固定した操作の列が名前の列を覆わず、文の列が数字ずつに縮まない。見出しの行は見えなくし、名前以外の td には data-label に列の名前を入れて、値の前に出す。", "操作が3つ並ぶ行がある表（運用の組織の一覧。4つ目の表）は、.table-actions に is-wrap を付ける。表の幅が足りないときは操作の列を広げずにボタンを折り返し、足りていれば1行に並ぶ。", "行の状態のせいで操作を出せないときは、ボタンを消すだけにせず、.table-actions の中に .props-note で理由を出す（4つ目の表の3行目。消す予定日を過ぎた組織）。注記はボタンの高さの中央に置き、操作の列の折り返さない指定を継がずに、狭い幅では折り返す。注記だけの行で縦長に潰れないよう、16em の最小の幅を持つ。","表の補足の印が多いときは details.table-details にまとめ、初めは閉じる。summary には種類と詳細、最優先の状態を .table-details-alert（危険は is-danger と alert、注意は is-warn と clock）と短い文言で出す。組織名と残りの状態も読み上げ用の文に含める。印は .table-details-body に並べる。補足がない行には開閉欄を出さない。狭い幅と指で押す画面では summary も44px以上にする（4つ目の表の2行目は閉じ、3行目は開いた例）。", "名前の列（is-name）の印（.chip）は、長い文でも列の幅で折り返す。積んだ行でも、印は右端で切れずに折り返す。", "行の中の選択欄（.select。メンバーのロールなど）は、列が縮んでも選んだ値が読めるよう中身の幅を保ち、行の高さに合わせて小さくする。狭い幅と指で押す画面では 44px の高さにする。選択欄と操作のボタンが並ぶ表も is-stacked にする（最後の表。ロールの選択欄と「抜ける」「外す」）。送っている間の選択欄は aria-disabled にし、全体を薄くして押せない形にする（2行目）。"], ".table-wrap .table .table-details .table-details-alert .table-details-body .is-num .is-name .is-actions .person.is-wrap .mono.is-wrap td.is-wrap .table.is-stacked .table-actions .table-actions.is-wrap .table-actions .props-note .table .select")],
-  ["party-list", "一覧の行", () => block("party-list", "一覧の行", "列の見出しが要らない短い一覧（休日、休み、討伐隊）。1行に日付や人と名前を並べ、操作は右端に寄せる。",
+  ["party-list", "一覧の行", () => block("party-list", "一覧の行", "列の見出しが要らない短い一覧（休日、休み、参加者）。1行に日付や人と名前を並べ、操作は右端に寄せる。",
     `<ul class="party-list" aria-label="登録した休日">
       <li><span class="mono">2026-11-03</span><span class="party-list-text">文化の日</span><button class="icon-btn is-danger party-list-end" type="button" aria-label="2026-11-03 を消す">${icon("trash")}</button></li>
       <li><span class="mono">2026-11-04</span><span class="party-list-text">SoukyuKaihatsuKyokaiSouritsuKinenbiKyujitsu</span><button class="icon-btn is-danger party-list-end" type="button" aria-label="2026-11-04 を消す">${icon("trash")}</button></li>
