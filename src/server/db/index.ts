@@ -119,4 +119,11 @@ export {
 
 export { attachmentsReady, attachFilesStatement, type AttachmentSave } from './attach-files.ts';
 
-export { reconcileAttachmentQuotaWarning, cleanupReadNotifications } from './attachment-quota-warning.ts';
+export {
+  reconcileAttachmentQuotaWarning,
+  cleanupReadNotifications,
+  markAttachmentQuotaCheck,
+  type QuotaWarningOptions,
+} from './attachment-quota-warning.ts';
+
+export { attachmentFitsQuota } from './wiki.ts';

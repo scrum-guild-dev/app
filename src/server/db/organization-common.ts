@@ -12,6 +12,7 @@ export type OrganizationRow = {
   // organizations.member_limit
   readonly memberLimit: number;
   readonly attachmentQuotaBytes: number;
+  readonly attachmentQuotaNeedsCheck: boolean;
 };
 
 // 組織の設定のうち、管理者が変えるもの。先に読んだ値（from）と書く値（to）を持つ。渡した項目だけを書く
@@ -26,12 +27,25 @@ export async function readOrganizationRow(env: Env, db: OrganizationDb): Promise
     common.statement((q) =>
       q
         .selectFrom('organizations')
-        .select(['member_limit', 'attachment_quota_bytes'])
+        .select([
+          'member_limit',
+          'attachment_quota_bytes',
+          'attachment_quota_warned_at',
+          'attachment_quota_warning_pending_at',
+          'attachment_quota_check_pending_at',
+        ])
         .where('id', '=', db.organizationId),
     ),
   );
   if (row === undefined) throw new Error('入った組織の行が無い');
-  return { memberLimit: row.member_limit, attachmentQuotaBytes: row.attachment_quota_bytes };
+  return {
+    memberLimit: row.member_limit,
+    attachmentQuotaBytes: row.attachment_quota_bytes,
+    attachmentQuotaNeedsCheck:
+      row.attachment_quota_warned_at !== null ||
+      row.attachment_quota_warning_pending_at !== null ||
+      row.attachment_quota_check_pending_at !== null,
+  };
 }
 
 // 組織の設定を書いた結果。written は書けた（書く項目が無かったときも）、suspended は入ってから書くまでに組織が停止された、
