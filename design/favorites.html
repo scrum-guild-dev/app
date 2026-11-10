@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scrum Guild お気に入り</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;900&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="icons.js"></script>
+<script src="art.js"></script>
+<script src="sample-data.js"></script>
+<script src="kit.js"></script>
+<script>
+"use strict";
+// お気に入り: 本人が星を付けたタスク、ストーリー、エピック、Wiki のページを、付けた新しい順に並べる（組織の画面）。
+// ?state=empty で空、?state=failed で読み込みの失敗を見る
+const { t, icon, esc, pageHead } = SQ;
+const state = new URLSearchParams(location.search).get("state");
+const items = [
+  { icon: "check", kind: t("task"), title: "朝会の進め方をまとめる", href: "task.html" },
+  { icon: "board", kind: t("story"), title: "初めて使う人が、招待から最初のタスクまで迷わず進められる", href: "backlog.html" },
+  { icon: "flag", kind: t("epic"), title: "初めて使う人が仕事を始められるようにする", href: "epic.html" },
+  { icon: "file", kind: t("favoriteKindWikiPage"), title: "ふくろう班の開発手順と、とても長い名前のページが折り返す見本", href: "wiki.html" },
+];
+
+SQ.mount("favorites", () => `
+  ${pageHead("", t("favorites"))}
+  ${state === "failed" ? `<div class="favorite-control"><span class="field-error">${t("favoriteLoadFailed")}</span><button class="btn is-sm" type="button">${t("retry")}</button><span class="field-hint" role="status"></span></div>` : ""}
+  ${state === "empty" ? `<div class="empty">${icon("star")}<b>${t("favoritesEmpty")}</b><span>${t("favoritesEmptyText").replace("{task}", t("task")).replace("{story}", t("story")).replace("{epic}", t("epic"))}</span></div>`
+  : state === "failed" ? ""
+  : `<div class="choice-list">${items.map((x) => `<a class="choice" href="${esc(x.href)}">${icon(x.icon)}<div><b>${esc(x.title)}</b><span>${esc(x.kind)}</span></div>${icon("chevron")}</a>`).join("")}</div>`}`);
+</script>
+</body>
+</html>

@@ -59,11 +59,18 @@
 
   // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
   const DICT = {
+    menu: "メニュー",
+    close: "閉じる",
+    mobileTabs: "よく使う画面",
+    mobileMenu: "すべてのメニュー",
     favorites: "お気に入り",
     favoriteAdd: "お気に入りにする",
     favoriteRemove: "お気に入りから外す",
     favoriteLoadFailed: "お気に入りを読み込めませんでした。",
     favoriteLimit: "お気に入りは20件までです。登録した対象の星を外してから追加してください。",
+    favoritesEmpty: "お気に入りはまだありません",
+    favoritesEmptyText: "{task}、{story}、{epic}、Wiki のページの星を押すと、ここに並びます。",
+    favoriteKindWikiPage: "Wiki のページ",
   signupTitle: "会員登録",
   onboardingStart: "利用開始の設定",
   onboardingProfileInvalid: "表示する名前は1〜100文字、肩書きは100文字以内で入力してください。改行や制御文字は使えません。",
@@ -314,6 +321,8 @@
     consentRevisedBoth: "利用規約とプライバシーポリシーが改められました",
     markdownTableRegion: "表", teamXpLabel: "チーム全体の経験値", filterLabel: "{backlog}の絞り込み", backlogSearch: "タイトルで探す",
     filterAll: "{label}: すべて", filterMe: "自分", unassigned: "担当なし", leftMember: "（離脱済み）", categoryNone: "{category}なし",
+    backlogSummary: "集計", backlogFilters: "絞り込み", backlogFiltersCount: "絞り込み（{count}条件）",
+    backlogPriority: "上ほど優先", backlogOrderHelp: "並べ替えの使い方",
     filterNoRepository: "リポジトリなし", filterNoEpic: "{epic}なし", filterClear: "絞り込みを外す",
     backlogFilterOrderNote: "上にあるものほど優先します。絞り込みを外すと並べ替えられます。", backlogNoMatchTitle: "絞り込みに当たるものはありません",
     backlogNoMatchText: "条件を変えるか、絞り込みを外してください。", filterTotalsNote: "{points}と件数は、絞る前の全体の値です",
@@ -680,14 +689,28 @@
     return `<li><a class="wiki-link" href="#${p.id}" data-wiki-page="${p.id}"${current ? ' aria-current="page"' : ""}>${esc(p.title)}<span class="props-note">${esc(path)}</span><span class="props-note">${where === "title" ? "題に一致" : "本文に一致"}</span></a></li>`;
   }
   // meta は集計の下に置く1行（バックログの画面のチーム全体の経験値 teamXp など）
-  function pageHead(eyebrow, title, tallies = [], actions = "", meta = "") {
-    const tally = tallies.length
-      ? `<dl class="tally">${tallies.map(([cls, ic, label, n]) => `<div class="${n ? cls : ""}"><dt>${ic ? icon(ic) : ""}${label}</dt><dd>${n}</dd></div>`).join("")}</dl>`
-      : "";
-    return `<header class="page-head">
+  let narrowDisclosureId = 0;
+  function narrowDisclosure(label, body) {
+    const id = `narrow-disclosure-${++narrowDisclosureId}`;
+    return `<div class="narrow-disclosure" data-open="false"><button class="btn is-sm is-quiet narrow-disclosure-toggle" type="button" aria-expanded="false" aria-controls="${id}">${icon("chevron")}<span>${esc(label)}</span></button><div class="narrow-disclosure-body" id="${id}">${body}</div></div>`;
+  }
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest && event.target.closest(".narrow-disclosure-toggle");
+    if (!button) return;
+    const open = button.getAttribute("aria-expanded") !== "true";
+    button.setAttribute("aria-expanded", String(open));
+    button.parentElement.dataset.open = String(open);
+  });
+  function pageHead(eyebrow, title, tallies = [], actions = "", meta = "", narrowSummary = "") {
+    const counts = (items) => items.length ? `<dl class="tally">${items.map(([cls, ic, label, n]) => `<div class="${n ? cls : ""}"><dt>${ic ? icon(ic) : ""}${label}</dt><dd>${n}</dd></div>`).join("")}</dl>` : "";
+    const compactSummary = tallies.length > 1 || meta ? narrowSummary : "";
+    const metrics = compactSummary
+      ? `<div class="page-head-metrics">${counts(tallies.slice(0, 1))}${narrowDisclosure(compactSummary, `${counts(tallies.slice(1))}${meta ? `<div class="page-head-meta">${meta}</div>` : ""}`)}</div>`
+      : `${counts(tallies)}${meta}`;
+    return `<header class="page-head${compactSummary ? " is-compact" : ""}">
       ${eyebrow ? `<span class="page-eyebrow">${eyebrow}</span>` : ""}
       <div class="page-head-row"><h1 class="page-title">${title}</h1>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
-      ${tally}${meta}
+      ${metrics}
     </header>`;
   }
 
@@ -2520,11 +2543,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D.stories.s2 && `「${D.stories.s2.title}」の${t("task")}を全部今の${t("sprint")}に入れて`,
     `${t("organization")}の人数の上限を 50 人に上げて`,
   ].filter(Boolean);
+  // メニューに無い組織の画面（アカウントのメニューから開く画面と、お気に入りの一覧）の名前のキー。本番の breadcrumb.ts の accountScreenKey
+  const ACCOUNT_SCREENS = { me: "pageMe", admin: "pageOrgAdmin", favorites: "favorites" };
   // 開いている画面。タスクの詳細を開いていればそのタスク
   function assistContext() {
     if (drawer.id) return `${drawerNoun()}「${esc(drawerItem().title)}」`;
     if (!page) return esc(Object.values(D.workspaces)[0]?.name || "");
-    if (["me", "admin"].includes(page.current)) return t(page.current === "me" ? "pageMe" : "pageOrgAdmin");
+    if (ACCOUNT_SCREENS[page.current]) return t(ACCOUNT_SCREENS[page.current]);
     if (page.current === "sprint" && D.sprints.sp14) return esc(sprintLabel("sp14"));
     const p = PAGES.find((x) => Array.isArray(x) && x[0] === page.current);
     const inWs = PAGES.indexOf(p) > PAGES.indexOf("workspace");
@@ -2901,6 +2926,38 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       return `<a class="nav-item${id === "orgwiki" ? " is-wrapping" : ""}" href="${target}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}<span class="nav-item-label">${label()}</span>${badge && !first ? `<span class="nav-badge">${badge}</span>` : ""}</a>`;
     }).join("");
   }
+  function mobileTabsHtml(current, { live = true } = {}) {
+    const tabs = [["today", "sun", "pageToday", "today.html"], ["favorites", "star", "favorites", "favorites.html"],
+      ...(Object.keys(D.workspaces).length ? [["backlog", "board", "backlog", `backlog.html?workspace=${encodeURIComponent(D.workspace)}`]] : [])];
+    return `<div class="mobile-navigation"><nav class="mobile-tabs" aria-label="${t("mobileTabs")}">${tabs.map(([id, ic, key, href]) => `<a class="mobile-tab" href="${firstHref(href)}" aria-label="${t(key)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}</a>`).join("")}<button class="mobile-tab" type="button" aria-label="${t("mobileMenu")}" aria-haspopup="dialog" aria-expanded="false" ${live ? 'data-mobile-menu-open aria-controls="mobile-menu"' : ""}><span class="mobile-menu-arrows" aria-hidden="true">${icon("chevron")}${icon("chevron")}</span></button></nav><div class="mobile-create-slot"></div></div>`;
+  }
+  // 中身を複製せず、狭い幅では同じ組織切り替えと nav をダイアログに移す。
+  function syncMobileMenu() {
+    const dialog = document.getElementById("mobile-menu");
+    if (!dialog) return;
+    const narrow = window.matchMedia("(max-width: 760px)").matches;
+    if (!narrow && dialog.open) closeMobileMenu();
+    const target = document.querySelector(narrow ? ".mobile-menu-sheet" : ".binding-body");
+    for (const id of ["org-menu-slot", "app-nav"]) {
+      const node = document.getElementById(id);
+      if (node && node.parentElement !== target) target.append(node);
+    }
+  }
+  function closeMobileMenu() {
+    document.getElementById("mobile-menu")?.close();
+    const button = document.querySelector("[data-mobile-menu-open]");
+    button?.setAttribute("aria-expanded", "false");
+    button?.focus();
+  }
+  window.addEventListener("resize", syncMobileMenu);
+  document.addEventListener("click", (event) => {
+    const dialog = document.getElementById("mobile-menu");
+    if (!dialog) return;
+    if (event.target.closest("[data-mobile-menu-open]")) {
+      dialog.showModal();
+      document.querySelector("[data-mobile-menu-open]").setAttribute("aria-expanded", "true");
+    } else if (event.target.closest("[data-mobile-menu-close]") || (dialog.open && event.target.closest(".mobile-menu a[href], .mobile-menu [data-dialog]"))) closeMobileMenu();
+  });
   // 組織の切り替え。開閉するメニューで、中は各組織へのリンクと、組織の選択の画面へ戻るリンクと、最後に「組織を作る」（ダイアログを開く）。
   // 戻るリンクは、入れる組織が2つ以上、または届いた招待があるときだけ出す（1組織でも招待があれば、一覧へ戻る道が要る）。
   // 「組織を作る」は常に出す（入れる組織が1つで招待が無い人は、/ を開くと今の組織へ移り、組織の選択の画面に届かない）。
@@ -2940,7 +2997,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // ワークスペースの切り替え。組織と同じ開閉と通常のリンクを使い、移動先はバックログ。
   let workspaceMenuOpen = false;
-  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] }, inWorkspaceScreen = !page || !["today", "notifications", "orgwiki", "me", "admin", "operator"].includes(page.current) } = {}) {
+  function workspaceMenuHtml({ open = workspaceMenuOpen, id = "ws-menu-list", live = true, workspaces = Object.entries(D.workspaces).map(([id, w]) => ({ id, ...w })), current = { id: D.workspace, ...D.workspaces[D.workspace] }, inWorkspaceScreen = !page || !["today", "notifications", "orgwiki", "me", "admin", "favorites", "operator"].includes(page.current) } = {}) {
     const name = workspaces.find((w) => w.id === current.id)?.name || current.name;
     const label = t("workspaceSwitchLabel").replace("{name}", name).replace("{workspace}", t("workspace"));
     const listLabel = t("workspaceSwitchListLabel").replace("{workspace}", t("workspace"));
@@ -2997,33 +3054,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function cycleFirst() {
     const order = [null, ...FIRST_ROLES];
     const next = order[(order.indexOf(first) + 1) % order.length];
-    const here = ["me", "admin"].includes(page.current) ? `${page.current}.html` : (PAGES.find((p) => Array.isArray(p) && p[0] === page.current) || [])[3] || "today.html";
+    const here = ACCOUNT_SCREENS[page.current] ? `${page.current}.html` : (PAGES.find((p) => Array.isArray(p) && p[0] === page.current) || [])[3] || "today.html";
     const target = !next || FIRST_PAGES[next].includes(here) ? here : "today.html";
     location.href = firstHref(target, next);
   }
   let page = null;
-  // 760px 以下のメニューの帯（横に送る .nav）。描き直したら今のページの項目が見える位置まで送り、続きがある端に印を付ける
-  // （CSS が端を薄くする）。計算は本番の src/lib/nav-strip.ts と同じ。広い幅の縦の列は横にはみ出さないので、送らず印も付かない
-  const NAV_STRIP_PEEK = 32;
-  function syncNavStrip(scroll) {
-    const nav = document.getElementById("app-nav");
-    if (!nav) return;
-    const item = scroll && nav.querySelector('a.nav-item[aria-current="page"]');
-    if (item && nav.scrollWidth > nav.clientWidth) {
-      const view = nav.getBoundingClientRect(); const box = item.getBoundingClientRect();
-      const group = nav.querySelector(".ws-menu")?.getBoundingClientRect();
-      // 両端に peek を残す（続きがあると端に幕が重なるため。左の幕は左に送ってあるときだけ出る）
-      const start = group && group.left <= box.left && box.right - group.left <= nav.clientWidth - 2 * NAV_STRIP_PEEK ? group.left : box.left;
-      if (start < view.left + (nav.scrollLeft > 1 ? NAV_STRIP_PEEK : 0) || box.right > view.left + nav.clientWidth - NAV_STRIP_PEEK) nav.scrollLeft = Math.max(0, nav.scrollLeft + start - view.left - NAV_STRIP_PEEK);
-    }
-    nav.toggleAttribute("data-more-start", nav.scrollLeft > 1);
-    nav.toggleAttribute("data-more-end", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
-  }
-  document.addEventListener("scroll", (ev) => { if (ev.target.id === "app-nav") syncNavStrip(false); }, true);
-  // 書体を読み終えると項目の幅が変わるので、送り位置を測り直す
-  document.fonts?.ready.then(() => syncNavStrip(true));
-  // 幅を跨いで狭めたとき、回転したときも、今の項目が隠れていれば送る（本番の NavMenu は ResizeObserver で同じことをする）
-  window.addEventListener("resize", () => syncNavStrip(true));
   function redraw() {
     if (!page) return;
     if (!page.operator) {
@@ -3032,7 +3067,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       document.getElementById("breadcrumb-slot").innerHTML = breadcrumbHtml();
       document.getElementById("app-nav").innerHTML = navHtml(page.current, PAGES);
     }
-    syncNavStrip(true);
+    const tabs = document.getElementById("mobile-navigation-slot");
+    if (tabs) tabs.innerHTML = mobileTabsHtml(page.current);
+    syncMobileMenu();
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
     document.getElementById("content").innerHTML = page.render();
@@ -3078,7 +3115,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       crumbs.push({ label: D.workspaces[D.workspace].name, href: `${firstHref("backlog.html")}${first ? "&" : "?"}workspace=${encodeURIComponent(D.workspace)}` });
     }
     if (index >= 0) crumbs.push({ label: PAGES[index][2]().replace(/&amp;/g, "&"), current: true });
-    else if (["me", "admin"].includes(page.current)) crumbs.push({ label: t(page.current === "me" ? "pageMe" : "pageOrgAdmin"), current: true });
+    else if (ACCOUNT_SCREENS[page.current]) crumbs.push({ label: t(ACCOUNT_SCREENS[page.current]), current: true });
     return crumbs;
   }
   // 画面の見本を組み立てる。render は中身の HTML を返す関数。
@@ -3126,6 +3163,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         <main class="content" id="content"></main>
       </div>
     </div>
+    <div id="mobile-navigation-slot"></div>
+    <dialog class="mobile-menu" id="mobile-menu" aria-label="${t("mobileMenu")}"><div class="mobile-menu-sheet"><div class="mobile-menu-head"><h2>${t("menu")}</h2><button class="icon-btn" type="button" data-mobile-menu-close aria-label="${t("close")}">${icon("x")}</button></div></div></dialog>
     <div class="scrim" id="scrim" data-close-drawer hidden></div>
     <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden></aside>
     <div class="dialog" id="dialog" hidden></div>
@@ -3138,6 +3177,16 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       applyNavCollapsed();
     });
     document.querySelector("[data-switch='first']")?.addEventListener("click", cycleFirst);
+    const mobileMenu = document.getElementById("mobile-menu");
+    let pressedOutside = false;
+    let releasedOutside = false;
+    mobileMenu.addEventListener("cancel", (event) => { event.preventDefault(); closeMobileMenu(); });
+    mobileMenu.addEventListener("pointerdown", (event) => { pressedOutside = event.target === mobileMenu; });
+    mobileMenu.addEventListener("pointerup", (event) => { releasedOutside = event.target === mobileMenu; });
+    mobileMenu.addEventListener("click", (event) => {
+      if (event.target === mobileMenu && pressedOutside && releasedOutside) closeMobileMenu();
+      pressedOutside = false; releasedOutside = false;
+    });
     applyTheme();
     redraw();
     const storyId = new URLSearchParams(location.search).get("story");
@@ -3598,8 +3647,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       return;
     }
     if (ev.key !== "Escape" || ev.isComposing || ev.keyCode === 229) return;
-    if (orgMenuOpen) { ev.stopPropagation(); closeOrgMenu(); return; }
-    if (workspaceMenuOpen) { ev.stopPropagation(); closeWorkspaceMenu(); return; }
+    if (orgMenuOpen) { ev.preventDefault(); ev.stopPropagation(); closeOrgMenu(); return; }
+    if (workspaceMenuOpen) { ev.preventDefault(); ev.stopPropagation(); closeWorkspaceMenu(); return; }
     if (accountMenuOpen) { ev.stopPropagation(); closeAccountMenu(); return; }
     if (closeCelebrate()) return;
     if (dialogOnlyButtons && !document.getElementById("dialog")?.hidden) return;
@@ -3852,14 +3901,14 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   document.addEventListener("pointerdown", () => keyHints.hide(), true);
 
   window.SQ = {
-    favoriteButtonHtml, favoritesNavHtml, favoriteRetryHtml, favoriteBackgroundHtml,
+    mobileTabsHtml, favoriteButtonHtml, favoritesNavHtml, favoriteRetryHtml, favoriteBackgroundHtml,
     formatTrialStopDateTime,
     first, firstHref, firstSteps, emptyState, art,
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer, flashRow,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
     avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
-    card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
+    narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,

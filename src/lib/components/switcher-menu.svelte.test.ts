@@ -21,7 +21,14 @@ function setup() {
 }
 
 function key(key: string, extra = {}) {
-  return { key, isComposing: false, keyCode: 0, stopPropagation: vi.fn(), ...extra } as unknown as KeyboardEvent;
+  return {
+    key,
+    isComposing: false,
+    keyCode: 0,
+    stopPropagation: vi.fn(),
+    preventDefault: vi.fn(),
+    ...extra,
+  } as unknown as KeyboardEvent;
 }
 
 describe('組織とワークスペースの共通の開閉', () => {
@@ -34,7 +41,7 @@ describe('組織とワークスペースの共通の開閉', () => {
     expect(focus).toHaveBeenCalledOnce();
   });
 
-  test('Esc は閉じてフォーカスを戻し、イベントの伝播を止める', () => {
+  test('Esc は閉じてフォーカスを戻し、親のモーダルを閉じずに伝播を止める', () => {
     const { menu, focus } = setup();
     menu.open = true;
     const event = key('Escape');
@@ -42,6 +49,7 @@ describe('組織とワークスペースの共通の開閉', () => {
     expect(menu.open).toBe(false);
     expect(focus).toHaveBeenCalledOnce();
     expect(event.stopPropagation).toHaveBeenCalledOnce();
+    expect(event.preventDefault).toHaveBeenCalledOnce();
   });
 
   test('矢印キーと日本語変換中の Esc は移動も開閉もしない', () => {
@@ -56,6 +64,7 @@ describe('組織とワークスペースの共通の開閉', () => {
       menu.onkeydown(event);
       expect(menu.open).toBe(true);
       expect(event.stopPropagation).not.toHaveBeenCalled();
+      expect(event.preventDefault).not.toHaveBeenCalled();
     }
     expect(focus).not.toHaveBeenCalled();
   });
@@ -76,6 +85,7 @@ describe('組織とワークスペースの共通の開閉', () => {
     menu.onclick({ target: outside } as unknown as MouseEvent);
     expect(menu.open).toBe(false);
     expect(event.stopPropagation).not.toHaveBeenCalled();
+    expect(event.preventDefault).not.toHaveBeenCalled();
     expect(focus).not.toHaveBeenCalled();
   });
 

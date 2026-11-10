@@ -159,7 +159,7 @@ test.describe('所属が1つの一般のメンバー', () => {
     await expect(listOf(page)).toBeHidden();
   });
 
-  test('今日やることにも切り替えがあり、畳んだ列では隠し、760px以下ではメニューの帯の札から開ける（#993）', async ({
+  test('今日やることにも切り替えがあり、畳んだ列では隠し、760px以下では浮きメニューから開ける（#1102）', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -170,7 +170,8 @@ test.describe('所属が1つの一般のメンバー', () => {
     await page.getByRole('button', { name: 'メニューを広げる' }).click();
     for (const width of [760, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
-      // 札はメニューの帯（横に送る .nav）の中にある。帯の外へ出した一覧が帯のスクロール領域に切られず、画面の幅に収まる
+      await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
+      // 切り替えの一覧は浮きメニューの面の中に広がる
       await expect(page.locator('#app-nav .ws-menu-button')).toHaveCount(1);
       await buttonOf(page).click();
       const list = listOf(page);
@@ -187,6 +188,8 @@ test.describe('所属が1つの一般のメンバー', () => {
       expect(box!.x + box!.width).toBeLessThanOrEqual(width);
       await page.keyboard.press('Escape');
       await expect(list).toBeHidden();
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.mobile-menu')).toBeHidden();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
     await page.setViewportSize({ width: 1280, height: 900 });

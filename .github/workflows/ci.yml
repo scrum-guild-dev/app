@@ -1,8 +1,13 @@
 name: ci
 
-# PR ごとに回し、結果を ci-ok の1つにまとめる（docs/development.md の「CI」）。
+# PR と main で回し、結果を ci-ok の1つにまとめる（docs/development.md の「CI」）。
 # 各ジョブは package.json のスクリプトを呼ぶだけにし、手順をここに持たない
 on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "43 21 * * *" # 毎日 06:43 JST（実行は遅れることがある）
+  workflow_dispatch:
   pull_request:
     # edited では動かさない。タイトルや本文の編集で何もしない実行ができると、マージの欄では前の実行の結果が隠れるため（#252）。
     # ベースの付け替えは label.yml が拾い、push し直すまで label を失敗にする
@@ -13,8 +18,8 @@ run-name: "ci pr=${{ github.event.pull_request.number }} base=${{ github.event.p
 
 # 同じ PR の古い実行は止める
 concurrency:
-  group: ci-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -25,9 +30,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      docs_only: ${{ steps.docs.outputs.docs_only }}
-      dev_build: ${{ steps.docs.outputs.dev_build }}
-      repeat: ${{ steps.repeat.outputs.repeat }}
+      docs_only: ${{ steps.docs.outputs.docs_only || steps.main.outputs.docs_only }}
+      dev_build: ${{ steps.docs.outputs.dev_build || steps.main.outputs.dev_build }}
+      repeat: ${{ steps.repeat.outputs.repeat || steps.main.outputs.repeat }}
       repeat_files: ${{ steps.repeat.outputs.repeat_files }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,21 +47,31 @@ jobs:
       # --no-renames: リネームを移動先の名前だけで見ると、src/ から docs/ への移動が文書だけに見えるため。
       # -z: 日本語や空白を含む名前を git が引用して書き換えないようにするため
       - id: docs
+        if: github.event_name == 'pull_request'
         name: 文書だけかと、開発モードの e2e を走らせるかを判定する
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -o pipefail
           git diff --name-only --no-renames -z "$BASE_SHA...$HEAD_SHA" | node scripts/changes.ts | tee -a "$GITHUB_OUTPUT"
 
+      - name: main は差分によらず全検査する
+        if: github.event_name != 'pull_request'
+        id: main
+        run: |
+          echo 'docs_only=false' >> "$GITHUB_OUTPUT"
+          echo 'dev_build=true' >> "$GITHUB_OUTPUT"
+          echo 'repeat=false' >> "$GITHUB_OUTPUT"
+
       # --diff-filter=AM: 消したテストは回せないので、足したか変えたものだけを渡す。リネームは --no-renames で消すと足すに分かれ、
       # 移動先が足したものとして選ばれる。名前が決まった形に合わなければ scripts/changes.ts が落ちる
       - id: repeat
+        if: github.event_name == 'pull_request'
         name: 繰り返す e2e のテストのファイルを選ぶ
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -o pipefail
           git diff --name-only --no-renames --diff-filter=AM -z "$BASE_SHA...$HEAD_SHA" | node scripts/changes.ts --repeat | tee -a "$GITHUB_OUTPUT"
@@ -148,7 +163,7 @@ jobs:
         shard: [1, 2, 3, 4, 5]
     env:
       # 画面と /api/health に同じ版が出ることも確かめる
-      APP_VERSION: ${{ github.event.pull_request.head.sha }}
+      APP_VERSION: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -184,7 +199,7 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5]
     env:
-      APP_VERSION: ${{ github.event.pull_request.head.sha }}
+      APP_VERSION: ${{ github.event.pull_request.head.sha || github.sha }}
       E2E_DEV_BUILD: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -222,7 +237,7 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     env:
-      APP_VERSION: ${{ github.event.pull_request.head.sha }}
+      APP_VERSION: ${{ github.event.pull_request.head.sha || github.sha }}
       # changes が名前の形（空白もシェルの記号も含まない）を確かめた、空白区切りの一覧。引用せずに語に分けて渡す
       REPEAT_FILES: ${{ needs.changes.outputs.repeat_files }}
     steps:

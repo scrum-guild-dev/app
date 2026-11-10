@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { idSchema } from '../../id.ts';
+import { longTextSchema } from '../../story.ts';
 import { taskPointsSchema, taskTitleSchema } from '../../task.ts';
 import { defineOperation } from '../define.ts';
 import { conflictReasonOf } from '../conflict-reason.ts';
@@ -29,13 +30,14 @@ export function taskCreateConflictReasonOf(details: unknown): TaskCreateConflict
 export const taskCreate = defineOperation({
   name: 'task-create',
   description:
-    'バックログにタスクを作る。タイトル、ポイント（未設定か 0、1、2、3、5、8、13）、担当（任意）、親のストーリー（任意）、リポジトリ（任意）、区分（親のないときだけ、任意）を指す。位置は親の配下の末尾。入れ先のスプリントと列（任意、完了の列は不可）を指すと、同時にその列の末尾に入れる',
+    'バックログにタスクを作る。タイトル、本文（任意、1万字まで）、ポイント（未設定か 0、1、2、3、5、8、13）、担当（任意）、親のストーリー（任意）、リポジトリ（任意）、区分（親のないときだけ、任意）を指す。位置は親の配下の末尾。入れ先のスプリントと列（任意、完了の列は不可）を指すと、同時にその列の末尾に入れる',
   mode: 'write',
   permission: 'member',
   workspace: true,
   input: z.object({
     workspace_id: idSchema,
     title: taskTitleSchema,
+    body_md: longTextSchema.default(null),
     points: taskPointsSchema.nullable().default(null),
     assignee_user_id: idSchema.nullable().default(null),
     story_id: idSchema.nullable().default(null),

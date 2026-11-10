@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { MediaQuery } from 'svelte/reactivity';
+  import MobileNavigation from './MobileNavigation.svelte';
   import { navigationLoading } from '../navigation-loading.svelte.ts';
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
@@ -48,6 +50,8 @@
     notice?: Snippet;
     children: Snippet;
   } = $props();
+
+  const narrow = new MediaQuery('(max-width: 760px)');
 
   // パンくず。ワークスペースは、ワークスペースの画面を開いているときだけ出す（組織の画面では、メニューの対象でも出さない）。
   // 画面の名前はメニューの項目から引き、メニューに無いアカウントのメニューの画面だけ別に引く
@@ -138,31 +142,33 @@
 </script>
 
 <div class="app" data-nav-collapsed={navState.collapsed ? 'true' : undefined}>
-  <aside class="binding" aria-label={t('menu')}>
-    <div class="binding-inner">
-      <div class="binding-head">
-        <a class="brand" href={resolve('/[slug]', { slug })}>
-          <BrandMark />
-          <span class="visually-hidden">{t('appName')}</span>
-        </a>
-        <button
-          class="nav-toggle"
-          type="button"
-          aria-expanded={!navState.collapsed}
-          aria-controls={NAV_MENU_ID}
-          aria-label={t(navState.collapsed ? 'menuExpand' : 'menuCollapse')}
-          onclick={() => setNavCollapsed(!navState.collapsed)}
-        >
-          <Icon name="panel" />
-          <span class="nav-tip" aria-hidden="true">{t(navState.collapsed ? 'menuExpand' : 'menuCollapse')}</span>
-        </button>
+  {#if !narrow.current}
+    <aside class="binding" aria-label={t('menu')}>
+      <div class="binding-inner">
+        <div class="binding-head">
+          <a class="brand" href={resolve('/[slug]', { slug })}>
+            <BrandMark />
+            <span class="visually-hidden">{t('appName')}</span>
+          </a>
+          <button
+            class="nav-toggle"
+            type="button"
+            aria-expanded={!navState.collapsed}
+            aria-controls={NAV_MENU_ID}
+            aria-label={t(navState.collapsed ? 'menuExpand' : 'menuCollapse')}
+            onclick={() => setNavCollapsed(!navState.collapsed)}
+          >
+            <Icon name="panel" />
+            <span class="nav-tip" aria-hidden="true">{t(navState.collapsed ? 'menuExpand' : 'menuCollapse')}</span>
+          </button>
+        </div>
+        <div class="binding-body">
+          {#if organizationSwitcher}{@render organizationSwitcher()}{/if}
+          <NavMenu {current} {slug} {hasWorkspace} {isAdmin} {workspace} {workspaceSwitcher} />
+        </div>
       </div>
-      <div class="binding-body">
-        {#if organizationSwitcher}{@render organizationSwitcher()}{/if}
-        <NavMenu {current} {slug} {hasWorkspace} {isAdmin} {workspace} {workspaceSwitcher} />
-      </div>
-    </div>
-  </aside>
+    </aside>
+  {/if}
   <div class="sheet">
     <div class="topbar">
       <Breadcrumb crumbs={shownCrumbs} />
@@ -176,4 +182,11 @@
       {@render children()}
     </main>
   </div>
+  {#if narrow.current}
+    <MobileNavigation {current} {slug} workspaceId={hasWorkspace ? workspace?.id : undefined} {organizationSwitcher}>
+      {#snippet menu()}
+        <NavMenu {current} {slug} {hasWorkspace} {isAdmin} {workspace} {workspaceSwitcher} />
+      {/snippet}
+    </MobileNavigation>
+  {/if}
 </div>

@@ -22,6 +22,8 @@ test('開発サーバーは専用フラグで架空の鍵だけを渡し、環�
           ...(testCredentials ? ['--test-credentials'] : []),
         ],
         {
+          // dev.ts は作業ディレクトリの .dev.vars を読むので、手元の本物の .dev.vars が無い一時ディレクトリで動かす
+          cwd: dir,
           encoding: 'utf8',
           timeout: 10_000,
           env: {
