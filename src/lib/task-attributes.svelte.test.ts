@@ -315,3 +315,20 @@ test.each(['gone', 'completed'] as const)('同じ表示文でも失敗の種別 
   expect(rejected).toHaveBeenCalledWith('同じ表示文', reason);
   detach();
 });
+
+test('引き出しの書きかけがある間は、行の広いstale通知で組織の枠まで読み直さない', async () => {
+  mocks.call.mockResolvedValue({ ok: false, status: 409, error: { code: 'workspace_closed' } });
+  const editor = taskAttributes('aoba', 'w', 'stale-scope');
+  const rowStale = vi.fn();
+  const drawerStale = vi.fn();
+  const detachRow = editor.attach({ stale: rowStale });
+  const detachDrawer = editor.attach({ stale: drawerStale, inlineErrors: true });
+  editor.observe(detail(), 0);
+  editor.points.choose(5);
+  await settle();
+  expect(drawerStale).toHaveBeenCalledTimes(1);
+  expect(rowStale).not.toHaveBeenCalled();
+  expect(editor.points.error).toBe('workspaceClosedReadOnly');
+  detachRow();
+  detachDrawer();
+});

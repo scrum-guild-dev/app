@@ -187,12 +187,12 @@ export class TaskAttributes {
   ): Promise<AttributeFailure> {
     const other = (message: string): AttributeFailure => ({ message, reason: 'other' });
     if (result.status === 401 || (result.status === 409 && result.error?.code === 'workspace_closed')) {
-      for (const observer of this.observers) {
-        try {
-          observer.stale();
-        } catch {
-          /* 失敗の通知と後始末を続ける */
-        }
+      // 開いている引き出しは書きかけを持つので、その画面の狭い再取得を優先する。
+      const observer = [...this.observers].find((item) => item.inlineErrors) ?? this.observers.values().next().value;
+      try {
+        observer?.stale();
+      } catch {
+        /* 失敗の通知と後始末を続ける */
       }
       if (result.status === 409) {
         return this.stop(t('workspaceClosedReadOnly', { workspace: t('workspace') }), 'closed');
