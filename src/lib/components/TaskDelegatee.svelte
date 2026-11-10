@@ -91,7 +91,9 @@
             selected = duplicate.id;
           } else {
             selected = created.data.delegatee.id;
-            rows = [...rows, created.data.delegatee].sort((a, b) => a.name.localeCompare(b.name));
+            rows = [...rows, created.data.delegatee];
+            await section.load();
+            if (!section.isCurrent(token)) return;
           }
         }
       }
@@ -125,7 +127,7 @@
 
 <div>
   <dt>
-    {#if editable}<label for={id}>{t('delegatee')}</label>{:else}{t('delegatee')}{/if}
+    {#if editable && section.state === 'ready'}<label for={id}>{t('delegatee')}</label>{:else}{t('delegatee')}{/if}
   </dt>
   <dd>
     {#if editable}
@@ -151,7 +153,7 @@
           class="field"
           onsubmit={(event) => {
             event.preventDefault();
-            void save(null, true);
+            if (!busy && name.trim()) void save(null, true);
           }}
         >
           <label class="visually-hidden" for={`${id}-new`}>{t('delegateeNew')}</label>
@@ -168,9 +170,11 @@
             aria-describedby={error ? `${id}-error` : undefined}
             placeholder={t('delegateeNew')}
           />
-          {#if name.trim()}<button class="btn is-sm" type="submit" aria-disabled={busy}
-              >{t('delegateeAdd', { name: name.trim() })}</button
-            >{/if}
+          {#if name.trim()}<div class="form-actions">
+              <button class="btn is-sm" type="submit" aria-disabled={busy}
+                >{t('delegateeAdd', { name: name.trim() })}</button
+              >
+            </div>{/if}
         </form>
       {:else}
         <span>{value?.name ?? t('delegateeNone')}</span>
@@ -178,13 +182,17 @@
           >{t(section.state === 'loading' ? 'delegateeLoading' : 'delegateeLoadFailed')}</span
         >
       {/if}
+      {#if section.refreshFailed}<span class="props-note" id={`${id}-refresh`}>{t('delegateeRefreshFailed')}</span>{/if}
       {#if section.state === 'failed' || section.refreshFailed}
-        <button
-          class="btn is-sm is-quiet"
-          type="button"
-          aria-disabled={section.retrying}
-          onclick={() => section.retry()}>{t('retry')}</button
-        >
+        <div class="form-actions">
+          <button
+            class="btn is-sm is-quiet"
+            type="button"
+            aria-disabled={section.retrying}
+            aria-describedby={section.refreshFailed ? `${id}-refresh` : undefined}
+            onclick={() => section.retry()}>{t('retry')}</button
+          >
+        </div>
       {/if}
     {:else}
       <span>{value?.name ?? t('delegateeNone')}</span>

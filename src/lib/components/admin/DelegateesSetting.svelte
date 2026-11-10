@@ -71,7 +71,9 @@
         return;
       }
       if (!result.ok) {
-        error = t(remove ? 'delegateeDeleteFailed' : 'delegateeFailed');
+        error = t(
+          result.status === 404 ? 'delegateeAssignUnavailable' : remove ? 'delegateeDeleteFailed' : 'delegateeFailed',
+        );
         await section.load();
         return;
       }
