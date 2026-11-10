@@ -874,20 +874,20 @@ export const dictionary = defineDictionary({
   epicPageStale: '最新の内容を読み込めませんでした。表示は前に読んだ内容です。',
   epicPagePartyEmpty: '参加者はまだいません。',
   epicPageStories: '配下の{story}',
-  // 参加者の面の操作。「参加する」と「抜ける」は accept と leave（見本と同じキー）。割り振りは作成者とリーダーだけに出す
+  // 参加者の面の操作。「参加する」と「参加をやめる」は accept と leave（見本と同じキー）。割り振りは作成者とリーダーだけに出す
   epicPageAssign: '{party}に割り振る',
   epicPartyJoined: '{epic}に参加しました',
   epicPartyLeft: '{party}から抜けました',
-  // 「参加する」と「抜ける」で何も書かなかった（別の画面などで先に変わっていた）。画面は読み直す
+  // 「参加する」と「参加をやめる」で何も書かなかった（別の画面などで先に変わっていた）。画面は読み直す
   epicPartyAlreadyChanged: '{party}はもう変わっていました。最新の内容を表示しています',
-  // 「参加する」と「抜ける」が 403（ワークスペースに所属していない）
+  // 「参加する」と「参加をやめる」が 403（ワークスペースに所属していない）
   epicPartyForbidden: 'この{workspace}に所属していないため、{party}を変えられません',
   epicPartyUpdating: '{party}を更新しています',
   // 終わった（完了か中止した）エピックの参加者は変えられない（409 の epic_finished）
   epicPartyFinished: 'この{epic}は終わっているので、{party}を変えられません',
   // 書き込みの競合に 3 回続けて負けた（409 の conflict）。画面を読み直すと実際の状態が見え、押し直せる
   epicPartyConflict: 'ほかの変更と重なりました。もう一度試してください',
-  // 「参加する」と「抜ける」が 404。エピックが消えたか、呼んだ人がもう所属していない
+  // 「参加する」と「参加をやめる」が 404。エピックが消えたか、呼んだ人がもう所属していない
   epicPartyGone: '{epic}が見つからないか、{workspace}に所属していないため、{party}を変えられません',
   epicPartyFailed: '{party}を更新できませんでした。もう一度試してください',
   // エピックの完了と取り消し。操作は作成者とリーダーだけに出す。完了にできない理由は、押せない操作の横に出す
