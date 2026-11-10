@@ -1,31 +1,12 @@
-// #740: 基盤のマイグレーションより前にも、通知の振る舞いを先に検証する。
-/* eslint-disable db-entry/guard -- 将来の notifications の表をテスト用に用意し、受け取った行を実際の D1 から検査するため */
+// #740: 本番のマイグレーションで作る通知の表を、組織の入口から検証する。
 import { env } from 'cloudflare:workers';
-import { beforeAll, describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { commonDb, orgDb } from '../src/server/db/index.ts';
 import { reconcileAttachmentQuota } from '../src/server/storage/quota-warning.ts';
 import { AT, createAttachment, createOrganization, createUser, createWorkspace, uuidv7 } from './factories.ts';
 
 const at = new Date('2026-11-10T08:00:00.000Z');
 const later = new Date('2026-11-11T08:00:00.000Z');
-
-beforeAll(async () => {
-  await env.DB.prepare(
-    `CREATE TABLE IF NOT EXISTS notifications (
-    id TEXT NOT NULL PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id),
-    workspace_id TEXT REFERENCES workspaces(id),
-    kind TEXT NOT NULL,
-    task_id TEXT REFERENCES tasks(id),
-    epic_id TEXT REFERENCES epics(id),
-    connection_id TEXT REFERENCES connections(id),
-    actor_user_id TEXT REFERENCES users(id),
-    payload_json TEXT NOT NULL DEFAULT '{}',
-    read_at TEXT,
-    created_at TEXT NOT NULL
-  )`,
-  ).run();
-});
 
 async function fixture(sizeBytes: number, warnedAt: string | null = null) {
   const organization = await createOrganization({
@@ -42,27 +23,14 @@ async function fixture(sizeBytes: number, warnedAt: string | null = null) {
 }
 
 type Target = Awaited<ReturnType<typeof fixture>>;
-type Notification = {
-  id: string;
-  user_id: string;
-  workspace_id: string | null;
-  kind: string;
-  task_id: string | null;
-  epic_id: string | null;
-  connection_id: string | null;
-  actor_user_id: string | null;
-  payload_json: string;
-  read_at: string | null;
-  created_at: string;
-};
-
 async function notifications(target: Target) {
   const ids = [target.admin.id, target.secondAdmin.id, target.member.id, target.disabledAdmin.id];
-  return (
-    await env.DB.prepare('SELECT * FROM notifications WHERE user_id IN (?, ?, ?, ?) ORDER BY user_id, created_at')
-      .bind(...ids)
-      .all<Notification>()
-  ).results;
+  const db = orgDb(env, target.organization.verified);
+  return db.rows(
+    db.statement((q) =>
+      q.selectFrom('notifications').selectAll().where('user_id', 'in', ids).orderBy('user_id').orderBy('created_at'),
+    ),
+  );
 }
 
 async function warnedAt(target: Target) {
