@@ -399,7 +399,7 @@ test('見本の削除の確認: クリア済みのエピックを配下を残し
   await expect(dialog.getByLabel('配下を親なしで残す')).toBeDisabled();
   await expect(dialog.getByLabel('配下もまとめて削除する')).not.toBeChecked();
   await expect(dialog.locator('.btn.is-danger')).toHaveAttribute('aria-disabled', 'true');
-  await dialog.locator('.btn.is-danger').click();
+  await dialog.locator('.btn.is-danger').click({ force: true });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('配下もまとめて削除する').check();
   await expect(dialog.getByLabel('配下を親なしで残す')).toHaveAccessibleDescription(
@@ -416,7 +416,7 @@ test('見本の削除の確認: クリア済みのエピックを配下を残し
     /に、エピックの完了を取り消してもらってください/,
   );
   await expect(dialog.locator('.btn.is-danger')).toHaveAttribute('aria-disabled', 'true');
-  await dialog.locator('.btn.is-danger').click();
+  await dialog.locator('.btn.is-danger').click({ force: true });
   await expect(dialog).toBeVisible();
   expect(errors).toEqual([]);
 });

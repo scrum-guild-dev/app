@@ -190,7 +190,8 @@ test('クリア済みでまとめて削除もできない人は、削除する�
   await expect(confirm.getByRole('radio', { name: /配下もまとめて削除する/ })).toBeDisabled();
   const submit = confirm.getByRole('button', { name: '削除する' });
   await expect(submit).toHaveAttribute('aria-disabled', 'true');
-  await submit.click();
+  await submit.click({ force: true });
+  await page.waitForLoadState('networkidle');
   await expect(confirm).toBeVisible();
   expect(sent).toBe(0);
 });
