@@ -59,6 +59,30 @@
 
   // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
   const DICT = {
+  delegateeEmptyText: 'タスクの引き出しで新しい名前を入力すると、名簿に追加できます。',
+  delegateeAssignFailed: '依頼先を変更できませんでした。タスクの状態や名簿を確認し、もう一度選んでください。',
+  delegateeAssignUnavailable: '依頼先またはタスクの状態が変わった可能性があります。名簿とタスクを確認して、もう一度試してください。',
+  delegateeDeleteFailed: '依頼先を削除できませんでした。一覧を確認して、もう一度試してください。',
+  delegateeReloadFailed: '依頼先は保存済みですが、タスクを読み直せませんでした。引き出しを開き直してください。',
+  delegateeLoading: '名簿を読み込んでいます',
+  delegateeReadonly: '完了済み、バックログ以外、または書き込みできないタスクの依頼先は変更できません。',
+
+  delegateeNone: '依頼先なし',
+  delegateeNew: '新しい依頼先の名前',
+  delegateeAdd: '「{name}」を足す',
+  delegateeSave: '名前を保存する',
+  delegateeRemove: '削除する',
+  delegateeCancel: 'やめる',
+  delegateeDeleteTitle: '依頼先を削除しますか',
+  delegateeDeleteText: '「{name}」を名簿から削除し、未完了のタスクから外します。元には戻せません。完了したタスクには名前が残ります。',
+  delegateeFailed: '依頼先を更新できませんでした。名前の重複や名簿の上限を確認し、もう一度試してください。',
+  delegateeLoadFailed: '依頼先を読み込めませんでした',
+  delegateeRefreshFailed: '依頼先の一覧を更新できませんでした',
+  delegateeEmpty: '依頼先はまだありません',
+  delegateeDesc: 'タスクの引き出しで足した依頼先の名前を直したり、削除できます。',
+  delegateeBusy: '保存しています',
+  delegateeInvalid: '名前は1〜50文字で入力してください。改行や制御文字は使えません。',
+
     mobilePageToolsLabel: "検索とアカウント",
     menu: "メニュー",
     close: "閉じる",
@@ -1437,6 +1461,34 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       <div class="comment-head"><b>${esc(user(c.who).name)}</b><span class="mono">${c.at}</span>${c.edited ? "<span>編集済み</span>" : ""}${actions ? `<span class="comment-actions">${actions}</span>` : ""}</div>
       ${body}${files}</div></div>`;
   }
+  // ?personal で自分用の依頼先を確認する。既存の選択欄と入力欄だけを使う。
+  D.delegatees = D.delegatees || [{ id: "sample-delegatee", name: "架空の依頼先" }];
+  function drawerDelegateeHtml(x) {
+    if (!new URLSearchParams(location.search).has("personal")) return "";
+    const selected = D.delegatees.find((row) => row.id === x.delegatee);
+    const content = x.doneAt || drawerReadOnly()
+      ? `<span>${esc(selected?.name || t("delegateeNone"))}</span><span class="props-note">${t("delegateeReadonly")}</span>`
+      : `<select class="select" id="drawer-delegatee" data-delegatee-select><option value="">${t("delegateeNone")}</option>${D.delegatees.map((row) => `<option value="${row.id}"${row.id === x.delegatee ? " selected" : ""}>${esc(row.name)}</option>`).join("")}</select>
+         <form class="field" data-delegatee-create><label class="visually-hidden" for="drawer-delegatee-new">${t("delegateeNew")}</label><input class="input" id="drawer-delegatee-new" placeholder="${t("delegateeNew")}" maxlength="50" required><button class="btn is-sm" type="submit">${t("delegateeAdd", { name: "新しい名前" })}</button></form>`;
+    return `<div><dt>${x.doneAt || drawerReadOnly() ? t("delegatee") : `<label for="drawer-delegatee">${t("delegatee")}</label>`}</dt><dd>${content}</dd></div>`;
+  }
+  document.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-delegatee-select]")) return;
+    const x = drawerItem();
+    x.delegatee = event.target.value || null;
+    if (x.delegatee && !x.who) x.who = D.me;
+    renderDrawer();
+  });
+  document.addEventListener("submit", (event) => {
+    if (!event.target.matches("[data-delegatee-create]")) return;
+    event.preventDefault();
+    const name = event.target.querySelector("input").value.trim();
+    if (!name) return;
+    let row = D.delegatees.find((entry) => entry.name === name);
+    if (!row) { row = { id: `sample-${Date.now()}`, name }; D.delegatees.push(row); }
+    const x = drawerItem(); x.delegatee = row.id; if (!x.who) x.who = D.me;
+    renderDrawer(); document.getElementById("drawer-delegatee-new")?.focus();
+  });
   // 2つのタブの中身は描いたまま隠す（本番は書きかけのコメントを、タブを切り替えても保つ）。左右の矢印キーでタブを移る
   function drawerHtml() {
     if (isStoryDrawer()) return storyDrawerHtml();
@@ -1469,6 +1521,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       <dl class="props">
         <div><dt>${t("column")}</dt><dd>${colName(x) ? `<span class="status-dot is-wrap">${esc(colName(x))}</span>` : "—"}</dd></div>
         <div><dt>${t("assignee")}</dt><dd>${drawerAssigneeHtml(x)}</dd></div>
+        ${drawerDelegateeHtml(x)}
         <div><dt>${t("points")}</dt><dd>${drawerPointsHtml(x)}</dd></div>
         <div><dt>${t("due")}</dt><dd>${drawerDueHtml(x)}</dd></div>
         <div><dt>親</dt><dd>${parent ? `${icon("flag")} ${esc(parent.title)}${epic ? `<span class="props-note">${esc(epic.title)}</span>` : ""}` : "なし"}</dd></div>
