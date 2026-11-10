@@ -219,7 +219,7 @@
       }
     });
   });
-  let movedRootCategories = $state<Record<string, { value: BacklogTask['category']; at: number }>>({});
+  let movedToRootAt = $state<Record<string, number>>({});
   function savedRow(task: BacklogTask): BacklogTask {
     const parentId = taskPlaces[task.id]?.parentId;
     const parent =
@@ -227,11 +227,11 @@
         ? undefined
         : (openStories.find((row) => row.id === parentId) ?? allStories.find((row) => row.id === parentId));
     const inherited = parentId == null ? undefined : (parentEpicOf(parentId)?.category ?? parent?.category ?? null);
-    return taskWithSavedAttributes(task, savedAttributes[task.id] ?? {}, inherited, movedRootCategories[task.id]);
+    return taskWithSavedAttributes(task, savedAttributes[task.id] ?? {}, inherited, movedToRootAt[task.id]);
   }
   function rememberCategoryForMove(task: BacklogTask, parentId: string | null): void {
-    if (parentId === null) movedRootCategories[task.id] = { value: savedRow(task).category, at: performance.now() };
-    else delete movedRootCategories[task.id];
+    if (parentId === null) movedToRootAt[task.id] = performance.now();
+    else delete movedToRootAt[task.id];
   }
 
   // 完了の応答が返った時刻（performance.now()）。これより前に始まった読み直しが遅れて届いても、完了の印を捨てない（completionSettled）
@@ -356,7 +356,7 @@
     completedAt = Object.fromEntries(keptDone.map((id) => [id, completedAt[id]]));
     const preserveMoves = carry && attributeReload.preservesState;
     if (!preserveMoves) {
-      movedRootCategories = {};
+      movedToRootAt = {};
       movedParents = {};
       taskOrders = {};
       movedStoryParents = {};
@@ -1039,7 +1039,7 @@
 
   // 画面で動かした並びを捨てる。まだ送っていない操作も、世代を進めて捨てる
   function discardMoves(): void {
-    movedRootCategories = {};
+    movedToRootAt = {};
     movedParents = {};
     taskOrders = {};
     movedStoryParents = {};

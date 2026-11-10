@@ -6,7 +6,7 @@ export function taskWithSavedAttributes(
   task: BacklogTask,
   changes: Saved,
   inheritedCategory?: BacklogTask['category'],
-  movedRootCategory?: { value: BacklogTask['category']; at: number },
+  movedToRootAt?: number,
 ): BacklogTask {
   const result = { ...task };
   for (const field of Object.keys(changes) as Attribute[]) {
@@ -14,8 +14,8 @@ export function taskWithSavedAttributes(
     if (saved !== undefined) Object.assign(result, { [field]: saved.task[field] });
   }
   if (inheritedCategory !== undefined) result.category = inheritedCategory;
-  else if (movedRootCategory !== undefined && (changes.category?.at ?? -Infinity) <= movedRootCategory.at) {
-    result.category = movedRootCategory.value;
+  else if (movedToRootAt !== undefined && (changes.category?.at ?? -Infinity) <= movedToRootAt) {
+    result.category = null;
   }
   return result;
 }

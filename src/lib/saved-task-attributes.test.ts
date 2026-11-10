@@ -28,8 +28,13 @@ test('別の欄の応答で区分を戻さず、親の区分が無いときも�
   ).toEqual(category);
   expect(taskWithSavedAttributes(row, { category: { task: { ...row, category }, at: 1 } }, null).category).toBeNull();
 });
-test('親なしに移すときは引き継いだ区分を保ち、その後の自分の保存で上書きする', () => {
-  const moved = { value: category, at: 2 };
-  expect(taskWithSavedAttributes(row, { category: { task: row, at: 1 } }, undefined, moved).category).toEqual(category);
-  expect(taskWithSavedAttributes(row, { category: { task: row, at: 3 } }, undefined, moved).category).toBeNull();
+test('親なしへ移すと親の区分は写さず、その後の自分の保存だけを出す', () => {
+  const child = { ...row, category };
+  expect(taskWithSavedAttributes(child, {}, undefined, 2).category).toBeNull();
+  expect(
+    taskWithSavedAttributes(child, { category: { task: { ...row, category }, at: 1 } }, undefined, 2).category,
+  ).toBeNull();
+  expect(
+    taskWithSavedAttributes(child, { category: { task: { ...row, category }, at: 3 } }, undefined, 2).category,
+  ).toEqual(category);
 });
