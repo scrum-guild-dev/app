@@ -65,8 +65,8 @@ export function taskAssignmentStatements(
             eb('today_on', 'is', current.today_on),
             eb.exists(openWorkspace(q, organizationId, workspaceId)),
             delegationCondition(eb),
-            // 明示した担当変更は所属の検査を再確認。依頼先の自動設定は、確かめた本人（管理者なら所属なしでも可）。
-            ...(assignee === null || delegation !== undefined
+            // 担当を付ける場合は、自動設定でも現在の所属を再確認する。依頼先だけを変える場合は既存の担当を保持する。
+            ...(assignee === null || (delegation !== undefined && current.assignee_user_id !== null)
               ? []
               : [eb.exists(activeMemberName(q, organizationId, workspaceId, assignee.id))]),
           ]),

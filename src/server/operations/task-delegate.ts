@@ -4,7 +4,7 @@ import { ApiError } from '../errors.ts';
 import { assertPersonalOrganization, liveDelegatees } from './delegatee.ts';
 import { implement } from './implement.ts';
 import { taskAssignmentStatements } from './task-assignment.ts';
-import { actorUserIdOf, throwIfClosed } from './write-guards.ts';
+import { activeMemberName, actorUserIdOf, throwIfClosed } from './write-guards.ts';
 import type { ChangeMap } from './change-log-merge.ts';
 
 export const taskDelegateOperation = implement(taskDelegate, async ({ db, actor, organization, workspace, input }) => {
@@ -55,17 +55,10 @@ export const taskDelegateOperation = implement(taskDelegate, async ({ db, actor,
       current.assignee_user_id === null ? null : { id: current.assignee_user_id, name: current.assignee_name ?? '' };
     if (autoAssign) {
       const self = await db.first(
-        db.statement((q) =>
-          q
-            .selectFrom('users')
-            .select(['id', 'name'])
-            .where('id', '=', actorUserId)
-            .where('organization_id', '=', db.organizationId)
-            .where('disabled_at', 'is', null),
-        ),
+        db.statement((q) => activeMemberName(q, db.organizationId, workspaceId, actorUserId)),
       );
       if (self === undefined) throw new ApiError(404, 'not_found');
-      assignee = self;
+      assignee = { id: actorUserId, name: self.name };
     }
     const changes: ChangeMap = {};
     if (current.delegatee_id !== input.delegatee_id)

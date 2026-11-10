@@ -10,9 +10,19 @@ import { taskComplete, taskDelegate, taskDetail, taskHistory } from '../src/shar
 import { afterFirstQuery } from './auth/helpers.ts';
 import { createEpic, createMembership, createStory, createTask, uuidv7 } from './factories.ts';
 import { post } from './operations/harness.ts';
-import { createPersonalTarget, createTarget, testEnv, type Target } from './operations/world.ts';
+import {
+  createPersonalTarget as createPersonalTargetWithoutMembership,
+  createTarget,
+  testEnv,
+  type Target,
+} from './operations/world.ts';
 
 const app = createApp(implementedOperations);
+async function createPersonalTarget() {
+  const target = await createPersonalTargetWithoutMembership();
+  await createMembership(target.organization, target.workspace.id, target.admin.userId!);
+  return target;
+}
 type Delegatee = { id: string; name: string };
 async function add(target: Target, name = '青葉 透'): Promise<Delegatee> {
   const res = await post(app, delegateeCreate, { slug: target.slug, token: target.admin.token, body: { name } });
@@ -61,6 +71,15 @@ async function detail(target: Target, taskId: string) {
 }
 
 describe('task-delegate', () => {
+  test('所属していない管理者を自動担当にせず404で断る', async () => {
+    const target = await createPersonalTargetWithoutMembership();
+    const person = await add(target);
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!);
+    expect((await delegate(target, task.id, person.id)).status).toBe(404);
+    expect(await row(target, task.id)).toEqual(task);
+    expect(await logs(target, task.id)).toEqual([]);
+  });
+
   test('担当なしに依頼先を付けると担当が自分になり、詳細と履歴に両方の変化が出る。外しても担当と今日の印を残す', async () => {
     const target = await createPersonalTarget();
     const person = await add(target);
@@ -156,7 +175,6 @@ describe('task-delegate', () => {
   test('完了したときの経験値と完了の記録は担当の自分に付く', async () => {
     const target = await createPersonalTarget();
     const person = await add(target);
-    await createMembership(target.organization, target.workspace.id, target.admin.userId!);
     const task = await createTask(target.organization, target.workspace.id, target.admin.userId!, { points: 3 });
     expect((await delegate(target, task.id, person.id)).status).toBe(200);
     const complete = await post(app, taskComplete, {
