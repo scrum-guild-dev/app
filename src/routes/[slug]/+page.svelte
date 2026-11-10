@@ -62,8 +62,8 @@
       points: task.points,
       due_on: task.due_on,
       assignee: task.assignee,
-      // 今日やることの行には依頼先のチップを出さない（「依頼中」の区分は #906）
-      delegatee: null,
+      // 行は attrs を渡さないので依頼先のチップは出ない（「依頼中」の区分は metaText で名前を出す）
+      delegatee: task.delegatee,
       category: null,
       repository: task.repository,
       sprint: task.sprint,

@@ -5,7 +5,6 @@ import { startBacklogRead } from '../../../../lib/backlog-tallies.ts';
 import { isUnauthenticated, loginUrl } from '../../../../lib/login-redirect.ts';
 import { categoryRepositoryList } from '../../../../shared/operations/definition/index.ts';
 import { experienceTeamTotal } from '../../../../shared/operations/experience/index.ts';
-import { delegateeList } from '../../../../shared/operations/organization/index.ts';
 import { backlogTree } from '../../../../shared/operations/task/index.ts';
 import type { PageLoad } from './$types';
 
@@ -19,9 +18,7 @@ import type { PageLoad } from './$types';
 // url の残りは 401 のときだけ読む（読むと、移るたびにこの load が走り直る）。
 // `app:backlog-tree` は、引き出しが欄を保存した後に、木だけを読み直す印（枠の読み直しが一時的に失敗しても、引き出しと書きかけを失わないため）。
 // チーム全体の経験値（teamTotal）は木と並べて読み、読めなければ null で、見出しに出さないだけにする（画面は壊さない）。
-// 依頼先の名簿（delegatee-list。行の依頼先のチップと絞り込みの帯の候補）も木と並べて読み、読めなければ null。
-// 出すかどうか（自分用の組織だけ）は画面が組織の枠の値で決める。ここで parent() を待つと、枠の読み直し（app:workspace）のたびに
-// 木まで読み直すことになるので、組織の種類を見ずに読む（チーム用の組織は空の名簿が返る）
+// 依頼先の名簿は、自分用の組織だけ画面（+page.svelte）が読む（チーム用の組織の最初の読み込みに要求を足さないため）
 export const load: PageLoad = async ({ params, fetch, url, depends }) => {
   depends('app:backlog-tree');
   // 読み直しを始めた時刻。画面で足した行が、この木に無いのを「消えた」と決めてよいかを、足した時刻との前後で決める
@@ -29,11 +26,10 @@ export const load: PageLoad = async ({ params, fetch, url, depends }) => {
   const readVersion = startBacklogRead();
   const filter = filterFromParams(url.searchParams);
   const options = { slug: params.slug, fetcher: fetch };
-  const [result, definitions, teamTotal, delegatees] = await Promise.all([
+  const [result, definitions, teamTotal] = await Promise.all([
     callOperation(backlogTree, { workspace_id: params.id, ...filterInput(filter) }, options),
     callOperation(categoryRepositoryList, { workspace_id: params.id }, options),
     callOperation(experienceTeamTotal, { workspace_id: params.id }, options),
-    callOperation(delegateeList, {}, options),
   ]);
   if (isUnauthenticated(result)) redirect(307, loginUrl(url));
   return {
@@ -43,6 +39,5 @@ export const load: PageLoad = async ({ params, fetch, url, depends }) => {
     filter,
     definitions: definitions.ok ? definitions.data : null,
     teamTotal: teamTotal.ok ? teamTotal.data.total : null,
-    delegatees: delegatees.ok ? delegatees.data.delegatees : null,
   };
 };
