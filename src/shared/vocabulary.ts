@@ -2477,7 +2477,8 @@ export const dictionary = defineDictionary({
     'このブラウザのログインは残り、同時刻以前にログインしたほかの端末はログアウトされます。後からログインした端末は残ります。疑わしいときは、ログインし直してから実行してください。発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。',
   apiTokenRevokeAllConfirm: '締め出す',
   apiTokenRevokingAll: '締め出しています',
-  apiTokenRevokedAll: 'ほかの端末のセッション{sessions}件と、API トークン{tokens}件を締め出しました',
+  apiTokenRevokedAll:
+    'ほかの端末のセッション{sessions}件と、API トークン{tokens}件を締め出しました。後からログインした端末は残ります。ほかの端末を締め出すには、ログインし直してもう一度実行してください。',
   apiTokenRevokeAllFailed: '締め出せませんでした。時間をおいて、もう一度試してください',
   apiTokenEmptyTitle: '発行済みの API トークンはありません',
   apiTokenEmptyText: '発行すると、ここに並びます。',

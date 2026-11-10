@@ -2357,7 +2357,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     tokenRevokeAll: () => {
       openDialog("すべての端末とトークンを締め出しますか",
         `<p>このブラウザのログインは残り、同時刻以前にログインしたほかの端末はログアウトされます。後からログインした端末は残ります。疑わしいときは、ログインし直してから実行してください。発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。</p>`,
-        `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="ほかの端末のセッション2件と、API トークン2件を締め出しました">締め出す</button>`);
+        `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="ほかの端末のセッション2件と、API トークン2件を締め出しました。後からログインした端末は残ります。ほかの端末を締め出すには、ログインし直してもう一度実行してください。">締め出す</button>`);
       document.querySelector(".dialog-sheet").classList.add("is-danger");
     },
     // スプリントを始めるダイアログ（本番は SprintStartDialog）。押したボタンの data-state で状態を替える。

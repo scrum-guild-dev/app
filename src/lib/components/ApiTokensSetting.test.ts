@@ -157,7 +157,10 @@ test('件数の知らせは、消したセッションと取り消したトー�
   expect(text).toContain('{sessions}');
   expect(text).toContain('{tokens}');
   expect(text.replace('{sessions}', '2').replace('{tokens}', '3')).toBe(
-    'ほかの端末のセッション2件と、API トークン3件を締め出しました',
+    'ほかの端末のセッション2件と、API トークン3件を締め出しました。後からログインした端末は残ります。ほかの端末を締め出すには、ログインし直してもう一度実行してください。',
+  );
+  expect(text.replace('{sessions}', '0').replace('{tokens}', '0')).toContain(
+    '0件を締め出しました。後からログインした端末は残ります。',
   );
   for (const key of ['apiTokenRevokingAll', 'apiTokenRevokeAllFailed'] as const) {
     expect(dictionary[key].length, key).toBeGreaterThan(0);
