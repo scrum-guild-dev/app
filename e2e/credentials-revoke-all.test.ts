@@ -231,4 +231,25 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     await expect(toast(page, '締め出せませんでした。時間をおいて、もう一度試してください')).toHaveCount(0);
     await unroute();
   });
+
+  // 全失効は同意の門の例外にしない（#770）。設定の画面を開いた後に規約の版が上がった場合を、応答の差し替えで作る
+  test('実行が 403 の terms_required（開いた後に規約の版が上がった）なら、同意の画面へ移り、戻り先は設定の画面', async ({
+    page,
+  }) => {
+    let sent = 0;
+    page.on('request', (request) => {
+      if (request.url().endsWith('/api/credentials-revoke-all')) sent++;
+    });
+    await page.goto('/aoba/me');
+    const section = sectionOf(page);
+    await expect(section.getByRole('table', { name: '発行済みの API トークン' })).toBeVisible();
+    const unroute = await failOperation(page, credentialsRevokeAll, 403, 'terms_required');
+    await section.getByRole('button', { name: BUTTON }).click();
+    await page.getByRole('dialog', { name: DIALOG }).getByRole('button', { name: '締め出す', exact: true }).click();
+    await expect(page).toHaveURL(/\/consent\?return_to=%2Faoba%2Fme$/);
+    // 同意の画面が描かれた後も、全失効を送ったのは押した1回だけ（移った先で送り直さない）
+    await expect(page.getByText('現在の版に同意しています。')).toBeVisible();
+    expect(sent).toBe(1);
+    await unroute();
+  });
 });
