@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
-  import { beforeNavigate, goto, invalidate } from '$app/navigation';
+  import { afterNavigate, beforeNavigate, goto, invalidate } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { callOperation } from '../api.ts';
   import { modalState, showToast } from '../toast.svelte.ts';
@@ -70,8 +70,9 @@
   function finish(): void {
     open = false;
     dialog.close();
-    trigger?.focus();
-    if (document.activeElement !== trigger) focusPageHeading();
+    const opener = document.getElementById(`${id}-trigger`) ?? trigger;
+    opener?.focus();
+    if (document.activeElement !== opener) focusPageHeading();
     title = body = storyId = epicId = assignee = points = due = failure = '';
   }
 
@@ -87,6 +88,11 @@
   async function close(): Promise<void> {
     if (await mayDiscard()) finish();
   }
+
+  // 遷移が終わる直前に開いたときも、SvelteKit のフォーカス復帰の後で題へ置く。
+  afterNavigate(() => {
+    if (open && !confirming && !dialog.contains(document.activeElement)) titleInput.focus();
+  });
 
   beforeNavigate((navigation) => {
     if (!open) return;
@@ -252,7 +258,7 @@
       {#if !title.trim()}<p class="muted" id={`${uid}-reason`}>{t('taskTitleRequired')}</p>{/if}
       {#if failure}<p class="callout is-danger" role="alert">{failure}</p>{/if}
       <label class="field"
-        ><span class="label">{t('fieldTitle')}</span><input
+        ><span class="field-label">{t('fieldTitle')}</span><input
           class="input create-sheet-title"
           id={`${uid}-title`}
           bind:this={titleInput}
@@ -262,7 +268,7 @@
         /></label
       >
       <div class="field">
-        <label class="label" for={`${uid}-body`}>{t('fieldBody')}</label><MarkdownEditor
+        <label class="field-label" for={`${uid}-body`}>{t('fieldBody')}</label><MarkdownEditor
           id={`${uid}-body`}
           bind:value={body}
           {slug}
@@ -327,7 +333,7 @@
           >
             {#snippet panel(closePanel)}
               <label class="field"
-                ><span class="label">{t('due')}</span><input class="input" type="date" bind:value={due} /></label
+                ><span class="field-label">{t('due')}</span><input class="input" type="date" bind:value={due} /></label
               >
               <button class="btn" type="button" onclick={closePanel}>{t('close')}</button>
             {/snippet}

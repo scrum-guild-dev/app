@@ -135,7 +135,8 @@ test('390px: 空・失敗・破棄をやめる・送信中の重複とフォー�
   const trigger = page.getByRole('button', { name: '起票', exact: true });
   await trigger.click();
   const sheet = page.getByRole('dialog', { name: '起票', exact: true });
-  await sheet.getByRole('button', { name: '作る', exact: true }).click();
+  // aria-disabled は Playwright が押下を待ち続けるので、イベントを送り処理側のガードを検査する。
+  await sheet.getByRole('button', { name: '作る', exact: true }).dispatchEvent('click');
   expect(sends).toBe(0);
   await sheet.getByLabel('タイトル', { exact: true }).fill('失敗しても残す');
   await sheet.getByLabel('本文', { exact: true }).fill('消さない本文');
@@ -145,7 +146,7 @@ test('390px: 空・失敗・破棄をやめる・送信中の重複とフォー�
   await expect(sheet.getByLabel('本文', { exact: true })).toHaveValue('消さない本文');
   await sheet.getByRole('button', { name: '作る', exact: true }).click();
   await expect.poll(() => sends).toBe(1);
-  await sheet.getByRole('button', { name: '作っています', exact: true }).click();
+  await sheet.getByRole('button', { name: '作っています', exact: true }).dispatchEvent('click');
   await page.keyboard.press('Escape');
   await expect(sheet).toBeVisible();
   expect(sends).toBe(1);

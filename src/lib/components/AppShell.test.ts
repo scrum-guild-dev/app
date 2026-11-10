@@ -7,7 +7,12 @@ import { navigationLoading } from '../navigation-loading.svelte.ts';
 vi.mock('$app/state', () => ({
   page: { data: { organization: { organization: { name: '架空の組織', kind: 'team' } } } },
 }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn(), beforeNavigate: vi.fn(), invalidate: vi.fn() }));
+vi.mock('$app/navigation', () => ({
+  goto: vi.fn(),
+  beforeNavigate: vi.fn(),
+  afterNavigate: vi.fn(),
+  invalidate: vi.fn(),
+}));
 vi.mock('$app/paths', () => ({
   asset: (path: string) => `/${path}`,
   resolve: (route: string, params: { slug: string; id?: string }) =>

@@ -100,6 +100,7 @@
     {#if isWorkspaceId(workspaceId) && oncreate}
       <button
         class="mobile-create"
+        id={createSheetId ? `${createSheetId}-trigger` : undefined}
         type="button"
         aria-label={t('createSheet')}
         aria-haspopup="dialog"

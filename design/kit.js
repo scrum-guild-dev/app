@@ -2963,8 +2963,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         </header>
         <div class="create-sheet-body">
           <p class="muted" id="create-sheet-reason">${t("taskTitleRequired")}</p>
-          <label class="field"><span class="label">${t("fieldTitle")}</span><input class="input create-sheet-title" name="title" placeholder="${t("taskTitlePlaceholder")}"></label>
-          <label class="field"><span class="label">${t("fieldBody")}</span><textarea class="textarea" name="body"></textarea></label>
+          <label class="field"><span class="field-label">${t("fieldTitle")}</span><input class="input create-sheet-title" name="title" placeholder="${t("taskTitlePlaceholder")}"></label>
+          <label class="field"><span class="field-label">${t("fieldBody")}</span><textarea class="textarea" name="body"></textarea></label>
           <div class="create-sheet-attrs" data-create-task>
             ${createSheetChip(t("taskParent").replace("{story}", t("story")), ["架空の親ストーリー"])}
             ${createSheetChip(t("assignee"), ["架空の担当"])}
