@@ -869,7 +869,9 @@ describe('接続の暗号鍵の設定不備', () => {
       const created = await register(ctx, target, target.member, pat);
       expect(created.status).toBe(200);
       const { connection } = (await created.json()) as { connection: { id: string } };
+      expect((await save(ctx, target, target.member, connection.id, ['1001'])).status).toBe(200);
       const before = await rowsOf(target);
+      expect(before.scopes).toHaveLength(1);
       const brokenEnv = { ...env, CONNECTION_CREDENTIAL_KEYS: keys };
       const log = vi.spyOn(console, 'error');
       try {
