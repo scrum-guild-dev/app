@@ -28,7 +28,7 @@
 | まとまり | テーブル |
 | --- | --- |
 | アカウント | `accounts`、`account_profiles`、`account_logins`、`password_credentials`、`sessions`、`api_tokens`、`account_consents`、`oauth_states`、`rate_limits` |
-| 組織 | `organizations`、`users`、`organization_holidays` |
+| 組織 | `organizations`、`users`、`organization_holidays`、`delegatees` |
 | ユーザーの稼働 | `user_capacity_settings`、`user_monthly_overrides`、`user_time_off` |
 | ワークスペース | `workspaces`、`workspace_point_rates`、`workspace_holidays`、`memberships`、`invitations`、`allocations` |
 | ワークスペースの定義 | `board_columns`、`detail_fields`、`categories`、`repositories` |
@@ -1459,7 +1459,7 @@ Wiki のページ。組織の Wiki とワークスペースの Wiki で共有す
 | workspace_id | TEXT | FK workspaces | 組織の変更（組織の作成、停止、再開、管理者の指名、ユーザーの無効化、組織の設定の変更、上限の変更）では空 |
 | actor_user_id | TEXT | FK users | 空なら同期などの定期処理か運用者の操作（`operator` も空なら定期処理。お試しの期限切れによる組織の停止は、`operator` も空で書き、画面は「システム」の操作として出す） |
 | operator | TEXT | | 運用者の操作（組織の作成、停止、再開、管理者の指名し直し、上限の変更）のときの運用者のログインの ID（`github:12345`、`google:<sub>` の形） |
-| entity_type | TEXT | NOT NULL | `task`、`story`、`epic`、`comment`、`sprint`、`membership`、`invitation`、`allocation`、`connection`、`completion`、`user`、`workspace`、`organization`、`category`、`repository`、`detail_field` など |
+| entity_type | TEXT | NOT NULL | `task`、`story`、`epic`、`comment`、`sprint`、`membership`、`invitation`、`allocation`、`connection`、`completion`、`user`、`workspace`、`organization`、`category`、`repository`、`detail_field`、`delegatee` など |
 | entity_id | TEXT | NOT NULL | |
 | action | TEXT | NOT NULL | `create`、`update`、`delete`、`restore`（タスクの削除の取り消し）、`complete`、`reopen`、`archive`、`close` など |
 | changes_json | TEXT | NOT NULL、既定 `'{}'` | `{"列名": [前, 後]}`。人や列は ID と、そのときの表示名を並べて残す |
