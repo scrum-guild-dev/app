@@ -312,20 +312,31 @@ export async function revokeApiTokensOf(db: CommonDb, accountId: string, checked
 }
 
 // その人の、取り消していない（revoked_at が NULL の）トークンすべてに revoked_at を now で書く文。期限切れの行も入る。
-// 取り消し済みの行は書き直さない。別の文と同じ batch() に入れて送るために、文のまま返す
+// 取り消し済みの行は書き直さない。別の文と同じ batch() に入れて送るために、文のまま返す。
+// currentTokenHash を渡したときだけ、今のセッションの行（token_hash と account_id が両方一致する行）がまだあるときに限って書く
+// （deleteOtherSessionsStatement と同じ条件。先に自分のセッションを消された側は何も書かない）。省いたら条件を付けない
 export function revokeAllApiTokensStatement(
   db: CommonDb,
   accountId: string,
   now: Date,
   currentTokenHash?: string,
 ): Statement<'common'> {
-  return db.statement((q) =>
-    q
+  return db.statement((q) => {
+    const update = q
       .updateTable('api_tokens')
       .set({ revoked_at: now.toISOString() })
       .where('account_id', '=', accountId)
-      .where('revoked_at', 'is', null),
-  );
+      .where('revoked_at', 'is', null);
+    if (currentTokenHash === undefined) return update;
+    return update.where(({ exists, selectFrom }) =>
+      exists(
+        selectFrom('sessions as cs')
+          .select('cs.token_hash')
+          .where('cs.token_hash', '=', currentTokenHash)
+          .where('cs.account_id', '=', accountId),
+      ),
+    );
+  });
 }
 
 // 期限切れ（expires_at <= now）の行を消し、消した件数を返す。取り消し済みでも、期限が来るまでは残す。
