@@ -58,6 +58,8 @@ for (const kind of ['task', 'story'] as const) {
     const title = `シートで作った${kind}-${crypto.randomUUID().slice(0, 8)}`;
     await sheet.getByLabel('タイトル', { exact: true }).fill(title);
     await sheet.getByLabel('本文', { exact: true }).fill('起票シートの本文です。');
+    await sheet.getByRole('button', { name: '引用', exact: true }).click();
+    await expect(sheet.getByLabel('本文', { exact: true })).toBeFocused();
     await expect(sheet.getByText('ファイルを選ぶ', { exact: true })).toHaveCount(0);
     if (kind === 'task') {
       const parent = sheet.getByRole('button', { name: /^親のストーリー:/ });
@@ -102,7 +104,10 @@ for (const kind of ['task', 'story'] as const) {
     expect(detail.status()).toBe(200);
     const data = await detail.json();
     const entity = kind === 'task' ? data.task : data.story;
-    expect(entity.body_md).toBe('起票シートの本文です。');
+    expect(entity.body_md).toBe('> 起票シートの本文です。');
+    const drawer = page.getByRole('dialog', { name: title, exact: true });
+    await expect(drawer.locator('blockquote')).toContainText('起票シートの本文です。');
+    await expect(drawer.getByRole('group', { name: '本文の書式' })).toHaveCount(0);
     if (kind === 'task') {
       expect(entity.points).toBe(3);
       expect(entity.story_id).toBe(target.story.id);
@@ -120,6 +125,62 @@ for (const kind of ['task', 'story'] as const) {
     ).toContainText(title);
   });
 }
+
+test('390px: 書式の付け外しは選択とフォーカスを保ち、44px以上のボタンから続けて書ける', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  if (!baseURL) throw new Error('baseURL が無い');
+  await signIn(context, baseURL, 'admin');
+  await setup(page, baseURL);
+  await page.getByRole('button', { name: '起票', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: '起票', exact: true });
+  const body = sheet.getByLabel('本文', { exact: true });
+  const toolbar = sheet.getByRole('group', { name: '本文の書式' });
+  await expect(toolbar.getByRole('button')).toHaveCount(4);
+  for (const [name, prefix] of [
+    ['箇条書き', '- '],
+    ['チェックリスト', '- [ ] '],
+    ['コード', '```\n'],
+    ['引用', '> '],
+  ]) {
+    const button = toolbar.getByRole('button', { name, exact: true });
+    const bounds = await button.boundingBox();
+    expect(bounds!.width).toBeGreaterThanOrEqual(44);
+    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+    await body.fill('前\n本文\n後');
+    await body.evaluate((input: HTMLTextAreaElement) => input.setSelectionRange(3, 4));
+    await button.click();
+    await expect(body).toBeFocused();
+    await expect(body).toHaveValue(`前\n${prefix}本文${name === 'コード' ? '\n```' : ''}\n後`);
+    await expect
+      .poll(() =>
+        body.evaluate((input: HTMLTextAreaElement) => input.value.slice(input.selectionStart, input.selectionEnd)),
+      )
+      .toBe('文');
+    // キーボードでボタンを押した場合も、最後の本文の選択を使う。
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await expect(body).toBeFocused();
+    await expect(body).toHaveValue('前\n本文\n後');
+    await page.keyboard.insertText('続き');
+    await expect(body).toHaveValue('前\n本続き\n後');
+  }
+  await body.fill('一行\n二行\n残す行');
+  await body.evaluate((input: HTMLTextAreaElement) => input.setSelectionRange(0, 6));
+  await toolbar.getByRole('button', { name: 'チェックリスト', exact: true }).click();
+  await expect(body).toHaveValue('- [ ] 一行\n- [ ] 二行\n残す行');
+  await toolbar.getByRole('button', { name: 'チェックリスト', exact: true }).click();
+  await expect(body).toHaveValue('一行\n二行\n残す行');
+  await body.fill('');
+  await toolbar.getByRole('button', { name: 'コード', exact: true }).click();
+  await page.keyboard.insertText('const answer = 42;');
+  await expect(body).toHaveValue('```\nconst answer = 42;\n```');
+  await toolbar.getByRole('button', { name: 'コード', exact: true }).click();
+  await expect(body).toHaveValue('const answer = 42;');
+  expect(await findA11yViolations(page)).toEqual([]);
+});
 
 test('390px: 空・失敗・破棄をやめる・送信中の重複とフォーカス復帰', async ({ page, context, baseURL }) => {
   if (!baseURL) throw new Error('baseURL が無い');
