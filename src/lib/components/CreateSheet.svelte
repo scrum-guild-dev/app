@@ -2,6 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import { afterNavigate, beforeNavigate, goto, invalidate } from '$app/navigation';
   import { resolve } from '$app/paths';
+  import { creationChoices, reconcileCreationRefs } from '../create-choices.ts';
   import { callOperation } from '../api.ts';
   import { modalState, showToast } from '../toast.svelte.ts';
   import { focusPageHeading } from '../focus-heading.ts';
@@ -38,16 +39,10 @@
   let loading = $state(false);
   let tree = $state<OutputOf<typeof backlogTree> | null>(null);
   const dirty = $derived(!!(title || body || storyId || epicId || assignee || points || due));
-  const stories = $derived(
-    tree
-      ? [
-          ...tree.epics.filter((epic) => !epic.completed_at && !epic.canceled_at).flatMap((epic) => epic.stories),
-          ...tree.stories,
-        ].filter((story) => !story.completed_at)
-      : [],
-  );
-  const epics = $derived(tree?.choices.epics.filter((epic) => !epic.finished) ?? []);
-  const people = $derived(tree?.choices.assignees.filter((person) => person.current) ?? []);
+  const choices = $derived(creationChoices(tree));
+  const stories = $derived(choices.stories);
+  const epics = $derived(choices.epics);
+  const people = $derived(choices.people);
   const locked = $derived(busy ? t('storyCreating') : loading ? t('loading') : undefined);
 
   async function loadChoices(): Promise<void> {
@@ -56,7 +51,13 @@
     const result = await callOperation(backlogTree, { workspace_id: workspaceId }, { slug });
     loading = false;
     choicesFailed = !result.ok;
-    if (result.ok) tree = result.data;
+    if (result.ok) {
+      tree = result.data;
+      const refs = reconcileCreationRefs(creationChoices(result.data), { storyId, epicId, assignee });
+      storyId = refs.storyId;
+      epicId = refs.epicId;
+      assignee = refs.assignee;
+    }
   }
 
   export function show(opener: HTMLButtonElement): void {
