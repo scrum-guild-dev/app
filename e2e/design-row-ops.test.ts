@@ -430,6 +430,79 @@ test('見本のバックログ: 配下の未完了が残るストーリーは、
   await expect(drawer.locator('.hanko')).toHaveCount(0);
 });
 
+test('見本のチップ: ロックの理由、読み込み中、再試行と離脱済みの候補', async ({ page }) => {
+  await openSample(page, 'backlog.html');
+  const examples = page.locator('.attr-chip-examples');
+  await examples.locator('summary').click();
+  const locked = examples.locator('[data-chip-example="locked"] .chip-btn').first();
+  await expect(locked).toHaveAttribute('aria-disabled', 'true');
+  await expect(locked).toHaveAccessibleDescription('このタスクは完了になっているため、ポイントは直せません。');
+  await locked.focus();
+  await locked.press('Enter');
+  await expect(locked).not.toHaveAttribute('aria-expanded');
+  const lockedAssignee = examples.locator('[data-chip-example="locked"] .attr-chip').last().locator('.chip-btn');
+  await expect(lockedAssignee).toHaveAttribute('aria-disabled', 'true');
+  await expect(lockedAssignee).toHaveAccessibleDescription('このタスクは完了になっているため、担当は替えられません。');
+
+  const loading = examples.locator('[data-chip-example="loading"] .attr-chip').last();
+  await loading.locator('.chip-btn').click();
+  await expect(loading.getByRole('menu')).toHaveAttribute('aria-busy', 'true');
+  await expect(loading.getByRole('menuitem')).toHaveText('読み込んでいます');
+  await page.keyboard.press('Escape');
+  await expect(loading.locator('.chip-btn')).toBeFocused();
+
+  const failed = examples.locator('[data-chip-example="failed"] .attr-chip').last();
+  await failed.locator('.chip-btn').click();
+  await failed.getByRole('menuitem', { name: /もう一度試す/ }).click();
+  await expect(failed.getByRole('menuitemradio', { name: /離脱済み/ })).toHaveAttribute('aria-checked', 'true');
+  await failed.getByRole('menuitemradio', { name: '担当なし', exact: true }).click();
+  await expect(failed.locator('.chip-btn')).toBeFocused();
+  await expect(failed.locator('.avatar')).toHaveCount(0);
+
+  const left = examples.locator('[data-chip-example="left"] .attr-chip').last();
+  await expect(left.locator(':scope > .avatar')).toHaveClass(/is-left/);
+  await expect(left.locator('.chip-btn .avatar')).toHaveCount(0);
+});
+
+for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+  test(`見本のチップ: ${theme}、320px・文字150%で長い担当名が収まる`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await openSample(page, 'backlog.html');
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+      document.documentElement.style.fontSize = '150%';
+    }, theme);
+    await page.locator('.attr-chip-examples summary').click();
+    await page.evaluate(() => document.fonts.ready);
+    const row = page.locator('[data-chip-example="long"]');
+    const chip = row.locator('.attr-chip').last().locator('.chip-btn');
+    const box = (await chip.boundingBox())!;
+    const bounds = (await row.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+    expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    const dimensions = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    }));
+    expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
+    const text = await chip.locator('.chip-text').evaluate((element) => ({
+      scroll: element.scrollWidth,
+      client: element.clientWidth,
+    }));
+    expect(text.scroll).toBeGreaterThan(text.client);
+    await expect(chip.locator('.ico')).toHaveCount(1);
+    // 行に説明や他の属性が並んでも、包み自体を残りの幅まで縮める。
+    const end = row.locator('.entry-end');
+    await end.evaluate((element) => (element.style.width = '160px'));
+    const endBox = (await end.boundingBox())!;
+    const wrapper = (await row.locator('.attr-chip').last().boundingBox())!;
+    expect(wrapper.width).toBeLessThanOrEqual(endBox.width);
+    expect(wrapper.x + wrapper.width).toBeLessThanOrEqual(endBox.x + endBox.width + 1);
+  });
+}
+
 test('カタログの横送りの見本で属性と行の操作を選んでも、同じ見本へフォーカスが戻る', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = await openSample(page, 'index.html');
