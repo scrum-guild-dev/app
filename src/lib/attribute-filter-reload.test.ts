@@ -71,3 +71,39 @@ test('読み直しの失敗でも保護状態を戻し、次の要求を実行�
   await coordinator.request();
   expect(reload).toHaveBeenCalledTimes(2);
 });
+
+test('失敗した読み直し中に追加された保存も、次の読み直しで反映する', async () => {
+  const idle = Promise.resolve();
+  const first = deferred();
+  const reload = vi
+    .fn()
+    .mockImplementationOnce(async () => {
+      await first.promise;
+      throw new Error('first failed');
+    })
+    .mockResolvedValueOnce(undefined);
+  const coordinator = new FilteredAttributeReload({ whenIdle: () => idle, reload });
+  const pending = coordinator.request();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const later = coordinator.request();
+  first.resolve();
+  await expect(pending).resolves.toBeUndefined();
+  await later;
+  expect(reload).toHaveBeenCalledTimes(2);
+});
+
+test('同じ読み直しの失敗は、待っている呼び出し元が複数あっても一度だけ知らせる', async () => {
+  const idle = Promise.resolve();
+  const first = deferred();
+  const failed = vi.fn();
+  const reload = vi.fn(async () => {
+    await first.promise;
+    throw new Error('read failed');
+  });
+  const coordinator = new FilteredAttributeReload({ whenIdle: () => idle, reload, failed });
+  const pending = coordinator.request();
+  const later = coordinator.request();
+  first.resolve();
+  await Promise.allSettled([pending, later]);
+  expect(failed).toHaveBeenCalledTimes(1);
+});

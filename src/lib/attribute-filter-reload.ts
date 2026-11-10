@@ -18,13 +18,22 @@ export function completedAfterAttributeRead(
 // 属性が絞り込みを変える場合だけ、移動を待って再取得する。読み取り中の別の保存は最後にもう一度反映する。
 export class FilteredAttributeReload {
   preservesState = false;
-  private running = false;
+  private running: Promise<void> | null = null;
   private requested: (() => boolean) | null = null;
-  constructor(private readonly hooks: { whenIdle: () => Promise<void>; reload: () => Promise<void> }) {}
-  async request(isCurrent: () => boolean = () => true): Promise<void> {
+  constructor(
+    private readonly hooks: {
+      whenIdle: () => Promise<void>;
+      reload: () => Promise<void>;
+      failed?: (error: unknown) => void;
+    },
+  ) {}
+  request(isCurrent: () => boolean = () => true): Promise<void> {
     this.requested = isCurrent;
-    if (this.running) return;
-    this.running = true;
+    this.running ??= Promise.resolve().then(() => this.drain());
+    return this.running;
+  }
+  private async drain(): Promise<void> {
+    let failure: { error: unknown; current: () => boolean } | undefined;
     try {
       while (this.requested !== null) {
         const current = this.requested;
@@ -38,12 +47,19 @@ export class FilteredAttributeReload {
         this.preservesState = true;
         try {
           await this.hooks.reload();
+          failure = undefined;
+        } catch (error) {
+          failure = { error, current };
         } finally {
           this.preservesState = false;
         }
       }
+      if (failure !== undefined) {
+        if (failure.current()) this.hooks.failed?.(failure.error);
+        throw failure.error;
+      }
     } finally {
-      this.running = false;
+      this.running = null;
     }
   }
 }

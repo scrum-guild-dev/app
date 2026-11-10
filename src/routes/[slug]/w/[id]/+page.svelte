@@ -215,18 +215,16 @@
         const savedFilter = filter;
         void attributeReload
           .request(() => page.params.id === workspaceId && sameFilter(filter, savedFilter))
-          .catch(() => showToast(t('taskListReloadFailed'), 'alert'));
+          .catch(() => {
+            /* 読み直しの失敗は調整処理が1回だけ通知する */
+          });
       }
     });
   });
   let movedToRootAt = $state<Record<string, number>>({});
   function savedRow(task: BacklogTask): BacklogTask {
     const parentId = taskPlaces[task.id]?.parentId;
-    const parent =
-      parentId == null
-        ? undefined
-        : (openStories.find((row) => row.id === parentId) ?? allStories.find((row) => row.id === parentId));
-    const inherited = parentId == null ? undefined : (parentEpicOf(parentId)?.category ?? parent?.category ?? null);
+    const inherited = parentId == null ? undefined : inheritedTaskCategories.get(parentId);
     return taskWithSavedAttributes(task, savedAttributes[task.id] ?? {}, inherited, movedToRootAt[task.id]);
   }
   function rememberCategoryForMove(task: BacklogTask, parentId: string | null): void {
@@ -260,12 +258,14 @@
   });
   const attributeReload = new FilteredAttributeReload({
     whenIdle: () => moves.whenIdle(),
+    failed: () => showToast(t('taskListReloadFailed'), 'alert'),
     reload: async () => {
       const saved = focusedControl();
       const lost = document.activeElement === null || document.activeElement === document.body;
       await invalidate('app:backlog-tree');
       await tick();
       await restoreFocus(saved, lost);
+      await throwIfListFailed(() => data);
     },
   });
   $effect.pre(() => {
@@ -466,6 +466,13 @@
     });
   });
   // 空の行で作ったエピックは、読み直すまで choices に無いので、画面に足した分も親の候補に入れる
+  const inheritedTaskCategories = $derived(
+    new Map(
+      [...allStories, ...openStories].map(
+        (parent) => [parent.id, parentEpicOf(parent.id)?.category ?? parent.category] as const,
+      ),
+    ),
+  );
   const openEpics = $derived([
     ...choiceEpics.filter((epic) => !epic.finished).map((epic) => ({ id: epic.id, title: epic.title })),
     ...addedEpics
