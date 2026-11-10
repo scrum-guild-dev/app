@@ -436,7 +436,7 @@ export const dictionary = defineDictionary({
   sectionOpen: '開くと一覧を表示',
   // 依頼先（自分用の組織）の付いた、自分が担当の未完了のタスク。人に振ったものを期日の早い順に確かめる
   sectionDelegated: '依頼中',
-  sectionDelegatedHint: '{done}にするまで残ります',
+  sectionDelegatedHint: '{delegatee}を外すか{done}にするまで残ります',
   delegatedTo: '{delegatee}: {name}',
   overdue: '期日切れ',
   weekDue: '今週が期日',

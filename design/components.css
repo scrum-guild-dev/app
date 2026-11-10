@@ -684,7 +684,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 button.entry-title { text-align: left; background: transparent; border: 0; padding: 0; cursor: pointer; font: inherit; font-weight: 700; }
 .completed-list .entry-meta { overflow-wrap: anywhere; }
 .entry-meta { display: flex; flex-wrap: wrap; gap: 4px var(--space-3); align-items: center; font-size: var(--text-xs); color: var(--color-muted); }
-/* ワークスペース名の印（.tag は折り返さない）は、長い名前だけ折り返して全文を読めるようにする */
+/* ワークスペース名の印（.tag は折り返さない）と注記（.props-note。依頼先の名前など、利用者が付けた名前を含む）は、長い名前だけ折り返して全文を読めるようにする */
 .entry-meta .tag, .entry-meta .props-note { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 .entry-attributes, .entry-chips, .entry-actions { display: contents; }
 .entry-end { display: flex; align-items: center; gap: var(--space-2); }
