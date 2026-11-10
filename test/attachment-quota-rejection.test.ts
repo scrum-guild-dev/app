@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, test, vi } from 'vitest';
 import { commonDb, orgDb } from '../src/server/db/index.ts';
 import { envWithD1Hooks } from '../src/server/db/testing.ts';
-import { generatedStream, recordingBucket, upload } from './attachment-helpers.ts';
+import { generatedStream, MAX_BYTES, recordingBucket, upload } from './attachment-helpers.ts';
 import { AT, createAttachment } from './factories.ts';
 import { errorCodeOf } from './operations/harness.ts';
 import { createTarget } from './operations/world.ts';
@@ -13,10 +13,18 @@ describe('容量拒否時の変更待ちと拒否順', () => {
     const common = commonDb(env);
     await common.batch([
       common.statement((q) =>
-        q.updateTable('organizations').set({ attachment_quota_bytes: 1000 }).where('id', '=', target.organization.id),
+        q
+          .updateTable('organizations')
+          .set({ attachment_quota_bytes: 6 * MAX_BYTES })
+          .where('id', '=', target.organization.id),
       ),
     ]);
-    await createAttachment(target.organization, target.workspace.id, target.member.userId!, { size_bytes: 995 });
+    // 小上限の先読みを避け、原子的な拒否後に変更印の保存が失敗する経路を保つ。
+    for (let index = 0; index < 6; index++) {
+      await createAttachment(target.organization, target.workspace.id, target.member.userId!, {
+        size_bytes: MAX_BYTES - (index === 5 ? 5 : 0),
+      });
+    }
     const recording = recordingBucket();
     let failed = false;
     const observed = envWithD1Hooks(recording.env, {
