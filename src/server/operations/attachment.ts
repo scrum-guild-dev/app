@@ -4,7 +4,7 @@ import { attachmentDownload, attachmentUpload } from '../../shared/operations/at
 import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
 import { actorUserIdOf, throwIfClosed } from './write-guards.ts';
-import { insertUploadedAttachment } from '../db/index.ts';
+import { insertUploadedAttachment, attachmentFitsQuota } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { sniffContentType } from '../attachments/sniff.ts';
 import { downloadAttachment } from '../attachments/download.ts';
@@ -86,7 +86,14 @@ export const attachmentUploadOperation = implement(
   async ({ db, workspace, actor, tools, input, binary, requestId }) => {
     // R2 に書く前に閉じる（書いた後の NOT NULL 違反で、消すだけの書き込みをしない）
     const uploadedBy = actorUserIdOf(actor);
-    const { attachmentQuotaBytes } = await tools.readOrganization();
+    const { attachmentQuotaBytes, attachmentQuotaNeedsCheck } = await tools.readOrganization();
+    if (
+      binary.contentLength > attachmentQuotaBytes ||
+      (attachmentQuotaNeedsCheck && !(await attachmentFitsQuota(db, attachmentQuotaBytes, binary.contentLength)))
+    ) {
+      await throwIfClosed(db, workspace.workspaceId);
+      throw new ApiError(409, 'attachment_quota_exceeded');
+    }
     const id = uuidv7(now());
     const objectKey = `${db.organizationId}/${workspace.workspaceId}/${id}`;
     let createdAt: string;
@@ -123,6 +130,8 @@ export const attachmentUploadOperation = implement(
       );
       if (!inserted) {
         await throwIfClosed(db, workspace.workspaceId);
+        // 初回の容量拒否でも、次の要求を本文/R2より前の確認へ回す。失敗の応答では重い処理を起動しない。
+        await tools.reconcileAttachmentQuota({ markOnly: true });
         throw new ApiError(409, 'attachment_quota_exceeded');
       }
     } catch (error) {
