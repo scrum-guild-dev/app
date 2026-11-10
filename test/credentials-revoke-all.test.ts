@@ -1,4 +1,4 @@
-// 設定からの全失効（credentials-revoke-all）。今のセッション以外のすべてのセッションと、取り消していないすべての API トークンを無効にする。
+// 設定からの全失効（credentials-revoke-all）。今のセッションと同時刻以前に作られたほかのセッションと、取り消していないすべての API トークンを無効にする。
 // Cookie のセッションだけが使える（cookieOnly）。一覧を回す検査は test/operation-registry.test.ts、トークン全般の取り決めは test/api-token-operations.test.ts
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -99,7 +99,7 @@ describe('操作の定義', () => {
   });
 });
 
-describe('完了条件1: 今のセッション以外のセッションが消える', () => {
+describe('完了条件1: 同時刻以前のほかのセッションが消える', () => {
   test('今のセッション、別端末、盗まれた Cookie の想定のセッションのうち、実行したセッションだけが残る', async () => {
     const person = await createLoginPerson();
     const laptop = await otherSession(person);
@@ -589,7 +589,7 @@ describe('同じ batch() で送る（半端な状態を残さない）', () => {
 describe('deleteOtherSessionsOf', () => {
   const db = () => commonDb(env);
 
-  test('今のセッション以外を消し、消した数を返す', async () => {
+  test('同時刻以前のほかのセッションを消し、消した行数（期限切れも含む）を返す', async () => {
     const person = await createLoginPerson();
     const a = await otherSession(person);
     const b = await otherSession(person);
