@@ -188,6 +188,35 @@ describe('startStallProbe', () => {
     assert.ok(lags.length >= 1);
     assert.ok(lags.every((s) => s.result === '遅れ'));
   });
+
+  // 待ちの途中で詰まると、延びは「詰まった時間 − 待ちの残り」しか見えない。しきい値 1000ms、間隔 500ms なら、
+  // 問い合わせを 1000ms 止めた詰まりの延びは 500ms 以上になるので、500ms から probe に出す
+  for (const [late, expected] of [
+    [499, false],
+    [500, true],
+    [700, true],
+  ] as const) {
+    test(`間隔 500ms、しきい値 1000ms で、待ちが ${late}ms 延びたら probe に${expected ? '出す' : '出さない'}`, async () => {
+      let mono = 0;
+      const deps: ProbeDeps = {
+        ...nodeProbeDeps,
+        elapsed: () => mono,
+        // 3 か所の問い合わせは止めるまで返さず、待つのは遅れを測るループだけにする（時計を進めるのをそこだけにする）
+        fetch: (_url, signal) =>
+          new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason))),
+        sleep: async (ms, signal) => {
+          mono += ms + late;
+          await delay(1, undefined, { signal }).catch(() => {});
+        },
+      };
+      const probe = startStallProbe(BASE, deps, { intervalMs: 500, thresholdMs: 1_000 });
+      await delay(30);
+      const report = await probe.stop();
+      const lags = report.stalls.filter((s) => s.target === 'probe');
+      assert.equal(lags.length > 0, expected);
+      assert.ok(lags.every((s) => s.ms === late));
+    });
+  }
 });
 
 describe('ログの行', () => {

@@ -119,14 +119,17 @@ export function startStallProbe(
       await deps.sleep(intervalMs, controller.signal);
     }
   });
-  // 測る側の遅れ。待ちが予定よりしきい値以上延びたら、親プロセスのイベントループかランナー全体が詰まっている
+  // 測る側の遅れ。待ちが予定より延びたら、親プロセスのイベントループかランナー全体が詰まっている。
+  // 詰まりが待ちの途中で始まると、延びは「詰まった時間 − 待ちの残り（最大 intervalMs）」しか見えないので、
+  // しきい値から intervalMs を引いた値で拾う。こうすると、問い合わせを thresholdMs 以上止めた詰まりは必ず probe にも出る
+  const lagThresholdMs = Math.max(thresholdMs - intervalMs, 0);
   const lag = (async () => {
     while (!controller.signal.aborted) {
       const startedAt = deps.now();
       const from = deps.elapsed();
       await deps.sleep(intervalMs, controller.signal);
       const late = deps.elapsed() - from - intervalMs;
-      if (!controller.signal.aborted && late >= thresholdMs)
+      if (!controller.signal.aborted && late >= lagThresholdMs)
         record({ target: 'probe', startedAt, ms: late, result: '遅れ' });
     }
   })();
