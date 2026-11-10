@@ -1767,8 +1767,15 @@
           {taskId}
           value={task.delegatee}
           editable={assigneeEditable && inBacklog && !workspaceClosed}
+          onfailed={async (status, code) => {
+            if (code === 'workspace_closed') onstale();
+            if (status === 404 || status === 409) await refresh(true);
+          }}
           onsaved={async () => {
-            if (!alive || task === null) return false;
+            if (!alive || task === null) {
+              onchanged();
+              return false;
+            }
             savedVersion++;
             assigneeVersion++;
             // ほかの保存と同じ世代管理で読み直し、遅い応答で新しい担当を戻さない。

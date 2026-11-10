@@ -1,12 +1,13 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { tick } from 'svelte';
+  import Icon from './Icon.svelte';
   import { delegateeList, delegateeCreate } from '../../shared/operations/organization/index.ts';
   import { taskDelegate } from '../../shared/operations/task/index.ts';
   import { definitionNameProblem } from '../../shared/definition.ts';
   import { callOperation } from '../api.ts';
   import { isUnauthenticated, loginUrl } from '../login-redirect.ts';
   import { t } from '../vocabulary.svelte.ts';
-  import SectionBoundary from './admin/SectionBoundary.svelte';
   import { SectionLoad } from './admin/section-load.svelte.ts';
 
   let {
@@ -16,6 +17,7 @@
     value,
     editable,
     onsaved,
+    onfailed,
   }: {
     slug: string;
     workspaceId: string;
@@ -23,12 +25,14 @@
     value: { id: string; name: string } | null;
     editable: boolean;
     onsaved: () => Promise<boolean>;
+    onfailed: (status: number, code: string | undefined) => Promise<void>;
   } = $props();
   const id = $props.id();
   let rows = $state<{ id: string; name: string }[]>([]);
   let name = $state('');
   let busy = $state(false);
   let select = $state<HTMLSelectElement>();
+  let newInput = $state<HTMLInputElement>();
   $effect(() => {
     void busy;
     void rows;
@@ -36,13 +40,16 @@
   });
   let error = $state('');
   const section = new SectionLoad(
-    () => callOperation(delegateeList, {}, { slug }),
+    () =>
+      editable
+        ? callOperation(delegateeList, {}, { slug })
+        : Promise.resolve({ ok: true as const, data: { delegatees: [] } }),
     (data) => {
       rows = data.delegatees;
     },
   );
   section.attach(
-    () => [slug, workspaceId, taskId],
+    () => [slug, workspaceId, taskId, editable],
     () => {
       rows = [];
       name = '';
@@ -84,10 +91,9 @@
             selected = duplicate.id;
           } else {
             selected = created.data.delegatee.id;
-            rows = [...rows, created.data.delegatee];
+            rows = [...rows, created.data.delegatee].sort((a, b) => a.name.localeCompare(b.name));
           }
         }
-        name = '';
       }
       const result = await callOperation(taskDelegate, { ...input, delegatee_id: selected }, options);
       if (!section.isCurrent(token)) return;
@@ -96,11 +102,21 @@
         return;
       }
       if (!result.ok) {
-        error = t('delegateeFailed');
-        await section.load();
+        error = t(
+          result.status === 404 || result.status === 409 ? 'delegateeAssignUnavailable' : 'delegateeAssignFailed',
+        );
+        await onfailed(result.status, result.error?.code);
+        if (section.isCurrent(token)) await section.load();
         return;
       }
-      if (!(await onsaved()) && section.isCurrent(token)) error = t('createSheetReloadFailed');
+      const saved = await onsaved();
+      if (!section.isCurrent(token)) return;
+      if (!saved) error = t('delegateeReloadFailed');
+      else if (create) {
+        name = '';
+        await tick();
+        newInput?.focus();
+      }
     } finally {
       if (section.isCurrent(token)) busy = false;
     }
@@ -109,41 +125,74 @@
 
 <div>
   <dt>
-    {#if editable}<label for={id}>{t('delegateeTitle')}</label>{:else}{t('delegateeTitle')}{/if}
+    {#if editable}<label for={id}>{t('delegatee')}</label>{:else}{t('delegatee')}{/if}
   </dt>
   <dd>
     {#if editable}
-      <SectionBoundary {section} failedTitle={t('delegateeLoadFailed')} refreshFailedText={t('delegateeRefreshFailed')}>
+      {#if section.state === 'ready'}
         <select
           bind:this={select}
           {id}
           class="select"
           value={value?.id ?? ''}
-          disabled={busy}
+          aria-disabled={busy}
           aria-invalid={error !== ''}
           aria-describedby={error ? `${id}-error` : undefined}
-          onchange={(event) => save(event.currentTarget.value || null)}
+          onchange={(event) => {
+            if (busy) event.currentTarget.value = value?.id ?? '';
+            else void save(event.currentTarget.value || null);
+          }}
         >
           <option value="">{t('delegateeNone')}</option>
           {#if value && !rows.some((row) => row.id === value.id)}<option value={value.id}>{value.name}</option>{/if}
           {#each rows as row (row.id)}<option value={row.id}>{row.name}</option>{/each}
         </select>
-        <label class="visually-hidden" for={`${id}-new`}>{t('delegateeNew')}</label>
-        <input
-          id={`${id}-new`}
-          class="input"
-          bind:value={name}
-          readonly={busy}
-          aria-invalid={error !== ''}
-          aria-describedby={error ? `${id}-error` : undefined}
-          placeholder={t('delegateeNew')}
-        />
-        {#if name.trim()}<button class="btn is-sm" type="button" disabled={busy} onclick={() => save(null, true)}
-            >{t('delegateeAdd', { name: name.trim() })}</button
-          >{/if}
-      </SectionBoundary>
-    {:else}<span>{value?.name ?? t('delegateeNone')}</span>{/if}
-    <span id={`${id}-error`} role="alert" class="field-error">{error}</span>
+        <form
+          class="field"
+          onsubmit={(event) => {
+            event.preventDefault();
+            void save(null, true);
+          }}
+        >
+          <label class="visually-hidden" for={`${id}-new`}>{t('delegateeNew')}</label>
+          <input
+            bind:this={newInput}
+            id={`${id}-new`}
+            class="input"
+            bind:value={name}
+            readonly={busy}
+            oninput={() => {
+              error = '';
+            }}
+            aria-invalid={error !== ''}
+            aria-describedby={error ? `${id}-error` : undefined}
+            placeholder={t('delegateeNew')}
+          />
+          {#if name.trim()}<button class="btn is-sm" type="submit" aria-disabled={busy}
+              >{t('delegateeAdd', { name: name.trim() })}</button
+            >{/if}
+        </form>
+      {:else}
+        <span>{value?.name ?? t('delegateeNone')}</span>
+        <span class="props-note" role="status"
+          >{t(section.state === 'loading' ? 'delegateeLoading' : 'delegateeLoadFailed')}</span
+        >
+      {/if}
+      {#if section.state === 'failed' || section.refreshFailed}
+        <button
+          class="btn is-sm is-quiet"
+          type="button"
+          aria-disabled={section.retrying}
+          onclick={() => section.retry()}>{t('retry')}</button
+        >
+      {/if}
+    {:else}
+      <span>{value?.name ?? t('delegateeNone')}</span>
+      <span class="props-note">{t('delegateeReadonly')}</span>
+    {/if}
+    <span id={`${id}-error`} role="alert"
+      >{#if error}<span class="field-error"><Icon name="alert" />{error}</span>{/if}</span
+    >
     <span role="status" class="visually-hidden">{busy ? t('delegateeBusy') : ''}</span>
   </dd>
 </div>
