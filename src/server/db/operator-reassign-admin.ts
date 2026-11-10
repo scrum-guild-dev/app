@@ -167,11 +167,12 @@ function removableWhere(
   };
 }
 
-// 前の指名を取り消す4つの文。
+// 前の指名を取り消す5つの文。
 //   0. 消す行ごとの change_logs（user の delete）を、同じ条件の INSERT ... SELECT で作る
-//   1. 所属を持たない前の指名を DELETE する
-//   2. 所属を持つ前の指名ごとの change_logs（user の update、{"is_admin":[1,0]}。履歴の「管理者の解除」）を作る
-//   3. 所属を持つ前の指名の管理者の印を外す（UPDATE で is_admin = 0）
+//   1. その前の指名が受け取った通知を DELETE する
+//   2. 所属を持たない前の指名を DELETE する
+//   3. 所属を持つ前の指名ごとの change_logs（user の update、{"is_admin":[1,0]}。履歴の「管理者の解除」）を作る
+//   4. 所属を持つ前の指名の管理者の印を外す（UPDATE で is_admin = 0）
 // 同じ batch() の中なので、記録の文と書く文は同じ行に当たる。消す記録は行の前の値を残す。Google で待つ行（login_subject が空）は、
 // メールアドレス、秘密のハッシュ、期限を入れず、名前は仮の名前にし、login_subject の列を持たない
 function removeStatements(
@@ -179,7 +180,13 @@ function removeStatements(
   nomineeUserId: string,
   input: AdminReassignment,
   state: NomineeState,
-): [Statement<'organization'>, Statement<'organization'>, Statement<'organization'>, Statement<'organization'>] {
+): [
+  Statement<'organization'>,
+  Statement<'organization'>,
+  Statement<'organization'>,
+  Statement<'organization'>,
+  Statement<'organization'>,
+] {
   const where = removableWhere(db, nomineeUserId, state, 'without');
   const demotable = removableWhere(db, nomineeUserId, state, 'with');
   return [
@@ -207,6 +214,9 @@ function removeStatements(
             ])
             .where(where),
         ),
+    ),
+    db.statement((q) =>
+      q.deleteFrom('notifications').where('user_id', 'in', q.selectFrom('users').select('users.id').where(where)),
     ),
     db.statement((q) => q.deleteFrom('users').where(where)),
     db.statement((q) =>
@@ -313,9 +323,9 @@ async function afterFailedInsert(
 }
 
 // 前の指名（その組織の account_id が空の users の行。指名する人自身の行は除く）を取り消し、続けて指名する。1回の batch() で書く。
-// 前の指名を取り消す文は4つ（消す記録の INSERT ... SELECT、DELETE、所属を持つ行の解除の記録の INSERT ... SELECT、印を外す UPDATE）。
-// 文の順は、新しい行を入れるときと既に有効な管理者のときは、指名（INSERT。既に有効な管理者なら無し）、4つの文
-// （指名する人が有効な管理者であることが条件）。既にいる人を UPDATE するときは、4つの文（指名する人の行が読んだ値のままで
+// 前の指名を取り消す文は5つ（消す記録の INSERT ... SELECT、通知の DELETE、ユーザーの DELETE、所属を持つ行の解除の記録の INSERT ... SELECT、印を外す UPDATE）。
+// 文の順は、新しい行を入れるときと既に有効な管理者のときは、指名（INSERT。既に有効な管理者なら無し）、5つの文
+// （指名する人が有効な管理者であることが条件）。既にいる人を UPDATE するときは、5つの文（指名する人の行が読んだ値のままで
 // あることが条件。UPDATE と同じ述語）、指名の UPDATE、指名する人の記録の順。
 // 前の指名は読んだ ID でなく書く時点の条件（account_id が空、指名する人の行でない）で当てるので、読んでから書くまでに
 // 別の指名し直しが入れた行も消す。UPDATE が条件に外れたら、前の指名も記録も書かない。
@@ -357,9 +367,9 @@ export async function reassignOrganizationAdmin(
   const removal = removeStatements(db, userId, input, updating ? { kind: 'read', row: existing } : { kind: 'active' });
   const check = outcome === 'unchanged' ? [activeAdminStatement(db, userId)] : [];
   const statements = updating ? [...removal, ...designation] : [...designation, ...removal, ...check];
-  // 結果の位置。前の指名の DELETE（removeStatements の 1）と、既にいる人の UPDATE（removeStatements の4つの文の後ろ）。
+  // 結果の位置。前の指名の DELETE（removeStatements の 2）と、既にいる人の UPDATE（removeStatements の5つの文の後ろ）。
   // 管理者の印を外した行の数は返さない（removed は消した行の数のまま）
-  const deleteIndex = (updating ? 0 : designation.length) + 1;
+  const deleteIndex = (updating ? 0 : designation.length) + 2;
   const updateIndex = updating ? removal.length : -1;
 
   let results: readonly { changes: number; rows: readonly unknown[] }[];

@@ -808,6 +808,27 @@ function userClaimStatements(db: OrganizationEntry, c: ClaimContext, name: strin
         .where('login_subject', '=', login.subject)
         .where((eb) => userClaimIsOpen(eb, c)),
     ),
+    // 待っていた行を実際に消せるときだけ、その受信通知も同じ batch で先に消す。
+    db.statement((q) =>
+      q.deleteFrom('notifications').where(
+        'user_id',
+        'in',
+        q
+          .selectFrom('users')
+          .select('id')
+          .where('id', '=', pending.id)
+          .where('organization_id', '=', pending.organizationId)
+          .where('login_subject', 'is', null)
+          .where('disabled_at', 'is', null)
+          .where('claim_token_hash', '=', c.tokenHash)
+          .where('claim_expires_at', '>', nowIso)
+          .where((eb) =>
+            eb.exists(
+              sameLoginUsers(eb, c).select('su.id').where('su.is_admin', '=', 1).where('su.disabled_at', 'is', null),
+            ),
+          ),
+      ),
+    ),
     // 統合した後に、待っていた行を消す。統合先が無効でない管理者になっていることも条件にする
     db.statement((q) =>
       q
