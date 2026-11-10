@@ -326,6 +326,7 @@
   let taskReadAt = $state(0);
   $effect(() =>
     editor.attach({
+      inlineErrors: true,
       stale: () => onstale(),
       rejected: async (message) => {
         if (!alive) return;

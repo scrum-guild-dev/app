@@ -90,6 +90,7 @@ export class AttributeQueue<T> {
 }
 
 type Observer = {
+  inlineErrors?: boolean;
   rejected?: (message: string) => Promise<void> | void;
   saved?: (saved: AttributeSaved) => Promise<void> | void;
   stale: () => void;
@@ -202,6 +203,19 @@ export class TaskAttributes {
     }
     return result.status === 400 ? t('taskBadRequest') : t('taskSaveFailed');
   }
+  private async reject(message: string): Promise<void> {
+    const inline = () => [...this.observers].some((observer) => observer.inlineErrors);
+    const notified = message === t('taskGone', { task: t('task') }) || !inline();
+    if (notified) showToast(message, 'alert');
+    for (const observer of this.observers) {
+      try {
+        await observer.rejected?.(message);
+      } catch {
+        /* 保存の失敗を別の失敗で隠さない */
+      }
+    }
+    if (!notified && !inline()) showToast(message, 'alert');
+  }
   private async send<K extends 'points' | 'assignee'>(
     field: K,
     value: K extends 'points' ? TaskDetail['points'] : string,
@@ -224,19 +238,12 @@ export class TaskAttributes {
           : t('taskAssigneeDone', { task: t('task'), done: t('done'), assignee: t('assignee') }),
         field === 'assignee',
       );
-      showToast(message, 'alert');
       if (this.stopped) {
         this.stoppedAt = performance.now();
         this.points.pending = null;
         this.assignee.pending = null;
       }
-      for (const observer of this.observers) {
-        try {
-          await observer.rejected?.(message);
-        } catch {
-          /* 保存の失敗を別の失敗で隠さない */
-        }
-      }
+      await this.reject(message);
       return message;
     }
     const saved: AttributeSaved = {

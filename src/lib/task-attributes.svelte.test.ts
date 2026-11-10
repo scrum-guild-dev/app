@@ -253,3 +253,30 @@ test('削除されたタスクの後始末には、既に通知した理由を�
   expect(mocks.toast).toHaveBeenCalledTimes(1);
   detach();
 });
+
+test('引き出しに失敗を出せる間は同じ文のトーストを重ねない', async () => {
+  mocks.call.mockResolvedValue({ ok: false, status: 0, error: null });
+  const editor = taskAttributes('aoba', 'w', 'inline-errors');
+  const detach = editor.attach({ stale: vi.fn(), inlineErrors: true });
+  editor.observe(detail(), 0);
+  editor.points.choose(5);
+  await settle();
+  expect(editor.points.error).toBe('taskSaveFailed');
+  expect(mocks.toast).not.toHaveBeenCalled();
+  detach();
+});
+
+test('失敗の読み直し中に引き出しが閉じたらトーストで知らせる', async () => {
+  mocks.call.mockResolvedValue({ ok: false, status: 0, error: null });
+  const held = gate<void>();
+  const editor = taskAttributes('aoba', 'w', 'inline-detached');
+  const detach = editor.attach({ stale: vi.fn(), inlineErrors: true, rejected: () => held.promise });
+  editor.observe(detail(), 0);
+  editor.points.choose(5);
+  await settle();
+  detach();
+  held.resolve();
+  await settle();
+  expect(mocks.toast).toHaveBeenCalledWith('taskSaveFailed', 'alert');
+  expect(mocks.toast).toHaveBeenCalledTimes(1);
+});
