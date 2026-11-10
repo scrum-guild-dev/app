@@ -82,6 +82,7 @@ export const commonTableColumns = {
     attachment_quota_bytes: integerDefault,
     attachment_quota_warned_at: textOrNull,
     attachment_quota_warning_pending_at: textOrNull,
+    attachment_quota_check_pending_at: textOrNull,
     stores_source_payload: integerDefault,
     created_by_operator: text,
     // migrations/0014_add_organization_trial.sql で足す。運用者が作る組織は両方 NULL

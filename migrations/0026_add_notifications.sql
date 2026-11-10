@@ -1,13 +1,15 @@
 -- 通知の保存と、共通 DB で確保した容量警告の再試行。
 ALTER TABLE organizations ADD COLUMN attachment_quota_warning_pending_at TEXT
   CHECK (attachment_quota_warning_pending_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', attachment_quota_warning_pending_at) IS attachment_quota_warning_pending_at);
+ALTER TABLE organizations ADD COLUMN attachment_quota_check_pending_at TEXT
+  CHECK (attachment_quota_check_pending_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', attachment_quota_check_pending_at) IS attachment_quota_check_pending_at);
 
 -- 初期導入では論理参照にする。旧版の組織削除を、新しい子の外部キーで止めないため。
 CREATE TABLE notifications (
   id TEXT NOT NULL PRIMARY KEY,
   user_id TEXT NOT NULL,
   workspace_id TEXT,
-  kind TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('source_done', 'source_reopened', 'source_missing', 'connection_failed', 'credential_expiring', 'comment', 'assigned', 'party_assigned', 'reward_changed', 'thanked', 'attachment_quota_warning')),
   task_id TEXT,
   epic_id TEXT,
   connection_id TEXT,

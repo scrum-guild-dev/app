@@ -1435,22 +1435,22 @@ Wiki のページ。組織の Wiki とワークスペースの Wiki で共有す
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
 | id | TEXT | PK | |
-| user_id | TEXT | NOT NULL、FK users | 受け取る人 |
-| workspace_id | TEXT | FK workspaces | |
-| kind | TEXT | NOT NULL | `source_done`、`source_reopened`、`source_missing`、`connection_failed`、`credential_expiring`、`comment`、`assigned`、`party_assigned`、`reward_changed`、`thanked`、`attachment_quota_warning` |
-| task_id | TEXT | FK tasks | |
-| epic_id | TEXT | FK epics | |
-| connection_id | TEXT | FK connections | |
-| actor_user_id | TEXT | FK users | 知らせのもとになった操作をした人 |
+| user_id | TEXT | NOT NULL、論理参照 users | 受け取る人 |
+| workspace_id | TEXT | 論理参照 workspaces | |
+| kind | TEXT | NOT NULL、列挙の CHECK | `source_done`、`source_reopened`、`source_missing`、`connection_failed`、`credential_expiring`、`comment`、`assigned`、`party_assigned`、`reward_changed`、`thanked`、`attachment_quota_warning` |
+| task_id | TEXT | 論理参照 tasks | |
+| epic_id | TEXT | 論理参照 epics | |
+| connection_id | TEXT | 論理参照 connections | |
+| actor_user_id | TEXT | 論理参照 users | 知らせのもとになった操作をした人 |
 | payload_json | TEXT | NOT NULL、既定 `'{}'` | 文面に差し込む値 |
 | read_at | TEXT | | |
 | created_at | TEXT | NOT NULL | |
 
-- 索引: `(user_id, created_at)`、`(user_id) WHERE read_at IS NULL`。`(user_id, created_at)` は `user_id` の外部キーの検査にも使う。
+- 索引: `(user_id, created_at)`、`(user_id) WHERE read_at IS NULL`。`(user_id, created_at)` は本人による参照にも使う。
 - 索引: `(actor_user_id) WHERE actor_user_id IS NOT NULL`。行為者による参照。
 - 索引: `(read_at) WHERE read_at IS NOT NULL`。既読90日超の掃除。
 - 既読にしてから90日たった通知は定期処理で消す。未読は消さない。
-- #740 の初期導入では、上表の FK は論理参照であり、物理的な外部キー制約は付けない。旧版の解約時の物理削除を追加した子行が妨げず、コードだけ戻せるようにするため。通知の作成・読み取り・既読化は、受取人の組織と本人で絞る。解約の削除 SQL は、ユーザーを消す前に通知も消す。
+- #740 の初期導入では、上表の参照列は論理参照であり、物理的な外部キー制約は付けない。旧版の解約時の物理削除を追加した子行が妨げず、コードだけ戻せるようにするため。通知の作成・読み取り・既読化は、受取人の組織と本人で絞る。解約の削除 SQL と、指名し直し・Google の待つ行の統合は、ユーザーを消す前に同じ batch で通知も消す。物理 FK の導入は、旧版の削除経路を使わない版が出た後の別の変更として判断する。
 - 容量警告は `kind = attachment_quota_warning`、`payload_json = {"used_bytes": 合計, "quota_bytes": 上限}`。`workspace_id` と対象・行為者の列は空。共通 DB で `attachment_quota_warned_at` と `attachment_quota_warning_pending_at` を条件付き更新で確保し、組織 DB の有効な管理者へ冪等に書き、配信待ちを空に戻す。固定された開発用時計でも再超過の周期を区別するため、周期の日時は現在時刻と前回の警告日時＋1ミリ秒の大きい方にする。通知 ID は周期の時刻を持つ UUIDv7 で、組織・受取人・周期から決定的に作り、並行処理と再試行で同じ通知を増やさない。既送で配信待ちのない周期は書き直さないため、90日後の掃除の後にも再作成しない。80%ちょうどでは通知も周期のリセットも行わない。
 - 添付の追加・削除と Wiki の作成・保存・アップロード後に容量を確かめる。通知処理の失敗で元の保存を失敗にはせず、毎分の定期処理で配信待ちの再試行と80%未満への復帰を確かめる。停止した組織を配信対象にしない。配信の各 batch 直前にも共通 DB の停止状態・上限・周期を照合し、変わっていたら中止する。ただし共通 DB の照合と組織 DB の挿入は別トランザクションで、その間の競合まで原子的には防がない。
 - `notification-list`（組織のメンバー）は本人宛てを `(created_at DESC, id DESC)` のカーソルで50件読み、`unread_only` と未読総数を持つ。`notification-read` は本人宛てだけの既読日時を空のときだけ書き、すでに既読なら元の日時を返す。他人・別組織・存在しない ID は同じ404。
