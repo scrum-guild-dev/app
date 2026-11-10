@@ -29,7 +29,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     },
     hasDevWarningCode,
   });
-  // サーバーが応答しなくなる時間を、テストの間ずっと測り、終わりにログへ出す（scripts/e2e-stall-probe.ts）
+  // サーバーが応答しなくなる時間をテストの間ずっと測り、見つけた時点で 1 行ずつ、終わりに集計を出す（scripts/e2e-stall-probe.ts）
   const probe = startStallProbe(new URL(e2eHealthURL(process.env)).origin, nodeProbeDeps, {
     onStall: stallLogger((line) => console.log(line)),
   });
