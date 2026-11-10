@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { myOrganizations } from '../src/shared/operations/organization/index.ts';
 import { tokenCreate } from '../src/shared/operations/session/index.ts';
 import { expect, test } from './fixtures.ts';
-import { mockOperation } from './operations.ts';
+import { failOperation, mockOperation } from './operations.ts';
 import {
   expectFocusReturned,
   expectModalFocus,
@@ -917,6 +917,20 @@ test('角のマスにマーク、組織の名前、開閉のボタンが1行で�
   expect(listBox.y).toBeGreaterThanOrEqual(headBox.y + headBox.height);
   expect(listBox.x + listBox.width).toBeLessThanOrEqual(240);
   await expect(list.getByRole('link', { name: 'あおば開発' })).toHaveAttribute('aria-current', 'page');
+});
+
+test('組織の一覧が読めず切り替えが無いときも、開閉のボタンは角のマスの右端に留まる', async ({ page }) => {
+  await failOperation(page, myOrganizations, 503, 'unavailable');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(today);
+  const head = page.locator('.binding-head');
+  await expect(head.getByRole('link', { name: 'Scrum Guild', exact: true })).toBeVisible();
+  await expect(head.locator('.org-menu')).toHaveCount(0);
+  const toggle = head.getByRole('button', { name: 'メニューを畳む' });
+  const headBox = (await head.boundingBox())!;
+  const padding = await head.evaluate((element) => parseFloat(getComputedStyle(element).paddingRight));
+  const toggleBox = (await toggle.boundingBox())!;
+  expect(Math.abs(toggleBox.x + toggleBox.width - (headBox.x + headBox.width - padding))).toBeLessThanOrEqual(1);
 });
 
 test('長い組織の名前でも、角のマスは1行で省略し、十字の罫がずれない', async ({ page }) => {

@@ -78,6 +78,8 @@ h1, h2, h3 { text-wrap: balance; }
   background: var(--color-sunken); border-bottom: var(--rule-double);
 }
 .binding-head .brand { flex: none; padding-inline: 0; }
+/* 組織の一覧が読めず切り替えが無いときも、開閉のボタンを右端に留める（切り替えが届いたときに位置が跳ばない） */
+.binding-head .nav-toggle { margin-left: auto; }
 #org-menu-slot { display: contents; }
 /* 角のマスの組織の切り替え。名前は1行で、収まらなければ省略記号で切る（全文はボタンの読み上げの名前と一覧で読める）。
    角のマスの高さを上の帯と揃えるため、「組織」のラベルと「届いた招待あり」のチップは見せず、招待は点の印で示す。
