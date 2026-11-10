@@ -201,13 +201,18 @@ test('読み込んだ後にクリアされたエピックを、配下を残し�
 }) => {
   // 開いたときは未クリア。断られた後は、別の人がクリアした後の値（completed_at あり）を返す
   let clearedByOther = false;
+  const refreshed = Promise.withResolvers<void>();
   await routeOperation(page, epicDelete, AOBA, async (call) => {
     clearedByOther = true;
     await call.fail(409, 'epic_finished');
   });
-  await rewriteOperation(page, epicGet, AOBA, (output) =>
-    clearedByOther ? { ...output, completed_at: CLEARED_AT } : output,
-  );
+  await routeOperation(page, epicGet, AOBA, async (call) => {
+    // 初回の要求が途中で届いても、削除拒否後に始まった再取得だけを待つ。
+    const afterDelete = clearedByOther;
+    const output = await call.fetch();
+    await call.fulfill(afterDelete ? { ...output, completed_at: CLEARED_AT } : output);
+    if (afterDelete) refreshed.resolve();
+  });
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   await page.getByRole('link', { name: 'エピックを直す' }).click();
   const drawer = page.getByRole('dialog', { name: EPIC_TITLE, exact: true });
@@ -215,6 +220,7 @@ test('読み込んだ後にクリアされたエピックを、配下を残し�
   await chooseRowAction(drawer, EPIC_TITLE, 'このエピックを削除する');
   const confirm = page.getByRole('dialog', { name: 'エピックを削除する' });
   await expect(confirm.getByRole('radio', { name: /配下を親なしで残す/ })).toBeChecked();
+  await expect(confirm.getByRole('button', { name: '削除する' })).toHaveAttribute('aria-disabled', 'false');
   await confirm.getByRole('button', { name: '削除する' }).click();
   await expect(
     confirm.locator('.field-hint', {
@@ -228,4 +234,6 @@ test('読み込んだ後にクリアされたエピックを、配下を残し�
   await expect(keepAfter).toBeDisabled();
   await expect(keepAfter).not.toBeChecked();
   await expect(confirm.getByRole('button', { name: '削除する' })).toHaveAttribute('aria-disabled', 'true');
+  // 拒否された直後に表示は切り替わるが、再取得はまだ続く。応答を返してからテストを終える。
+  await refreshed.promise;
 });
