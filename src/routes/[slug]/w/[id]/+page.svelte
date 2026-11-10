@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    attributeAffectsFilter,
+    completedAfterAttributeRead,
+    FilteredAttributeReload,
+  } from '../../../../lib/attribute-filter-reload.ts';
   import { onTaskAttributeSaved, type Attribute, type AttributeSaved } from '../../../../lib/task-attributes.svelte.ts';
   import { tick, untrack } from 'svelte';
   import { useShortcut } from '../../../../lib/shortcuts.svelte.ts';
@@ -35,7 +40,6 @@
   } from '../../../../lib/backlog-filter.ts';
   import {
     carriesOver,
-    completionSettled,
     keepAddedRow,
     orphanedFromTree,
     parentStoryIds,
@@ -206,6 +210,12 @@
       };
       if (saved.field === 'points')
         savedPoints = { ...savedPoints, [saved.taskId]: { value: saved.task.points, at: saved.at } };
+      if (attributeAffectsFilter(saved.field, filter)) {
+        const savedFilter = filter;
+        void attributeReload
+          .request(() => page.params.id === workspaceId && sameFilter(filter, savedFilter))
+          .catch(() => showToast(t('taskListReloadFailed'), 'alert'));
+      }
     });
   });
   function savedRow(task: BacklogTask): BacklogTask {
@@ -240,6 +250,16 @@
     },
     dropped: () => showToast(t('moveReloaded'), 'alert'),
   });
+  const attributeReload = new FilteredAttributeReload({
+    whenIdle: () => moves.whenIdle(),
+    reload: async () => {
+      const saved = focusedControl();
+      const lost = document.activeElement === null || document.activeElement === document.body;
+      await invalidate('app:backlog-tree');
+      await tick();
+      await restoreFocus(saved, lost);
+    },
+  });
   $effect.pre(() => {
     // 足した行は、読み直した木に入るまで残す。作る前に読んだ木が遅れて届いても、作った行を消さないため。
     // 作った後に始まった読み直しの木に無い行（別の人の削除、親ごとの消失）は、木に入る日が来ないので捨てる
@@ -258,7 +278,7 @@
     const done = untrack(() => completedIds);
     const loadedAtForDone = untrack(() => data.loadedAt);
     // 完了の応答より前に始まった読み直しの木は、完了を含むとは限らない。その行は木に無くても捨てず、印も残す
-    const unsettled = done.filter((id) => !completionSettled(completedAt[id] ?? Infinity, loadedAtForDone));
+    const unsettled = completedAfterAttributeRead(done, completedAt, loadedAtForDone, attributeReload.preservesState);
     // 木に無い行を残すかは、足した時刻と読み直しを始めた時刻で決める（src/lib/added-rows.ts）
     const loadedAt = untrack(() => data.loadedAt);
     savedAttributes = carry
@@ -326,12 +346,15 @@
     const keptDone = carry ? unsettled.filter((id) => !orphanIds.includes(id)) : [];
     completedIds = keptDone;
     completedAt = Object.fromEntries(keptDone.map((id) => [id, completedAt[id]]));
-    movedParents = {};
-    taskOrders = {};
-    movedStoryParents = {};
-    storyOrders = {};
-    epicOrder = null;
-    moves.reloaded();
+    const preserveMoves = carry && attributeReload.preservesState;
+    if (!preserveMoves) {
+      movedParents = {};
+      taskOrders = {};
+      movedStoryParents = {};
+      storyOrders = {};
+      epicOrder = null;
+    }
+    moves.reloaded(preserveMoves);
   });
 
   // order の順に並べる。order に無い行（後から足した行）は、元の順のまま後ろに置く

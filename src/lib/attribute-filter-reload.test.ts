@@ -1,0 +1,74 @@
+import { expect, test, vi } from 'vitest';
+import {
+  attributeAffectsFilter,
+  completedAfterAttributeRead,
+  FilteredAttributeReload,
+} from './attribute-filter-reload.ts';
+
+const filter = { assignee: '', category: '', repository: '', epic: '', q: '' };
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+test('絞り込みに使っている欄だけを読み直す', () => {
+  expect(attributeAffectsFilter('assignee', { ...filter, assignee: 'me' })).toBe(true);
+  expect(attributeAffectsFilter('category', { ...filter, category: 'none' })).toBe(true);
+  expect(attributeAffectsFilter('repository', { ...filter, repository: 'r' })).toBe(true);
+  expect(attributeAffectsFilter('points', { ...filter, assignee: 'me' })).toBe(false);
+  expect(attributeAffectsFilter('assignee', { ...filter, q: 'タイトル' })).toBe(false);
+});
+
+test('読み直しの間も完了の印を保ち、通常の読み直しでは外す', () => {
+  expect(completedAfterAttributeRead(['done'], { done: 10 }, 20, true)).toEqual(['done']);
+  expect(completedAfterAttributeRead(['done'], { done: 10 }, 20, false)).toEqual([]);
+});
+
+test('後から足された移動も待ち、読み直す間だけ状態を保つ', async () => {
+  const first = deferred();
+  const next = deferred();
+  const read = deferred();
+  let tail = first.promise;
+  let coordinator!: FilteredAttributeReload;
+  const reload = vi.fn(async () => {
+    expect(coordinator.preservesState).toBe(true);
+    await read.promise;
+  });
+  coordinator = new FilteredAttributeReload({ whenIdle: () => tail, reload });
+  const pending = coordinator.request();
+  tail = next.promise;
+  first.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(reload).not.toHaveBeenCalled();
+  next.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(reload).toHaveBeenCalledTimes(1);
+  read.resolve();
+  await pending;
+  expect(coordinator.preservesState).toBe(false);
+});
+
+test('移動待ちの間に画面や条件が変わったら古い保存では読み直さない', async () => {
+  const move = deferred();
+  const reload = vi.fn();
+  let current = true;
+  const coordinator = new FilteredAttributeReload({ whenIdle: () => move.promise, reload });
+  const pending = coordinator.request(() => current);
+  current = false;
+  move.resolve();
+  await pending;
+  expect(reload).not.toHaveBeenCalled();
+});
+
+test('読み直しの失敗でも保護状態を戻し、次の要求を実行する', async () => {
+  const idle = Promise.resolve();
+  const reload = vi.fn().mockRejectedValueOnce(new Error('read failed')).mockResolvedValueOnce(undefined);
+  const coordinator = new FilteredAttributeReload({ whenIdle: () => idle, reload });
+  await expect(coordinator.request()).rejects.toThrow('read failed');
+  expect(coordinator.preservesState).toBe(false);
+  await coordinator.request();
+  expect(reload).toHaveBeenCalledTimes(2);
+});

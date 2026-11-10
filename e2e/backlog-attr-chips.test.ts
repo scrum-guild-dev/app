@@ -626,3 +626,22 @@ test('ポイントの送信中に親を移しても、失敗を知らせて最�
   await page.reload();
   await expect(row.getByRole('button', { name: 'ポイント: 8 pt' })).toBeVisible();
 });
+
+test('絞り込みから外れる担当変更は行を外し、残る完了の印を保つ', async ({ page }) => {
+  await createWorkspace(page, '絞り込みを更新する');
+  await addTaskRow(page, '印を残す件');
+  await addTaskRow(page, '担当を替える件');
+  await waitForSettled(page);
+  await page.goto(`${new URL(page.url()).pathname}?assignee=none`);
+  const completed = page.locator('.entry', { hasText: '印を残す件' });
+  const edited = page.locator('.entry', { hasText: '担当を替える件' });
+  await completed.getByRole('button', { name: '完了にする: 印を残す件', exact: true }).click();
+  await expect(completed.locator('.hanko')).toBeVisible();
+  await edited.getByRole('button', { name: '担当: 未設定' }).click();
+  const people = page.getByRole('menu', { name: '担当を選ぶ' });
+  const reloaded = waitForResponses(page, '/backlog-tree');
+  await people.getByRole('menuitemradio', { name: 'ミナト', exact: true }).click();
+  await reloaded;
+  await expect(edited).toHaveCount(0);
+  await expect(completed.locator('.hanko')).toBeVisible();
+});

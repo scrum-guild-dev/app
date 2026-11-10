@@ -25,8 +25,9 @@ export class MoveQueue<R extends { ok: boolean }> {
   }
 
   // 木が読み直された（画面の読み直しでも、失敗した後の読み直しでも呼ぶ）
-  reloaded(): void {
-    this.#generation++;
+  reloaded(keepPending = false): void {
+    // 属性による読み直しは画面の移動を保つので、未送信の操作も同じ世代で続ける。
+    if (!keepPending) this.#generation++;
     if (this.#pending > 0) this.#reloadedWhileMoving = true;
   }
 
