@@ -67,7 +67,8 @@ test('バックログの先頭2行が390×844pxに入り、補助情報を各1�
     await expect(bar.getByRole('searchbox')).toBeVisible();
     await expect(header.getByText('未完了のタスク', { exact: true })).toBeVisible();
     await expect(header.locator('.team-xp')).toBeHidden();
-    await expect(page.locator('.breadcrumb')).toContainText('受託開発チーム');
+    await expect(page.locator('.breadcrumb')).toHaveCount(0);
+    await expect(header.locator('.mobile-page-tools')).toHaveCount(1);
     for (const label of ['詳細 未記入', '未見積もり', 'スプリントに入っていない']) {
       await expect(header.getByText(label, { exact: true })).toBeHidden();
     }
@@ -501,8 +502,9 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   // ページ全体で開いたタスク
   await page.goto(`${WORKSPACE}/tasks/${TASK_ID}`);
   const whole = page.locator('.drawer.is-page');
-  // ページ全体は画面に h1 が無いので、題を h1 にする（引き出しの h2 のまま読み上げが h2 から始まらない）
+  // ページ全体の題は唯一の h1。スマホのワークスペース名は補助見出し（h2）で出す。
   await expect(whole.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.locator('.mobile-page-head').getByRole('heading', { level: 2 })).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expectDrawerToolsApart(page, whole, 3);
 });

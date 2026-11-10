@@ -6,7 +6,8 @@
 </script>
 
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { getContext, onMount, type Snippet } from 'svelte';
+  import { MOBILE_PAGE_HEAD, type MobilePageHead } from '../mobile-page-head.ts';
   import Icon from './Icon.svelte';
   import NarrowDisclosure from './NarrowDisclosure.svelte';
 
@@ -31,15 +32,23 @@
     narrowSummary?: string;
   } = $props();
 
+  const mobileHead = getContext<MobilePageHead | undefined>(MOBILE_PAGE_HEAD);
+  // 同じ画面の失敗表示にも PageHead がある場合は、最初の見出しだけが入口を持つ。
+  const headId = Symbol('page-head');
+  onMount(() => mobileHead?.register(headId));
+
   const compactSummary = $derived(tallies.length > 1 || meta ? narrowSummary : undefined);
 </script>
 
 <header class="page-head" class:is-compact={!!compactSummary}>
   {#if eyebrow}<span class="page-eyebrow">{eyebrow}</span>{/if}
   <div class="page-head-row">
-    <!-- tabindex="-1" は、プログラムからフォーカスを置くため（キーボードの Tab 順には入らない）。値は -1 か未指定だけ -->
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-    <h1 class="page-title" tabindex={focusable ? -1 : undefined}>{title}</h1>
+    <div class="page-title-row">
+      <!-- tabindex="-1" は、プログラムからフォーカスを置くため（キーボードの Tab 順には入らない）。値は -1 か未指定だけ -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <h1 class="page-title" tabindex={focusable ? -1 : undefined}>{title}</h1>
+      {#if mobileHead?.narrow && mobileHead.owns(headId)}{@render mobileHead.tools()}{/if}
+    </div>
     {#if actions}<div class="page-actions">{@render actions()}</div>{/if}
   </div>
   {#snippet counts(items: Tally[])}

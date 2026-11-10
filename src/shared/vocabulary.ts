@@ -394,6 +394,7 @@ export const dictionary = defineDictionary({
   menuCollapse: 'メニューを畳む',
   menuExpand: 'メニューを広げる',
   breadcrumb: 'パンくず',
+  mobilePageToolsLabel: '検索とアカウント',
   navSearchLabel: '画面とタスクを探す',
   navSearchPlaceholder: '画面やタスクを探す',
   navSearchBacklog: '{backlog}で「{query}」を探す',
