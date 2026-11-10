@@ -61,7 +61,7 @@
   const DICT = {
   delegateeEmptyText: 'タスクの引き出しで新しい名前を入力すると、名簿に追加できます。',
   delegateeAssignFailed: '依頼先を変更できませんでした。タスクの状態や名簿を確認し、もう一度選んでください。',
-  delegateeAssignUnavailable: 'タスクが変更・削除されたか、ワークスペースが終了しています。状態を読み直しました。',
+  delegateeAssignUnavailable: '依頼先またはタスクの状態が変わった可能性があります。名簿とタスクを確認して、もう一度試してください。',
   delegateeDeleteFailed: '依頼先を削除できませんでした。一覧を確認して、もう一度試してください。',
   delegateeReloadFailed: '依頼先は保存済みですが、タスクを読み直せませんでした。引き出しを開き直してください。',
   delegateeLoading: '名簿を読み込んでいます',
@@ -1439,7 +1439,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       <div class="comment-head"><b>${esc(user(c.who).name)}</b><span class="mono">${c.at}</span>${c.edited ? "<span>編集済み</span>" : ""}${actions ? `<span class="comment-actions">${actions}</span>` : ""}</div>
       ${body}${files}</div></div>`;
   }
-  // 2つのタブの中身は描いたまま隠す（本番は書きかけのコメントを、タブを切り替えても保つ）。左右の矢印キーでタブを移る
   // ?personal で自分用の依頼先を確認する。既存の選択欄と入力欄だけを使う。
   D.delegatees = D.delegatees || [{ id: "sample-delegatee", name: "架空の依頼先" }];
   function drawerDelegateeHtml(x) {
@@ -1468,6 +1467,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const x = drawerItem(); x.delegatee = row.id; if (!x.who) x.who = D.me;
     renderDrawer(); document.getElementById("drawer-delegatee-new")?.focus();
   });
+  // 2つのタブの中身は描いたまま隠す（本番は書きかけのコメントを、タブを切り替えても保つ）。左右の矢印キーでタブを移る
   function drawerHtml() {
     if (isStoryDrawer()) return storyDrawerHtml();
     const x = task(drawer.id);
