@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { callOperation, type ApiResult } from '../api.ts';
@@ -81,6 +81,13 @@
   let formCallout = $state<HTMLElement>();
   let dialogEpoch = 0;
   let inputEpoch = 0;
+
+  // 一覧の再取得がログインや権限の変更で画面を移すこともある。
+  // 破棄後に届く応答や invalidateAll の続きから、古い props を読まない。
+  onDestroy(() => {
+    dialogEpoch++;
+    inputEpoch++;
+  });
 
   const words = $derived({ organization: t('organization'), admin: t('admin') });
   const organizationUrl = $derived(created === null ? '' : `${page.url.origin}/${created.slug}/`);
