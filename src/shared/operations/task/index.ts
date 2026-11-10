@@ -1,3 +1,4 @@
+import { taskDelegate } from './task-delegate.ts';
 // バックログの木と、タスクの作成、読み取り、変更、担当の変更、今日やるの印、完了、完了を戻す、削除、移動、変更の履歴、コメントの操作の定義
 import type { AnyOperationDefinition } from '../define.ts';
 import { backlogCompletedTasks } from './backlog-completed-tasks.ts';
@@ -31,6 +32,7 @@ export {
   inboxList,
   inboxToBacklog,
   taskAssign,
+  taskDelegate,
   taskComplete,
   taskCreate,
   taskDelete,
@@ -95,6 +97,7 @@ export const taskOperations: readonly AnyOperationDefinition[] = [
   taskUpdate,
   taskFieldSet,
   taskAssign,
+  taskDelegate,
   taskTodayMark,
   taskDelete,
   taskRestore,

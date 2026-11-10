@@ -40,6 +40,7 @@ const TABLES: readonly (readonly [table: string, scope: Scope])[] = [
   ['connection_scopes', 'connection'],
   ['connections', 'workspace'],
   ['tasks', 'workspace'],
+  ['delegatees', 'organization'],
   ['stories', 'workspace'],
   ['epic_party_members', 'epic'],
   ['epics', 'workspace'],

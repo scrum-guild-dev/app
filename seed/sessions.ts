@@ -49,6 +49,11 @@ export const SEED_SESSIONS = {
     accountId: '019a0000-0000-7000-8000-000000000112',
     description: 'どの組織にも属さず、自分の組織を作る会員（ナギ）',
   },
+  personalAdmin: {
+    token: 'dev-seed-personal-admin00000000000000000000',
+    accountId: '019a0000-0000-7000-8000-000000000115',
+    description: '自分用の組織（personal）の本人（ユズキ）。依頼先の API と後続の画面の確認に使う',
+  },
   trialAdmin: {
     token: 'dev-seed-trial-admin-0000000000000000000000',
     accountId: '019a0000-0000-7000-8000-000000000113',

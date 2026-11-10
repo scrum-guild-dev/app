@@ -385,6 +385,7 @@ export const dictionary = defineDictionary({
   assistant: 'アシスタント',
 
   // ---- 本番の画面の文言 ----
+  delegatee: '依頼先',
   // 枠の共通の文言
   appName: 'Scrum Guild',
   pageTitle: '{page} - {app}',
@@ -394,6 +395,7 @@ export const dictionary = defineDictionary({
   menuCollapse: 'メニューを畳む',
   menuExpand: 'メニューを広げる',
   breadcrumb: 'パンくず',
+  mobilePageToolsLabel: '検索とアカウント',
   navSearchLabel: '画面とタスクを探す',
   navSearchPlaceholder: '画面やタスクを探す',
   navSearchBacklog: '{backlog}で「{query}」を探す',
@@ -743,7 +745,7 @@ export const dictionary = defineDictionary({
   moveParentHint: '移す先の末尾に置きます。',
   moveParentSubmit: '移す',
   // ストーリーの親（エピック）を移すときの、完了か中止した{epic}が移す元か移す先のとき（向きは問わない）の知らせ
-  moveEpicDone: '{done}か中止した{epic}との間では、{story}を移せません。一覧を読み直します',
+  moveEpicDone: '{done}か中止した{epic}の配下からも配下へも、{story}を移せません。一覧を読み直します',
 
   // エピックの行（木の最上段）。{title} はエピックの題
   epicCreate: '{epic}を作る',
@@ -1772,6 +1774,12 @@ export const dictionary = defineDictionary({
   // ワークスペースの行が無く、名前の分からない終了と再開
   orgHistoryWorkspaceClosedNoName: '{workspace}を終了しました',
   orgHistoryWorkspaceReopenedNoName: '{workspace}を再開しました',
+  // 依頼先の名簿。名前は記録に残っている場合だけ添える
+  orgHistoryDelegateeCreated: '依頼先「{name}」を追加しました',
+  orgHistoryDelegateeCreatedNoName: '依頼先を追加しました',
+  orgHistoryDelegateeRenamed: '依頼先の名前を「{name}」に変更しました',
+  orgHistoryDelegateeRenamedNoName: '依頼先の名前を変更しました',
+  orgHistoryDelegateeDeleted: '依頼先を削除しました',
   // 知らない組（entity_type と action）
   orgHistoryOther: '{organization}を変更しました',
   orgHistoryEmptyTitle: 'まだ変更の履歴がありません',

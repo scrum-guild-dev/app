@@ -110,6 +110,7 @@
   // 呼んだ人が削除できるか、まとめて削除できるか、配下の件数（epic-get が返す）
   let canDelete = $state(false);
   let canDeleteChildren = $state(false);
+  let cleared = $state(false);
   let childCounts = $state({ stories: 0, tasks: 0 });
   let heading = $state<HTMLElement>();
   let retryButton = $state<HTMLButtonElement>();
@@ -270,6 +271,7 @@
       epic = result.data.epic;
       canDelete = result.data.can_delete;
       canDeleteChildren = result.data.can_delete_children;
+      cleared = result.data.completed_at != null;
       childCounts = result.data.children;
       loadState = 'ready';
       // 区分を直せるときだけ、選択肢を読む
@@ -315,6 +317,7 @@
       epic = result.data.epic;
       canDelete = result.data.can_delete;
       canDeleteChildren = result.data.can_delete_children;
+      cleared = result.data.completed_at != null;
       childCounts = result.data.children;
     }
     return result.data.epic;
@@ -694,7 +697,10 @@
   // 配下の扱いを選ぶ確認（TreeDeleteDialog）。件数とまとめて削除できるかは、確認が開いたときに epic-get で読み直す
   function askDelete(trigger: HTMLElement): void {
     if (epic === null || !canDelete) return;
-    deleteDialog?.show({ kind: 'epic', id: epic.id, title: epic.title, ...childCounts, canDeleteChildren }, trigger);
+    deleteDialog?.show(
+      { kind: 'epic', id: epic.id, title: epic.title, ...childCounts, canDeleteChildren, cleared },
+      trigger,
+    );
   }
 
   function deleteFinished(outcome: 'deleted' | 'gone' | 'closed'): void {
