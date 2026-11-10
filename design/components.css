@@ -2565,11 +2565,14 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
       display: flex; align-items: center; gap: var(--space-2); overflow-x: auto;
       min-height: 44px; padding: 2px; scrollbar-width: thin;
       background:
-        linear-gradient(to right, var(--color-surface) 30%, transparent) left center / 24px 100% local no-repeat,
-        linear-gradient(to left, var(--color-surface) 30%, transparent) right center / 24px 100% local no-repeat,
-        linear-gradient(to right, var(--color-rule), transparent) left center / 12px 100% scroll no-repeat,
-        linear-gradient(to left, var(--color-rule), transparent) right center / 12px 100% scroll no-repeat;
+        linear-gradient(to right, var(--entry-chip-cover, var(--color-surface)) 30%, transparent) left center / 24px 100% local no-repeat,
+        linear-gradient(to left, var(--entry-chip-cover, var(--color-surface)) 30%, transparent) right center / 24px 100% local no-repeat,
+        linear-gradient(to right, var(--color-control-edge), transparent) left center / 12px 100% scroll no-repeat,
+        linear-gradient(to left, var(--color-control-edge), transparent) right center / 12px 100% scroll no-repeat;
     }
+    .tree .entry:hover .entry-chips { --entry-chip-cover: color-mix(in srgb, var(--color-accent-soft) 45%, var(--color-surface)); }
+    /* 強調の背景は時間で変わるため、強調中だけ覆いを外す。mask は固定位置のメニューまで切るので使わない。 */
+    .tree .entry.is-dropped .entry-chips { background: none; }
     .tree .entry-chips > * { flex: none; }
     .tree .entry-chips .chip-btn { min-width: 44px; min-height: 44px; }
     .tree .entry-chips .chip-btn::after { content: none; }
