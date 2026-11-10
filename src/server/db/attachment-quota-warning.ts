@@ -9,12 +9,29 @@ const NOTIFICATION_BATCH_SIZE = 50;
 const MAX_NOTIFICATION_BATCHES = 5;
 
 // 保存後は安価な共通行の更新だけ待つ。日時がNULLを跨いで再利用されても、世代は減らさず古い確認と区別する。
-export async function markAttachmentQuotaCheck(env: Env, organizationId: string, at: Date): Promise<boolean> {
+export async function markAttachmentQuotaCheck(
+  env: Env,
+  organizationId: string,
+  at: Date,
+  options: { onlyIfClean?: boolean } = {},
+): Promise<boolean> {
   const common = commonDb(env);
+  if (options.onlyIfClean === true) {
+    const current = await common.first(
+      common.statement((q) =>
+        q
+          .selectFrom('organizations')
+          .select('attachment_quota_check_pending_at')
+          .where('id', '=', organizationId)
+          .where('suspended_at', 'is', null),
+      ),
+    );
+    if (current === undefined || current.attachment_quota_check_pending_at !== null) return false;
+  }
   const value = at.toISOString();
   const [updated] = await common.batch([
-    common.statement((q) =>
-      q
+    common.statement((q) => {
+      const update = q
         .updateTable('organizations')
         .set({
           attachment_quota_check_pending_at: sql<string>`case when attachment_quota_check_pending_at >= ${value}
@@ -22,8 +39,9 @@ export async function markAttachmentQuotaCheck(env: Env, organizationId: string,
           attachment_quota_check_generation: sql<number>`attachment_quota_check_generation + 1`,
         })
         .where('id', '=', organizationId)
-        .where('suspended_at', 'is', null),
-    ),
+        .where('suspended_at', 'is', null);
+      return options.onlyIfClean === true ? update.where('attachment_quota_check_pending_at', 'is', null) : update;
+    }),
   ]);
   return updated.changes > 0;
 }

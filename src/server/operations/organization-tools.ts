@@ -6,7 +6,7 @@
 // 自分のログインの読み取り（myLogins）のほかの道具を使えず、組織の設定の書き込みは管理者の操作からだけ使える。
 // 当たらない呼び出しは処理の誤りなので、投げて 500 にする
 import { now } from '../../shared/clock.ts';
-import { reconcileAttachmentQuota } from '../storage/quota-warning.ts';
+import { reconcileAttachmentQuotaAfterSave } from '../storage/quota-warning.ts';
 import type { Defer } from './implement.ts';
 import { INVITE_PATH } from '../../shared/claim-token.ts';
 import type { InviteeResolver } from '../auth/login-method.ts';
@@ -111,13 +111,16 @@ export function organizationTools(
           defer(async () => {
             try {
               if (retryMark && !(await markAttachmentQuotaCheck(env, db.organizationId, now()))) return;
-              await reconcileAttachmentQuota(env, db.organizationId, now());
+              await reconcileAttachmentQuotaAfterSave(env, db.organizationId);
             } catch (error) {
               logFailure(error);
             }
           });
         try {
-          if (!(await markAttachmentQuotaCheck(env, db.organizationId, now()))) return;
+          if (
+            !(await markAttachmentQuotaCheck(env, db.organizationId, now(), { onlyIfClean: options.markOnly === true }))
+          )
+            return;
           if (options.markOnly === true) return;
           queueCheck(false);
         } catch (error) {
