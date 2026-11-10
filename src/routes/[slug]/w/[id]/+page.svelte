@@ -4,6 +4,7 @@
     completedAfterAttributeRead,
     FilteredAttributeReload,
   } from '../../../../lib/attribute-filter-reload.ts';
+  import { taskWithSavedAttributes } from '../../../../lib/saved-task-attributes.ts';
   import { onTaskAttributeSaved, type Attribute, type AttributeSaved } from '../../../../lib/task-attributes.svelte.ts';
   import { tick, untrack } from 'svelte';
   import { useShortcut } from '../../../../lib/shortcuts.svelte.ts';
@@ -218,12 +219,19 @@
       }
     });
   });
+  let movedRootCategories = $state<Record<string, { value: BacklogTask['category']; at: number }>>({});
   function savedRow(task: BacklogTask): BacklogTask {
-    const patch: Partial<BacklogTask> = {};
-    for (const saved of Object.values(savedAttributes[task.id] ?? {})) {
-      if (saved !== undefined) Object.assign(patch, { [saved.field]: saved.task[saved.field] });
-    }
-    return { ...task, ...patch };
+    const parentId = taskPlaces[task.id]?.parentId;
+    const parent =
+      parentId == null
+        ? undefined
+        : (openStories.find((row) => row.id === parentId) ?? allStories.find((row) => row.id === parentId));
+    const inherited = parentId == null ? undefined : (parentEpicOf(parentId)?.category ?? parent?.category ?? null);
+    return taskWithSavedAttributes(task, savedAttributes[task.id] ?? {}, inherited, movedRootCategories[task.id]);
+  }
+  function rememberCategoryForMove(task: BacklogTask, parentId: string | null): void {
+    if (parentId === null) movedRootCategories[task.id] = { value: savedRow(task).category, at: performance.now() };
+    else delete movedRootCategories[task.id];
   }
 
   // 完了の応答が返った時刻（performance.now()）。これより前に始まった読み直しが遅れて届いても、完了の印を捨てない（completionSettled）
@@ -348,6 +356,7 @@
     completedAt = Object.fromEntries(keptDone.map((id) => [id, completedAt[id]]));
     const preserveMoves = carry && attributeReload.preservesState;
     if (!preserveMoves) {
+      movedRootCategories = {};
       movedParents = {};
       taskOrders = {};
       movedStoryParents = {};
@@ -1030,6 +1039,7 @@
 
   // 画面で動かした並びを捨てる。まだ送っていない操作も、世代を進めて捨てる
   function discardMoves(): void {
+    movedRootCategories = {};
     movedParents = {};
     taskOrders = {};
     movedStoryParents = {};
@@ -1165,6 +1175,7 @@
     if (workspace === null) return;
     const key = storyId ?? ROOT;
     const ids = (taskLists[key] ?? []).map((row) => row.id).filter((id) => id !== task.id);
+    rememberCategoryForMove(task, storyId);
     movedParents = { ...movedParents, [task.id]: storyId };
     taskOrders = { ...taskOrders, [key]: [...ids, task.id] };
     if (storyId !== null) expandStory(storyId);
@@ -1232,6 +1243,7 @@
     const key = move.parentId ?? ROOT;
     const next = (taskLists[key] ?? []).map((row) => row.id).filter((id) => id !== task.id);
     next.splice(move.index, 0, task.id);
+    if (move.reparent) rememberCategoryForMove(task, move.parentId);
     movedParents = { ...movedParents, [task.id]: move.parentId };
     taskOrders = { ...taskOrders, [key]: next };
     if (move.parentId !== null) expandStory(move.parentId);
