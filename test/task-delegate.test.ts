@@ -77,6 +77,53 @@ async function detail(target: Target, taskId: string) {
 }
 
 describe('task-delegate', () => {
+  test('自動担当を読んだ後に所属が外れたら書かず、担当・討伐隊・履歴を増やさない', async () => {
+    const target = await createPersonalTarget();
+    const person = await add(target);
+    const epic = await createEpic(target.organization, target.workspace.id, target.admin.userId!);
+    const story = await createStory(target.organization, target.workspace.id, target.admin.userId!, {
+      epic_id: epic.id,
+    });
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      story_id: story.id,
+    });
+    const db = orgDb(env, target.organization.verified);
+    let raced = false;
+    const racing = afterFirstQuery(
+      testEnv,
+      (sql) => sql.startsWith('select "u"."name" from "memberships" as "m"'),
+      async () => {
+        raced = true;
+        await db.batch([
+          db.statement((q) =>
+            q
+              .updateTable('memberships')
+              .set({ left_at: '2026-11-10T00:00:00.000Z', left_on: '2026-11-10' })
+              .where('workspace_id', '=', target.workspace.id)
+              .where('user_id', '=', target.admin.userId!)
+              .where('left_at', 'is', null),
+          ),
+        ]);
+      },
+    );
+    expect((await delegate(target, task.id, person.id, racing)).status).toBe(404);
+    expect(raced).toBe(true);
+    expect(await row(target, task.id)).toEqual(task);
+    expect(await logs(target, task.id)).toEqual([]);
+    expect(
+      await db.rows(
+        db.statement((q) =>
+          q
+            .selectFrom('epic_party_members')
+            .innerJoin('epics', 'epics.id', 'epic_party_members.epic_id')
+            .select('epic_party_members.user_id')
+            .where('epics.workspace_id', '=', target.workspace.id)
+            .where('epic_id', '=', epic.id),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
   test('完了を戻す直前に名簿が削除されたら競合にし、読み直して解除する', async () => {
     const target = await createPersonalTarget();
     const person = await add(target);
