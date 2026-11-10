@@ -194,10 +194,12 @@ test.describe('リーダー（あおば開発のミナト）', () => {
     const categorySaved = waitForResponses(page, '/story-update');
     await storyDrawer.getByLabel('区分', { exact: true }).selectOption({ label: '保守' });
     await storyDrawer.getByLabel('区分', { exact: true }).blur();
-    await categorySaved;
+    expect((await categorySaved).status()).toBe(200);
+    const story = page.locator('.tree-group', { hasText: 'ポイントを使える' });
+    // 保存の応答だけでなく、木への反映も確かめてから引き出しを閉じる
+    await expect(story.locator('.tree-row .chip')).toHaveText('区分：保守');
     await page.keyboard.press('Escape');
     await expect(storyDrawer).toBeHidden();
-    const story = page.locator('.tree-group', { hasText: 'ポイントを使える' });
     await expect(story.locator('.tree-row .chip')).toHaveText('区分：保守');
 
     // ストーリーの配下に作ったタスクは、リポジトリを行のチップで選ぶ。区分は親から引き継ぎ、チップは押せない
