@@ -12,7 +12,8 @@ import {
   tokenCreate,
 } from '../src/shared/operations/session/index.ts';
 import { createApp } from '../src/server/app.ts';
-import { hashSessionToken, deleteOtherSessionsOf } from '../src/server/auth/session.ts';
+import { revokeAllApiTokensStatement } from '../src/server/auth/api-token.ts';
+import { hashSessionToken, deleteOtherSessionsOf, deleteOtherSessionsStatement } from '../src/server/auth/session.ts';
 import { commonDb } from '../src/server/db/index.ts';
 import { envWithD1Hooks } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
@@ -612,14 +613,17 @@ describe('deleteOtherSessionsOf', () => {
     expect(await sessionRowsOf(person.accountId)).toEqual(before);
   });
 
-  test('ほかのアカウントの今のセッションのハッシュを渡しても、自分のアカウントのセッションだけを消す', async () => {
+  test('ほかのアカウントの今のセッションのハッシュを渡すと、自分のアカウントにその行が無いので 0 を返し、どちらのアカウントの行も消さない', async () => {
     const [person, bystander] = await Promise.all([createLoginPerson(), createLoginPerson()]);
     const mine = await otherSession(person);
+    const mineBefore = await sessionRowsOf(person.accountId);
     const theirsBefore = await sessionRowsOf(bystander.accountId);
     const deleted = await deleteOtherSessionsOf(db(), person.accountId, await hashSessionToken(bystander.token));
-    expect(deleted).toBe(2);
+    expect(deleted).toBe(0);
+    expect(await sessionRowsOf(person.accountId)).toEqual(mineBefore);
+    expect(mineBefore).toHaveLength(2);
+    expect(await sessionHashesOf(person.accountId)).toContain(mine.row.token_hash);
     expect(await sessionRowsOf(bystander.accountId)).toEqual(theirsBefore);
-    expect(await sessionHashesOf(person.accountId)).not.toContain(mine.row.token_hash);
   });
 
   test('API トークンの行には触らない', async () => {
@@ -629,5 +633,200 @@ describe('deleteOtherSessionsOf', () => {
     const before = await tokenRowsOf(person.accountId);
     await deleteOtherSessionsOf(db(), person.accountId, await hashSessionToken(person.token));
     expect(await tokenRowsOf(person.accountId)).toEqual(before);
+  });
+});
+
+// 同じアカウントの2つのセッション A と B が全失効を同時に実行したとき（#767）。先に書いた側の batch() が後の側のセッションを消し、
+// 後の側の batch() は、今のセッションの行（token_hash と account_id の両方が一致する行）が無いので何も書かない。
+// Promise.all の順に頼らず、文を順に流すか、B の認証の後・書き込みの前に A を挟んで、決定的に確かめる
+describe('同時に全失効を実行したとき、先に書いた側のセッションが残る', () => {
+  // 文を作った入口と batch() を送る入口を同じにする（入口は自分の作った文しか受け取らない）
+  let entry: ReturnType<typeof commonDb> | undefined;
+  const db = () => (entry ??= commonDb(env));
+  // 操作 credentials-revoke-all が1つの batch() で送る2文と同じ組
+  const revokeAllBatch = async (accountId: string, currentTokenHash: string) => {
+    const [sessions, tokens] = await db().batch([
+      deleteOtherSessionsStatement(db(), accountId, currentTokenHash),
+      revokeAllApiTokensStatement(db(), accountId, new Date(), currentTokenHash),
+    ]);
+    return { sessions: sessions.changes, tokens: tokens.changes };
+  };
+
+  // B の要求が、認証と同意の確かめを終えて書き込みの batch() を送る前に、between を await する env。
+  // 書き込みの前の最後の問い合わせは同意の読み取り（account_consents）。afterQuery は待たれるので、その間に別の要求を流せる
+  function envInterleaving(between: () => Promise<void>) {
+    const state = { ran: false };
+    const hooked = envWithD1Hooks(testEnv, {
+      afterQuery: async (sql) => {
+        if (state.ran || !sql.includes('"account_consents"')) return;
+        state.ran = true;
+        await between();
+      },
+    });
+    return { env: hooked, state };
+  }
+
+  describe('完了条件: 1つ目の後に2つ目を流しても、1つ目のセッションが残る', () => {
+    test('A の2文の後に B の2文を流すと、A のセッションが残り、B の batch() はセッションもトークンも 0 件', async () => {
+      const person = await createLoginPerson();
+      const a = await hashSessionToken(person.token);
+      const b = await otherSession(person);
+      await otherSession(person);
+      const { hash } = await insertApiToken(person.accountId, { expiresAt: future() });
+
+      expect(await revokeAllBatch(person.accountId, a)).toEqual({ sessions: 2, tokens: 1 });
+      const revokedAt = (await tokenRow(hash))!.revoked_at;
+      expect(revokedAt).not.toBeNull();
+
+      expect(await revokeAllBatch(person.accountId, b.row.token_hash)).toEqual({ sessions: 0, tokens: 0 });
+      expect(await sessionHashesOf(person.accountId)).toEqual([a]);
+      expect((await tokenRow(hash))!.revoked_at).toBe(revokedAt);
+      expect((await callMe({ token: person.token })).status).toBe(200);
+      await expectSignedOut(await callMe({ token: b.token }));
+    });
+
+    test('順を逆にして B の2文を先に流すと、B のセッションが残り、A の batch() が 0 件', async () => {
+      const person = await createLoginPerson();
+      const a = await hashSessionToken(person.token);
+      const b = await otherSession(person);
+      await insertApiToken(person.accountId, { expiresAt: future() });
+
+      expect(await revokeAllBatch(person.accountId, b.row.token_hash)).toEqual({ sessions: 1, tokens: 1 });
+      expect(await revokeAllBatch(person.accountId, a)).toEqual({ sessions: 0, tokens: 0 });
+      expect(await sessionHashesOf(person.accountId)).toEqual([b.row.token_hash]);
+      expect((await callMe({ token: b.token })).status).toBe(200);
+      await expectSignedOut(await callMe({ token: person.token }));
+    });
+
+    test('操作として: B の認証の後・書き込みの前に A の実行を挟むと、B は 200 で 0 と 0 を返し、A のセッションが残る', async () => {
+      const person = await createLoginPerson();
+      const b = await otherSession(person);
+      await otherSession(person);
+      const { hash } = await insertApiToken(person.accountId, { expiresAt: future() });
+      let first: Counts | undefined;
+      const { env: interleaved, state } = envInterleaving(async () => {
+        first = await revoked(person.token);
+      });
+
+      const res = await revokeAll(b.token, { env: interleaved });
+
+      expect(state.ran).toBe(true);
+      expect(first).toEqual({ revoked_sessions: 2, revoked_tokens: 1 });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ revoked_sessions: 0, revoked_tokens: 0 });
+      expect(await sessionHashesOf(person.accountId)).toEqual([await hashSessionToken(person.token)]);
+      expect((await tokenRow(hash))!.revoked_at).not.toBeNull();
+      expect((await callMe({ token: person.token })).status).toBe(200);
+      await expectSignedOut(await callMe({ token: b.token }));
+    });
+  });
+
+  describe('完了条件: 先に消された側の実行は、セッションもトークンの revoked_at も変えない', () => {
+    test('1つ目の後に足した未取り消しのトークンとセッションは、消された側の2文を流しても残り、件数は 0', async () => {
+      const person = await createLoginPerson();
+      const a = await hashSessionToken(person.token);
+      const b = await otherSession(person);
+      await revokeAllBatch(person.accountId, a);
+
+      const later = await otherSession(person);
+      const added = await insertApiToken(person.accountId, { expiresAt: future() });
+      const sessionsBefore = await sessionRowsOf(person.accountId);
+
+      expect(await revokeAllBatch(person.accountId, b.row.token_hash)).toEqual({ sessions: 0, tokens: 0 });
+      expect((await tokenRow(added.hash))!.revoked_at).toBeNull();
+      expect(await sessionRowsOf(person.accountId)).toEqual(sessionsBefore);
+      expect(await sessionHashesOf(person.accountId)).toContain(later.row.token_hash);
+    });
+
+    test('操作として: A の実行の後に未取り消しのトークンを足してから B の書き込みが進んでも、B は 200 で 0 と 0、そのトークンは取り消されない', async () => {
+      const person = await createLoginPerson();
+      const b = await otherSession(person);
+      let added: { raw: string; hash: string } | undefined;
+      let later: Awaited<ReturnType<typeof otherSession>> | undefined;
+      const { env: interleaved, state } = envInterleaving(async () => {
+        await revoked(person.token);
+        added = await insertApiToken(person.accountId, { expiresAt: future() });
+        later = await otherSession(person);
+      });
+
+      const res = await revokeAll(b.token, { env: interleaved });
+
+      expect(state.ran).toBe(true);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ revoked_sessions: 0, revoked_tokens: 0 });
+      expect((await tokenRow(added!.hash))!.revoked_at).toBeNull();
+      expect((await callMe({ bearer: added!.raw, origin: null })).status).toBe(200);
+      expect(await sessionHashesOf(person.accountId)).toEqual(
+        [await hashSessionToken(person.token), later!.row.token_hash].sort(),
+      );
+    });
+  });
+
+  describe('断る場合: 今のセッションの行（token_hash と account_id が一致）が無ければ何も書かない', () => {
+    test('存在しないハッシュを今のセッションとして渡すと、セッションを消す文は 0 で、自分のセッションはすべて残る', async () => {
+      const person = await createLoginPerson();
+      await otherSession(person);
+      const before = await sessionRowsOf(person.accountId);
+      expect(await deleteOtherSessionsOf(db(), person.accountId, 'f'.repeat(64))).toBe(0);
+      expect(await sessionRowsOf(person.accountId)).toEqual(before);
+      expect(before).toHaveLength(2);
+    });
+
+    test('トークンを取り消す文に、ほかのアカウントの今のセッションのハッシュを渡すと、どちらのアカウントのトークンも取り消さない', async () => {
+      const [person, bystander] = await Promise.all([createLoginPerson(), createLoginPerson()]);
+      const mine = await insertApiToken(person.accountId, { expiresAt: future() });
+      await insertApiToken(bystander.accountId, { expiresAt: future() });
+      const theirsBefore = await tokenRowsOf(bystander.accountId);
+      const [result] = await db().batch([
+        revokeAllApiTokensStatement(db(), person.accountId, new Date(), await hashSessionToken(bystander.token)),
+      ]);
+      expect(result.changes).toBe(0);
+      expect((await tokenRow(mine.hash))!.revoked_at).toBeNull();
+      expect(await tokenRowsOf(bystander.accountId)).toEqual(theirsBefore);
+    });
+
+    test('トークンを取り消す文に、存在しないハッシュを渡すと、何も取り消さない', async () => {
+      const person = await createLoginPerson();
+      const mine = await insertApiToken(person.accountId, { expiresAt: future() });
+      const [result] = await db().batch([
+        revokeAllApiTokensStatement(db(), person.accountId, new Date(), 'f'.repeat(64)),
+      ]);
+      expect(result.changes).toBe(0);
+      expect((await tokenRow(mine.hash))!.revoked_at).toBeNull();
+    });
+
+    test('トークンを取り消す文に、ほかのアカウントの API トークンのハッシュを渡しても、何も取り消さない（見るのはセッションの行）', async () => {
+      const [person, bystander] = await Promise.all([createLoginPerson(), createLoginPerson()]);
+      const mine = await insertApiToken(person.accountId, { expiresAt: future() });
+      const theirs = await insertApiToken(bystander.accountId, { expiresAt: future() });
+      const [result] = await db().batch([revokeAllApiTokensStatement(db(), person.accountId, new Date(), theirs.hash)]);
+      expect(result.changes).toBe(0);
+      expect((await tokenRow(mine.hash))!.revoked_at).toBeNull();
+      expect((await tokenRow(theirs.hash))!.revoked_at).toBeNull();
+    });
+  });
+
+  describe('通る場合と互換: 4つ目の引数', () => {
+    test('トークンを取り消す文に自分の今のセッションのハッシュを渡すと、自分の未取り消しのトークンだけを取り消す', async () => {
+      const [person, bystander] = await Promise.all([createLoginPerson(), createLoginPerson()]);
+      const mine = await insertApiToken(person.accountId, { expiresAt: future() });
+      await insertApiToken(bystander.accountId, { expiresAt: future() });
+      const theirsBefore = await tokenRowsOf(bystander.accountId);
+      const [result] = await db().batch([
+        revokeAllApiTokensStatement(db(), person.accountId, new Date(), await hashSessionToken(person.token)),
+      ]);
+      expect(result.changes).toBe(1);
+      expect((await tokenRow(mine.hash))!.revoked_at).not.toBeNull();
+      expect(await tokenRowsOf(bystander.accountId)).toEqual(theirsBefore);
+    });
+
+    test('4つ目を省くと、今と同じく、セッションの行が1つも無いアカウントでも未取り消しのトークンを取り消す', async () => {
+      const account = await createAccount({}, { consented: true });
+      const token = await insertApiToken(account.id, { expiresAt: future() });
+      expect(await sessionRowsOf(account.id)).toHaveLength(0);
+      const [result] = await db().batch([revokeAllApiTokensStatement(db(), account.id, new Date())]);
+      expect(result.changes).toBe(1);
+      expect((await tokenRow(token.hash))!.revoked_at).not.toBeNull();
+    });
   });
 });
