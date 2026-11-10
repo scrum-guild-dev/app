@@ -94,6 +94,9 @@ for (const screen of [
       for (const theme of themes) {
         await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
         if (screen.path.startsWith('/aoba') && width <= 760) {
+          // 角のマスは出さない。残るマークは浮きメニューの中の組織の切り替えのもので、見えない
+          await expect(page.locator('.binding-head')).toHaveCount(0);
+          await expect(page.locator('.brand-art')).toHaveCount(1);
           await expect(page.locator('.brand-art')).toBeHidden();
           await expect(page.locator('.mobile-tabs')).toBeVisible();
         } else if (screen.path.startsWith('/aoba')) {

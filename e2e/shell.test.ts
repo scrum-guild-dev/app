@@ -80,7 +80,7 @@ test('1280px では左のメニューを折りたため、幅とラベルと状�
   const item = page.locator('.nav-item').first();
   await expect(item.locator('.nav-item-label')).toHaveCSS('opacity', '0');
   await expect(page.locator('#app-nav').getByRole('link', { name: '今日やること' })).toBeVisible();
-  // 角のマスは組織のボタンのマークだけになり、マークのリンクは隠れる。広げるとリンクが戻る
+  // 角のマスは組織のボタンのマークだけになり、マークのリンクは隠れる（読み上げの名前と行き先は残る）
   await expect(page.locator('.binding-head .org-menu-button .brand-mark')).toBeVisible();
   await expect(page.locator('.binding-head .brand')).toBeHidden();
   await expect(page.locator('.binding-head .brand')).toHaveAttribute('href', '/aoba');
