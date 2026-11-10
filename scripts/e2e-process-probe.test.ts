@@ -100,8 +100,14 @@ test(
     assert.equal(recorded.ppid, process.pid);
     assert.equal(recorded.name, 'workerd');
     assert.ok(recorded.startTicks > 0);
-    assert.match(recorded.mainThreadSchedstat!, /^\d+ \d+ \d+$/);
-    assert.match(recorded.io!, /read_bytes: \d+/);
+    // カーネル設定や sandbox により追加項目が無い環境でも、採取本体と同じく null を許容する。
+    // 読める環境では値の検査を残し、常に null を返す退行も見逃さない。
+    const schedstat = await readFile(`/proc/${child.pid}/schedstat`, 'utf8').catch(() => null);
+    const io = await readFile(`/proc/${child.pid}/io`, 'utf8').catch(() => null);
+    if (schedstat === null) assert.equal(recorded.mainThreadSchedstat, null);
+    else assert.match(recorded.mainThreadSchedstat!, /^\d+ \d+ \d+$/);
+    if (io === null) assert.equal(recorded.io, null);
+    else assert.match(recorded.io!, /read_bytes: \d+/);
   },
 );
 
