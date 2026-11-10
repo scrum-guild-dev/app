@@ -76,6 +76,7 @@
     dueClear: "クリア",
     storyTitlePlaceholder: "どこまで進めば区切りか",
     createSheet: "起票",
+    markdownToolbar: "本文の書式", slashBullet: "箇条書き", slashTodo: "チェックリスト", slashCode: "コード", slashQuote: "引用",
     createSheetReloadFailed: "作成済みですが、一覧を読み直せませんでした。画面を開き直してください。",
     createKind: "作る種類",
     createSheetCreated: "{kind}「{title}」を作りました",
@@ -2954,6 +2955,79 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function createSheetChip(label, values) {
     return `<span class="row-menu"><button class="chip chip-btn is-unset" type="button" data-row-menu data-create-chip="${esc(label)}" aria-label="${esc(label)}: 未設定" aria-haspopup="menu" aria-expanded="false"><span class="chip-text">${esc(label)}</span></button><ul class="account-menu-list row-menu-list" role="menu" aria-label="${esc(label)}を選ぶ" hidden>${["なし", ...values].map((text, index) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${index === 0}" data-create-option>${esc(text)}</button></li>`).join("")}</ul></span>`;
   }
+  // 本番の markdown-toolbar.ts と同じ行単位の書き換え。
+  function toolbarEdit(value, from, to, format) {
+      const start = from === 0 ? 0 : value.lastIndexOf('\n', from - 1) + 1;
+      const last = to > from && value[to - 1] === '\n' ? to - 1 : to;
+      const next = value.indexOf('\n', last);
+      const end = next < 0 ? value.length : next;
+      if (format === 'code')
+          return codeEdit(value, start, end, from, to);
+      const prefix = format === 'bullet' ? '- ' : format === 'todo' ? '- [ ] ' : '> ';
+      const pattern = format === 'bullet' ? /^- (?!\[[ xX]\] )/u : format === 'todo' ? /^- \[[ xX]\] /u : /^> /u;
+      const lines = value.slice(start, end).split('\n');
+      const remove = lines.every((line) => pattern.test(line.replace(/^[ \t]*/u, '')));
+      const changes = [];
+      let offset = start;
+      const text = lines.map((line) => {
+          const indent = /^[ \t]*/u.exec(line)?.[0] ?? '';
+          const content = line.slice(indent.length);
+          const match = pattern.exec(content);
+          const removed = remove ? match?.[0].length ?? 0 : 0;
+          const added = !remove && !match ? prefix : '';
+          changes.push({ at: offset + indent.length, removed, added: added.length });
+          offset += line.length + 1;
+          return indent + added + content.slice(removed);
+      }).join('\n');
+      const move = (position) => position + changes.reduce((delta, change) => position < change.at ? delta : delta + change.added - Math.min(change.removed, position - change.at), 0);
+      return { start, end, text, selectionStart: move(from), selectionEnd: move(to) };
+  }
+  function codeEdit(value, start, end, from, to) {
+      const blocks = [];
+      let open = null;
+      let offset = 0;
+      for (const line of value.split('\n')) {
+          const match = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(line);
+          if (match) {
+              const mark = match[1];
+              const info = match[2];
+              if (open === null) {
+                  if (!(mark[0] === '`' && info.includes('`')))
+                      open = { start: offset, end: offset + line.length, mark };
+              }
+              else if (mark[0] === open.mark[0] && mark.length >= open.mark.length && info.trim() === '') {
+                  const contentStart = open.end + 1;
+                  blocks.push({ start: open.start, end: offset + line.length, contentStart, contentEnd: Math.max(contentStart, offset - 1) });
+                  open = null;
+              }
+          }
+          offset += line.length + 1;
+      }
+      // 閉じの無い囲みも Markdown では末尾までコード。内側に新しい囲みを重ねない。
+      if (open)
+          blocks.push({ start: open.start, end: value.length, contentStart: Math.min(value.length, open.end + 1), contentEnd: value.length });
+      const block = blocks.find((entry) => from >= entry.start && to <= entry.end);
+      if (block) {
+          const move = (position) => block.start + Math.max(0, Math.min(position - block.contentStart, block.contentEnd - block.contentStart));
+          return { start: block.start, end: block.end, text: value.slice(block.contentStart, block.contentEnd), selectionStart: move(from), selectionEnd: move(to) };
+      }
+      // 囲みの内外にまたがる選択はブロック全体へ広げ、既存の開始・終了を分断しない。
+      for (const entry of blocks) {
+          if (start < entry.end && end > entry.start) {
+              start = Math.min(start, entry.start);
+              end = Math.max(end, entry.end);
+          }
+      }
+      const content = value.slice(start, end);
+      const longest = Math.max(2, ...Array.from(content.matchAll(/`+/gu), (match) => match[0].length));
+      const fence = '`'.repeat(longest + 1);
+      return {
+          start, end, text: `${fence}\n${content}\n${fence}`,
+          selectionStart: from + fence.length + 1,
+          selectionEnd: to + fence.length + 1,
+      };
+  }
+
   function createSheetHtml(state = "ready") {
     const sending = state === "sending";
     return `<dialog class="create-sheet" aria-label="${t("createSheet")}" data-create-sheet>
@@ -2972,7 +3046,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
           ${sending ? `<p role="status">${t("storyCreating")}</p>` : ""}
           <p class="muted" id="create-sheet-reason">${t("taskTitleRequired")}</p>
           <label class="field"><span class="field-label">${t("fieldTitle")}</span><input class="input create-sheet-title" name="title" placeholder="${t("taskTitlePlaceholder")}"></label>
-          <div class="field"><label class="field-label" for="sample-create-body">${t("fieldBody")}</label><div class="markdown-editor"><div class="slash-wrap"><textarea class="textarea" id="sample-create-body" name="body" ${sending ? "readonly" : ""}></textarea></div></div></div>
+          <div class="field"><label class="field-label" for="sample-create-body">${t("fieldBody")}</label><div class="markdown-editor"><div class="slash-wrap"><textarea class="textarea" id="sample-create-body" name="body" ${sending ? "readonly" : ""}></textarea></div><div class="markdown-toolbar" role="group" aria-label="${t("markdownToolbar")}">${[["bullet", "slashBullet", "list-bullet"], ["todo", "slashTodo", "list-check"], ["code", "slashCode", "code"], ["quote", "slashQuote", "quote"]].map(([key, label, mark]) => `<button class="pill" type="button" data-markdown-format="${key}" aria-label="${t(label)}" title="${t(label)}" ${sending ? "disabled" : ""}>${icon(mark)}</button>`).join("")}</div></div></div>
           <div class="create-sheet-attrs" data-create-task>
             ${createSheetChip(t("taskParent").replace("{story}", t("story")), ["架空の親ストーリー"])}
             ${createSheetChip(t("assignee"), ["架空の担当"])}
@@ -2995,6 +3069,16 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const sheet = document.querySelector("[data-create-sheet]");
     const title = sheet.querySelector('[name="title"]');
     const body = sheet.querySelector('[name="body"]');
+    sheet.querySelectorAll("[data-markdown-format]").forEach((button) => {
+      button.addEventListener("pointerdown", (event) => event.preventDefault());
+      button.addEventListener("click", () => {
+        if (body.readOnly) return;
+        const edit = toolbarEdit(body.value, body.selectionStart, body.selectionEnd, button.dataset.markdownFormat);
+        body.setRangeText(edit.text, edit.start, edit.end, "end");
+        body.focus(); body.setSelectionRange(edit.selectionStart, edit.selectionEnd);
+        body.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    });
     let kind = "task";
     const finish = () => { sheet.close(); sheet.remove(); opener.focus(); };
     const close = () => {

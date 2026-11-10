@@ -31,14 +31,16 @@ export interface A11yViolation {
 }
 
 // 今の画面に axe を走らせ、違反を要素ごとに並べて返す
-export async function findA11yViolations(page: Page): Promise<A11yViolation[]> {
-  return (await runA11y(page)).violations;
+export async function findA11yViolations(page: Page, include?: string): Promise<A11yViolation[]> {
+  return (await runA11y(page, include)).violations;
 }
 
 // undecided は、axe が判定を保留した（incomplete の）文字のコントラストの要素の数。
 // 地のグラデーションの上の文字などで、違反に数えないので別に返す
-async function runA11y(page: Page): Promise<{ violations: A11yViolation[]; undecided: number }> {
-  const results = await new AxeBuilder({ page }).withTags(A11Y_TAGS).analyze();
+async function runA11y(page: Page, include?: string): Promise<{ violations: A11yViolation[]; undecided: number }> {
+  const builder = new AxeBuilder({ page }).withTags(A11Y_TAGS);
+  if (include !== undefined) builder.include(include);
+  const results = await builder.analyze();
   const undecided = results.incomplete
     .filter((result) => result.id === 'color-contrast')
     .reduce((sum, result) => sum + result.nodes.length, 0);

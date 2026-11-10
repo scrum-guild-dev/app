@@ -14,6 +14,7 @@
     uploadAttachment,
   } from '../attachment-upload.ts';
   import { assistKeyEdit, linkPasteEdit, type AssistEdit } from '../markdown-assist.ts';
+  import { MARKDOWN_FORMATS, toolbarEdit, type MarkdownFormat } from '../markdown-toolbar.ts';
   import { filterSlashItems, moveSlashSelection, slashEdit, slashQuery, type SlashItem } from '../markdown-slash.ts';
   import { t } from '../vocabulary.svelte.ts';
   import Icon from './Icon.svelte';
@@ -33,6 +34,7 @@
     oninput,
     dataCommentInput,
     attachments = true,
+    toolbar = false,
   }: {
     value: string;
     input?: HTMLTextAreaElement;
@@ -48,6 +50,7 @@
     oninput?: () => void;
     dataCommentInput?: string;
     attachments?: boolean;
+    toolbar?: boolean;
   } = $props();
 
   type Upload = {
@@ -380,6 +383,12 @@
     applyAssist(edit);
   }
 
+  function formatBody(format: MarkdownFormat): void {
+    if (!input || readonly || composing) return;
+    closeSlash();
+    applyAssist(toolbarEdit(input.value, input.selectionStart, input.selectionEnd, format));
+  }
+
   function paste(event: ClipboardEvent): void {
     const clipboard = event.clipboardData;
     if (!attachments || !clipboard?.files.length) {
@@ -507,6 +516,22 @@
       {/each}
     </ul>
   </div>
+  {#if toolbar}
+    <div class="markdown-toolbar" role="group" aria-label={t('markdownToolbar')}>
+      {#each MARKDOWN_FORMATS as format (format.key)}
+        <button
+          type="button"
+          class="pill"
+          aria-label={t(format.label)}
+          title={t(format.label)}
+          disabled={readonly}
+          onmousedown={(event) => event.preventDefault()}
+          onpointerdown={(event) => event.preventDefault()}
+          onclick={() => formatBody(format.key)}><Icon name={format.icon} /></button
+        >
+      {/each}
+    </div>
+  {/if}
   {#if attachments}
     <div
       class="dropzone"

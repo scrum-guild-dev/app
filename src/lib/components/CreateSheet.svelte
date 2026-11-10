@@ -301,6 +301,7 @@
             {workspaceId}
             readonly={busy}
             attachments={false}
+            toolbar
           />
         </div>
         <div class="create-sheet-attrs">
