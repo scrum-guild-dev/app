@@ -136,18 +136,34 @@ export async function deleteSessionsOf(db: CommonDb, accountId: string, checkedA
 }
 
 // その人の、今のセッション（currentTokenHash）以外のセッションをすべて消す文。期限が切れた行も、期限内の行も消す。
-// ほかのアカウントのセッションは account_id で除く。別の文と同じ batch() に入れて送るために、文のまま返す
+// ほかのアカウントのセッションは account_id で除く。別の文と同じ batch() に入れて送るために、文のまま返す。
+// 今のセッションの行（token_hash と account_id が両方一致する行）がまだあるときだけ消す。同じアカウントの2つのセッションが
+// 同時に全失効を実行しても、後から来た側（自分の行が先に消された側）は何も消さず、両方のセッションが消えることを防ぐ。
+// 消した行の expires_at を返す（呼び手が期限内の行だけを数えるため。何も消さなかったときは行が返らない）
 export function deleteOtherSessionsStatement(
   db: CommonDb,
   accountId: string,
   currentTokenHash: string,
-): Statement<'common'> {
+): Statement<'common', { expires_at: string }> {
   return db.statement((q) =>
-    q.deleteFrom('sessions').where('account_id', '=', accountId).where('token_hash', '!=', currentTokenHash),
+    q
+      .deleteFrom('sessions')
+      .where('account_id', '=', accountId)
+      .where('token_hash', '!=', currentTokenHash)
+      .where(({ exists, selectFrom }) =>
+        exists(
+          selectFrom('sessions as cs')
+            .select('cs.token_hash')
+            .where('cs.token_hash', '=', currentTokenHash)
+            .where('cs.account_id', '=', accountId),
+        ),
+      )
+      .returning('expires_at'),
   );
 }
 
-// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消し、消した行数を返す。
+// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消し、消した行数（changes。期限切れの行も含む）を返す。
+// 全失効の応答の件数（期限内の行だけ）とは意味が違う。
 // 今のセッションと、ほかのアカウントのセッションは残す。本番の道（credentials-revoke-all）は、トークンの取り消しと
 // 同じ batch() に入れるため、文（deleteOtherSessionsStatement）を直に使う。この関数を呼ぶのは今はテストだけ
 export async function deleteOtherSessionsOf(

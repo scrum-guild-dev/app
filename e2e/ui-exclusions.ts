@@ -51,10 +51,11 @@ export interface UiExclusion {
   issue: number;
 }
 
-// 上の帯の組織とアカウントのボタン。aria-label が見える文字（「組織 あおば開発」、「ミナト 管理者 1」）を
-// 含まず、WCAG 2.5.3（見える名前を読み上げの名前に含める）に当たる。ダイアログか引き出しを開いた状態では、
+// 上の帯のアカウントのボタン。aria-label が見える文字（「ミナト 管理者 1」）を含まず、
+// WCAG 2.5.3（見える名前を読み上げの名前に含める）に当たる。ダイアログか引き出しを開いた状態では、
 // 後ろの画面が読み上げから外れるので axe も見ない。開いていない画面にだけ置く。
-// 直すには辞書の文言（organizationSwitchLabel、accountMenuLabel）と、見える文字の組み方を決め直す
+// 直すには辞書の文言（accountMenuLabel）と、見える文字の組み方を決め直す。
+// 角のマスの組織のボタンは、見える文字が組織の名前だけで読み上げの名前に含まれるので、除外しない
 const HEADER_MENU_LABEL_ISSUE = 343;
 
 export const uiExclusions: readonly UiExclusion[] = [
@@ -75,14 +76,6 @@ export const uiExclusions: readonly UiExclusion[] = [
       'admin',
     ] as const
   ).flatMap((screen): UiExclusion[] => [
-    {
-      check: 'label-content-name-mismatch',
-      selector: '.org-menu-button',
-      screen,
-      reason:
-        '組織を切り替えるボタンの aria-label が、見える「組織」と組織の名前の並びを含まない。文言の決め直しが要る',
-      issue: HEADER_MENU_LABEL_ISSUE,
-    },
     {
       check: 'label-content-name-mismatch',
       selector: '.account-menu-button',

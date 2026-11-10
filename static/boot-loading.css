@@ -182,16 +182,24 @@ html[data-boot] #boot-loading .boot-frame {
 #boot-loading .boot-binding > i {
   margin-inline: 8px;
 }
+/* 角のマス。読み込んだ後と同じく、左にマーク（34px）、続けて組織の名前、右に開閉のボタンの分（36px と隙間）を空ける */
 #boot-loading .boot-corner {
-  justify-content: center;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
   height: 60px;
   margin: 0 -16px 4px;
-  padding-inline: 24px;
+  padding-inline: 16px 56px;
   border-bottom: 1px solid #d6d6da;
 }
-#boot-loading .boot-corner i {
-  width: 132px;
-  height: 36px;
+#boot-loading .boot-corner .is-mark {
+  width: 34px;
+  height: 34px;
+}
+#boot-loading .boot-corner .is-org-name {
+  flex: 1 1 auto;
+  height: 1.25em;
+  margin-left: 8px;
 }
 #boot-loading .boot-binding > .is-org {
   height: 60px;
@@ -381,10 +389,19 @@ html[data-boot] #boot-loading .boot-frame {
     align-items: center;
   }
   html[data-boot-nav='collapsed'] #boot-loading .boot-corner {
+    justify-content: center;
     margin-inline: 0;
     padding-inline: 0;
     align-self: stretch;
     align-items: center;
+  }
+  /* 畳んだ列の角のマスはマークだけ（組織の名前は札でだけ出す）。マークは読み込んだ後と同じ 34px にする */
+  html[data-boot-nav='collapsed'] #boot-loading .boot-corner .is-org-name {
+    display: none;
+  }
+  html[data-boot-nav='collapsed'] #boot-loading .boot-corner .is-mark {
+    width: 34px;
+    height: 34px;
   }
   html[data-boot-nav='collapsed'] #boot-loading .boot-binding i {
     width: 32px;

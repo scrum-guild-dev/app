@@ -444,9 +444,9 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     await menuButton(page).focus();
     await page.keyboard.press('Enter');
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'true');
-    // 3つのリンクと「組織を作る」「自分用を作る」のボタンを通り過ぎて、メニューの外（左のメニューの項目）へ出る
+    // 3つのリンクと「組織を作る」「自分用を作る」のボタンを通り過ぎて、メニューの外（角のマスの開閉のボタン）へ出る
     for (let index = 0; index < 6; index++) await page.keyboard.press('Tab');
-    await expect(page.locator('.nav-item').first()).toBeFocused();
+    await expect(page.getByRole('button', { name: 'メニューを畳む' })).toBeFocused();
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -493,7 +493,9 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
   }) => {
     await mockOperation(page, myOrganizations, AOBA_WITH_INVITATION);
     await page.goto('/aoba');
-    await expect(menuButton(page).locator('.chip')).toHaveText('届いた招待あり');
+    // 角のマスは1行に収めるため、チップの代わりに点の印で示し、読み上げの名前で伝える
+    await expect(menuButton(page).locator('.org-menu-invite')).toBeVisible();
+    await expect(menuButton(page).locator('.chip')).toBeHidden();
     await expect(menuButton(page)).toHaveAttribute('aria-label', /届いた招待あり/);
     await menuButton(page).click();
     await expect(menuLinks(page)).toHaveCount(2);
