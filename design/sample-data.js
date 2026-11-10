@@ -153,7 +153,7 @@ window.SQ_DATA = (function () {
       ],
     },
     // 組織の添付ファイルの合計（GB）。上限の 80% を超えると管理者に知らせる
-    storage: { used: 25.1, quota: 30, byWorkspace: [["wa", 612, 18.4], ["wb", 205, 6.7]] },
+    storage: { used: 25.1, quota: 30, organizationWikiBytes: 0, byWorkspace: [["wa", 612, 18.4], ["wb", 205, 6.7]] },
     // 組織の人数と上限。人数は管理者と、いずれかのワークスペースに所属しているか招待されている人
     seats: { used: 5, limit: 15 },
     history: {
@@ -340,7 +340,7 @@ Object.assign(window.SQ_DATA, {
       // 会員が自分で作った組織（self_created）。名前に「自分で作った組織」の印が付く
       { slug: "kaze-labo", name: "かぜラボ", users: 1, limit: 15, wss: 0, tasks: 0, quota: 30, lastUsed: "2026/10/21 08:30", created: "2026/10/21 08:20", admins: 1, selfCreated: true, trialEndsOn: "2026-11-20", trialExpired: false },
       // 自分用の組織（personal）。種類の印を付け、人数 / 上限の列は空（ダッシュ）、上限に達した印と管理者の状態の印を出さず、管理者の指名と上限の変更を置かない
-      { slug: "mio-solo", name: "自分用", users: 1, limit: 1, wss: 2, tasks: 37, quota: 1, lastUsed: "2026/10/22 07:55", created: "2026/10/10 21:40", admins: 1, personal: true },
+      { slug: "mio-solo", name: "自分用", users: 1, limit: 1, wss: 2, tasks: 37, quota: 1, usedBytes: 37, lastUsed: "2026/10/22 07:55", created: "2026/10/10 21:40", admins: 1, personal: true },
       { slug: "kumo-lab", name: "くもラボ", users: 38, limit: 50, wss: 4, tasks: 3410, quota: 100, lastUsed: "2026/10/18 11:03", created: "2026/07/10 09:45", admins: 0 },
       // 停止中の自分用。停止の理由の切り替えと再開はできる
       { slug: "hoshi-solo", name: "自分用", users: 1, limit: 1, wss: 1, tasks: 4, quota: 1, lastUsed: "2026/09/05 12:10", created: "2026/08/20 18:00", admins: 1, personal: true, suspended: "2026-09-30" },

@@ -72,6 +72,7 @@ export const listOrganizationsOperation = implement(listOrganizations, async ({ 
       seats: { used: usage.get(row.id)?.seatsUsed ?? 0, limit: row.member_limit },
       workspace_count: usage.get(row.id)?.workspaceCount ?? 0,
       task_count: usage.get(row.id)?.taskCount ?? 0,
+      attachment_used_bytes: usage.get(row.id)?.attachmentBytes ?? 0,
       attachment_quota_bytes: row.attachment_quota_bytes,
       last_used_at: usage.get(row.id)?.lastUsedAt ?? null,
     })),

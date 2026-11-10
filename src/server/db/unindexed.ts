@@ -6,8 +6,9 @@ import { sql, type RawBuilder } from 'kysely';
 // 5 万件で 10 秒かかった（tasks_story_open を足す前。docs/data-model.md の tasks の節）
 // 例: 完了した親のないタスクの読み取りで story_id の IS NULL に tasks_story を使わせないため。ANALYZE の後は、
 // SQLite が NULL を別々の値と数えて tasks_story を選び、全組織の親のないタスクを読む計画になる
+// 例: バックログの木を依頼先で絞るとき、担当と同じ理由で tasks_delegatee_completed を選ばせない（#907）
 // 列は、使う列の名前（別名つき）だけを受ける（任意の文字列を SQL の参照にしない）
-export type UnindexedColumn = 'tasks.assignee_user_id' | 'tasks.story_id';
+export type UnindexedColumn = 'tasks.assignee_user_id' | 'tasks.delegatee_id' | 'tasks.story_id';
 
 export function unindexed(column: UnindexedColumn): RawBuilder<unknown> {
   return sql`+${sql.ref(column)}`;

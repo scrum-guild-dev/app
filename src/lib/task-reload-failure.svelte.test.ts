@@ -64,6 +64,7 @@ describe('markReloadFailed と reloadFailureNote', () => {
   });
 
   test('文は、消した、戻したことが済んでいると分かる形にする', () => {
+    expect(reloadFailureMessage('saved')).toBe('taskSavedReloadFailed');
     expect(reloadFailureMessage('deleted')).toBe('taskDeletedReloadFailed');
     expect(reloadFailureMessage('restored')).toBe('taskRestoredReloadFailed');
     expect(reloadFailureMessage('stale')).toBe('taskListStaleReloadFailed');

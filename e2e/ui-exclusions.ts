@@ -6,6 +6,7 @@
 export const uiScreens = [
   'today',
   'favorites',
+  'notifications',
   'backlog',
   'epic',
   'task-drawer',

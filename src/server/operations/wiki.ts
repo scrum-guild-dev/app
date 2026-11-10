@@ -67,6 +67,7 @@ async function createPage({ db, actor, tools, input }: ContextOf<typeof orgWikiC
   }
   const page = await readWikiPage(db, scope, id);
   if (page === undefined) throw new ApiError(404, 'not_found');
+  await tools.reconcileAttachmentQuota();
   return { page };
 }
 async function updatePage({ db, actor, tools, input }: ContextOf<typeof orgWikiUpdate>, scope: WikiScope) {
@@ -92,6 +93,7 @@ async function updatePage({ db, actor, tools, input }: ContextOf<typeof orgWikiU
     if (page.version !== input.read_version) throw new ApiError(409, 'conflict', { reason: 'changed' });
     throw new ApiError(409, 'attachment_quota_exceeded');
   }
+  await tools.reconcileAttachmentQuota();
   return { page };
 }
 

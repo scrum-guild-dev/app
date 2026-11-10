@@ -15,7 +15,7 @@
   import { callOperation, type ApiResult } from '../api.ts';
   import { formatDateTime } from '../format-datetime.ts';
   import { formatLocalDate } from '../format.ts';
-  import { isUnauthenticated, loginUrl } from '../login-redirect.ts';
+  import { consentUrl, isTermsRequired, isUnauthenticated, loginUrl } from '../login-redirect.ts';
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import ConfirmDialog from './ConfirmDialog.svelte';
@@ -40,7 +40,8 @@
   //   読み直しの失敗は、今の一覧を残して知らせる
   // - 節の末尾の「すべての端末とトークンを締め出す」（危険な操作。見本は design/me.html）は、確認のダイアログを経て、今のセッション以外の
   //   すべてのセッションと、取り消していないすべてのトークンを無効にする。今の画面は使い続けられる（移動しない）。
-  //   できたら、消した数と取り消した数をトーストで知らせ、一覧を読み直す（空になる）。失敗したら知らせて、一覧も読み直す
+  //   できたら、消した数と取り消した数をトーストで知らせ、一覧を読み直す（空になる）。失敗したら知らせて、一覧も読み直す。
+  //   ただし 401 はログインの画面へ、403 の terms_required は同意の画面へ、知らせずに移す（#770）
   // 操作は1件ずつ送り、送っている間はどの操作も aria-disabled にして押しても無視する
   type Token = OutputOf<typeof tokenList>['tokens'][number];
   type FieldName = 'name' | 'lifetime';
@@ -337,6 +338,12 @@
       const result = await callOperation(credentialsRevokeAll, {});
       if (!result.ok && isUnauthenticated(result)) {
         toLogin();
+        return;
+      }
+      // 開いた後に規約の版が上がると、全失効も 403 の terms_required で断られる（同意の門の例外にしない。#770）。
+      // 同意の画面へ移し、同意したらこの画面へ戻す。戻った後に全失効を自動で実行しない（もう一度押してもらう）
+      if (isTermsRequired(result)) {
+        window.location.assign(consentUrl(page.url));
         return;
       }
       if (result.ok) {

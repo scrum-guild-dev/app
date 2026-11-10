@@ -686,6 +686,8 @@ test('矢印キーでポイントを続けて動かしても、保存は1本ず�
   for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
   await expect(drawer.getByRole('radio', { name: '3', exact: true })).toBeChecked();
   await expect(row.getByRole('button', { name: 'ポイント: 3 pt' })).toBeVisible();
+  // 行は楽観的に更新されるので、最後の要求が実際に出てから列が空になるのを待つ。
+  await expect.poll(() => sent[sent.length - 1]).toBe(3);
   await expect.poll(() => inFlight).toBe(0);
   expect(maxInFlight).toBe(1);
   expect(sent[sent.length - 1]).toBe(3);
@@ -862,10 +864,13 @@ test('期日で欄を離れた直後と、ポイントを選んだ直後に閉�
   await slow.unroute();
   slow = await slowTaskUpdate(page);
   await row.getByRole('link', { name: '閉じた後に返る' }).click();
+  const pointsSaved = waitForResponses(page, '/task-update');
   await drawer.getByRole('radio', { name: '8', exact: true }).check();
   await drawer.getByRole('button', { name: '閉じる' }).click();
   await expect(drawer).toBeHidden();
   await expect(row.getByRole('button', { name: 'ポイント: 8 pt' })).toBeVisible();
+  await pointsSaved;
+  await waitForSettled(page);
   // 失敗はトーストで知らせる
   await slow.unroute();
   await slowTaskUpdate(page, { status: 500, code: 'internal' });

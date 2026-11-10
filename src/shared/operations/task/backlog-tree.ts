@@ -16,6 +16,8 @@ export const backlogTaskSchema = z.object({
   due_on: z.string().nullable(),
   // 担当。いなければ null。名前は、離脱済みの人でも出す
   assignee: z.object({ id: z.string(), name: z.string() }).nullable(),
+  // 依頼先（自分用の組織の名簿の人）。付いていなければ null。チーム用の組織では常に null
+  delegatee: definitionRefSchema.nullable(),
   // 引き継ぎを解いた区分（親のエピック、親のストーリー、タスク自身の順）。無ければ null
   category: definitionRefSchema.nullable(),
   // 振ったリポジトリ。無ければ null
@@ -115,15 +117,16 @@ const filterRefSchema = idSchema.nullable().optional();
 // - category_id: 引き継ぎを解いた区分（エピック、ストーリー、タスクの順）の ID か null（区分なし）
 // - repository_id: リポジトリの ID か null（リポジトリなし）
 // - epic_id: エピックの ID か null（エピックなし。親のないストーリーと親のないタスクだけ）
+// - delegatee_id: 依頼先の ID か null（依頼先なし）。候補は delegatee-list で読む（choices には載せない）
 // - query: タイトルの検索。空白（半角、全角）で語に分け、どの語も1つの行のタイトルに含むときに当たる（instr と lower。英字の大文字と小文字は区別しない）
 // 区分、エピック、検索は、ストーリーとエピックそのものにも当てる。親が当たれば、配下のタスクのうちほかの条件にも当たるものを全部出す。
-// 担当かリポジトリでも絞っているときは、当たるタスクを持たない親を出さない。
+// 担当、依頼先、リポジトリでも絞っているときは、当たるタスクを持たない親を出さない。
 // 別のワークスペースや別の組織の ID は、何にも当たらない（404 にはしない）。
 // 絞っても、ポイントの合計と完了の件数は、そのストーリーとエピックの全体の値を返す。絞っているときは、親のない完了の件数を返さない（null）
 export const backlogTree = defineOperation({
   name: 'backlog-tree',
   description:
-    'バックログの木を返す。エピック（配下のストーリーとポイントの合計つき）、親のないストーリー（配下の未完了のタスク、完了した件数、ポイントの合計つき）と、親のない未完了のタスク（決まった欄が未記入かつき）、完了した親のないタスクの件数、決まった欄が未記入の未完了のタスクの全体の件数、絞り込みの担当とエピックの選択肢。担当、区分、リポジトリ、エピック、タイトルの検索で絞れる',
+    'バックログの木を返す。エピック（配下のストーリーとポイントの合計つき）、親のないストーリー（配下の未完了のタスク、完了した件数、ポイントの合計つき）と、親のない未完了のタスク（決まった欄が未記入かつき）、完了した親のないタスクの件数、決まった欄が未記入の未完了のタスクの全体の件数、絞り込みの担当とエピックの選択肢。担当、区分、リポジトリ、エピック、依頼先、タイトルの検索で絞れる',
   mode: 'read',
   permission: 'member',
   workspace: true,
@@ -136,6 +139,7 @@ export const backlogTree = defineOperation({
     category_id: filterRefSchema,
     repository_id: filterRefSchema,
     epic_id: filterRefSchema,
+    delegatee_id: filterRefSchema,
     query: backlogQuerySchema.optional(),
   }),
   output: z.object({

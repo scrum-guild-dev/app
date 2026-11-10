@@ -68,6 +68,7 @@ test('390px の管理と運用で静かな操作が積んだ行の左端にそ�
             workspace_count: 3,
             task_count: 1284,
             attachment_quota_bytes: 32212254720,
+            attachment_used_bytes: 0,
             last_used_at: null,
             self_created: false,
             trial_ends_on: null,

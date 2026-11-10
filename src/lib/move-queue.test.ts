@@ -263,3 +263,29 @@ describe('MoveQueue の whenIdle', () => {
     await queue.whenIdle();
   });
 });
+
+test('属性の読み直しで待ち列を保つ場合は、その間に押した移動も捨てない', async () => {
+  const { queue, sent, dropped, reload } = setup();
+  const first = deferred();
+  void queue.send(
+    () => {
+      sent.push('a');
+      return first.promise;
+    },
+    async () => {},
+  );
+  await started();
+  const last = queue.send(
+    async () => {
+      sent.push('b');
+      return { ok: true, name: 'b' };
+    },
+    async () => {},
+  );
+  queue.reloaded(true);
+  first.resolve({ ok: true, name: 'a' });
+  await last;
+  expect(sent).toEqual(['a', 'b']);
+  expect(dropped).not.toHaveBeenCalled();
+  expect(reload).toHaveBeenCalledTimes(1);
+});

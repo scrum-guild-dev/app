@@ -23,11 +23,11 @@
   // 開いたときの上限を expected に添えて送り、開いた後に別の運用者が変えていればサーバーが 409 で断る。
   // 選択肢を選び直したら、欄の誤りと送信の失敗の文を消す。
   // 書かれたか分からない失敗（5xx、通信の切れ）は、変わっていることもあると伝え、閉じたときに一覧を読み直す。
-  // 添付ファイルの今の合計と、合計に関わる注意（合計が下がるまで添付できない、80% の通知）は #68 まで出さない。
+  // 一覧を読んだときの合計と、上限を下げる場合と上げる場合の注意を出す。
   // 送っている間の扱いと、結果の渡し方（onfinish、generation）は OrganizationSuspendDialog と同じ
   type Outcome = 'done' | 'state_changed' | 'unavailable' | 'unauthenticated';
   type Choice = (typeof quotaTiers)[number]['id'] | 'other';
-  type Current = { member_limit: number; attachment_quota_bytes: number; used: number };
+  type Current = { member_limit: number; attachment_quota_bytes: number; attachment_used_bytes: number; used: number };
   let { onfinish }: { onfinish: (outcome: Outcome) => void } = $props();
 
   let open = $state(false);
@@ -76,6 +76,9 @@
     const quota = quotaSize(bytes);
     return t(quota.unit === 'gb' ? 'operatorQuotaSize' : 'operatorQuotaSizeMb', { size: quota.size });
   }
+  function usageText(bytes: number): string {
+    return bytes < 1024 ** 2 ? t('storageByteSize', { size: formatCount(bytes) }) : sizeText(bytes);
+  }
 
   const isWhole = (value: number | null, max: number): value is number =>
     typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= max;
@@ -86,6 +89,7 @@
       name: string;
       seats: { used: number; limit: number };
       attachment_quota_bytes: number;
+      attachment_used_bytes: number;
     },
     trigger?: HTMLElement | null,
   ): void {
@@ -93,6 +97,7 @@
     const current = {
       member_limit: organization.seats.limit,
       attachment_quota_bytes: organization.attachment_quota_bytes,
+      attachment_used_bytes: organization.attachment_used_bytes,
       used: organization.seats.used,
     };
     target = { slug: organization.slug, name: organization.name, current };
@@ -193,6 +198,7 @@
           used: target.current.used,
           limit: target.current.member_limit,
           quota: sizeText(target.current.attachment_quota_bytes),
+          storage: usageText(target.current.attachment_used_bytes),
         }),
   );
   const tierNames = $derived({
@@ -283,6 +289,10 @@
         <span class="field-hint" id={unchangedHintId}>{t('operatorQuotaUnchangedHint')}</span>
       {/if}
       <p class="field-hint">{t('operatorQuotaNote')}</p>
+      <p class="field-hint">{t('operatorStorageQuotaNote')}</p>
+      {#if target !== null && chosen !== null && chosen.attachment_quota_bytes < target.current.attachment_used_bytes}
+        <div class="callout is-warn"><Icon name="alert" /><span>{t('operatorStorageBelowUsage')}</span></div>
+      {/if}
       <p class="field-hint">{t('operatorQuotaHistoryNote', { organization: t('organization') })}</p>
     </div>
     {#if submitError !== null}

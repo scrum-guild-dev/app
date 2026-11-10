@@ -47,6 +47,16 @@
 
 手元の `wrangler dev` と vitest の Workers の実行環境は R2 を模擬する。本番のバケットには触らず、手元用のバケットを Cloudflare に作る必要はない。
 
+### 容量警告と通知の定期処理
+
+毎分の処理は、組織の通知済み・配信待ち・容量確認待ちの印を持つ組織だけを集計し、80%未満への復帰と通知の再試行を行う。保存応答は集計・配信を待たず、印の登録後に集計・配信が失敗したときは `attachment_quota_check_pending_at` または `attachment_quota_warning_pending_at` が残る。通常の `organization` の読み取りでは容量を集計せず、管理画面の節が `include_storage: true` を明示したときだけ読む。
+
+保存後の集計は同じ isolate・組織で実行中なら印を共有し、後続リクエストは元の Promise を待たずに返す。追随は1回まで。開始から30秒を超えた実行中の印は、次の保存で置き換える。旧処理を強制終了しないため、生きていれば置換後の処理と並走しうる。その後の変更待ちはcronへ渡す。容量値・権限はキャッシュせず、isolate 間の合流や連続要求の回数上限は保証しない。添付の事前確認は印がある組織に加え、上限が最大添付サイズ50MiBの5倍以下の組織でも常に行う。80%未満でも1添付が残量を超えうるためで、cronが変更待ちを消した後も本文・R2前に拒否できる。拒否後の印だけの登録は、すでに変更待ちなら共通行・世代を更新しない。
+
+1回の容量確認は10組織、1組織5バッチ（各50人を1文）まで。通知済みだけの組織も80%未満への復帰を調べるため同じ巡回に含む。jobは毎分動くが、各組織の再試行が毎分とは限らず、対象N組織なら通常は約ceil(N/10)分（末尾の空巡回を含む場合はさらに1分）かかる。時間予算・失敗でさらに遅れる。既読90日超の通知の掃除は別に全組織を10件ずつ確認する。停止した組織は対象外。`job: "attachment-quota-warning"` の失敗ログと、`reason: "容量の変更待ちの記録または通知処理に失敗した"` のログを調べ、次の回で印と未配信の人が減ることを確かめる。変更待ちの初回登録が失敗すると defer で1回再試行するが、その登録も失敗した場合や、保存後から印の登録までに isolate の破棄・タイムアウト等で処理が中断した場合は、未登録のままとなる。保存自体は取り消さず、ログの例外名と共通 DB の障害を調べる。本文・受取人・資格情報はログに出さない。
+
+R2 の `system/attachment-quota-warning-cursor` と `system/notification-cleanup-cursor` は各処理の続きの組織 ID を持つ内部オブジェクトで、添付ではない。組織の容量や削除対象には含めない。末尾まで処理すると空に戻り、次の回は先頭から始める。詳細は `docs/data-model.md` の `notifications`。
+
 ### Workers Builds の接続
 
 Workers & Pages の「Create application」→「Continue with GitHub」で、リポジトリ `scrum-guild-dev/app` を選び、Project name を `scrum-guild`（`wrangler.jsonc` の `name` と同じ）にして作る。Worker が既にあるときは、その Worker の Settings の Builds でつなぐ。GitHub の Cloudflare のアプリには、このリポジトリと紹介サイトのリポジトリ `scrum-guild-dev/website` だけを許可する。紹介サイトの Worker `scrum-guild-website` の Builds の設定は、`scrum-guild-dev/website` の README の「デプロイ」に書く。
@@ -346,7 +356,7 @@ rollback で戻るのは、版が持つものすべて。コードと設定の�
 次のものは戻らない。
 
 - D1 のデータとスキーマ（下の「DB を戻す」）
-- cron やルート（triggers）の変更。`wrangler deploy` が版と一緒に反映する。triggers を変えた版を戻すときは、手元（上の「手元の準備」）で戻し先の版のコミットを checkout し、その `wrangler.jsonc` で `wrangler triggers deploy` を実行して当て直す。今の `main` で実行すると、戻したい triggers をもう一度当てるだけになる。今の `wrangler.jsonc` の triggers は、毎分（`* * * * *`）の期限切れの行の掃除と、毎時 0 分（`0 * * * *`）のお試しの期限切れの停止と未添付ファイルの掃除、という2つの式
+- cron やルート（triggers）の変更。`wrangler deploy` が版と一緒に反映する。triggers を変えた版を戻すときは、手元（上の「手元の準備」）で戻し先の版のコミットを checkout し、その `wrangler.jsonc` で `wrangler triggers deploy` を実行して当て直す。今の `main` で実行すると、戻したい triggers をもう一度当てるだけになる。今の `wrangler.jsonc` の triggers は、毎分（`* * * * *`）の期限切れ・保持期限後の行の掃除と容量警告の再試行、および毎時 0 分（`0 * * * *`）のお試しの期限切れの停止と未添付ファイルの掃除、という2つの式
 
 ### DB を戻す
 

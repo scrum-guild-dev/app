@@ -11,10 +11,11 @@ const theme = z.enum(themes);
 export const organizationInfo = defineOperation({
   name: 'organization',
   description:
-    '組織の名前、既定のテーマと、この組織での自分、所属するワークスペース、管理者ならお試しの期限と残りの日数を返す。呼ぶと last_seen_at を書く（1時間に1回まで）',
+    '組織の名前、既定のテーマと、この組織での自分、所属するワークスペース、管理者ならお試しの期限と残りの日数を返す。include_storage:true を指定した管理者だけ容量の合計と内訳を取得する。呼ぶと last_seen_at を書く（1時間に1回まで）',
   mode: 'read',
   permission: 'organization',
-  input: z.object({}),
+  // 管理画面の容量の節だけが明示する。組織の枠では本文と全過去版を走査しない。
+  input: z.object({ include_storage: z.boolean().optional() }),
   output: z.object({
     organization: z.object({
       name: z.string(),
@@ -32,6 +33,22 @@ export const organizationInfo = defineOperation({
       theme: theme.nullable(),
       level: z.number().int(),
     }),
+    // 組織全体の内訳は管理者だけ。一般のメンバーには所属していないワークスペースも含めて見せない。
+    storage: z
+      .object({
+        used_bytes: z.number().int(),
+        quota_bytes: z.number().int(),
+        organization_wiki_bytes: z.number().int(),
+        workspaces: z.array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            closed_at: z.string().nullable(),
+            used_bytes: z.number().int(),
+          }),
+        ),
+      })
+      .nullable(),
     trial: z.object({ ends_on: z.string(), days_left: z.number().int() }).nullable(),
     workspaces: z.array(z.object({ id: z.string(), name: z.string(), role: z.enum(['leader', 'member']) })),
   }),

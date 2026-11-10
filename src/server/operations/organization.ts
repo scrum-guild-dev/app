@@ -3,6 +3,7 @@ import { levelOf } from '../../shared/experience.ts';
 import { myOrganizations, organizationInfo } from '../../shared/operations/organization/index.ts';
 import type { Theme } from '../../shared/theme.ts';
 import { ApiError } from '../errors.ts';
+import { readOrganizationStorageUsage } from '../db/index.ts';
 import { amountOf, userExperienceTotalStatement } from './experience.ts';
 import { implement } from './implement.ts';
 
@@ -19,85 +20,97 @@ export const myOrganizationsOperation = implement(myOrganizations, async ({ acco
   };
 });
 
-export const organizationInfoOperation = implement(organizationInfo, async ({ db, actor, organization, defer }) => {
-  // permission: 'organization' は users の行がある人だけを通す。型の上の null を 404 で閉じる
-  const userId = actor.userId;
-  if (userId === null) throw new ApiError(404, 'not_found');
-  const at = now();
-  const staleBefore = new Date(at.getTime() - LAST_SEEN_INTERVAL_MS).toISOString();
+export const organizationInfoOperation = implement(
+  organizationInfo,
+  async ({ db, actor, organization, defer, tools, input }) => {
+    // permission: 'organization' は users の行がある人だけを通す。型の上の null を 404 で閉じる
+    const userId = actor.userId;
+    if (userId === null) throw new ApiError(404, 'not_found');
+    const at = now();
+    const staleBefore = new Date(at.getTime() - LAST_SEEN_INTERVAL_MS).toISOString();
 
-  // 画面に返す値を読む。書き込みは混ぜず、書き込みが失敗しても画面は開く
-  const [userResult, workspaceResult, anyWorkspaceResult, experienceResult] = await db.batch([
-    db.statement((q) =>
-      q
-        .selectFrom('users')
-        .select(['id', 'name', 'theme'])
-        .where('id', '=', userId)
-        .where('organization_id', '=', db.organizationId),
-    ),
-    db.statement((q) =>
-      q
-        .selectFrom('memberships as m')
-        .innerJoin('workspaces as w', 'w.id', 'm.workspace_id')
-        .select(['w.id', 'w.name', 'm.role'])
-        .where('m.user_id', '=', userId)
-        .where('m.left_at', 'is', null)
-        .where('w.organization_id', '=', db.organizationId)
-        .orderBy('w.name')
-        .orderBy('w.id'),
-    ),
-    db.statement((q) =>
-      q.selectFrom('workspaces').select('id').where('organization_id', '=', db.organizationId).limit(1),
-    ),
-    // アカウントのメニューの紋章に出すレベルの元。合計そのものは返さない
-    userExperienceTotalStatement(db, userId),
-  ] as const);
-
-  const user = userResult.rows[0];
-  if (user === undefined) throw new ApiError(404, 'not_found');
-
-  // 1時間に1回までの書き込み。応答を待たせない。条件は書く文の WHERE に入れ、並行した呼び出しの片方だけが書き、日時が巻き戻らない
-  defer(() =>
-    db.batch([
+    // 画面に返す値を読む。書き込みは混ぜず、書き込みが失敗しても画面は開く
+    const [userResult, workspaceResult, anyWorkspaceResult, experienceResult] = await db.batch([
       db.statement((q) =>
         q
-          .updateTable('users')
-          .set({ last_seen_at: at.toISOString() })
+          .selectFrom('users')
+          .select(['id', 'name', 'theme'])
           .where('id', '=', userId)
-          .where('organization_id', '=', db.organizationId)
-          .where((eb) => eb.or([eb('last_seen_at', 'is', null), eb('last_seen_at', '<=', staleBefore)])),
+          .where('organization_id', '=', db.organizationId),
       ),
-    ]),
-  );
+      db.statement((q) =>
+        q
+          .selectFrom('memberships as m')
+          .innerJoin('workspaces as w', 'w.id', 'm.workspace_id')
+          .select(['w.id', 'w.name', 'm.role'])
+          .where('m.user_id', '=', userId)
+          .where('m.left_at', 'is', null)
+          .where('w.organization_id', '=', db.organizationId)
+          .orderBy('w.name')
+          .orderBy('w.id'),
+      ),
+      db.statement((q) =>
+        q.selectFrom('workspaces').select('id').where('organization_id', '=', db.organizationId).limit(1),
+      ),
+      // アカウントのメニューの紋章に出すレベルの元。合計そのものは返さない
+      userExperienceTotalStatement(db, userId),
+    ] as const);
 
-  return {
-    // theme の形は出力のスキーマ（z.enum）が検証する
-    organization: {
-      name: organization.name,
-      kind: organization.kind,
-      theme: organization.theme,
-      has_workspaces: anyWorkspaceResult.rows.length > 0,
-    },
-    me: {
-      id: user.id,
-      name: user.name,
-      is_admin: actor.isAdmin,
-      // 列の CHECK が守る値（組織の theme と同じ列挙）
-      theme: user.theme as Theme | null,
-      level: levelOf(amountOf(experienceResult.rows[0]?.total)),
-    },
-    trial:
-      actor.isAdmin && organization.trial_ends_on !== null
+    const user = userResult.rows[0];
+    if (user === undefined) throw new ApiError(404, 'not_found');
+
+    // 1時間に1回までの書き込み。応答を待たせない。条件は書く文の WHERE に入れ、並行した呼び出しの片方だけが書き、日時が巻き戻らない
+    defer(() =>
+      db.batch([
+        db.statement((q) =>
+          q
+            .updateTable('users')
+            .set({ last_seen_at: at.toISOString() })
+            .where('id', '=', userId)
+            .where('organization_id', '=', db.organizationId)
+            .where((eb) => eb.or([eb('last_seen_at', 'is', null), eb('last_seen_at', '<=', staleBefore)])),
+        ),
+      ]),
+    );
+
+    const storage =
+      actor.isAdmin && input.include_storage === true
         ? {
-            ends_on: organization.trial_ends_on,
-            days_left:
-              (Date.parse(organization.trial_ends_on) - Date.parse(at.toISOString().slice(0, 10))) / 86_400_000,
+            ...(await readOrganizationStorageUsage(db)),
+            quota_bytes: (await tools.readOrganization()).attachmentQuotaBytes,
           }
-        : null,
-    workspaces: workspaceResult.rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      role: row.role === 'leader' ? ('leader' as const) : ('member' as const),
-    })),
-  };
-});
+        : null;
+
+    return {
+      storage,
+      // theme の形は出力のスキーマ（z.enum）が検証する
+      organization: {
+        name: organization.name,
+        kind: organization.kind,
+        theme: organization.theme,
+        has_workspaces: anyWorkspaceResult.rows.length > 0,
+      },
+      me: {
+        id: user.id,
+        name: user.name,
+        is_admin: actor.isAdmin,
+        // 列の CHECK が守る値（組織の theme と同じ列挙）
+        theme: user.theme as Theme | null,
+        level: levelOf(amountOf(experienceResult.rows[0]?.total)),
+      },
+      trial:
+        actor.isAdmin && organization.trial_ends_on !== null
+          ? {
+              ends_on: organization.trial_ends_on,
+              days_left:
+                (Date.parse(organization.trial_ends_on) - Date.parse(at.toISOString().slice(0, 10))) / 86_400_000,
+            }
+          : null,
+      workspaces: workspaceResult.rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        role: row.role === 'leader' ? ('leader' as const) : ('member' as const),
+      })),
+    };
+  },
+);

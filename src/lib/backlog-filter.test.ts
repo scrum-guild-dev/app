@@ -3,14 +3,18 @@ import { backlogQueryProblem } from '../shared/backlog-filter.ts';
 import { emptyFilter, filterFromParams, filterInput, filterSearch, isFiltering, sameFilter } from './backlog-filter.ts';
 
 describe('filterFromParams', () => {
-  test('5つの問い合わせを読み、無いものはすべて（空）にする', () => {
+  test('6つの問い合わせを読み、無いものはすべて（空）にする', () => {
     expect(filterFromParams(new URLSearchParams('assignee=me&category=none&epic=e1&q=api&task=t1'))).toEqual({
       assignee: 'me',
       category: 'none',
       repository: '',
       epic: 'e1',
+      delegatee: '',
       q: 'api',
     });
+    expect(filterFromParams(new URLSearchParams('delegatee=d1')).delegatee).toBe('d1');
+    expect(filterFromParams(new URLSearchParams('delegatee=none')).delegatee).toBe('none');
+    expect(filterFromParams(new URLSearchParams({ delegatee: 'x'.repeat(65) })).delegatee).toBe('');
     expect(filterFromParams(new URLSearchParams(''))).toEqual(emptyFilter);
   });
 
@@ -28,7 +32,8 @@ describe('filterFromParams', () => {
 });
 
 describe('sameFilter', () => {
-  test('5つの値がすべて同じときだけ同じ', () => {
+  test('6つの値がすべて同じときだけ同じ', () => {
+    expect(sameFilter({ ...emptyFilter, delegatee: 'd1' }, emptyFilter)).toBe(false);
     expect(sameFilter(emptyFilter, { ...emptyFilter })).toBe(true);
     expect(sameFilter(emptyFilter, { ...emptyFilter, q: 'api' })).toBe(false);
     expect(sameFilter({ ...emptyFilter, epic: 'none' }, emptyFilter)).toBe(false);
@@ -40,6 +45,7 @@ describe('isFiltering', () => {
     expect(isFiltering(emptyFilter)).toBe(false);
     expect(isFiltering({ ...emptyFilter, repository: 'none' })).toBe(true);
     expect(isFiltering({ ...emptyFilter, q: 'api' })).toBe(true);
+    expect(isFiltering({ ...emptyFilter, delegatee: 'none' })).toBe(true);
   });
 });
 
@@ -49,18 +55,24 @@ describe('filterSearch', () => {
       '?task=t1&q=%E8%BF%94%E9%87%91+API&category=c1',
     );
     expect(filterSearch('?assignee=u1', emptyFilter)).toBe('');
+    expect(filterSearch('?task=t1', { ...emptyFilter, delegatee: 'd1' })).toBe('?task=t1&delegatee=d1');
+    expect(filterSearch('?delegatee=d1', emptyFilter)).toBe('');
   });
 });
 
 describe('filterInput', () => {
   test('すべては渡さず、なしは null、自分と ID はそのまま渡す', () => {
     expect(filterInput(emptyFilter)).toEqual({});
-    expect(filterInput({ assignee: 'me', category: 'none', repository: 'r1', epic: 'none', q: 'api' })).toEqual({
+    expect(
+      filterInput({ assignee: 'me', category: 'none', repository: 'r1', epic: 'none', delegatee: 'd1', q: 'api' }),
+    ).toEqual({
       assignee_user_id: 'me',
       category_id: null,
       repository_id: 'r1',
       epic_id: null,
+      delegatee_id: 'd1',
       query: 'api',
     });
+    expect(filterInput({ ...emptyFilter, delegatee: 'none' })).toEqual({ delegatee_id: null });
   });
 });

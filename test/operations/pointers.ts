@@ -290,6 +290,23 @@ export const pointers: Pointers = {
   }),
   // 入力は空。組織は URL の slug で決まる
   organization: { noReference: {} },
+  'notification-list': { noReference: {} },
+  'notification-read': async (target, caller) => {
+    const db = orgDb(env, target.organization.verified);
+    const id = uuidv7();
+    await db.batch([
+      db.statement((q) =>
+        q.insertInto('notifications').values({
+          id,
+          user_id: (personOf(target, caller) ?? target.admin).userId!,
+          kind: 'attachment_quota_warning',
+          payload_json: JSON.stringify({ used_bytes: 81, quota_bytes: 100 }),
+          created_at: '2026-11-10T00:00:00.000Z',
+        }),
+      ),
+    ]);
+    return { id };
+  },
   today: { noReference: {} },
   'first-steps': { noReference: {} },
   // 最初のリーダーに、対象の組織の管理者を指す。別の組織の管理者を指すと 404
