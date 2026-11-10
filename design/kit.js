@@ -3221,10 +3221,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function syncMobilePageTools() {
     if (!page || page.operator) return;
     const narrow = matchMedia("(max-width: 760px)").matches;
-    if (narrow === mobileToolsNarrow) return;
+    if (narrow === mobileToolsNarrow && (!narrow || document.querySelector(".mobile-page-tools"))) return;
     restoreMobilePageTools();
-    mobileToolsNarrow = narrow;
-    if (!narrow) return;
+    if (!narrow) { mobileToolsNarrow = false; return; }
     const content = document.getElementById("content");
     let row = content.querySelector(".page-title-row");
     if (!row) {
@@ -3241,6 +3240,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const node = document.querySelector(selector);
       if (node) tools.append(node);
     }
+    mobileToolsNarrow = true;
   }
   window.addEventListener("resize", syncMobilePageTools);
   function redraw() {
