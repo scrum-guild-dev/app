@@ -12,7 +12,7 @@ import {
   delegateeUpdate,
 } from '../src/shared/operations/organization/index.ts';
 import { taskDetail } from '../src/shared/operations/task/index.ts';
-import { createTask, createWorkspace, uuidv7 } from './factories.ts';
+import { createDelegatee, createTask, createWorkspace, uuidv7 } from './factories.ts';
 import { post } from './operations/harness.ts';
 import { createPersonalTarget, createTarget, testEnv, type Target } from './operations/world.ts';
 
@@ -43,6 +43,23 @@ async function logs(target: Target) {
 }
 
 describe('依頼先の名簿', () => {
+  test('件数上限の最後の枠に並行登録しても50人まで。削除後は枠を再利用できる', async () => {
+    const target = await createPersonalTarget();
+    for (let n = 0; n < 49; n++) await createDelegatee(target.organization, { name: `名簿-${n}` });
+    const responses = await Promise.all([
+      call(target, delegateeCreate, { name: '最後の候補1' }),
+      call(target, delegateeCreate, { name: '最後の候補2' }),
+    ]);
+    expect(responses.map((res) => res.status).sort()).toEqual([200, 409]);
+    const refused = responses.find((res) => res.status === 409)!;
+    expect(await refused.json()).toMatchObject({ error: { code: 'conflict', details: { reason: 'limit' } } });
+    const people = await list(target);
+    expect(people).toHaveLength(50);
+    expect((await call(target, delegateeDelete, { delegatee_id: people[0]!.id })).status).toBe(200);
+    expect((await call(target, delegateeCreate, { name: '削除した枠' })).status).toBe(200);
+    expect(await list(target)).toHaveLength(50);
+  });
+
   test('追加・名前変更・名前順の一覧。名前の前後の空白を除く', async () => {
     const target = await createPersonalTarget();
     const second = await add(target, '  いろは 透  ');

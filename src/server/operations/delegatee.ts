@@ -1,3 +1,4 @@
+import { DELEGATEES_PER_ORGANIZATION } from '../../shared/operations/organization/delegatee.ts';
 import { now } from '../../shared/clock.ts';
 import {
   delegateeCreate,
@@ -64,7 +65,13 @@ function rosterLog(
 
 export const delegateeListOperation = implement(delegateeList, async ({ db }) => ({
   delegatees: await db.rows(
-    db.statement((q) => liveDelegatees(q, db.organizationId).select(['id', 'name']).orderBy('name').orderBy('id')),
+    db.statement((q) =>
+      liveDelegatees(q, db.organizationId)
+        .select(['id', 'name'])
+        .orderBy('name')
+        .orderBy('id')
+        .limit(DELEGATEES_PER_ORGANIZATION),
+    ),
   ),
 }));
 
@@ -88,7 +95,14 @@ export const delegateeCreateOperation = implement(delegateeCreate, async ({ db, 
               eb.val(stamp).as('created_at'),
               eb.val(stamp).as('updated_at'),
             ])
-            .where((eb) => eb.not(eb.exists(sameName(q, db.organizationId, input.name)))),
+            .where((eb) => eb.not(eb.exists(sameName(q, db.organizationId, input.name))))
+            .where((eb) =>
+              eb(
+                liveDelegatees(q, db.organizationId).select(eb.fn.countAll<number>().as('count')),
+                '<',
+                DELEGATEES_PER_ORGANIZATION,
+              ),
+            ),
         ),
     ),
     rosterLog(db, {
@@ -100,7 +114,10 @@ export const delegateeCreateOperation = implement(delegateeCreate, async ({ db, 
       at,
     }),
   ]);
-  if ((results[0]?.changes ?? 0) === 0) throw new ApiError(409, 'conflict', { reason: 'duplicate_name' });
+  if ((results[0]?.changes ?? 0) === 0) {
+    const duplicate = await db.first(db.statement((q) => sameName(q, db.organizationId, input.name)));
+    throw new ApiError(409, 'conflict', { reason: duplicate === undefined ? 'limit' : 'duplicate_name' });
+  }
   return { delegatee: { id, name: input.name } };
 });
 

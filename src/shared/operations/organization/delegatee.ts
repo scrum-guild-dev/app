@@ -3,6 +3,9 @@ import { definitionNameSchema } from '../../definition.ts';
 import { idSchema } from '../../id.ts';
 import { defineOperation } from '../define.ts';
 
+// 区分と同じく、一覧を1回で返せる数に限る。削除済みは数えない。
+export const DELEGATEES_PER_ORGANIZATION = 50;
+
 export const delegateeSchema = z.object({ id: z.string(), name: z.string() });
 
 export const delegateeList = defineOperation({
@@ -11,7 +14,7 @@ export const delegateeList = defineOperation({
   mode: 'read',
   permission: 'organization',
   input: z.object({}),
-  output: z.object({ delegatees: z.array(delegateeSchema) }),
+  output: z.object({ delegatees: z.array(delegateeSchema).max(DELEGATEES_PER_ORGANIZATION) }),
 });
 
 export const delegateeCreate = defineOperation({
