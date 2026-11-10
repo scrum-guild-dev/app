@@ -13,6 +13,8 @@ import { ApiError } from '../errors.ts';
 import { sniffContentType } from '../attachments/sniff.ts';
 import { downloadAttachment } from '../attachments/download.ts';
 
+const SMALL_ATTACHMENT_QUOTA_MAX_BYTES = 5 * ATTACHMENT_MAX_BYTES;
+
 export const attachmentDownloadOperation = implement(attachmentDownload, async ({ db, actor, input, download }) => {
   if (actor.userId === null) throw new ApiError(404, 'not_found');
   const userId = actor.userId;
@@ -95,7 +97,7 @@ export const attachmentUploadOperation = implement(
     // 大きい上限で印がない通常要求には、この事前集計を増やさない。
     if (
       binary.contentLength > attachmentQuotaBytes ||
-      ((attachmentQuotaNeedsCheck || attachmentQuotaBytes <= 5 * ATTACHMENT_MAX_BYTES) &&
+      ((attachmentQuotaNeedsCheck || attachmentQuotaBytes <= SMALL_ATTACHMENT_QUOTA_MAX_BYTES) &&
         !(await attachmentFitsQuota(db, attachmentQuotaBytes, binary.contentLength)))
     ) {
       await throwIfClosed(db, workspace.workspaceId);
