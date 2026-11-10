@@ -89,8 +89,10 @@ export async function probeOnce(
   return { startedAt, ms: deps.elapsed() - from, result };
 }
 
-// 残すか。しきい値以上かかったものと、想定と違う応答（接続の失敗、落ちたサーバーの即時の失敗を含む）
+// 残すか。しきい値以上かかったものと、想定と違う応答（接続の失敗、落ちたサーバーの即時の失敗を含む）。
+// 止めた時点で待っていた問い合わせは、しきい値以上待っていたときだけ残す（終わりにたまたま待っていただけのものを数えない）
 export function isNotable(target: ProbeTarget, ms: number, result: string, thresholdMs: number): boolean {
+  if (result === STOPPED) return ms >= thresholdMs;
   return ms >= thresholdMs || result !== String(target.expectedStatus);
 }
 

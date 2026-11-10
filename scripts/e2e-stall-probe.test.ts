@@ -94,6 +94,11 @@ describe('isNotable', () => {
     assert.equal(isNotable(target('d1'), 5, '503', 1_000), true);
     assert.equal(isNotable(target('asset'), 3, 'TypeError', 1_000), true);
   });
+
+  test('止めた時点で待っていた問い合わせは、しきい値以上待っていたときだけ残す', () => {
+    assert.equal(isNotable(target('d1'), 10, '止めるまで応答なし', 1_000), false);
+    assert.equal(isNotable(target('d1'), 1_000, '止めるまで応答なし', 1_000), true);
+  });
 });
 
 describe('startStallProbe', () => {
