@@ -698,7 +698,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   border: 0; border-radius: var(--radius-1); background: none; color: var(--color-muted);
 }
 .favorite-mark:hover { background: var(--color-rule); color: var(--color-fg); }
-.favorite-mark[aria-pressed="true"] { color: var(--color-accent); }
+.favorite-mark[aria-pressed="true"] { color: var(--color-favorite); }
 .favorite-mark[aria-pressed="true"] .ico { fill: currentColor; }
 .favorite-mark[aria-disabled="true"] { cursor: not-allowed; }
 .favorite-mark[aria-busy="true"] { cursor: wait; }

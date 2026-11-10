@@ -132,6 +132,45 @@ for (const kind of ['task', 'task-drawer', 'story', 'epic', 'org-wiki', 'workspa
   });
 }
 
+// #1114: OS 自動選択も含め、実際に描かれる星の金色と塗りを確認する。
+test('お気に入りの星は全テーマで金色に塗られ、外すと輪郭に戻る', async ({ page, context, baseURL }) => {
+  if (!baseURL) throw new Error('baseURL が無い');
+  await signIn(context, baseURL, 'admin');
+  const item = await target(page, baseURL, 'task');
+  await routeOperation(page, favoriteList, { slug: 'aoba' }, async (call) => {
+    await call.fulfill(listOutput([]));
+  });
+  await routeOperation(page, favoriteSet, { slug: 'aoba' }, async (call) => {
+    await call.fulfill({ is_favorite: call.input.is_favorite });
+  });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(item.initial);
+  const star = page.getByRole('button', { name: 'お気に入りにする', exact: true });
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  await star.click();
+  await expect(star).toHaveAttribute('aria-pressed', 'true');
+  for (const [theme, scheme, color] of [
+    ['simple', 'light', 'rgb(153, 112, 0)'],
+    ['simple_light', 'dark', 'rgb(153, 112, 0)'],
+    ['simple', 'dark', 'rgb(245, 204, 69)'],
+    ['simple_dark', 'light', 'rgb(245, 204, 69)'],
+    ['medieval', 'light', 'rgb(145, 107, 0)'],
+    ['modern', 'light', 'rgb(245, 204, 69)'],
+  ] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    await expect(star).toHaveCSS('color', color);
+    await expect(star.locator('svg')).toHaveCSS('fill', color);
+    await star.hover();
+    await expect(star).toHaveCSS('color', color);
+  }
+  await star.click();
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  await expect(star.locator('svg')).toHaveCSS('fill', 'none');
+});
+
 test('お気に入りのタスクを削除するとナビから消え、取り消すと戻る', async ({ page, context, baseURL }) => {
   if (!baseURL) throw new Error('baseURL が無い');
   await signIn(context, baseURL, 'admin');
