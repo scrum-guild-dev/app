@@ -288,6 +288,8 @@ test('404 の後で候補から消えた親を解除し、親なしで再送で�
   await expect(parent).toHaveAccessibleName('親のストーリー: 未設定');
   await sheet.getByRole('button', { name: '作る', exact: true }).click();
   await expect(sheet).not.toBeVisible();
+  // 作成後の非同期の再読み込みまで確かめ、route.fetch の途中で context を閉じない。
+  await expect(page.getByRole('link', { name: '親を読み直して作る', exact: true })).toBeVisible();
 });
 
 test('起票前の本文にファイルを貼る・落とす操作でアップロードせず、本文を保つ', async ({ page, context, baseURL }) => {
