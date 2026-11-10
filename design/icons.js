@@ -4,10 +4,14 @@
 (function () {
   "use strict";
   const ICONS = {
-    "list-bullet": "<circle cx=\"4\" cy=\"6\" r=\"1\"/><circle cx=\"4\" cy=\"12\" r=\"1\"/><circle cx=\"4\" cy=\"18\" r=\"1\"/><path d=\"M9 6h11M9 12h11M9 18h11\"/>",
-    "list-check": "<path d=\"m3 6 2 2 3-4M11 6h10m-18 8 2 2 3-4m3 2h10M3 21h5m3 0h10\"/>",
-    "code": "<path d=\"m8 6-6 6 6 6m8-12 6 6-6 6M14 3l-4 18\"/>",
-    "quote": "<path d=\"M4 5h6v8H4zM14 5h6v8h-6zM10 13c0 4-2 6-6 6m16-6c0 4-2 6-6 6\"/>",
+    // Lucide list 1.70.0: https://github.com/lucide-icons/lucide/blob/1.70.0/icons/list.svg (ISC; licenses/lucide.txt)
+    'list-bullet': '<path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/>',
+    // Lucide list-checks 1.70.0: https://github.com/lucide-icons/lucide/blob/1.70.0/icons/list-checks.svg (ISC; licenses/lucide.txt)
+    'list-check': '<path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/>',
+    // Lucide code-xml 1.70.0: https://github.com/lucide-icons/lucide/blob/1.70.0/icons/code-xml.svg (ISC; licenses/lucide.txt)
+    code: '<path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/>',
+    // Lucide quote 1.70.0: https://github.com/lucide-icons/lucide/blob/1.70.0/icons/quote.svg (ISC; licenses/lucide.txt)
+    quote: '<path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/>',
     // Lucide star 1.70.0: https://github.com/lucide-icons/lucide/blob/1.70.0/icons/star.svg (ISC; licenses/lucide.txt)
     star: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
