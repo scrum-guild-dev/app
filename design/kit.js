@@ -71,6 +71,10 @@
     discardText: "保存していない変更があります。捨てると元に戻せません。",
     discardKeep: "書き続ける",
     discardConfirm: "捨てる",
+    loading: "読み込んでいます",
+    storyCreating: "作っています",
+    dueClear: "クリア",
+    storyTitlePlaceholder: "どこまで進めば区切りか",
     createSheet: "起票",
     createSheetReloadFailed: "作成済みですが、一覧を読み直せませんでした。画面を開き直してください。",
     createKind: "作る種類",
@@ -2964,8 +2968,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         </header>
         <div class="create-sheet-body">
           ${state === "error" ? `<p class="callout is-danger" role="alert">${t("createSheetFailed")}</p>` : ""}
-          ${state === "loading" ? `<p role="status">読み込んでいます</p>` : ""}
-          ${sending ? `<p role="status">作っています</p>` : ""}
+          ${state === "loading" ? `<p role="status">${t("loading")}</p>` : ""}
+          ${sending ? `<p role="status">${t("storyCreating")}</p>` : ""}
           <p class="muted" id="create-sheet-reason">${t("taskTitleRequired")}</p>
           <label class="field"><span class="field-label">${t("fieldTitle")}</span><input class="input create-sheet-title" name="title" placeholder="${t("taskTitlePlaceholder")}"></label>
           <div class="field"><label class="field-label" for="sample-create-body">${t("fieldBody")}</label><div class="markdown-editor"><div class="slash-wrap"><textarea class="textarea" id="sample-create-body" name="body" ${sending ? "readonly" : ""}></textarea></div></div></div>
@@ -2976,7 +2980,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
           </div>
           <div class="create-sheet-attrs" data-create-story hidden>
             ${createSheetChip(t("epic"), ["架空のエピック"])}
-            <span class="row-menu"><button class="chip chip-btn is-unset" type="button" data-row-menu aria-haspopup="dialog" aria-expanded="false" aria-label="${t("due")}: 未設定"><span class="chip-text">${t("due")}</span></button><div class="account-menu-list row-menu-list attr-panel" role="dialog" aria-label="${t("due")}" hidden><label class="field"><span class="field-label">${t("due")}</span><input class="input" type="date" data-create-due></label><button class="btn" type="button" data-create-due-clear>期日を外す</button><button class="btn" type="button" data-create-due-close>${t("close")}</button></div></span>
+            <span class="row-menu"><button class="chip chip-btn is-unset" type="button" data-row-menu aria-haspopup="dialog" aria-expanded="false" aria-label="${t("due")}: 未設定"><span class="chip-text">${t("due")}</span></button><div class="account-menu-list row-menu-list attr-panel" role="dialog" aria-label="${t("due")}" hidden><label class="field"><span class="field-label">${t("due")}</span><input class="input" type="date" data-create-due></label><button class="btn" type="button" data-create-due-clear>${t("dueClear")}</button><button class="btn" type="button" data-create-due-close>${t("close")}</button></div></span>
           </div>
         </div>
       </form>
@@ -3039,7 +3043,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     sheet.querySelectorAll("[data-create-kind]").forEach(button => button.onclick = () => {
       if (state === "sending") return;
       kind = button.dataset.createKind;
-      title.placeholder = kind === "story" ? "どこまで進めば区切りか" : t("taskTitlePlaceholder");
+      title.placeholder = kind === "story" ? t("storyTitlePlaceholder") : t("taskTitlePlaceholder");
       sheet.querySelectorAll("[data-create-kind]").forEach(item => {
         item.setAttribute("aria-pressed", String(item === button)); item.classList.toggle("is-on", item === button);
       });
@@ -3053,14 +3057,14 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (state === "sending") {
       title.value = "書きかけの題"; title.readOnly = true;
       sheet.querySelectorAll("[data-create-kind]").forEach(button => button.disabled = true);
-      sheet.querySelector('[type="submit"]').setAttribute("aria-label", "作っています");
+      sheet.querySelector('[type="submit"]').setAttribute("aria-label", t("storyCreating"));
     }
     sheet.showModal(); title.focus();
   });
   function mobileTabsHtml(current, { live = true } = {}) {
     const tabs = [["today", "sun", "pageToday", "today.html"], ["favorites", "star", "favorites", "favorites.html"],
       ...(Object.keys(D.workspaces).length ? [["backlog", "board", "backlog", `backlog.html?workspace=${encodeURIComponent(D.workspace)}`]] : [])];
-    return `<div class="mobile-navigation"><nav class="mobile-tabs" aria-label="${t("mobileTabs")}">${tabs.map(([id, ic, key, href]) => `<a class="mobile-tab" href="${firstHref(href)}" aria-label="${t(key)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}</a>`).join("")}<button class="mobile-tab" type="button" aria-label="${t("mobileMenu")}" aria-haspopup="dialog" aria-expanded="false" ${live ? 'data-mobile-menu-open aria-controls="mobile-menu"' : ""}><span class="mobile-menu-arrows" aria-hidden="true">${icon("chevron")}${icon("chevron")}</span></button></nav><div class="mobile-create-slot">${!isFirst("admin") ? `<button class="mobile-create" type="button" aria-label="${t("createSheet")}" data-create-sheet-open>${icon("plus")}</button>` : ""}</div></div>`;
+    return `<div class="mobile-navigation"><nav class="mobile-tabs" aria-label="${t("mobileTabs")}">${tabs.map(([id, ic, key, href]) => `<a class="mobile-tab" href="${firstHref(href)}" aria-label="${t(key)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}</a>`).join("")}<button class="mobile-tab" type="button" aria-label="${t("mobileMenu")}" aria-haspopup="dialog" aria-expanded="false" ${live ? 'data-mobile-menu-open aria-controls="mobile-menu"' : ""}><span class="mobile-menu-arrows" aria-hidden="true">${icon("chevron")}${icon("chevron")}</span></button></nav><div class="mobile-create-slot">${Object.keys(D.workspaces).length > 0 ? `<button class="mobile-create" type="button" aria-label="${t("createSheet")}" data-create-sheet-open>${icon("plus")}</button>` : ""}</div></div>`;
   }
   // 中身を複製せず、狭い幅では同じ組織切り替えと nav をダイアログに移す。
   function syncMobileMenu() {
