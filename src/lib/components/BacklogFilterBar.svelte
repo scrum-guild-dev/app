@@ -27,13 +27,17 @@
   // 絞り込みが1つでも掛かっていれば、帯の端に「絞り込みを外す」を出す。
   // URL の値が選択肢に無い（消えた区分、別のワークスペースの値）ときは、その値を「一覧に無い値」の選択肢で残す。
   // 区分とリポジトリの一覧（categories、repositories）が読めなければ（definitionsFailed）空で、「すべて」と「なし」だけになり、
-  // 選んでいる値は「選んでいる値」で残し、帯の下に読めなかったことを出す
+  // 選んでいる値は「選んでいる値」で残し、帯の下に読めなかったことを出す。
+  // 依頼先（delegatees。自分用の組織の名簿）を渡すと、エピックの後に依頼先の選択欄を出す（チーム用の組織は渡さず、欄を出さない）。
+  // 名簿を読めなかった（delegateesFailed）ときは「すべて」と「なし」だけで、選んでいる値は「選んでいる値」で残す
   let {
     filter,
     choices,
     categories,
     repositories,
     definitionsFailed,
+    delegatees,
+    delegateesFailed = false,
     onchange,
   }: {
     filter: BacklogFilter;
@@ -42,6 +46,8 @@
     repositories: readonly { id: string; name: string }[];
     // 区分とリポジトリの一覧を読めなかった
     definitionsFailed: boolean;
+    delegatees?: readonly { id: string; name: string }[];
+    delegateesFailed?: boolean;
     onchange: (next: BacklogFilter) => void;
   } = $props();
 
@@ -59,6 +65,7 @@
     category: initial.category,
     repository: initial.repository,
     epic: initial.epic,
+    delegatee: initial.delegatee,
   });
   let text = $state(initial.q);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -76,6 +83,7 @@
         category: loaded.category,
         repository: loaded.repository,
         epic: loaded.epic,
+        delegatee: loaded.delegatee,
       };
       text = loaded.q;
     });
@@ -134,7 +142,7 @@
   function clear(): void {
     clearTimeout(timer);
     timer = undefined;
-    selected = { assignee: '', category: '', repository: '', epic: '' };
+    selected = { assignee: '', category: '', repository: '', epic: '', delegatee: '' };
     text = '';
     lastSent = { ...emptyFilter };
     onchange(lastSent);
@@ -173,11 +181,19 @@
     { value: FILTER_NONE, label: t('filterNoEpic', { epic: t('epic') }) },
   ]);
 
+  const delegateeOptions = $derived<Option[]>([
+    ...(delegatees ?? []).map((person) => ({ value: person.id, label: person.name })),
+    { value: FILTER_NONE, label: t('delegateeNone') },
+  ]);
+
   const selects = $derived<{ key: FilterSelectKey; label: string; options: Option[]; unloaded: boolean }[]>([
     { key: 'assignee', label: t('assignee'), options: assigneeOptions, unloaded: false },
     { key: 'category', label: t('category'), options: categoryOptions, unloaded: definitionsFailed },
     { key: 'repository', label: t('repository'), options: repositoryOptions, unloaded: definitionsFailed },
     { key: 'epic', label: t('epic'), options: epicOptions, unloaded: false },
+    ...(delegatees === undefined
+      ? []
+      : [{ key: 'delegatee' as const, label: t('delegatee'), options: delegateeOptions, unloaded: delegateesFailed }]),
   ]);
 </script>
 
@@ -223,6 +239,9 @@
   {/if}
   {#if problem !== null}
     <p class="field-error toolbar-note" id={noteId} role="alert"><Icon name="alert" />{problemText}</p>
+  {/if}
+  {#if delegatees !== undefined && delegateesFailed}
+    <p class="field-hint toolbar-note">{t('delegateesLoadFailed', { delegatee: t('delegatee') })}</p>
   {/if}
   {#if definitionsFailed}
     <!-- 起票のダイアログと同じ文。区分とリポジトリの選択欄は「すべて」と「なし」（と選んでいる値）だけになる -->

@@ -5,7 +5,7 @@
   import { page } from '$app/state';
   import { tick, untrack } from 'svelte';
   import { taskAttributes, publishTaskAttribute } from '../task-attributes.svelte.ts';
-  import { taskDetail, taskUpdate } from '../../shared/operations/task/index.ts';
+  import { taskDelegate, taskDetail, taskUpdate } from '../../shared/operations/task/index.ts';
   import { TASK_POINT_VALUES } from '../../shared/task.ts';
   import { callOperation, type ApiResult } from '../api.ts';
   import { showToast } from '../toast.svelte.ts';
@@ -54,6 +54,9 @@
   // ドラッグの代わりは「上へ」「下へ」と Alt と ↑ ↓
   // 完了の印の判を押す動き（.is-new）は、今押した行（justDone が真）だけで再生する。開いた時点で完了済みの行（今日やることの今日完了）は静止した印を出す
   // definitions は、画面が読んだ区分とリポジトリの一覧（読めなかったときは null で、「なし」と今の値だけを選べる）
+  // delegatees は、自分用の組織で画面が読んだ依頼先の名簿（読めなかったときは null で、今の値と「外す」だけを選べる）。渡すと、
+  // 依頼先の付いた行にだけ依頼先のチップを出し、選び直すと task-delegate で保存する（担当なしの行に付けると自分が担当になる）。
+  // チーム用の組織は渡さず、チップを出さない。外すとチップが消えるので、チップにあったフォーカスはタイトルへ移す
   type RowAttrs = {
     slug: string;
     workspaceId: string;
@@ -61,6 +64,7 @@
     loadedAt: number;
     onStale: () => void;
     definitions: { categories: readonly DefinitionRef[]; repositories: readonly DefinitionRef[] } | null;
+    delegatees?: readonly DefinitionRef[] | null;
   };
   let {
     task,
@@ -196,6 +200,118 @@
   }
   async function explain(result: Exclude<ApiResult<unknown>, { ok: true }>, reason: string): Promise<string> {
     return (await editor?.explain(result, reason)) ?? t('taskSaveFailed');
+  }
+
+  // ---- 依頼先のチップ ----
+  // 担当と同じく、選んだ値は読み直すまで行に出し、1本ずつ送り、送っている間に選び直した分は最後の値だけを送る
+  let delegateePending = $state<{ value: string } | null>(null);
+  let confirmedDelegatee: string | undefined;
+  let delegateeSending = false;
+  let titleLink = $state<HTMLAnchorElement>();
+  let rowEl = $state<HTMLElement>();
+  const delegateeShownId = $derived(delegateePending !== null ? delegateePending.value : (task.delegatee?.id ?? ''));
+  // 付いた行にだけ出す。外すと選んでいる間（読み直すまで）は未設定の形で残す
+  const delegateeVisible = $derived(
+    attrs?.delegatees !== undefined && (task.delegatee !== null || delegateePending !== null),
+  );
+  const delegateeOptions = $derived.by(() => {
+    // 外す項目は、名簿の人の後ろ（末尾）に置く。矢印は端で回り込むので、選んでいる人から1つで届くこともある（外しても付け直せる）
+    const options: { value: string; text: string }[] = [];
+    for (const person of attrs?.delegatees ?? []) options.push({ value: person.id, text: person.name });
+    const current = task.delegatee;
+    if (current !== null && !options.some((option) => option.value === current.id)) {
+      options.push({ value: current.id, text: current.name });
+    }
+    options.push({ value: '', text: t('delegateeClear', { delegatee: t('delegatee') }) });
+    return options;
+  });
+  const delegateeText = $derived(
+    delegateeShownId === ''
+      ? t('delegatee')
+      : (delegateeOptions.find((option) => option.value === delegateeShownId)?.text ?? t('delegatee')),
+  );
+  const delegateeLockedReason = $derived(
+    lockedDone ? t('taskDelegateeDone', { task: t('task'), done: t('done'), delegatee: t('delegatee') }) : undefined,
+  );
+
+  // 選んだときにフォーカスが行の中にあったか（読み直してチップが消えた後には確かめられない）
+  let delegateeFocusInRow = false;
+  function chooseDelegatee(value: string): void {
+    delegateeFocusInRow = rowEl?.contains(document.activeElement) ?? false;
+    delegateePending = { value };
+    if (!delegateeSending) void sendDelegatee();
+  }
+
+  function settleDelegatee(choice: string): void {
+    if (delegateePending === null || delegateePending.value === choice) {
+      delegateePending = null;
+      confirmedDelegatee = undefined;
+    } else {
+      confirmedDelegatee = choice;
+    }
+  }
+
+  // 外してチップが消えたとき、行の中にあったフォーカスをタイトルへ移す（消えた要素と一緒に失わない）
+  async function keepFocusInRow(): Promise<void> {
+    const inRow = delegateeFocusInRow;
+    delegateeFocusInRow = false;
+    await tick();
+    if (gone || delegateeVisible || !inRow) return;
+    if (document.activeElement === null || document.activeElement === document.body) titleLink?.focus();
+  }
+
+  async function sendDelegatee(): Promise<void> {
+    if (attrs === undefined) return;
+    delegateeSending = true;
+    try {
+      while (delegateePending !== null) {
+        const choice = delegateePending.value;
+        if (choice === (confirmedDelegatee !== undefined ? confirmedDelegatee : (task.delegatee?.id ?? ''))) {
+          delegateePending = null;
+          if (confirmedDelegatee !== undefined) {
+            confirmedDelegatee = undefined;
+            await reload();
+          }
+          continue;
+        }
+        const result = await callOperation(
+          taskDelegate,
+          { workspace_id: attrs.workspaceId, task_id: task.id, delegatee_id: choice === '' ? null : choice },
+          { slug: attrs.slug },
+        );
+        if (result.ok) {
+          if (delegateePending !== null && delegateePending.value === choice) {
+            showToast(t('taskSaved'), 'check');
+            await reload();
+          }
+          settleDelegatee(choice);
+          continue;
+        }
+        let message: string;
+        if (result.status === 404) {
+          // タスクが消えたか、選んだ人が名簿から削除された。読み直して分ける
+          const latest = await callOperation(
+            taskDetail,
+            { workspace_id: attrs.workspaceId, task_id: task.id },
+            { slug: attrs.slug },
+          );
+          if (!latest.ok && latest.status === 404) message = t('taskGone', { task: t('task') });
+          else if (!latest.ok) message = t('taskSaveFailed');
+          else message = t('delegateeGone', { delegatee: t('delegatee') });
+        } else {
+          message = await explain(
+            result,
+            t('taskDelegateeDone', { task: t('task'), done: t('done'), delegatee: t('delegatee') }),
+          );
+        }
+        if (delegateePending === null || delegateePending.value === choice) delegateePending = null;
+        confirmedDelegatee = undefined;
+        await rejected(message);
+      }
+    } finally {
+      delegateeSending = false;
+      await keepFocusInRow();
+    }
   }
 
   // ---- 期日、リポジトリ、区分のチップ ----
@@ -427,6 +543,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- data-row-id は、画面が読み直した後に同じ行の操作へフォーカスを戻すのに使う -->
 <div
+  bind:this={rowEl}
   class="entry"
   class:has-attrs={attrs !== undefined}
   class:is-done={done}
@@ -458,6 +575,7 @@
     <!-- eslint-disable svelte/no-navigation-without-resolve -- href は resolve した経路に ?task=<ID> を足したもの、またはその詳細ページ -->
     <a
       class="entry-title"
+      bind:this={titleLink}
       href={taskDetailHref(`${taskHref}${taskQuery}${encodeURIComponent(task.id)}`)}
       data-task-id={task.id}
       {...taskLinkAttrs()}>{task.title}</a
@@ -583,6 +701,17 @@
               {/if}
             {/snippet}
           </AttrChip>
+          {#if delegateeVisible}
+            <AttrChip
+              attr={t('delegatee')}
+              text={delegateeText}
+              unset={delegateeShownId === ''}
+              options={delegateeOptions}
+              current={delegateeShownId}
+              onselect={chooseDelegatee}
+              locked={delegateeLockedReason}
+            />
+          {/if}
         {:else if task.points === null}
           <span class="pts is-none" role="img" aria-label={t('pointsUnsetTitle')} title={t('pointsUnsetTitle')}
             >{t('pointsUnsetMark')}</span

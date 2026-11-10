@@ -28,6 +28,8 @@
   import TreeEpic from '../../../../lib/components/TreeEpic.svelte';
   import TreeStory from '../../../../lib/components/TreeStory.svelte';
   import { callOperation, type ApiResult } from '../../../../lib/api.ts';
+  import { delegateeList } from '../../../../shared/operations/organization/index.ts';
+  import type { DefinitionRef } from '../../../../shared/operations/definition/definition.ts';
   import { BacklogDnd } from '../../../../lib/backlog-dnd.svelte.ts';
   import { DropFlash } from '../../../../lib/drop-flash.svelte.ts';
   import { indexTree, ROOT, type DropMove, type DropRow } from '../../../../lib/backlog-drop.ts';
@@ -108,6 +110,27 @@
   let { data }: PageProps = $props();
 
   const workspace = $derived(data.workspace);
+  // 依頼先のチップと絞り込みは自分用の組織だけに出す。名簿（delegatee-list）は自分用の組織だけ、木を読むたびに読み直す
+  // （load で読むと、チーム用の組織の最初の読み込みにも要求が足され、組織の種類を待つ parent() は枠の読み直しで木まで読み直すため）。
+  // 読む前は undefined（チップと帯の欄を出さない）、読めなければ null。読み直しの間は前の名簿を残す
+  const personal = $derived(data.organization?.organization.kind === 'personal');
+  let delegatees = $state<readonly DefinitionRef[] | null | undefined>(undefined);
+  $effect(() => {
+    void data.tree;
+    if (!personal) {
+      delegatees = undefined;
+      return;
+    }
+    let stale = false;
+    void callOperation(delegateeList, {}, { slug: page.params.slug ?? '' }).then((result) => {
+      if (stale) return;
+      if (result.ok) delegatees = result.data.delegatees;
+      else if (result.status !== 401) delegatees = null;
+    });
+    return () => {
+      stale = true;
+    };
+  });
   const tree = $derived(data.tree);
   // 行の「⋯」から消した（戻した）後の読み直しの失敗の印（#979。task-reload-failure.svelte.ts）。木が読めたら下ろす
   $effect(() => {
@@ -1378,6 +1401,7 @@
           loadedAt: data.loadedAt,
           onStale: () => void invalidateAll(),
           definitions: data.definitions,
+          delegatees: personal ? delegatees : undefined,
         }
       : undefined}
   />
@@ -1497,6 +1521,8 @@
           categories={data.definitions?.categories ?? []}
           repositories={data.definitions?.repositories ?? []}
           definitionsFailed={data.definitions === null}
+          delegatees={personal && delegatees !== undefined ? (delegatees ?? []) : undefined}
+          delegateesFailed={personal && delegatees === null}
           onchange={(next) => void applyFilter(next)}
         />
       {/if}
