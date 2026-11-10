@@ -328,9 +328,9 @@
     editor.attach({
       inlineErrors: true,
       stale: () => onstale(),
-      rejected: async (message) => {
+      rejected: async (_message, reason) => {
         if (!alive) return;
-        if (message === t('taskGone', { task: t('task') })) gone(false);
+        if (reason === 'gone') gone(false);
         else await refresh(true);
       },
       saved: async (saved) => {

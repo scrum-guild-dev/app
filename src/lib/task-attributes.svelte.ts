@@ -89,9 +89,11 @@ export class AttributeQueue<T> {
   }
 }
 
+export type AttributeFailureReason = 'gone' | 'completed' | 'closed' | 'other';
+type AttributeFailure = { message: string; reason: AttributeFailureReason };
 type Observer = {
   inlineErrors?: boolean;
-  rejected?: (message: string) => Promise<void> | void;
+  rejected?: (message: string, reason: AttributeFailureReason) => Promise<void> | void;
   saved?: (saved: AttributeSaved) => Promise<void> | void;
   stale: () => void;
 };
@@ -120,7 +122,7 @@ export class TaskAttributes {
   private observers = new Set<Observer>();
   private stopped = false;
   private stoppedAt = -Infinity;
-  private stoppedMessage = '';
+  private stoppedFailure: AttributeFailure = { message: '', reason: 'other' };
   constructor(
     readonly slug: string,
     readonly workspaceId: string,
@@ -163,19 +165,27 @@ export class TaskAttributes {
     this.candidatesFailed = !result.ok;
     this.candidates = result.ok ? result.data.members.map(({ id, name }) => ({ id, name })) : null;
   }
-  private stop(message: string): string {
+  private stop(message: string, reason: AttributeFailureReason): AttributeFailure {
     this.stopped = true;
     this.stoppedAt = performance.now();
-    this.stoppedMessage = message;
+    this.stoppedFailure = { message, reason };
     this.points.pending = null;
     this.assignee.pending = null;
-    return message;
+    return this.stoppedFailure;
   }
   async explain(
     result: Exclude<ApiResult<unknown>, { ok: true }>,
     doneReason: string,
     missingAssignee = false,
   ): Promise<string> {
+    return (await this.explainFailure(result, doneReason, missingAssignee)).message;
+  }
+  private async explainFailure(
+    result: Exclude<ApiResult<unknown>, { ok: true }>,
+    doneReason: string,
+    missingAssignee: boolean,
+  ): Promise<AttributeFailure> {
+    const other = (message: string): AttributeFailure => ({ message, reason: 'other' });
     if (result.status === 401 || (result.status === 409 && result.error?.code === 'workspace_closed')) {
       for (const observer of this.observers) {
         try {
@@ -185,7 +195,7 @@ export class TaskAttributes {
         }
       }
       if (result.status === 409) {
-        return this.stop(t('workspaceClosedReadOnly', { workspace: t('workspace') }));
+        return this.stop(t('workspaceClosedReadOnly', { workspace: t('workspace') }), 'closed');
       }
     }
     if (result.status === 409 || result.status === 404) {
@@ -195,27 +205,29 @@ export class TaskAttributes {
         { slug: this.slug },
       );
       if (!latest.ok) {
-        return latest.status === 404 ? this.stop(t('taskGone', { task: t('task') })) : t('taskSaveFailed');
+        return latest.status === 404
+          ? this.stop(t('taskGone', { task: t('task') }), 'gone')
+          : other(t('taskSaveFailed'));
       }
       if (latest.data.task.completed_at !== null) {
-        return this.stop(doneReason);
+        return this.stop(doneReason, 'completed');
       }
       if (result.status === 404) {
-        if (!missingAssignee) return t('taskSaveFailed');
+        if (!missingAssignee) return other(t('taskSaveFailed'));
         void this.loadCandidates();
-        return t('assigneeNotMember', { workspace: t('workspace'), assignee: t('assignee') });
+        return other(t('assigneeNotMember', { workspace: t('workspace'), assignee: t('assignee') }));
       }
-      return t('taskSaveRaced');
+      return other(t('taskSaveRaced'));
     }
-    return result.status === 400 ? t('taskBadRequest') : t('taskSaveFailed');
+    return other(result.status === 400 ? t('taskBadRequest') : t('taskSaveFailed'));
   }
-  private async reject(message: string): Promise<void> {
+  private async reject({ message, reason }: AttributeFailure): Promise<void> {
     const inline = () => [...this.observers].some((observer) => observer.inlineErrors);
-    const notified = message === t('taskGone', { task: t('task') }) || !inline();
+    const notified = reason === 'gone' || !inline();
     if (notified) showToast(message, 'alert');
     for (const observer of this.observers) {
       try {
-        await observer.rejected?.(message);
+        await observer.rejected?.(message, reason);
       } catch {
         /* 保存の失敗を別の失敗で隠さない */
       }
@@ -227,8 +239,8 @@ export class TaskAttributes {
     value: K extends 'points' ? TaskDetail['points'] : string,
   ): Promise<{ value: typeof value; after: () => Promise<void> } | string> {
     if (this.stopped) {
-      await this.reject(this.stoppedMessage);
-      return this.stoppedMessage;
+      await this.reject(this.stoppedFailure);
+      return this.stoppedFailure.message;
     }
     const input = { workspace_id: this.workspaceId, task_id: this.taskId };
     const result =
@@ -240,15 +252,15 @@ export class TaskAttributes {
             { slug: this.slug },
           );
     if (!result.ok) {
-      const message = await this.explain(
+      const failure = await this.explainFailure(
         result,
         field === 'points'
           ? t('taskSaveConflict', { task: t('task'), done: t('done'), points: t('points') })
           : t('taskAssigneeDone', { task: t('task'), done: t('done'), assignee: t('assignee') }),
         field === 'assignee',
       );
-      await this.reject(message);
-      return message;
+      await this.reject(failure);
+      return failure.message;
     }
     const saved: AttributeSaved = {
       slug: this.slug,

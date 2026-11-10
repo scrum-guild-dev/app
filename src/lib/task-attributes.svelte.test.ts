@@ -2,10 +2,10 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { AttributeQueue, taskAttributes, onTaskAttributeSaved } from './task-attributes.svelte.ts';
 import type { TaskDetail } from '../shared/operations/task/index.ts';
 
-const mocks = vi.hoisted(() => ({ call: vi.fn(), toast: vi.fn() }));
+const mocks = vi.hoisted(() => ({ call: vi.fn(), toast: vi.fn(), t: vi.fn((key: string) => key) }));
 vi.mock('./api.ts', () => ({ callOperation: mocks.call }));
 vi.mock('./toast.svelte.ts', () => ({ showToast: mocks.toast }));
-vi.mock('./vocabulary.svelte.ts', () => ({ t: (key: string) => key }));
+vi.mock('./vocabulary.svelte.ts', () => ({ t: mocks.t }));
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 function gate<T>() {
   let resolve!: (value: T) => void;
@@ -37,6 +37,7 @@ const detail = (patch: Partial<TaskDetail> = {}): TaskDetail => ({
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.t.mockImplementation((key: string) => key);
 });
 
 test.each([null, ''] as const)('送信中に最後の選択を元の値 %s に戻しても、その値を送り直す', async (base) => {
@@ -249,7 +250,7 @@ test('削除されたタスクの後始末には、既に通知した理由を�
   editor.observe(detail(), 0);
   editor.points.choose(5);
   await settle();
-  expect(rejected).toHaveBeenCalledWith('taskGone');
+  expect(rejected).toHaveBeenCalledWith('taskGone', 'gone');
   expect(mocks.toast).toHaveBeenCalledTimes(1);
   detach();
 });
@@ -292,6 +293,25 @@ test('他の欄から停止した後も無言で捨てず、古い読み取り�
   await settle();
   expect(mocks.call).not.toHaveBeenCalled();
   expect(mocks.toast).toHaveBeenCalledWith('workspaceClosedReadOnly', 'alert');
-  expect(rejected).toHaveBeenCalledWith('workspaceClosedReadOnly');
+  expect(rejected).toHaveBeenCalledWith('workspaceClosedReadOnly', 'closed');
+  detach();
+});
+
+test.each(['gone', 'completed'] as const)('同じ表示文でも失敗の種別 %s を区別する', async (reason) => {
+  mocks.t.mockReturnValue('同じ表示文');
+  mocks.call
+    .mockResolvedValueOnce({ ok: false, status: 409, error: { code: 'conflict' } })
+    .mockResolvedValueOnce(
+      reason === 'gone'
+        ? { ok: false, status: 404, error: null }
+        : { ok: true, data: { task: detail({ completed_at: '2026-11-10' }) } },
+    );
+  const editor = taskAttributes('aoba', 'w', `reason-type-${reason}`);
+  const rejected = vi.fn();
+  const detach = editor.attach({ stale: vi.fn(), rejected });
+  editor.observe(detail(), 0);
+  editor.points.choose(5);
+  await settle();
+  expect(rejected).toHaveBeenCalledWith('同じ表示文', reason);
   detach();
 });
