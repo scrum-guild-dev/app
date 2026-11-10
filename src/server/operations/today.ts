@@ -23,6 +23,8 @@ type Row = {
   position: string;
   assignee_id: string | null;
   assignee_name: string | null;
+  delegatee_id: string | null;
+  delegatee_name: string | null;
   repository_id: string | null;
   repository_name: string | null;
   sprint_id: string | null;
@@ -40,15 +42,17 @@ function carryDays(todayDate: string, markedOn: string | null): number {
   return daysBetween(markedOn, todayDate);
 }
 
-// 区分のどれかに入りうるか。完了したものは今日完了だけ。未完了は、印がある、期日が今週の終わりまで、進行中のスプリントのどれか
+// 区分のどれかに入りうるか。完了したものは今日完了だけ。未完了は、依頼先がある、印がある、期日が今週の終わりまで、進行中のスプリントのどれか
 function belongsToSection(row: Row, clock: { today: string; week_start: number }, completedToday: boolean): boolean {
   if (row.completed_at !== null) return completedToday;
+  if (row.delegatee_id !== null) return true;
   if (row.today_on !== null) return true;
   if (row.due_on !== null && dueStatus(row.due_on, clock.today, clock.week_start) !== 'later') return true;
   return row.sprint_status === 'active';
 }
 
 // 今日やることに読みうる、本人の担当のバックログのタスク（未完了か完了かは呼び出し側が絞る）。
+// 依頼先（delegatees）は削除で絞らない。名簿から消すと未完了のタスクからは外れるので、消した行を結ぶのは完了したタスクだけ（名前を残す）。
 // 区分に入るかの厳密な判定（ワークスペースのタイムゾーンでの今日、今週）は読んだ後の belongsToSection で行う
 function todayTaskQuery(
   from: Pick<QueryCreator<OrganizationTables>, 'selectFrom'>,
@@ -61,6 +65,9 @@ function todayTaskQuery(
     .innerJoin('tasks as t', 't.workspace_id', 'm.workspace_id')
     .leftJoin('users as u', (join) =>
       join.onRef('u.id', '=', 't.assignee_user_id').on('u.organization_id', '=', organizationId),
+    )
+    .leftJoin('delegatees as d', (join) =>
+      join.onRef('d.id', '=', 't.delegatee_id').on('d.organization_id', '=', organizationId),
     )
     .leftJoin('repositories as r', (join) =>
       join
@@ -91,6 +98,8 @@ function todayTaskQuery(
       'w.week_start',
       'u.id as assignee_id',
       'u.name as assignee_name',
+      'd.id as delegatee_id',
+      'd.name as delegatee_name',
       'r.id as repository_id',
       'r.name as repository_name',
       's.id as sprint_id',
@@ -121,7 +130,12 @@ export const todayOperation = implement(today, async ({ db, actor }) => {
       todayTaskQuery(q, db.organizationId, userId)
         .where('t.completed_at', 'is', null)
         .where((eb) =>
-          eb.or([eb('t.today_on', 'is not', null), eb('t.due_on', 'is not', null), eb('t.sprint_id', 'is not', null)]),
+          eb.or([
+            eb('t.today_on', 'is not', null),
+            eb('t.due_on', 'is not', null),
+            eb('t.sprint_id', 'is not', null),
+            eb('t.delegatee_id', 'is not', null),
+          ]),
         ),
     ),
     db.statement((q) => todayTaskQuery(q, db.organizationId, userId).where('t.completed_at', '>=', completedSince)),
@@ -169,6 +183,7 @@ export const todayOperation = implement(today, async ({ db, actor }) => {
       ...clock,
       position: row.position,
       assignee: row.assignee_id === null ? null : { id: row.assignee_id, name: row.assignee_name ?? '' },
+      delegatee: row.delegatee_id === null ? null : { id: row.delegatee_id, name: row.delegatee_name ?? '' },
       repository: row.repository_id === null ? null : { id: row.repository_id, name: row.repository_name ?? '' },
       sprint:
         row.sprint_id === null

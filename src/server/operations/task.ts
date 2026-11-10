@@ -394,6 +394,8 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
       points: input.points,
       due_on: null,
       assignee,
+      // 起票では依頼先を付けない
+      delegatee: null,
       category,
       repository,
       sprint: target?.ref ?? null,
@@ -443,6 +445,7 @@ function currentMember(eb: ExpressionBuilder<Tables, 'users'>, workspaceId: stri
 // バックログの木の絞り込み（定義の backlog-tree.ts）。undefined は絞らない、null は「なし」。words は検索の語（空なら検索しない）
 export type BacklogTreeFilter = {
   assignee?: string | null;
+  delegatee?: string | null;
   category?: string | null;
   repository?: string | null;
   epic?: string | null;
@@ -452,17 +455,20 @@ export type BacklogTreeFilter = {
 // ストーリーの下の未完了のタスク。ORDER BY を付けると SQLite が tasks_story_open を使わない計画を選ぶので、並べるのは読んだ後に行う。
 // 区分は親から引き継ぐので、タスク自身の区分は読まない。
 // 絞り込みは WHERE に足す。区分、エピック、検索は、タスクか親（ストーリー、その親のエピック）のどれかが当たれば当たり
-// （区分とエピックは親から引き継ぐので、親で決まる）。担当とリポジトリは、タスク自身で決める。
-// 担当の列は索引に使わせない（tasks_story_open を足す前は、SQLite が tasks_story の代わりに tasks_assignee_user をストーリーごとに
+// （区分とエピックは親から引き継ぐので、親で決まる）。担当、依頼先、リポジトリは、タスク自身で決める。
+// 担当と依頼先の列は索引に使わせない（tasks_story_open を足す前は、SQLite が tasks_story の代わりに tasks_assignee_user をストーリーごとに
 // 引く計画を選び、5 万件で 10 秒かかった。tasks_story_open があれば今はそれを選ぶが、計画が揺れないよう止めておく。
-// test/backlog-filter.test.ts が実行計画で確かめる）
+// 依頼先の tasks_delegatee_completed も同じ理由で止める。test/backlog-filter.test.ts が実行計画で確かめる）
 export function openStoryTasksStatement(db: OrganizationDb, workspaceId: string, filter: BacklogTreeFilter) {
-  const { assignee, category, repository, epic, words } = filter;
+  const { assignee, delegatee, category, repository, epic, words } = filter;
   const organizationId = db.organizationId;
   return db.statement((q) =>
     tasksUnderStories(q, workspaceId)
       .leftJoin('users', (join) =>
         join.onRef('users.id', '=', 'tasks.assignee_user_id').on('users.organization_id', '=', organizationId),
+      )
+      .leftJoin('delegatees', (join) =>
+        join.onRef('delegatees.id', '=', 'tasks.delegatee_id').on('delegatees.organization_id', '=', organizationId),
       )
       .leftJoin('repositories', (join) =>
         join
@@ -486,6 +492,8 @@ export function openStoryTasksStatement(db: OrganizationDb, workspaceId: string,
         'tasks.position',
         'tasks.assignee_user_id',
         'users.name as assignee_name',
+        'delegatees.id as delegatee_ref_id',
+        'delegatees.name as delegatee_name',
         'tasks.created_by',
         'tasks.is_imported',
         'repositories.id as repository_ref_id',
@@ -497,6 +505,9 @@ export function openStoryTasksStatement(db: OrganizationDb, workspaceId: string,
       .where('tasks.completed_at', 'is', null)
       .$if(assignee !== undefined, (qb) =>
         qb.where(unindexed('tasks.assignee_user_id'), assignee === null ? 'is' : '=', assignee!),
+      )
+      .$if(delegatee !== undefined, (qb) =>
+        qb.where(unindexed('tasks.delegatee_id'), delegatee === null ? 'is' : '=', delegatee!),
       )
       .$if(repository !== undefined, (qb) => qb.where('repositories.id', repository === null ? 'is' : '=', repository!))
       .$if(category !== undefined, (qb) =>
@@ -548,12 +559,15 @@ export function openStoryTasksStatement(db: OrganizationDb, workspaceId: string,
 // 親のない未完了のタスク。story_id は backlogTasksUnder が索引に使わせず、tasks_workspace_tray で引く
 // （test/backlog-filter.test.ts が ANALYZE の後の実行計画で確かめる）
 export function rootOpenTasksStatement(db: OrganizationDb, workspaceId: string, filter: BacklogTreeFilter) {
-  const { assignee, category, repository, epic, words } = filter;
+  const { assignee, delegatee, category, repository, epic, words } = filter;
   const organizationId = db.organizationId;
   return db.statement((q) =>
     backlogTasksUnder(q, workspaceId, null)
       .leftJoin('users', (join) =>
         join.onRef('users.id', '=', 'tasks.assignee_user_id').on('users.organization_id', '=', organizationId),
+      )
+      .leftJoin('delegatees', (join) =>
+        join.onRef('delegatees.id', '=', 'tasks.delegatee_id').on('delegatees.organization_id', '=', organizationId),
       )
       .leftJoin('categories', (join) =>
         join
@@ -580,6 +594,8 @@ export function rootOpenTasksStatement(db: OrganizationDb, workspaceId: string, 
         'tasks.due_on',
         'tasks.assignee_user_id',
         'users.name as assignee_name',
+        'delegatees.id as delegatee_ref_id',
+        'delegatees.name as delegatee_name',
         'tasks.created_by',
         'tasks.is_imported',
         'categories.id as category_ref_id',
@@ -592,6 +608,10 @@ export function rootOpenTasksStatement(db: OrganizationDb, workspaceId: string, 
       .where('tasks.completed_at', 'is', null)
       .$if(assignee !== undefined, (qb) =>
         qb.where('tasks.assignee_user_id', assignee === null ? 'is' : '=', assignee!),
+      )
+      // 依頼先は tasks_delegatee_completed を選ばせず、tasks_workspace_tray で引く
+      .$if(delegatee !== undefined, (qb) =>
+        qb.where(unindexed('tasks.delegatee_id'), delegatee === null ? 'is' : '=', delegatee!),
       )
       .$if(repository !== undefined, (qb) => qb.where('repositories.id', repository === null ? 'is' : '=', repository!))
       .$if(category !== undefined, (qb) => qb.where('categories.id', category === null ? 'is' : '=', category!))
@@ -676,12 +696,13 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
   const category = input.category_id;
   const repository = input.repository_id;
   const epic = input.epic_id;
+  const delegatee = input.delegatee_id;
   const words = input.query === undefined ? [] : searchWordsOf(input.query);
   const searching = words.length > 0;
-  // タスクにしか無い条件（担当、リポジトリ）で絞っているか。そのときは、当たるタスクを持たない親を出さない
-  const taskOnly = assignee !== undefined || repository !== undefined;
+  // タスクにしか無い条件（担当、依頼先、リポジトリ）で絞っているか。そのときは、当たるタスクを持たない親を出さない
+  const taskOnly = assignee !== undefined || delegatee !== undefined || repository !== undefined;
   const filtering = taskOnly || category !== undefined || epic !== undefined || searching;
-  const filter: BacklogTreeFilter = { assignee, category, repository, epic, words };
+  const filter: BacklogTreeFilter = { assignee, delegatee, category, repository, epic, words };
   const [
     workspaceResult,
     epicsResult,
@@ -817,6 +838,8 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
     due_on: string | null;
     assignee_user_id: string | null;
     assignee_name: string | null;
+    delegatee_ref_id: string | null;
+    delegatee_name: string | null;
     created_by: string | null;
     is_imported: number;
     repository_ref_id: string | null;
@@ -831,6 +854,7 @@ export const backlogTreeOperation = implement(backlogTree, async ({ db, actor, w
     points: row.points as TaskPoints,
     due_on: row.due_on,
     assignee: row.assignee_user_id === null ? null : { id: row.assignee_user_id, name: row.assignee_name ?? '' },
+    delegatee: refOf(row.delegatee_ref_id, row.delegatee_name),
     category,
     repository: refOf(row.repository_ref_id, row.repository_name),
     sprint: sprintRefOf(row),

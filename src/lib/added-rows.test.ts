@@ -46,7 +46,7 @@ test('完了の応答と読み直しを始めた時刻が同じなら残す', ()
   expect(completionSettled(100, 100)).toBe(false);
 });
 
-const none = { assignee: '', category: '', repository: '', epic: '', q: '' };
+const none = { assignee: '', category: '', repository: '', epic: '', delegatee: '', q: '' };
 
 test('同じ絞り込みの木は持ち越す（絞っていても同じ）', () => {
   expect(carriesOver(none, none, true)).toBe(true);
