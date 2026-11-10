@@ -4,7 +4,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-// wrangler 4.153.0 同梱の dotenv 16.3.1（lib/main.js）の LINE を写す。
+// wrangler 同梱の dotenv 16.3.1（lib/main.js）の LINE を写す。
 // dev-vars.test.ts で同梱の版と正規表現を照合する。更新で落ちたら同梱の parse を読み直し、
 // 鍵の数え方とテスト、ここの版、docs/development.md の「ワークツリーで作業する」を見直す。
 // （`KEY: value` の区切り、引用符で囲んだ複数行の値、`.` と `-` を含む鍵、行末の # のコメント）。# で始まる行は鍵にならない
