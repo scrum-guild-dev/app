@@ -67,7 +67,7 @@ for (const width of [320, 390, 760]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto('/aoba');
     const search = page.getByRole('combobox', { name: '画面とタスクを探す' });
-    // 760px 以下では欄を虫眼鏡のボタンに畳み、押すとパンくずの行の下に欄を出して欄へフォーカスを移す（#993）
+    // 760px 以下では欄を虫眼鏡のボタンに畳み、押すと見出しの行の下に欄を出して欄へフォーカスを移す（#993）
     const toggle = page.getByRole('button', { name: '画面とタスクを探す' });
     await expect(search).toBeHidden();
     await toggle.click();

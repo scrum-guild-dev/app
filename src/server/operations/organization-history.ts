@@ -159,6 +159,11 @@ function historyEvent(row: HistoryRow): HistoryEvent {
       return userEvent(row.action, changes, row);
     case 'workspace':
       return workspaceEvent(row.action, changes, row);
+    case 'delegatee':
+      if (row.action === 'create') return { kind: 'delegatee_created', name: textOrNull(pairOf(changes, 'name')?.[1]) };
+      if (row.action === 'update') return { kind: 'delegatee_renamed', name: textOrNull(pairOf(changes, 'name')?.[1]) };
+      if (row.action === 'delete') return { kind: 'delegatee_deleted' };
+      return { kind: 'other' };
     default:
       return { kind: 'other' };
   }

@@ -1,3 +1,4 @@
+import { delegateeCreate, delegateeDelete, delegateeList, delegateeUpdate } from './delegatee.ts';
 // 組織の選択と組織の枠、組織の管理の画面が使う操作の定義
 import type { AnyOperationDefinition } from '../define.ts';
 import {
@@ -23,6 +24,10 @@ import { userAdminUpdate, userDisable, userEnable, userList } from './user.ts';
 import { today } from './today.ts';
 
 export {
+  delegateeCreate,
+  delegateeDelete,
+  delegateeList,
+  delegateeUpdate,
   createMyOrganization,
   createMyOrganizationConflictReasonOf,
   createMyOrganizationConflictReasons,
@@ -48,6 +53,10 @@ export {
 };
 
 export const organizationOperations: readonly AnyOperationDefinition[] = [
+  delegateeCreate,
+  delegateeDelete,
+  delegateeList,
+  delegateeUpdate,
   myOrganizations,
   createMyOrganization,
   createPersonalOrganization,

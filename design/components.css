@@ -686,6 +686,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
 .entry-meta { display: flex; flex-wrap: wrap; gap: 4px var(--space-3); align-items: center; font-size: var(--text-xs); color: var(--color-muted); }
 /* ワークスペース名の印（.tag は折り返さない）は、長い名前だけ折り返して全文を読めるようにする */
 .entry-meta .tag { white-space: normal; overflow-wrap: anywhere; }
+.entry-attributes, .entry-chips, .entry-actions { display: contents; }
 .entry-end { display: flex; align-items: center; gap: var(--space-2); }
 /* 完了の印の横の「戻す」は折り返さず、縮めない */
 .entry-end .link-btn { white-space: nowrap; flex: none; }
@@ -2553,3 +2554,68 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 }
 .create-sheet-kind { min-width: 0; flex-wrap: wrap; justify-content: center; }
 .create-sheet-head > .icon-btn, .create-sheet-submit { flex: 0 0 44px; }
+
+/* 狭いバックログは属性だけを1段で横に送り、操作は右端に残す（#1038）。
+   local の背景が端の影を覆うので、続きのある側だけ影が見える。 */
+@media (max-width: 760px) {
+  @container tree (max-width: 640px) {
+    .tree .entry.has-attrs .entry-end { display: flex; min-width: 0; width: 100%; flex-wrap: nowrap; gap: var(--space-2); row-gap: 0; }
+    .tree .entry.has-attrs .entry-attributes { display: block; min-width: 0; flex: 1; }
+    .tree .entry.has-attrs .entry-chips {
+      display: flex; align-items: center; gap: var(--space-2); overflow-x: auto;
+      min-height: 44px; padding: 2px; scrollbar-width: thin;
+      background:
+        linear-gradient(to right, var(--entry-chip-cover, var(--color-surface)) 30%, transparent) left center / 24px 100% local no-repeat,
+        linear-gradient(to left, var(--entry-chip-cover, var(--color-surface)) 30%, transparent) right center / 24px 100% local no-repeat,
+        linear-gradient(to right, var(--color-control-edge), transparent) left center / 12px 100% scroll no-repeat,
+        linear-gradient(to left, var(--color-control-edge), transparent) right center / 12px 100% scroll no-repeat;
+    }
+    .tree .entry.has-attrs:hover .entry-chips { --entry-chip-cover: color-mix(in srgb, var(--color-accent-soft) 45%, var(--color-surface)); }
+    /* 強調の背景は時間で変わるため、強調中だけ覆いを外す。mask は固定位置のメニューまで切るので使わない。 */
+    .tree .entry.has-attrs.is-dropped .entry-chips { background: none; }
+    .tree .entry.has-attrs .entry-chips > * { flex: none; }
+    .tree .entry.has-attrs .entry-chips .chip-btn { min-width: 44px; min-height: 44px; }
+    .tree .entry.has-attrs .entry-chips .chip-btn::after { content: none; }
+    .tree .entry.has-attrs .entry-chips .chip-btn:focus-visible { outline-offset: -2px; }
+    .tree .entry.has-attrs .entry-actions { display: flex; flex: none; align-items: center; gap: var(--space-2); }
+    .tree .entry.has-attrs .entry-actions .done-btn { min-width: 44px; min-height: 44px; }
+    .tree .entry.has-attrs:not(:has(.entry-meta)) { row-gap: 12px; }
+  }
+}
+
+.page-title-row { display: contents; }
+.shell-notice {
+  display: flex; padding-block: var(--space-3) 0;
+  padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
+}
+.shell-notice .chip { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+/* スマホの大きな見出しと丸い入口（#1103）。道具は固定幅、長い題は残りの幅で折り返す。 */
+.mobile-page-tools { display: none; }
+@media (max-width: 760px) {
+  .app .topbar { display: none; }
+  .page-title-row, .mobile-page-head {
+    position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start; gap: var(--space-3); width: 100%;
+  }
+  .page-title { font-size: var(--text-3xl); text-wrap: balance; }
+  .mobile-page-tools { display: flex; gap: var(--space-2); align-items: center; }
+  .mobile-page-tools .nav-search-toggle,
+  .mobile-page-tools .account-menu-button {
+    display: inline-grid; place-items: center; width: 44px; height: 44px; min-width: 44px;
+    padding: 0; border: 1px solid var(--color-control-edge); border-radius: 50%; background: var(--color-surface);
+  }
+  .mobile-page-tools .account-menu-button > .ico { display: none; }
+  .mobile-page-tools .nav-search {
+    position: absolute; z-index: 10; top: calc(100% + var(--space-1)); left: 0; right: 0;
+    min-width: 0; margin: 0;
+  }
+  .mobile-page-tools .nav-search-list { min-width: 0; }
+  .mobile-page-tools .account-menu-list {
+    top: calc(100% + var(--space-1)); left: 0; right: 0;
+  }
+  .mobile-page-tools :is(.nav-search-toggle, .account-menu-button)[aria-expanded="true"] {
+    border-width: 2px;
+    background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent);
+  }
+}

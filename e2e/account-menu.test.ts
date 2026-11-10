@@ -76,6 +76,7 @@ test.describe('アカウントのメニュー', () => {
     test(`${width}px でも全項目が画面内に収まり、高さ44px以上になる`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await page.goto('/aoba');
+      await expect(page.locator('.page-head .account-menu-button')).toBeVisible();
       await page.getByRole('button', { name: /アカウントのメニュー$/ }).click();
       await expect(page.locator('.account-menu-list:not(.row-menu-list)')).toHaveCSS('translate', /^0px(?: 0px)?$/);
       const boxes = await page.locator('.account-menu-list a, .account-menu-list button').evaluateAll((elements) =>

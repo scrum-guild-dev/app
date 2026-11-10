@@ -199,7 +199,9 @@ test('見本の引き出し: タブを切り替えても、作り直しても、
   expect(await isKept()).toBe(true);
 
   // 引き出しを実際に作り直す操作（狭い幅への切り替えで renderDrawer が走る）でも、書きかけを戻す
-  await page.setViewportSize({ width: 600, height: 900 });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await expect(page.locator('[data-assist-open]').first()).toBeHidden();
+  await expect(page.locator('.mobile-page-tools')).toBeVisible();
   await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
   expect(await isKept()).toBe(false);
 
@@ -249,6 +251,9 @@ test('見本の引き出し: タブを切り替えても、作り直しても、
   // パレット（Ctrl+K）の答えの参照から別のタスクを開くときは、確認がパレットの上に出る。
   // 「書き続ける」ならパレットを残し、「捨てる」ならパレットを閉じて移る
   await drawer.locator('#new-comment').fill('書きかけのコメント');
+  // スマホでは検索とアカウントだけを出すので、見本のアシスタントの操作は広い幅へ戻して確かめる。
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
   await page.locator('[data-assist-open]').first().focus();
   await page.keyboard.press('Enter');
   const palette = page.locator('#assist-palette');
@@ -389,20 +394,29 @@ test('見本の削除の確認: クリア済みのエピックを配下を残し
   await page.goto('/__design-catalog/index.html');
   const dialog = page.locator('#dialog');
 
-  // まとめて削除できる人: 残す（既定）で押すと断られ、確認は開いたまま。「まとめて削除する」に替えると閉じる
+  // まとめて削除できる人: 「残す」は最初から選べず、理由が出る。どちらも未選択で、選ぶまで押せず、選ぶと閉じられる
   await page.locator('[data-dialog="deleteEpicCleared"]').click();
-  await dialog.locator('.btn.is-danger').click();
-  await expect(dialog.getByRole('alert')).toContainText('「配下もまとめて削除する」を選ぶか、先に');
+  await expect(dialog.getByLabel('配下を親なしで残す')).toBeDisabled();
+  await expect(dialog.getByLabel('配下もまとめて削除する')).not.toBeChecked();
+  await expect(dialog.locator('.btn.is-danger')).toHaveAttribute('aria-disabled', 'true');
+  await dialog.locator('.btn.is-danger').click({ force: true });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('配下もまとめて削除する').check();
+  await expect(dialog.getByLabel('配下を親なしで残す')).toHaveAccessibleDescription(
+    /「配下もまとめて削除する」を選ぶか、先に/,
+  );
   await dialog.locator('.btn.is-danger').click();
   await expect(dialog).toBeHidden();
 
-  // まとめて削除できない人: 選べず、押すと依頼主かリーダーに頼む文が出る
+  // まとめて削除できない人: どちらも選べず、依頼主かリーダーに頼む文が出て、削除するは押せない
   await page.locator('[data-dialog="deleteEpicClearedLeaderOnly"]').click();
+  await expect(dialog.getByLabel('配下を親なしで残す')).toBeDisabled();
   await expect(dialog.getByLabel('配下もまとめて削除する')).toBeDisabled();
-  await dialog.locator('.btn.is-danger').click();
-  await expect(dialog.getByRole('alert')).toContainText('に、エピックの完了を取り消してもらってください');
+  await expect(dialog.getByLabel('配下を親なしで残す')).toHaveAccessibleDescription(
+    /に、エピックの完了を取り消してもらってください/,
+  );
+  await expect(dialog.locator('.btn.is-danger')).toHaveAttribute('aria-disabled', 'true');
+  await dialog.locator('.btn.is-danger').click({ force: true });
   await expect(dialog).toBeVisible();
   expect(errors).toEqual([]);
 });

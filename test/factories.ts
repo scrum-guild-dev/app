@@ -306,6 +306,24 @@ export async function createChangeLog(
   return row;
 }
 
+export async function createDelegatee(
+  organization: OrganizationFixture,
+  overrides: Partial<Row<OrganizationTables, 'delegatees'>> = {},
+) {
+  const row: Row<OrganizationTables, 'delegatees'> = {
+    id: uuidv7(),
+    organization_id: organization.id,
+    name: '白川 葵',
+    deleted_at: null,
+    created_at: AT,
+    updated_at: AT,
+    ...overrides,
+  };
+  const db = orgDb(env, organization.verified);
+  await db.run(db.statement((q) => q.insertInto('delegatees').values(row)));
+  return row;
+}
+
 export async function createCategory(
   organization: OrganizationFixture,
   workspaceId: string,
@@ -435,6 +453,7 @@ export async function createTask(
     sprint_id: null,
     column_id: null,
     assignee_user_id: null,
+    delegatee_id: null,
     points: null,
     due_on: null,
     today_on: null,
