@@ -1,7 +1,6 @@
 import type { Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from './fixtures.ts';
-import { signIn, findA11yViolations, A11Y_TAGS } from './helpers.ts';
+import { signIn, findA11yViolations } from './helpers.ts';
 import { organizationInfo } from '../src/shared/operations/organization/index.ts';
 import { routeOperation, rewriteOperation } from './operations.ts';
 import { operationPath, type AnyOperationDefinition, type OutputOf } from '../src/shared/operations/define.ts';
@@ -187,8 +186,7 @@ test('390px: 書式の付け外しは選択とフォーカスを保ち、44px以
   await toolbar.getByRole('button', { name: 'コード', exact: true }).click();
   await expect(body).toHaveValue('const answer = 42;');
   // 未設定の属性チップはこの変更の対象外。本文欄と書式ボタンの規則を検査する。
-  const a11y = await new AxeBuilder({ page }).withTags(A11Y_TAGS).include('.create-sheet .markdown-editor').analyze();
-  expect(a11y.violations).toEqual([]);
+  expect(await findA11yViolations(page, '.create-sheet .markdown-editor')).toEqual([]);
 });
 
 test('390px: 空・失敗・破棄をやめる・送信中の重複とフォーカス復帰', async ({ page, context, baseURL }) => {
