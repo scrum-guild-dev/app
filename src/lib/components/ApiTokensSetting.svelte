@@ -604,5 +604,7 @@
   cancelLabel={t('cancel')}
   danger
 >
-  <p>{t('apiTokenRevokeAllText')}</p>
+  {#each t('apiTokenRevokeAllText').split('\n\n') as paragraph (paragraph)}
+    <p>{paragraph}</p>
+  {/each}
 </ConfirmDialog>

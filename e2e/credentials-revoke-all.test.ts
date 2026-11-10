@@ -103,12 +103,13 @@ test('確認を経て実行すると、今の画面は使い続けられ、ほ�
     await button.click();
     const confirm = page.getByRole('dialog', { name: DIALOG });
     await expect(confirm).toBeVisible();
-    await expect(
-      confirm.getByText(
-        'ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。このブラウザのログインは残ります。後からログインした端末は残ります。先にこのブラウザでログインし直してから実行してください。元に戻せません。',
-        { exact: false },
-      ),
-    ).toBeVisible();
+    for (const paragraph of [
+      'ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。このブラウザのログインは残ります。',
+      '後からログインした端末は残ります。先にこのブラウザでログインし直してから実行してください。',
+      '元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。',
+    ]) {
+      await expect(confirm.getByText(paragraph, { exact: true })).toBeVisible();
+    }
     await confirm.getByRole('button', { name: 'やめる' }).click();
     await expect(confirm).toHaveCount(0);
     await expect(button).toBeFocused();

@@ -2474,7 +2474,7 @@ export const dictionary = defineDictionary({
   apiTokenRevokeAll: 'ほかの端末とトークンを締め出す',
   apiTokenRevokeAllDialogTitle: 'ほかの端末とトークンを締め出しますか',
   apiTokenRevokeAllText:
-    'ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。このブラウザのログインは残ります。後からログインした端末は残ります。先にこのブラウザでログインし直してから実行してください。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。',
+    'ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。このブラウザのログインは残ります。\n\n後からログインした端末は残ります。先にこのブラウザでログインし直してから実行してください。\n\n元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。',
   apiTokenRevokeAllConfirm: '締め出す',
   apiTokenRevokingAll: '締め出しています',
   apiTokenRevokedAll:

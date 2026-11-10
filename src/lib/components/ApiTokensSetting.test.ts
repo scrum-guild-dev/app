@@ -143,7 +143,9 @@ test('再認証が必要で発行の欄が無いときも、締め出すボタ�
 test('確認のダイアログは、元に戻せないことと、今のログインと後からのログインが残ることを辞書の文言で書き、やめるを主ボタン、締め出すを危険のボタンにする', () => {
   const body = renderWith([token]);
   expect(body).toContain(dictionary.apiTokenRevokeAllDialogTitle);
-  expect(body).toContain(dictionary.apiTokenRevokeAllText);
+  const paragraphs = dictionary.apiTokenRevokeAllText.split('\n\n');
+  expect(paragraphs).toHaveLength(3);
+  for (const paragraph of paragraphs) expect(body).toContain(`<p>${paragraph}</p>`);
   expect(dictionary.apiTokenRevokeAllText).toContain('元に戻せません');
   expect(dictionary.apiTokenRevokeAllText).toContain('このブラウザのログインは残ります');
   expect(dictionary.apiTokenRevokeAllText).toContain('後からログインした端末は残ります');
