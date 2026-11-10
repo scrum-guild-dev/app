@@ -3230,7 +3230,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!row) {
       row = document.createElement("header");
       row.className = "mobile-page-head page-head-row";
-      row.innerHTML = `<h1 class="page-title">${esc(currentCrumbs().at(-1)?.label || "")}</h1>`;
+      row.innerHTML = `<h2 class="page-title">${esc(currentCrumbs().at(-1)?.label || "")}</h2>`;
       content.prepend(row);
     }
     const tools = document.createElement("div");

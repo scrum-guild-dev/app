@@ -502,9 +502,9 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   // ページ全体で開いたタスク
   await page.goto(`${WORKSPACE}/tasks/${TASK_ID}`);
   const whole = page.locator('.drawer.is-page');
-  // ページ全体の題は h1。スマホではその前に、ワークスペース名の見出しと共通の入口も出る。
+  // ページ全体の題は唯一の h1。スマホのワークスペース名は補助見出し（h2）で出す。
   await expect(whole.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.locator('.mobile-page-head .page-title')).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(2);
+  await expect(page.locator('.mobile-page-head').getByRole('heading', { level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expectDrawerToolsApart(page, whole, 3);
 });

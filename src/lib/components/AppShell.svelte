@@ -217,7 +217,7 @@
     <main class="content" id="content" aria-busy={navigationLoading.kind === 'inside' ? true : undefined}>
       {#if mounted && narrow.current && pageHeads.empty}
         <header class="mobile-page-head page-head-row">
-          <h1 class="page-title">{shownCrumbs.at(-1)?.label}</h1>
+          <h2 class="page-title">{shownCrumbs.at(-1)?.label}</h2>
           {@render mobileTools()}
         </header>
       {/if}
