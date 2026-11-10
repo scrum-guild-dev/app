@@ -143,6 +143,7 @@ test('お気に入りの星は全テーマで金色に塗られ、外すと輪�
   await routeOperation(page, favoriteSet, { slug: 'aoba' }, async (call) => {
     await call.fulfill({ is_favorite: call.input.is_favorite });
   });
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.goto(item.initial);
   const star = page.getByRole('button', { name: 'お気に入りにする', exact: true });
   await expect(star).toHaveAttribute('aria-pressed', 'false');
@@ -150,6 +151,7 @@ test('お気に入りの星は全テーマで金色に塗られ、外すと輪�
   await expect(star).toHaveAttribute('aria-pressed', 'true');
   for (const [theme, scheme, color] of [
     ['simple', 'light', 'rgb(153, 112, 0)'],
+    ['simple_light', 'dark', 'rgb(153, 112, 0)'],
     ['simple', 'dark', 'rgb(245, 204, 69)'],
     ['simple_dark', 'light', 'rgb(245, 204, 69)'],
     ['medieval', 'light', 'rgb(145, 107, 0)'],
