@@ -2557,6 +2557,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
   padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
 }
+.shell-notice .chip { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 /* スマホの大きな見出しと丸い入口（#1103）。道具は固定幅、長い題は残りの幅で折り返す。 */
 .mobile-page-tools { display: none; }
 @media (max-width: 760px) {

@@ -187,3 +187,18 @@ for (const width of [320, 390]) {
     });
   }
 }
+
+test('320px・文字200%でも所属していない管理者の印は安全領域の内側で折り返す', async ({ page }) => {
+  await rewriteOperation(page, workspaceInfo, { slug: 'aoba' }, (output) => ({ ...output, role: null }));
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto(WORKSPACE);
+  await expect(page.locator('.shell-notice .chip')).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '200%';
+  });
+  const box = await page.locator('.shell-notice .chip').boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(16);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(304);
+  expect(await page.locator('.shell-notice .chip').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+});
