@@ -271,7 +271,7 @@
       epic = result.data.epic;
       canDelete = result.data.can_delete;
       canDeleteChildren = result.data.can_delete_children;
-      cleared = result.data.completed_at !== null;
+      cleared = result.data.completed_at != null;
       childCounts = result.data.children;
       loadState = 'ready';
       // 区分を直せるときだけ、選択肢を読む
@@ -317,7 +317,7 @@
       epic = result.data.epic;
       canDelete = result.data.can_delete;
       canDeleteChildren = result.data.can_delete_children;
-      cleared = result.data.completed_at !== null;
+      cleared = result.data.completed_at != null;
       childCounts = result.data.children;
     }
     return result.data.epic;

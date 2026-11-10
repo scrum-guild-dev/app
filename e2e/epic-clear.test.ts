@@ -159,7 +159,40 @@ test('クリア済みで配下のあるエピックの削除の確認は、配�
   await expect(keep).toHaveAccessibleDescription(
     '完了したエピックは、配下のストーリーを親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先にエピックの完了を取り消してください。',
   );
-  await expect(confirm.getByRole('radio', { name: /配下もまとめて削除する/ })).toBeChecked();
+  // 取り消せない方を既定で選ばない。選ぶまで「削除する」は押せない
+  const all = confirm.getByRole('radio', { name: /配下もまとめて削除する/ });
+  await expect(all).not.toBeChecked();
+  await expect(keep).not.toBeChecked();
+  const submit = confirm.getByRole('button', { name: '削除する' });
+  await expect(submit).toHaveAttribute('aria-disabled', 'true');
+  await all.check();
+  await expect(submit).toHaveAttribute('aria-disabled', 'false');
+});
+
+test('クリア済みでまとめて削除もできない人は、削除するを押しても送らない', async ({ page }) => {
+  let sent = 0;
+  await routeOperation(page, epicDelete, AOBA, async (call) => {
+    sent++;
+    await call.fulfill({ epic_id: EPIC_ID });
+  });
+  await rewriteOperation(page, epicGet, AOBA, (output) => ({
+    ...output,
+    completed_at: CLEARED_AT,
+    can_delete_children: false,
+  }));
+  await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
+  await page.getByRole('link', { name: 'エピックを直す' }).click();
+  const drawer = page.getByRole('dialog', { name: EPIC_TITLE, exact: true });
+  await expect(drawer).toBeVisible();
+  await chooseRowAction(drawer, EPIC_TITLE, 'このエピックを削除する');
+  const confirm = page.getByRole('dialog', { name: 'エピックを削除する' });
+  await expect(confirm.getByRole('radio', { name: /配下を親なしで残す/ })).toBeDisabled();
+  await expect(confirm.getByRole('radio', { name: /配下もまとめて削除する/ })).toBeDisabled();
+  const submit = confirm.getByRole('button', { name: '削除する' });
+  await expect(submit).toHaveAttribute('aria-disabled', 'true');
+  await submit.click();
+  await expect(confirm).toBeVisible();
+  expect(sent).toBe(0);
 });
 
 test('読み込んだ後にクリアされたエピックを、配下を残して削除すると断られ、理由を出して確認を閉じない', async ({
@@ -180,4 +213,6 @@ test('読み込んだ後にクリアされたエピックを、配下を残し�
     ),
   ).toBeVisible();
   await expect(confirm).toBeVisible();
+  // 読み直して、続けて同じ断りを繰り返さないよう「残す」を選べなくする
+  await expect(confirm.getByRole('radio', { name: /配下を親なしで残す/ })).toBeDisabled();
 });
