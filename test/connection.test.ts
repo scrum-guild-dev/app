@@ -885,7 +885,13 @@ describe('接続の暗号鍵の設定不備', () => {
           token: target.member.token,
           body: { workspace_id: target.workspace.id, connection_id: connection.id },
         });
-        for (const response of [registration, candidates]) {
+        const saving = await post(ctx.app, connectionScopesSave, {
+          env: brokenEnv,
+          slug: target.slug,
+          token: target.member.token,
+          body: { workspace_id: target.workspace.id, connection_id: connection.id, source_ids: ['1001'] },
+        });
+        for (const response of [registration, candidates, saving]) {
           expect(response.status).toBe(503);
           expect(await response.json()).toEqual({
             error: {
@@ -898,11 +904,20 @@ describe('接続の暗号鍵の設定不備', () => {
         for (const secret of [pat, before.connections[0]!.credential_ciphertext!, keys]) {
           if (secret !== undefined) expect(logged).not.toContain(secret);
         }
-        expect(log.mock.calls).toHaveLength(2);
+        expect(log.mock.calls).toHaveLength(3);
         for (const [entry] of log.mock.calls) {
           expect(JSON.parse(String(entry))).toMatchObject({ code: 'credential_keys_unavailable', status: 503 });
         }
         expect(await rowsOf(target)).toEqual(before);
+        // 空の範囲は候補の照合も復号も不要なので、設定が不備でも取り込みを止められる。
+        const clearing = await post(ctx.app, connectionScopesSave, {
+          env: brokenEnv,
+          slug: target.slug,
+          token: target.member.token,
+          body: { workspace_id: target.workspace.id, connection_id: connection.id, source_ids: [] },
+        });
+        expect(clearing.status).toBe(200);
+        expect((await rowsOf(target)).scopes).toEqual([]);
       } finally {
         log.mockRestore();
       }
