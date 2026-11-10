@@ -2352,11 +2352,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="「手元の CLI」を取り消しました">取り消す</button>`);
       document.querySelector(".dialog-sheet").classList.add("is-danger");
     },
-    // 今のセッション以外のすべてのセッションと、すべての API トークンを無効にする確認（本番は ConfirmDialog）。API トークンの節の末尾の
-    // 「すべての端末とトークンを締め出す」から開く。元に戻せない旨と、いま使っているこのブラウザのログインだけが残る旨を書く
+    // 今のセッションと同時刻以前のほかのセッションと、すべての API トークンを無効にする確認（本番は ConfirmDialog）。API トークンの節の末尾の
+    // 「すべての端末とトークンを締め出す」から開く。元に戻せない旨と、このブラウザと後からログインした端末が残る旨を書く
     tokenRevokeAll: () => {
       openDialog("すべての端末とトークンを締め出しますか",
-        `<p>いま使っているこのブラウザのログインだけが残り、ほかのすべての端末（同じ端末のほかのブラウザを含む）はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。</p>`,
+        `<p>このブラウザのログインは残り、同時刻以前にログインしたほかの端末はログアウトされます。後からログインした端末は残ります。疑わしいときは、ログインし直してから実行してください。発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。</p>`,
         `<button class="btn is-primary" type="button" data-close-dialog>やめる</button><button class="btn is-danger" type="button" data-close-dialog data-toast="ほかの端末のセッション2件と、API トークン2件を締め出しました">締め出す</button>`);
       document.querySelector(".dialog-sheet").classList.add("is-danger");
     },

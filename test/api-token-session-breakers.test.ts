@@ -22,7 +22,7 @@ afterEach(() => vi.restoreAllMocks());
 test('発行バッチを送る直前に全失効しても、読み取り済みのセッションからトークンを残さない', async () => {
   const account = await createAccount();
   const current = await createSession(account.id);
-  const stale = await createSession(account.id);
+  const stale = await createSession(account.id, { created_at: current.created_at });
   const db = commonDb(env);
   const revokeDb = commonDb(env);
   const batch = db.batch.bind(db);
@@ -44,7 +44,7 @@ test('発行バッチを送る直前に全失効しても、読み取り済み�
 test('発行が成功した直後に全失効しても、成功した発行を401へ置き換えず、トークンは取り消される', async () => {
   const account = await createAccount();
   const current = await createSession(account.id);
-  const stale = await createSession(account.id);
+  const stale = await createSession(account.id, { created_at: current.created_at });
   const db = commonDb(env);
   const revokeDb = commonDb(env);
   const batch = db.batch.bind(db);

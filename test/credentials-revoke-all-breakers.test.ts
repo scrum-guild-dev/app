@@ -10,13 +10,20 @@ import { commonDb } from '../src/server/db/index.ts';
 import { envWithD1Hooks } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { sessionRowsOf } from './auth/helpers.ts';
-import { createSessionWithToken } from './factories.ts';
+import { createSessionWithToken as createSessionFixture } from './factories.ts';
 import { insertApiToken, tokenRow, tokenRowsOf } from './operations/api-token.ts';
 import { post } from './operations/harness.ts';
 import { createLoginPerson, testEnv } from './operations/world.ts';
 
 const app = createApp([...implementedOperations]);
 const future = () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+// 既存の同時実行・全削除の検査は同時刻に作ったセッションを使う。
+// 時刻の異なるセッションの回復は credentials-recovery.test.ts で確かめる。
+async function createSessionWithToken(accountId: string, overrides: Parameters<typeof createSessionFixture>[1] = {}) {
+  const [existing] = await sessionRowsOf(accountId);
+  return createSessionFixture(accountId, { created_at: existing!.created_at, ...overrides });
+}
 
 type Counts = { revoked_sessions: number; revoked_tokens: number };
 const revokeAll = (token: string) => post(app, credentialsRevokeAll, { token });

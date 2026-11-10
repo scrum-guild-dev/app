@@ -1,5 +1,5 @@
 // マイプロフィール（/<slug>/me）の「API トークン」の節の末尾の、危険な操作「すべての端末とトークンを締め出す」（#715）。
-// 今の画面のセッション以外のすべてのセッションと、取り消していないすべてのトークンを無効にする（credentials-revoke-all）。
+// 今の画面のセッションと同時刻以前のほかのセッションと、取り消していないすべてのトークンを無効にする（credentials-revoke-all）。
 // 本物の実行は、くもラボのコハル（lookThemed）で行う。実行すると、そのアカウントのほかのセッションがすべて消えるので、
 // admin など、並べて走るほかのテストが共有する seed のセッションがあるアカウントでは行わない（実行するのは seed のセッション、
 // 消えるのは e2e/local-d1.ts の OTHER_DEVICE_SESSION だけ）。やめる、失敗は、応答を差し替えて共有のセッション（admin）で確かめる
@@ -70,6 +70,18 @@ test('確認を経て実行すると、今の画面は使い続けられ、ほ�
   ).toBeVisible();
   await waitForSettled(page);
 
+  // 古い盗難 Cookie が全失効を繰り返しても、ログインし直した本人の画面は使える。
+  // signIn は seed の作成日時を更新するので、先に作った OTHER_DEVICE_SESSION より新しい。
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const attack = await request.post('/api/credentials-revoke-all', {
+      headers: { Origin: origin, Cookie: `${cookieName}=${OTHER_DEVICE_SESSION.token}` },
+      data: {},
+    });
+    expect(attack.status()).toBe(200);
+    expect(await attack.json()).toMatchObject({ revoked_sessions: 0 });
+    expect(await meWithCookie(SEED_SESSIONS.lookThemed.token)).toBe(200);
+  }
+
   // 取り消していないトークンを1つ作る（値は発行の直後に1回だけ見える）
   const bearer = await issue(page, `締め出しの確かめ ${Date.now().toString(36)}`);
   await expect(section.getByRole('table', { name: '発行済みの API トークン' })).toBeVisible();
@@ -93,7 +105,7 @@ test('確認を経て実行すると、今の画面は使い続けられ、ほ�
     await expect(confirm).toBeVisible();
     await expect(
       confirm.getByText(
-        'いま使っているこのブラウザのログインだけが残り、ほかのすべての端末（同じ端末のほかのブラウザを含む）はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。',
+        'このブラウザのログインは残り、同時刻以前にログインしたほかの端末はログアウトされます。後からログインした端末は残ります。疑わしいときは、ログインし直してから実行してください。発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。',
         { exact: false },
       ),
     ).toBeVisible();
