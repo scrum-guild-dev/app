@@ -54,6 +54,9 @@ export function connectionCreateFailure(result: FailedResult): ConnectionFailure
   if (result.status === 409) return { field: 'form', key: 'connectionLimit' };
   // 認証情報は送った直後に欄から消してあるので、やり直すときは入れ直す
   if (result.status === 429) return { field: 'form', key: 'connectionCreateRateLimited', refocus: 'credential' };
+  if (result.error?.code === 'credential_keys_unavailable') {
+    return { field: 'form', key: 'connectionCredentialKeysUnavailable' };
+  }
   if (result.status === 0 || result.status === 503) {
     return { field: 'form', key: 'connectionCreateUnreachable', refocus: 'credential' };
   }
@@ -63,6 +66,7 @@ export function connectionCreateFailure(result: FailedResult): ConnectionFailure
 // 範囲の候補（connection-scope-candidates）と保存（connection-scopes-save）の失敗。
 // 候補の 409（credential_rejected）は、保存した認証情報を取り込み元が受け付けなくなったこと
 export function connectionScopeFailure(result: FailedResult): DictionaryKey {
+  if (result.error?.code === 'credential_keys_unavailable') return 'connectionCredentialKeysUnavailable';
   if (result.error?.code === 'workspace_closed') return 'connectionWorkspaceClosed';
   if (result.status === 409) return 'connectionScopeRejected';
   if (result.status === 403 || result.status === 404) return 'connectionScopeGone';

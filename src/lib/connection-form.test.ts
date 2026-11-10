@@ -125,3 +125,17 @@ describe('connectionSyncOutcome / connectionSyncFailure', () => {
     expect(connectionSyncFailure(failed(500, 'internal'))).toBe('connectionSyncFailed');
   });
 });
+
+describe('接続の暗号鍵の設定不備', () => {
+  it('登録は再試行や認証情報の入れ直しではなく設定の確認を案内する', () => {
+    expect(connectionCreateFailure(failed(503, 'credential_keys_unavailable'))).toEqual({
+      field: 'form',
+      key: 'connectionCredentialKeysUnavailable',
+    });
+  });
+  it('範囲も通信の失敗と区別する', () => {
+    expect(connectionScopeFailure(failed(503, 'credential_keys_unavailable'))).toBe(
+      'connectionCredentialKeysUnavailable',
+    );
+  });
+});

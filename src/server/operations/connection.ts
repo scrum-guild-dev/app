@@ -21,6 +21,7 @@ import {
   type OrganizationTables,
 } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
+import { CredentialKeysError } from '../crypto/credential.ts';
 import { ImportSourceError, isImportSourceKind, type ScopeCandidate } from '../import/index.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
@@ -105,6 +106,16 @@ async function readConnections(db: OrganizationDb, workspaceId: string, connecti
   }));
 }
 
+// 鍵の設定不備だけを区別する。復号の失敗など想定外の例外は従来どおり伝える。
+async function credentialOperation<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (err) {
+    if (err instanceof CredentialKeysError) throw new ApiError(503, 'credential_keys_unavailable');
+    throw err;
+  }
+}
+
 function rejected(problem: ConnectionCreateProblem, message: string): ApiError {
   return new ApiError(400, 'invalid_input', [{ path: 'credential', code: problem, message }]);
 }
@@ -152,7 +163,7 @@ export const connectionCreateOperation = implement(connectionCreate, async ({ db
   const at = now();
   const stamp = at.toISOString();
   const connectionId = uuidv7(at);
-  const sealed = await tools.sealCredential(credential, connectionId);
+  const sealed = await credentialOperation(() => tools.sealCredential(credential, connectionId));
   const last4 = source.credentialLast4(credential);
 
   const results = await db.batch([
@@ -270,9 +281,9 @@ async function fetchCandidates(
     throw new ApiError(409, 'conflict', { reason: 'credential_missing' });
   }
   const source = tools.importSource(row.provider);
-  const credential = await tools.openCredential(
-    { ciphertext: row.credential_ciphertext, keyVersion: Number(row.credential_key_version) },
-    row.id,
+  const ciphertext = row.credential_ciphertext;
+  const credential = await credentialOperation(() =>
+    tools.openCredential({ ciphertext, keyVersion: Number(row.credential_key_version) }, row.id),
   );
   try {
     return await source.listScopeCandidates(credential);
