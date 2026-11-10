@@ -7,6 +7,7 @@ import { A11Y_THEMES, applyTheme } from './helpers.ts';
 // バックログとスプリントの見本で通す。見本はアプリの配信対象外なので、共有の見本ファイルをそのまま返す。
 const files: Record<string, string> = {
   'backlog.html': 'text/html',
+  'index.html': 'text/html',
   'sprint.html': 'text/html',
   'tokens.css': 'text/css',
   'components.css': 'text/css',
@@ -16,7 +17,7 @@ const files: Record<string, string> = {
   'kit.js': 'text/javascript',
 };
 
-async function openSample(page: Page, name: 'backlog.html' | 'sprint.html'): Promise<string[]> {
+async function openSample(page: Page, name: 'backlog.html' | 'sprint.html' | 'index.html'): Promise<string[]> {
   await page.route('**/__design-catalog/**', async (route) => {
     const file = new URL(route.request().url()).pathname.split('/').pop()!;
     const contentType = files[file];
@@ -427,4 +428,21 @@ test('見本のバックログ: 配下の未完了が残るストーリーは、
   const drawer = page.locator('#drawer');
   await drawer.locator('[data-story-done]').click({ force: true });
   await expect(drawer.locator('.hanko')).toHaveCount(0);
+});
+
+test('カタログの横送りの見本で属性と行の操作を選んでも、同じ見本へフォーカスが戻る', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors = await openSample(page, 'index.html');
+  const points = page.locator('#tree [data-chip-for="t15:pts"]');
+  await expect(page.locator('[data-chip-for="t15:pts"]')).toHaveCount(1);
+  await points.click();
+  await page.getByRole('menuitemradio', { name: '5 pt', exact: true }).click();
+  await expect(points).toHaveText('5 pt');
+  await expect(points).toBeFocused();
+  const menu = page.locator('#tree [data-menu-for="t15"]');
+  await expect(page.locator('[data-menu-for="t15"]')).toHaveCount(1);
+  await menu.click();
+  await page.getByRole('menuitem', { name: '今日やる', exact: true }).click();
+  await expect(menu).toBeFocused();
+  expect(errors).toEqual([]);
 });
