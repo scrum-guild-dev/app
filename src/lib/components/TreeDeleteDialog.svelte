@@ -16,6 +16,8 @@
   // 配下が増えていても、古い件数で確かめさせない）。読んでいる間は主ボタンを押しても無視する（aria-disabled）。
   // 読めなければ、元のダイアログが読んだ値のまま出す（サーバーが今の配下で判定する）。
   // まとめて削除できない（リーダーと管理者でない人で、配下に他の人の作ったものがある）ときは、その選択肢を押せなくし、理由を添える。
+  // クリア済み（epic-get の completed_at）で配下のストーリーがあるエピックは、「残す」を最初から押せなくして理由を添え、「まとめて削除する」を選んで開く
+  // （まとめて削除もできない人は、どちらも選べず、主ボタンを押しても送らない）。サーバーの 409 epic_finished は、読んだ後にクリアされた競合の最後の守り。
   // 送っている間は、主ボタンを押しても無視し、ダイアログも閉じられない（OrganizationSuspendDialog と同じ）。
   // 結果は onfinish で親に渡す。削除できた（deleted）、無かった（gone。別の画面で先に削除された）は親が閉じて木を読み直す。
   // 権限が無い（403）、閉じたワークスペース（409）、通信や 5xx は、このダイアログの中の role="alert" に理由を出す。
@@ -31,6 +33,8 @@
     tasks: number;
     // まとめて削除できるか
     canDeleteChildren: boolean;
+    // クリア済みのエピックか（ストーリーは常に偽）。クリア済みで配下のあるエピックは、配下を親なしで残せない
+    cleared: boolean;
   };
   let {
     slug,
@@ -59,6 +63,18 @@
   const ids = $props.id();
   const legendId = `${ids}-children`;
   const leaderOnlyId = `${ids}-leader-only`;
+  const clearedId = `${ids}-cleared`;
+
+  // クリア済みで、削除していない配下のストーリーがあるエピック。配下を親なしで残す削除はサーバーが 409 で断るので、最初から選ばせない
+  function keepBlocked(current: Target): boolean {
+    return current.kind === 'epic' && current.cleared && current.stories > 0;
+  }
+
+  // 選んでいる扱いを、選べるものに合わせる。残せなければ、まとめて削除できる人は「まとめて削除する」、できない人は「残す」のまま（主ボタンを押せなくする）
+  function usableMode(current: Target, chosen: DeleteChildrenMode): DeleteChildrenMode {
+    if (keepBlocked(current)) return current.canDeleteChildren ? 'delete' : 'keep';
+    return current.canDeleteChildren ? chosen : 'keep';
+  }
 
   $effect(() => {
     return () => {
@@ -86,8 +102,9 @@
           stories: 'stories' in children ? children.stories : 0,
           tasks: children.tasks,
           canDeleteChildren: result.data.can_delete_children,
+          cleared: 'completed_at' in result.data ? result.data.completed_at !== null : false,
         };
-        if (!result.data.can_delete_children) mode = 'keep';
+        mode = usableMode(target, mode);
         // 件数が変わったら、取り消せない操作の中身が変わったことを読み上げにも伝える（変わった後の説明の文を status に出す）
         if (before !== null && (before.stories !== target.stories || before.tasks !== target.tasks)) {
           announcement = childrenText(target, mode);
@@ -122,7 +139,7 @@
   export function show(next: Target, trigger?: HTMLElement | null): void {
     generation++;
     target = next;
-    mode = 'keep';
+    mode = usableMode(next, 'keep');
     canDelete = true;
     announcement = '';
     submitting = false;
@@ -140,8 +157,11 @@
       : await callOperation(storyDelete, { workspace_id: workspaceId, story_id: current.id, children }, { slug });
   }
 
+  // 残せず、まとめて削除もできない（クリア済みで、他の人の作った配下がある一般のメンバー）。選べる扱いが無いので送らない
+  const nothingToChoose = $derived(target !== null && hasChildren && keepBlocked(target) && !target.canDeleteChildren);
+
   async function submit(): Promise<void> {
-    if (target === null || submitting || loading || !canDelete) return;
+    if (target === null || submitting || loading || !canDelete || nothingToChoose) return;
     const current = target;
     const mine = generation;
     submitting = true;
@@ -230,7 +250,14 @@
       <span class="field-label" id={legendId}>{t('treeDeleteChildren')}</span>
       <div class="choice-list" role="radiogroup" aria-labelledby={legendId} aria-busy={loading}>
         <label class="choice">
-          <input type="radio" name="{ids}-children" value="keep" bind:group={mode} />
+          <input
+            type="radio"
+            name="{ids}-children"
+            value="keep"
+            bind:group={mode}
+            disabled={keepBlocked(target)}
+            aria-describedby={keepBlocked(target) ? clearedId : undefined}
+          />
           <div>
             <b>{t('treeDeleteKeep')}</b><span
               >{target.kind === 'epic'
@@ -257,6 +284,19 @@
           </div>
         </label>
       </div>
+      {#if keepBlocked(target)}
+        <span class="field-hint" id={clearedId}
+          >{target.canDeleteChildren
+            ? t('treeDeleteClearedKeep', { epic: t('epic'), done: t('done'), story: t('story') })
+            : t('treeDeleteClearedKeepAsk', {
+                epic: t('epic'),
+                done: t('done'),
+                story: t('story'),
+                requester: t('requester'),
+                leader: t('leader'),
+              })}</span
+        >
+      {/if}
       {#if !target.canDeleteChildren}
         <span class="field-hint" id={leaderOnlyId}>{t('treeDeleteAllLeaderOnly', { leader: t('leader') })}</span>
       {/if}
@@ -277,7 +317,12 @@
     <button class="btn is-quiet" type="button" aria-disabled={submitting} onclick={close} bind:this={cancelButton}
       >{t('taskDeleteCancel')}</button
     >
-    <button class="btn is-danger" type="button" aria-disabled={submitting || loading || !canDelete} onclick={submit}>
+    <button
+      class="btn is-danger"
+      type="button"
+      aria-disabled={submitting || loading || !canDelete || nothingToChoose}
+      onclick={submit}
+    >
       {submitting ? t('taskDeleting') : t('taskDeleteConfirm')}
     </button>
   {/snippet}

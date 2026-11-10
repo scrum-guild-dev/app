@@ -952,4 +952,24 @@ describe('epic-get と story-get の削除の可否と配下の件数', () => {
       expect(await storyRes.json()).toMatchObject({ can_delete: expected, children: { tasks: 2 } });
     }
   });
+
+  test('epic-get は、クリアした日時（クリアしていなければ null）を返す', async () => {
+    const target = await createTarget();
+    const ws = target.workspace.id;
+    const me = target.member.userId!;
+    const open = await createEpic(target.organization, ws, me);
+    const cleared = await createEpic(target.organization, ws, me, { completed_at: '2026-10-21T00:00:00.000Z' });
+    for (const [epic, expected] of [
+      [open, null],
+      [cleared, '2026-10-21T00:00:00.000Z'],
+    ] as const) {
+      const res = await post(app, epicGet, {
+        slug: target.slug,
+        token: target.member.token,
+        body: { workspace_id: ws, epic_id: epic.id },
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ completed_at: expected });
+    }
+  });
 });

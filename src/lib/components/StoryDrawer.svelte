@@ -924,7 +924,15 @@
   function askDelete(trigger: HTMLElement): void {
     if (story === null || !canDelete) return;
     deleteDialog?.show(
-      { kind: 'story', id: story.id, title: story.title, stories: 0, tasks: childTasks, canDeleteChildren },
+      {
+        kind: 'story',
+        id: story.id,
+        title: story.title,
+        stories: 0,
+        tasks: childTasks,
+        canDeleteChildren,
+        cleared: false,
+      },
       trigger,
     );
   }
