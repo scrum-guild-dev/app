@@ -148,9 +148,9 @@ describe('task-delegate', () => {
         }
       },
     });
-    expect(
-      (await post(app, taskReopen, { slug: target.slug, token: target.admin.token, body, env: racing })).status,
-    ).toBe(409);
+    const conflicted = await post(app, taskReopen, { slug: target.slug, token: target.admin.token, body, env: racing });
+    expect(conflicted.status).toBe(409);
+    expect(await conflicted.json()).toMatchObject({ error: { code: 'conflict', details: { reason: 'changed' } } });
     expect(raced).toBe(true);
     expect((await row(target, task.id))!.completed_at).not.toBeNull();
     expect((await post(app, taskReopen, { slug: target.slug, token: target.admin.token, body })).status).toBe(200);
