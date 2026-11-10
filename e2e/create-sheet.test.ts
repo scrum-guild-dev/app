@@ -189,3 +189,24 @@ test('画面幅と表示領域が変わっても書きかけと作るボタン�
     .click();
   await expect(page.getByRole('button', { name: '起票', exact: true })).toBeFocused();
 });
+
+test('書きかけで戻るのをやめれば残り、捨てて戻った後も進む履歴を保つ', async ({ page, context, baseURL }) => {
+  if (!baseURL) throw new Error('baseURL が無い');
+  await signIn(context, baseURL, 'admin');
+  const { workspace_id } = await setup(page, baseURL);
+  await page.locator('.mobile-tabs').getByRole('link', { name: '今日やること', exact: true }).click();
+  await expect(page).toHaveURL(new URL('/aoba', baseURL).href);
+  await page.getByRole('button', { name: '起票', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: '起票', exact: true });
+  await sheet.getByLabel('タイトル', { exact: true }).fill('戻る前の書きかけ');
+  await page.evaluate(() => history.back());
+  const confirm = page.getByRole('dialog', { name: '書きかけを捨てますか', exact: true });
+  await confirm.getByRole('button', { name: '書き続ける', exact: true }).click();
+  await expect(sheet.getByLabel('タイトル', { exact: true })).toHaveValue('戻る前の書きかけ');
+  await expect(page).toHaveURL(new URL('/aoba', baseURL).href);
+  await page.evaluate(() => history.back());
+  await confirm.getByRole('button', { name: '捨てる', exact: true }).click();
+  await expect(page).toHaveURL(new URL(`/aoba/w/${workspace_id}`, baseURL).href);
+  await page.evaluate(() => history.forward());
+  await expect(page).toHaveURL(new URL('/aoba', baseURL).href);
+});

@@ -108,12 +108,14 @@
     navigation.cancel();
     if (navigation.type === 'leave') return;
     const url = navigation.to?.url;
+    const delta = navigation.type === 'popstate' ? navigation.delta : undefined;
     if (url)
       void mayDiscard().then((answer) => {
         if (answer) {
           finish();
+          if (delta !== undefined && delta !== 0) history.go(delta);
           // eslint-disable-next-line svelte/no-navigation-without-resolve -- SvelteKit が解決した遷移先を再開する
-          void goto(url);
+          else void goto(url);
         }
       });
   });
