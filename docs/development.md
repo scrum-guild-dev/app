@@ -323,7 +323,7 @@ GitHub は無料のプランのまま使う（2026-10-23 に決めた）。無�
 - `pnpm preview` は、build した `build/` と API を `wrangler dev` だけで配る。本番と同じ配り方（Workers Static Assets、`_headers`、SPA の fallback）を確かめる口で、HMR は効かない
 - 開発の URL は2つある。`pnpm dev` は `http://localhost:5173`、`pnpm preview` は `http://localhost:8787`。Origin の検査は、この URL を `PUBLIC_ORIGIN` として `wrangler dev` に渡して行う（`scripts/dev.ts`）。ブラウザが送る Origin と合わない URL（`127.0.0.1` など）で開くと、更新系の API は 403 になる。GitHub の OAuth の戻り先もこの URL から作る（`<画面の URL>/api/auth/github/callback`）ので、開発用の OAuth App の Redirect URI とポートまで合わせる（`docs/operations.md` の「GitHub OAuth App」）。Google の戻り先も同じ（`<画面の URL>/api/auth/google/callback`）で、クライアントの承認済みのリダイレクト URI にこの URL（`pnpm dev` の `http://localhost:5173` と `pnpm preview` の `http://localhost:8787`）を足して合わせる（`docs/operations.md` の「Google の OAuth クライアント」）。運用者が作る招待の URL も `PUBLIC_ORIGIN` から作る（`<PUBLIC_ORIGIN>/invite#<秘密>`）
 
-`pnpm dev` と `pnpm preview` の `wrangler dev` は、API のポートの `/cdn-cgi/handler/scheduled?cron=*+*+*+*+*` を常に開いている（wrangler の既定）。開くと、毎分の定期処理（期限切れの行の掃除）を起こせる。毎時の定期処理（お試しの期限切れの停止と未添付ファイルの掃除）は `cron=0+*+*+*+*` で起こす。`/__scheduled` は `assets` の `not_found_handling` が先に答えて SPA の画面が返るので使わない。`cron` は `wrangler.jsonc` の `triggers.crons` にある式で、`+` は空白の代わり。表に無い式では例外になる。
+`pnpm dev` と `pnpm preview` の `wrangler dev` は、API のポートの `/cdn-cgi/handler/scheduled?cron=*+*+*+*+*` を常に開いている（wrangler の既定）。開くと、毎分の定期処理（期限切れ・保持期限後の行の掃除と、容量警告の再試行）を起こせる。毎時の定期処理（お試しの期限切れの停止と未添付ファイルの掃除）は `cron=0+*+*+*+*` で起こす。`/__scheduled` は `assets` の `not_found_handling` が先に答えて SPA の画面が返るので使わない。`cron` は `wrangler.jsonc` の `triggers.crons` にある式で、`+` は空白の代わり。表に無い式では例外になる。
 
 ### ポート
 
@@ -468,6 +468,11 @@ Wrangler の assets で本番ビルドを SPA として配り、ループバッ�
 今日の画面（`/[slug]`）を含め、計測する操作と主従は `scripts/loading-screens.ts` を正とする。#1018 で今日から外した経験値の読み取りは含めない。
 
 計測した表と判定は [画面の読み込みの計測結果](loading-bench-results.md) に残す。後回しそのものは #1042 の範囲に入れない。
+
+容量集計の負荷は、組織の枠の通常の `organization {}` と、管理画面の節の `organization { include_storage: true }` を分けて確認する。通常の呼び出しは Wiki の本文・過去版を集計しない。
+
+2026-11-10 の #740 では、ローカル workerd/D1 の独立した DB に5,000ページ・500,000過去版（各本文1,024バイト、題を含め519,645,000バイト）を用意して HTTP で測った。warmup2回の後の5回、p95はnearest-rankの最大値。seedだけの通常呼び出しはp50 30.7ms / p95 34.5ms、大量データでの通常呼び出しは25.0ms / 26.3ms、容量の明示取得は434.9ms / 599.4ms、その後の通常呼び出しは25.8ms / 35.7msだった。明示取得は目安500msを超えるため独立した節の読み込みとして扱い、組織の枠の読み込みを待たせない。最大10万字の本文や、本番のD1・ネットワークの性能保証ではない。
+
 
 ### 依存を入れたばかりの作業コピー
 
