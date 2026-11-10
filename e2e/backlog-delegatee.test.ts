@@ -90,7 +90,9 @@ test('自分用の組織では、依頼先の付いた行にチップが出て�
     const unroute = await failOperation(page, taskDelegate, { slug: 'personal' }, 404, 'not_found');
     await delegatedRow.getByRole('button', { name: `依頼先: ${second}` }).click();
     await page.getByRole('menu', { name: '依頼先を選ぶ' }).getByRole('menuitemradio', { name: first }).click();
-    await expect(page.getByText('選んだ人は依頼先の名簿から削除されています。選び直してください')).toBeVisible();
+    await expect(
+      page.getByRole('status').filter({ hasText: '選んだ人は依頼先の名簿から削除されています' }),
+    ).toBeVisible();
     await expect(delegatedRow.getByRole('button', { name: `依頼先: ${second}` })).toBeVisible();
     await unroute();
 
