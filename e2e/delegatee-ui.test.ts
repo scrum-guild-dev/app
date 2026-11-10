@@ -34,22 +34,33 @@ test('自分用の引き出しで依頼先を作成・付け外しし、設定�
     const select = page.getByRole('combobox', { name: '依頼先', exact: true });
     await expect(select.locator('option:checked')).toHaveText(name);
     const detail = await request.post(operationPath(taskDetail, 'personal'), { headers, data: input });
-    expect(taskDetail.output.parse(await detail.json()).task.assignee).not.toBeNull();
-    await expect(select).toBeEnabled();
+    const assigned = taskDetail.output.parse(await detail.json()).task.assignee;
+    expect(assigned).not.toBeNull();
+    await expect(
+      page.getByRole('dialog').getByRole('combobox', { name: '担当', exact: true }).locator('option:checked'),
+    ).toHaveText(assigned!.name);
+    await expect(select).toHaveAttribute('aria-disabled', 'false');
     await page.reload();
+    await expect(select.locator('option:checked')).toHaveText(name);
+    const restoreList = await failOperation(page, delegateeList, { slug: 'personal' }, 500, 'internal');
+    await page.reload();
+    const failedField = page.getByRole('dialog').locator('dd').filter({ hasText: '依頼先を読み込めませんでした' });
+    await expect(failedField.getByText(name, { exact: true })).toBeVisible();
+    await restoreList();
+    await failedField.getByRole('button', { name: 'もう一度試す', exact: true }).click();
     await expect(select.locator('option:checked')).toHaveText(name);
     const restore = await failOperation(page, taskDelegate, { slug: 'personal' }, 500, 'internal');
     await select.selectOption('');
-    await expect(page.getByRole('alert').filter({ hasText: '依頼先を更新できませんでした' })).toBeVisible();
-    await expect(select).toBeEnabled();
+    await expect(page.getByRole('alert').filter({ hasText: '依頼先を変更できませんでした' })).toBeVisible();
+    await expect(select).toHaveAttribute('aria-disabled', 'false');
     await expect(select.locator('option:checked')).toHaveText(name);
     await restore();
     await select.selectOption('');
     await expect(select.locator('option:checked')).toHaveText('依頼先なし');
-    await expect(select).toBeEnabled();
+    await expect(select).toHaveAttribute('aria-disabled', 'false');
     await select.selectOption({ label: name });
     await expect(select.locator('option:checked')).toHaveText(name);
-    await expect(select).toBeEnabled();
+    await expect(select).toHaveAttribute('aria-disabled', 'false');
     await page.goto('/personal/admin');
     const section = page.getByRole('region', { name: '依頼先', exact: true });
     const row = section.locator('.field').filter({ has: page.getByLabel(name, { exact: true }) });
@@ -90,7 +101,7 @@ test('チーム用の組織の引き出しと設定には依頼先を出さな�
   const link = page.locator('a[data-task-id]').first();
   await expect(link).toBeVisible();
   await link.click();
-  await expect(page.getByRole('combobox', { name: '担当', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('combobox', { name: '担当', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: '依頼先', exact: true })).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: '新しい依頼先の名前', exact: true })).toHaveCount(0);
 });
@@ -130,4 +141,13 @@ test('名簿の別行の未保存入力を残し、削除を取り消すと元�
   await dialog.getByRole('button', { name: 'やめる', exact: true }).click();
   await expect(remove).toBeFocused();
   await expect(section.getByRole('textbox', { name: '依頼先B', exact: true })).toHaveValue('編集中のB');
+});
+
+test('空の名簿ではタスクの引き出しから足す方法を案内する', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'personalAdmin');
+  await mockOperation(page, delegateeList, { slug: 'personal' }, { delegatees: [] });
+  await page.goto('/personal/admin');
+  const section = page.getByRole('region', { name: '依頼先', exact: true });
+  await expect(section.getByText('依頼先はまだありません', { exact: true })).toBeVisible();
+  await expect(section).toContainText('タスクの引き出しで新しい名前を入力すると');
 });
