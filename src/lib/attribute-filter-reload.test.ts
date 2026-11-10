@@ -32,12 +32,11 @@ test('後から足された移動も待ち、読み直す間だけ状態を保�
   const next = deferred();
   const read = deferred();
   let tail = first.promise;
-  let coordinator!: FilteredAttributeReload;
   const reload = vi.fn(async () => {
     expect(coordinator.preservesState).toBe(true);
     await read.promise;
   });
-  coordinator = new FilteredAttributeReload({ whenIdle: () => tail, reload });
+  const coordinator = new FilteredAttributeReload({ whenIdle: () => tail, reload });
   const pending = coordinator.request();
   tail = next.promise;
   first.resolve();
