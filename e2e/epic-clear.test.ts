@@ -199,7 +199,15 @@ test('クリア済みでまとめて削除もできない人は、削除する�
 test('読み込んだ後にクリアされたエピックを、配下を残して削除すると断られ、理由を出して確認を閉じない', async ({
   page,
 }) => {
-  await failOperation(page, epicDelete, AOBA, 409, 'epic_finished');
+  // 開いたときは未クリア。断られた後は、別の人がクリアした後の値（completed_at あり）を返す
+  let clearedByOther = false;
+  await routeOperation(page, epicDelete, AOBA, async (call) => {
+    clearedByOther = true;
+    await call.fail(409, 'epic_finished');
+  });
+  await rewriteOperation(page, epicGet, AOBA, (output) =>
+    clearedByOther ? { ...output, completed_at: CLEARED_AT } : output,
+  );
   await page.goto(`${WORKSPACE}/epics/${EPIC_ID}`);
   await page.getByRole('link', { name: 'エピックを直す' }).click();
   const drawer = page.getByRole('dialog', { name: EPIC_TITLE, exact: true });
