@@ -43,10 +43,12 @@
 <header class="page-head" class:is-compact={!!compactSummary}>
   {#if eyebrow}<span class="page-eyebrow">{eyebrow}</span>{/if}
   <div class="page-head-row">
-    <!-- tabindex="-1" は、プログラムからフォーカスを置くため（キーボードの Tab 順には入らない）。値は -1 か未指定だけ -->
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-    <h1 class="page-title" tabindex={focusable ? -1 : undefined}>{title}</h1>
-    {#if mobileHead?.narrow && mobileHead.owns(headId)}{@render mobileHead.tools()}{/if}
+    <div class="page-title-row">
+      <!-- tabindex="-1" は、プログラムからフォーカスを置くため（キーボードの Tab 順には入らない）。値は -1 か未指定だけ -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <h1 class="page-title" tabindex={focusable ? -1 : undefined}>{title}</h1>
+      {#if mobileHead?.narrow && mobileHead.owns(headId)}{@render mobileHead.tools()}{/if}
+    </div>
     {#if actions}<div class="page-actions">{@render actions()}</div>{/if}
   </div>
   {#snippet counts(items: Tally[])}

@@ -151,3 +151,38 @@ test('Wiki の読み込み失敗で見出しが複数あっても、検索とア
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('combobox', { name: '画面とタスクを探す' })).toBeFocused();
 });
+
+for (const width of [320, 390]) {
+  for (const [path, title] of [
+    ['/aoba/me', 'マイプロフィール'],
+    ['/aoba/wiki', 'Wiki'],
+  ]) {
+    test(`${width}px の ${title} で、折り返した見出しと入口が重ならず、一覧は入口の直下で開く`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(path);
+      await expect(page.locator('.page-title')).toHaveText(title);
+      if (path === '/aoba/wiki') await expect(page.locator('.page-actions')).toBeVisible();
+      await expect(page.locator('.page-head .mobile-page-tools')).toHaveCount(1);
+      const measure = await measureFrame(page);
+      expect(measure.clipped).toBe(false);
+      expect(measure.gap).toBeGreaterThanOrEqual(0);
+      const account = page.getByRole('button', { name: /アカウントのメニュー$/ });
+      await account.click();
+      await expect(account).toHaveAttribute('aria-expanded', 'true');
+      const row = await page.locator('.page-title-row').boundingBox();
+      const list = await page.locator('.account-menu-list').boundingBox();
+      expect(row).not.toBeNull();
+      expect(list).not.toBeNull();
+      expect(list!.y - row!.y - row!.height).toBeGreaterThanOrEqual(0);
+      expect(list!.y - row!.y - row!.height).toBeLessThanOrEqual(8);
+      await page.keyboard.press('Escape');
+      const search = page.getByRole('button', { name: '画面とタスクを探す' });
+      await search.click();
+      await expect(search).toHaveAttribute('aria-expanded', 'true');
+      const box = await page.getByRole('search', { name: '画面とタスクを探す' }).boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y - row!.y - row!.height).toBeGreaterThanOrEqual(0);
+      expect(box!.y - row!.y - row!.height).toBeLessThanOrEqual(8);
+    });
+  }
+}

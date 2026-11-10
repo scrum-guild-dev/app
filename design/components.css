@@ -2551,6 +2551,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .create-sheet-kind { min-width: 0; flex-wrap: wrap; justify-content: center; }
 .create-sheet-head > .icon-btn, .create-sheet-submit { flex: 0 0 44px; }
 
+.page-title-row { display: contents; }
 .shell-notice {
   display: flex; padding-block: var(--space-3) 0;
   padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
@@ -2560,9 +2561,11 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .mobile-page-tools { display: none; }
 @media (max-width: 760px) {
   .app .topbar { display: none; }
-  .page-head-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+  .page-title-row, .mobile-page-head {
+    position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start; gap: var(--space-3); width: 100%;
+  }
   .page-title { font-size: var(--text-3xl); }
-  .page-head-row > .page-actions { grid-column: 1 / -1; }
   .mobile-page-tools { display: flex; gap: var(--space-2); align-items: center; }
   .mobile-page-tools .nav-search-toggle,
   .mobile-page-tools .account-menu-button {

@@ -734,14 +734,14 @@
       : `${counts(tallies)}${meta}`;
     return `<header class="page-head${compactSummary ? " is-compact" : ""}">
       ${eyebrow ? `<span class="page-eyebrow">${eyebrow}</span>` : ""}
-      <div class="page-head-row"><h1 class="page-title">${title}</h1>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
+      <div class="page-head-row"><div class="page-title-row"><h1 class="page-title">${title}</h1></div>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
       ${metrics}
     </header>`;
   }
 
   // カタログ用のスマホ見出し。実際の検索とメニューは画面見本で操作する。
   function mobilePageHead(title) {
-    return `<header class="page-head"><div class="page-head-row"><h1 class="page-title">${esc(title)}</h1><div class="mobile-page-tools" role="group" aria-label="${t("mobilePageToolsLabel")}"><button class="nav-search-toggle" type="button" aria-label="画面とタスクを探す" data-toast="画面見本の検索から画面を探せます">${icon("search")}</button><button class="account-menu-button" type="button" aria-label="${t("accountMenuLabel").replace("{name}", "ミナト")}" data-toast="画面見本のアカウントからメニューを開けます">${avatarOf(D.me)}</button></div></div></header>`;
+    return `<header class="page-head"><div class="page-head-row page-title-row"><h1 class="page-title">${esc(title)}</h1><div class="mobile-page-tools" role="group" aria-label="${t("mobilePageToolsLabel")}"><button class="nav-search-toggle" type="button" aria-label="画面とタスクを探す" data-toast="画面見本の検索から画面を探せます">${icon("search")}</button><button class="account-menu-button" type="button" aria-label="${t("accountMenuLabel").replace("{name}", "ミナト")}" data-toast="画面見本のアカウントからメニューを開けます">${avatarOf(D.me)}</button></div></div></header>`;
   }
 
   // スプリントのカード（列の中）
@@ -3221,7 +3221,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     restoreMobilePageTools();
     if (!matchMedia("(max-width: 760px)").matches) return;
     const content = document.getElementById("content");
-    let row = content.querySelector(".page-head-row");
+    let row = content.querySelector(".page-title-row");
     if (!row) {
       row = document.createElement("header");
       row.className = "mobile-page-head page-head-row";
