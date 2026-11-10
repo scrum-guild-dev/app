@@ -2415,7 +2415,8 @@ export const dictionary = defineDictionary({
   tokenNoticeTitle: '未確認の API トークンの発行が{count}件あります',
   tokenNoticeLatest: '最新: {name} / {scope}',
   tokenNoticeRevoked: '取り消し済み',
-  tokenNoticeHint: '身に覚えがなければ、設定でトークンを確かめ、ほかの端末とトークンを締め出してください。',
+  tokenNoticeHint:
+    '身に覚えがなければ、設定でトークンを確かめ、ログインし直してから、ほかの端末とトークンを締め出してください。',
   tokenNoticeSettings: '設定を開く',
   tokenNoticeSeen: '確かめた',
   tokenNoticeSaved: 'API トークンの発行を確かめました',
