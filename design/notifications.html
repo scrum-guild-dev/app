@@ -12,6 +12,7 @@
 </head>
 <body>
 <div id="app"></div>
+<p id="notification-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
 <script src="icons.js"></script>
 <script src="art.js"></script>
 <script src="sample-data.js"></script>
@@ -27,9 +28,14 @@ let limit = 2;
 const pageSize = 2;
 let focusAfterLoading = false;
 let loadingTimer;
+function announceResults() {
+  const count = D.notifications.filter((n) => !unreadOnly || !n.read).slice(0, limit).length;
+  const unread = D.notifications.filter((n) => !n.read).length;
+  document.getElementById("notification-status").textContent = loading ? "読み込んでいます" : `表示中の通知 ${count} 件。全体の未読 ${unread} 件。`;
+}
 function scheduleLoading() { clearTimeout(loadingTimer); loadingTimer = setTimeout(finishLoading, 300); }
 function finishLoading() {
-  loading = false; SQ.redraw();
+  loading = false; SQ.redraw(); announceResults();
   if (focusAfterLoading) document.querySelector("[data-filter]:checked")?.focus();
   focusAfterLoading = false;
 }
@@ -44,22 +50,22 @@ SQ.mount("notifications", () => {
     <div class="toolbar"><div class="segmented" role="radiogroup" aria-label="表示">
       <label><input type="radio" name="f" data-filter="all" ${unreadOnly ? "" : "checked"}><span>すべて</span></label>
       <label><input type="radio" name="f" data-filter="unread" ${unreadOnly ? "checked" : ""}><span>未読だけ</span></label></div></div>
-    ${loading ? `<div role="status">${SQ.emptyState("clock", "読み込んでいます")}</div>` : list.length ? `<ul class="feed">${list.map((n) => `<li class="${n.read ? "" : "is-unread"}">
+    ${loading ? SQ.emptyState("clock", "読み込んでいます") : list.length ? `<ul class="feed">${list.map((n) => `<li class="${n.read ? "" : "is-unread"}">
         <span class="feed-icon">${icon(ICON[n.kind] || "bell")}</span>
         <span class="feed-main"><span class="feed-text">${esc(n.text)}</span><span class="feed-at">${esc(n.at)}${n.read ? "" : "・未読"}</span>${n.kind === "storage" && D.organizations[0]?.admin ? `<span><a class="btn is-sm is-quiet" href="admin.html">組織の管理を開く</a></span>` : ""}</span>
         ${n.read ? "" : `<button class="btn is-sm is-quiet" type="button" data-read="${D.notifications.indexOf(n)}">既読にする</button>`}
       </li>`).join("")}</ul>` : SQ.emptyState("bell", unreadOnly ? "未読の通知はありません" : "通知はまだありません")}
-    ${!loading ? `<span class="visually-hidden" role="status">通知 ${list.length} 件、未読 ${unread} 件</span>` : ""}
     ${!loading && more ? `<div class="form-actions"><button class="btn is-sm" type="button" data-more>続きを読む</button></div>` : !loading && limit > pageSize ? `<p class="action-note" tabindex="-1" id="notification-end">通知をすべて表示しました</p>` : ""}
     <p class="action-note">現在の実装は、容量が上限の80%を超えたときの管理者宛ての通知と、個別の既読です。ほかの種類の行は今後の通知の見本です。</p>`;
 });
+announceResults();
 scheduleLoading();
 
 document.addEventListener("click", (ev) => {
   const r = ev.target.closest("[data-read]");
   if (r) {
     D.notifications[+r.dataset.read].read = true;
-    SQ.redraw();
+    SQ.redraw(); announceResults();
     (document.querySelector("[data-read]") || document.querySelector("[data-more]") || document.querySelector("[data-filter]:checked"))?.focus();
   }
   const f = ev.target.closest("[data-filter]");
@@ -68,10 +74,10 @@ document.addEventListener("click", (ev) => {
     limit = pageSize;
     loading = true;
     focusAfterLoading = true;
-    SQ.redraw();
+    SQ.redraw(); announceResults();
     scheduleLoading();
   }
-  if (ev.target.closest("[data-more]")) { limit += pageSize; SQ.redraw(); (document.getElementById("notification-end") || document.querySelector("[data-more]"))?.focus(); }
+  if (ev.target.closest("[data-more]")) { limit += pageSize; SQ.redraw(); announceResults(); (document.getElementById("notification-end") || document.querySelector("[data-more]"))?.focus(); }
 });
 </script>
 </body>
