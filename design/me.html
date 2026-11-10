@@ -98,9 +98,9 @@ SQ.mount("me", () => `
           <tr><td class="is-name wrap-anywhere" data-label="名前">MCP（読み取りだけ）</td><td data-label="範囲"><span class="tag">読み取り</span></td><td class="mono" data-label="期限">2026-11-15</td><td data-label="最後に使った日">未使用</td><td class="is-actions"><button class="btn is-sm is-quiet is-danger" type="button" data-dialog="tokenRevoke" aria-label="API トークン「MCP（読み取りだけ）」を取り消す">取り消す</button></td></tr>
         </tbody></table></div>
       <!-- 危険な操作。節の末尾に置く。確認のダイアログ（元に戻せない）を経て、今の画面以外のすべての端末と、すべてのトークンを無効にする -->
-      <h3 class="field-label">すべての端末とトークンを締め出す</h3>
-      <p class="action-note">端末をなくしたときや、値が漏れたかもしれないときに使います。このブラウザでのログインと同時刻以前の、ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。後からログインした端末は残ります。疑わしいときは、ログインし直してから実行してください。</p>
-      <div class="form-actions"><button class="btn is-danger" type="button" data-dialog="tokenRevokeAll">すべての端末とトークンを締め出す</button></div>`)}
+      <h3 class="field-label">ほかの端末とトークンを締め出す</h3>
+      <p class="action-note">端末をなくしたときや、値が漏れたかもしれないときに使います。先にこのブラウザでログインし直してください。後からログインした端末は残るためです。ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。</p>
+      <div class="form-actions"><button class="btn is-danger" type="button" data-dialog="tokenRevokeAll">ほかの端末とトークンを締め出す</button></div>`)}
   <!-- 経験値の明細は5列の表なので、.setting（見出しの列 260px）にも、横の面と並ぶ本文にも入れず、説明を表の上に置いて
        画面の幅いっぱいに出す（上の API トークンの節も同じ）。760px 以下は is-stacked で行を縦に積む。今所属していないワークスペースの行は内容を伏せる（最後の行） -->
   ${SQ.section("me-experience", "経験値の明細", null, `

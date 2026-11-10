@@ -1,4 +1,4 @@
-// マイプロフィール（/<slug>/me）の「API トークン」の節の末尾の、危険な操作「すべての端末とトークンを締め出す」（#715）。
+// マイプロフィール（/<slug>/me）の「API トークン」の節の末尾の、危険な操作「ほかの端末とトークンを締め出す」（#715）。
 // 今の画面のセッションと同時刻以前のほかのセッションと、取り消していないすべてのトークンを無効にする（credentials-revoke-all）。
 // 本物の実行は、くもラボのコハル（lookThemed）で行う。実行すると、そのアカウントのほかのセッションがすべて消えるので、
 // admin など、並べて走るほかのテストが共有する seed のセッションがあるアカウントでは行わない（実行するのは seed のセッション、
@@ -12,8 +12,8 @@ import { signIn, waitForSettled, watchViolations } from './helpers.ts';
 import { insertOtherDeviceSession, OTHER_DEVICE_SESSION } from './local-d1.ts';
 import { failOperation, routeOperation } from './operations.ts';
 
-const BUTTON = 'すべての端末とトークンを締め出す';
-const DIALOG = 'すべての端末とトークンを締め出しますか';
+const BUTTON = 'ほかの端末とトークンを締め出す';
+const DIALOG = 'ほかの端末とトークンを締め出しますか';
 
 const sectionOf = (page: Page) => page.getByRole('region', { name: 'API トークン', exact: true });
 const toast = (page: Page, text: string | RegExp) => page.getByRole('status').filter({ hasText: text });
@@ -105,7 +105,7 @@ test('確認を経て実行すると、今の画面は使い続けられ、ほ�
     await expect(confirm).toBeVisible();
     await expect(
       confirm.getByText(
-        'このブラウザのログインは残り、同時刻以前にログインしたほかの端末はログアウトされます。後からログインした端末は残ります。疑わしいときは、ログインし直してから実行してください。発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。',
+        'ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。このブラウザのログインは残ります。後からログインした端末は残ります。先にこのブラウザでログインし直してから実行してください。元に戻せません。',
         { exact: false },
       ),
     ).toBeVisible();

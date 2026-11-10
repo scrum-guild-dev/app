@@ -118,13 +118,13 @@ test('一覧が読めなくても発行の欄を出す', () => {
   expect(renderWith(null)).toContain('<form');
 });
 
-// 危険な操作「すべての端末とトークンを締め出す」。押す先の確認のダイアログと、成功と失敗の知らせの文は辞書から出す
+// 危険な操作「ほかの端末とトークンを締め出す」。押す先の確認のダイアログと、成功と失敗の知らせの文は辞書から出す
 test('節の末尾に、危険な操作の小見出しと説明とボタンを辞書の文言で出す（一覧が空でも、行があっても、読めなくても）', () => {
   for (const initial of [[], [token], null]) {
     const body = renderWith(initial);
     expect(body).toContain(`<h3 class="field-label">${dictionary.apiTokenRevokeAllTitle}</h3>`);
     expect(body).toContain(dictionary.apiTokenRevokeAllDesc);
-    expect(body).toMatch(/<button[^>]*class="btn is-danger"[^>]*>すべての端末とトークンを締め出す<\/button>/);
+    expect(body).toMatch(/<button[^>]*class="btn is-danger"[^>]*>ほかの端末とトークンを締め出す<\/button>/);
     // 一覧より後ろ（節の末尾）に置く
     expect(body.indexOf(dictionary.apiTokenRevokeAllTitle)).toBeGreaterThan(body.indexOf('<form'));
   }
@@ -137,7 +137,7 @@ test('再認証が必要で発行の欄が無いときも、締め出すボタ�
     props: { initial: [token], canCreate: false, loginProvider: 'github', slug: 'aoba' },
   }).body;
   expect(body).not.toContain('<form');
-  expect(body).toContain('すべての端末とトークンを締め出す</button>');
+  expect(body).toContain('ほかの端末とトークンを締め出す</button>');
 });
 
 test('確認のダイアログは、元に戻せないことと、今のログインと後からのログインが残ることを辞書の文言で書き、やめるを主ボタン、締め出すを危険のボタンにする', () => {
@@ -145,9 +145,9 @@ test('確認のダイアログは、元に戻せないことと、今のログ�
   expect(body).toContain(dictionary.apiTokenRevokeAllDialogTitle);
   expect(body).toContain(dictionary.apiTokenRevokeAllText);
   expect(dictionary.apiTokenRevokeAllText).toContain('元に戻せません');
-  expect(dictionary.apiTokenRevokeAllText).toContain('このブラウザのログインは残り');
+  expect(dictionary.apiTokenRevokeAllText).toContain('このブラウザのログインは残ります');
   expect(dictionary.apiTokenRevokeAllText).toContain('後からログインした端末は残ります');
-  expect(dictionary.apiTokenRevokeAllText).toContain('ログインし直してから実行してください');
+  expect(dictionary.apiTokenRevokeAllText).toContain('先にこのブラウザでログインし直してから実行してください');
   expect(body).toMatch(/<button[^>]*class="btn is-primary"[^>]*>やめる<\/button>/);
   expect(body).toMatch(/<button[^>]*class="btn is-danger"[^>]*>締め出す<\/button>/);
 });
