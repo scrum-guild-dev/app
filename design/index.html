@@ -99,6 +99,7 @@ const COLORS = [
   ["クリア報酬の段階", [["小", "--color-tier-small", "銅。段階の印（.tier）だけ"], ["中", "--color-tier-medium", "銀。段階の印（.tier）だけ"], ["大", "--color-tier-large", "金。段階の印（.tier）だけ"]]],
 ];
 const SCREENS = [
+  ["create-sheet.html", "全画面の起票シート", "スマホでタスクとストーリーを題・本文・属性付きで作る"],
   ["consent.html", "同意の確認", "利用規約とプライバシーポリシーへの同意、同意済み、更新、読み込み失敗"],
   ["signup.html", "会員登録", "登録の認証方法を選び、利用開始へ進む"],
   ["onboarding.html", "利用開始のプレビュー", "プロフィールで個人用URLを設定し、招待時にチーム利用を選ぶ見本"],
@@ -272,7 +273,10 @@ const SECTIONS = [
     ["アイコンは文字の代わりにしない。意味のある操作には文字か aria-label を付ける。", "ゲームの物のアイコンは、経験値、クリア報酬、レベル、感謝の4つの語にだけ使う。エピック、ストーリー、タスクとメニューは業務のアイコンのまま。", "ゲームの物のアイコンの色は、語の色の役割に従う。経験値とレベルは経験値の色（.ico.is-xp）、クリア報酬は段階の色（.tier の中で受ける）、感謝は文字の色。", "レベルの紋章（.emblem）を出す所には crest を重ねない。紋章がレベルの印を兼ねる。", "本番では、同じ描き方の OSS のアイコンセット（Lucide など）に置き換えてよい。"], `&lt;svg class="ico"&gt;&lt;use href="#i-sun"/&gt;&lt;/svg&gt; / .ico.is-xp`)],
   ["mobile-navigation", "スマホのタブバー", () => block("mobile-navigation", "スマホのタブバーと浮きメニュー", "760px以下で下に浮くタブバー。今日やること、お気に入り、バックログ、すべてのメニューの順。各画面の見本をスマホ幅で開くと、最後のボタンから組織とワークスペースを切り替えられる。",
     `<div class="cat-mobile-navigation">${SQ.mobileTabsHtml("today", { live: false })}</div>`,
-    ["現在地は背景と枠、aria-currentで示す。各タブは48px四方。", "右の48pxは起票シートのボタンの置き場所。所属先が無いときはバックログを出さない。", "浮きメニューは背景を操作できなくし、Escと外を押すと閉じる。"], ".mobile-navigation .mobile-tabs .mobile-tab / .mobile-menu .mobile-menu-sheet")],
+    ["現在地は背景と枠、aria-currentで示す。各タブは48px四方。", "右の48pxは起票シートを開く丸ボタン。所属先が無いときはバックログと起票を出さない。", "浮きメニューは背景を操作できなくし、Escと外を押すと閉じる。"], ".mobile-navigation .mobile-tabs .mobile-tab / .mobile-menu .mobile-menu-sheet")],
+  ["create-sheet", "全画面の起票シート", () => block("create-sheet", "全画面の起票シート", "題・本文・横に送る属性チップでタスクかストーリーを作る。",
+    `<button class="btn" type="button" data-create-sheet-open>起票シートを開く</button><p><a href="create-sheet.html?state=loading">読み込み中</a> ／ <a href="create-sheet.html?state=sending">送信中</a> ／ <a href="create-sheet.html?state=error">エラー</a></p>`,
+    ["上の行は固定し、本文と属性を送る。", "題が空の理由、破棄の確認、送信中・失敗の状態を示す。"], ".create-sheet .create-sheet-head .create-sheet-body .create-sheet-attrs")],
   ["heads", "見出しと集計", () => block("heads", "画面の見出しと集計", "画面の先頭には、見出しと「今気にすること」の件数を置く。画面の主な操作は見出しの右。",
     `${pageHead(D.todayLabel, SQ.sprintLabel("sp14"), [["", "check", "完了", "4 / 24 pt"], ["is-danger", "alert", `${t("due")}切れ`, 1], ["is-warn", "pen", `${t("detail")} 未記入`, 1], ["is-ok", "check", "取り込み元で完了", 0]], `<button class="btn" type="button">延長する</button>`)}
      <div class="section-head"><h2 class="section-title">今日やると決めたもの</h2><span class="section-count">3 件</span><span class="section-hint">印を付けた日が過ぎても、完了にするか印を外すまで残ります</span></div>

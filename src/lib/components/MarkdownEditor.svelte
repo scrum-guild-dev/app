@@ -32,6 +32,7 @@
     describedby,
     oninput,
     dataCommentInput,
+    attachments = true,
   }: {
     value: string;
     input?: HTMLTextAreaElement;
@@ -46,6 +47,7 @@
     describedby?: string;
     oninput?: () => void;
     dataCommentInput?: string;
+    attachments?: boolean;
   } = $props();
 
   type Upload = {
@@ -62,7 +64,7 @@
   const uid = $props.id();
   const quotaId = `${uid}-quota`;
   let files = $state<Upload[]>([]);
-  let picker: HTMLInputElement;
+  let picker = $state<HTMLInputElement>();
   let sequence = 0;
   let pumping = false;
   let destroyed = false;
@@ -153,7 +155,7 @@
   }
 
   function add(list: FileList | File[], anchor = input?.selectionStart ?? value.length): void {
-    if (readonly || quota) return;
+    if (!attachments || readonly || quota) return;
     notice = null;
     for (const file of Array.from(list)) {
       if (attachmentIds.length + active().length >= ATTACHMENTS_PER_SAVE) {
@@ -380,7 +382,7 @@
 
   function paste(event: ClipboardEvent): void {
     const clipboard = event.clipboardData;
-    if (!clipboard?.files.length) {
+    if (!attachments || !clipboard?.files.length) {
       // 文字を選んで URL を1つ貼ったときだけリンクにする。ファイルの貼り付けは下のまま
       const edit =
         readonly || !input
@@ -419,6 +421,7 @@
     if (!event.dataTransfer?.types.includes('Files') && !event.dataTransfer?.files.length) return;
     event.preventDefault();
     event.stopPropagation();
+    if (!attachments) return;
     if (!readonly && !quota && event.dataTransfer) add(event.dataTransfer.files);
   }
 </script>
@@ -504,33 +507,35 @@
       {/each}
     </ul>
   </div>
-  <div
-    class="dropzone"
-    class:is-disabled={readonly || quota}
-    role="region"
-    aria-label={t('attachmentDrop')}
-    ondrop={drop}
-    ondragover={(event) => {
-      if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
-    }}
-  >
-    <Icon name="upload" />
-    <span class="dropzone-text"><b>{t('attachmentDrop')}</b><span>{t('attachmentDropHint')}</span></span>
-    <input
-      bind:this={picker}
-      type="file"
-      multiple
-      hidden
-      disabled={readonly || quota}
-      onchange={(event) => {
-        if (event.currentTarget.files) add(event.currentTarget.files);
-        event.currentTarget.value = '';
+  {#if attachments}
+    <div
+      class="dropzone"
+      class:is-disabled={readonly || quota}
+      role="region"
+      aria-label={t('attachmentDrop')}
+      ondrop={drop}
+      ondragover={(event) => {
+        if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
       }}
-    />
-    <button type="button" class="btn is-sm" disabled={readonly || quota} onclick={() => picker.click()}
-      >{t('attachmentChoose')}</button
     >
-  </div>
+      <Icon name="upload" />
+      <span class="dropzone-text"><b>{t('attachmentDrop')}</b><span>{t('attachmentDropHint')}</span></span>
+      <input
+        bind:this={picker}
+        type="file"
+        multiple
+        hidden
+        disabled={readonly || quota}
+        onchange={(event) => {
+          if (event.currentTarget.files) add(event.currentTarget.files);
+          event.currentTarget.value = '';
+        }}
+      />
+      <button type="button" class="btn is-sm" disabled={readonly || quota} onclick={() => picker?.click()}
+        >{t('attachmentChoose')}</button
+      >
+    </div>
+  {/if}
   {#if quota}<p class="field-error" id={quotaId} role="alert"><Icon name="alert" />{t('attachmentQuota')}</p>{/if}
   {#if notice}<p class="field-error" role="alert">{notice}</p>{/if}
   {#each files.filter((file) => file.state !== 'done' || attachmentIds.includes(file.attachmentId ?? '')) as file (file.key)}

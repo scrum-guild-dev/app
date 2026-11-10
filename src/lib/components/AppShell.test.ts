@@ -7,7 +7,12 @@ import { navigationLoading } from '../navigation-loading.svelte.ts';
 vi.mock('$app/state', () => ({
   page: { data: { organization: { organization: { name: '架空の組織', kind: 'team' } } } },
 }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => ({
+  goto: vi.fn(),
+  beforeNavigate: vi.fn(),
+  afterNavigate: vi.fn(),
+  invalidate: vi.fn(),
+}));
 vi.mock('$app/paths', () => ({
   asset: (path: string) => `/${path}`,
   resolve: (route: string, params: { slug: string; id?: string }) =>
@@ -108,4 +113,12 @@ test('枠の中の遅い移動だけ本文をbusyにし、操作を止めない'
   } finally {
     navigationLoading.kind = null;
   }
+});
+
+test('閉じている起票シートは、ほかの画面の本文欄や属性メニューと重なる要素を描かない', () => {
+  const body = shell('/aoba/w/w1', { id: 'w1', name: '架空のワークスペース', role: 'member' });
+  expect(body).toContain('class="create-sheet"');
+  expect(body).not.toContain('create-sheet-title');
+  expect(body).not.toContain('class="markdown-editor"');
+  expect(body).not.toContain('class="row-menu"');
 });

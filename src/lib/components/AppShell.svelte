@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CreateSheet from './CreateSheet.svelte';
   import { MediaQuery } from 'svelte/reactivity';
   import MobileNavigation from './MobileNavigation.svelte';
   import { navigationLoading } from '../navigation-loading.svelte.ts';
@@ -19,6 +20,9 @@
   import type { DictionaryKey } from '../../shared/vocabulary.ts';
   import Icon from './Icon.svelte';
   import type { NavigationWorkspace } from '../workspace-navigation.svelte.ts';
+
+  const createSheetId = $props.id();
+  let createSheet = $state<ReturnType<typeof CreateSheet>>();
 
   // kit.js の mount が組む画面の枠。左上の角のマス（ロゴ）と全幅の上の帯が十字に分かれ、左のメニュー（綴じ）と本文（帳面）が続く。
   // slug は今の組織で、組織の中の画面だけが使う。
@@ -183,10 +187,25 @@
     </main>
   </div>
   {#if narrow.current}
-    <MobileNavigation {current} {slug} workspaceId={hasWorkspace ? workspace?.id : undefined} {organizationSwitcher}>
+    <MobileNavigation
+      {createSheetId}
+      oncreate={(trigger) => void createSheet?.show(trigger)}
+      {current}
+      {slug}
+      workspaceId={hasWorkspace ? workspace?.id : undefined}
+      {organizationSwitcher}
+    >
       {#snippet menu()}
         <NavMenu {current} {slug} {hasWorkspace} {isAdmin} {workspace} {workspaceSwitcher} />
       {/snippet}
     </MobileNavigation>
+  {/if}
+  {#if hasWorkspace && isWorkspaceId(workspace?.id)}
+    {#key `${slug}/${workspace.id}`}<CreateSheet
+        bind:this={createSheet}
+        {slug}
+        workspaceId={workspace.id}
+        id={createSheetId}
+      />{/key}
   {/if}
 </div>

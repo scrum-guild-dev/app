@@ -12,12 +12,16 @@
     workspaceId,
     organizationSwitcher,
     menu,
+    oncreate,
+    createSheetId,
   }: {
     current: string;
     slug: string;
     workspaceId?: string;
     organizationSwitcher?: Snippet;
     menu: Snippet;
+    oncreate?: (trigger: HTMLButtonElement) => void;
+    createSheetId?: string;
   } = $props();
 
   const menuId = $props.id();
@@ -92,8 +96,19 @@
       <span class="mobile-menu-arrows" aria-hidden="true"><Icon name="chevron" /><Icon name="chevron" /></span>
     </button>
   </nav>
-  <!-- 起票シートの別ストーリーがこの置き場所にボタンを足す。空の操作は出さない。 -->
-  <div class="mobile-create-slot"></div>
+  <div class="mobile-create-slot">
+    {#if isWorkspaceId(workspaceId) && oncreate}
+      <button
+        class="mobile-create"
+        id={createSheetId ? `${createSheetId}-trigger` : undefined}
+        type="button"
+        aria-label={t('createSheet')}
+        aria-haspopup="dialog"
+        aria-controls={createSheetId}
+        onclick={(event) => oncreate?.(event.currentTarget)}><Icon name="plus" /></button
+      >
+    {/if}
+  </div>
 </div>
 
 <!-- showModal が背景を inert にし、Tab を中に閉じ込める。外で押し始め、離したときだけ閉じる。 -->
