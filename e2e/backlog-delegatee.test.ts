@@ -67,7 +67,9 @@ test('自分用の組織では、依頼先の付いた行にチップが出て�
     await page.goto(PERSONAL_BACKLOG);
     const delegatedRow = page.locator('.entry', { hasText: delegated });
     const ownRow = page.locator('.entry', { hasText: own });
-    await expect(delegatedRow.getByRole('button', { name: `依頼先: ${first}` })).toBeVisible();
+    // URL を直接開いた最初の読み込み（SPA の起動と枠の読み込み）は CI で 5 秒を超えることがあるので、最初の確かめだけ長く待つ
+    // （e2e/loading-fade.test.ts と同じ 15 秒）
+    await expect(delegatedRow.getByRole('button', { name: `依頼先: ${first}` })).toBeVisible({ timeout: 15_000 });
     // 依頼先の無い行にはチップを出さない
     await expect(ownRow.getByRole('button', { name: '担当: 未設定' })).toBeVisible();
     await expect(ownRow.getByRole('button', { name: /^依頼先/ })).toHaveCount(0);
@@ -133,9 +135,10 @@ test('自分用の組織では、依頼先の付いた行にチップが出て�
 test('チーム用の組織のバックログには、依頼先のチップも絞り込みも出さない', async ({ page, context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
   await page.goto(TEAM_BACKLOG);
+  // 最初の読み込みを待ってから、無いことを確かめる（上と同じ理由で長く待つ）
+  await expect(page.locator('.tree .entry').first()).toBeVisible({ timeout: 15_000 });
   const bar = page.getByRole('search', { name: 'バックログの絞り込み' });
   await expect(bar.getByRole('combobox', { name: '担当', exact: true })).toBeVisible();
   await expect(bar.getByRole('combobox', { name: '依頼先', exact: true })).toHaveCount(0);
-  await expect(page.locator('.tree .entry').first()).toBeVisible();
   await expect(page.getByRole('button', { name: /^依頼先/ })).toHaveCount(0);
 });
