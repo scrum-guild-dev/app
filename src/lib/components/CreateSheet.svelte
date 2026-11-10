@@ -38,6 +38,8 @@
   let failureNote = $state<HTMLParagraphElement>();
   let choicesFailed = $state(false);
   let loading = $state(false);
+  let reconciling = $state(false);
+  let choicesRead: Promise<void> | null = null;
   let tree = $state<OutputOf<typeof backlogTree> | null>(null);
   const dirty = $derived(!!(title || body || storyId || epicId || assignee || points || due));
   const choices = $derived(creationChoices(tree));
@@ -46,8 +48,15 @@
   const people = $derived(choices.people);
   const locked = $derived(busy ? t('storyCreating') : loading ? t('loading') : undefined);
 
-  async function loadChoices(): Promise<void> {
-    if (loading) return;
+  function loadChoices(): Promise<void> {
+    if (!choicesRead)
+      choicesRead = readChoices().finally(() => {
+        choicesRead = null;
+      });
+    return choicesRead;
+  }
+
+  async function readChoices(): Promise<void> {
     loading = true;
     const result = await callOperation(backlogTree, { workspace_id: workspaceId }, { slug });
     loading = false;
@@ -149,7 +158,7 @@
   });
 
   async function create(): Promise<void> {
-    if (busy || !title.trim()) return;
+    if (busy || reconciling || !title.trim()) return;
     busy = true;
     failure = '';
     const createdKind = kind;
@@ -180,10 +189,16 @@
               : result.status === 400
                 ? t('storyBadRequest')
                 : t('createSheetFailed');
-      if (result.status === 404 || result.status === 409) void loadChoices();
+      reconciling = result.status === 404 || result.status === 409;
       await tick();
       failureNote?.focus();
       failureNote?.scrollIntoView({ block: 'nearest' });
+      if (reconciling) {
+        // 先に開いたときの読み取りが残っていても、拒否された後の状態を改めて読む。
+        if (choicesRead) await choicesRead;
+        await loadChoices();
+        reconciling = false;
+      }
       return;
     }
     const createdId = 'task' in result.data ? result.data.task.id : result.data.story.id;
@@ -260,8 +275,9 @@
           class="btn is-primary create-sheet-submit"
           type="submit"
           aria-label={t(busy ? 'storyCreating' : 'storyCreateSubmit')}
-          aria-disabled={busy || !title.trim()}
-          aria-describedby={!title.trim() ? `${uid}-reason` : undefined}><Icon name="up" /></button
+          aria-disabled={busy || reconciling || !title.trim()}
+          aria-describedby={reconciling ? `${uid}-choices-status` : !title.trim() ? `${uid}-reason` : undefined}
+          ><Icon name="up" /></button
         >
       </header>
       <div class="create-sheet-body">
@@ -375,7 +391,9 @@
             </AttrChip>
           {/if}
         </div>
-        <span class="visually-hidden" role="status">{loading ? t('loading') : ''}</span>
+        <span class="visually-hidden" id={`${uid}-choices-status`} role="status"
+          >{loading || reconciling ? t('loading') : ''}</span
+        >
         {#if loading}<p aria-hidden="true">{t('loading')}</p>{/if}
         {#if choicesFailed}<p class="field-error" role="alert">{t('createChoicesFailed')}</p>
           <button class="btn" type="button" disabled={loading || busy} onclick={() => void loadChoices()}

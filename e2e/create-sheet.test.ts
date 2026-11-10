@@ -240,16 +240,28 @@ test('404 の後で候補から消えた親を解除し、親なしで再送で�
   await signIn(context, baseURL, 'admin');
   const { story } = await setup(page, baseURL);
   let removed = false;
-  await rewriteOperation(page, backlogTree, { slug: 'aoba' }, (output) =>
-    removed
-      ? {
-          ...output,
-          stories: output.stories.filter((row) => row.id !== story.id),
-          epics: output.epics.map((epic) => ({ ...epic, stories: epic.stories.filter((row) => row.id !== story.id) })),
-        }
-      : output,
-  );
+  let releaseChoices = () => {};
+  const waitChoices = new Promise<void>((resolve) => {
+    releaseChoices = resolve;
+  });
+  let rechecks = 0;
+  let sends = 0;
+  await routeOperation(page, backlogTree, { slug: 'aoba' }, async (call) => {
+    const output = await call.fetch();
+    if (!removed) {
+      await call.fulfill(output);
+      return;
+    }
+    rechecks++;
+    await waitChoices;
+    await call.fulfill({
+      ...output,
+      stories: output.stories.filter((row) => row.id !== story.id),
+      epics: output.epics.map((epic) => ({ ...epic, stories: epic.stories.filter((row) => row.id !== story.id) })),
+    });
+  });
   await routeOperation(page, taskCreate, { slug: 'aoba' }, async (call) => {
+    sends++;
     if (!removed) {
       expect(call.input.story_id).toBe(story.id);
       removed = true;
@@ -267,6 +279,12 @@ test('404 の後で候補から消えた親を解除し、親なしで再送で�
   await parent.click();
   await sheet.getByRole('menuitemradio', { name: story.title, exact: true }).click();
   await sheet.getByRole('button', { name: '作る', exact: true }).click();
+  await expect.poll(() => rechecks).toBe(1);
+  const submit = sheet.getByRole('button', { name: '作る', exact: true });
+  await expect(submit).toHaveAttribute('aria-disabled', 'true');
+  await submit.dispatchEvent('click');
+  expect(sends).toBe(1);
+  releaseChoices();
   await expect(parent).toHaveAccessibleName('親のストーリー: 未設定');
   await sheet.getByRole('button', { name: '作る', exact: true }).click();
   await expect(sheet).not.toBeVisible();
