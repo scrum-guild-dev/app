@@ -6,6 +6,7 @@ import type { TodayTask } from '../shared/operations/organization/today.ts';
 export type TodaySections = {
   overdue: TodayTask[];
   today: TodayTask[];
+  delegated: TodayTask[];
   week: TodayTask[];
   sprint: TodayTask[];
   done: TodayTask[];
@@ -48,11 +49,16 @@ function dueStatusOf(task: TodayTask): DueStatus | null {
 }
 
 export function todaySections(tasks: readonly TodayTask[]): TodaySections {
-  const sections: TodaySections = { overdue: [], today: [], week: [], sprint: [], done: [] };
+  const sections: TodaySections = { overdue: [], today: [], delegated: [], week: [], sprint: [], done: [] };
   for (const task of tasks) {
     if (task.completed_at !== null) {
       // 今日より前に完了したものは、どの区分にも出さない
       if (task.is_today_completed) sections.done.push(task);
+      continue;
+    }
+    // 依頼先の付いたものは、印や期日に関わらず依頼中だけに出す（人に振ったものを確かめる区分）
+    if (task.delegatee !== null) {
+      sections.delegated.push(task);
       continue;
     }
     // 印を付けたものは、期日に関わらず今日やると決めたものだけに出す
@@ -68,6 +74,7 @@ export function todaySections(tasks: readonly TodayTask[]): TodaySections {
   }
   sections.overdue.sort(compareTodayTasks);
   sections.today.sort(compareTodayMarked);
+  sections.delegated.sort(compareTodayTasks);
   sections.week.sort(compareTodayTasks);
   sections.sprint.sort(compareTodayTasks);
   sections.done.sort(compareTodayTasks);

@@ -23,6 +23,7 @@ function task(id: string, overrides: Partial<TodayTask> = {}): TodayTask {
     is_today_completed: false,
     reopenable: false,
     assignee: null,
+    delegatee: null,
     repository: null,
     sprint: null,
     ...overrides,
@@ -34,6 +35,35 @@ function ids(list: readonly TodayTask[]): string[] {
 }
 
 describe('todaySections', () => {
+  test('依頼先の付いた未完了は、印や期日切れ、今週の期日、進行中のスプリントがあっても依頼中だけに出る', () => {
+    const delegatee = { id: 'd1', name: '青葉 透' };
+    const sections = todaySections([
+      task('marked', { delegatee, today_on: TODAY }),
+      task('late', { delegatee, due_on: '2026-11-01' }),
+      task('week', { delegatee, due_on: '2026-11-06' }),
+      task('sprint', { delegatee, sprint_active: true }),
+      task('none', { delegatee }),
+    ]);
+    // 期日の早い順で、期日の無いものは後ろ（同じなら ID の順）
+    expect(ids(sections.delegated)).toEqual(['late', 'week', 'marked', 'none', 'sprint']);
+    expect(sections.today).toEqual([]);
+    expect(sections.overdue).toEqual([]);
+    expect(sections.week).toEqual([]);
+    expect(sections.sprint).toEqual([]);
+  });
+
+  test('依頼先の付いたタスクも、今日完了にしたものは今日完了だけに出る', () => {
+    const sections = todaySections([
+      task('done', {
+        delegatee: { id: 'd1', name: '青葉 透' },
+        completed_at: '2026-11-04T01:00:00.000Z',
+        is_today_completed: true,
+      }),
+    ]);
+    expect(ids(sections.done)).toEqual(['done']);
+    expect(sections.delegated).toEqual([]);
+  });
+
   test('印がある未完了は、期日切れでも今日やると決めたものだけに出す', () => {
     const marked = task('marked', { today_on: TODAY, due_on: '2026-11-01' });
     const sections = todaySections([marked]);
