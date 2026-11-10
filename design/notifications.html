@@ -25,7 +25,12 @@ let unreadOnly = false;
 let loading = true;
 let limit = 2;
 const pageSize = 2;
-function finishLoading() { loading = false; SQ.redraw(); }
+let focusAfterLoading = false;
+function finishLoading() {
+  loading = false; SQ.redraw();
+  if (focusAfterLoading) document.querySelector("[data-filter]:checked")?.focus();
+  focusAfterLoading = false;
+}
 
 SQ.mount("notifications", () => {
   const all = D.notifications.filter((n) => !unreadOnly || !n.read);
@@ -52,17 +57,18 @@ document.addEventListener("click", (ev) => {
   if (r) {
     D.notifications[+r.dataset.read].read = true;
     SQ.redraw();
-    document.querySelector("[data-read]")?.focus();
+    (document.querySelector("[data-read]") || document.querySelector("[data-more]") || document.querySelector("[data-filter]:checked"))?.focus();
   }
   const f = ev.target.closest("[data-filter]");
   if (f) {
     unreadOnly = f.dataset.filter === "unread";
     limit = pageSize;
     loading = true;
+    focusAfterLoading = true;
     SQ.redraw();
     setTimeout(finishLoading, 300);
   }
-  if (ev.target.closest("[data-more]")) { limit += pageSize; SQ.redraw(); document.getElementById("notification-end")?.focus(); }
+  if (ev.target.closest("[data-more]")) { limit += pageSize; SQ.redraw(); (document.getElementById("notification-end") || document.querySelector("[data-more]"))?.focus(); }
 });
 </script>
 </body>
