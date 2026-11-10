@@ -39,7 +39,7 @@
   }
 </script>
 
-<Setting title={t('storageTitle')} description={t('storageDescription')}>
+<Setting title={t('storageTitle')} description={t('storageDescription', { workspace: t('workspace') })}>
   <SectionBoundary {section} failedTitle={t('storageLoadFailed')} refreshFailedText={t('storageRefreshFailed')}>
     {#if storage !== null}
       <div class="meter" class:is-warn={ratio > 0.8} class:is-full={ratio >= 1}>
@@ -62,11 +62,15 @@
         <span class="props-note">{t('storageThresholdNote', { admin: t('admin') })}</span>
       </div>
       {#if ratio >= 1}
-        <div class="callout is-danger"><Icon name="alert" /><span>{t('storageFull')}</span></div>
+        <div class="callout is-danger">
+          <Icon name="alert" /><span>{t('storageFull', { workspace: t('workspace'), leader: t('leader') })}</span>
+        </div>
       {:else if ratio > 0.8}
-        <div class="callout is-warn"><Icon name="alert" /><span>{t('storageWarning')}</span></div>
+        <div class="callout is-warn">
+          <Icon name="alert" /><span>{t('storageWarning', { workspace: t('workspace'), leader: t('leader') })}</span>
+        </div>
       {/if}
-      <p class="field-hint">{t('storageRetention')}</p>
+      <p class="field-hint">{t('storageRetention', { workspace: t('workspace') })}</p>
       <div class="table-wrap">
         <table class="table is-stacked">
           <thead><tr><th>{t('storageBreakdown')}</th><th class="is-num">{t('storageUsed')}</th></tr></thead>

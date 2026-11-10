@@ -195,7 +195,7 @@ export const dictionary = defineDictionary({
   storageLoadFailed: '容量を読み込めませんでした',
   storageRefreshFailed: '容量を更新できませんでした。表示は前に読み込んだ値です。もう一度試してください。',
   storageDescription:
-    '組織の添付ファイルと Wiki の最新本文・過去版の合計です。上限に達すると、どのワークスペースでも新しく添付できません。上限の変更は運用者に依頼してください。',
+    '組織の添付ファイルと Wiki の最新本文・過去版の合計です。上限に達すると、どの{workspace}でも新しく添付できません。上限の変更は運用者に依頼してください。',
   storageExactBytes: '{bytes} バイト使用中',
   storageUsed: '使用量',
   storageByteSize: '{size} B',
@@ -205,11 +205,11 @@ export const dictionary = defineDictionary({
   storageWorkspaceClosed: '終了済み',
   storageBreakdown: '内訳',
   storageOrganizationWiki: '組織の Wiki',
-  storageRetention: '終了したワークスペースと、削除後30日の保持中の Wiki も含みます。Wiki は題と本文を数えます。',
+  storageRetention: '終了した{workspace}と、削除後30日の保持中の Wiki も含みます。Wiki は題と本文を数えます。',
   storageWarning:
-    '上限の80%を超えています。上げた人かワークスペースのリーダーが不要な添付ファイルを消すか、運用者に上限の引き上げを依頼してください。',
+    '上限の80%を超えています。上げた人か{workspace}の{leader}が不要な添付ファイルを消すか、運用者に上限の引き上げを依頼してください。',
   storageFull:
-    '容量の上限に達したため、新しく添付できません。上げた人かワークスペースのリーダーが不要な添付ファイルを消すか、運用者に上限の引き上げを依頼すると添付できます。',
+    '容量の上限に達したため、新しく添付できません。上げた人か{workspace}の{leader}が不要な添付ファイルを消すか、運用者に上限の引き上げを依頼すると添付できます。',
 
   notificationUnread: '未読',
   notificationAll: 'すべて',
