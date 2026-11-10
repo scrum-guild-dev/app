@@ -12,8 +12,8 @@ import { t } from './vocabulary.svelte.ts';
 // 印を描いた要素の属性（LoadFailed.svelte が同じ名前を静的に付ける）。描かれたかをこの属性で確かめる
 export const RELOAD_NOTE_ATTRIBUTE = 'data-task-reload-note';
 
-// 何が済んだか。deleted は消した後、restored は戻した後、stale は断られた後の読み直し（何も変えていない）
-export type ReloadFailure = 'deleted' | 'restored' | 'stale';
+// 何が済んだか。saved は属性を保存した後、deleted は消した後、restored は戻した後、stale は断られた後の読み直し（何も変えていない）
+export type ReloadFailure = 'deleted' | 'restored' | 'stale' | 'saved';
 
 const current = $state<{ failure: ReloadFailure | null; workspaceId: string | null }>({
   failure: null,
@@ -28,6 +28,7 @@ export function reloadFailureNote(workspaceId: string): string | null {
 
 export function reloadFailureMessage(failure: ReloadFailure): string {
   if (failure === 'deleted') return t('taskDeletedReloadFailed', { task: t('task') });
+  if (failure === 'saved') return t('taskSavedReloadFailed');
   if (failure === 'restored') return t('taskRestoredReloadFailed', { task: t('task') });
   return t('taskListStaleReloadFailed');
 }
