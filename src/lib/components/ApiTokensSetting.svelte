@@ -15,7 +15,7 @@
   import { callOperation, type ApiResult } from '../api.ts';
   import { formatDateTime } from '../format-datetime.ts';
   import { formatLocalDate } from '../format.ts';
-  import { isUnauthenticated, loginUrl } from '../login-redirect.ts';
+  import { consentUrl, isTermsRequired, isUnauthenticated, loginUrl } from '../login-redirect.ts';
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import ConfirmDialog from './ConfirmDialog.svelte';
@@ -337,6 +337,12 @@
       const result = await callOperation(credentialsRevokeAll, {});
       if (!result.ok && isUnauthenticated(result)) {
         toLogin();
+        return;
+      }
+      // 開いた後に規約の版が上がると、全失効も 403 の terms_required で断られる（同意の門の例外にしない。#770）。
+      // 同意の画面へ移し、同意したらこの画面へ戻す。戻った後に全失効を自動で実行しない（もう一度押してもらう）
+      if (isTermsRequired(result)) {
+        window.location.assign(consentUrl(page.url));
         return;
       }
       if (result.ok) {
