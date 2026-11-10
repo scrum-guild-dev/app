@@ -78,6 +78,28 @@ describe('時刻を止めて確かめる', () => {
     ]);
   });
 
+  test('書き込みの batch() の後に時刻が進んでも、数えるのは取り消しの時刻（revoked_at）で、取り直した時刻ではない', async () => {
+    const person = await createLoginPerson({ sessionOverrides: { expires_at: at(DAY_MS), last_used_at: at(0) } });
+    // 取り消しの時刻（NOW）では期限内、batch() の後（NOW+5）では切れている行
+    await createSessionWithToken(person.accountId, { expires_at: at(3) });
+    const token = await insertApiToken(person.accountId, { expiresAt: at(3) });
+    const state = { ran: false };
+    const hooked = envWithD1Hooks(testEnv, {
+      afterBatch: async (sqls) => {
+        if (state.ran || !sqls.some((sql) => sql.includes('"api_tokens"'))) return;
+        state.ran = true;
+        vi.setSystemTime(new Date(NOW.getTime() + 5));
+      },
+    });
+
+    const res = await revokeAll(person.token, hooked);
+
+    expect(state.ran).toBe(true);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ revoked_sessions: 1, revoked_tokens: 1 });
+    expect((await tokenRow(token.hash))!.revoked_at).toBe(at(0));
+  });
+
   test('数えたトークンの数は、同じ時刻にそのトークンで認証して通った数と一致する（境目の前後 2 ミリ秒）', async () => {
     const person = await createLoginPerson({ sessionOverrides: { expires_at: at(DAY_MS), last_used_at: at(0) } });
     const offsets = [-2, -1, 0, 1, 2];

@@ -162,7 +162,8 @@ export function deleteOtherSessionsStatement(
   );
 }
 
-// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消し、消した行数を返す。
+// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消し、消した行数（changes。期限切れの行も含む）を返す。
+// 全失効の応答の件数（期限内の行だけ）とは意味が違う。
 // 今のセッションと、ほかのアカウントのセッションは残す。本番の道（credentials-revoke-all）は、トークンの取り消しと
 // 同じ batch() に入れるため、文（deleteOtherSessionsStatement）を直に使う。この関数を呼ぶのは今はテストだけ
 export async function deleteOtherSessionsOf(
