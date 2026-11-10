@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
 import { createApp } from '../src/server/app.ts';
 import { orgDb } from '../src/server/db/index.ts';
-import { envWithD1Hooks } from '../src/server/db/testing.ts';
+import { envWithD1Hooks, runStatementsForTest } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { delegateeCreate, delegateeDelete } from '../src/shared/operations/organization/index.ts';
 import { taskComplete, taskDelegate, taskDetail, taskHistory } from '../src/shared/operations/task/index.ts';
@@ -400,12 +400,16 @@ describe('task-delegate', () => {
     const task = await createTask(target.organization, target.workspace.id, target.admin.userId!, {
       story_id: story.id,
     });
-    const failing = envWithD1Hooks(testEnv, {
-      beforeBatch(sqls) {
-        if (sqls.some((sql) => sql.startsWith('update "tasks"'))) throw new Error('simulated write failure');
-      },
-    });
-    expect((await delegate(target, task.id, person.id, failing)).status).toBe(500);
+    await runStatementsForTest(env, [
+      `CREATE TRIGGER reject_task_delegate_log_test BEFORE INSERT ON change_logs
+       WHEN NEW.entity_id = '${task.id}' AND NEW.action = 'update'
+       BEGIN SELECT RAISE(ABORT, 'simulated second statement failure'); END`,
+    ]);
+    try {
+      expect((await delegate(target, task.id, person.id)).status).toBe(500);
+    } finally {
+      await runStatementsForTest(env, ['DROP TRIGGER reject_task_delegate_log_test']);
+    }
     expect(await row(target, task.id)).toEqual(task);
     expect(await logs(target, task.id)).toEqual([]);
     const db = orgDb(env, target.organization.verified);

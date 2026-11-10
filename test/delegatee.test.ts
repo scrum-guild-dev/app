@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
 import { createApp } from '../src/server/app.ts';
 import { orgDb } from '../src/server/db/index.ts';
-import { envWithD1Hooks } from '../src/server/db/testing.ts';
+import { runStatementsForTest } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import {
   delegateeCreate,
@@ -236,17 +236,21 @@ describe('依頼先の名簿', () => {
       delegatee_id: person.id,
     });
     const originalLogs = await logs(target);
-    const failing = envWithD1Hooks(testEnv, {
-      beforeBatch(sqls) {
-        if (sqls.some((sql) => sql.startsWith('update "delegatees"'))) throw new Error('simulated write failure');
-      },
-    });
-    const res = await post(app, delegateeDelete, {
-      slug: target.slug,
-      token: target.admin.token,
-      body: { delegatee_id: person.id },
-      env: failing,
-    });
+    await runStatementsForTest(env, [
+      `CREATE TRIGGER reject_delegatee_unset_test BEFORE UPDATE OF delegatee_id ON tasks
+       WHEN OLD.delegatee_id = '${person.id}' AND NEW.delegatee_id IS NULL
+       BEGIN SELECT RAISE(ABORT, 'simulated last statement failure'); END`,
+    ]);
+    let res: Response;
+    try {
+      res = await post(app, delegateeDelete, {
+        slug: target.slug,
+        token: target.admin.token,
+        body: { delegatee_id: person.id },
+      });
+    } finally {
+      await runStatementsForTest(env, ['DROP TRIGGER reject_delegatee_unset_test']);
+    }
     expect(res.status).toBe(500);
     expect(await list(target)).toEqual([person]);
     const db = orgDb(env, target.organization.verified);
