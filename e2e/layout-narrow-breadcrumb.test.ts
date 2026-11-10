@@ -176,6 +176,8 @@ for (const width of [320, 390]) {
       expect(list).not.toBeNull();
       expect(list!.y - row!.y - row!.height).toBeGreaterThanOrEqual(0);
       expect(list!.y - row!.y - row!.height).toBeLessThanOrEqual(8);
+      expect(Math.abs(list!.x - row!.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(list!.width - row!.width)).toBeLessThanOrEqual(1);
       await page.keyboard.press('Escape');
       const search = page.getByRole('button', { name: '画面とタスクを探す' });
       await search.click();

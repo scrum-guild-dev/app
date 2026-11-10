@@ -2582,10 +2582,8 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
   .mobile-page-tools .account-menu-list {
     top: calc(100% + var(--space-1)); left: 0; right: 0;
   }
-}
-
-@media (max-width: 760px) {
   .mobile-page-tools :is(.nav-search-toggle, .account-menu-button)[aria-expanded="true"] {
+    border-width: 2px;
     background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent);
   }
 }
