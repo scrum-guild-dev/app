@@ -47,6 +47,7 @@ const organization = (overrides: Partial<ListedOrganization>): ListedOrganizatio
   workspace_count: 3,
   task_count: 1284,
   attachment_quota_bytes: 32212254720,
+  attachment_used_bytes: 5 * 1024 ** 3,
   last_used_at: '2026-10-20T00:12:00.000Z',
   self_created: false,
   trial_ends_on: null,
@@ -308,7 +309,7 @@ test.describe('運用者', () => {
       '人数 / 上限',
       'ワークスペースの数',
       'タスクの数',
-      '添付ファイルの上限',
+      '添付・Wiki / 上限',
       '最後に使われた日時',
       '操作',
     ]);
@@ -317,8 +318,8 @@ test.describe('運用者', () => {
     await expect(aoba.locator('td[data-label="ワークスペースの数"]')).toHaveText('3');
     await expect(aoba.locator('td[data-label="タスクの数"]')).toHaveText('1,284');
     // 上限の下に、人数と容量の上限を変える文字のボタンを置く。読み上げの名前に、どの組織かを添える
-    const aobaQuota = aoba.locator('td[data-label="添付ファイルの上限"]');
-    await expect(aobaQuota).toHaveText(/^\s*30\sGB\s*人数と容量の上限を変える\s*$/);
+    const aobaQuota = aoba.locator('td[data-label="添付・Wiki / 上限"]');
+    await expect(aobaQuota).toHaveText(/^\s*5\sGB\s*\/\s*30\sGB\s*人数と容量の上限を変える\s*$/);
     await expect(aobaQuota.locator('button.link-btn')).toHaveAccessibleName('「あおば開発」の人数と容量の上限を変える');
     // 2026-10-20T00:12Z は、東京のブラウザでは 09:12
     await expect(aoba.locator('td[data-label="最後に使われた日時"]')).toHaveText('2026/10/20 09:12');
@@ -327,17 +328,17 @@ test.describe('運用者', () => {
     const hibari = rows.filter({ hasText: 'ひばり工房' });
     await expect(hibari.locator('td[data-label="人数 / 上限"]')).toContainText('15 / 15');
     await expect(hibari.locator('td[data-label="人数 / 上限"] .chip.is-warn')).toHaveText('上限に達した');
-    await expect(hibari.locator('td[data-label="添付ファイルの上限"]')).toContainText('100 GB');
+    await expect(hibari.locator('td[data-label="添付・Wiki / 上限"]')).toContainText('100 GB');
     // だれも使っていない組織は、日時の代わりに文で示す
     const tsubame = rows.filter({ hasText: 'つばめ商会' });
     await expect(tsubame.locator('td[data-label="最後に使われた日時"]')).toHaveText('まだ使われていない');
     await expect(tsubame.locator('td[data-label="人数 / 上限"]')).toHaveText('0 / 15');
     // 1 GB 未満の上限は「0 GB」にせず MB で出す
-    await expect(tsubame.locator('td[data-label="添付ファイルの上限"]')).toContainText('512 MB');
-    await expect(tsubame.locator('td[data-label="添付ファイルの上限"]')).not.toContainText('0 GB');
+    await expect(tsubame.locator('td[data-label="添付・Wiki / 上限"]')).toContainText('512 MB');
+    await expect(tsubame.locator('td[data-label="添付・Wiki / 上限"]')).not.toContainText('0 GB');
     // 数と単位の間は不可分の空白で、積んだ行でも割れない
     expect(await aoba.locator('td[data-label="人数 / 上限"]').textContent()).toContain('5 / 15');
-    expect(await aoba.locator('td[data-label="添付ファイルの上限"]').textContent()).toContain('30 GB');
+    expect(await aoba.locator('td[data-label="添付・Wiki / 上限"]').textContent()).toContain('30 GB');
     expect(await collect()).toEqual([]);
   });
 
@@ -492,8 +493,8 @@ test.describe('運用者', () => {
     await expect(seats.locator('[aria-hidden="true"]')).toHaveText('—');
     await expect(seats.locator('.chip')).toHaveCount(0);
     // 添付ファイルの上限の値は出し、変更のボタンは置かない
-    const quota = solo.locator('td[data-label="添付ファイルの上限"]');
-    await expect(quota).toHaveText(/^\s*1\sGB\s*$/);
+    const quota = solo.locator('td[data-label="添付・Wiki / 上限"]');
+    await expect(quota).toHaveText(/^\s*5\sGB\s*\/\s*1\sGB\s*$/);
     await expect(quota.getByRole('button')).toHaveCount(0);
     await expect(solo.getByRole('button', { name: /人数と容量の上限を変える/ })).toHaveCount(0);
     // 指名のボタンは無く、停止はできる
@@ -1750,6 +1751,29 @@ test.describe('運用者', () => {
   test.describe('上限の変更', () => {
     const GIB = 1024 ** 3;
 
+    test('微小な使用量を一覧と上限変更の案内にバイト数で出す', async ({ page }) => {
+      await mockList(page, [organization({ attachment_used_bytes: 52000 })]);
+      await page.goto('/operator');
+      const row = page.locator('.table tbody tr').filter({ hasText: 'あおば開発' });
+      await expect(row.locator('td[data-label="添付・Wiki / 上限"]')).toContainText('52,000 B / 30 GB');
+      await row.getByRole('button', { name: '「あおば開発」の人数と容量の上限を変える' }).click();
+      await expect(page.getByRole('dialog', { name: '人数と添付ファイルの上限を変える' })).toContainText(
+        '合計 52,000 B',
+      );
+    });
+
+    test('今の合計と通知の注意を出し、使用量より小さい上限の選択を警告する', async ({ page }) => {
+      await mockList(page, [organization({ attachment_used_bytes: 40 * GIB })]);
+      await page.goto('/operator');
+      await page.getByRole('button', { name: '「あおば開発」の人数と容量の上限を変える' }).click();
+      const dialog = page.getByRole('dialog', { name: '人数と添付ファイルの上限を変える' });
+      await expect(dialog).toContainText('合計 40 GB（上限 30 GB）');
+      await expect(dialog).toContainText('次に80%を超えたときに管理者へまた通知します');
+      await expect(dialog.locator('.callout.is-warn')).toContainText('選んだ上限は今の合計より小さい');
+      await dialog.getByRole('radio', { name: /標準/ }).check();
+      await expect(dialog.locator('.callout.is-warn')).toHaveCount(0);
+    });
+
     test('今の上限に合う段階を選んで開き、同じ値では変えられず、標準を選んで送ると一覧が読み直される', async ({
       page,
     }) => {
@@ -1772,15 +1796,15 @@ test.describe('運用者', () => {
       await expect(dialog).toBeVisible();
       await expect(page.locator('.dialog-sheet.is-danger:visible')).toHaveCount(0);
       await expect(dialog).toContainText(
-        '「あおば開発」の上限を変えます。今は人数 5 人（上限 15 人）、添付ファイルの上限 30',
+        '「あおば開発」の上限を変えます。今は人数 5 人（上限 15 人）、添付ファイルと Wiki の合計 5 GB（上限 30',
       );
       await expect(dialog).not.toContainText('{');
       // 数と「人」の間は不可分の空白で、折り返しで割れない
       expect(await dialog.locator('p.wrap-anywhere').textContent()).toContain('5 人（上限 15 人）');
       expect(await dialog.locator('.choice span').first().textContent()).toContain('15 人・30 GB');
-      // 添付ファイルの今の合計と、合計に関わる注意は #68 まで出さない
-      await expect(dialog).not.toContainText('合計');
-      await expect(dialog).not.toContainText('80%');
+      // 今の合計と、容量を下げたとき・上げたときの注意を示す
+      await expect(dialog).toContainText('合計 5 GB');
+      await expect(dialog).toContainText('80%');
       await expect(dialog.getByRole('radio')).toHaveCount(3);
       const small = dialog.getByRole('radio', { name: /小さい組織/ });
       await expect(small).toBeChecked();
@@ -1819,7 +1843,7 @@ test.describe('運用者', () => {
       await expect(page.getByRole('status').filter({ hasText: '「あおば開発」の上限を変えました' })).toBeVisible();
       const row = page.locator('.table tbody tr', { hasText: 'あおば開発' });
       await expect(row.locator('td[data-label="人数 / 上限"]')).toHaveText('5 / 50');
-      await expect(row.locator('td[data-label="添付ファイルの上限"]')).toContainText('100 GB');
+      await expect(row.locator('td[data-label="添付・Wiki / 上限"]')).toContainText('100 GB');
       // 標準の組織は、開き直すと標準を選んだ状態で開く
       await button.click();
       await expect(dialog.getByRole('radio', { name: /標準/ })).toBeChecked();
@@ -1846,7 +1870,7 @@ test.describe('運用者', () => {
       // 1 GB 未満の上限は、GB の整数の 1 で埋める
       await page.getByRole('button', { name: '「ひばり工房」の人数と容量の上限を変える' }).click();
       const dialog = page.getByRole('dialog', { name: '人数と添付ファイルの上限を変える' });
-      await expect(dialog).toContainText('添付ファイルの上限 512 MB です');
+      await expect(dialog).toContainText('合計 5 GB（上限 512 MB）です');
       await expect(dialog.getByRole('spinbutton', { name: '添付ファイルの上限（GB）' })).toHaveValue('1');
       await dialog.getByRole('button', { name: 'やめる' }).click();
 
@@ -1946,7 +1970,7 @@ test.describe('運用者', () => {
         },
       ]);
       const row = page.locator('.table tbody tr', { hasText: 'ひばり工房' });
-      await expect(row.locator('td[data-label="添付ファイルの上限"]')).toContainText('512 MB');
+      await expect(row.locator('td[data-label="添付・Wiki / 上限"]')).toContainText('512 MB');
 
       // 容量の欄を触れば、入れた GB を送る
       await open.click();

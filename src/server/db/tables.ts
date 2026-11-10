@@ -81,6 +81,7 @@ export const commonTableColumns = {
     member_limit: integerDefault,
     attachment_quota_bytes: integerDefault,
     attachment_quota_warned_at: textOrNull,
+    attachment_quota_warning_pending_at: textOrNull,
     stores_source_payload: integerDefault,
     created_by_operator: text,
     // migrations/0014_add_organization_trial.sql で足す。運用者が作る組織は両方 NULL
@@ -457,6 +458,19 @@ export const organizationTableColumns = {
     reverses_grant_id: textOrNull,
     dedupe_key: text,
     confirmed_at: text,
+  },
+  notifications: {
+    id: text,
+    user_id: text,
+    workspace_id: textOrNull,
+    kind: text,
+    task_id: textOrNull,
+    epic_id: textOrNull,
+    connection_id: textOrNull,
+    actor_user_id: textOrNull,
+    payload_json: textDefault,
+    read_at: textOrNull,
+    created_at: text,
   },
   change_logs: {
     id: text,

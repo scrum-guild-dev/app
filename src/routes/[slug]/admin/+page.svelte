@@ -8,6 +8,7 @@
   import OrganizationLookSetting from '../../../lib/components/admin/OrganizationLookSetting.svelte';
   import TrialSetting from '../../../lib/components/admin/TrialSetting.svelte';
   import HistorySetting from '../../../lib/components/admin/HistorySetting.svelte';
+  import StorageSetting from '../../../lib/components/admin/StorageSetting.svelte';
   import { t } from '../../../lib/vocabulary.svelte.ts';
   import type { PageProps } from './$types';
 
@@ -73,6 +74,7 @@
       slug={data.slug}
       meId={organization.me.id}
     />
+    <StorageSetting slug={data.slug} />
     <HolidaysSetting slug={data.slug} />
     <OrganizationLookSetting slug={data.slug} theme={organization.organization.theme} />
     <HistorySetting slug={data.slug} />

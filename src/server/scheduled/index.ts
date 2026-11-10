@@ -1,4 +1,5 @@
 // 定期処理の表。wrangler.jsonc の triggers.crons の式から処理を引く。表に無い式で起きたら、設定の食い違いなので例外にする
+import { attachmentQuotaWarningJob } from './attachment-quota-warning.ts';
 import { cleanupWiki } from './cleanup-wiki.ts';
 import { cleanupAttachments } from './cleanup-attachments.ts';
 import { cleanupApiTokens } from './cleanup-api-tokens.ts';
@@ -20,9 +21,11 @@ async function runJobs(jobs: readonly ScheduledJob[], env: Env, scheduledTime: D
   if (failures.length > 0) throw failures[0];
 }
 
+const minuteJobs: readonly ScheduledJob[] = [cleanupExpired, cleanupApiTokens, cleanupWiki, attachmentQuotaWarningJob];
+
 const scheduledJobs: ReadonlyMap<string, ScheduledJob> = new Map<string, ScheduledJob>([
   // 毎分: 期限を過ぎた行を消す（oauth_states、sessions、rate_limits と、api_tokens）
-  ['* * * * *', (env, at) => runJobs([cleanupExpired, cleanupApiTokens, cleanupWiki], env, at)],
+  ['* * * * *', (env, at) => runJobs(minuteJobs, env, at)],
   // 毎時 0 分: お試しの期限切れを止め、停止していない組織の未添付のファイルを消す
   ['0 * * * *', (env, at) => runJobs([suspendExpiredTrialsJob, cleanupAttachments], env, at)],
 ]);

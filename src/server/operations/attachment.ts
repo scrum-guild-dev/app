@@ -155,6 +155,7 @@ export const attachmentUploadOperation = implement(
       );
       throw new Error('添付ファイルの保存に失敗した', { cause: error });
     }
+    await tools.reconcileAttachmentQuota();
     return {
       id,
       file_name: input.file_name,

@@ -165,6 +165,40 @@ export const dictionary = defineDictionary({
   attachmentCancelled: 'アップロードをやめました。',
   attachmentEmpty: '空のファイルは添付できません（0 MB）。',
 
+  storageTitle: '添付ファイルと Wiki の容量',
+  storageLoadFailed: '容量を読み込めませんでした',
+  storageRefreshFailed: '容量を更新できませんでした。表示は前に読み込んだ値です。もう一度試してください。',
+  storageDescription:
+    '組織の添付ファイルと Wiki の最新本文・過去版の合計です。上限に達すると、どのワークスペースでも新しく添付できません。上限の変更は運用者に依頼してください。',
+  storageExactBytes: '{bytes} バイト使用中',
+  storageUsed: '使用量',
+  storageByteSize: '{size} B',
+  storageBreakdown: '内訳',
+  storageOrganizationWiki: '組織の Wiki',
+  storageRetention: '終了したワークスペースと、削除後30日の保持中の Wiki も含みます。Wiki は題と本文を数えます。',
+  storageWarning:
+    '上限の80%を超えています。上げた人かワークスペースのリーダーが不要な添付ファイルを消すか、運用者に上限の引き上げを依頼してください。',
+  storageFull:
+    '容量の上限に達したため、新しく添付できません。上げた人かワークスペースのリーダーが不要な添付ファイルを消すか、運用者に上限の引き上げを依頼すると添付できます。',
+
+  notificationUnread: '未読',
+  notificationAll: 'すべて',
+  notificationUnreadOnly: '未読だけ',
+  notificationFilter: '表示',
+  notificationEmpty: '通知はまだありません',
+  notificationUnreadEmpty: '未読の通知はありません',
+  notificationLoadFailed: '通知を読み込めませんでした。もう一度試してください。',
+  notificationRead: '既読にする',
+  notificationReading: '既読にしています',
+  notificationReadFailed: '既読にできませんでした。もう一度試してください。',
+  notificationMore: '続きを読む',
+  notificationEnd: '通知をすべて表示しました',
+  notificationQuotaWarning:
+    '組織の添付ファイルと Wiki の合計が上限の80%を超えました（使用量 {used}／上限 {quota}）。不要なファイルを消すか、運用者に上限の変更を依頼してください。',
+  notificationUnknown: '通知があります',
+  notificationOpenAdmin: '組織の管理を開く',
+  notificationBytes: '{size} バイト',
+
   slashMenuLabel: 'Markdown を入れる',
   markdownToolbar: '本文の書式',
   slashHeading: '見出し',
@@ -1051,7 +1085,7 @@ export const dictionary = defineDictionary({
   operatorColumnSeats: '人数 / 上限',
   operatorColumnWorkspaces: '{workspace}の数',
   operatorColumnTasks: '{task}の数',
-  operatorColumnQuota: '添付ファイルの上限',
+  operatorColumnQuota: '添付・Wiki / 上限',
   operatorColumnLastUsed: '最後に使われた日時',
   // {used} は人数、{limit} は人数の上限。空白は不可分の空白（U+00A0）で、積んだ行でも数の間で割れない
   operatorSeats: '{used} / {limit}',
@@ -1125,14 +1159,14 @@ export const dictionary = defineDictionary({
   operatorAdminExpired: '{admin}の招待の URL は期限切れ',
 
   // 人数と添付ファイルの上限を変えるダイアログ（design/kit.js の changeQuota）。{name} は組織の名前、{organization} は辞書の同じ名前の項目。
-  // 添付ファイルの今の合計と、合計に関わる注意（合計が下がるまで添付できない、80% の通知）は #68 まで出さない
+  // 使用量は添付ファイルと Wiki の合計で、一覧を読んだときの値。
   operatorQuotaAction: '人数と容量の上限を変える',
   operatorQuotaLabel: '「{name}」の人数と容量の上限を変える',
   operatorQuotaTitle: '人数と添付ファイルの上限を変える',
   // {used} は人数、{limit} は人数の上限、{quota} は添付ファイルの上限（operatorQuotaSize か operatorQuotaSizeMb）。
   // 数と「人」の間は不可分の空白（U+00A0）で、折り返しで割れない
   operatorQuotaText:
-    '「{name}」の上限を変えます。今は人数 {used} 人（上限 {limit} 人）、添付ファイルの上限 {quota} です。',
+    '「{name}」の上限を変えます。今は人数 {used} 人（上限 {limit} 人）、添付ファイルと Wiki の合計 {storage}（上限 {quota}）です。',
   operatorQuotaChoices: '新しい上限',
   operatorQuotaTierSmall: '小さい{organization}',
   operatorQuotaTierStandard: '標準',
@@ -1147,6 +1181,9 @@ export const dictionary = defineDictionary({
   operatorQuotaSizeInvalid: '添付ファイルの上限は 1〜{max} の整数（GB）で入れてください。',
   operatorQuotaNote:
     '人数を今より小さくしても、今いる人はそのまま残り、上限を下回るまで新しい人の招待と管理者への指名だけを止めます。',
+  operatorStorageQuotaNote:
+    '容量の上限を今の合計より小さくすると、合計が下がるまで新しく添付できません。上限を上げて合計が80%を下回ると、次に80%を超えたときに管理者へまた通知します。合計は一覧を読んだときの値です。',
+  operatorStorageBelowUsage: '選んだ上限は今の合計より小さいため、合計が下がるまで新しく添付できなくなります。',
   operatorQuotaHistoryNote: '上限の変更は{organization}の変更の履歴に、運用者の操作として残ります。',
   // 開いた直後は今の上限に合う選択肢が選ばれていて「変える」を押せないので、その理由と次にできることを伝える
   operatorQuotaUnchangedHint: '今の上限です。別の値を選ぶと変えられます。',

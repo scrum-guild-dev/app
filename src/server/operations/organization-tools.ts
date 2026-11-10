@@ -5,6 +5,8 @@
 // 道具は権限ごとに分けず、組織の中のすべての操作に渡す。道具の中で入った人（actor）を確かめ、承諾待ちの招待だけの人の操作からは
 // 自分のログインの読み取り（myLogins）のほかの道具を使えず、組織の設定の書き込みは管理者の操作からだけ使える。
 // 当たらない呼び出しは処理の誤りなので、投げて 500 にする
+import { now } from '../../shared/clock.ts';
+import { reconcileAttachmentQuota } from '../storage/quota-warning.ts';
 import { INVITE_PATH } from '../../shared/claim-token.ts';
 import type { InviteeResolver } from '../auth/login-method.ts';
 import { decryptCredential, encryptCredential, type EncryptedCredential } from '../crypto/credential.ts';
@@ -36,6 +38,8 @@ export type OrganizationTools = {
   inviteUrl(claimToken: string): string;
   // 自分の組織の行のうち、入るときに引かない値（人数の上限）
   readOrganization(): Promise<OrganizationRow>;
+  // 容量の書き込み成功後に呼ぶ。通知に失敗しても保存を取り消さず、定期処理で再試行する。
+  reconcileAttachmentQuota(): Promise<void>;
   // 自分の組織の言葉づかいと既定のテーマを、停止しておらず、先に読んだ値（from）のままなら書く（渡した項目と updated_at だけ）。
   // 管理者の操作からだけ呼ぶ。書けたら written、入ってから書くまでに停止されていたら suspended（呼び出し側は 403 にする）、
   // 別の要求が先に変えていたら conflict（409 にする）。変更の記録（change_logs）は書かない。
@@ -86,6 +90,21 @@ export function organizationTools(
     inviteeResolver: (provider) => member(() => inviteeResolver(provider)),
     inviteUrl: (claimToken) => member(() => `${new URL(env.PUBLIC_ORIGIN).origin}${INVITE_PATH}#${claimToken}`),
     readOrganization: () => member(() => readOrganizationRow(env, db)),
+    reconcileAttachmentQuota: () =>
+      member(async () => {
+        try {
+          await reconcileAttachmentQuota(env, db.organizationId, now());
+        } catch {
+          console.error(
+            JSON.stringify({
+              level: 'error',
+              code: 'internal',
+              operation: 'attachment-quota-warning',
+              reason: '容量の通知を確かめられなかった。定期処理で再試行する',
+            }),
+          );
+        }
+      }),
     writeOrganizationSettings: (change, now) =>
       member(() => {
         if (!actor.isAdmin) throw new Error('管理者でない人の操作から、組織の設定を書いた');

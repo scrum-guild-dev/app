@@ -14,7 +14,7 @@ const workspaceRoutes = [
   '/[slug]/w/[id]/wiki',
 ] as const;
 export type WorkspaceNavRoute = (typeof workspaceRoutes)[number];
-export type NavRoute = '/[slug]' | '/[slug]/wiki' | WorkspaceNavRoute;
+export type NavRoute = '/[slug]' | '/[slug]/wiki' | '/[slug]/notifications' | WorkspaceNavRoute;
 
 // `g` の次のキーで移る画面。メニューの項目の label から引く（AppShell が登録し、NavMenu が aria-keyshortcuts に伝える）
 export const GO_KEYS: Partial<Record<DictionaryKey, string>> = {
@@ -104,7 +104,7 @@ export const navSections: NavSection[] = [
   {
     items: [
       { icon: 'sun', label: 'pageToday', href: '/[slug]' },
-      { icon: 'bell', label: 'pageNotifications', href: null },
+      { icon: 'bell', label: 'pageNotifications', href: '/[slug]/notifications' },
       { icon: 'file', label: 'orgWiki', href: '/[slug]/wiki' },
     ],
   },

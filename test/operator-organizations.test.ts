@@ -583,6 +583,7 @@ describe('組織の一覧', () => {
       purge_due: false,
       created_at: organization.created_at,
       admin_status: 'pending',
+      attachment_used_bytes: 0,
       // 指名した管理者は、ログインする前から人数に数える
       seats: { used: 1, limit: 15 },
       workspace_count: 0,
@@ -838,6 +839,7 @@ describe('組織ごとの集計', () => {
     expect(Object.keys(item ?? {}).sort()).toEqual([
       'admin_status',
       'attachment_quota_bytes',
+      'attachment_used_bytes',
       'created_at',
       'kind',
       'last_used_at',
@@ -864,11 +866,18 @@ describe('組織ごとの集計', () => {
     expect(usage.size).toBe(ids.length);
     expect(usage.get(organization.id)).toEqual({
       seatsUsed: 4,
+      attachmentBytes: 0,
       workspaceCount: 2,
       taskCount: 4,
       lastUsedAt: '2026-10-25T08:00:00.000Z',
     });
-    expect(usage.get(filler[0]!)).toEqual({ seatsUsed: 0, workspaceCount: 0, taskCount: 0, lastUsedAt: null });
+    expect(usage.get(filler[0]!)).toEqual({
+      seatsUsed: 0,
+      workspaceCount: 0,
+      taskCount: 0,
+      lastUsedAt: null,
+      attachmentBytes: 0,
+    });
   });
 
   test('組織の中の DB が複数でも、人数は同じ人を1人にして合わせ、数は足し、日時は新しい方を取る', async () => {
@@ -886,7 +895,7 @@ describe('組織ごとの集計', () => {
       batch: async (statements: FakeStatement[]) => {
         batches.push(statements.length);
         const result = (results: unknown[]) => ({ results, meta: { changes: 0 } });
-        // 人数の2文（users、招待）と、集計の3文（ワークスペース、タスク、最後に使われた日時）
+        // 人数の2文（users、招待）と、集計の4文（ワークスペース、タスク、最後に使われた日時、容量）
         if (statements.length === 2) {
           return [
             result([
@@ -919,17 +928,19 @@ describe('組織ごとの集計', () => {
           result([{ organization_id: organization.id, count: 2 }]),
           result([{ organization_id: organization.id, count: 5 }]),
           result([{ organization_id: organization.id, last_seen_at: '2026-10-22T00:00:00.000Z' }]),
+          result([{ organization_id: organization.id, bytes: 19 }]),
         ];
       },
     };
     const usage = await organizationUsageForTest(env, [organization.id], [second]);
     expect(usage.get(organization.id)).toEqual({
       seatsUsed: 3,
+      attachmentBytes: 19,
       workspaceCount: 3,
       taskCount: 6,
       lastUsedAt: '2026-10-22T00:00:00.000Z',
     });
-    expect(batches).toEqual([2, 3]);
+    expect(batches).toEqual([2, 4]);
   });
 
   test('ワークスペースの数とタスクの数と最後に使われた日時を数える文は、表を全件読まない', async () => {

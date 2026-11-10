@@ -145,6 +145,17 @@ async function fillOrganization(organization: Awaited<ReturnType<typeof createOr
   await createChangeLog(organization);
   await createOrganizationHoliday(organization, admin.id);
   const wikiDb = orgDb(env, organization.verified);
+  await wikiDb.batch([
+    wikiDb.statement((q) =>
+      q.insertInto('notifications').values({
+        id: uuidv7(),
+        user_id: admin.id,
+        kind: 'attachment_quota_warning',
+        payload_json: JSON.stringify({ used_bytes: 900, quota_bytes: 1000 }),
+        created_at: AT,
+      }),
+    ),
+  ]);
   for (const scope of [{ workspaceId: ws }, { organizationId: organization.id }]) {
     const pageId = uuidv7();
     await insertWikiPage(

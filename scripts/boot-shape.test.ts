@@ -48,6 +48,11 @@ function routeIds(dir = routesDir): string[] {
 const samplePath = (routeId: string) => routeId.replaceAll(/\[([^\]]+)\]/g, (_, name: string) => `sample-${name}`);
 
 describe('最初の読み込みの骨組みの形（static/boot-shape.js）', () => {
+  test('通知は初回の読み込みも画面の移動も、知らせの行に近い一覧の骨組みを使う', () => {
+    assert.equal(loadingShape('/[slug]/notifications'), 'list');
+    assert.equal(runBootShape('/aoba/notifications').dataset.boot, 'list');
+    assert.equal(runBootShape('/aoba/notifications/').dataset.boot, 'list');
+  });
   test('どの画面の URL でも、移る間の骨組み（src/lib/loading-shape.ts）と同じ形を選ぶ', () => {
     const ids = routeIds();
     assert.ok(ids.includes('/[slug]/w/[id]/sprint'));

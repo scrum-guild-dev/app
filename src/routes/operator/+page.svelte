@@ -81,6 +81,9 @@
     const quota = quotaSize(bytes);
     return t(quota.unit === 'gb' ? 'operatorQuotaSize' : 'operatorQuotaSizeMb', { size: quota.size });
   }
+  function usageText(bytes: number): string {
+    return bytes < 1024 ** 2 ? t('storageByteSize', { size: formatCount(bytes) }) : quotaText(bytes);
+  }
 
   type Row = { slug: string; name: string; suspended_at: string | null; purge_on: string | null };
 
@@ -166,7 +169,13 @@
   }
 
   function changeQuota(
-    row: { slug: string; name: string; seats: { used: number; limit: number }; attachment_quota_bytes: number },
+    row: {
+      slug: string;
+      name: string;
+      seats: { used: number; limit: number };
+      attachment_quota_bytes: number;
+      attachment_used_bytes: number;
+    },
     trigger: HTMLElement,
   ): void {
     if (resumingSlug !== null) return;
@@ -319,7 +328,7 @@
                     >{formatCount(organization.task_count)}</td
                   >
                   <td class="is-num" data-label={t('operatorColumnQuota')}>
-                    {quotaText(organization.attachment_quota_bytes)}
+                    {usageText(organization.attachment_used_bytes)} / {quotaText(organization.attachment_quota_bytes)}
                     <!-- 人数と添付ファイルの上限をまとめて変える。読み上げの名前に、どの組織かを添える。
                          自分用は上限を変える対象にしないので、値だけ出して変更のボタンを置かない -->
                     {#if organization.kind !== 'personal'}

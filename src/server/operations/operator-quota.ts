@@ -60,7 +60,7 @@ export const organizationQuotaUpdateOperation = implement(organizationQuotaUpdat
         .set({
           member_limit: input.member_limit,
           attachment_quota_bytes: input.attachment_quota_bytes,
-          ...(raised ? { attachment_quota_warned_at: null } : {}),
+          ...(raised ? { attachment_quota_warned_at: null, attachment_quota_warning_pending_at: null } : {}),
           updated_at: at.toISOString(),
         })
         .where('id', '=', current.id)

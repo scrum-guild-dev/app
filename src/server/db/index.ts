@@ -102,6 +102,7 @@ export {
   cleanupDeletedWiki,
   insertUploadedAttachment,
   organizationStorageBytes,
+  readOrganizationStorageUsage,
   readWikiPage,
   readWikiRevisions,
   readWikiTree,
@@ -117,3 +118,5 @@ export {
 } from './wiki.ts';
 
 export { attachmentsReady, attachFilesStatement, type AttachmentSave } from './attach-files.ts';
+
+export { reconcileAttachmentQuotaWarning, cleanupReadNotifications } from './attachment-quota-warning.ts';

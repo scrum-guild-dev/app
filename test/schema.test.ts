@@ -26,6 +26,34 @@ import {
 const AT = '2026-10-20T00:00:00.000Z';
 const CLAIM_EXPIRES_AT = '2026-11-03T00:00:00.000Z';
 
+describe('容量通知のスキーマ', () => {
+  test('通知本文はJSONで、日時はUTCミリ秒の形だけを受け付ける', async () => {
+    const insert = (payload: string, created: string, read: string | null = null) =>
+      run(
+        'INSERT INTO notifications (id, user_id, kind, payload_json, created_at, read_at) VALUES (?, ?, ?, ?, ?, ?)',
+        id(),
+        id(),
+        'attachment_quota_warning',
+        payload,
+        created,
+        read,
+      );
+    await insert('{"used_bytes":81,"quota_bytes":100}', AT);
+    await expect(insert('{', AT)).rejects.toThrow(/CHECK/);
+    await expect(insert('{}', '2026-11-10')).rejects.toThrow(/CHECK/);
+    await expect(insert('{}', AT, '2026-11-10')).rejects.toThrow(/CHECK/);
+  });
+
+  test('配信待ちの日時は空かUTCミリ秒の形だけを受け付ける', async () => {
+    const orgId = await organization();
+    await expect(
+      run('UPDATE organizations SET attachment_quota_warning_pending_at = ? WHERE id = ?', 'invalid', orgId),
+    ).rejects.toThrow(/CHECK/);
+    await run('UPDATE organizations SET attachment_quota_warning_pending_at = ? WHERE id = ?', AT, orgId);
+    await run('UPDATE organizations SET attachment_quota_warning_pending_at = NULL WHERE id = ?', orgId);
+  });
+});
+
 function id(): string {
   return crypto.randomUUID();
 }

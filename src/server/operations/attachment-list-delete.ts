@@ -25,7 +25,7 @@ export { attachmentListOperation } from './attachment-list-page.ts';
 
 export const attachmentDeleteOperation = implement(
   attachmentDelete,
-  async ({ db, workspace, actor, input, attachmentStorage }) => {
+  async ({ db, workspace, actor, input, attachmentStorage, tools }) => {
     const workspaceId = workspace.workspaceId;
     const userId = actorUserIdOf(actor);
     await requireTask(db, workspaceId, input.task_id);
@@ -123,6 +123,7 @@ export const attachmentDeleteOperation = implement(
       // D1 の削除は確定済み。後処理の失敗を操作の失敗にせず、秘密を含まない件数だけを記録する。
       console.error(JSON.stringify({ level: 'error', code: 'internal', operation: 'attachment-delete', count: 1 }));
     }
+    await tools.reconcileAttachmentQuota();
     return { id: removed.id };
   },
 );
