@@ -395,9 +395,13 @@ html[data-boot] #boot-loading .boot-frame {
     align-self: stretch;
     align-items: center;
   }
-  /* 畳んだ列の角のマスはマークだけ（組織の名前は札でだけ出す） */
+  /* 畳んだ列の角のマスはマークだけ（組織の名前は札でだけ出す）。マークは読み込んだ後と同じ 34px にする */
   html[data-boot-nav='collapsed'] #boot-loading .boot-corner .is-org-name {
     display: none;
+  }
+  html[data-boot-nav='collapsed'] #boot-loading .boot-corner .is-mark {
+    width: 34px;
+    height: 34px;
   }
   html[data-boot-nav='collapsed'] #boot-loading .boot-binding i {
     width: 32px;
