@@ -363,7 +363,6 @@ export const dictionary = defineDictionary({
   due: '期日',
   points: 'ポイント',
   assignee: '担当',
-  delegatee: '依頼先',
   category: '区分',
   capacity: '作業量と基準',
   over: '超過',
@@ -386,6 +385,7 @@ export const dictionary = defineDictionary({
   assistant: 'アシスタント',
 
   // ---- 本番の画面の文言 ----
+  delegatee: '依頼先',
   // 枠の共通の文言
   appName: 'Scrum Guild',
   pageTitle: '{page} - {app}',
