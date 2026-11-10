@@ -5,7 +5,7 @@ import {
   FilteredAttributeReload,
 } from './attribute-filter-reload.ts';
 
-const filter = { assignee: '', category: '', repository: '', epic: '', q: '' };
+const filter = { assignee: '', delegatee: '', category: '', repository: '', epic: '', q: '' };
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
