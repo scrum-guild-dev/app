@@ -68,11 +68,18 @@ for (const path of ['/aoba', '/aoba/me', '/aoba/wiki']) {
         expect(
           await page.locator('.content').evaluate((el) => parseFloat(getComputedStyle(el).paddingTop)),
         ).toBeGreaterThanOrEqual(16);
-        const band = await page.locator('.topbar').boundingBox();
         const title = await heading.boundingBox();
-        expect(band).not.toBeNull();
         expect(title).not.toBeNull();
-        expect(title!.y - band!.y - band!.height).toBeGreaterThanOrEqual(16);
+        if (width > 760) {
+          const band = await page.locator('.topbar').boundingBox();
+          expect(band).not.toBeNull();
+          expect(title!.y - band!.y - band!.height).toBeGreaterThanOrEqual(16);
+        } else {
+          await expect(page.locator('.topbar')).toHaveCount(0);
+          const content = await page.locator('.content').boundingBox();
+          expect(content).not.toBeNull();
+          expect(title!.y - content!.y).toBeGreaterThanOrEqual(16);
+        }
       }
     }
   });

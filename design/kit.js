@@ -59,6 +59,7 @@
 
   // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
   const DICT = {
+    mobilePageToolsLabel: "検索とアカウント",
     menu: "メニュー",
     close: "閉じる",
     taskTitleRequired: "タイトルを入れてください",
@@ -736,6 +737,11 @@
       <div class="page-head-row"><h1 class="page-title">${title}</h1>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
       ${metrics}
     </header>`;
+  }
+
+  // カタログ用のスマホ見出し。実際の検索とメニューは画面見本で操作する。
+  function mobilePageHead(title) {
+    return `<header class="page-head"><div class="page-head-row"><h1 class="page-title">${esc(title)}</h1><div class="mobile-page-tools" role="group" aria-label="${t("mobilePageToolsLabel")}"><button class="nav-search-toggle" type="button" aria-label="画面とタスクを探す" data-toast="画面見本の検索から画面を探せます">${icon("search")}</button><button class="account-menu-button" type="button" aria-label="${t("accountMenuLabel").replace("{name}", "ミナト")}" data-toast="画面見本のアカウントからメニューを開けます">${avatarOf(D.me)}</button></div></div></header>`;
   }
 
   // スプリントのカード（列の中）
@@ -1662,7 +1668,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function redrawContent() {
     if (!page) return;
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
+    restoreMobilePageTools();
     document.getElementById("content").innerHTML = page.render();
+    syncMobilePageTools();
     drafts.forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
   }
   // 保存した欄に応じて、引き出しの見出し、リンクの「開く」、「未記入」の印だけを差し替える（書いている欄は作り直さない）
@@ -3194,6 +3202,42 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     location.href = firstHref(target, next);
   }
   let page = null;
+  // 同じ検索とアカウントを見出しに移し、本文の再描画前には帯へ戻す。
+  function restoreMobilePageTools() {
+    const bar = document.querySelector(".topbar");
+    if (!bar) return;
+    for (const selector of ["[data-nav-search-toggle]", "#nav-search-box", "#account-menu-slot"]) {
+      const node = document.querySelector(selector);
+      if (node && node.parentElement !== bar) {
+        if (selector === "#account-menu-slot") bar.append(node);
+        else bar.insertBefore(node, bar.querySelector(".topbar-tools"));
+      }
+    }
+    document.querySelector(".mobile-page-tools")?.remove();
+    document.querySelector(".mobile-page-head")?.remove();
+  }
+  function syncMobilePageTools() {
+    if (!page || page.operator) return;
+    restoreMobilePageTools();
+    if (!matchMedia("(max-width: 760px)").matches) return;
+    const content = document.getElementById("content");
+    let row = content.querySelector(".page-head-row");
+    if (!row) {
+      row = document.createElement("header");
+      row.className = "mobile-page-head page-head-row";
+      row.innerHTML = `<h1 class="page-title">${esc(currentCrumbs().at(-1)?.label || "")}</h1>`;
+      content.prepend(row);
+    }
+    const tools = document.createElement("div");
+    tools.className = "mobile-page-tools";
+    tools.setAttribute("role", "group"); tools.setAttribute("aria-label", t("mobilePageToolsLabel"));
+    row.append(tools);
+    for (const selector of ["[data-nav-search-toggle]", "#nav-search-box", "#account-menu-slot"]) {
+      const node = document.querySelector(selector);
+      if (node) tools.append(node);
+    }
+  }
+  window.addEventListener("resize", syncMobilePageTools);
   function redraw() {
     if (!page) return;
     if (!page.operator) {
@@ -3207,7 +3251,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     syncMobileMenu();
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
+    restoreMobilePageTools();
     document.getElementById("content").innerHTML = page.render();
+    syncMobilePageTools();
     drafts.forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
     applyNavCollapsed();
     applyTheme();
@@ -4042,7 +4088,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer, flashRow,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
-    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
+    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead, mobilePageHead,
     narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,

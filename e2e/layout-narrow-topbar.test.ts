@@ -23,7 +23,8 @@ for (const theme of LAYOUT_THEMES) {
     await applyTheme(page, theme);
     const tabs = page.getByRole('navigation', { name: 'よく使う画面' });
     await expect(page.locator('.binding')).toHaveCount(0);
-    await expect(page.locator('.topbar')).toBeVisible();
+    await expect(page.locator('.topbar')).toHaveCount(0);
+    await expect(page.locator('.mobile-page-tools')).toHaveCount(1);
     await expect(tabs.getByRole('link')).toHaveCount(3);
     for (const item of await tabs.locator('a, button').all()) {
       const box = await item.boundingBox();

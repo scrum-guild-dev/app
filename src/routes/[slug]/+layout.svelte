@@ -108,9 +108,9 @@
       />
     {/if}
   {/snippet}
-  {#snippet account()}
+  {#snippet account(narrow = false)}
     <!-- 所属していない管理者がワークスペースの画面を開いているときの印。所属していないことを、画面のどこからでも見て分かるようにする -->
-    {#if openWorkspace?.role === null}
+    {#if !narrow && openWorkspace?.role === null}
       <span class="chip">{t('notMemberAdminChip', { admin: t('admin') })}</span>
     {/if}
     <AccountMenu
@@ -132,7 +132,10 @@
       />
     {/if}
   {/snippet}
-  {#snippet notice()}
+  {#snippet notice(narrow = false)}
+    {#if narrow && openWorkspace?.role === null}
+      <span class="chip">{t('notMemberAdminChip', { admin: t('admin') })}</span>
+    {/if}
     {#key navigationScope}
       <TokenNotice notice={data.tokenNotice} slug={data.slug} />
     {/key}

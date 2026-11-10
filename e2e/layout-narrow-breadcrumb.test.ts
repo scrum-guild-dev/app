@@ -1,9 +1,10 @@
-// 上の帯は #1102 のタブバー追加後も維持する。名前、同じ行のアカウント、所属せず管理者の印を検査する。
+// スマホの大きな見出しと丸い入口（#1103）。E2E は CI で実行する。
 import type { Page } from '@playwright/test';
+import { orgWikiTree } from '../src/shared/operations/wiki/index.ts';
 import { workspaceInfo } from '../src/shared/operations/workspace/workspace.ts';
 import { expect, test } from './fixtures.ts';
 import { applyTheme, LAYOUT_THEMES, NARROW_VIEWPORT, signIn } from './helpers.ts';
-import { rewriteOperation } from './operations.ts';
+import { failOperation, rewriteOperation } from './operations.ts';
 
 const WORKSPACE = '/aoba/w/019a0000-0000-7000-8000-000000000401';
 test.beforeEach(async ({ context, baseURL }) => {
@@ -12,68 +13,137 @@ test.beforeEach(async ({ context, baseURL }) => {
 async function measureFrame(page: Page) {
   return page.evaluate(async () => {
     await document.fonts.ready;
-    const item = document.querySelector<HTMLElement>('.breadcrumb [aria-current="page"]')!;
-    const range = document.createRange();
-    range.selectNodeContents(item);
-    const crumb = document.querySelector('.breadcrumb')!.getBoundingClientRect();
-    const account = document.querySelector('.account-menu-button')!.getBoundingClientRect();
+    const tools = document.querySelector('.mobile-page-tools')!;
+    const row = tools.closest('.page-head-row')!;
+    const title = row.querySelector<HTMLElement>('.page-title')!;
+    const titleBox = title.getBoundingClientRect();
+    const search = tools.querySelector('.nav-search-toggle')!.getBoundingClientRect();
+    const account = tools.querySelector('.account-menu-button')!.getBoundingClientRect();
     return {
-      clipped: range.getBoundingClientRect().width > item.getBoundingClientRect().width + 0.01,
-      gap: account.left - item.getBoundingClientRect().right,
-      sameRow: Math.abs(account.top + account.height / 2 - (crumb.top + crumb.height / 2)) < 12,
+      clipped: title.scrollWidth > title.clientWidth,
+      size: parseFloat(getComputedStyle(title).fontSize),
+      gap: search.left - titleBox.right,
+      sameRow: Math.abs(account.top - titleBox.top) < 1,
+      buttons: [search, account].map((box) => ({ width: box.width, height: box.height })),
     };
   });
 }
 for (const [path, name] of [
+  ['/aoba', '今日やること'],
+  ['/aoba/admin', '組織の管理'],
   [WORKSPACE, 'バックログ'],
   [`${WORKSPACE}/inbox`, '受信箱'],
   [`${WORKSPACE}/wiki`, 'Wiki'],
   [`${WORKSPACE}/settings`, '設定'],
 ] as const) {
-  test(`390px の ${name} で今の画面の名前を読み、アカウントと同じ行に出す`, async ({ page }) => {
+  test(`390px の ${name} で上の帯を出さず、大きな見出しと丸ボタンを同じ行に出す`, async ({ page }) => {
     await page.setViewportSize(NARROW_VIEWPORT);
     await page.goto(path);
-    await expect(page.locator('.breadcrumb [aria-current="page"]')).toHaveText(name);
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('.mobile-page-tools')).toHaveCount(1);
+    await expect(page.locator('.topbar')).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'パンくず' })).toHaveCount(0);
+    await expect(page.locator('.page-title')).toHaveText(name);
+    await expect(page.getByRole('combobox', { name: '画面とタスクを探す' })).toBeHidden();
     for (const theme of LAYOUT_THEMES) {
       await applyTheme(page, theme);
       const result = await measureFrame(page);
       expect(result.clipped, theme).toBe(false);
+      expect(result.size, theme).toBeGreaterThanOrEqual(32);
       expect(result.gap, theme).toBeGreaterThanOrEqual(0);
       expect(result.sameRow, theme).toBe(true);
+      for (const box of result.buttons) {
+        expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+      }
     }
   });
 }
 
-test('390px で所属していない管理者がワークスペースを開いても、アカウントのボタンはパンくずの行に残る', async ({
-  page,
-}) => {
-  // 所属していない管理者の印（.topbar の直接の子の .chip）は幅があり、パンくずの行に並べるとアカウントを2行目へ押し出す
+test('390px で所属していない管理者の印は見出しの外に残り、丸ボタンと重ならない', async ({ page }) => {
   await rewriteOperation(page, workspaceInfo, { slug: 'aoba' }, (output) => ({ ...output, role: null }));
   await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(WORKSPACE);
-  await expect(page.locator('.topbar > .chip')).toHaveText('所属せず管理者として開いています');
-  await page.waitForLoadState('networkidle');
+  await expect(page.getByText('所属せず管理者として開いています', { exact: true })).toBeVisible();
+  await expect(page.locator('.mobile-page-tools > .chip')).toHaveCount(0);
+  await expect(page.locator('.mobile-page-tools')).toHaveCount(1);
   const result = await measureFrame(page);
   expect(result.sameRow).toBe(true);
   expect(result.clipped).toBe(false);
   expect(result.gap).toBeGreaterThanOrEqual(0);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('390px でアカウントのボタンはアバターと▾だけで、読み上げの名前に表示名を残す', async ({ page }) => {
+test('390px の長い画面名は丸ボタンの手前で折り返す', async ({ page }) => {
+  const name = 'W'.repeat(50);
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto('/aoba');
+  await expect(page.locator('.page-head .mobile-page-tools')).toHaveCount(1);
+  // 画面の文言は変えず、部品に長い題が渡されたときの折り返しを測る。
+  await page.locator('.page-title').evaluate((title, value) => {
+    title.textContent = value;
+  }, name);
+  for (const theme of LAYOUT_THEMES) {
+    await applyTheme(page, theme);
+    const result = await measureFrame(page);
+    expect(result.clipped).toBe(false);
+    expect(result.gap).toBeGreaterThanOrEqual(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
+test('PageHead のない詳細では長いワークスペース名を出し、一覧へ移ると見出しの入口を1つに保つ', async ({ page }) => {
+  const name = 'W'.repeat(50);
+  await rewriteOperation(page, workspaceInfo, { slug: 'aoba' }, (output) => ({
+    ...output,
+    name,
+  }));
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(`${WORKSPACE}/tasks/019a0000-0000-7000-8000-000000000701`);
+  await expect(page.locator('.mobile-page-head .page-title')).toHaveText(name);
+  await expect(page.locator('.mobile-page-tools')).toHaveCount(1);
+  expect((await measureFrame(page)).gap).toBeGreaterThanOrEqual(0);
+  await page.getByRole('button', { name: '画面とタスクを探す' }).click();
+  await page.getByRole('combobox', { name: '画面とタスクを探す' }).fill('今日');
+  await page.getByRole('option', { name: '今日やること', exact: true }).click();
+  await expect(page).toHaveURL('/aoba');
+  await expect(page.locator('.mobile-page-head')).toHaveCount(0);
+  await expect(page.locator('.page-head .mobile-page-tools')).toHaveCount(1);
+});
+
+test('390px でアカウントは丸いアバターだけにし、読み上げ名に表示名を残す', async ({ page }) => {
   await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(WORKSPACE);
   const button = page.getByRole('button', { name: /ミナト.*アカウントのメニュー/ });
   await expect(button).toBeVisible();
   await expect(button.locator('.me-detail')).toBeHidden();
   await expect(button.locator('.avatar')).toBeVisible();
+  await expect(button.locator(':scope > .ico')).toBeHidden();
+  await expect(button).toHaveCSS('border-radius', '50%');
 });
 
-test('761px 以上では虫眼鏡を出さず、検索の欄と表示名を帯に出す', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto(WORKSPACE);
-  await expect(page.getByRole('combobox', { name: '画面とタスクを探す' })).toBeVisible();
-  await expect(page.locator('.nav-search-toggle')).toBeHidden();
-  await expect(page.locator('.account-menu-button .me-detail')).toBeVisible();
+for (const width of [761, 1280]) {
+  test(`${width}px では検索の欄と表示名を帯に出し、スマホ幅との切り替えでも入口を重複させない`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(WORKSPACE);
+    await expect(page.locator('.topbar')).toBeVisible();
+    await expect(page.getByRole('combobox', { name: '画面とタスクを探す' })).toBeVisible();
+    await expect(page.locator('.nav-search-toggle')).toBeHidden();
+    await expect(page.locator('.account-menu-button .me-detail')).toBeVisible();
+    await page.setViewportSize(NARROW_VIEWPORT);
+    await expect(page.locator('.topbar')).toHaveCount(0);
+    await expect(page.locator('.mobile-page-tools')).toHaveCount(1);
+    await page.setViewportSize({ width, height: 800 });
+    await expect(page.locator('.mobile-page-tools')).toHaveCount(0);
+    await expect(page.locator('.account-menu-button')).toHaveCount(1);
+  });
+}
+
+test('Wiki の読み込み失敗で見出しが複数あっても、検索とアカウントは1組だけになる', async ({ page }) => {
+  await failOperation(page, orgWikiTree, { slug: 'aoba' }, 500, 'internal');
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto('/aoba/wiki');
+  await expect(page.getByText('読み込めませんでした', { exact: true })).toBeVisible();
+  await expect(page.locator('.page-head')).toHaveCount(2);
+  await expect(page.locator('.mobile-page-tools')).toHaveCount(1);
+  await page.keyboard.press('Control+k');
+  await expect(page.getByRole('combobox', { name: '画面とタスクを探す' })).toBeFocused();
 });

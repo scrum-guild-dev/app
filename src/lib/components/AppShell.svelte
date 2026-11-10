@@ -3,7 +3,8 @@
   import { MediaQuery } from 'svelte/reactivity';
   import MobileNavigation from './MobileNavigation.svelte';
   import { navigationLoading } from '../navigation-loading.svelte.ts';
-  import type { Snippet } from 'svelte';
+  import { onMount, setContext, tick, type Snippet } from 'svelte';
+  import { MOBILE_PAGE_HEAD, type MobilePageHead } from '../mobile-page-head.ts';
   import { resolve } from '$app/paths';
   import { t } from '../vocabulary.svelte.ts';
   import { NAV_MENU_ID, navState, setNavCollapsed } from '../nav-collapse.svelte.ts';
@@ -28,7 +29,8 @@
   // slug は今の組織で、組織の中の画面だけが使う。
   // 組織の切り替え（ブランドの下）、ワークスペースの切り替え、アシスタントのボタンは置き場所だけで、中身は snippet で渡す。
   // workspace はメニューの対象。「今日やること」など組織の画面でも渡す。
-  // 上の帯の左はパンくず（組織 › ワークスペース › 画面）で、常に出す。assistant と account は右に並べる。account はログインしている人の表示
+  // 761px 以上の上の帯の左はパンくず（組織 › ワークスペース › 画面）。assistant と account は右に並べる。
+  // スマホは PageHead の右に検索と account を移し、PageHead が無い画面だけ代わりの見出しを置く
   let {
     current,
     slug,
@@ -50,12 +52,35 @@
     organizationSwitcher?: Snippet;
     workspaceSwitcher?: Snippet;
     assistant?: Snippet;
-    account?: Snippet;
-    notice?: Snippet;
+    account?: Snippet<[narrow?: boolean]>;
+    notice?: Snippet<[narrow?: boolean]>;
     children: Snippet;
   } = $props();
 
   const narrow = new MediaQuery('(max-width: 760px)');
+  let pageHeads = $state<symbol[]>([]);
+  let mounted = $state(false);
+  onMount(() => {
+    // 子の PageHead が登録を終えるまでは代わりの入口を描かない。
+    void tick().then(() => {
+      mounted = true;
+    });
+  });
+  setContext<MobilePageHead>(MOBILE_PAGE_HEAD, {
+    get narrow() {
+      return narrow.current;
+    },
+    get tools() {
+      return mobileTools;
+    },
+    register(id) {
+      pageHeads = [...pageHeads, id];
+      return () => {
+        pageHeads = pageHeads.filter((head) => head !== id);
+      };
+    },
+    owns: (id) => pageHeads[0] === id,
+  });
 
   // パンくず。ワークスペースは、ワークスペースの画面を開いているときだけ出す（組織の画面では、メニューの対象でも出さない）。
   // 画面の名前はメニューの項目から引き、メニューに無いアカウントのメニューの画面だけ別に引く
@@ -145,6 +170,13 @@
   );
 </script>
 
+{#snippet mobileTools()}
+  <div class="mobile-page-tools" role="group" aria-label={t('mobilePageToolsLabel')}>
+    <NavSearch screens={navScreens} {backlogHref} />
+    {#if account}{@render account(true)}{/if}
+  </div>
+{/snippet}
+
 <div class="app" data-nav-collapsed={navState.collapsed ? 'true' : undefined}>
   {#if !narrow.current}
     <aside class="binding" aria-label={t('menu')}>
@@ -174,15 +206,23 @@
     </aside>
   {/if}
   <div class="sheet">
-    <div class="topbar">
-      <Breadcrumb crumbs={shownCrumbs} />
-      <NavSearch screens={navScreens} {backlogHref} />
-      {#if assistant}{@render assistant()}{/if}
-      {#if account}{@render account()}{/if}
-    </div>
+    {#if !narrow.current}
+      <div class="topbar">
+        <Breadcrumb crumbs={shownCrumbs} />
+        <NavSearch screens={navScreens} {backlogHref} />
+        {#if assistant}{@render assistant()}{/if}
+        {#if account}{@render account()}{/if}
+      </div>
+    {/if}
 
-    {@render notice?.()}
+    {@render notice?.(narrow.current)}
     <main class="content" id="content" aria-busy={navigationLoading.kind === 'inside' ? true : undefined}>
+      {#if mounted && narrow.current && pageHeads.length === 0}
+        <header class="mobile-page-head page-head-row">
+          <h1 class="page-title">{shownCrumbs.at(-1)?.label}</h1>
+          {@render mobileTools()}
+        </header>
+      {/if}
       {@render children()}
     </main>
   </div>
