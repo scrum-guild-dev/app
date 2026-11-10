@@ -33,16 +33,20 @@ test('wrangler 同梱の dotenv の版と LINE が、写した正規表現から
   const modules = [
     ...bundle.matchAll(/\/\/ [^\n]*dotenv@([^/]+)\/node_modules\/dotenv\/lib\/main\.js\n([\s\S]*?)(?=\n\/\/ )/g),
   ];
-  assert.equal(modules.length, 1, review);
-  assert.equal(modules[0]![1], '16.3.1', review);
+  assert.equal(modules.length, 1, `dotenv の同梱モジュールを一意に抽出できない: ${review}`);
+  assert.equal(modules[0]![1], '16.3.1', `dotenv の版が変わった: ${review}`);
   const upstream = modules[0]![2]!.match(/var LINE = \/(.+)\/([a-z]+);/);
   const local = readFileSync(new URL('./dev-vars.ts', import.meta.url), 'utf8').match(
     /const DOTENV_LINE =\s*\/(.+)\/([a-z]+);/,
   );
-  assert.ok(upstream, review);
-  assert.ok(local, review);
+  assert.ok(upstream, `同梱 dotenv の LINE を抽出できない: ${review}`);
+  assert.ok(local, `dev-vars.ts の DOTENV_LINE を抽出できない: ${review}`);
   // mg と gm の並びだけの違いは無視する。
-  assert.equal(new RegExp(local[1]!, local[2]).toString(), new RegExp(upstream[1]!, upstream[2]).toString(), review);
+  assert.equal(
+    new RegExp(local[1]!, local[2]).toString(),
+    new RegExp(upstream[1]!, upstream[2]).toString(),
+    `同梱 dotenv の LINE と DOTENV_LINE が違う: ${review}`,
+  );
 });
 
 test('鍵は wrangler の dotenv と同じに数え、コメントの行は数えない', () => {
