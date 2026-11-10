@@ -35,6 +35,7 @@
   let points = $state('');
   let due = $state('');
   let failure = $state('');
+  let failureNote = $state<HTMLParagraphElement>();
   let choicesFailed = $state(false);
   let loading = $state(false);
   let tree = $state<OutputOf<typeof backlogTree> | null>(null);
@@ -180,16 +181,21 @@
                 ? t('storyBadRequest')
                 : t('createSheetFailed');
       if (result.status === 404 || result.status === 409) void loadChoices();
+      await tick();
+      failureNote?.focus();
+      failureNote?.scrollIntoView({ block: 'nearest' });
       return;
     }
-    const id = 'task' in result.data ? result.data.task.id : result.data.story.id;
+    const createdId = 'task' in result.data ? result.data.task.id : result.data.story.id;
     finish();
     await tick();
     showToast(t('createSheetCreated', { kind: t(createdKind), title: createdTitle }), 'check', {
       label: t('createSheetOpen'),
       run: () => {
         // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve 済みのバックログへ作成対象のクエリを足す
-        void goto(`${resolve('/[slug]/w/[id]', { slug, id: workspaceId })}?${createdKind}=${encodeURIComponent(id)}`);
+        void goto(
+          `${resolve('/[slug]/w/[id]', { slug, id: workspaceId })}?${createdKind}=${encodeURIComponent(createdId)}`,
+        );
       },
     });
     // 済んだ作成を読み直しの失敗で失敗扱いにしない。
@@ -261,7 +267,7 @@
       </header>
       <div class="create-sheet-body">
         {#if !title.trim()}<p class="muted" id={`${uid}-reason`}>{t('taskTitleRequired')}</p>{/if}
-        {#if failure}<p class="callout is-danger" role="alert">{failure}</p>{/if}
+        {#if failure}<p class="callout is-danger" role="alert" tabindex="-1" bind:this={failureNote}>{failure}</p>{/if}
         <label class="field"
           ><span class="field-label">{t('fieldTitle')}</span><input
             class="input create-sheet-title"
@@ -349,6 +355,14 @@
                     type="date"
                     bind:value={due}
                   /></label
+                >
+                <button
+                  class="btn"
+                  type="button"
+                  onclick={() => {
+                    due = '';
+                    closePanel();
+                  }}>{t('dueClear')}</button
                 >
                 <button class="btn" type="button" onclick={closePanel}>{t('close')}</button>
               {/snippet}
