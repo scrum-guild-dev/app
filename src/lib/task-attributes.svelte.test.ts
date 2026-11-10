@@ -280,3 +280,18 @@ test('失敗の読み直し中に引き出しが閉じたらトーストで知�
   expect(mocks.toast).toHaveBeenCalledWith('taskSaveFailed', 'alert');
   expect(mocks.toast).toHaveBeenCalledTimes(1);
 });
+
+test('他の欄から停止した後も無言で捨てず、古い読み取りでは停止を解除しない', async () => {
+  const editor = taskAttributes('aoba', 'w', 'stopped-direct');
+  const rejected = vi.fn();
+  const detach = editor.attach({ stale: vi.fn(), rejected });
+  editor.observe(detail(), 0);
+  await editor.explain({ ok: false, status: 409, error: { code: 'workspace_closed', message: 'closed' } }, 'done');
+  editor.observe(detail(), 0);
+  editor.points.choose(5);
+  await settle();
+  expect(mocks.call).not.toHaveBeenCalled();
+  expect(mocks.toast).toHaveBeenCalledWith('workspaceClosedReadOnly', 'alert');
+  expect(rejected).toHaveBeenCalledWith('workspaceClosedReadOnly');
+  detach();
+});

@@ -120,6 +120,7 @@ export class TaskAttributes {
   private observers = new Set<Observer>();
   private stopped = false;
   private stoppedAt = -Infinity;
+  private stoppedMessage = '';
   constructor(
     readonly slug: string,
     readonly workspaceId: string,
@@ -162,6 +163,14 @@ export class TaskAttributes {
     this.candidatesFailed = !result.ok;
     this.candidates = result.ok ? result.data.members.map(({ id, name }) => ({ id, name })) : null;
   }
+  private stop(message: string): string {
+    this.stopped = true;
+    this.stoppedAt = performance.now();
+    this.stoppedMessage = message;
+    this.points.pending = null;
+    this.assignee.pending = null;
+    return message;
+  }
   async explain(
     result: Exclude<ApiResult<unknown>, { ok: true }>,
     doneReason: string,
@@ -176,8 +185,7 @@ export class TaskAttributes {
         }
       }
       if (result.status === 409) {
-        this.stopped = true;
-        return t('workspaceClosedReadOnly', { workspace: t('workspace') });
+        return this.stop(t('workspaceClosedReadOnly', { workspace: t('workspace') }));
       }
     }
     if (result.status === 409 || result.status === 404) {
@@ -187,12 +195,10 @@ export class TaskAttributes {
         { slug: this.slug },
       );
       if (!latest.ok) {
-        if (latest.status === 404) this.stopped = true;
-        return latest.status === 404 ? t('taskGone', { task: t('task') }) : t('taskSaveFailed');
+        return latest.status === 404 ? this.stop(t('taskGone', { task: t('task') })) : t('taskSaveFailed');
       }
       if (latest.data.task.completed_at !== null) {
-        this.stopped = true;
-        return doneReason;
+        return this.stop(doneReason);
       }
       if (result.status === 404) {
         if (!missingAssignee) return t('taskSaveFailed');
@@ -220,7 +226,10 @@ export class TaskAttributes {
     field: K,
     value: K extends 'points' ? TaskDetail['points'] : string,
   ): Promise<{ value: typeof value; after: () => Promise<void> } | string> {
-    if (this.stopped) return t('taskSaveFailed');
+    if (this.stopped) {
+      await this.reject(this.stoppedMessage);
+      return this.stoppedMessage;
+    }
     const input = { workspace_id: this.workspaceId, task_id: this.taskId };
     const result =
       field === 'points'
@@ -238,11 +247,6 @@ export class TaskAttributes {
           : t('taskAssigneeDone', { task: t('task'), done: t('done'), assignee: t('assignee') }),
         field === 'assignee',
       );
-      if (this.stopped) {
-        this.stoppedAt = performance.now();
-        this.points.pending = null;
-        this.assignee.pending = null;
-      }
       await this.reject(message);
       return message;
     }
