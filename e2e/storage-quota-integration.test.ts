@@ -77,7 +77,7 @@ test('全ワークスペースで容量を共有し、80%超過の管理者通�
       return notificationList.output.parse(await response.json());
     };
     const storage = async () => {
-      const response = await post(admin, organizationInfo);
+      const response = await post(admin, organizationInfo, { include_storage: true });
       expect(response.status()).toBe(200);
       return organizationInfo.output.parse(await response.json()).storage;
     };
@@ -98,6 +98,9 @@ test('全ワークスペースで容量を共有し、80%超過の管理者通�
     expect((await notifications(admin)).notifications).toHaveLength(0);
     expect((await notifications(secondAdmin)).notifications).toHaveLength(0);
     expect((await upload(secondWorkspaceId!, 1)).status()).toBe(200);
+    // 通知の集計・配信は保存応答を待たせず継続するため、配信完了を待つ。
+    await expect.poll(async () => (await notifications(admin)).notifications.length).toBe(1);
+    await expect.poll(async () => (await notifications(secondAdmin)).notifications.length).toBe(1);
     const warning = (await notifications(admin)).notifications[0];
     expect(warning).toMatchObject({
       kind: 'attachment_quota_warning',

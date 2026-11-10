@@ -22,7 +22,7 @@ export const myOrganizationsOperation = implement(myOrganizations, async ({ acco
 
 export const organizationInfoOperation = implement(
   organizationInfo,
-  async ({ db, actor, organization, defer, tools }) => {
+  async ({ db, actor, organization, defer, tools, input }) => {
     // permission: 'organization' は users の行がある人だけを通す。型の上の null を 404 で閉じる
     const userId = actor.userId;
     if (userId === null) throw new ApiError(404, 'not_found');
@@ -73,12 +73,13 @@ export const organizationInfoOperation = implement(
       ]),
     );
 
-    const storage = actor.isAdmin
-      ? {
-          ...(await readOrganizationStorageUsage(db)),
-          quota_bytes: (await tools.readOrganization()).attachmentQuotaBytes,
-        }
-      : null;
+    const storage =
+      actor.isAdmin && input.include_storage === true
+        ? {
+            ...(await readOrganizationStorageUsage(db)),
+            quota_bytes: (await tools.readOrganization()).attachmentQuotaBytes,
+          }
+        : null;
 
     return {
       storage,

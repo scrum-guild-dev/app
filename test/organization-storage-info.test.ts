@@ -67,7 +67,11 @@ test('管理者だけに全ワークスペースと組織 Wiki の容量と上�
   const otherWorkspace = await createWorkspace(other, otherAdmin.id);
   await createAttachment(other, otherWorkspace.id, otherAdmin.id, { size_bytes: 999 });
 
-  const adminResponse = await post(app, organizationInfo, { slug: organization.slug, token: admin.token });
+  const adminResponse = await post(app, organizationInfo, {
+    slug: organization.slug,
+    token: admin.token,
+    body: { include_storage: true },
+  });
   expect(adminResponse.status).toBe(200);
   const result = (await adminResponse.json()) as OutputOf<typeof organizationInfo>;
   expect(result.storage).toEqual({
@@ -75,11 +79,15 @@ test('管理者だけに全ワークスペースと組織 Wiki の容量と上�
     quota_bytes: 10000,
     organization_wiki_bytes: wikiBytes,
     workspaces: [
-      { id: first.id, name: 'あおば', used_bytes: 17 },
-      { id: closed.id, name: 'ひばり', used_bytes: 23 },
+      { id: first.id, name: 'あおば', closed_at: null, used_bytes: 17 },
+      { id: closed.id, name: 'ひばり', closed_at: AT, used_bytes: 23 },
     ],
   });
-  const memberResponse = await post(app, organizationInfo, { slug: organization.slug, token: member.token });
+  const memberResponse = await post(app, organizationInfo, {
+    slug: organization.slug,
+    token: member.token,
+    body: { include_storage: true },
+  });
   expect(memberResponse.status).toBe(200);
   const memberResult = (await memberResponse.json()) as OutputOf<typeof organizationInfo>;
   expect(memberResult.storage).toBeNull();
