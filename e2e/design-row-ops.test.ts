@@ -478,7 +478,7 @@ for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
     expect(box.x).toBeGreaterThanOrEqual(bounds.x);
     expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
     expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(320);
+    expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
     const dimensions = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: window.innerWidth,
@@ -490,6 +490,13 @@ for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
     }));
     expect(text.scroll).toBeGreaterThan(text.client);
     await expect(chip.locator('.ico')).toHaveCount(1);
+    // 行に説明や他の属性が並んでも、包み自体を残りの幅まで縮める。
+    const end = row.locator('.entry-end');
+    await end.evaluate((element) => (element.style.width = '160px'));
+    const endBox = (await end.boundingBox())!;
+    const wrapper = (await row.locator('.attr-chip').last().boundingBox())!;
+    expect(wrapper.width).toBeLessThanOrEqual(endBox.width);
+    expect(wrapper.x + wrapper.width).toBeLessThanOrEqual(endBox.x + endBox.width + 1);
   });
 }
 
