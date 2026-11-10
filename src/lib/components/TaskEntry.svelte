@@ -395,7 +395,7 @@
     attrs?.delegatees !== undefined && (task.delegatee !== null || delegateePending !== null),
   );
   const delegateeOptions = $derived.by(() => {
-    // 外す項目は、選んでいる人（開いた最初のフォーカス）から矢印1つで届かないよう末尾に置く
+    // 外す項目は、名簿の人の後ろ（末尾）に置く。矢印は端で回り込むので、選んでいる人から1つで届くこともある（外しても付け直せる）
     const options: { value: string; text: string }[] = [];
     for (const person of attrs?.delegatees ?? []) options.push({ value: person.id, text: person.name });
     const current = task.delegatee;
