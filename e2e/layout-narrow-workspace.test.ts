@@ -193,7 +193,7 @@ test('スプリントが 390px で横にはみ出さず、押せる要素が 44p
   });
 });
 
-// バックログのタスクの行の密度（#999）。行の高さを詰めても、押せる範囲（::after で 44px に広げたもの）が隣と重ならない。
+// バックログのタスクの行の密度（#1038）。行の高さを詰めても、押せる範囲（::after で 44px に広げたもの）が隣と重ならない。
 // 押せる範囲の汎用の検査は、重なっても上に描かれた方に当たれば通るので、広げた範囲の箱を直接比べる
 test('バックログのタスクの行が 390px で今より低く、チップと完了の丸の押せる範囲が 44px で隣と重ならない', async ({
   page,
@@ -205,8 +205,57 @@ test('バックログのタスクの行が 390px で今より低く、チップ�
   });
   await expect(row).toBeVisible();
   await page.waitForLoadState('networkidle');
-  for (const theme of LAYOUT_THEMES) {
+  for (const theme of A11Y_THEMES) {
     await applyTheme(page, theme);
+    const chips = row.locator('.entry-chips');
+    await chips.evaluate((el) => {
+      el.scrollLeft = 0;
+    });
+    await row.scrollIntoViewIfNeeded();
+    await chips.locator('.chip-btn').first().focus();
+    const before = await row.locator('.entry-actions').boundingBox();
+    const strip = await chips.evaluate((el) => ({ width: el.clientWidth, total: el.scrollWidth }));
+    expect(strip.total, `${theme}: 属性に横送りの続きがある`).toBeGreaterThan(strip.width);
+    const buttons = chips.locator('.chip-btn');
+    await expect(buttons).toHaveCount(5);
+    const firstY = (await buttons.first().boundingBox())!.y;
+    for (const [index, button] of (await buttons.all()).entries()) {
+      // Tabで、隠れていたチップも横送りされて押せる。
+      if (index > 0) await page.keyboard.press('Tab');
+      await expect(button).toBeFocused();
+      const ring = await button.evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        const outside = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+        const clip = el.closest('.entry-chips')!.getBoundingClientRect();
+        return {
+          visible: style.outlineStyle !== 'none',
+          fits:
+            rect.top - outside >= clip.top &&
+            rect.bottom + outside <= clip.bottom &&
+            rect.left - outside >= clip.left &&
+            rect.right + outside <= clip.right,
+        };
+      });
+      expect(ring.visible, `${theme}: フォーカスの輪がある`).toBe(true);
+      expect(ring.fits, `${theme}: フォーカスの輪が横送り領域に切られない`).toBe(true);
+      const box = (await button.boundingBox())!;
+      const viewport = (await chips.boundingBox())!;
+      expect(Math.abs(box.y - firstY)).toBeLessThanOrEqual(1);
+      expect(box.x).toBeGreaterThanOrEqual(viewport.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.x + viewport.width + 1);
+    }
+    expect(await chips.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+    expect(await row.locator('.entry-actions').boundingBox()).toEqual(before);
+    // 横送りの外にある操作も、属性のメニューも隠れずに使える。
+    await buttons.last().click();
+    await expect(chips.getByRole('menu')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(buttons.last()).toBeFocused();
+    await row.locator('.entry-actions .row-menu-btn').click();
+    await expect(row.locator('.entry-actions [role="menu"]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expectNoA11yViolations(page, 'backlog');
     const result = await row.evaluate((entry) => {
       // 押せる範囲は ::after で広げるので、疑似要素の大きさから箱を作る。見た目の大きさが 44px 以上ならそのまま使う
       const targets = [...entry.querySelectorAll<HTMLElement>('.entry-end button, .entry-end a, .entry-title')].filter(
@@ -219,23 +268,55 @@ test('バックログのタスクの行が 390px で今より低く、チップ�
         const h = Math.max(rect.height, after.content === 'none' ? 0 : parseFloat(after.height) || 0);
         const cx = rect.x + rect.width / 2;
         const cy = rect.y + rect.height / 2;
-        return { name: el.textContent?.trim().slice(0, 12) ?? '', x: cx - w / 2, y: cy - h / 2, w, h };
+        const clip = el.closest('.entry-chips')?.getBoundingClientRect();
+        return {
+          name: el.textContent?.trim().slice(0, 12) ?? '',
+          x: cx - w / 2,
+          y: cy - h / 2,
+          w,
+          h,
+          left: clip?.left ?? -Infinity,
+          right: clip?.right ?? Infinity,
+        };
       });
       return { height: entry.getBoundingClientRect().height, boxes };
     });
-    // 以前は約 181px（seed のこの行を本番と同じ build の 390px で測った。2026-11-08）。いまは約 170px。書体の差に 5px の許容
-    expect(result.height, `${theme}: 行の高さ`).toBeLessThanOrEqual(175);
+    // #999 の約170pxから1段分を削り、130px以内（同じseedの行）にする。
+    expect(result.height, `${theme}: 行の高さ`).toBeLessThanOrEqual(130);
     for (const box of result.boxes) {
       expect(box.w, `${theme}: ${box.name} の幅`).toBeGreaterThanOrEqual(43.5);
       expect(box.h, `${theme}: ${box.name} の高さ`).toBeGreaterThanOrEqual(43.5);
     }
     for (const [i, a] of result.boxes.entries()) {
       for (const b of result.boxes.slice(i + 1)) {
-        const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        // 横送りで隠れた部分は当たり判定から除く。44px の大きさは上で全チップを検査する。
+        const overlapX = Math.min(a.x + a.w, b.x + b.w, a.right, b.right) - Math.max(a.x, b.x, a.left, b.left);
         const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
         expect(overlapX > 0.5 && overlapY > 0.5, `${theme}: ${a.name} と ${b.name} の押せる範囲が重なる`).toBe(false);
       }
     }
+  }
+});
+
+// 書き込めない行は属性の横送りを持たず、表示だけの情報をそのまま読める。
+test('終了したバックログの行は属性の横送りを持たず、390pxでも読める', async ({ page }) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await rewriteOperation(page, workspaceInfo, { slug: 'aoba' }, (output) => ({
+    ...output,
+    closed_at: '2026-10-20T00:00:00.000Z',
+  }));
+  await page.goto(WORKSPACE);
+  const row = page.locator('.entry', {
+    has: page.getByRole('link', { name: 'ポイント付与のバッチを作る', exact: true }),
+  });
+  await expect(row).toBeVisible();
+  await expect(row.locator('.chip-btn')).toHaveCount(0);
+  await expect(row.locator('.entry-chips')).not.toHaveAttribute('role', 'group');
+  for (const theme of A11Y_THEMES) {
+    await applyTheme(page, theme);
+    expect(await row.locator('.entry-chips').evaluate((el) => getComputedStyle(el).display)).toBe('contents');
+    expect(await findOverflowViolations(page)).toEqual([]);
+    await expectNoA11yViolations(page, 'backlog');
   }
 });
 

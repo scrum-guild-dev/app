@@ -539,17 +539,22 @@
     return `<div class="draft-row" data-draft-row>${icon("plus")}<label class="visually-hidden" for="${id}">${esc(label)}</label>` +
       `<input class="input" id="${id}" data-draft="${kind}:${key}" placeholder="${esc(placeholder ?? `${label}（題を打って Enter）`)}" autocomplete="off" enterkeyhint="done"></div>`;
   }
-  // 属性のチップ。タスクの属性（pts か who）を、行のチップを押して後から決める。値がなければ薄い破線の形（未設定）。
+  // 属性のチップ。タスクの属性（期日、リポジトリ、区分、ポイント、担当）を、行のチップを押して後から決める。値がなければ薄い破線の形（未設定）。
   // 押すと値の一覧（行の「⋯」と同じメニュー）が開き、選ぶと見本の中で保存する
   function attrChip(x, name) {
-    const isPts = name === "pts";
-    const label = isPts ? t("points") : t("assignee");
-    const set = isPts ? x.pts != null : Boolean(x.who);
-    const shown = isPts ? (set ? `${x.pts} pt` : label) : (set ? user(x.who).name : label);
-    const options = isPts
-      ? [["", "未見積もり"], ...[0, 1, 2, 3, 5, 8, 13].map((v) => [String(v), `${v} pt`])]
-      : [["", `${label}なし`], ...Object.entries(D.users).filter(([, u]) => !u.left).map(([id, u]) => [id, u.name])];
-    const current = isPts ? (x.pts == null ? "" : String(x.pts)) : (x.who || "");
+    const cat = categoryOf(x);
+    const config = {
+      pts: { label: t("points"), current: x.pts == null ? "" : String(x.pts), options: [["", "未見積もり"], ...[0, 1, 2, 3, 5, 8, 13].map((v) => [String(v), `${v} pt`])] },
+      who: { label: t("assignee"), current: x.who || "", options: [["", `${t("assignee")}なし`], ...Object.entries(D.users).filter(([, u]) => !u.left).map(([id, u]) => [id, u.name])] },
+      due: { label: t("due"), current: dueOf(x)?.date || "", options: [["", "期日なし"], [D.today, "今日まで"], [D.weekEnd, "今週まで"]] },
+      repo: { label: "リポジトリ", current: x.repo || "", options: [["", "リポジトリなし"], ...Object.entries(D.repositories).map(([id, r]) => [id, r.name])] },
+      cat: { label: t("category"), current: cat?.id || "", options: [["", "区分なし"], ...Object.entries(D.categories).map(([id, c]) => [id, c.name])] },
+    }[name];
+    const { label, current, options } = config;
+    const set = current !== "";
+    const shown = set ? (name === "who" ? user(current).name : options.find(([value]) => value === current)?.[1] || current) : label;
+    const locked = name === "cat" && cat?.inherited ? "親から引き継いだ区分" : name === "due" && dueOf(x)?.fromSource ? "取り込み元の期日" : null;
+    if (locked) return `<span class="row-menu"><button class="chip chip-btn" type="button" aria-disabled="true" aria-label="${label}: ${esc(shown)}" title="${locked}"><span class="chip-text">${esc(shown)}</span></button></span>`;
     const items = options.map(([value, text]) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${value === current}" data-chip-set="${x.id}:${name}:${value}">${value === current ? icon("check") : ""}<span>${esc(text)}</span></button></li>`).join("");
     return `<span class="row-menu"><button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-row-menu data-chip-for="${x.id}:${name}" aria-haspopup="menu" aria-expanded="false" aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(shown)}"><span class="chip-text">${esc(shown)}</span></button>` +
       `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" hidden>${items}</ul></span>`;
@@ -577,23 +582,23 @@
       : `<button class="sun" type="button" data-sun="${x.id}" aria-pressed="${x.todayOn === D.today}" aria-label="今日やる: ${esc(x.title)}" title="今日やる" aria-disabled="false">${icon("sun")}</button>`;
     const title = opts.noLink ? `<span class="entry-title">${titleOf(x)}</span>` : `<a class="entry-title" href="#" data-task="${x.id}">${titleOf(x)}</a>`;
     const mark = opts.mark || {};
-    return `<div class="entry ${x.doneAt ? "is-done" : ""}${opts.order ? " has-grip" : ""}${mark.state ? ` ${mark.state}` : ""}"${dropAttr(mark)}>
+    return `<div class="entry ${x.doneAt ? "is-done" : ""}${opts.order ? " has-grip" : ""}${compact ? " has-attrs" : ""}${mark.state ? ` ${mark.state}` : ""}"${dropAttr(mark)}>
       ${opts.order ? gripCell(Boolean(x.doneAt)) : ""}${lead}
       <div class="entry-main">
         ${title}
         <span class="entry-meta">
           ${opts.showWs ? `<span class="tag">${esc(D.workspaces[x.ws].name)}</span>` : ""}
-          ${opts.showSprint ? sprintTag(x) : ""}${repoTag(x)}${x.story ? "" : categoryTag(x.cat)}${sourceKey(x)}
+          ${opts.showSprint ? sprintTag(x) : ""}${compact ? "" : repoTag(x)}${!compact && !x.story ? categoryTag(x.cat) : ""}${sourceKey(x)}
           ${showParent && parent ? `<span>${icon("flag")} ${esc(parent)}</span>` : ""}
           ${compact && x.todayOn === D.today ? `<span class="entry-today">${icon("sun")}今日やる</span>` : ""}${x.doneAt ? `<span>${t("done")} ${esc(x.doneAt)}</span>` : colName(x) ? `<span class="status-dot">${esc(colName(x))}</span>` : ""}
           ${taskFlags(x)}${opts.meta ? opts.meta(x) : ""}
         </span>
       </div>
-      <div class="entry-end">${taskDue(x)}${opts.hidePts ? "" : compact ? attrChip(x, "pts") : pts(x.pts)}${opts.showAssignee ? (compact ? attrChip(x, "who") : avatarOf(x.who)) : ""}${compact ? rowMenu(x.title, [
+      <div class="entry-end"><div class="entry-attributes"><div class="entry-chips"${compact ? ` role="group" aria-label="${esc(x.title)}"` : ""}>${compact ? attrChip(x, "due") + attrChip(x, "repo") + attrChip(x, "cat") : taskDue(x)}${opts.hidePts ? "" : compact ? attrChip(x, "pts") : pts(x.pts)}${opts.showAssignee ? (compact ? attrChip(x, "who") : avatarOf(x.who)) : ""}</div></div><div class="entry-actions">${compact ? rowMenu(x.title, [
         { attr: `data-sun="${x.id}"`, label: x.todayOn === D.today ? "今日やるを外す" : "今日やる", icon: "sun" },
         ...orderItems(opts.order),
         { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除する`, icon: "trash", danger: true },
-      ], x.id) : ""}${opts.actions ? opts.actions(x) : doneControl(x)}</div>
+      ], x.id) : ""}${opts.actions ? opts.actions(x) : doneControl(x)}</div></div>
     </div>`;
   }
   // opts.empty があれば、空のときに台帳の代わりに出す（emptyState で作る）
@@ -3581,7 +3586,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if ((el = hit("data-chip-set"))) {
       const [id, name, value] = el.dataset.chipSet.split(":");
       const x = task(id);
-      if (x) { if (name === "pts") x.pts = value === "" ? null : Number(value); else x.who = value || null; }
+      if (x) { if (name === "pts") x.pts = value === "" ? null : Number(value); else if (["who", "due", "repo", "cat"].includes(name)) x[name] = value || null; }
       redrawAll(); document.querySelector(`[data-chip-for="${id}:${name}"]`)?.focus(); toast(`${icon("check")}保存しました`); return;
     }
     // 組織の切り替えを開閉する。外を押したら閉じる（押したものの動きは続ける）
