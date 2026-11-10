@@ -271,3 +271,29 @@ test('404 の後で候補から消えた親を解除し、親なしで再送で�
   await sheet.getByRole('button', { name: '作る', exact: true }).click();
   await expect(sheet).not.toBeVisible();
 });
+
+test('起票前の本文にファイルを貼る・落とす操作でアップロードせず、本文を保つ', async ({ page, context, baseURL }) => {
+  if (!baseURL) throw new Error('baseURL が無い');
+  await signIn(context, baseURL, 'admin');
+  await setup(page, baseURL);
+  const uploads: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/attachment-upload')) uploads.push(request.url());
+  });
+  await page.getByRole('button', { name: '起票', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: '起票', exact: true });
+  await sheet.getByLabel('タイトル', { exact: true }).fill('添付せず作る');
+  const body = sheet.getByLabel('本文', { exact: true });
+  await body.fill('元の本文');
+  const prevented = await body.evaluate((element) => {
+    const data = new DataTransfer();
+    data.items.add(new File(['sample'], '架空の画像.png', { type: 'image/png' }));
+    element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    return !element.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
+  });
+  expect(prevented).toBe(true);
+  await expect(body).toHaveValue('元の本文');
+  await sheet.getByRole('button', { name: '作る', exact: true }).click();
+  await expect(sheet).not.toBeVisible();
+  expect(uploads).toEqual([]);
+});

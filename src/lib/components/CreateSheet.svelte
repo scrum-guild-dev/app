@@ -21,7 +21,7 @@
   const uid = $props.id();
   let dialog: HTMLDialogElement;
   let trigger: HTMLButtonElement | null = null;
-  let titleInput: HTMLInputElement;
+  let titleInput = $state<HTMLInputElement>();
   let discard: ReturnType<typeof ConfirmDialog>;
   let open = $state(false);
   let confirming = $state(false);
@@ -66,7 +66,7 @@
     open = true;
     await tick();
     dialog.showModal();
-    titleInput.focus();
+    titleInput?.focus();
     void loadChoices();
   }
 
@@ -94,7 +94,7 @@
 
   // 遷移が終わる直前に開いたときも、SvelteKit のフォーカス復帰の後で題へ置く。
   afterNavigate(() => {
-    if (open && dialog.open && !confirming && !dialog.contains(document.activeElement)) titleInput.focus();
+    if (open && dialog.open && !confirming && !dialog.contains(document.activeElement)) titleInput?.focus();
   });
 
   beforeNavigate((navigation) => {
@@ -192,10 +192,9 @@
     showToast(t('createSheetCreated', { kind: t(createdKind), title: createdTitle }), 'check', {
       label: t('createSheetOpen'),
       run: () => {
+        const href = `${resolve('/[slug]/w/[id]', { slug, id: workspaceId })}?${createdKind}=${encodeURIComponent(createdId)}`;
         // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve 済みのバックログへ作成対象のクエリを足す
-        void goto(
-          `${resolve('/[slug]/w/[id]', { slug, id: workspaceId })}?${createdKind}=${encodeURIComponent(createdId)}`,
-        );
+        void goto(href);
       },
     });
     // 済んだ作成を読み直しの失敗で失敗扱いにしない。
@@ -218,7 +217,7 @@
     // Chromium が cancel を飛ばして閉じても、書きかけを失わせない。
     if (open && !dialog.open) {
       dialog.showModal();
-      titleInput.focus();
+      titleInput?.focus();
       void close();
     }
   }}
@@ -353,6 +352,13 @@
                   ><span class="field-label">{t('due')}</span><input
                     class="input"
                     type="date"
+                    onkeydown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        closePanel();
+                      }
+                    }}
                     bind:value={due}
                   /></label
                 >
@@ -369,7 +375,8 @@
             </AttrChip>
           {/if}
         </div>
-        {#if loading}<p role="status">{t('loading')}</p>{/if}
+        <span class="visually-hidden" role="status">{loading ? t('loading') : ''}</span>
+        {#if loading}<p aria-hidden="true">{t('loading')}</p>{/if}
         {#if choicesFailed}<p class="field-error" role="alert">{t('createChoicesFailed')}</p>
           <button class="btn" type="button" disabled={loading || busy} onclick={() => void loadChoices()}
             >{t('retry')}</button

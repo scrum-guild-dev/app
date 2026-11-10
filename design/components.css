@@ -2540,7 +2540,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 }
 .create-sheet-title { font-size: var(--text-lg); }
 .create-sheet .textarea { min-height: 10rem; }
-.create-sheet-attrs { display: flex; flex-shrink: 0; gap: var(--space-2); overflow-x: auto; padding-block: var(--space-2); }
+.create-sheet-attrs { display: flex; flex-shrink: 0; gap: var(--space-2); overflow-x: auto; padding: var(--space-2) var(--space-1); }
 .create-sheet-attrs > * { flex-shrink: 0; }
 .create-sheet-attrs .chip-btn { min-height: 44px; }
 
