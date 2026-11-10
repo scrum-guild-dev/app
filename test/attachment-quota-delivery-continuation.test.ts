@@ -31,7 +31,7 @@ async function fixture(admins = 1) {
   return { organization, users, db, common, notifications };
 }
 
-describe('容量警告の反証第2周', () => {
+describe('容量警告の配信継続と掃除', () => {
   test('周期確保の直後に上限が上がり周期が取り消されたら、古い上限の通知を配信しない', async () => {
     const target = await fixture();
     let raised = false;
