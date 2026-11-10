@@ -440,6 +440,9 @@ test('見本のチップ: ロックの理由、読み込み中、再試行と離
   await locked.focus();
   await locked.press('Enter');
   await expect(locked).not.toHaveAttribute('aria-expanded');
+  const lockedAssignee = examples.locator('[data-chip-example="locked"] .attr-chip').last().locator('.chip-btn');
+  await expect(lockedAssignee).toHaveAttribute('aria-disabled', 'true');
+  await expect(lockedAssignee).toHaveAccessibleDescription('このタスクは完了になっているため、担当は替えられません。');
 
   const loading = examples.locator('[data-chip-example="loading"] .attr-chip').last();
   await loading.locator('.chip-btn').click();
