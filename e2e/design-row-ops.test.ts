@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures.ts';
 import type { Page } from '@playwright/test';
+import { A11Y_THEMES, applyTheme } from './helpers.ts';
 
 // 見本（design/）の、行で直に操作する部品（空の行、チップ、「⋯」、自動保存、取り消せるトースト、「/」の小窓）を
 // バックログとスプリントの見本で通す。見本はアプリの配信対象外なので、共有の見本ファイルをそのまま返す。
@@ -338,17 +339,38 @@ test('見本の引き出し: タイトルとリンクを保存すると、見出
   await expect(drawer.locator('a[data-drawer-open]')).toHaveCount(0);
 });
 
-test('見本のバックログ: 幅 390px で、チップの上端の外側 20px を押してもチップが押される', async ({ page }) => {
+test('見本のバックログ: 幅390pxで横送りした各チップを44px四方で押せる', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openSample(page, 'backlog.html');
-  const chip = page.locator('.chip-btn').first();
-  await chip.scrollIntoViewIfNeeded();
-  const hit = await chip.evaluate((el) => {
-    const r = el.getBoundingClientRect();
-    const target = document.elementFromPoint(r.left + r.width / 2, r.top - 10);
-    return target === el || el.contains(target);
-  });
-  expect(hit).toBe(true);
+  const chips = page.locator('.tree .entry.has-attrs .entry-chips').first().locator('.chip-btn');
+  await expect(chips).toHaveCount(5);
+  for (const theme of A11Y_THEMES) {
+    await applyTheme(page, theme);
+    for (const chip of await chips.all()) {
+      await chip.scrollIntoViewIfNeeded();
+      const result = await chip.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const offsets = [
+          [0, 0],
+          [-21, 0],
+          [21, 0],
+          [0, -21],
+          [0, 21],
+        ];
+        return {
+          width: r.width,
+          height: r.height,
+          hits: offsets.every(([x, y]) => {
+            const target = document.elementFromPoint(r.left + r.width / 2 + x, r.top + r.height / 2 + y);
+            return target === el || el.contains(target);
+          }),
+        };
+      });
+      expect(result.width, theme).toBeGreaterThanOrEqual(44);
+      expect(result.height, theme).toBeGreaterThanOrEqual(44);
+      expect(result.hits, theme).toBe(true);
+    }
+  }
 });
 
 test('見本のバックログ: 下の行を先に、上の行を後に消し、古い方から取り消しても元の並びに戻る', async ({ page }) => {
