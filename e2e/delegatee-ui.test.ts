@@ -3,7 +3,12 @@ import { signIn } from './helpers.ts';
 import { SEED_API_TOKENS } from '../seed/api-tokens.ts';
 import { operationPath } from '../src/shared/operations/define.ts';
 import { taskCreate, taskDelete, taskDetail, taskDelegate } from '../src/shared/operations/task/index.ts';
-import { delegateeList, delegateeDelete, delegateeUpdate } from '../src/shared/operations/organization/index.ts';
+import {
+  delegateeList,
+  delegateeDelete,
+  delegateeUpdate,
+  delegateeCreate,
+} from '../src/shared/operations/organization/index.ts';
 
 import { failOperation, mockOperation, routeOperation } from './operations.ts';
 
@@ -29,10 +34,33 @@ test('自分用の引き出しで依頼先を作成・付け外しし、設定�
   const url = `/personal/w/${workspace}?task=${task.id}`;
   try {
     await page.goto(url);
-    await page.getByRole('textbox', { name: '新しい依頼先の名前', exact: true }).fill(name);
-    await page.getByRole('button', { name: `「${name}」を足す`, exact: true }).click();
+    const newName = page.getByRole('textbox', { name: '新しい依頼先の名前', exact: true });
+    await newName.fill(name);
+    let releaseCreate!: () => void;
+    const createGate = new Promise<void>((resolve) => {
+      releaseCreate = resolve;
+    });
+    let createCalls = 0;
+    const restoreCreate = await routeOperation(page, delegateeCreate, { slug: 'personal' }, async (call) => {
+      createCalls++;
+      await createGate;
+      await call.passThrough();
+    });
+    const add = page.getByRole('button', { name: `「${name}」を足す`, exact: true });
+    try {
+      await add.click();
+      await expect(add).toHaveAttribute('aria-disabled', 'true');
+      await expect.poll(() => createCalls).toBe(1);
+      await newName.press('Enter');
+      expect(createCalls).toBe(1);
+    } finally {
+      releaseCreate();
+    }
     const select = page.getByRole('combobox', { name: '依頼先', exact: true });
     await expect(select.locator('option:checked')).toHaveText(name);
+    await restoreCreate();
+    expect(createCalls).toBe(1);
+    await expect(newName).toBeFocused();
     const detail = await request.post(operationPath(taskDetail, 'personal'), { headers, data: input });
     const assigned = taskDetail.output.parse(await detail.json()).task.assignee;
     expect(assigned).not.toBeNull();
@@ -55,6 +83,27 @@ test('自分用の引き出しで依頼先を作成・付け外しし、設定�
     await expect(select).toHaveAttribute('aria-disabled', 'false');
     await expect(select.locator('option:checked')).toHaveText(name);
     await restore();
+    // 依頼先が消えた場合と、タスクの状態が変わった場合は、タスク詳細も読み直す。
+    for (const status of [404, 409]) {
+      const restoreConflict = await failOperation(
+        page,
+        taskDelegate,
+        { slug: 'personal' },
+        status,
+        status === 404 ? 'not_found' : 'conflict',
+      );
+      const refreshed = page.waitForResponse((response) =>
+        response.url().endsWith(operationPath(taskDetail, 'personal')),
+      );
+      await select.selectOption('');
+      await refreshed;
+      await expect(
+        page.getByRole('alert').filter({ hasText: '依頼先またはタスクの状態が変わった可能性' }),
+      ).toBeVisible();
+      await expect(select).toHaveAttribute('aria-disabled', 'false');
+      await expect(select.locator('option:checked')).toHaveText(name);
+      await restoreConflict();
+    }
     await select.selectOption('');
     await expect(select.locator('option:checked')).toHaveText('依頼先なし');
     await expect(select).toHaveAttribute('aria-disabled', 'false');
@@ -66,7 +115,7 @@ test('自分用の引き出しで依頼先を作成・付け外しし、設定�
     const row = section.locator('.field').filter({ has: page.getByLabel(name, { exact: true }) });
     await row.getByRole('textbox').fill(renamed);
     await row.getByRole('button', { name: '名前を保存する', exact: true }).click();
-    await expect(section.getByLabel(renamed, { exact: true })).toBeVisible();
+    await expect(section.getByRole('textbox', { name: renamed, exact: true })).toBeVisible();
     await page.goto(url);
     await expect(select.locator('option:checked')).toHaveText(renamed);
     await page.goto('/personal/admin');
@@ -78,7 +127,7 @@ test('自分用の引き出しで依頼先を作成・付け外しし、設定�
     const dialog = page.getByRole('dialog', { name: '依頼先を削除しますか' });
     await expect(dialog).toContainText('未完了のタスクから外します');
     await dialog.getByRole('button', { name: '削除する', exact: true }).click();
-    await expect(section.getByLabel(renamed, { exact: true })).toHaveCount(0);
+    await expect(section.getByRole('textbox', { name: renamed, exact: true })).toHaveCount(0);
     await page.goto(url);
     await expect(select.locator('option:checked')).toHaveText('依頼先なし');
   } finally {
@@ -124,11 +173,18 @@ test('名簿の別行の未保存入力を残し、削除を取り消すと元�
   const section = page.getByRole('region', { name: '依頼先', exact: true });
   await section.getByRole('textbox', { name: '依頼先A', exact: true }).fill('変更したA');
   await section.getByRole('textbox', { name: '依頼先B', exact: true }).fill('編集中のB');
-  await section
+  const saveA = section
     .locator('.field')
     .filter({ has: page.getByLabel('依頼先A', { exact: true }) })
-    .getByRole('button', { name: '名前を保存する', exact: true })
-    .click();
+    .getByRole('button', { name: '名前を保存する', exact: true });
+  const restoreRename = await failOperation(page, delegateeUpdate, { slug: 'personal' }, 409, 'conflict');
+  await saveA.click();
+  await expect(section.getByRole('alert')).toContainText('依頼先を更新できませんでした');
+  await expect(saveA).toHaveAttribute('aria-disabled', 'false');
+  await expect(section.getByRole('textbox', { name: '依頼先A', exact: true })).toHaveValue('変更したA');
+  await expect(section.getByRole('textbox', { name: '依頼先B', exact: true })).toHaveValue('編集中のB');
+  await restoreRename();
+  await saveA.click();
   await expect(section.getByRole('textbox', { name: '変更したA', exact: true })).toBeVisible();
   await expect(section.getByRole('textbox', { name: '依頼先B', exact: true })).toHaveValue('編集中のB');
   const remove = section
