@@ -21,6 +21,7 @@ export async function reconcileAttachmentQuotaWarning(env: Env, organizationId: 
   const bytes = Number(total?.bytes ?? 0);
   const quota = current.attachment_quota_bytes;
   if (bytes * 5 < quota * 4) {
+    if (current.attachment_quota_warned_at === null && current.attachment_quota_warning_pending_at === null) return;
     await common.batch([
       common.statement((q) => {
         let update = q
