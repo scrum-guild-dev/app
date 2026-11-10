@@ -238,9 +238,17 @@ export class TaskAttributes {
     field: K,
     value: K extends 'points' ? TaskDetail['points'] : string,
   ): Promise<{ value: typeof value; after: () => Promise<void> } | string> {
+    const doneReason =
+      field === 'points'
+        ? t('taskSaveConflict', { task: t('task'), done: t('done'), points: t('points') })
+        : t('taskAssigneeDone', { task: t('task'), done: t('done'), assignee: t('assignee') });
     if (this.stopped) {
-      await this.reject(this.stoppedFailure);
-      return this.stoppedFailure.message;
+      const failure =
+        this.stoppedFailure.reason === 'completed'
+          ? { ...this.stoppedFailure, message: doneReason }
+          : this.stoppedFailure;
+      await this.reject(failure);
+      return failure.message;
     }
     const input = { workspace_id: this.workspaceId, task_id: this.taskId };
     const result =
@@ -252,13 +260,7 @@ export class TaskAttributes {
             { slug: this.slug },
           );
     if (!result.ok) {
-      const failure = await this.explainFailure(
-        result,
-        field === 'points'
-          ? t('taskSaveConflict', { task: t('task'), done: t('done'), points: t('points') })
-          : t('taskAssigneeDone', { task: t('task'), done: t('done'), assignee: t('assignee') }),
-        field === 'assignee',
-      );
+      const failure = await this.explainFailure(result, doneReason, field === 'assignee');
       await this.reject(failure);
       return failure.message;
     }

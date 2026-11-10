@@ -332,3 +332,20 @@ test('引き出しの書きかけがある間は、行の広いstale通知で組
   detachRow();
   detachDrawer();
 });
+
+test('ポイントで完了に気づいた後の担当操作には、担当の失敗文を出す', async () => {
+  mocks.call
+    .mockResolvedValueOnce({ ok: false, status: 409, error: { code: 'conflict' } })
+    .mockResolvedValueOnce({ ok: true, data: { task: detail({ completed_at: '2026-11-10' }) } });
+  const editor = taskAttributes('aoba', 'w', 'stopped-field-reason');
+  const detach = editor.attach({ stale: vi.fn() });
+  editor.observe(detail(), 0);
+  editor.points.choose(5);
+  await settle();
+  editor.assignee.choose('member');
+  await settle();
+  expect(mocks.call).toHaveBeenCalledTimes(2);
+  expect(editor.assignee.error).toBe('taskAssigneeDone');
+  expect(mocks.toast).toHaveBeenLastCalledWith('taskAssigneeDone', 'alert');
+  detach();
+});
