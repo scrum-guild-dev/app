@@ -37,6 +37,7 @@ function row(id: string, overrides: Partial<TodayTask> = {}): TodayTask {
     is_today_completed: false,
     reopenable: false,
     assignee: null,
+    delegatee: null,
     repository: null,
     sprint: null,
     ...overrides,
@@ -167,6 +168,57 @@ test('行にワークスペース名の印が出る。持ち越しは日数の�
   await expect(entry('金曜が期日').locator('.entry-meta .chip')).toHaveCount(0);
   // 今日やると決めたものの区分では、期日が今日でも「期日は今日」を添えない
   await expect(entry('今日付けた印').locator('.entry-meta .chip')).toHaveCount(0);
+});
+
+// #906: 依頼先の付いた行は、印や期日に関わらず「依頼中」だけに出る。期日の早い順で、期日の無いものは後ろ
+test('依頼先の付いた行は「依頼中」に期日の早い順で依頼先の名前つきで出て、ほかの区分に出ず、太陽のボタンを出さない', async ({
+  page,
+}) => {
+  const asahi = { id: 'delegatee-1', name: 'アサヒ' };
+  const natsume = { id: 'delegatee-2', name: 'ナツメ' };
+  const tasks = [
+    row('依頼した期日なし', { delegatee: asahi }),
+    row('依頼した印つき', { delegatee: natsume, today_on: TODAY, due_on: '2026-11-06' }),
+    row('依頼した期日切れ', { delegatee: asahi, due_on: '2026-11-02' }),
+    row('自分でやる期日切れ', { due_on: '2026-11-01' }),
+  ];
+  await mockOperation(page, today, { slug: 'aoba' }, { tasks, sprint_goals: [] });
+  await page.goto('/aoba');
+
+  // 依頼中は、今日やると決めたものの後、今週が期日の前（今週が期日はここでは空なので出ない）
+  await expect(sectionHeadings(page)).toHaveText(['期日切れ', '今日やると決めたもの', '依頼中']);
+  const delegated = region(page, '依頼中');
+  await expect(delegated.locator('.section-count')).toHaveText('3 件');
+  await expect(delegated.locator('.entry-title')).toHaveText([
+    '依頼した期日切れ',
+    '依頼した印つき',
+    '依頼した期日なし',
+  ]);
+  await expect(region(page, '期日切れ').locator('.entry-title')).toHaveText(['自分でやる期日切れ']);
+  // 印のある依頼中の行は、今日やると決めたものに出ない（空の状態が出る）
+  await expect(region(page, '今日やると決めたもの').locator('.entry')).toHaveCount(0);
+  // 見出しの集計も、依頼中の行を期日切れと今日やると決めたものに数えない
+  await expect(tally(page, '期日切れ')).toHaveText('1');
+  await expect(tally(page, '今日やると決めたもの')).toHaveText('0');
+
+  const entry = (title: string) => delegated.locator('.entry', { hasText: title });
+  await expect(entry('依頼した期日切れ').locator('.entry-meta .props-note')).toHaveText('依頼先: アサヒ');
+  await expect(entry('依頼した印つき').locator('.entry-meta .props-note')).toHaveText('依頼先: ナツメ');
+  // 期日を過ぎた行には期日切れの印
+  await expect(entry('依頼した期日切れ').locator('.chip.is-danger')).toBeVisible();
+  // 依頼中の行に太陽のボタンは出さず、完了のボタンは出す
+  await expect(delegated.locator('.sun')).toHaveCount(0);
+  await expect(delegated.locator('.done-btn')).toHaveCount(3);
+  await expect(page.locator('.entry .sun')).toHaveCount(1);
+});
+
+test('依頼先の付いた行が無ければ「依頼中」の区分は出ない', async ({ page }) => {
+  await mockOperation(page, today, { slug: 'aoba' }, { tasks: ALL_SECTIONS, sprint_goals: [] });
+  await page.goto('/aoba');
+
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+  await expect(region(page, '期日切れ')).toBeVisible();
+  await expect(region(page, '依頼中')).toHaveCount(0);
 });
 
 test('今日完了した行は静止した完了の印を持ち、判を押す動き（.is-new）は付かない', async ({ page }) => {
@@ -520,4 +572,25 @@ test('完了を 409 の conflict で断られた後に今日を読み直せな�
   await page.getByRole('button', { name: '完了にする: 読み直せない行' }).click();
   await expect(page.getByRole('status').filter({ hasText: '完了にできませんでした' })).toBeVisible();
   await expect(page.getByText('このタスクは見つかりません')).toHaveCount(0);
+});
+
+// #906: seed の自分用の組織（ユズキ）。依頼先アサヒの付いたタスクが、本物の today の応答で「依頼中」に出る
+test.describe('自分用の組織の依頼中', () => {
+  test.beforeEach(async ({ context, baseURL }) => {
+    await context.clearCookies();
+    await signIn(context, baseURL, 'personalAdmin');
+  });
+
+  test('依頼先を付けたタスクが「依頼中」に依頼先の名前つきで出て、太陽のボタンを出さない', async ({ page }) => {
+    await page.goto('/personal');
+
+    const delegated = region(page, '依頼中');
+    // ほかの e2e（e2e/delegatee.test.ts）が同じ組織に作るタスクが並ぶことがあるので、seed の行を名前で探す
+    const entry = delegated.locator('.entry', { hasText: '見積もりの返事を確かめる' });
+    await expect(entry.locator('.entry-meta .props-note')).toHaveText('依頼先: アサヒ');
+    await expect(entry.locator('.sun')).toHaveCount(0);
+    await expect(entry.locator('.done-btn')).toBeVisible();
+    // 担当なしで依頼先も無い seed のタスクは出ない
+    await expect(page.locator('.entry', { hasText: '資料の確認を依頼する' })).toHaveCount(0);
+  });
 });

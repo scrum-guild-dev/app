@@ -265,7 +265,8 @@
   }
 </script>
 
-{#snippet rows(list: TodayTask[], options: { done?: boolean; markDueToday?: boolean } = {})}
+<!-- 依頼中の行（delegated）は、人に振ったものを確かめる行なので、今日やるの印のボタンを出さず、依頼先の名前を注記に出す -->
+{#snippet rows(list: TodayTask[], options: { done?: boolean; markDueToday?: boolean; delegated?: boolean } = {})}
   <div class="book">
     {#each list as task (task.id)}<TaskEntry
         task={taskOf(task)}
@@ -275,13 +276,17 @@
         pending={pendingIds.includes(task.id)}
         onComplete={() => void complete(task)}
         marked={task.today_on !== null}
-        onToggleToday={() => void toggleToday(task)}
+        onToggleToday={options.delegated ? undefined : () => void toggleToday(task)}
         onReopen={options.done && task.reopenable ? () => void reopen(task) : undefined}
         clock={{ today: task.today, weekStart: task.week_start }}
         workspaceId={task.workspace_id}
         workspaceName={task.workspace_name}
         metaChip={options.markDueToday && task.due_on === task.today ? t('dueIsToday') : undefined}
-        metaText={task.carry_days > 0 ? t('carryDays', { days: task.carry_days }) : undefined}
+        metaText={options.delegated && task.delegatee !== null
+          ? t('delegatedTo', { delegatee: t('delegatee'), name: task.delegatee.name })
+          : task.carry_days > 0
+            ? t('carryDays', { days: task.carry_days })
+            : undefined}
       />{/each}
   </div>
 {/snippet}
@@ -362,6 +367,16 @@
       {@render rows(sections.today)}
     {/if}
   </Section>
+  {#if sections.delegated.length > 0}
+    <Section
+      id="s-delegated"
+      title={t('sectionDelegated')}
+      count={sections.delegated.length}
+      hint={t('sectionDelegatedHint', { delegatee: t('delegatee'), done: t('done') })}
+    >
+      {@render rows(sections.delegated, { delegated: true })}
+    </Section>
+  {/if}
   {#if sections.week.length > 0}
     <Section id="s-week" title={t('weekDue')} count={sections.week.length}>
       {@render rows(sections.week, { markDueToday: true })}
