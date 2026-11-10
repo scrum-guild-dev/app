@@ -199,7 +199,9 @@ test('見本の引き出し: タブを切り替えても、作り直しても、
   expect(await isKept()).toBe(true);
 
   // 引き出しを実際に作り直す操作（狭い幅への切り替えで renderDrawer が走る）でも、書きかけを戻す
-  await page.setViewportSize({ width: 600, height: 900 });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await expect(page.locator('[data-assist-open]').first()).toBeHidden();
+  await expect(page.locator('.mobile-page-tools')).toBeVisible();
   await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
   expect(await isKept()).toBe(false);
 
@@ -251,6 +253,7 @@ test('見本の引き出し: タブを切り替えても、作り直しても、
   await drawer.locator('#new-comment').fill('書きかけのコメント');
   // スマホでは検索とアカウントだけを出すので、見本のアシスタントの操作は広い幅へ戻して確かめる。
   await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(drawer.locator('#new-comment')).toHaveValue('書きかけのコメント');
   await page.locator('[data-assist-open]').first().focus();
   await page.keyboard.press('Enter');
   const palette = page.locator('#assist-palette');
