@@ -65,6 +65,10 @@ test('390px で所属していない管理者の印は見出しの外に残り�
   await page.goto(WORKSPACE);
   await expect(page.getByText('所属せず管理者として開いています', { exact: true })).toBeVisible();
   await expect(page.locator('.mobile-page-tools > .chip')).toHaveCount(0);
+  const chip = await page.getByText('所属せず管理者として開いています', { exact: true }).boundingBox();
+  expect(chip).not.toBeNull();
+  expect(chip!.x).toBeGreaterThanOrEqual(16);
+  expect(chip!.x + chip!.width).toBeLessThanOrEqual(NARROW_VIEWPORT.width - 16);
   await expect(page.locator('.mobile-page-tools')).toHaveCount(1);
   const result = await measureFrame(page);
   expect(result.sameRow).toBe(true);

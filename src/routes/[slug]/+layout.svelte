@@ -134,7 +134,7 @@
   {/snippet}
   {#snippet notice(narrow = false)}
     {#if narrow && openWorkspace?.role === null}
-      <span class="chip">{t('notMemberAdminChip', { admin: t('admin') })}</span>
+      <div class="shell-notice"><span class="chip">{t('notMemberAdminChip', { admin: t('admin') })}</span></div>
     {/if}
     {#key navigationScope}
       <TokenNotice notice={data.tokenNotice} slug={data.slug} />
