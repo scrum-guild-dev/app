@@ -347,7 +347,8 @@ test('見本のバックログ: 幅390pxで横送りした各チップを44px四
   for (const theme of A11Y_THEMES) {
     await applyTheme(page, theme);
     for (const chip of await chips.all()) {
-      await chip.scrollIntoViewIfNeeded();
+      // 画面下に浮くタブバーと重ならない位置へ、縦と横をそれぞれ送る。
+      await chip.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
       const result = await chip.evaluate((el) => {
         const r = el.getBoundingClientRect();
         const offsets = [
