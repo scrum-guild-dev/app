@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onTaskAttributeSaved, type Attribute, type AttributeSaved } from '../../../../lib/task-attributes.svelte.ts';
   import { tick, untrack } from 'svelte';
   import { useShortcut } from '../../../../lib/shortcuts.svelte.ts';
   import { ariaKeyshortcuts, NEW_TASK_KEY } from '../../../../lib/shortcut-keys.ts';
@@ -193,6 +194,28 @@
   });
   let completedIds = $state<string[]>([]);
   let savedPoints = $state<SavedBacklogPoints>({});
+  let savedAttributes = $state<Record<string, Partial<Record<Attribute, AttributeSaved>>>>({});
+  $effect(() => {
+    const slug = page.params.slug;
+    const workspaceId = page.params.id;
+    return onTaskAttributeSaved((saved) => {
+      if (saved.slug !== slug || saved.workspaceId !== workspaceId) return;
+      savedAttributes = {
+        ...savedAttributes,
+        [saved.taskId]: { ...savedAttributes[saved.taskId], [saved.field]: saved },
+      };
+      if (saved.field === 'points')
+        savedPoints = { ...savedPoints, [saved.taskId]: { value: saved.task.points, at: saved.at } };
+    });
+  });
+  function savedRow(task: BacklogTask): BacklogTask {
+    const patch: Partial<BacklogTask> = {};
+    for (const saved of Object.values(savedAttributes[task.id] ?? {})) {
+      if (saved !== undefined) Object.assign(patch, { [saved.field]: saved.task[saved.field] });
+    }
+    return { ...task, ...patch };
+  }
+
   // 完了の応答が返った時刻（performance.now()）。これより前に始まった読み直しが遅れて届いても、完了の印を捨てない（completionSettled）
   let completedAt: Record<string, number> = {};
   let pendingIds = $state<string[]>([]);
@@ -238,6 +261,14 @@
     const unsettled = done.filter((id) => !completionSettled(completedAt[id] ?? Infinity, loadedAtForDone));
     // 木に無い行を残すかは、足した時刻と読み直しを始めた時刻で決める（src/lib/added-rows.ts）
     const loadedAt = untrack(() => data.loadedAt);
+    savedAttributes = carry
+      ? Object.fromEntries(
+          Object.entries(untrack(() => savedAttributes)).map(([id, fields]) => [
+            id,
+            Object.fromEntries(Object.entries(fields).filter(([, saved]) => loaded === null || saved.at >= loadedAt)),
+          ]),
+        )
+      : {};
     savedPoints = carry
       ? pendingBacklogPoints(
           untrack(() => savedPoints),
@@ -495,7 +526,11 @@
     const gained = rows.filter((task) => !known.has(task.id) && !fromTreeIds.has(task.id));
     const lost = story.tasks.filter((task) => !here.has(task.id));
     const sum = (tasks: readonly BacklogTask[]) => tasks.reduce((total, task) => total + (task.points ?? 0), 0);
-    return story.points_all + sum(gained) - sum(lost);
+    const changed = rows.filter((task) => known.has(task.id));
+    const delta = changed.reduce((total, task) => total + (savedRow(task).points ?? 0) - (task.points ?? 0), 0);
+    return (
+      story.points_all + gained.reduce((total, task) => total + (savedRow(task).points ?? 0), 0) - sum(lost) + delta
+    );
   }
 
   // 完了にした行のポイントを、親の「完了」に足す。完了にした行は、読み直した一覧では未完了だった行か、足した行なので、
@@ -506,7 +541,7 @@
     const done = storyRows(story).filter(
       (task) => completedIds.includes(task.id) && (known.has(task.id) || !fromTreeIds.has(task.id)),
     );
-    return story.points_done + done.reduce((sum, task) => sum + (task.points ?? 0), 0);
+    return story.points_done + done.reduce((sum, task) => sum + (savedRow(task).points ?? 0), 0);
   }
 
   // エピックの合計は、今その下に並ぶストーリーの合計（画面で移したストーリーと、足した行、完了にした行の分を含む）に、
@@ -1277,7 +1312,7 @@
   <TaskEntry
     addedFlash={wasAdded('task', task.id)}
     bind:this={entries[task.id]}
-    {task}
+    task={savedRow(task)}
     {clock}
     done={completedIds.includes(task.id)}
     justDone={completedIds.includes(task.id)}
@@ -1297,9 +1332,7 @@
           slug: page.params.slug ?? '',
           workspaceId: workspace.id,
           onSaved: () => invalidateAll(),
-          onPointsSaved: (row, value) => {
-            savedPoints = { ...savedPoints, [row.id]: { value, at: performance.now() } };
-          },
+          loadedAt: data.loadedAt,
           onStale: () => void invalidateAll(),
           definitions: data.definitions,
         }

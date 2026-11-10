@@ -9,6 +9,7 @@
   import NotFoundPage from '../../../../lib/components/NotFoundPage.svelte';
   import EpicDrawer from '../../../../lib/components/EpicDrawer.svelte';
   import StoryDrawer from '../../../../lib/components/StoryDrawer.svelte';
+  import { onTaskAttributeSaved } from '../../../../lib/task-attributes.svelte.ts';
   import TaskDrawer from '../../../../lib/components/TaskDrawer.svelte';
   import {
     adjacentTaskIds,
@@ -53,6 +54,17 @@
   let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
   const workspace = $derived(data.workspace);
+  // バックログは保存した欄だけを反映する。それ以外の画面は、従来どおり読み直す。
+  // 引き出しが閉じてから返った応答も、今いる画面に反映する。
+  $effect(() => {
+    const slug = data.slug;
+    const workspaceId = workspace?.id;
+    return onTaskAttributeSaved((saved) => {
+      if (saved.slug === slug && saved.workspaceId === workspaceId && page.route.id !== '/[slug]/w/[id]') {
+        void invalidate('app:backlog-tree');
+      }
+    });
+  });
   const isAdmin = $derived(data.organization?.me.is_admin === true);
   const status = $derived(data.workspaceFailure?.status);
   const code = $derived(data.workspaceFailure?.code);

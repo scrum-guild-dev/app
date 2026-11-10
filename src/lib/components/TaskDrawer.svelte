@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { tick, setContext } from 'svelte';
+  import { tick, setContext, untrack } from 'svelte';
+  import { taskAttributes } from '../task-attributes.svelte.ts';
   import { ATTACHMENT_DELETIONS, type AttachmentDeletions } from '../attachment-context.ts';
   import { attachmentDownload } from '../../shared/operations/attachment/index.ts';
   import { operationPath } from '../../shared/operations/define.ts';
@@ -7,7 +8,6 @@
   import {
     taskTodayMark,
     taskTodayMarkConflictReasonOf,
-    taskAssign,
     taskComplete,
     taskDelete,
     taskDetail,
@@ -20,7 +20,6 @@
     type TaskHistoryEntry,
   } from '../../shared/operations/task/index.ts';
   import type { OutputOf } from '../../shared/operations/define.ts';
-  import { memberList } from '../../shared/operations/workspace/index.ts';
   import { categoryRepositoryList, type DefinitionRef } from '../../shared/operations/definition/index.ts';
   import {
     LINK_URL_MAX_LENGTH,
@@ -72,7 +71,7 @@
   // 完了していないタスクだけ「未記入」の印を添える。task-detail の fields を読み、保存は task-field-set で、読んだ値のままなら書き、
   // 同時に直されていれば断って読み直す）。
   // 欄ごとに、その場で直す。ポイントと期日は選んだら保存し、タイトル、リンク、本文は AutoSaveEdit で確定する（本文は Markdown の部品で描く）。
-  // 送る欄は、今の値と違うものだけ。保存したら、その欄だけを応答で入れ替え、画面が木を読み直す（onchanged）。
+  // 送る欄は、今の値と違うものだけ。保存したら、その欄だけを応答で入れ替える。担当とポイントは共有状態から行と集計も直し、それ以外は木を読み直す（onchanged）。
   // ポイントの保存は1本ずつ送る。送っている間に選び直したら、最後の選択だけを溜め、送り終えた後に送る（矢印キーで動かしても要求が飛び交わず、
   // 応答の順が前後しない）。期日は、年が4桁そろった値だけを、少し待ってから（カレンダーで選んだとき）か、欄を離れる／Enter で保存する。
   // 担当は、アバターと選択欄で、選んで少し待ってから（閉じた選択欄の矢印キーは1つ動くたびに change を出すため）か、欄を離れたときに、
@@ -87,7 +86,7 @@
   // と、まだ送っていない期日の入力）があるまま閉じる（×、幕、Esc）か、別のタスクや別の画面へ移る（beforeNavigate）ときは、
   // 捨てるかをアプリの中のダイアログで確かめる。捨てると決めたら、閉じる／移る。送っている最中の要求は止められず、そのまま通る。
   // 帯の前後のボタンと `[` `]` で前後のタスクへ移るとき（開いた画面が順を渡したときだけ。adjacent）も、同じ確認を挟む。
-  // 閉じた後に返った保存の応答も、通ったら木を読み直してトーストで知らせ、失敗はトーストで知らせる（saveFields）。
+  // 閉じた後に返った保存の応答も、通ったら行へ反映してトーストで知らせ、失敗はトーストで知らせる。担当とポイント以外は木を読み直す（saveFields）。
   // 引き出しが読み直すのは木（onchanged）かワークスペースの枠（onstale）だけで、組織の枠は読み直さない。
   // 削除は確認のダイアログを挟まない。消したら閉じ、「取り消す」付きのトーストで知らせ（押すと task-restore を送って木を読み直す）、
   // 画面が木を読み直す（onremoved）。
@@ -323,11 +322,37 @@
     document.getElementById(target === 'comments' ? commentsTabId : historyTabId)?.focus();
   }
 
-  // 選んだポイント。送っている間（と、続けて選んだ分を送り終えるまで）は、最後に選んだ値を見せる
-  let pointsPending = $state<{ value: PointsChoice } | null>(null);
-  const pointsShown = $derived<PointsChoice>(pointsPending !== null ? pointsPending.value : (task?.points ?? null));
-  let pointsError = $state<string | null>(null);
-  let pointsSending = false;
+  const editor = $derived(taskAttributes(slug, workspaceId, taskId));
+  let taskReadAt = $state(0);
+  $effect(() =>
+    editor.attach({
+      stale: () => onstale(),
+      rejected: async (message) => {
+        if (!alive) return;
+        if (message === t('taskGone', { task: t('task') })) gone(false);
+        else await refresh(true);
+      },
+      saved: async (saved) => {
+        savedVersion++;
+        if (!alive || task === null) return;
+        if (saved.field === 'assignee') {
+          assigneeVersion++;
+          taskContext = { ...taskContext, today_on: null };
+          task = { ...task, assignee: saved.task.assignee };
+          await refresh();
+        } else task = { ...task, points: saved.task.points };
+        void loadHistory();
+      },
+    }),
+  );
+  $effect(() => {
+    const current = task;
+    const at = taskReadAt;
+    const session = editor;
+    if (current !== null) untrack(() => session.observe(current, at));
+  });
+  const pointsShown = $derived(editor.points.shown === undefined ? (task?.points ?? null) : editor.points.shown);
+  const pointsError = $derived(editor.points.error);
   let dueError = $state<string | null>(null);
   let dueInput = $state<HTMLInputElement>();
   let dueTimer: ReturnType<typeof setTimeout> | undefined;
@@ -356,19 +381,16 @@
   let asking = false;
 
   // 担当の候補（そのワークスペースに今所属している人）。読み込む前と読めなかったときは null
-  let candidates = $state<readonly { id: string; name: string }[] | null>(null);
-  let candidatesFailed = $state(false);
-  let candidatesVersion = 0;
-  let candidatesLoading = $state(false);
+  const candidates = $derived(editor.candidates);
+  const candidatesFailed = $derived(editor.candidatesFailed);
+  const candidatesLoading = $derived(editor.candidatesLoading);
   // 選択欄で選んで、まだ送っていない担当（待っている間）。閉じた選択欄で矢印キーを押すと、1つ動くたびに change が出るので、
   // 期日と同じく少し待ってから（か欄を離れたときに）最後の値だけを送る
   let assigneeChoice = $state<{ value: string } | null>(null);
   let assigneeTimer: ReturnType<typeof setTimeout> | undefined;
   let assigneeSelect = $state<HTMLSelectElement>();
   // 送っている担当（空は担当なし）。送っている間（と、続けて選んだ分を送り終えるまで）は、最後に選んだ値を見せる
-  let assigneePending = $state<{ value: string } | null>(null);
-  let assigneeError = $state<string | null>(null);
-  let assigneeSending = false;
+  const assigneeError = $derived(editor.assignee.error);
 
   // 区分とリポジトリの選択肢（直せるときだけ読む）。読む前と読めなかったときは null
   let definitions = $state<{ categories: DefinitionRef[]; repositories: DefinitionRef[] } | null>(null);
@@ -412,11 +434,7 @@
   const pointsEditable = $derived(canWrite && task !== null && task.completed_at === null);
   const assigneeEditable = $derived(canWrite && task !== null && task.completed_at === null);
   const assigneeShownId = $derived(
-    assigneeChoice !== null
-      ? assigneeChoice.value
-      : assigneePending !== null
-        ? assigneePending.value
-        : (task?.assignee?.id ?? ''),
+    assigneeChoice !== null ? assigneeChoice.value : (editor.assignee.shown ?? task?.assignee?.id ?? ''),
   );
   // 選択欄の選択肢。候補に、今の担当が候補にいなければ（抜けた、候補を読めなかった）その人を足す
   const assigneeOptions = $derived.by(() => {
@@ -535,6 +553,7 @@
   let movedStatus = $state('');
 
   async function load(): Promise<void> {
+    const readAt = performance.now();
     const wantedStepFocus = stepFocus;
     stepFocus = null;
     const mine = ++loadVersion;
@@ -542,6 +561,7 @@
     const result = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: taskId }, { slug });
     if (!alive || mine !== loadVersion) return;
     if (result.ok) {
+      taskReadAt = readAt;
       task = result.data.task;
       taskContext = {
         column: result.data.column,
@@ -555,7 +575,7 @@
       loadState = 'ready';
       void loadHistory();
       // 担当を選べるときだけ、候補を読む（読み取り専用では選択欄を出さない）
-      if (canWrite && result.data.task.completed_at === null && candidates === null) void loadCandidates();
+      if (canWrite && result.data.task.completed_at === null) void loadCandidates();
       // リポジトリと区分を直せるときだけ、選択肢を読む
       if (canWrite && definitions === null) void loadDefinitions();
       // 開いたときの読み上げに、見出しが読まれるようにする。閉じるボタンか何も無い所にフォーカスがあるときだけ移す
@@ -594,10 +614,10 @@
   void load();
 
   // タスクが消えていた（別の人が削除した）。閉じて、木を読み直す
-  function gone(): void {
+  function gone(notify = true): void {
     leaving = true;
     taskGone = true;
-    showToast(t('taskGone', { task: t('task') }), 'alert');
+    if (notify) showToast(t('taskGone', { task: t('task') }), 'alert');
     onremoved(null, 'gone');
   }
 
@@ -792,6 +812,7 @@
 
   // 今の値を読み直す。読めなければ今の表示のまま（null）
   function refresh(closeIfGone = false): Promise<TaskDetail | null> {
+    const readAt = performance.now();
     const requestedVersion = ++refreshVersion;
     const requestedSavedVersion = savedVersion;
     const requestedTaskId = taskId;
@@ -812,6 +833,7 @@
       if (alive && taskId === requestedTaskId) {
         // 途中で保存が通ったら、その後の値を取り直す。古い欄を戻さず、完了状態や権限も取りこぼさない。
         if (requestedSavedVersion !== savedVersion) return refresh(refreshCloseIfGone);
+        taskReadAt = readAt;
         task = result.data.task;
         fields = result.data.fields;
         taskContext = {
@@ -878,17 +900,7 @@
   // ---- 担当（選んで少し待ってから、か欄を離れたときに保存する。1本ずつ送る） ----
   // 候補を読む。読めなければ、担当なしと今の担当だけを選べるままにし、読めなかったことと「もう一度試す」を添える
   async function loadCandidates(): Promise<void> {
-    const mine = ++candidatesVersion;
-    candidatesLoading = true;
-    const result = await callOperation(memberList, { workspace_id: workspaceId }, { slug });
-    if (!alive || mine !== candidatesVersion) return;
-    candidatesLoading = false;
-    if (result.ok) {
-      candidates = result.data.members.map((member) => ({ id: member.id, name: member.name }));
-      candidatesFailed = false;
-    } else {
-      candidatesFailed = true;
-    }
+    await editor.loadCandidates();
   }
 
   // 候補を読み直す。読めたら、押したボタンは消えるので、担当の選択欄へフォーカスを移す
@@ -930,112 +942,7 @@
   }
 
   function chooseAssignee(value: string): void {
-    // 送っている間に選び直されたら、最後の選択だけを残す
-    assigneePending = { value };
-    if (!assigneeSending) void sendAssignee();
-  }
-
-  // ポイントと同じく、引き出しが閉じた後も溜めた最後の選択まで送る。タスクが消えたか、完了にされていたら、溜めた分を捨てる
-  async function sendAssignee(): Promise<void> {
-    assigneeSending = true;
-    try {
-      while (assigneePending !== null && !taskGone) {
-        const choice = assigneePending.value;
-        if (task === null || choice === (task.assignee?.id ?? '') || task.completed_at !== null) {
-          assigneePending = null;
-          break;
-        }
-        assigneeError = null;
-        const message = await saveAssignee(choice === '' ? null : choice);
-        if (message !== null) {
-          assigneeError = message;
-          if (assigneePending === null || assigneePending.value === choice) assigneePending = null;
-          continue;
-        }
-        if (assigneePending !== null && assigneePending.value === choice) assigneePending = null;
-      }
-      if (taskGone) assigneePending = null;
-    } finally {
-      assigneeSending = false;
-    }
-  }
-
-  // 担当を書く。成功なら null、失敗ならエラーの文（saveFields と同じ扱い）。404 は、タスクが消えたか、選んだ人が所属を外れたかを、
-  // 読み直して分ける（タスクがあれば、候補を読み直して、選び直しを促す）
-  async function saveAssignee(assigneeUserId: string | null): Promise<string | null> {
-    const result = await callOperation(
-      taskAssign,
-      { workspace_id: workspaceId, task_id: taskId, assignee_user_id: assigneeUserId },
-      { slug },
-    );
-    if (result.ok) {
-      savedVersion++;
-      if (alive && task !== null) {
-        const saved = result.data.task;
-        if (saved.assignee?.id !== task.assignee?.id) {
-          assigneeVersion++;
-          taskContext = { ...taskContext, today_on: null };
-        }
-        task = {
-          ...task,
-          assignee: saved.assignee,
-          completed_at: saved.completed_at,
-          can_delete: saved.can_delete,
-          can_send_thanks: saved.can_send_thanks,
-        };
-        await refresh();
-      }
-      showToast(t('taskSaved'), 'check');
-      onchanged();
-      return null;
-    }
-    let message: string;
-    if (result.status === 404) {
-      const latest = await callOperation(taskDetail, { workspace_id: workspaceId, task_id: taskId }, { slug });
-      if (!latest.ok && latest.status === 404) {
-        taskGone = true;
-        if (alive) gone();
-        else {
-          showToast(t('taskGone', { task: t('task') }), 'alert');
-          onchanged();
-        }
-        return null;
-      }
-      if (!latest.ok) {
-        // 読み直せなかった（通信、5xx など）。どちらが理由か分からないので、ふつうの失敗の文にする
-        message = t('taskSaveFailed');
-      } else {
-        if (alive) {
-          task = latest.data.task;
-          taskContext = {
-            column: latest.data.column,
-            story: latest.data.story,
-            epic: latest.data.epic,
-            today_on: latest.data.today_on,
-          };
-          clock = { today: latest.data.today, weekStart: latest.data.week_start };
-          void loadCandidates();
-        }
-        message = t('assigneeNotMember', { workspace: t('workspace'), assignee: t('assignee') });
-      }
-    } else if (result.status === 401) {
-      onstale();
-      message = t('taskSaveFailed');
-    } else if (result.status === 409 && result.error?.code === 'workspace_closed') {
-      onstale();
-      message = t('workspaceClosedReadOnly', { workspace: t('workspace') });
-    } else if (result.status === 409) {
-      // 完了にされていれば、それが理由。そうでなければ、同時に担当を替えられた
-      const latest = await refresh();
-      message =
-        (latest ?? task)?.completed_at != null
-          ? t('taskAssigneeDone', { task: t('task'), done: t('done'), assignee: t('assignee') })
-          : t('taskSaveRaced');
-    } else {
-      message = result.status === 400 ? t('taskBadRequest') : t('taskSaveFailed');
-    }
-    if (!alive) showToast(message, 'alert');
-    return message;
+    editor.assignee.choose(value);
   }
 
   // ---- タイトル、リンク、本文（AutoSaveEdit） ----
@@ -1132,38 +1039,7 @@
 
   // ---- ポイント（選んだら保存する。1本ずつ送る） ----
   function choosePoints(choice: PointsChoice): void {
-    // 送っている間に選び直されたら、最後の選択だけを残す
-    pointsPending = { value: choice };
-    if (!pointsSending) void sendPoints();
-  }
-
-  // 引き出しが閉じた後も、溜めた最後の選択まで送る（選んだ値を黙って失わない）。送った結果の通知は saveFields がする。
-  // 先の要求が失敗しても、送っている間に選び直された最後の選択は捨てずに送る（次の送信を始めるときに、前の失敗の文は消す）。
-  // タスクが消えた（404）か、完了にされていた（ポイントを直せない）ときは、同じ要求を繰り返さず、溜めた分を捨てる
-  async function sendPoints(): Promise<void> {
-    pointsSending = true;
-    try {
-      while (pointsPending !== null && !taskGone) {
-        const choice = pointsPending.value;
-        // 保存した値（最後に送って通った値）と同じなら送らない
-        if (task === null || choice === task.points || task.completed_at !== null) {
-          pointsPending = null;
-          break;
-        }
-        pointsError = null;
-        const message = await saveFields({ points: choice });
-        if (message !== null) {
-          pointsError = message;
-          // 選び直されていなければ、ここで終わる。選び直されていれば、次の周で最後の選択を送る
-          if (pointsPending === null || pointsPending.value === choice) pointsPending = null;
-          continue;
-        }
-        if (pointsPending !== null && pointsPending.value === choice) pointsPending = null;
-      }
-      if (taskGone) pointsPending = null;
-    } finally {
-      pointsSending = false;
-    }
+    editor.points.choose(choice);
   }
 
   // ---- リポジトリと区分 ----
