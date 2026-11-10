@@ -315,28 +315,31 @@ export async function revokeApiTokensOf(db: CommonDb, accountId: string, checked
 // 取り消し済みの行は書き直さない。別の文と同じ batch() に入れて送るために、文のまま返す。
 // currentTokenHash を渡したときだけ、今のセッションの行（token_hash と account_id が両方一致する行）がまだあるときに限って書く
 // （deleteOtherSessionsStatement と同じ条件。先に自分のセッションを消された側は何も書かない）。省いたら条件を付けない。
-// 省ける形は、3つの引数で直に呼ぶ既存のテスト（test/api-token-session-breakers.test.ts）のため。本番の道（全失効）は必ず渡す
+// 省ける形は、3つの引数で直に呼ぶ既存のテスト（test/api-token-session-breakers.test.ts）のため。本番の道（全失効）は必ず渡す。
+// 取り消した行の expires_at を返す（呼び手が期限内の行だけを数えるため。何も書かなかったときは行が返らない）
 export function revokeAllApiTokensStatement(
   db: CommonDb,
   accountId: string,
   now: Date,
   currentTokenHash?: string,
-): Statement<'common'> {
+): Statement<'common', { expires_at: string }> {
   return db.statement((q) => {
     const update = q
       .updateTable('api_tokens')
       .set({ revoked_at: now.toISOString() })
       .where('account_id', '=', accountId)
       .where('revoked_at', 'is', null);
-    if (currentTokenHash === undefined) return update;
-    return update.where(({ exists, selectFrom }) =>
-      exists(
-        selectFrom('sessions as cs')
-          .select('cs.token_hash')
-          .where('cs.token_hash', '=', currentTokenHash)
-          .where('cs.account_id', '=', accountId),
-      ),
-    );
+    if (currentTokenHash === undefined) return update.returning('expires_at');
+    return update
+      .where(({ exists, selectFrom }) =>
+        exists(
+          selectFrom('sessions as cs')
+            .select('cs.token_hash')
+            .where('cs.token_hash', '=', currentTokenHash)
+            .where('cs.account_id', '=', accountId),
+        ),
+      )
+      .returning('expires_at');
   });
 }
 
