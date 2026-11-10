@@ -108,7 +108,13 @@ export function startStallProbe(
   const stalls: Stall[] = [];
   const record = (stall: Stall) => {
     stalls.push(stall);
-    onStall(stall);
+    // 知らせ先が投げても、問い合わせのループを止めない（止まると以降を測れず、stop() まで拾われない reject になる）。
+    // 記録は stalls に残っているので、終わりの集計の件数には入る
+    try {
+      onStall(stall);
+    } catch (error) {
+      console.error(`${PREFIX} 行を出せなかった: ${error instanceof Error ? error.name : typeof error}`);
+    }
   };
   const loops = PROBE_TARGETS.map(async (target) => {
     const url = new URL(target.path, baseURL).toString();

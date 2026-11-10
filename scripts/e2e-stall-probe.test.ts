@@ -139,6 +139,29 @@ describe('startStallProbe', () => {
     );
   });
 
+  test('知らせ先が投げても問い合わせを続け、記録は集計に残る', async () => {
+    const deps: ProbeDeps = { ...nodeProbeDeps, fetch: async () => Promise.reject(new TypeError('fetch failed')) };
+    const errors: unknown[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => errors.push(args);
+    try {
+      const probe = startStallProbe(BASE, deps, {
+        intervalMs: 5,
+        onStall: () => {
+          throw new Error('出せない');
+        },
+      });
+      await delay(30);
+      const report = await probe.stop();
+      // 1 回目で止まらず、3 か所とも 2 回以上問い合わせている
+      for (const count of Object.values(report.counts)) assert.ok(count >= 2);
+      assert.ok(report.stalls.length >= 6);
+      assert.ok(errors.length >= 6);
+    } finally {
+      console.error = original;
+    }
+  });
+
   test('サーバーが落ちて接続を拒まれると、速く返っても残す', async () => {
     const deps: ProbeDeps = { ...nodeProbeDeps, fetch: async () => Promise.reject(new TypeError('fetch failed')) };
     const probe = startStallProbe(BASE, deps, { intervalMs: 5 });
