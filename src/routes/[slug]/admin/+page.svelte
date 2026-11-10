@@ -4,6 +4,7 @@
   import PageHead from '../../../lib/components/PageHead.svelte';
   import UsersSetting from '../../../lib/components/admin/UsersSetting.svelte';
   import WorkspacesSetting from '../../../lib/components/admin/WorkspacesSetting.svelte';
+  import DelegateesSetting from '../../../lib/components/admin/DelegateesSetting.svelte';
   import HolidaysSetting from '../../../lib/components/admin/HolidaysSetting.svelte';
   import OrganizationLookSetting from '../../../lib/components/admin/OrganizationLookSetting.svelte';
   import TrialSetting from '../../../lib/components/admin/TrialSetting.svelte';
@@ -73,6 +74,7 @@
       slug={data.slug}
       meId={organization.me.id}
     />
+    {#if organization.organization.kind === 'personal'}<DelegateesSetting slug={data.slug} />{/if}
     <HolidaysSetting slug={data.slug} />
     <OrganizationLookSetting slug={data.slug} theme={organization.organization.theme} />
     <HistorySetting slug={data.slug} />
