@@ -14,7 +14,7 @@ import {
 import { taskDetail } from '../src/shared/operations/task/index.ts';
 import { createDelegatee, createTask, createWorkspace, uuidv7 } from './factories.ts';
 import { post } from './operations/harness.ts';
-import { createPersonalTarget, createTarget, testEnv, type Target } from './operations/world.ts';
+import { createPersonalTarget, createTarget, type Target } from './operations/world.ts';
 
 type Delegatee = { id: string; name: string };
 const app = createApp(implementedOperations);
