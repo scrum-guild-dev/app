@@ -1,5 +1,5 @@
 // 再認証の案内（ApiTokensSetting.svelte の canCreate、loginProvider、slug）の崩し。ApiTokensSetting.test.ts の
-// github と google の基本と重ならない手口: 手段が不明、slug に特殊な文字、発行できるときは案内を出さない
+// github と google の基本と重ならない手口: 手段が不明、slug に特殊な文字、発行できるときは発行専用の案内を出さない
 import { render } from 'svelte/server';
 import { expect, test, vi } from 'vitest';
 import { dictionary } from '../../shared/vocabulary.ts';
@@ -12,15 +12,15 @@ const renderWith = (props: { canCreate: boolean; loginProvider: string | null; s
 
 // 「ログインし直す」のリンクの href（HTML の実体参照を戻す）
 function reauthHref(body: string): string {
-  const match = /<a[^>]*href="([^"]*)"[^>]*>ログインし直す/.exec(body);
+  const match = /<a[^>]*href="([^"]*)"[^>]*>(?:締め出す前に)?ログインし直す/.exec(body);
   expect(match, 'ログインし直すのリンク').not.toBeNull();
   return match![1]!.replaceAll('&amp;', '&');
 }
 
-test('発行できる（canCreate が true）なら、手段が何でも、ログインし直すの案内を出さず発行の欄を出す', () => {
+test('発行できる（canCreate が true）なら、手段が何でも、発行専用の再認証案内を出さず発行の欄を出す', () => {
   for (const loginProvider of ['github', 'google', null, 'saml']) {
     const body = renderWith({ canCreate: true, loginProvider, slug: 'aoba' });
-    expect(body, String(loginProvider)).not.toContain('ログインし直す');
+    expect(body, String(loginProvider)).not.toContain('API トークンを発行するには、ログインし直してください。');
     expect(body, String(loginProvider)).toContain('<form');
   }
 });
@@ -66,7 +66,7 @@ test('発行の欄が無いとき、空の文は存在しないフォームを�
 
 test('再認証リンクの説明は、同じ案内の理由の本文を指す', () => {
   const body = renderWith({ canCreate: false, loginProvider: 'github', slug: 'aoba' });
-  const link = /<a[^>]*aria-describedby="([^"]+)"[^>]*>ログインし直す/.exec(body);
+  const link = /<a[^>]*aria-describedby="([^"]+)"[^>]*>(?:締め出す前に)?ログインし直す/.exec(body);
   expect(link).not.toBeNull();
   expect(body).toContain(`<span id="${link![1]}">API トークンを発行するには、ログインし直してください。`);
 });
@@ -92,5 +92,18 @@ test.each(['..', '.', '%2e%2e', 'api', '%61pi', 'login', 'signup', 'a\\b', 'あ�
       const returnTo = new URL(href, 'http://localhost').searchParams.get('return_to');
       expect(returnTo, `${slug}/${String(loginProvider)}`).toBe('/');
     }
+  },
+);
+
+test.each(['github', 'google', null])(
+  '発行できるときも、全失効からの再ログインは安全な戻り先を使う: %j',
+  (loginProvider) => {
+    const body = renderWith({ canCreate: true, loginProvider, slug: 'aoba' });
+    const href = reauthHref(body);
+    expect(href).toBe(
+      loginProvider === null
+        ? '/login?return_to=%2Faoba%2Fme'
+        : `/api/auth/${loginProvider}/start?return_to=%2Faoba%2Fme`,
+    );
   },
 );

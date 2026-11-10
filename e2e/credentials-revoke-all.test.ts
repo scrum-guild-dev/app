@@ -214,12 +214,7 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     await button.click({ force: true });
     await expect(confirm).toHaveCount(0);
     release();
-    await expect(
-      toast(
-        page,
-        'ほかの端末のセッション0件と、API トークン0件を締め出しました。後からログインした端末は残ります。ほかの端末を締め出すには、ログインし直してもう一度実行してください。',
-      ),
-    ).toBeVisible();
+    await expect(toast(page, 'ほかの端末のセッション0件と、API トークン0件を締め出しました')).toBeVisible();
     expect(sent).toBe(2);
     await unrouteSlow();
   });
@@ -233,12 +228,18 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     });
     await section.getByRole('button', { name: BUTTON }).click();
     await page.getByRole('dialog', { name: DIALOG }).getByRole('button', { name: '締め出す', exact: true }).click();
+    await expect(toast(page, 'ほかの端末のセッション2件と、API トークン5件を締め出しました')).toBeVisible();
+    await expect(toast(page, 'ほかの端末のセッション2件と、API トークン5件を締め出しました')).toHaveCount(0);
     await expect(
-      toast(
-        page,
-        'ほかの端末のセッション2件と、API トークン5件を締め出しました。後からログインした端末は残ります。ほかの端末を締め出すには、ログインし直してもう一度実行してください。',
+      section.getByText(
+        '後からログインした端末は残ります。ほかの端末を締め出すには、ログインし直してもう一度実行してください。',
+        { exact: true },
       ),
     ).toBeVisible();
+    await expect(section.locator('a[aria-describedby$="-revoke-all-hint"]')).toHaveAttribute(
+      'href',
+      /return_to=%2Faoba%2Fme/,
+    );
     await unroute();
   });
 

@@ -77,6 +77,7 @@
   const sectionId = 'api-tokens';
   const nameId = `${ids}-name`;
   const reauthHintId = `${ids}-reauth-hint`;
+  const revokeAllHintId = `${ids}-revoke-all-hint`;
   const nameHintId = `${ids}-name-hint`;
   const nameErrorId = `${ids}-name-error`;
   const scopeLabelId = `${ids}-scope-label`;
@@ -549,6 +550,18 @@
   <!-- 危険な操作。トークンの一覧の読み込みに失敗していても、セッションを締め出す側は使える -->
   <h3 class="field-label">{t('apiTokenRevokeAllTitle')}</h3>
   <p class="action-note">{t('apiTokenRevokeAllDesc')}</p>
+  <div class="callout is-info">
+    <Icon name="alert" />
+    <span id={revokeAllHintId}>{t('apiTokenRevokeAllNotice')}</span>
+    <div class="callout-actions">
+      <!-- 全失効の注意からも、発行可否に関係なく同じ安全な戻り先でログインし直せる。 -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -->
+      <a class="btn" href={reauthUrl} aria-describedby={revokeAllHintId} data-sveltekit-reload
+        >{t('apiTokenRevokeAllReauth')}</a
+      >
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
+    </div>
+  </div>
   <div class="form-actions">
     <button
       class="btn is-danger"

@@ -108,10 +108,10 @@ test.each(['github', 'google'])(
   },
 );
 
-test('canCreate が true なら発行の欄を出し、再ログインの案内を出さない', () => {
+test('canCreate が true なら発行の欄を出し、発行専用の再認証案内を出さない', () => {
   const body = renderWith([]);
   expect(body).toContain('<form');
-  expect(body).not.toContain('ログインし直す');
+  expect(body).not.toContain('API トークンを発行するには、ログインし直してください。');
 });
 
 test('一覧が読めなくても発行の欄を出す', () => {
@@ -159,10 +159,10 @@ test('件数の知らせは、消したセッションと取り消したトー�
   expect(text).toContain('{sessions}');
   expect(text).toContain('{tokens}');
   expect(text.replace('{sessions}', '2').replace('{tokens}', '3')).toBe(
-    'ほかの端末のセッション2件と、API トークン3件を締め出しました。後からログインした端末は残ります。ほかの端末を締め出すには、ログインし直してもう一度実行してください。',
+    'ほかの端末のセッション2件と、API トークン3件を締め出しました',
   );
-  expect(text.replace('{sessions}', '0').replace('{tokens}', '0')).toContain(
-    '0件を締め出しました。後からログインした端末は残ります。',
+  expect(text.replace('{sessions}', '0').replace('{tokens}', '0')).toBe(
+    'ほかの端末のセッション0件と、API トークン0件を締め出しました',
   );
   for (const key of ['apiTokenRevokingAll', 'apiTokenRevokeAllFailed'] as const) {
     expect(dictionary[key].length, key).toBeGreaterThan(0);
@@ -174,4 +174,18 @@ test('ログインの手段が読めなければ、戻り先を保ったログ�
     props: { initial: [], canCreate: false, loginProvider: null, slug: 'aoba' },
   }).body;
   expect(body).toContain('/login?return_to=%2Faoba%2Fme');
+});
+
+// トーストが消えても、締め出せない端末と次の手順を見失わない。
+test.each([true, false])('全失効の注意と再ログイン導線は発行可否 %j によらず常設する', (canCreate) => {
+  const body = render(ApiTokensSetting, {
+    props: { initial: [], canCreate, loginProvider: 'github', slug: 'aoba' },
+  }).body;
+  const notice = /<span id="([^"]+-revoke-all-hint)">([^<]+)<\/span>/.exec(body);
+  expect(notice).not.toBeNull();
+  expect(notice![2]).toContain('後からログインした端末は残ります');
+  expect(notice![2]).toContain('ログインし直して');
+  expect(body).toContain(`aria-describedby="${notice![1]}"`);
+  expect(body).toContain('class="callout is-info"');
+  expect(body.indexOf(notice![1]!)).toBeGreaterThan(body.indexOf(dictionary.apiTokenRevokeAllTitle));
 });
