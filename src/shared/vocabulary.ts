@@ -2662,6 +2662,8 @@ export const dictionary = defineDictionary({
   connectionReadonlyNote: 'この{workspace}は終了しているため、{connection}の登録と範囲の保存はできません。',
   connectionScopeTarget: '範囲を選ぶ{connection}: {name}',
   connectionCredentialLast4: '末尾',
+  connectionCredentialKeysUnavailable:
+    'サービスの設定に不備があるため、接続を登録したり範囲を扱ったりできません。管理者か運用者に、サービスの設定を確かめるよう伝えてください。',
   connectionCreateFailed: '登録できませんでした。もう一度試してください。',
 });
 

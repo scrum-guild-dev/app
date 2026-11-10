@@ -371,3 +371,18 @@ test('今すぐ同期は本人の接続にだけ出て、押すと届いた件�
   await expect(page.getByRole('status').filter({ hasText: '5分に1回までです' })).toBeVisible();
   expect(calls).toBe(2);
 });
+
+test('鍵の設定不備は登録と範囲の候補で運用者への確認を案内する', async ({ page }) => {
+  await failOperation(page, connectionCreate, { slug: 'aoba' }, 503, 'credential_keys_unavailable');
+  await failOperation(page, connectionScopeCandidates, { slug: 'aoba' }, 503, 'credential_keys_unavailable');
+  await page.goto(`${WORKSPACE}/connections`);
+  await page.getByLabel('表示名').fill('設定不備の接続');
+  await page.getByLabel('fine-grained personal access token').fill('github_pat_' + 'A'.repeat(30));
+  await page.getByRole('button', { name: '登録する' }).click();
+  const message =
+    'サービスの設定に不備があるため、接続を登録したり範囲を扱ったりできません。管理者か運用者に、サービスの設定を確かめるよう伝えてください。';
+  await expect(page.getByRole('alert').filter({ hasText: message })).toHaveCount(1);
+  await expect(page.getByLabel('fine-grained personal access token')).toHaveValue('');
+  await page.getByRole('button', { name: '範囲を選ぶ' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: message })).toHaveCount(2);
+});

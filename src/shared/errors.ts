@@ -51,6 +51,8 @@ export const errorCodes = [
   'internal',
   // 依存先（D1、GitHub）に届かない。503。人がしばらくしてからやり直せる
   'unavailable',
+  // 接続の暗号鍵が無いか形が違う。503。運用者が設定を直す必要がある
+  'credential_keys_unavailable',
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];

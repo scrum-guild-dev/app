@@ -2,7 +2,7 @@
 // 一覧を回す test/operation-registry*.test.ts が確かめる。ここでは認証情報が応答と DB と履歴に平文で残らないこと、
 // 取り込み元の拒否と不調、本人だけの操作、範囲の置き換え、閉じたワークスペースを見る。取り込み元は偽の GitHub（PAT）に向ける
 import { env } from 'cloudflare:workers';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import {
   CONNECTION_SCOPES_MAX,
   CONNECTIONS_PER_MEMBER_MAX,
@@ -856,4 +856,56 @@ describe('connection-sync（今すぐ同期）', () => {
     expect(ctx.github.calls).toHaveLength(calls);
     expect((await lastManual(target, id)).last_manual_sync_at).toBeNull();
   });
+});
+
+describe('接続の暗号鍵の設定不備', () => {
+  test.each([undefined, 'not-json-secret', '{}', '{"1":"invalid-key-secret"}'])(
+    '鍵 %s は登録と候補を専用の503で断り、秘密を出さない',
+    async (keys) => {
+      const ctx = setup();
+      const target = await createTarget();
+      const pat = fakePat('keys-unavailable');
+      ctx.github.addAccount(pat, OWNER, fakeRepos(2));
+      const created = await register(ctx, target, target.member, pat);
+      expect(created.status).toBe(200);
+      const { connection } = (await created.json()) as { connection: { id: string } };
+      const before = await rowsOf(target);
+      const brokenEnv = { ...env, CONNECTION_CREDENTIAL_KEYS: keys };
+      const log = vi.spyOn(console, 'error');
+      try {
+        const registration = await post(ctx.app, connectionCreate, {
+          env: brokenEnv,
+          slug: target.slug,
+          token: target.member.token,
+          body: { workspace_id: target.workspace.id, provider: 'github', name: '設定不備', credential: pat },
+        });
+        const candidates = await post(ctx.app, connectionScopeCandidates, {
+          env: brokenEnv,
+          slug: target.slug,
+          token: target.member.token,
+          body: { workspace_id: target.workspace.id, connection_id: connection.id },
+        });
+        for (const response of [registration, candidates]) {
+          expect(response.status).toBe(503);
+          expect(await response.json()).toEqual({
+            error: {
+              code: 'credential_keys_unavailable',
+              message: 'credential keys unavailable',
+            },
+          });
+        }
+        const logged = JSON.stringify(log.mock.calls);
+        for (const secret of [pat, before.connections[0]!.credential_ciphertext!, keys]) {
+          if (secret !== undefined) expect(logged).not.toContain(secret);
+        }
+        expect(log.mock.calls).toHaveLength(2);
+        for (const [entry] of log.mock.calls) {
+          expect(JSON.parse(String(entry))).toMatchObject({ code: 'credential_keys_unavailable', status: 503 });
+        }
+        expect(await rowsOf(target)).toEqual(before);
+      } finally {
+        log.mockRestore();
+      }
+    },
+  );
 });
