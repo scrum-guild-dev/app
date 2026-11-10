@@ -502,8 +502,9 @@ test('タスクの引き出し（前後のボタンつき）、ストーリー�
   // ページ全体で開いたタスク
   await page.goto(`${WORKSPACE}/tasks/${TASK_ID}`);
   const whole = page.locator('.drawer.is-page');
-  // ページ全体は画面に h1 が無いので、題を h1 にする（引き出しの h2 のまま読み上げが h2 から始まらない）
+  // ページ全体の題は h1。スマホではその前に、ワークスペース名の見出しと共通の入口も出る。
   await expect(whole.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  await expect(page.locator('.mobile-page-head .page-title')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(2);
   await expectDrawerToolsApart(page, whole, 3);
 });

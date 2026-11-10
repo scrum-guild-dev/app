@@ -101,7 +101,8 @@ test('PageHead のない詳細では長いワークスペース名を出し、�
     name,
   }));
   await page.setViewportSize(NARROW_VIEWPORT);
-  await page.goto(`${WORKSPACE}/tasks/019a0000-0000-7000-8000-000000000701`);
+  await page.goto(`${WORKSPACE}/tasks/019a0000-0000-7000-8000-000000000801`);
+  await expect(page.locator('.drawer.is-page')).toHaveAttribute('aria-busy', 'false');
   await expect(page.locator('.mobile-page-head .page-title')).toHaveText(name);
   await expect(page.locator('.mobile-page-tools')).toHaveCount(1);
   expect((await measureFrame(page)).gap).toBeGreaterThanOrEqual(0);

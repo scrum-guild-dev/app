@@ -249,6 +249,8 @@ test('見本の引き出し: タブを切り替えても、作り直しても、
   // パレット（Ctrl+K）の答えの参照から別のタスクを開くときは、確認がパレットの上に出る。
   // 「書き続ける」ならパレットを残し、「捨てる」ならパレットを閉じて移る
   await drawer.locator('#new-comment').fill('書きかけのコメント');
+  // スマホでは検索とアカウントだけを出すので、見本のアシスタントの操作は広い幅へ戻して確かめる。
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.locator('[data-assist-open]').first().focus();
   await page.keyboard.press('Enter');
   const palette = page.locator('#assist-palette');
