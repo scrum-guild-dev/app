@@ -1,3 +1,10 @@
+import {
+  delegateeCreateOperation,
+  delegateeDeleteOperation,
+  delegateeListOperation,
+  delegateeUpdateOperation,
+} from './delegatee.ts';
+import { taskDelegateOperation } from './task-delegate.ts';
 import { attachmentListOperation, attachmentDeleteOperation } from './attachment-list-delete.ts';
 import { favoriteListOperation, favoriteSetOperation } from './favorite.ts';
 import { orgWikiDeleteOperation, workspaceWikiDeleteOperation } from './wiki-delete.ts';
@@ -244,6 +251,11 @@ const listedOperations: readonly ImplementedOperation[] = [
   inboxToBacklogOperation,
   taskCompleteOperation,
   taskReopenOperation,
+  taskDelegateOperation,
+  delegateeCreateOperation,
+  delegateeDeleteOperation,
+  delegateeListOperation,
+  delegateeUpdateOperation,
   taskDetailOperation,
   taskUpdateOperation,
   taskAssignOperation,

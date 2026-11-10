@@ -363,6 +363,7 @@ export const dictionary = defineDictionary({
   due: '期日',
   points: 'ポイント',
   assignee: '担当',
+  delegatee: '依頼先',
   category: '区分',
   capacity: '作業量と基準',
   over: '超過',

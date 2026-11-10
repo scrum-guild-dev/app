@@ -33,6 +33,7 @@ const FIELD_LABELS: ReadonlyMap<string, (t: Translate) => string> = new Map([
   ['link_url', (t: Translate) => t('fieldLink')],
   ['body_md', (t: Translate) => t('fieldBody')],
   ['assignee', (t: Translate) => t('assignee')],
+  ['delegatee', (t: Translate) => t('delegatee')],
   ['story', (t: Translate) => t('historyFieldParent', { story: t('story') })],
   ['category', (t: Translate) => t('category')],
   ['repository', (t: Translate) => t('repository')],

@@ -131,6 +131,7 @@ describe('task-detail', () => {
       due_on: '2026-10-30',
       link_url: 'https://example.com/spec',
       assignee: null,
+      delegatee: null,
       is_imported: false,
       completed_at: null,
       reopenable: false,
