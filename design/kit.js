@@ -544,6 +544,7 @@
   }
   // 属性のチップ。タスクの属性（期日、リポジトリ、区分、ポイント、担当）を、行のチップを押して後から決める。値がなければ薄い破線の形（未設定）。
   // 押すと値の一覧（行の「⋯」と同じメニュー）が開き、選ぶと見本の中で保存する
+  let attrChipSequence = 0;
   function attrChip(x, name, opts = {}) {
     const isPts = name === "pts", isWho = name === "who";
     const member = x.who ? user(x.who) : null;
@@ -563,9 +564,9 @@
     const items = options.map(([value, text]) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${value === current}" data-chip-set="${x.id}:${name}:${value}">${value === current ? icon("check") : ""}<span>${esc(text)}</span></button></li>`).join("");
     const state = opts.state || "ready";
     const pending = state === "loading" ? `<li role="none"><button class="menu-item" type="button" role="menuitem" aria-disabled="true">${t("loading")}</button></li>` : `<li role="none"><button class="menu-item" type="button" role="menuitem" data-chip-retry>${t("assigneeCandidatesFailed").replace("{assignee}", t("assignee"))}。${t("retry")}</button></li>`;
-    const reasonId = `chip-reason-${x.id}-${name}`;
-    return `<span class="row-menu attr-chip${isPts ? " is-points" : ""}">${isWho && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked || shown)}"><span class="chip-text">${esc(shown)}</span>${locked || !opts.proposal ? "" : icon("chevron")}</button>` +
-      (locked ? `<span class="visually-hidden" id="${reasonId}">${locked}</span>` : `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" aria-busy="${state === "loading"}" data-ready-items="${esc(items)}" hidden>${state === "ready" ? items : pending}</ul>`) + `</span>`;
+    const reasonId = `chip-reason-${x.id}-${name}-${++attrChipSequence}`;
+    return `<span class="row-menu attr-chip${isPts ? " is-points" : ""}">${isWho && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked ? `${shown} — ${locked}` : shown)}"><span class="chip-text">${esc(shown)}</span>${locked || !opts.proposal ? "" : icon("chevron")}</button>` +
+      (locked ? `<span class="visually-hidden" id="${reasonId}">${locked}</span>` : `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" aria-busy="${state === "loading"}"${state === "failed" ? ` data-ready-items="${esc(items)}"` : ""} hidden>${state === "ready" ? items : pending}</ul>`) + `</span>`;
   }
 
   // 本番へ移す前に人が確認する状態の見本。実データと混ぜず、値の選択もこの領域だけで終える。
@@ -3610,9 +3611,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const [id, name, value] = el.dataset.chipSet.split(":");
       if (id.startsWith("preview")) {
         const root = el.closest(".row-menu"), button = root.querySelector("[data-chip-for]");
-        const text = el.querySelector("span").textContent;
+        const attr = name === "pts" ? t("points") : t("assignee");
+        const text = value === "" ? attr : el.querySelector("span").textContent;
         button.querySelector(".chip-text").textContent = text;
-        button.setAttribute("aria-label", `${name === "pts" ? t("points") : t("assignee")}: ${text}`);
+        button.setAttribute("aria-label", `${attr}: ${value === "" ? "未設定" : text}`);
         button.title = text;
         button.classList.toggle("is-unset", value === "");
         root.querySelector(".avatar")?.remove();
