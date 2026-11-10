@@ -113,13 +113,17 @@ describe('revoked_at の値', () => {
 describe('deleteOtherSessionsOf の境界', () => {
   const db = () => commonDb(env);
 
-  test('ほかのアカウントのハッシュを今のセッションとして渡しても、その人のセッションは全部消え、渡したハッシュの行は残る', async () => {
+  test('ほかのアカウントのハッシュを今のセッションとして渡すと、0 を返し、その人のセッションも渡したハッシュの行も消えない', async () => {
     const [person, bystander] = await Promise.all([createLoginPerson(), createLoginPerson()]);
     const theirs = await createSessionWithToken(bystander.accountId);
     await createSessionWithToken(person.accountId);
+    const mineBefore = await sessionRowsOf(person.accountId);
+    const theirsBefore = await sessionRowsOf(bystander.accountId);
     const deleted = await deleteOtherSessionsOf(db(), person.accountId, theirs.row.token_hash);
-    expect(deleted).toBe(2);
-    expect(await sessionRowsOf(person.accountId)).toHaveLength(0);
+    expect(deleted).toBe(0);
+    expect(await sessionRowsOf(person.accountId)).toEqual(mineBefore);
+    expect(mineBefore).toHaveLength(2);
+    expect(await sessionRowsOf(bystander.accountId)).toEqual(theirsBefore);
     expect((await sessionRowsOf(bystander.accountId)).map((row) => row.token_hash)).toContain(theirs.row.token_hash);
   });
 

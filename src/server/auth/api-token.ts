@@ -313,7 +313,12 @@ export async function revokeApiTokensOf(db: CommonDb, accountId: string, checked
 
 // その人の、取り消していない（revoked_at が NULL の）トークンすべてに revoked_at を now で書く文。期限切れの行も入る。
 // 取り消し済みの行は書き直さない。別の文と同じ batch() に入れて送るために、文のまま返す
-export function revokeAllApiTokensStatement(db: CommonDb, accountId: string, now: Date): Statement<'common'> {
+export function revokeAllApiTokensStatement(
+  db: CommonDb,
+  accountId: string,
+  now: Date,
+  currentTokenHash?: string,
+): Statement<'common'> {
   return db.statement((q) =>
     q
       .updateTable('api_tokens')
