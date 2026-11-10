@@ -2511,3 +2511,42 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 @media (hover: none) {
   .nav-favorites .nav-item:focus .nav-item-label { white-space: normal; overflow-wrap: anywhere; }
 }
+
+/* 全画面の起票。上の行をスクロールから分け、ソフトキーボードの上でも作成へ届く。 */
+.mobile-create {
+  display: grid; place-items: center; width: var(--mobile-tab-size); height: var(--mobile-tab-size);
+  border-radius: var(--radius-full); border: 1px solid var(--color-line); background: var(--color-accent); color: var(--color-on-accent);
+  box-shadow: var(--shadow-float); cursor: pointer; pointer-events: auto;
+}
+.create-sheet {
+  position: fixed; inset: var(--create-top, 0px) 0 auto; margin: 0; padding: 0; border: 0;
+  width: 100%; max-width: none; height: var(--create-height, 100dvh); max-height: none;
+  background: var(--color-surface); color: var(--color-fg);
+}
+.create-sheet::backdrop { background: var(--color-surface); }
+.create-sheet-form { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.create-sheet-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+  padding: max(var(--space-3), env(safe-area-inset-top, 0px)) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--color-line); flex-shrink: 0;
+}
+.create-sheet-kind { display: flex; gap: var(--space-1); }
+.create-sheet-head button { min-height: 44px; min-width: 44px; }
+.create-sheet-submit { border-radius: var(--radius-full); padding: 0; }
+.create-sheet-body {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-4);
+  padding-bottom: max(var(--space-4), env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: var(--space-4);
+}
+.create-sheet-title { font-size: var(--text-lg); }
+.create-sheet .textarea { min-height: 10rem; }
+.create-sheet-attrs { display: flex; flex-shrink: 0; gap: var(--space-2); overflow-x: auto; padding: var(--space-2) var(--space-1); }
+.create-sheet-attrs > * { flex-shrink: 0; }
+.create-sheet-attrs .chip-btn { min-height: 44px; }
+
+.create-sheet-head, .create-sheet-body {
+  padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
+}
+.create-sheet-kind { min-width: 0; flex-wrap: wrap; justify-content: center; }
+.create-sheet-head > .icon-btn, .create-sheet-submit { flex: 0 0 44px; }
