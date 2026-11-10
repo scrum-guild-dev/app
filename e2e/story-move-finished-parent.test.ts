@@ -32,7 +32,8 @@ for (const state of ['active', 'completed', 'canceled', 'root'] as const) {
                       : entry.stories,
               },
         ),
-        stories: state === 'root' ? [...output.stories, { ...story, epic_id: null }] : output.stories,
+        // 親は epics 配下か最上段の stories かで表す。出力のストーリーに epic_id は無い。
+        stories: state === 'root' ? [...output.stories, story] : output.stories,
       };
     });
     await page.goto(WORKSPACE);
