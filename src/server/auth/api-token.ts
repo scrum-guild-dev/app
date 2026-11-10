@@ -314,7 +314,8 @@ export async function revokeApiTokensOf(db: CommonDb, accountId: string, checked
 // その人の、取り消していない（revoked_at が NULL の）トークンすべてに revoked_at を now で書く文。期限切れの行も入る。
 // 取り消し済みの行は書き直さない。別の文と同じ batch() に入れて送るために、文のまま返す。
 // currentTokenHash を渡したときだけ、今のセッションの行（token_hash と account_id が両方一致する行）がまだあるときに限って書く
-// （deleteOtherSessionsStatement と同じ条件。先に自分のセッションを消された側は何も書かない）。省いたら条件を付けない
+// （deleteOtherSessionsStatement と同じ条件。先に自分のセッションを消された側は何も書かない）。省いたら条件を付けない。
+// 省ける形は、3つの引数で直に呼ぶ既存のテスト（test/api-token-session-breakers.test.ts）のため。本番の道（全失効）は必ず渡す
 export function revokeAllApiTokensStatement(
   db: CommonDb,
   accountId: string,
