@@ -228,8 +228,9 @@
     return taskWithSavedAttributes(task, savedAttributes[task.id] ?? {}, inherited, movedToRootAt[task.id]);
   }
   function rememberCategoryForMove(task: BacklogTask, parentId: string | null): void {
-    if (parentId === null) movedToRootAt[task.id] = performance.now();
-    else delete movedToRootAt[task.id];
+    if (parentId === null) {
+      if (taskPlaces[task.id]?.parentId != null) movedToRootAt[task.id] = performance.now();
+    } else delete movedToRootAt[task.id];
   }
 
   // 完了の応答が返った時刻（performance.now()）。これより前に始まった読み直しが遅れて届いても、完了の印を捨てない（completionSettled）
@@ -258,7 +259,7 @@
   });
   const attributeReload = new FilteredAttributeReload({
     whenIdle: () => moves.whenIdle(),
-    failed: () => showToast(t('taskListReloadFailed'), 'alert'),
+    failed: () => markReloadFailed('saved', page.params.id ?? ''),
     reload: async () => {
       const saved = focusedControl();
       const lost = document.activeElement === null || document.activeElement === document.body;
@@ -465,7 +466,6 @@
       };
     });
   });
-  // 空の行で作ったエピックは、読み直すまで choices に無いので、画面に足した分も親の候補に入れる
   const inheritedTaskCategories = $derived(
     new Map(
       [...allStories, ...openStories].map(
@@ -473,6 +473,7 @@
       ),
     ),
   );
+  // 空の行で作ったエピックは、読み直すまで choices に無いので、画面に足した分も親の候補に入れる
   const openEpics = $derived([
     ...choiceEpics.filter((epic) => !epic.finished).map((epic) => ({ id: epic.id, title: epic.title })),
     ...addedEpics

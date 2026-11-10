@@ -107,3 +107,24 @@ test('同じ読み直しの失敗は、待っている呼び出し元が複数�
   await Promise.allSettled([pending, later]);
   expect(failed).toHaveBeenCalledTimes(1);
 });
+
+test('読み直し中に条件が変わったら古い画面の失敗を通知しない', async () => {
+  const idle = Promise.resolve();
+  const read = deferred();
+  let current = true;
+  const failed = vi.fn();
+  const coordinator = new FilteredAttributeReload({
+    whenIdle: () => idle,
+    reload: async () => {
+      await read.promise;
+      throw new Error('old read');
+    },
+    failed,
+  });
+  const pending = coordinator.request(() => current);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  current = false;
+  read.resolve();
+  await expect(pending).rejects.toThrow('old read');
+  expect(failed).not.toHaveBeenCalled();
+});

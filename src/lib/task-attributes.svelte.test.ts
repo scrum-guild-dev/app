@@ -218,6 +218,7 @@ test('組織とワークスペースを分離し、保存後の通知の例外�
   await settle();
   expect(mocks.call).toHaveBeenCalledTimes(2);
   expect(saved).toHaveBeenCalledTimes(2);
+  expect(mocks.toast).toHaveBeenCalledWith('taskSaved', 'check');
   expect(saved.mock.calls[0][0]).toMatchObject({
     slug: 'aoba',
     workspaceId: 'w',
@@ -360,6 +361,23 @@ test('行から起こした失敗は、引き出しが開いていてもトー�
   await settle();
   expect(mocks.toast).toHaveBeenCalledWith('taskSaveFailed', 'alert');
   expect(editor.points.errorViaToast).toBe(true);
+  detachRow();
+  detachDrawer();
+});
+
+test('失敗後の再取得も引き出しを優先し、行の全体再取得を重ねない', async () => {
+  mocks.call.mockResolvedValue({ ok: false, status: 409, error: { code: 'workspace_closed' } });
+  const editor = taskAttributes('aoba', 'w', 'rejected-scope');
+  const rowReload = vi.fn();
+  const drawerRefresh = vi.fn();
+  const detachRow = editor.attach({ stale: vi.fn(), rejected: rowReload });
+  const detachDrawer = editor.attach({ stale: vi.fn(), inlineErrors: true, rejected: drawerRefresh });
+  editor.observe(detail(), 0);
+  editor.points.choose(5);
+  await settle();
+  expect(drawerRefresh).toHaveBeenCalledExactlyOnceWith('workspaceClosedReadOnly', 'closed');
+  expect(rowReload).not.toHaveBeenCalled();
+  expect(editor.points.error).toBe('workspaceClosedReadOnly');
   detachRow();
   detachDrawer();
 });

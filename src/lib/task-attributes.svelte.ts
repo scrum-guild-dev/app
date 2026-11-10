@@ -233,12 +233,12 @@ export class TaskAttributes {
     const inline = () => [...this.observers].some((observer) => observer.inlineErrors);
     const notified = toast || reason === 'gone' || !inline();
     if (notified) showToast(message, 'alert');
-    for (const observer of this.observers) {
-      try {
-        await observer.rejected?.(message, reason);
-      } catch {
-        /* 保存の失敗を別の失敗で隠さない */
-      }
+    // 同じ失敗で行の全体再取得を重ねると、引き出しの書きかけを失う。
+    const observer = [...this.observers].find((item) => item.inlineErrors) ?? this.observers.values().next().value;
+    try {
+      await observer?.rejected?.(message, reason);
+    } catch {
+      /* 保存の失敗を別の失敗で隠さない */
     }
     if (!notified && !inline()) showToast(message, 'alert');
   }
