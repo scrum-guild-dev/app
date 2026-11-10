@@ -349,3 +349,17 @@ test('ポイントで完了に気づいた後の担当操作には、担当の�
   expect(mocks.toast).toHaveBeenLastCalledWith('taskAssigneeDone', 'alert');
   detach();
 });
+
+test('行から起こした失敗は、引き出しが開いていてもトーストで知らせる', async () => {
+  mocks.call.mockResolvedValue({ ok: false, status: 0, error: null });
+  const editor = taskAttributes('aoba', 'w', 'row-with-drawer');
+  const detachRow = editor.attach({ stale: vi.fn() });
+  const detachDrawer = editor.attach({ stale: vi.fn(), inlineErrors: true });
+  editor.observe(detail(), 0);
+  editor.points.choose(5, true);
+  await settle();
+  expect(mocks.toast).toHaveBeenCalledWith('taskSaveFailed', 'alert');
+  expect(editor.points.errorViaToast).toBe(true);
+  detachRow();
+  detachDrawer();
+});

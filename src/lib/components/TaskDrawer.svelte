@@ -355,7 +355,7 @@
     if (current !== null) untrack(() => session.observe(current, at));
   });
   const pointsShown = $derived(editor.points.shown === undefined ? (task?.points ?? null) : editor.points.shown);
-  const pointsError = $derived(editor.points.error);
+  const pointsError = $derived(editor.points.errorViaToast ? null : editor.points.error);
   let dueError = $state<string | null>(null);
   let dueInput = $state<HTMLInputElement>();
   let dueTimer: ReturnType<typeof setTimeout> | undefined;
@@ -393,7 +393,7 @@
   let assigneeTimer: ReturnType<typeof setTimeout> | undefined;
   let assigneeSelect = $state<HTMLSelectElement>();
   // 送っている担当（空は担当なし）。送っている間（と、続けて選んだ分を送り終えるまで）は、最後に選んだ値を見せる
-  const assigneeError = $derived(editor.assignee.error);
+  const assigneeError = $derived(editor.assignee.errorViaToast ? null : editor.assignee.error);
 
   // 区分とリポジトリの選択肢（直せるときだけ読む）。読む前と読めなかったときは null
   let definitions = $state<{ categories: DefinitionRef[]; repositories: DefinitionRef[] } | null>(null);

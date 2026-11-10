@@ -152,10 +152,10 @@
     await editor?.loadCandidates();
   }
   function choosePoints(value: string): void {
-    editor?.points.choose(value === '' ? null : (Number(value) as PointsChoice));
+    editor?.points.choose(value === '' ? null : (Number(value) as PointsChoice), true);
   }
   function chooseAssignee(value: string): void {
-    editor?.assignee.choose(value);
+    editor?.assignee.choose(value, true);
   }
 
   const assigneeOptions = $derived.by(() => {

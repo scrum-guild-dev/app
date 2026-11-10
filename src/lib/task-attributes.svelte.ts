@@ -32,14 +32,18 @@ export function publishTaskAttribute(saved: AttributeSaved): void {
 // 値の確定と送信の順序を、表示や保存後の処理から独立させる。
 export class AttributeQueue<T> {
   value = $state<T>() as T;
-  pending = $state<{ value: T } | null>(null);
+  pending = $state<{ value: T; toast: boolean } | null>(null);
   error = $state<string | null>(null);
+  errorViaToast = $state(false);
   sending = $state(false);
   private readAt = -Infinity;
   private savedAt = -Infinity;
   private initialized = false;
   constructor(
-    private readonly send: (value: T) => Promise<{ value: T; after: () => Promise<void> | void } | string>,
+    private readonly send: (
+      value: T,
+      toast: boolean,
+    ) => Promise<{ value: T; after: () => Promise<void> | void } | string>,
     private readonly idle: () => void = () => {},
   ) {}
   get shown(): T {
@@ -52,9 +56,10 @@ export class AttributeQueue<T> {
       this.initialized = true;
     }
   }
-  choose(value: T): void {
-    this.pending = { value };
+  choose(value: T, toast = false): void {
+    this.pending = { value, toast };
     this.error = null;
+    this.errorViaToast = false;
     if (!this.sending) void this.drain();
   }
   private async drain(): Promise<void> {
@@ -62,14 +67,17 @@ export class AttributeQueue<T> {
     try {
       while (this.pending !== null) {
         const choice = this.pending.value;
+        const toast = this.pending.toast;
         if (choice === this.value) {
           this.pending = null;
           continue;
         }
         this.error = null;
-        const result = await this.send(choice);
-        if (typeof result === 'string') this.error = result;
-        else {
+        const result = await this.send(choice, toast);
+        if (typeof result === 'string') {
+          this.error = result;
+          this.errorViaToast = toast;
+        } else {
           this.value = result.value;
           this.savedAt = performance.now();
         }
@@ -130,11 +138,11 @@ export class TaskAttributes {
     private readonly dispose: () => void,
   ) {
     this.points = new AttributeQueue(
-      (value) => this.send('points', value),
+      (value, toast) => this.send('points', value, toast),
       () => this.cleanup(),
     );
     this.assignee = new AttributeQueue(
-      (value) => this.send('assignee', value),
+      (value, toast) => this.send('assignee', value, toast),
       () => this.cleanup(),
     );
   }
@@ -221,9 +229,9 @@ export class TaskAttributes {
     }
     return other(result.status === 400 ? t('taskBadRequest') : t('taskSaveFailed'));
   }
-  private async reject({ message, reason }: AttributeFailure): Promise<void> {
+  private async reject({ message, reason }: AttributeFailure, toast = false): Promise<void> {
     const inline = () => [...this.observers].some((observer) => observer.inlineErrors);
-    const notified = reason === 'gone' || !inline();
+    const notified = toast || reason === 'gone' || !inline();
     if (notified) showToast(message, 'alert');
     for (const observer of this.observers) {
       try {
@@ -237,6 +245,7 @@ export class TaskAttributes {
   private async send<K extends 'points' | 'assignee'>(
     field: K,
     value: K extends 'points' ? TaskDetail['points'] : string,
+    toast: boolean,
   ): Promise<{ value: typeof value; after: () => Promise<void> } | string> {
     const doneReason =
       field === 'points'
@@ -247,7 +256,7 @@ export class TaskAttributes {
         this.stoppedFailure.reason === 'completed'
           ? { ...this.stoppedFailure, message: doneReason }
           : this.stoppedFailure;
-      await this.reject(failure);
+      await this.reject(failure, toast);
       return failure.message;
     }
     const input = { workspace_id: this.workspaceId, task_id: this.taskId };
@@ -261,7 +270,7 @@ export class TaskAttributes {
           );
     if (!result.ok) {
       const failure = await this.explainFailure(result, doneReason, field === 'assignee');
-      await this.reject(failure);
+      await this.reject(failure, toast);
       return failure.message;
     }
     const saved: AttributeSaved = {
