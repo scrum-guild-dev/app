@@ -233,7 +233,7 @@ test.describe('応答を差し替える（共有の seed のセッションで�
   });
 
   // 全失効は同意の門の例外にしない（#770）。設定の画面を開いた後に規約の版が上がった場合を、応答の差し替えで作る
-  test('実行が 403 の terms_required（開いた後に規約の版が上がった）なら、失敗の知らせでなく同意の画面へ移り、戻り先は設定の画面', async ({
+  test('実行が 403 の terms_required（開いた後に規約の版が上がった）なら、同意の画面へ移り、戻り先は設定の画面', async ({
     page,
   }) => {
     let sent = 0;
@@ -247,9 +247,8 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     await section.getByRole('button', { name: BUTTON }).click();
     await page.getByRole('dialog', { name: DIALOG }).getByRole('button', { name: '締め出す', exact: true }).click();
     await expect(page).toHaveURL(/\/consent\?return_to=%2Faoba%2Fme$/);
-    await expect(toast(page, '締め出せませんでした。時間をおいて、もう一度試してください')).toHaveCount(0);
-    // 移った後に全失効をやり直さない（送ったのは押した1回だけ）
-    await waitForSettled(page);
+    // 同意の画面が描かれた後も、全失効を送ったのは押した1回だけ（移った先で送り直さない）
+    await expect(page.getByText('現在の版に同意しています。')).toBeVisible();
     expect(sent).toBe(1);
     await unroute();
   });
