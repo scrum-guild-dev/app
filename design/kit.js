@@ -540,18 +540,37 @@
   }
   // 属性のチップ。タスクの属性（pts か who）を、行のチップを押して後から決める。値がなければ薄い破線の形（未設定）。
   // 押すと値の一覧（行の「⋯」と同じメニュー）が開き、選ぶと見本の中で保存する
-  function attrChip(x, name) {
+  function attrChip(x, name, opts = {}) {
     const isPts = name === "pts";
     const label = isPts ? t("points") : t("assignee");
     const set = isPts ? x.pts != null : Boolean(x.who);
-    const shown = isPts ? (set ? `${x.pts} pt` : label) : (set ? user(x.who).name : label);
+    const member = x.who ? user(x.who) : null;
+    const shown = isPts ? (set ? `${x.pts} pt` : label) : (set ? `${opts.text || member.name}${member.left ? "（離脱済み）" : ""}` : label);
+    const locked = x.doneAt ? "完了したタスクの属性は変更できません" : "";
     const options = isPts
       ? [["", "未見積もり"], ...[0, 1, 2, 3, 5, 8, 13].map((v) => [String(v), `${v} pt`])]
       : [["", `${label}なし`], ...Object.entries(D.users).filter(([, u]) => !u.left).map(([id, u]) => [id, u.name])];
+    if (!isPts && member?.left) options.push([x.who, shown]);
     const current = isPts ? (x.pts == null ? "" : String(x.pts)) : (x.who || "");
     const items = options.map(([value, text]) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${value === current}" data-chip-set="${x.id}:${name}:${value}">${value === current ? icon("check") : ""}<span>${esc(text)}</span></button></li>`).join("");
-    return `<span class="row-menu"><button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-row-menu data-chip-for="${x.id}:${name}" aria-haspopup="menu" aria-expanded="false" aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(shown)}"><span class="chip-text">${esc(shown)}</span></button>` +
-      `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" hidden>${items}</ul></span>`;
+    const state = opts.state || "ready";
+    const pending = state === "loading" ? `<li role="none"><button class="menu-item" type="button" role="menuitem" aria-disabled="true">読み込み中…</button></li>` : `<li role="none"><button class="menu-item" type="button" role="menuitem" data-chip-retry>候補を読み込めませんでした。もう一度試す</button></li>`;
+    const reasonId = `chip-reason-${x.id}-${name}`;
+    return `<span class="row-menu attr-chip${isPts ? " is-points" : ""}">${!isPts && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked || shown)}"><span class="chip-text">${esc(shown)}</span>${locked ? "" : icon("chevron")}</button>` +
+      (locked ? `<span class="visually-hidden" id="${reasonId}">${locked}</span>` : `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" aria-busy="${state === "loading"}" data-ready-items="${esc(items)}" hidden>${state === "ready" ? items : pending}</ul>`) + `</span>`;
+  }
+
+  // 本番へ移す前に人が確認する状態の見本。実データと混ぜず、値の選択もこの領域だけで終える。
+  function attrChipExamples() {
+    const left = Object.keys(D.users).find((id) => D.users[id].left);
+    const example = { id: "preview", who: left, pts: 5 };
+    return `<details class="attr-chip-examples"><summary>行のチップの状態と見た目の案（本番への反映前）</summary><div class="book">` +
+      [["locked", "完了した行", { ...example, doneAt: "2026-11-01" }, {}],
+       ["loading", "候補の読み込み中", example, { state: "loading" }],
+       ["failed", "候補の読み込み失敗（もう一度試すで復帰）", example, { state: "failed" }],
+       ["left", "離脱済みの担当", example, {}],
+       ["long", "長い名前・320px・文字150%", example, { text: "長い担当名を持つメンバーの名前を省略して表示する見本" }]]
+      .map(([key, title, x, opts]) => `<div class="entry" data-chip-example="${key}"><span>${title}</span><div class="entry-end">${attrChip({ ...x, id: `preview-${key}` }, "pts")}${attrChip({ ...x, id: `preview-${key}` }, "who", opts)}</div></div>`).join("") + `</div></details>`;
   }
 
   // 行の先頭のつまみ（飾りで、aria-hidden）。order を渡した行（書き込めるとき）だけに付く。
@@ -3524,11 +3543,34 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const hit = (attr) => ev.target.closest(`[${attr}]`);
     let el;
     // 行の「⋯」とチップの一覧。開閉は属性だけで、外を押すか項目を選ぶと閉じる（項目を選んだときは元のボタンにフォーカスを戻す）
+    if ((el = hit("data-chip-retry"))) {
+      const menu = el.closest('[role="menu"]');
+      menu.innerHTML = menu.dataset.readyItems;
+      menu.setAttribute("aria-busy", "false");
+      placeRowMenu(menu.parentElement.querySelector("[data-row-menu]"), menu);
+      menu.querySelector('[aria-checked="true"]')?.focus(); return;
+    }
     const rowToggle = hit("data-row-menu");
     closeRowMenus(rowToggle, ev.target);
     if (rowToggle) { toggleRowMenu(rowToggle); return; }
     if ((el = hit("data-chip-set"))) {
       const [id, name, value] = el.dataset.chipSet.split(":");
+      if (id.startsWith("preview")) {
+        const root = el.closest(".row-menu"), button = root.querySelector("[data-chip-for]");
+        const text = el.querySelector("span").textContent;
+        button.querySelector(".chip-text").textContent = text;
+        button.setAttribute("aria-label", `${name === "pts" ? t("points") : t("assignee")}: ${text}`);
+        button.title = text;
+        button.classList.toggle("is-unset", value === "");
+        root.querySelector(".avatar")?.remove();
+        if (name === "who" && value) button.insertAdjacentHTML("beforebegin", avatarOf(value));
+        root.querySelectorAll('[role="menuitemradio"]').forEach((item) => {
+          item.setAttribute("aria-checked", String(item === el));
+          item.querySelector(".ico")?.remove();
+          if (item === el) item.insertAdjacentHTML("afterbegin", icon("check"));
+        });
+        closeAllRowMenus(); button.focus(); return;
+      }
       const x = task(id);
       if (x) { if (name === "pts") x.pts = value === "" ? null : Number(value); else x.who = value || null; }
       redrawAll(); document.querySelector(`[data-chip-for="${id}:${name}"]`)?.focus(); toast(`${icon("check")}保存しました`); return;
@@ -4126,7 +4168,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer, flashRow,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
-    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
+    attrChipExamples, avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
     narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,

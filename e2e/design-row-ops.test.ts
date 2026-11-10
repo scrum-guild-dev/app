@@ -405,3 +405,53 @@ test('見本のバックログ: 配下の未完了が残るストーリーは、
   await drawer.locator('[data-story-done]').click({ force: true });
   await expect(drawer.locator('.hanko')).toHaveCount(0);
 });
+
+test('見本のチップ: ロックの理由、読み込み中、再試行と離脱済みの候補', async ({ page }) => {
+  await openSample(page, 'backlog.html');
+  const examples = page.locator('.attr-chip-examples');
+  await examples.locator('summary').click();
+  const locked = examples.locator('[data-chip-example="locked"] .chip-btn').first();
+  await expect(locked).toHaveAttribute('aria-disabled', 'true');
+  await expect(locked).toHaveAccessibleDescription('完了したタスクの属性は変更できません');
+  await locked.focus();
+  await locked.press('Enter');
+  await expect(locked).not.toHaveAttribute('aria-expanded');
+
+  const loading = examples.locator('[data-chip-example="loading"] .attr-chip').last();
+  await loading.locator('.chip-btn').click();
+  await expect(loading.getByRole('menu')).toHaveAttribute('aria-busy', 'true');
+  await expect(loading.getByRole('menuitem')).toHaveText('読み込み中…');
+  await page.keyboard.press('Escape');
+  await expect(loading.locator('.chip-btn')).toBeFocused();
+
+  const failed = examples.locator('[data-chip-example="failed"] .attr-chip').last();
+  await failed.locator('.chip-btn').click();
+  await failed.getByRole('menuitem', { name: /もう一度試す/ }).click();
+  await expect(failed.getByRole('menuitemradio', { name: /離脱済み/ })).toHaveAttribute('aria-checked', 'true');
+  await failed.getByRole('menuitemradio', { name: '担当なし', exact: true }).click();
+  await expect(failed.locator('.chip-btn')).toBeFocused();
+  await expect(failed.locator('.avatar')).toHaveCount(0);
+
+  const left = examples.locator('[data-chip-example="left"] .attr-chip').last();
+  await expect(left.locator(':scope > .avatar')).toHaveClass(/is-left/);
+  await expect(left.locator('.chip-btn .avatar')).toHaveCount(0);
+});
+
+for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+  test(`見本のチップ: ${theme}、320px・文字150%で長い担当名が収まる`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await openSample(page, 'backlog.html');
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+      document.documentElement.style.fontSize = '150%';
+    }, theme);
+    await page.locator('.attr-chip-examples summary').click();
+    const row = page.locator('[data-chip-example="long"]');
+    const chip = row.locator('.attr-chip').last().locator('.chip-btn');
+    const box = (await chip.boundingBox())!;
+    const bounds = (await row.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+    expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+    await expect(chip.locator('.ico')).toHaveCount(1);
+  });
+}
