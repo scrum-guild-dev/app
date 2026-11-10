@@ -22,31 +22,47 @@
 const { D, t, icon, esc, pageHead } = SQ;
 const ICON = { srcDone: "check", comment: "pen", party: "users", error: "alert", thanks: "heart", reward: "chest", storage: "clip" };
 let unreadOnly = false;
+let loading = true;
+let limit = 2;
+const pageSize = 2;
+function finishLoading() { loading = false; SQ.redraw(); }
 
 SQ.mount("notifications", () => {
-  const list = D.notifications.filter((n) => !unreadOnly || !n.read);
+  const all = D.notifications.filter((n) => !unreadOnly || !n.read);
+  const list = all.slice(0, limit);
+  const more = all.length > limit;
   const unread = D.notifications.filter((n) => !n.read).length;
   return `
-    ${pageHead("すべての" + t("workspace"), "通知", [["", "bell", "未読", unread]],
-      `<button class="btn" type="button" data-read-all ${unread ? "" : "disabled"}>すべて既読にする</button>`)}
+    ${pageHead("", "通知", [["", "bell", "未読", unread]])}
     <div class="toolbar"><div class="segmented" role="radiogroup" aria-label="表示">
       <label><input type="radio" name="f" data-filter="all" ${unreadOnly ? "" : "checked"}><span>すべて</span></label>
       <label><input type="radio" name="f" data-filter="unread" ${unreadOnly ? "checked" : ""}><span>未読だけ</span></label></div></div>
-    ${list.length ? `<ul class="feed">${list.map((n, i) => `<li class="${n.read ? "" : "is-unread"}">
-        <span class="feed-icon">${icon(ICON[n.kind])}</span>
-        <span class="feed-main"><span class="feed-text">${esc(n.text)}</span><span class="feed-at">${esc(n.at)}${n.read ? "" : "・未読"}</span></span>
-        ${n.href ? `<a class="btn is-sm" href="${n.href}">開く</a>` : n.task ? `<a class="btn is-sm" href="#" data-task="${n.task}" data-read="${D.notifications.indexOf(n)}">開く</a>` : n.read ? "" : `<button class="btn is-sm is-quiet" type="button" data-read="${D.notifications.indexOf(n)}">既読にする</button>`}
-      </li>`).join("")}</ul>`
-      : SQ.emptyState("bell", D.notifications.length ? "未読の通知はありません" : "通知はまだありません")}
-    <p class="action-note">知らせるのは、取り込み元での完了と開き直し、取り込み元で見つからない${t("task")}、自分の${t("connection")}の失敗、自分の${t("task")}へのコメント、担当への割り当て、${t("party")}への割り振り、${t("reward")}の変更、届いた感謝、添付ファイルの合計が上限の 80% を超えたこと（${t("admin")}だけ）です。</p>`;
+    ${loading ? SQ.emptyState("clock", "読み込んでいます") : list.length ? `<ul class="feed">${list.map((n) => `<li class="${n.read ? "" : "is-unread"}">
+        <span class="feed-icon">${icon(ICON[n.kind] || "bell")}</span>
+        <span class="feed-main"><span class="feed-text">${esc(n.text)}</span><span class="feed-at">${esc(n.at)}${n.read ? "" : "・未読"}</span>${n.kind === "storage" && D.organizations[0]?.admin ? `<span><a class="btn is-sm is-quiet" href="admin.html">組織の管理を開く</a></span>` : ""}</span>
+        ${n.read ? "" : `<button class="btn is-sm is-quiet" type="button" data-read="${D.notifications.indexOf(n)}">既読にする</button>`}
+      </li>`).join("")}</ul>` : SQ.emptyState("bell", unreadOnly ? "未読の通知はありません" : "通知はまだありません")}
+    ${!loading && more ? `<div class="form-actions"><button class="btn is-sm" type="button" data-more>続きを読む</button></div>` : !loading && limit > pageSize ? `<p class="action-note" tabindex="-1" id="notification-end">通知をすべて表示しました</p>` : ""}
+    <p class="action-note">現在の実装は、容量が上限の80%を超えたときの管理者宛ての通知と、個別の既読です。ほかの種類の行は今後の通知の見本です。</p>`;
 });
+setTimeout(finishLoading, 300);
 
 document.addEventListener("click", (ev) => {
   const r = ev.target.closest("[data-read]");
-  if (r) { D.notifications[+r.dataset.read].read = true; if (!r.dataset.task) SQ.redraw(); else setTimeout(SQ.redraw); }
-  if (ev.target.closest("[data-read-all]")) { D.notifications.forEach((n) => (n.read = true)); SQ.redraw(); }
+  if (r) {
+    D.notifications[+r.dataset.read].read = true;
+    SQ.redraw();
+    document.querySelector("[data-read]")?.focus();
+  }
   const f = ev.target.closest("[data-filter]");
-  if (f) { unreadOnly = f.dataset.filter === "unread"; SQ.redraw(); }
+  if (f) {
+    unreadOnly = f.dataset.filter === "unread";
+    limit = pageSize;
+    loading = true;
+    SQ.redraw();
+    setTimeout(finishLoading, 300);
+  }
+  if (ev.target.closest("[data-more]")) { limit += pageSize; SQ.redraw(); document.getElementById("notification-end")?.focus(); }
 });
 </script>
 </body>

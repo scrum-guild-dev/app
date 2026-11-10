@@ -1232,13 +1232,18 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // 使っている量と上限。80% を超えたら is-warn、上限に達したら is-full
   // opts.unit は量の単位（既定 GB）、opts.note は下に添える文
+  function storageBytes(bytes) {
+    if (bytes < 1024 ** 2) return `${bytes.toLocaleString("ja-JP")}\u00a0B`;
+    const unit = bytes >= 1024 ** 3 ? 1024 ** 3 : 1024 ** 2;
+    return `${(Math.floor(bytes / unit * 10) / 10).toLocaleString("ja-JP")}\u00a0${unit === 1024 ** 3 ? "GB" : "MB"}`;
+  }
   function meter(used, quota, opts = {}) {
     const unit = opts.unit || "GB";
-    const pct = Math.min(100, Math.round((used / quota) * 100));
-    const key = used >= quota ? "is-full" : pct >= 80 ? "is-warn" : "";
+    const pct = Math.min(100, Math.floor((used / quota) * 100));
+    const key = used >= quota ? "is-full" : used / quota > 0.8 ? "is-warn" : "";
     const label = `上限 ${quota} ${unit} のうち ${used} ${unit}（${pct}%）`;
     const state = key === "is-full" ? `<span class="chip is-danger">${icon("alert")}上限に達しています</span>`
-      : key ? `<span class="chip is-warn">${icon("alert")}上限の ${pct}%</span>` : `<span class="props-note">上限の ${pct}%</span>`;
+      : key ? `<span class="chip is-warn">${icon("alert")}${opts.storage ? "上限の80%を超えています" : `上限の ${pct}%`}</span>` : `<span class="props-note">上限の ${pct}%</span>`;
     if (opts.small) {
       return `<div class="meter meter-small ${key}"><span class="meter-small-top"><span class="mono">${used} / ${quota} ${unit}</span>${key ? `<span class="verdict is-over">${icon("alert")}${pct}%</span>` : ""}</span>
         <div class="meter-bar" role="img" aria-label="${label}"><span style="width:${pct}%"></span></div></div>`;
@@ -4283,7 +4288,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     attrChipExamples, avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead, mobilePageHead,
     narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
-    filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
+    filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter, storageBytes,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
     enableAssistOnCatalog: () => { assistOnCatalog = true; },
   };

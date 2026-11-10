@@ -47,6 +47,17 @@ export function organizationStorageBytes(db: OrganizationDb): RawBuilder<number>
 }
 
 // 管理者に返す容量の内訳。Wiki は題と本文の UTF-8 バイト数で、過去版と削除後の保持分を含める。
+// 80%通知や変更待ちの印がある組織だけで、R2へ流す前の明らかな超過を断るために使う。
+// 最後の上限の守りは、insertUploadedAttachmentの同じSQL文内の条件が担う。
+export async function attachmentFitsQuota(db: OrganizationDb, quota: number, incomingBytes: number): Promise<boolean> {
+  const row = await db.first(
+    db.statement((q) =>
+      q.selectNoFrom(sql<number>`${organizationStorageBytes(db)} + ${incomingBytes} <= ${quota}`.as('fits')),
+    ),
+  );
+  return Number(row?.fits ?? 0) === 1;
+}
+
 export async function readOrganizationStorageUsage(db: OrganizationDb) {
   const wikiBytes = (condition: RawBuilder<boolean>) => sql<number>`(
     WITH scoped_pages AS (SELECT id, title, body_md FROM wiki_pages WHERE ${condition})
@@ -64,6 +75,7 @@ export async function readOrganizationStorageUsage(db: OrganizationDb) {
         .select([
           'w.id',
           'w.name',
+          'w.closed_at',
           sql<number>`${wikiBytes(sql<boolean>`workspace_id = w.id`)} + (SELECT coalesce(sum(size_bytes), 0) FROM attachments WHERE workspace_id = w.id)`.as(
             'used_bytes',
           ),

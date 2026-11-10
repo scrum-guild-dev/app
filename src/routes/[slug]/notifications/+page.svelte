@@ -199,8 +199,13 @@
       </li>
     {/each}
   </ul>
-{:else if !loading && !failed}
-  <EmptyState icon="bell" title={t(unreadOnly ? 'notificationUnreadEmpty' : 'notificationEmpty')} />
+{:else if loading}
+  <EmptyState icon="clock" title={t('loading')} />
+{:else if !failed}
+  <EmptyState
+    icon="bell"
+    title={t(unreadOnly ? (next !== null ? 'notificationPageRead' : 'notificationUnreadEmpty') : 'notificationEmpty')}
+  />
 {/if}
 
 {#if next !== null}

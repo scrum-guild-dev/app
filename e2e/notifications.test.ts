@@ -2,7 +2,7 @@
 import { notificationList, notificationRead } from '../src/shared/operations/notification.ts';
 import type { OutputOf } from '../src/shared/operations/define.ts';
 import { expect, test } from './fixtures.ts';
-import { signIn } from './helpers.ts';
+import { expectNoA11yViolationsInThemes, signIn } from './helpers.ts';
 import { routeOperation } from './operations.ts';
 
 const warning = {
@@ -45,6 +45,50 @@ test('通知の容量警告から管理へ移れ、既読にすると未読だ�
   await page.getByRole('radio', { name: 'すべて', exact: true }).check();
   await expect(page.locator('.feed')).toContainText('上限の80%を超えました');
   await expect(page.getByRole('button', { name: '既読にする', exact: true })).toHaveCount(0);
+  await expectNoA11yViolationsInThemes(page, 'notifications');
+});
+
+test('初回と絞り込み切替の読み込み中には、画面にも状態を表示する', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'admin');
+  let finish!: () => void;
+  let pending = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await routeOperation(page, notificationList, { slug: 'aoba' }, async (call) => {
+    await pending;
+    await call.fulfill({ notifications: [warning], next: null, unread_count: 1 });
+  });
+  await page.goto('/aoba/notifications');
+  await expect(page.locator('.empty')).toContainText('読み込んでいます');
+  finish();
+  await expect(page.locator('.feed li')).toHaveCount(1);
+  pending = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await page.getByRole('radio', { name: '未読だけ' }).check();
+  await expect(page.locator('.empty')).toContainText('読み込んでいます');
+  finish();
+  await expect(page.locator('.feed li')).toHaveCount(1);
+});
+
+test('未読の現在のページを既読にしても、続きがある間は未読がないと言わない', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL, 'admin');
+  await routeOperation(page, notificationList, { slug: 'aoba' }, (call) =>
+    call.fulfill({
+      notifications: [warning],
+      next: { id: warning.id, created_at: warning.created_at },
+      unread_count: 2,
+    }),
+  );
+  await routeOperation(page, notificationRead, { slug: 'aoba' }, (call) =>
+    call.fulfill({ id: warning.id, read_at: warning.created_at }),
+  );
+  await page.goto('/aoba/notifications');
+  await page.getByRole('radio', { name: '未読だけ' }).check();
+  await page.getByRole('button', { name: '既読にする', exact: true }).click();
+  await expect(page.getByText('未読の通知はありません', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('表示中の通知はすべて既読です。続きの通知があります。', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '続きを読む', exact: true })).toBeVisible();
 });
 
 test('既読を保存している間に別の操作へフォーカスを移したら、保存の成功で奪い返さない', async ({
