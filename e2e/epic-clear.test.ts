@@ -209,11 +209,15 @@ test('読み込んだ後にクリアされたエピックを、配下を残し�
   await expect(confirm.getByRole('radio', { name: /配下を親なしで残す/ })).toBeChecked();
   await confirm.getByRole('button', { name: '削除する' }).click();
   await expect(
-    confirm.getByText(
-      '完了したエピックは、配下のストーリーを親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先にエピックの完了を取り消してください。',
-    ),
+    confirm.locator('.field-hint', {
+      hasText:
+        '完了したエピックは、配下のストーリーを親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先にエピックの完了を取り消してください。',
+    }),
   ).toBeVisible();
   await expect(confirm).toBeVisible();
   // 読み直して、続けて同じ断りを繰り返さないよう「残す」を選べなくする
-  await expect(confirm.getByRole('radio', { name: /配下を親なしで残す/ })).toBeDisabled();
+  const keepAfter = confirm.getByRole('radio', { name: /配下を親なしで残す/ });
+  await expect(keepAfter).toBeDisabled();
+  await expect(keepAfter).not.toBeChecked();
+  await expect(confirm.getByRole('button', { name: '削除する' })).toHaveAttribute('aria-disabled', 'true');
 });

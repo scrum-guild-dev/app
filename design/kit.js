@@ -1746,7 +1746,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // ポイントと期日は、選んだら保存する（保存のボタンは無い）
   document.addEventListener("change", (ev) => {
-    if (ev.target.name === "d-del") document.querySelector("[data-delete-needs-choice]")?.setAttribute("aria-disabled", "false");
+    if (ev.target.name === "d-del") { const b = document.querySelector("[data-delete-needs-choice]"); b?.setAttribute("aria-disabled", "false"); b?.removeAttribute("aria-describedby"); }
     const el = ev.target.closest && ev.target.closest("[data-drawer-pts], [data-drawer-due]");
     if (!el || !drawer.id) return;
     const x = drawerItem();

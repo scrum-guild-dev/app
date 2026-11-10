@@ -209,9 +209,12 @@
       } else if (result.status === 409 && result.error?.code === 'epic_finished') {
         // クリア済みの<エピック>は、配下を親なしで残して削除できない（完了した<ストーリー>で、もう一度クリアできてしまうため）
         // まとめて削除できない人（他の人の作った配下がある一般のメンバー）は、完了を取り消せる人に頼む
-        submitError = clearedText(current);
-        // 読んだ後にクリアされていた。読み直して、「残す」を選べなくする（理由の文は残る）
-        void refresh(current, mine);
+        // 読んだ後にクリアされていた。読み直しの成否に依らず、その場で「残す」を選べなくし、理由は選択肢の下の文と status に任せる（alert と重ねない）
+        const updated = { ...current, cleared: true };
+        target = updated;
+        mode = usableMode(updated, mode);
+        announcement = clearedText(updated);
+        void refresh(updated, mine);
       } else if (result.status === 409 && result.error?.code === 'workspace_closed') {
         submitError = t('workspaceClosedReadOnly', { workspace: t('workspace') });
         onfinish('closed');
