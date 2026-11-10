@@ -73,6 +73,9 @@
     discardKeep: "書き続ける",
     discardConfirm: "捨てる",
     loading: "読み込んでいます",
+    taskSaveConflict: "この{task}は{done}になっているため、{points}は直せません。",
+    taskAssigneeDone: "この{task}は{done}になっているため、{assignee}は替えられません。",
+    assigneeCandidatesFailed: "{assignee}の候補を読み込めませんでした",
     storyCreating: "作っています",
     dueClear: "クリア",
     storyTitlePlaceholder: "どこまで進めば区切りか",
@@ -554,12 +557,12 @@
     }[name];
     const { label, current, options } = config;
     const set = current !== "";
-    if (isWho && member?.left) options.push([x.who, `${opts.text || member.name}（離脱済み）`]);
-    const shown = set ? (name === "who" ? `${opts.text || member.name}${member.left ? "（離脱済み）" : ""}` : options.find(([value]) => value === current)?.[1] || current) : label;
-    const locked = x.doneAt ? "完了したタスクの属性は変更できません" : name === "cat" && cat?.inherited ? "親から引き継いだ区分" : name === "due" && dueOf(x)?.fromSource ? "取り込み元の期日" : null;
+    if (isWho && member?.left) options.push([x.who, `${opts.text || member.name}${t("leftMember")}`]);
+    const shown = set ? (name === "who" ? `${opts.text || member.name}${member.left ? t("leftMember") : ""}` : options.find(([value]) => value === current)?.[1] || current) : label;
+    const locked = x.doneAt && (isPts || isWho) ? t(isPts ? "taskSaveConflict" : "taskAssigneeDone").replace("{task}", t("task")).replace("{done}", t("done")).replace(isPts ? "{points}" : "{assignee}", label) : name === "cat" && cat?.inherited ? "親から引き継いだ区分" : name === "due" && dueOf(x)?.fromSource ? "取り込み元の期日" : null;
     const items = options.map(([value, text]) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${value === current}" data-chip-set="${x.id}:${name}:${value}">${value === current ? icon("check") : ""}<span>${esc(text)}</span></button></li>`).join("");
     const state = opts.state || "ready";
-    const pending = state === "loading" ? `<li role="none"><button class="menu-item" type="button" role="menuitem" aria-disabled="true">読み込み中…</button></li>` : `<li role="none"><button class="menu-item" type="button" role="menuitem" data-chip-retry>候補を読み込めませんでした。もう一度試す</button></li>`;
+    const pending = state === "loading" ? `<li role="none"><button class="menu-item" type="button" role="menuitem" aria-disabled="true">${t("loading")}</button></li>` : `<li role="none"><button class="menu-item" type="button" role="menuitem" data-chip-retry>${t("assigneeCandidatesFailed").replace("{assignee}", t("assignee"))}。${t("retry")}</button></li>`;
     const reasonId = `chip-reason-${x.id}-${name}`;
     return `<span class="row-menu attr-chip${isPts ? " is-points" : ""}">${isWho && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked || shown)}"><span class="chip-text">${esc(shown)}</span>${locked ? "" : icon("chevron")}</button>` +
       (locked ? `<span class="visually-hidden" id="${reasonId}">${locked}</span>` : `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" aria-busy="${state === "loading"}" data-ready-items="${esc(items)}" hidden>${state === "ready" ? items : pending}</ul>`) + `</span>`;

@@ -436,7 +436,7 @@ test('見本のチップ: ロックの理由、読み込み中、再試行と離
   await examples.locator('summary').click();
   const locked = examples.locator('[data-chip-example="locked"] .chip-btn').first();
   await expect(locked).toHaveAttribute('aria-disabled', 'true');
-  await expect(locked).toHaveAccessibleDescription('完了したタスクの属性は変更できません');
+  await expect(locked).toHaveAccessibleDescription('このタスクは完了になっているため、ポイントは直せません。');
   await locked.focus();
   await locked.press('Enter');
   await expect(locked).not.toHaveAttribute('aria-expanded');
@@ -444,7 +444,7 @@ test('見本のチップ: ロックの理由、読み込み中、再試行と離
   const loading = examples.locator('[data-chip-example="loading"] .attr-chip').last();
   await loading.locator('.chip-btn').click();
   await expect(loading.getByRole('menu')).toHaveAttribute('aria-busy', 'true');
-  await expect(loading.getByRole('menuitem')).toHaveText('読み込み中…');
+  await expect(loading.getByRole('menuitem')).toHaveText('読み込んでいます');
   await page.keyboard.press('Escape');
   await expect(loading.locator('.chip-btn')).toBeFocused();
 
