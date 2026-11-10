@@ -183,7 +183,7 @@
 
   const delegateeOptions = $derived<Option[]>([
     ...(delegatees ?? []).map((person) => ({ value: person.id, label: person.name })),
-    { value: FILTER_NONE, label: t('delegateeNone', { delegatee: t('delegatee') }) },
+    { value: FILTER_NONE, label: t('delegateeNone') },
   ]);
 
   const selects = $derived<{ key: FilterSelectKey; label: string; options: Option[]; unloaded: boolean }[]>([

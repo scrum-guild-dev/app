@@ -1897,7 +1897,6 @@ export const dictionary = defineDictionary({
   taskAssigneeLocked: '{done}した{task}の{assignee}は替えられません',
   taskAssigneeDone: 'この{task}は{done}になっているため、{assignee}は替えられません。',
   // バックログの行の依頼先のチップ（自分用の組織だけ。付いた行にだけ出す）と、絞り込みの「なし」
-  delegateeNone: '{delegatee}なし',
   delegateeClear: '{delegatee}を外す',
   delegateesLoadFailed: '{delegatee}の名簿を読み込めませんでした。再読み込みすると、もう一度読みます',
   delegateeGone: '選んだ人は{delegatee}の名簿から削除されています。選び直してください',
