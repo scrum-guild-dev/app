@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -26,6 +26,29 @@ function withDir(run: (dir: string) => void) {
   }
 }
 
+test('wrangler 同梱の dotenv の版と LINE が、写した正規表現から変わっていない', () => {
+  const review = 'wrangler 同梱の dotenv の parse と、dev-vars.ts・テスト・docs の見直しが必要';
+  const bundle = readFileSync(new URL(import.meta.resolve('wrangler')), 'utf8');
+  // バンドルは実行しない。同梱物の構成が変わり抽出できなくなったときも、黙って通さず見直す。
+  const modules = [
+    ...bundle.matchAll(/\/\/ [^\n]*dotenv@([^/]+)\/node_modules\/dotenv\/lib\/main\.js\n([\s\S]*?)(?=\n\/\/ )/g),
+  ];
+  assert.equal(modules.length, 1, `dotenv の同梱モジュールを一意に抽出できない: ${review}`);
+  assert.equal(modules[0]![1], '16.3.1', `dotenv の版が変わった: ${review}`);
+  const upstream = modules[0]![2]!.match(/var LINE = \/(.+)\/([a-z]+);/);
+  const local = readFileSync(new URL('./dev-vars.ts', import.meta.url), 'utf8').match(
+    /const DOTENV_LINE =\s*\/(.+)\/([a-z]+);/,
+  );
+  assert.ok(upstream, `同梱 dotenv の LINE を抽出できない: ${review}`);
+  assert.ok(local, `dev-vars.ts の DOTENV_LINE を抽出できない: ${review}`);
+  // mg と gm の並びだけの違いは無視する。
+  assert.equal(
+    new RegExp(local[1]!, local[2]).toString(),
+    new RegExp(upstream[1]!, upstream[2]).toString(),
+    `同梱 dotenv の LINE と DOTENV_LINE が違う: ${review}`,
+  );
+});
+
 test('鍵は wrangler の dotenv と同じに数え、コメントの行は数えない', () => {
   const text = ['  export A=1', 'B =2', '#C=3', ' # D=4', 'E', 'F=', 'G=x=y # note', 'not a key=1'].join('\n');
   assert.deepEqual([...devVarKeys(text)], ['A', 'B', 'F', 'G']);
@@ -41,6 +64,21 @@ test('dotenv の書き方（コロンの区切り、複数行の値、. と - �
     ['A=1\rB=2\r\nC=3', ['A', 'B', 'C']],
   ];
   for (const [text, keys] of cases) assert.deepEqual([...devVarKeys(text)], keys, JSON.stringify(text));
+});
+
+test('LF・CR・CRLF の通常行と引用符付き複数行で、値の中の鍵らしい行を数えない', () => {
+  for (const newline of ['\n', '\r', '\r\n']) {
+    for (const quote of ['"', "'", '`']) {
+      const text = ['A=1', `MULTI=${quote}first`, 'INSIDE=1', `last${quote}`, '# COMMENT=1', 'AFTER=2'].join(newline);
+      assert.deepEqual([...devVarKeys(text)], ['A', 'MULTI', 'AFTER'], JSON.stringify(text));
+    }
+  }
+});
+
+test('コロン直後の CRLF を正規化し、次の行を値として読む dotenv と同じ鍵を数える', () => {
+  for (const newline of ['\n', '\r', '\r\n']) {
+    assert.deepEqual([...devVarKeys(`B:${newline}A=1${newline}AFTER=2`)], ['B', 'AFTER']);
+  }
 });
 
 test('足りない鍵だけを、.dev.vars.example の順で返す。空の値は「ある」と数える', () => {

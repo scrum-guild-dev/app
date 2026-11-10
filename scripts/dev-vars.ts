@@ -4,14 +4,17 @@
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-// wrangler は .dev.vars を同梱の dotenv（16.x）で読む。鍵の数え方を wrangler とずらさないため、その行の正規表現を写す
+// wrangler 同梱の dotenv 16.3.1（lib/main.js）の LINE を写す。
+// dev-vars.test.ts で同梱の版と正規表現を照合する。更新で落ちたら同梱の parse を読み直し、
+// 鍵の数え方とテスト、ここの版、docs/development.md の「ワークツリーで作業する」を見直す。
 // （`KEY: value` の区切り、引用符で囲んだ複数行の値、`.` と `-` を含む鍵、行末の # のコメント）。# で始まる行は鍵にならない
 const DOTENV_LINE =
   /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/gm;
 
 export function devVarKeys(text: string): Set<string> {
   const keys = new Set<string>();
-  // dotenv と同じく、CRLF と CR だけの改行を LF にそろえてから読む
+  // dotenv と同じく CRLF と CR を LF にそろえる。コロン直後の CRLF では、
+  // 正規化しないと :\s+? が CR だけを消費し、次の行の値を別の鍵として数えてしまう。
   for (const match of text.replace(/\r\n?/g, '\n').matchAll(DOTENV_LINE)) keys.add(match[1]!);
   return keys;
 }
