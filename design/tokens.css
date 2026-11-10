@@ -80,6 +80,7 @@
   --color-stamp: #cf222e;       /* 依頼主の印と通知の数 */
   --color-done: var(--color-ok);  /* 完了の印とクリア */
   --color-xp: #8a5a00;          /* 経験値とレベルだけに使う */
+  --color-favorite: #997000;  /* お気に入りの塗った星だけ */
   --color-xp-soft: #f6ecd6;
 
   /* ---- 色: 状態 ---- */
@@ -136,6 +137,7 @@
     --color-accent-soft: #18233a;
     --color-stamp: #ff7b72;
     --color-xp: #e3b341;
+    --color-favorite: #f5cc45;  /* お気に入りの塗った星だけ */
     --color-xp-soft: #3a2e12;
     --color-danger: #ff8178;
     --color-danger-soft: #3d1f1d;
@@ -167,6 +169,7 @@
   --color-accent-soft: #18233a;
   --color-stamp: #ff7b72;
   --color-xp: #e3b341;
+  --color-favorite: #f5cc45;  /* お気に入りの塗った星だけ */
   --color-xp-soft: #3a2e12;
   --color-danger: #ff8178;
   --color-danger-soft: #3d1f1d;
@@ -200,6 +203,7 @@
   --color-stamp: #c8352b;       /* 朱。完了の判子と依頼主の印だけに使う */
   --color-done: var(--color-stamp);
   --color-xp: #8a6418;          /* 金 */
+  --color-favorite: #916b00;  /* お気に入りの塗った星だけ */
   --color-xp-soft: #f2e8d2;
   --color-danger: #b42318;
   --color-danger-soft: #f9e3e1;
@@ -244,6 +248,7 @@
   --color-accent-soft: #0e2a44;
   --color-stamp: #ff6f8e;
   --color-xp: #b69cff;          /* 紫。経験値とレベルだけに使う */
+  --color-favorite: #f5cc45;  /* お気に入りの塗った星だけ */
   --color-xp-soft: #231b42;
   --color-danger: #ff7a7a;
   --color-danger-soft: #3a1520;

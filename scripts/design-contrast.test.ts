@@ -214,3 +214,33 @@ describe('.tier の色の対応', () => {
     );
   });
 });
+
+describe('お気に入りの星の色', () => {
+  const all = { ...blocks, 'シンプル（自動）のダークの側': autoDarkBlock };
+  for (const [theme, block] of Object.entries(all)) {
+    test(`${theme}: お気に入りの金と地5色が3:1以上で、報酬の金と別の値`, () => {
+      const color = readColor(block, theme, 'favorite');
+      assert.notEqual(color, readColor(block, theme, 'tier-large'));
+      for (const ground of groundNames) {
+        const ratio = contrast(color, readColor(block, theme, ground));
+        assert.ok(ratio >= 3, `${theme} の星（${color}）と --color-${ground} は ${ratio.toFixed(2)}:1`);
+      }
+    });
+  }
+
+  test('シンプル（自動）のダークの側は、simple_dark と同じお気に入りの色', () => {
+    assert.equal(
+      readColor(autoDarkBlock, 'シンプル（自動）のダークの側', 'favorite'),
+      readColor(blocks['シンプル（ダーク）'], 'シンプル（ダーク）', 'favorite'),
+    );
+  });
+
+  test('塗った星は --color-favorite を color に使う', () => {
+    const rules = [...components.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
+      ([, selector]) => selector.trim() === '.favorite-mark[aria-pressed="true"]',
+    );
+    assert.equal(rules.length, 1);
+    const colors = [...rules[0][2].matchAll(/(?:^|[;\s])color:\s*([^;]+?)\s*(?:;|$)/g)].map(([, value]) => value);
+    assert.deepEqual(colors, ['var(--color-favorite)']);
+  });
+});
