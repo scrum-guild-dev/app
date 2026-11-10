@@ -256,7 +256,7 @@
     const inRow = delegateeFocusInRow;
     delegateeFocusInRow = false;
     await tick();
-    if (gone || delegateeVisible || !inRow) return;
+    if (!rowEl?.isConnected || delegateeVisible || !inRow) return;
     if (document.activeElement === null || document.activeElement === document.body) titleLink?.focus();
   }
 
