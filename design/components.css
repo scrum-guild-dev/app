@@ -2556,12 +2556,12 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .create-sheet-head > .icon-btn, .create-sheet-submit { flex: 0 0 44px; }
 
 /* #890: 見本で確認する案。本番の AttrChip には、人の確認後に反映する。 */
-.attr-chip { flex: 0 1 auto; min-width: 0; max-width: 100%; }
-.attr-chip .avatar { flex: none; }
-.attr-chip .chip-btn { min-width: 0; }
-.attr-chip .chip-text { min-width: 0; }
-.attr-chip.is-points .chip-text { font-family: var(--font-mono); }
-.attr-chip .chip-btn > .ico { flex: none; width: 1em; height: 1em; transform: rotate(90deg); }
+.attr-chip-examples .attr-chip { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.attr-chip-examples .attr-chip .avatar { flex: none; }
+.attr-chip-examples .attr-chip .chip-btn { min-width: 0; }
+.attr-chip-examples .attr-chip .chip-text { min-width: 0; }
+.attr-chip-examples .attr-chip.is-points .chip-text { font-family: var(--font-mono); }
+.attr-chip-examples .attr-chip .chip-btn > .ico { flex: none; width: 1em; height: 1em; transform: rotate(90deg); }
 .attr-chip-examples .entry { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .attr-chip-examples .entry-end { min-width: 0; max-width: 100%; flex-wrap: wrap; }
 

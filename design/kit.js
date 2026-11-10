@@ -564,7 +564,7 @@
     const state = opts.state || "ready";
     const pending = state === "loading" ? `<li role="none"><button class="menu-item" type="button" role="menuitem" aria-disabled="true">${t("loading")}</button></li>` : `<li role="none"><button class="menu-item" type="button" role="menuitem" data-chip-retry>${t("assigneeCandidatesFailed").replace("{assignee}", t("assignee"))}。${t("retry")}</button></li>`;
     const reasonId = `chip-reason-${x.id}-${name}`;
-    return `<span class="row-menu attr-chip${isPts ? " is-points" : ""}">${isWho && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked || shown)}"><span class="chip-text">${esc(shown)}</span>${locked ? "" : icon("chevron")}</button>` +
+    return `<span class="row-menu attr-chip${isPts ? " is-points" : ""}">${isWho && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked || shown)}"><span class="chip-text">${esc(shown)}</span>${locked || !opts.proposal ? "" : icon("chevron")}</button>` +
       (locked ? `<span class="visually-hidden" id="${reasonId}">${locked}</span>` : `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" aria-busy="${state === "loading"}" data-ready-items="${esc(items)}" hidden>${state === "ready" ? items : pending}</ul>`) + `</span>`;
   }
 
@@ -578,7 +578,7 @@
        ["failed", "候補の読み込み失敗（もう一度試すで復帰）", example, { state: "failed" }],
        ["left", "離脱済みの担当", example, {}],
        ["long", "長い名前・320px・文字150%", example, { text: "長い担当名を持つメンバーの名前を省略して表示する見本" }]]
-      .map(([key, title, x, opts]) => `<div class="entry" data-chip-example="${key}"><span>${title}</span><div class="entry-end">${attrChip({ ...x, id: `preview-${key}` }, "pts")}${attrChip({ ...x, id: `preview-${key}` }, "who", opts)}</div></div>`).join("") + `</div></details>`;
+      .map(([key, title, x, opts]) => `<div class="entry" data-chip-example="${key}"><span>${title}</span><div class="entry-end">${attrChip({ ...x, id: `preview-${key}` }, "pts", { proposal: true })}${attrChip({ ...x, id: `preview-${key}` }, "who", { ...opts, proposal: true })}</div></div>`).join("") + `</div></details>`;
   }
 
   // 行の先頭のつまみ（飾りで、aria-hidden）。order を渡した行（書き込めるとき）だけに付く。
