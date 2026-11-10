@@ -8,7 +8,9 @@ const AFTER_SAVE_CHECK_TTL_MS = 30_000;
 // 保存後の副作用だけを同じisolate・組織で合流する。認可や容量の厳密な書き込み条件は各リクエストで行う。
 // 実行中に新しい保存があれば一度だけ追随する。追随中の追加保存は世代CASでdirtyを残し、cronへ渡す。
 // 共有するのは実行中の印だけ。別リクエストはownerのI/O Promiseを保持せず、その完了も待たない。
-// ownerが中断してfinallyまで届かなくても、実時間30秒で置き換えられる。容量や権限のキャッシュ・書込ロックではない。
+// ownerが中断してfinallyまで届かなくても、waitUntilの猶予に合わせ実時間30秒で置き換える。
+// 業務の固定時計now()では期限が進まないためDate.now()を使う。旧処理が生きていれば新処理と並走しうる。
+// 後続が追随に間に合わなくても登録済みdirtyはcronが拾う。容量や権限のキャッシュ・書込ロックではない。
 export function reconcileAttachmentQuotaAfterSave(env: Env, organizationId: string): Promise<void> {
   const startedAt = Date.now();
   const existing = runningChecks.get(organizationId);
