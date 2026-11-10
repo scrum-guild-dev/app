@@ -2578,3 +2578,40 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
     .tree .entry:not(:has(.entry-meta)):has(.chip-btn) { row-gap: 12px; }
   }
 }
+
+.page-title-row { display: contents; }
+.shell-notice {
+  display: flex; padding-block: var(--space-3) 0;
+  padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
+}
+.shell-notice .chip { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+/* スマホの大きな見出しと丸い入口（#1103）。道具は固定幅、長い題は残りの幅で折り返す。 */
+.mobile-page-tools { display: none; }
+@media (max-width: 760px) {
+  .app .topbar { display: none; }
+  .page-title-row, .mobile-page-head {
+    position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start; gap: var(--space-3); width: 100%;
+  }
+  .page-title { font-size: var(--text-3xl); text-wrap: balance; }
+  .mobile-page-tools { display: flex; gap: var(--space-2); align-items: center; }
+  .mobile-page-tools .nav-search-toggle,
+  .mobile-page-tools .account-menu-button {
+    display: inline-grid; place-items: center; width: 44px; height: 44px; min-width: 44px;
+    padding: 0; border: 1px solid var(--color-control-edge); border-radius: 50%; background: var(--color-surface);
+  }
+  .mobile-page-tools .account-menu-button > .ico { display: none; }
+  .mobile-page-tools .nav-search {
+    position: absolute; z-index: 10; top: calc(100% + var(--space-1)); left: 0; right: 0;
+    min-width: 0; margin: 0;
+  }
+  .mobile-page-tools .nav-search-list { min-width: 0; }
+  .mobile-page-tools .account-menu-list {
+    top: calc(100% + var(--space-1)); left: 0; right: 0;
+  }
+  .mobile-page-tools :is(.nav-search-toggle, .account-menu-button)[aria-expanded="true"] {
+    border-width: 2px;
+    background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent);
+  }
+}

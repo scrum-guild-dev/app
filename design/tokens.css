@@ -19,6 +19,7 @@
   --text-lg: 1rem;       /* 16 */
   --text-xl: 1.25rem;    /* 20 節の見出し */
   --text-2xl: 1.625rem;  /* 26 画面の見出し */
+  --text-3xl: 2rem;     /* 32 スマホの画面の見出し */
   --text-stat: 2rem;     /* 32 経験値の大きな数字 */
 
   --leading-tight: 1.35;

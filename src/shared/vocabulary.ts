@@ -394,6 +394,7 @@ export const dictionary = defineDictionary({
   menuCollapse: 'メニューを畳む',
   menuExpand: 'メニューを広げる',
   breadcrumb: 'パンくず',
+  mobilePageToolsLabel: '検索とアカウント',
   navSearchLabel: '画面とタスクを探す',
   navSearchPlaceholder: '画面やタスクを探す',
   navSearchBacklog: '{backlog}で「{query}」を探す',
@@ -743,7 +744,7 @@ export const dictionary = defineDictionary({
   moveParentHint: '移す先の末尾に置きます。',
   moveParentSubmit: '移す',
   // ストーリーの親（エピック）を移すときの、完了か中止した{epic}が移す元か移す先のとき（向きは問わない）の知らせ
-  moveEpicDone: '{done}か中止した{epic}との間では、{story}を移せません。一覧を読み直します',
+  moveEpicDone: '{done}か中止した{epic}の配下からも配下へも、{story}を移せません。一覧を読み直します',
 
   // エピックの行（木の最上段）。{title} はエピックの題
   epicCreate: '{epic}を作る',

@@ -59,6 +59,7 @@
 
   // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
   const DICT = {
+    mobilePageToolsLabel: "検索とアカウント",
     menu: "メニュー",
     close: "閉じる",
     taskTitleRequired: "タイトルを入れてください",
@@ -739,9 +740,14 @@
       : `${counts(tallies)}${meta}`;
     return `<header class="page-head${compactSummary ? " is-compact" : ""}">
       ${eyebrow ? `<span class="page-eyebrow">${eyebrow}</span>` : ""}
-      <div class="page-head-row"><h1 class="page-title">${title}</h1>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
+      <div class="page-head-row"><div class="page-title-row"><h1 class="page-title">${title}</h1></div>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
       ${metrics}
     </header>`;
+  }
+
+  // カタログ用のスマホ見出し。実際の検索とメニューは画面見本で操作する。
+  function mobilePageHead(title) {
+    return `<header class="page-head"><div class="page-head-row page-title-row"><h1 class="page-title">${esc(title)}</h1><div class="mobile-page-tools" role="group" aria-label="${t("mobilePageToolsLabel")}"><button class="nav-search-toggle" type="button" aria-label="画面とタスクを探す" data-toast="画面見本の検索から画面を探せます">${icon("search")}</button><button class="account-menu-button" type="button" aria-label="${t("accountMenuLabel").replace("{name}", "ミナト")}" data-toast="画面見本のアカウントからメニューを開けます">${avatarOf(D.me)}</button></div></div></header>`;
   }
 
   // スプリントのカード（列の中）
@@ -841,7 +847,7 @@
     return `<button class="tree-folded${opts.root ? " is-root" : ""}" type="button" aria-expanded="${open}" aria-controls="${id}"${opts.title ? ` aria-label="${esc(named(open ? opened : closed))}"` : ""} data-completed-toggle="${id}" data-closed="${esc(closed)}" data-opened="${esc(opened)}" data-title="${esc(opts.title || "")}"${dropAttr(opts.tail || {})}>${icon("chevron")}<span>${esc(open ? opened : closed)}</span></button>
       <div id="${id}" class="completed-list" role="group" aria-label="${esc(groupName)}"${open ? "" : " hidden"}>${rows}${status}</div>`;
   }
-  // バックログの木。opts.order を渡すと、ストーリーの行に「上へ」「下へ」（order.parent が真なら「親を移す」も）を、
+  // バックログの木。opts.order を渡すと、ストーリーの行に「上へ」「下へ」（order.parent が真で opts.blocked が偽なら「親を移す」も）を、
   // 配下のタスクの行に並べ替えと「親を移す」を出す。opts.doneAt で、完了したストーリーとして描ける（カタログの見本）。
   // opts.blocked は親のエピックが完了か中止している、opts.key は同じストーリーを2回描くときの id の区別
   function treeStory(sid, solo, opts = {}) {
@@ -867,7 +873,7 @@
           <span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span>
           ${st.doneAt ? "" : `<button class="btn is-sm" type="button" data-dialog="createTask" aria-label="${t("task")}を足す: ${esc(st.title)}">${icon("plus")}${t("task")}</button>`}
           ${storyDoneControl(key, st, open.length, Boolean(opts.blocked))}
-          ${opts.order ? rowMenu(st.title, orderItems(opts.order)) : ""}
+          ${opts.order ? rowMenu(st.title, orderItems({ ...opts.order, parent: opts.order.parent && !opts.blocked })) : ""}
         </span>
       </div>
       <div class="tree-children" id="tree-${key}">${open.map((x, i) => entry(x, { showParent: false, showAssignee: true, showSprint: true,
@@ -887,7 +893,7 @@
   // エピックの画面へのリンクは、エピックの画面の Issue（#65）で足す。
   // 区分の印はエピックに振ったものを出す（配下の行では繰り返さない。本番と同じ）。
   // カタログの見本用に、opts.cleared（クリア済み。配下は完了したストーリー）、opts.canceled（中止）、opts.empty（配下なし）、
-  // opts.key（同じエピックを2回描くときの id の区別）を受ける。完了か中止したエピックは、期日に色を付けず、配下の取り消しを押せなくする
+  // opts.key（同じエピックを2回描くときの id の区別）を受ける。完了か中止したエピックは、期日に色を付けず、配下の取り消しを押せなくし、「親を移す」を隠す
   function treeEpic(eid, opts = {}) {
     const key = opts.key || eid;
     const e = D.epics[eid];
@@ -1668,7 +1674,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function redrawContent() {
     if (!page) return;
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
+    restoreMobilePageTools();
     document.getElementById("content").innerHTML = page.render();
+    syncMobilePageTools();
     drafts.forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
   }
   // 保存した欄に応じて、引き出しの見出し、リンクの「開く」、「未記入」の印だけを差し替える（書いている欄は作り直さない）
@@ -3283,6 +3291,47 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     location.href = firstHref(target, next);
   }
   let page = null;
+  // 同じ検索とアカウントを見出しに移し、本文の再描画前には帯へ戻す。
+  let mobileToolsNarrow = null;
+  function restoreMobilePageTools() {
+    mobileToolsNarrow = null;
+    const bar = document.querySelector(".topbar");
+    if (!bar) return;
+    for (const selector of ["[data-nav-search-toggle]", "#nav-search-box", "#account-menu-slot"]) {
+      const node = document.querySelector(selector);
+      if (node && node.parentElement !== bar) {
+        if (selector === "#account-menu-slot") bar.append(node);
+        else bar.insertBefore(node, bar.querySelector(".topbar-tools"));
+      }
+    }
+    document.querySelector(".mobile-page-tools")?.remove();
+    document.querySelector(".mobile-page-head")?.remove();
+  }
+  function syncMobilePageTools() {
+    if (!page || page.operator) return;
+    const narrow = matchMedia("(max-width: 760px)").matches;
+    if (narrow === mobileToolsNarrow && (!narrow || document.querySelector(".mobile-page-tools"))) return;
+    restoreMobilePageTools();
+    if (!narrow) { mobileToolsNarrow = false; return; }
+    const content = document.getElementById("content");
+    let row = content.querySelector(".page-title-row");
+    if (!row) {
+      row = document.createElement("header");
+      row.className = "mobile-page-head page-head-row";
+      row.innerHTML = `<h2 class="page-title">${esc(currentCrumbs().at(-1)?.label || "")}</h2>`;
+      content.prepend(row);
+    }
+    const tools = document.createElement("div");
+    tools.className = "mobile-page-tools";
+    tools.setAttribute("role", "group"); tools.setAttribute("aria-label", t("mobilePageToolsLabel"));
+    row.append(tools);
+    for (const selector of ["[data-nav-search-toggle]", "#nav-search-box", "#account-menu-slot"]) {
+      const node = document.querySelector(selector);
+      if (node) tools.append(node);
+    }
+    mobileToolsNarrow = true;
+  }
+  window.addEventListener("resize", syncMobilePageTools);
   function redraw() {
     if (!page) return;
     if (!page.operator) {
@@ -3296,7 +3345,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     syncMobileMenu();
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
+    restoreMobilePageTools();
     document.getElementById("content").innerHTML = page.render();
+    syncMobilePageTools();
     drafts.forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
     applyNavCollapsed();
     applyTheme();
@@ -4131,7 +4182,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer, flashRow,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
-    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
+    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead, mobilePageHead,
     narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,
