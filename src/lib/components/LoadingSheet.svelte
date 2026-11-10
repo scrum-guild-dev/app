@@ -2,7 +2,7 @@
   import { t } from '../vocabulary.svelte.ts';
   import { navState } from '../nav-collapse.svelte.ts';
   import { loadingShapeCounts, loadingShapeHasActions, type LoadingShape } from '../loading-shape.ts';
-  import BrandMark from './BrandMark.svelte';
+  import BrandSymbol from './BrandSymbol.svelte';
   import Gate from './Gate.svelte';
   import GateSheet from './GateSheet.svelte';
 
@@ -24,9 +24,11 @@
   <div class="app skeleton-frame" data-nav-collapsed={navState.collapsed ? 'true' : undefined} data-shape={shape}>
     <div class="binding" aria-hidden="true">
       <div class="binding-inner">
-        <div class="binding-head"><span class="brand"><BrandMark /></span></div>
+        <div class="binding-head">
+          <span class="brand"><BrandSymbol /></span>
+          <span class="skeleton-line is-org-name"></span>
+        </div>
         <div class="binding-body">
-          <span class="skeleton-line is-org"></span>
           <div class="skeleton skeleton-nav">
             <span class="skeleton-line"></span>
             <span class="skeleton-line is-short"></span>

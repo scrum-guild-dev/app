@@ -40,7 +40,7 @@ h1, h2, h3 { text-wrap: balance; }
 }
 
 /* ===== 枠: 角のマス、上の帯、綴じ（メニュー）、帳面 =====
-   左上の角のマス（ロゴ）と全幅の上の帯が同じ高さ（--header-height）で並び、帯の下の罫と綴じの右の罫が角で交わって十字になる。 */
+   左上の角のマス（マークと組織の切り替え）と全幅の上の帯が同じ高さ（--header-height）で並び、帯の下の罫と綴じの右の罫が角で交わって十字になる。 */
 .app {
   --binding-width-expanded: 240px;
   --binding-width-collapsed: 64px;
@@ -51,7 +51,7 @@ h1, h2, h3 { text-wrap: balance; }
   display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin;
 }
-/* 綴じの中身（組織の切り替え、メニュー、足跡）。角のマスの下に続く。
+/* 綴じの中身（メニュー、足跡）。角のマスの下に続く。
    項目の44pxは保ち、節の余白を詰めて通知を含む既定の並びを高さ800pxに収める。低い画面は内側全体を送る */
 .binding-body {
   flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-3);
@@ -66,7 +66,10 @@ h1, h2, h3 { text-wrap: balance; }
 .brand-art { display: block; flex: none; width: 168px; max-width: 100%; padding: 4px; background: #fff; border-radius: var(--radius-1); }
 .brand-name { display: block; width: 100%; height: auto; }
 .brand-mark { display: none; width: 100%; height: auto; object-fit: contain; }
-/* 角のマス。ブランドと開閉のボタンの行で、高さは上の帯と同じ。下の罫が上の帯の罫へ続く。
+/* マーク単体（BrandSymbol）。左上の角のマスに置く。白い下地の 34px の枠の中に、縦横比を保って収める */
+.brand-art.is-symbol { display: grid; place-items: center; width: 34px; height: 34px; box-sizing: border-box; }
+.brand-art.is-symbol .brand-mark { display: block; width: auto; height: 26px; }
+/* 角のマス。マーク（組織のホームへのリンク）、組織の切り替え、開閉のボタンの行で、高さは上の帯と同じ。下の罫が上の帯の罫へ続く。
    メニューを送っても角が残るよう、列の上に貼り付ける。畳んだ列では、ボタンを罫の下へ出す */
 .binding-head {
   position: sticky; top: 0; z-index: 1; flex: none; box-sizing: border-box; height: var(--header-height);
@@ -74,8 +77,37 @@ h1, h2, h3 { text-wrap: balance; }
   padding-left: max(var(--space-4), env(safe-area-inset-left, 0px)); padding-right: var(--space-4);
   background: var(--color-sunken); border-bottom: var(--rule-double);
 }
-.binding-head .brand-art { width: 132px; }
-.binding-head .brand { flex: 1 1 auto; min-width: 0; }
+.binding-head .brand { flex: none; padding-inline: 0; }
+/* 組織の一覧が読めず切り替えが無いときも、開閉のボタンを右端に留める（切り替えが届いたときに位置が跳ばない） */
+.binding-head .nav-toggle { margin-left: auto; }
+#org-menu-slot { display: contents; }
+/* 角のマスの組織の切り替え。名前は1行で、収まらなければ省略記号で切る（全文はボタンの読み上げの名前と一覧で読める）。
+   角のマスの高さを上の帯と揃えるため、「組織」のラベルと「届いた招待あり」のチップは見せず、招待は点の印で示す。
+   一覧は角のマスの下に、列の幅で浮かせる（角のマスの中に流すと高さが変わり、十字の罫がずれる） */
+.binding-head .org-menu { display: block; flex: 1 1 auto; min-width: 0; }
+.binding-head .org-menu-button {
+  position: relative; display: flex; align-items: center; gap: var(--space-1); min-height: 36px;
+  padding: var(--space-1) var(--space-2); border-color: transparent; background: transparent;
+}
+.binding-head .org-menu-button:hover,
+.binding-head .org-menu-button[aria-expanded="true"] { border-color: var(--color-line); background: var(--color-surface); }
+.binding-head .org-menu-button > b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+.binding-head .org-menu-label,
+.binding-head .org-menu-button > .chip { display: none; }
+.binding-head .org-menu-button > .ico { flex: none; }
+.binding-head .org-menu-invite {
+  display: block; position: absolute; top: 3px; right: 3px; width: 8px; height: 8px;
+  border-radius: 50%; border: 1px solid var(--color-stamp); background: var(--color-stamp); box-shadow: 0 0 0 2px var(--color-surface);
+}
+.binding-head .org-menu-list {
+  position: absolute; z-index: 1; top: calc(100% + var(--space-1)); left: var(--space-2); right: var(--space-2);
+  box-shadow: var(--shadow-float);
+}
+/* 切り替えのボタンの中のマークは、畳んだ列でだけ見せる（下の畳んだ列の規則）。浮きメニューの中でも出さない */
+.org-menu-button > .brand-art { display: none; }
+@media (forced-colors: active) {
+  .binding-head .org-menu-invite { border-color: CanvasText; background: CanvasText; }
+}
 .nav-toggle {
   position: relative; display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0;
   border: 1px solid transparent; border-radius: var(--radius-1);
@@ -119,8 +151,7 @@ h1, h2, h3 { text-wrap: balance; }
 :is(.org-menu-button, .ws-menu-button) > .chip { grid-column: 1; justify-self: start; margin-top: var(--space-1); }
 :is(.org-menu-button, .ws-menu-button) > .ico { grid-column: 2; grid-row: 1 / span 3; color: var(--color-muted); transform: rotate(90deg); }
 :is(.org-menu-button, .ws-menu-button)[aria-expanded="true"] > .ico:last-of-type { transform: rotate(-90deg); }
-/* swap のアイコンと招待の印は、畳んだ列でだけ見せる（広げた列は組織の名前と「届いた招待あり」で示す） */
-:is(.org-menu-button, .ws-menu-button) > .ico:first-of-type:not(:last-of-type) { display: none; }
+/* 招待の点の印は、角のマスと畳んだ列でだけ見せる（760px 以下の浮きメニューは「届いた招待あり」のチップで示す） */
 .org-menu-invite { display: none; }
 /* 組織が多いときは、一覧の中でスクロールする（メニューの綴じが画面の高さに収まらなくなるため） */
 :is(.org-menu-list, .ws-menu-list), .account-menu-list {
@@ -158,6 +189,9 @@ h1, h2, h3 { text-wrap: balance; }
   :is(.org-menu-list, .ws-menu-list) a, :is(.org-menu-list, .ws-menu-list) button, .account-menu-list a, .account-menu-list button, .account-menu-button { min-height: 44px; }
   .nav-toggle { width: 44px; height: 44px; }
   .brand, .nav-item:not(.is-later) { min-height: 44px; }
+  /* 角のマスのマークと組織のボタン（761px 以上の指の画面。760px 以下は角のマスを出さない） */
+  .binding-head .brand { justify-content: center; min-width: 44px; }
+  .binding-head .org-menu-button { min-height: 44px; }
   a.breadcrumb-item { display: block; line-height: 44px; min-width: 44px; }
   /* 組織とワークスペースのリンクは、押せる幅 44px より縮めない（長い名前は省略して、44px を下限に縮む） */
   .breadcrumb li:not(:last-child) { min-width: calc(44px + 1.25rem); }
@@ -172,8 +206,6 @@ h1, h2, h3 { text-wrap: balance; }
   /* 浮かせた札と組織の一覧を本文の位置付きの要素（バックログの行など）より上に出す。綴じの sticky は自前の重なりの文脈を作り、
      中の z-index は文脈の外に効かないので、綴じごと本文の上に置く。引き出し（.scrim の 20）とアシスタント（15）より下 */
   .binding { position: relative; z-index: 5; }
-  /* 名前を通常の文字の大きさで1行に収めるため、ブランドの右の余白を削る（240px の列の内側は 207px） */
-  .binding-head .brand { padding-right: 0; }
   .nav-toggle:focus-visible .nav-tip { display: grid; }
   .nav-tip {
     position: absolute; z-index: 1; left: calc(100% + var(--space-3)); top: 50%; transform: translateY(-50%);
@@ -222,12 +254,11 @@ h1, h2, h3 { text-wrap: balance; }
   /* 札（fixed）の基準になるので、中央寄せに transform は使わない */
   .app[data-nav-collapsed="true"] .binding-head .nav-toggle { position: absolute; top: calc(100% + var(--space-2)); left: calc(50% - 22px); background: var(--color-sunken); }
   .app[data-nav-collapsed="true"] .brand { justify-content: center; width: 44px; min-height: 44px; padding: 0; }
-  .app[data-nav-collapsed="true"] .binding-head .brand-art { width: 34px; }
-  .app[data-nav-collapsed="true"] .brand-mark { display: block; height: 26px; }
-  /* 横組み画像を隠してマークだけにする。読み上げ名は別の visually-hidden に残る */
-  .app[data-nav-collapsed="true"] .brand-name {
-    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
-  }
+  /* 角のマスには、組織の切り替えのボタンだけを残し、ボタンの中のマークを見せる（押すと組織の一覧、札で組織の名前）。
+     組織の一覧が読めず切り替えが無いときだけ、マークのリンクを残す */
+  .app[data-nav-collapsed="true"] .binding-head:has(.org-menu) .brand { display: none; }
+  .app[data-nav-collapsed="true"] .binding-head .org-menu { flex: none; }
+  .app[data-nav-collapsed="true"] .org-menu-button > .brand-art { display: grid; }
   .app[data-nav-collapsed="true"] .org-menu-label,
   .app[data-nav-collapsed="true"] .org-menu-button > b,
   .app[data-nav-collapsed="true"] .org-menu-button > .chip,
@@ -255,8 +286,7 @@ h1, h2, h3 { text-wrap: balance; }
   .app[data-nav-collapsed="true"] .nav-item:focus-visible .nav-item-label { opacity: 1; }
   .app[data-nav-collapsed="true"] .nav-group { height: 1px; margin: var(--space-3) 0; padding: 0; border-top: 1px solid var(--color-line); }
   .app[data-nav-collapsed="true"] .org-menu-button { position: relative; display: flex; align-items: center; padding: 0; }
-  .app[data-nav-collapsed="true"] .org-menu-button > .ico:first-of-type { display: block; transform: none; }
-  .app[data-nav-collapsed="true"] .org-menu-button > .ico:last-of-type { display: none; }
+  .app[data-nav-collapsed="true"] .org-menu-button > .ico { display: none; }
   /* 届いた招待の印。色は通知の数と同じ印の色。強制カラーで背景が消えても、縁で形が残る */
   .app[data-nav-collapsed="true"] .org-menu-invite {
     display: block; position: absolute; top: 7px; right: 7px; width: 8px; height: 8px;
@@ -264,7 +294,7 @@ h1, h2, h3 { text-wrap: balance; }
   }
   .app[data-nav-collapsed="true"] .org-menu { position: relative; }
   .app[data-nav-collapsed="true"] .org-menu-list {
-    position: absolute; z-index: 1; top: 0; left: calc(100% + var(--space-3)); width: 15rem; max-width: min(18rem, 70vw);
+    position: absolute; z-index: 1; top: 0; right: auto; left: calc(100% + var(--space-3)); width: 15rem; max-width: min(18rem, 70vw);
     box-shadow: var(--shadow-float);
   }
   /* 項目の札、組織ボタンの札、組織の一覧も、fixed とアンカーをセットで当てて列のスクロールに追従させる
@@ -1933,9 +1963,10 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 /* 組織の枠へ移る間の骨組み（LoadingSheet の shape）。枠と同じ部品（.app、.binding、.topbar、.content、.page-head）の中に帯を置き、
    左のメニューの幅、上の帯の高さ、本文の余白を読み込んだ後と同じにする。本文は行き先の画面の組み（data-shape）に近い形にし、
    2列や節は本物と同じ部品（.layout-aside、.layout-wiki、.settings、.board、.lanes）に任せて、畳む幅も本物と揃える。
-   帯の大きさは、組織の切り替え（.org-menu-button の 60px）、メニューの項目、パンくず、検索の欄（.nav-search-input の 36px）、
-   アカウントのボタン、行、カードのおおよその大きさを写した値で、本物の部品を変えても追従しない（形が近ければよく、位置を揃えるのは枠の部品）。
-   最初の読み込みの static/boot-loading.css も同じ値を写す */
+   帯の大きさは、角のマスの組織の名前（開閉のボタンの 36px と隙間を右に空ける）、ワークスペースの切り替え（.ws-menu-button の 60px）、
+   メニューの項目、パンくず、検索の欄（.nav-search-input の 36px）、アカウントのボタン、行、カードのおおよその大きさを写した値で、
+   本物の部品を変えても追従しない（形が近ければよく、位置を揃えるのは枠の部品）。最初の読み込みの static/boot-loading.css も同じ値を写す */
+.skeleton-frame .binding-head > .skeleton-line.is-org-name { flex: 1 1 auto; height: 1.25em; margin-inline: var(--space-2) calc(36px + var(--space-1)); }
 .skeleton-frame .skeleton-line.is-org { height: 60px; }
 .skeleton-frame .skeleton-nav { gap: var(--space-4); padding-inline: var(--space-2); }
 .skeleton-frame .skeleton-nav .skeleton-line.is-org { margin-inline: calc(-1 * var(--space-2)); }
@@ -1970,6 +2001,8 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
   .app.skeleton-frame[data-nav-collapsed="true"] .binding-body .skeleton-line { width: 32px; height: 32px; margin-inline: auto; }
   .app.skeleton-frame[data-nav-collapsed="true"] .binding-body .skeleton-line.is-group-label { display: none; }
   .app.skeleton-frame[data-nav-collapsed="true"] .skeleton-nav { padding-inline: 0; }
+  /* 畳んだ列の角のマスはマークだけ（組織の名前は札でだけ出す） */
+  .app.skeleton-frame[data-nav-collapsed="true"] .binding-head > .skeleton-line.is-org-name { display: none; }
 }
 @media (max-width: 760px) {
   /* 狭い幅では左のメニューを隠し、パンくず・検索・アカウントの帯から始める。 */

@@ -445,6 +445,8 @@
   // 提供された横組みロゴとマーク。名前は隣の視覚的に隠した文字で1回だけ読ませる。
   // 枠の外では .gate-brand が透明余白（600pxの画像の左34px）を引いて本文とそろえる。BrandMark.svelte と共通。
   const brandMark = `<span class="brand-art" aria-hidden="true"><img class="brand-name" src="brand/header/logo-transparent-600.png" srcset="brand/header/logo-transparent-600.png 600w, brand/header/logo-transparent-1200.png 1200w" sizes="240px" width="600" height="200" alt=""><img class="brand-mark" src="brand/master/symbol.png" width="629" height="678" alt=""></span>`;
+  // 左上の角のマスのマーク単体。白い下地の枠の中に置く。BrandSymbol.svelte と共通
+  const brandSymbol = `<span class="brand-art is-symbol" aria-hidden="true"><img class="brand-mark" src="brand/master/symbol.png" width="629" height="678" alt=""></span>`;
   // Google の G のロゴ。Google のブランドの決まりの公式の SVG で、形も4色も変えない（本番は GoogleMark.svelte）
   const googleMark = `<svg class="google-mark" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>`;
   // opts.image はログインの手段の側のアバターの画像の URL（指名する人を確かめるときなど）。画像が読めないときは頭文字に戻す
@@ -3030,7 +3032,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     // ワークスペースがまだない管理者には、ワークスペースの中の画面を出さない
     const cut = Object.keys(D.workspaces).length ? pages.length : pages.indexOf("workspace");
     return pages.slice(0, cut < 0 ? pages.length : cut).map((p) => {
-      // 組織の切り替えは、メニューの外（ブランドの下）の orgMenuHtml
+      // 組織の切り替えは、メニューの外（左上の角のマス）の orgMenuHtml
       if (p === "organization") return "";
       if (p === "workspace") return `<div class="nav-group"><span class="nav-group-label">${t("workspace")}</span></div>
         <div id="ws-menu-slot">${workspaceMenuHtml()}</div>`;
@@ -3240,16 +3242,23 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     return `<div class="mobile-navigation"><nav class="mobile-tabs" aria-label="${t("mobileTabs")}">${tabs.map(([id, ic, key, href]) => `<a class="mobile-tab" href="${firstHref(href)}" aria-label="${t(key)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}</a>`).join("")}<button class="mobile-tab" type="button" aria-label="${t("mobileMenu")}" aria-haspopup="dialog" aria-expanded="false" ${live ? 'data-mobile-menu-open aria-controls="mobile-menu"' : ""}><span class="mobile-menu-arrows" aria-hidden="true">${icon("chevron")}${icon("chevron")}</span></button></nav><div class="mobile-create-slot">${Object.keys(D.workspaces).length > 0 ? `<button class="mobile-create" type="button" aria-label="${t("createSheet")}" data-create-sheet-open>${icon("plus")}</button>` : ""}</div></div>`;
   }
   // 中身を複製せず、狭い幅では同じ組織切り替えと nav をダイアログに移す。
+  // 広い幅に戻すときは、組織切り替えを角のマスの開閉のボタンの前へ、nav を左のメニューへ戻す（本番の AppShell と同じ位置）
   function syncMobileMenu() {
     const dialog = document.getElementById("mobile-menu");
     if (!dialog) return;
     const narrow = window.matchMedia("(max-width: 760px)").matches;
     if (!narrow && dialog.open) closeMobileMenu();
-    const target = document.querySelector(narrow ? ".mobile-menu-sheet" : ".binding-body");
-    for (const id of ["org-menu-slot", "app-nav"]) {
-      const node = document.getElementById(id);
-      if (node && node.parentElement !== target) target.append(node);
+    const sheet = document.querySelector(".mobile-menu-sheet");
+    const org = document.getElementById("org-menu-slot");
+    const nav = document.getElementById("app-nav");
+    if (narrow) {
+      for (const node of [org, nav]) if (node && node.parentElement !== sheet) sheet.append(node);
+      return;
     }
+    const toggle = document.querySelector(".binding-head .nav-toggle");
+    if (org && toggle && org.nextElementSibling !== toggle) toggle.before(org);
+    const body = document.querySelector(".binding-body");
+    if (nav && nav.parentElement !== body) body.prepend(nav);
   }
   function closeMobileMenu() {
     document.getElementById("mobile-menu")?.close();
@@ -3286,7 +3295,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const current = orgs.find((k) => k.slug === D.organization) || orgs[0];
     const label = `${orgName(current)}。${t("organization")}を切り替える${invited ? "。届いた招待あり" : ""}`;
     const shown = moving ? t("organizationMoving") : esc(orgName(current));
-    return `<div class="org-menu"><button class="org-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${moving ? 'data-moving="true"' : ""} ${live ? "data-org-menu" : ""}><span class="org-menu-label">${t("organization")}</span><b>${shown}</b>${invited ? '<span class="chip">届いた招待あり</span>' : ""}${invited ? '<span class="org-menu-invite" aria-hidden="true"></span>' : ""}${icon("swap")}${icon("chevron")}<span class="nav-tip" aria-hidden="true">${shown}${invited && !moving ? "<small>届いた招待あり</small>" : ""}</span></button><span class="visually-hidden" role="status">${moving ? t("organizationMoving") : ""}</span>
+    return `<div class="org-menu"><button class="org-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${moving ? 'data-moving="true"' : ""} ${live ? "data-org-menu" : ""}><span class="org-menu-label">${t("organization")}</span><b>${shown}</b>${invited ? '<span class="chip">届いた招待あり</span>' : ""}${invited ? '<span class="org-menu-invite" aria-hidden="true"></span>' : ""}${brandSymbol}${icon("chevron")}<span class="nav-tip" aria-hidden="true">${shown}${invited && !moving ? "<small>届いた招待あり</small>" : ""}</span></button><span class="visually-hidden" role="status">${moving ? t("organizationMoving") : ""}</span>
       <ul class="org-menu-list" id="${id}" aria-label="入れる${t("organization")}" ${open ? "" : "hidden"}>${orgs.map((k) => `<li><a href="today.html"${k.slug === current.slug ? ' aria-current="page"' : ""}><span class="org-menu-name">${esc(orgName(k))}</span>${k.slug === current.slug ? icon("check") : ""}</a></li>`).join("")}${hasList ? `<li class="is-aside"><a href="organizations.html"><span class="org-menu-name">${t("organization")}の一覧へ</span>${invited ? '<span class="org-menu-note">招待が届いています</span>' : ""}</a></li>` : ""}<li class="is-aside"><button type="button" ${live ? 'data-dialog="createMyOrganization"' : ""}><span class="org-menu-name">${t("organization")}を作る</span></button></li>${canCreatePersonal ? `<li class="is-aside"><button type="button" ${live ? 'data-dialog="createPersonalOrganization"' : ""}><span class="org-menu-name">${t("createPersonalOrganizationAction")}</span></button></li>` : ""}</ul></div>`;
   }
   function setOrgMenu(open, focus) {
@@ -3489,11 +3498,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     <div class="app">
       <aside class="binding" aria-label="メニュー"><div class="binding-inner">
         <div class="binding-head">
-          <a class="brand" href="index.html" title="デザインシステムのカタログへ">${brandMark}<span class="visually-hidden">Scrum Guild</span></a>
+          <a class="brand" href="index.html" title="デザインシステムのカタログへ">${brandSymbol}<span class="visually-hidden">Scrum Guild</span></a>
+          <div id="org-menu-slot"></div>
           <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="${!navCollapsed}" aria-controls="app-nav" aria-label="${t(navCollapsed ? "menuExpand" : "menuCollapse")}">${icon("panel")}<span class="nav-tip" aria-hidden="true">${t(navCollapsed ? "menuExpand" : "menuCollapse")}</span></button>
         </div>
         <div class="binding-body">
-          <div id="org-menu-slot"></div>
           <nav class="nav" id="app-nav"></nav>
           <p class="binding-foot">デザインの見本。データはすべて架空の例です</p>
         </div>
@@ -4282,7 +4291,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     createSheetHtml, mobileTabsHtml, favoriteButtonHtml, favoritesNavHtml, favoriteRetryHtml, favoriteBackgroundHtml,
     formatTrialStopDateTime,
     first, firstHref, firstSteps, emptyState, art,
-    D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
+    D, t, brandMark, brandSymbol, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer, flashRow,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
     attrChipExamples, avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead, mobilePageHead,

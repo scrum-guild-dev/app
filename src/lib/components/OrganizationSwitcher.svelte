@@ -4,10 +4,12 @@
   import type { OrganizationKind } from '../../shared/organization-kind.ts';
   import { organizationLabel } from '../organization-label.ts';
   import { t } from '../vocabulary.svelte.ts';
+  import BrandSymbol from './BrandSymbol.svelte';
   import Icon from './Icon.svelte';
   import { SwitcherMenu } from './switcher-menu.svelte.ts';
 
-  // kit.js の orgMenuHtml。開閉するメニューで、中は各組織へのリンクと、最後に組織の選択の画面（/）へ戻るリンク。
+  // kit.js の orgMenuHtml。761px 以上は左上の角のマス、760px 以下は浮きメニューの先頭に置く。
+  // 開閉するメニューで、中は各組織へのリンクと、最後に組織の選択の画面（/）へ戻るリンク。
   // 選ぶと画面が移るので select にしない（矢印キーで選んだだけで移ってしまう）。
   // 閉じるのは、ボタン、メニューの外を押す、Tab でメニューの外へ出る、リンクを押す、Esc。
   // メニューの中にフォーカスがあるときに閉じたら、ボタンへフォーカスを戻す（隠れた要素にフォーカスを残さない）。
@@ -85,7 +87,8 @@
     <b>{shownName}</b>
     {#if invited}<span class="chip">{t('invitationsBadge')}</span>{/if}
     {#if invited}<span class="org-menu-invite" aria-hidden="true"></span>{/if}
-    <Icon name="swap" />
+    <!-- マークは畳んだ列でだけ見せ、名前の欄の代わりにする（広げた列はマークのリンクがボタンの左に別にある） -->
+    <BrandSymbol />
     <Icon name="chevron" />
     <!-- 畳んだ列で、ホバーとキーボードのフォーカスのときに今の組織と招待の有無を目で読ませる札。読み上げは aria-label が受け持つ。
          移っている最中は、広げた列の名前の欄と同じく「移っています」を出し、畳んだ列では札を出したままにする（押し直しを誘わない） -->

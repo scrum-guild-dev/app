@@ -76,28 +76,39 @@ const readSvg = (source: string) => readElements(source, 'svg')[0];
 const readTags = (source: string) => [...source.matchAll(/<([a-zA-Z][\w-]*)\b/g)].map(([, tag]) => tag);
 
 describe('見本との照合', () => {
-  test('ロゴは見本と本番で同じ画像、寸法、読み上げの扱い', () => {
-    const brandMark = /const brandMark = `([^`]*)`/.exec(read('kit.js'))?.[1];
-    assert.ok(brandMark, 'design/kit.js に brandMark が見つからない');
-    const component = readFileSync(new URL('../src/lib/components/BrandMark.svelte', import.meta.url), 'utf8');
-    // Svelte の asset() を見本と同じ相対パスにそろえる
-    const normalized = component
-      .replaceAll(/\$\{asset\('([^']+)'\)\}/g, '$1')
-      .replaceAll(/\{asset\('([^']+)'\)\}/g, '"$1"')
-      .replaceAll(/\{`([^`]+)`\}/g, '"$1"');
-    const images = readElements(brandMark, 'img');
-    assert.equal(images.length, 2);
-    assert.deepEqual(readElements(normalized, 'img'), images);
-    for (const source of [brandMark, normalized]) {
-      assert.match(source, /<span class="brand-art" aria-hidden="true">/);
-      for (const image of readElements(source, 'img')) {
-        assert.equal(image.alt, '');
-        const png = readFileSync(new URL(`../design/${image.src}`, import.meta.url));
-        assert.equal(Number(image.width), png.readUInt32BE(16));
-        assert.equal(Number(image.height), png.readUInt32BE(20));
+  // 横組みのロゴ（枠の外の画面）と、左上の角のマスのマーク単体
+  for (const { name, file, count, wrapper } of [
+    { name: 'brandMark', file: 'BrandMark.svelte', count: 2, wrapper: /<span class="brand-art" aria-hidden="true">/ },
+    {
+      name: 'brandSymbol',
+      file: 'BrandSymbol.svelte',
+      count: 1,
+      wrapper: /<span class="brand-art is-symbol" aria-hidden="true">/,
+    },
+  ]) {
+    test(`ロゴ（${name}）は見本と本番で同じ画像、寸法、読み上げの扱い`, () => {
+      const kit = new RegExp(`const ${name} = \`([^\`]*)\``).exec(read('kit.js'))?.[1];
+      assert.ok(kit, `design/kit.js に ${name} が見つからない`);
+      const component = readFileSync(new URL(`../src/lib/components/${file}`, import.meta.url), 'utf8');
+      // Svelte の asset() を見本と同じ相対パスにそろえる
+      const normalized = component
+        .replaceAll(/\$\{asset\('([^']+)'\)\}/g, '$1')
+        .replaceAll(/\{asset\('([^']+)'\)\}/g, '"$1"')
+        .replaceAll(/\{`([^`]+)`\}/g, '"$1"');
+      const images = readElements(kit, 'img');
+      assert.equal(images.length, count);
+      assert.deepEqual(readElements(normalized, 'img'), images);
+      for (const source of [kit, normalized]) {
+        assert.match(source, wrapper);
+        for (const image of readElements(source, 'img')) {
+          assert.equal(image.alt, '');
+          const png = readFileSync(new URL(`../design/${image.src}`, import.meta.url));
+          assert.equal(Number(image.width), png.readUInt32BE(16));
+          assert.equal(Number(image.height), png.readUInt32BE(20));
+        }
       }
-    }
-  });
+    });
+  }
 
   test('Google の G のロゴは見本と本番で同じ形と色。公式の4色の path を変えない', () => {
     const googleMark = /const googleMark = `([^`]*)`/.exec(read('kit.js'))?.[1];
