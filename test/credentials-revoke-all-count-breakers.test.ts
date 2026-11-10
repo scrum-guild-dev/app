@@ -148,8 +148,9 @@ describe('文の RETURNING', () => {
     const person = await createLoginPerson();
     const liveSession = future();
     const deadSession = past();
-    await createSessionWithToken(person.accountId, { expires_at: liveSession });
-    await createSessionWithToken(person.accountId, { expires_at: deadSession });
+    const createdAt = (await sessionRowsOf(person.accountId))[0]!.created_at;
+    await createSessionWithToken(person.accountId, { created_at: createdAt, expires_at: liveSession });
+    await createSessionWithToken(person.accountId, { created_at: createdAt, expires_at: deadSession });
     const liveToken = future(7);
     const deadToken = past();
     await insertApiToken(person.accountId, { expiresAt: liveToken });
@@ -197,13 +198,15 @@ describe('文の RETURNING', () => {
 });
 
 describe('認証の後に足された行（勝つ側）', () => {
-  test('認証の後・書き込みの前に足した期限内と期限切れの行も消え・取り消され、件数には書いた期限内の行だけが入る', async () => {
+  test('認証の後・書き込みの前に足した同時刻の期限内と期限切れの行も消え・取り消され、件数には書いた期限内の行だけが入る', async () => {
     const person = await createLoginPerson();
-    await createSessionWithToken(person.accountId, { expires_at: future() });
+    // 行の挿入順と created_at の新旧は別。削除対象を同時刻に揃えて件数の筋書きを保つ。
+    const createdAt = (await sessionRowsOf(person.accountId))[0]!.created_at;
+    await createSessionWithToken(person.accountId, { created_at: createdAt, expires_at: future() });
     let added: { live: string; dead: string } | undefined;
     const paused = pausedAfterAuth(async () => {
-      await createSessionWithToken(person.accountId, { expires_at: future() });
-      await createSessionWithToken(person.accountId, { expires_at: past() });
+      await createSessionWithToken(person.accountId, { created_at: createdAt, expires_at: future() });
+      await createSessionWithToken(person.accountId, { created_at: createdAt, expires_at: past() });
       added = {
         live: (await insertApiToken(person.accountId, { expiresAt: future() })).hash,
         dead: (await insertApiToken(person.accountId, { expiresAt: past() })).hash,
