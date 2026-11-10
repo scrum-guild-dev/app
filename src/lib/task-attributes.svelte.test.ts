@@ -22,6 +22,7 @@ const detail = (patch: Partial<TaskDetail> = {}): TaskDetail => ({
   due_on: null,
   link_url: null,
   assignee: null,
+  delegatee: null,
   is_imported: false,
   completed_at: null,
   reopenable: false,
