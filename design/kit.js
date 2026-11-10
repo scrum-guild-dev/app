@@ -3203,7 +3203,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   let page = null;
   // 同じ検索とアカウントを見出しに移し、本文の再描画前には帯へ戻す。
+  let mobileToolsNarrow = null;
   function restoreMobilePageTools() {
+    mobileToolsNarrow = null;
     const bar = document.querySelector(".topbar");
     if (!bar) return;
     for (const selector of ["[data-nav-search-toggle]", "#nav-search-box", "#account-menu-slot"]) {
@@ -3218,8 +3220,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   function syncMobilePageTools() {
     if (!page || page.operator) return;
+    const narrow = matchMedia("(max-width: 760px)").matches;
+    if (narrow === mobileToolsNarrow) return;
     restoreMobilePageTools();
-    if (!matchMedia("(max-width: 760px)").matches) return;
+    mobileToolsNarrow = narrow;
+    if (!narrow) return;
     const content = document.getElementById("content");
     let row = content.querySelector(".page-title-row");
     if (!row) {
