@@ -842,7 +842,7 @@
     return `<button class="tree-folded${opts.root ? " is-root" : ""}" type="button" aria-expanded="${open}" aria-controls="${id}"${opts.title ? ` aria-label="${esc(named(open ? opened : closed))}"` : ""} data-completed-toggle="${id}" data-closed="${esc(closed)}" data-opened="${esc(opened)}" data-title="${esc(opts.title || "")}"${dropAttr(opts.tail || {})}>${icon("chevron")}<span>${esc(open ? opened : closed)}</span></button>
       <div id="${id}" class="completed-list" role="group" aria-label="${esc(groupName)}"${open ? "" : " hidden"}>${rows}${status}</div>`;
   }
-  // バックログの木。opts.order を渡すと、ストーリーの行に「上へ」「下へ」（order.parent が真なら「親を移す」も）を、
+  // バックログの木。opts.order を渡すと、ストーリーの行に「上へ」「下へ」（order.parent が真で opts.blocked が偽なら「親を移す」も）を、
   // 配下のタスクの行に並べ替えと「親を移す」を出す。opts.doneAt で、完了したストーリーとして描ける（カタログの見本）。
   // opts.blocked は親のエピックが完了か中止している、opts.key は同じストーリーを2回描くときの id の区別
   function treeStory(sid, solo, opts = {}) {
@@ -888,7 +888,7 @@
   // エピックの画面へのリンクは、エピックの画面の Issue（#65）で足す。
   // 区分の印はエピックに振ったものを出す（配下の行では繰り返さない。本番と同じ）。
   // カタログの見本用に、opts.cleared（クリア済み。配下は完了したストーリー）、opts.canceled（中止）、opts.empty（配下なし）、
-  // opts.key（同じエピックを2回描くときの id の区別）を受ける。完了か中止したエピックは、期日に色を付けず、配下の取り消しを押せなくする
+  // opts.key（同じエピックを2回描くときの id の区別）を受ける。完了か中止したエピックは、期日に色を付けず、配下の取り消しを押せなくし、「親を移す」を隠す
   function treeEpic(eid, opts = {}) {
     const key = opts.key || eid;
     const e = D.epics[eid];
