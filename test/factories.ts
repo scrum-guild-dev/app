@@ -59,6 +59,7 @@ export async function createOrganization(overrides: Partial<Row<CommonTables, 'o
     attachment_quota_warned_at: null,
     attachment_quota_warning_pending_at: null,
     attachment_quota_check_pending_at: null,
+    attachment_quota_check_generation: 0,
     stores_source_payload: 0,
     created_by_operator: 'github:9000000000000001',
     created_at: AT,

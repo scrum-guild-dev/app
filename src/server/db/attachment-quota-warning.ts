@@ -8,7 +8,7 @@ export type QuotaWarningOptions = { maxNotificationBatches?: number };
 const NOTIFICATION_BATCH_SIZE = 50;
 const MAX_NOTIFICATION_BATCHES = 5;
 
-// 保存後は安価な共通行の更新だけ待つ。固定時計や同時の保存でも、後続の変更を古い確認が消さないよう単調にする。
+// 保存後は安価な共通行の更新だけ待つ。日時がNULLを跨いで再利用されても、世代は減らさず古い確認と区別する。
 export async function markAttachmentQuotaCheck(env: Env, organizationId: string, at: Date): Promise<boolean> {
   const common = commonDb(env);
   const value = at.toISOString();
@@ -19,6 +19,7 @@ export async function markAttachmentQuotaCheck(env: Env, organizationId: string,
         .set({
           attachment_quota_check_pending_at: sql<string>`case when attachment_quota_check_pending_at >= ${value}
       then strftime('%Y-%m-%dT%H:%M:%fZ', attachment_quota_check_pending_at, '+0.001 seconds') else ${value} end`,
+          attachment_quota_check_generation: sql<number>`attachment_quota_check_generation + 1`,
         })
         .where('id', '=', organizationId)
         .where('suspended_at', 'is', null),
@@ -47,6 +48,7 @@ export async function reconcileAttachmentQuotaWarning(
           'attachment_quota_warned_at',
           'attachment_quota_warning_pending_at',
           'attachment_quota_check_pending_at',
+          'attachment_quota_check_generation',
         ])
         .where('id', '=', organizationId)
         .where('suspended_at', 'is', null),
@@ -67,6 +69,7 @@ export async function reconcileAttachmentQuotaWarning(
           .where('id', '=', organizationId)
           .where('suspended_at', 'is', null)
           .where('attachment_quota_bytes', '=', quota)
+          .where('attachment_quota_check_generation', '=', current.attachment_quota_check_generation)
           .where('attachment_quota_check_pending_at', '=', current.attachment_quota_check_pending_at),
       ),
     ]);
@@ -89,7 +92,8 @@ export async function reconcileAttachmentQuotaWarning(
           })
           .where('id', '=', organizationId)
           .where('suspended_at', 'is', null)
-          .where('attachment_quota_bytes', '=', quota);
+          .where('attachment_quota_bytes', '=', quota)
+          .where('attachment_quota_check_generation', '=', current.attachment_quota_check_generation);
         update =
           current.attachment_quota_warned_at === null
             ? update.where('attachment_quota_warned_at', 'is', null)
@@ -225,6 +229,7 @@ export async function reconcileAttachmentQuotaWarning(
         .where('id', '=', organizationId)
         .where('suspended_at', 'is', null)
         .where('attachment_quota_bytes', '=', quota)
+        .where('attachment_quota_check_generation', '=', current.attachment_quota_check_generation)
         .where('attachment_quota_warned_at', '=', cycle)
         .where('attachment_quota_warning_pending_at', '=', cycle),
     ),

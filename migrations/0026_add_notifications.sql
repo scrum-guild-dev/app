@@ -3,6 +3,9 @@ ALTER TABLE organizations ADD COLUMN attachment_quota_warning_pending_at TEXT
   CHECK (attachment_quota_warning_pending_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', attachment_quota_warning_pending_at) IS attachment_quota_warning_pending_at);
 ALTER TABLE organizations ADD COLUMN attachment_quota_check_pending_at TEXT
   CHECK (attachment_quota_check_pending_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', attachment_quota_check_pending_at) IS attachment_quota_check_pending_at);
+-- 日時が NULL に戻った後も世代を保持し、同じ日時の印の再利用を古い集計と区別する。
+ALTER TABLE organizations ADD COLUMN attachment_quota_check_generation INTEGER NOT NULL DEFAULT 0
+  CHECK (attachment_quota_check_generation BETWEEN 0 AND 9007199254740991);
 
 -- 初期導入では論理参照にする。旧版の組織削除を、新しい子の外部キーで止めないため。
 CREATE TABLE notifications (

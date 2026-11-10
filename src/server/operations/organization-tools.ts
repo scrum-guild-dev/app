@@ -124,7 +124,7 @@ export function organizationTools(
           logFailure(error);
           if (options.markOnly === true) return;
           // 印の登録だけが一度失敗しても、保存の応答を待たせず一度だけ登録からやり直す。
-          // 両方の登録が失敗する全面停止までは、永続的な配信を保証しない。
+          // 共通DBへの印登録が2回とも失敗した場合までは、永続的な配信を保証しない。
           try {
             queueCheck(true);
           } catch (error) {
