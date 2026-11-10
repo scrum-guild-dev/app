@@ -112,9 +112,10 @@ describe('startStallProbe', () => {
         const { pathname } = new URL(url);
         calls.push(pathname);
         const call = calls.filter((p) => p === pathname).length;
-        // d1 の 2 回目が先に始まり長く止まり、worker の 3 回目が後に始まって先に終わる
+        // d1 の 2 回目が先に始まり長く止まり、worker の 8 回目が後に始まって先に終わる。
+        // 始まりの差は間隔の数回分（数十 ms）空け、タイマーの揺れで前後が入れ替わらないようにする
         if (pathname === '/api/health' && call === 2) await delay(1_200);
-        if (pathname === '/api/e2e-stall-probe' && call === 3) await delay(800);
+        if (pathname === '/api/e2e-stall-probe' && call === 8) await delay(600);
         return ok(EXPECTED[pathname]);
       },
     };
@@ -131,7 +132,7 @@ describe('startStallProbe', () => {
         { target: 'worker', result: '404' },
       ],
     );
-    assert.ok(report.stalls[0]!.startedAt <= report.stalls[1]!.startedAt);
+    assert.ok(report.stalls[0]!.startedAt < report.stalls[1]!.startedAt);
     // 見つけた順（終わった順）に知らせる
     assert.deepEqual(
       seen.map((s) => s.target),
