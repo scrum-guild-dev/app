@@ -1077,6 +1077,32 @@ test.describe('運用者', () => {
     await expect(dialog.getByRole('alert')).toContainText('今作った組織かもしれない');
   });
 
+  test('作成失敗後の一覧再取得で運用者でなくなったら、破棄したダイアログの一覧を読まない（#1118）', async ({
+    page,
+  }) => {
+    let reads = 0;
+    await routeOperation(page, listOrganizations, (call) =>
+      ++reads === 1 ? call.fulfill({ organizations: [] }) : call.fail(403, 'forbidden'),
+    );
+    await mockGithubUser(page, TOKYO_USER);
+    await failOperation(page, createOrganization, 409, 'conflict');
+    await page.goto('/operator');
+    await page.getByRole('button', { name: '組織を作る' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('URL の名前（slug）').fill('sakura-dev');
+    await dialog.getByLabel('表示名').fill('工房');
+    await dialog.getByLabel('GitHub のユーザー名').fill('alice');
+    await dialog.getByRole('button', { name: '確かめる' }).click();
+    await dialog.getByRole('button', { name: '作る', exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(dialog).toHaveCount(0);
+    // invalidateAll の続きも終える。開発時の derived_inert は共通 fixture が検出する。
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+    );
+    expect(reads).toBeGreaterThan(1);
+  });
+
   test('入力欄の長さの上限と、誤りのある欄へのフォーカス、読み上げとの結び付き', async ({ page }) => {
     await mockList(page, []);
     await mockGithubUser(page, invalidInput('username', 'github_user_not_found'));
