@@ -207,6 +207,7 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
           'is_imported',
           'tray',
           'title',
+          'body_md',
           'points',
           'story_id',
           'category_id',
@@ -228,6 +229,7 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
               eb.val(0).as('is_imported'),
               eb.val('backlog').as('tray'),
               eb.val(input.title).as('title'),
+              eb.val(input.body_md).as('body_md'),
               eb.val(input.points).as('points'),
               eb.val(parent?.id ?? null).as('story_id'),
               eb.val(category?.id ?? null).as('category_id'),
@@ -295,6 +297,7 @@ export const taskCreateOperation = implement(taskCreate, async ({ db, actor, wor
                 .val(
                   JSON.stringify({
                     title: [null, input.title],
+                    ...(input.body_md === null ? {} : { body_md: [null, input.body_md] }),
                     points: [null, input.points],
                     ...(assignee === null ? {} : { assignee: [null, assignee] }),
                     ...(parent === null ? {} : { story: [null, parent] }),

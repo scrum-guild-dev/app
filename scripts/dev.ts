@@ -5,10 +5,20 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { TEST_CREDENTIAL_KEYS } from './test-credential-keys.ts';
 import { devPorts, devPublicOrigin } from './dev-ports.ts';
+import { checkDevVars } from './dev-vars.ts';
 
 const preview = process.argv.includes('--preview');
 const ports = devPorts(process.env);
 const version = process.env.APP_VERSION;
+
+// .dev.vars を通さずに wrangler へ渡す値。.dev.vars の鍵の確かめも、ここに無い鍵だけを見る
+const vars: [string, string][] = [
+  ...(process.argv.includes('--test-credentials')
+    ? [['CONNECTION_CREDENTIAL_KEYS', TEST_CREDENTIAL_KEYS] as [string, string]]
+    : []),
+  ...(version ? [['APP_VERSION', version] as [string, string]] : []),
+  ['PUBLIC_ORIGIN', devPublicOrigin(ports, preview)],
+];
 
 const wranglerArgs = [
   'dev',
@@ -16,13 +26,15 @@ const wranglerArgs = [
   String(ports.api),
   '--inspector-port',
   String(ports.inspector),
-  ...(process.argv.includes('--test-credentials')
-    ? ['--var', `CONNECTION_CREDENTIAL_KEYS:${TEST_CREDENTIAL_KEYS}`]
-    : []),
-  ...(version ? ['--var', `APP_VERSION:${version}`] : []),
-  '--var',
-  `PUBLIC_ORIGIN:${devPublicOrigin(ports, preview)}`,
+  ...vars.flatMap(([name, value]) => ['--var', `${name}:${value}`]),
 ];
+
+// wrangler は起動したディレクトリの .dev.vars を読むので、同じ場所で鍵の名前を比べる。足りなくても起動は止めない
+const devVarsWarning = checkDevVars(
+  process.cwd(),
+  vars.map(([name]) => name),
+);
+if (devVarsWarning) console.error(devVarsWarning);
 
 const commands: [string, string[]][] = preview
   ? [['wrangler', wranglerArgs]]

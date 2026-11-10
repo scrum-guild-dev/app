@@ -6,7 +6,6 @@
   import { GO_KEYS, favoriteNavItem, isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { organizationLabel } from '../organization-label.ts';
-  import { navStripEdges, navStripScrollLeft } from '../nav-strip.ts';
   import type { NavigationWorkspace } from '../workspace-navigation.svelte.ts';
   import Icon from './Icon.svelte';
   import FavoriteLoadStatus from './FavoriteLoadStatus.svelte';
@@ -42,67 +41,6 @@
       .filter(({ item }) => item.href !== null),
   );
 
-  // 760px 以下の帯（横に送る .nav）。画面が変わったら今のページの項目が見える位置まで送り、続きがある端に印を付ける（CSS が端を薄くする）。
-  // 広い幅の縦の列は横にはみ出さないので、送らず印も付かない
-  let nav = $state<HTMLElement>();
-  let moreStart = $state(false);
-  let moreEnd = $state(false);
-
-  function syncEdges(): void {
-    if (!nav) return;
-    const edges = navStripEdges(nav.scrollLeft, nav.clientWidth, nav.scrollWidth);
-    moreStart = edges.start;
-    moreEnd = edges.end;
-  }
-
-  // 今の項目が隠れていれば送り、端の印を付け直す
-  function scrollToCurrent(): void {
-    if (!nav) return;
-    const item = nav.querySelector<HTMLElement>('a.nav-item[aria-current="page"]');
-    if (item && nav.scrollWidth > nav.clientWidth) {
-      const box = nav.getBoundingClientRect();
-      const group = nav.querySelector<HTMLElement>('.ws-menu')?.getBoundingClientRect() ?? null;
-      const left = navStripScrollLeft(
-        { scrollLeft: nav.scrollLeft, left: box.left, width: nav.clientWidth },
-        item.getBoundingClientRect(),
-        group,
-      );
-      if (left !== null) nav.scrollLeft = left;
-    }
-    syncEdges();
-  }
-
-  $effect(() => {
-    void current;
-    void workspace?.id;
-    scrollToCurrent();
-  });
-
-  // 書体を読み終えると項目の幅が変わるので、送り位置を測り直す
-  $effect(() => {
-    let live = true;
-    void document.fonts?.ready.then(() => {
-      if (live) scrollToCurrent();
-    });
-    return () => {
-      live = false;
-    };
-  });
-
-  // 帯の大きさ（幅を跨いで狭めたとき、回転したとき）と、項目の大きさ（ワークスペースの名前、件数の印、テーマの書体）が
-  // 変わったら測り直す。今の項目が見えている間は送らない（手で送るだけでは大きさが変わらないので、送った位置は戻さない）
-  // 子の並び（節、お気に入りの一覧の出入り）が変わったら付け直す
-  $effect(() => {
-    void sections;
-    void favoriteLinks;
-    void favorites?.loading;
-    if (!nav) return;
-    const observer = new ResizeObserver(scrollToCurrent);
-    observer.observe(nav);
-    for (const child of nav.children) observer.observe(child);
-    return () => observer.disconnect();
-  });
-
   const sections = $derived(
     visibleNav(undefined, {
       hasWorkspace,
@@ -114,14 +52,7 @@
   );
 </script>
 
-<nav
-  class="nav"
-  id={NAV_MENU_ID}
-  bind:this={nav}
-  onscroll={syncEdges}
-  data-more-start={moreStart ? '' : undefined}
-  data-more-end={moreEnd ? '' : undefined}
->
+<nav class="nav" id={NAV_MENU_ID}>
   {#each sections as section (section.heading ?? 'organization')}
     {#if section.heading}<div class="nav-group"><span class="nav-group-label">{t(section.heading)}</span></div>{/if}
     {#if section.slot === 'workspace' && workspaceSwitcher}{@render workspaceSwitcher()}{/if}

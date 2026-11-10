@@ -568,6 +568,7 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
   test('狭い幅では、一覧のリンクの高さが 44px 以上ある', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto('/aoba');
+    await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
     await menuButton(page).click();
     // 入場中の小数座標でなく、最終位置で44pxの押せる高さを測る。
     await expect(page.locator('.org-menu-list')).toHaveCSS('translate', /^0px(?: 0px)?$/);
@@ -588,6 +589,7 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
   test('390px の幅でも、組織の切り替えが出て、各組織へ移れ、一覧に戻れる', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto('/aoba');
+    await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
     await expect(menuButton(page)).toBeVisible();
     await menuButton(page).click();
     await expect(menuLinks(page)).toHaveText(['あおば開発', 'ひばり工房', '組織の一覧へ']);
@@ -597,6 +599,7 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
 
     await menuLinks(page).nth(1).click();
     await expect(page).toHaveURL(/\/hibari$/);
+    await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
     await menuButton(page).click();
     await menuLinks(page).last().click();
     await expect(page).toHaveURL(/\/$/);
@@ -634,6 +637,7 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     });
     await page.goto('/aoba');
     await expect(page.locator('.me')).toContainText(longUser);
+    await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
     await menuButton(page).click();
     const shell = await overflowOf(page);
     expect(shell.scroll).toBeLessThanOrEqual(shell.inner);

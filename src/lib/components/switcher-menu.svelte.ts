@@ -16,6 +16,7 @@ export class SwitcherMenu {
 
   onkeydown = (event: KeyboardEvent): void => {
     if (!this.open || event.key !== 'Escape' || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
     event.stopPropagation();
     this.close();
   };

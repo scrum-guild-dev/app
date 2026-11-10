@@ -888,6 +888,7 @@ describe('読んだ後に別の要求が割り込む', () => {
 describe('task-create の入れ先（スプリントの列の末尾の空の行）', () => {
   // 処理を直に呼ぶときは、入力の検証の既定値が入らないので、省く欄も書く
   const fullCreateInput = {
+    body_md: 'スプリントへ作る本文',
     points: null,
     assignee_user_id: null,
     story_id: null,

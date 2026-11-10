@@ -7,6 +7,7 @@
   import { resolve } from '$app/paths';
   import { navigating, page } from '$app/state';
   import BacklogFilterBar from '../../../../lib/components/BacklogFilterBar.svelte';
+  import NarrowDisclosure from '../../../../lib/components/NarrowDisclosure.svelte';
   import CompletedTasks from '../../../../lib/components/CompletedTasks.svelte';
   import EmptyState from '../../../../lib/components/EmptyState.svelte';
   import Icon from '../../../../lib/components/Icon.svelte';
@@ -1369,6 +1370,7 @@
   {/snippet}
   <PageHead
     title={t('backlog')}
+    narrowSummary={t('backlogSummary')}
     eyebrow={workspace.name}
     focusable
     tallies={[
@@ -1438,14 +1440,19 @@
       {:else}
         {#if canWrite && !firstStep}
           <!-- 絞っている間は並べ替えを出さないので、外すと並べ替えられることを案内する -->
-          <p class="action-note">
-            {#if filtering}
-              {t('backlogFilterOrderNote')}
-            {:else}
-              {t('backlogOrderNote', { epic: t('epic'), story: t('story'), task: t('task') })}
-              <span class="drag-note">{t('backlogDragNote')}</span>
-            {/if}
-          </p>
+          {#if filtering}
+            <p class="action-note">{t('backlogFilterOrderNote')}</p>
+          {:else}
+            <div class="order-help">
+              <span class="order-priority">{t('backlogPriority')}</span>
+              <NarrowDisclosure label={t('backlogOrderHelp')}>
+                <p class="action-note">
+                  {t('backlogOrderNote', { epic: t('epic'), story: t('story'), task: t('task') })}
+                  <span class="drag-note">{t('backlogDragNote')}</span>
+                </p>
+              </NarrowDisclosure>
+            </div>
+          {/if}
         {/if}
         {@render treeView()}
       {/if}

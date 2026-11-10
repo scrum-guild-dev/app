@@ -138,7 +138,7 @@
    .content と同じにし、本文は行き先の画面の組み（形は src/lib/loading-shape.ts と同じ。2列は .layout-aside の 320px、.layout-wiki、
    .setting の 260px、.board の 232px の列、.lanes の3列。どれも 1080px 以下で1列）に近づける。デザインシステムの LoadingSheet の
    .skeleton-frame と同じ並びにして、移る間と最初の読み込みで同じ形を見せる。
-   760px 以下は、ロゴと組織の切り替えとメニューの項目の横並びの帯の下に上の帯を置く */
+   760px 以下は、左のメニューの骨組みを隠して上の帯から始める */
 #boot-loading .boot-frame {
   display: none;
 }
@@ -398,37 +398,9 @@ html[data-boot] #boot-loading .boot-frame {
 @media (max-width: 760px) {
   html[data-boot] #boot-loading .boot-frame {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
+    grid-template-rows: 1fr;
   }
   #boot-loading .boot-binding {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-right: 0;
-    border-bottom: 1px solid #d6d6da;
-  }
-  #boot-loading .boot-corner {
-    height: auto;
-    margin: 0;
-    padding: 0;
-    border-bottom: 0;
-  }
-  #boot-loading .boot-corner i {
-    width: 120px;
-    height: 40px;
-  }
-  /* ロゴと組織の切り替えを1段に並べ、メニューの項目（最初の3つ）を次の段に横並びにする。ワークスペースの区切りより後は出さない */
-  #boot-loading .boot-binding > .is-org {
-    flex: 1 1 10rem;
-  }
-  #boot-loading .boot-binding > i:not(.is-org) {
-    width: 6rem;
-    margin: 14px 4px;
-  }
-  #boot-loading .boot-binding > .is-group-label,
-  #boot-loading .boot-binding > .is-group-label ~ i {
     display: none;
   }
   #boot-loading .boot-topbar {

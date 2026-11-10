@@ -595,9 +595,9 @@ test('620px 以下では真ん中を隠し、既定が真ん中でも横で開�
   await expect(modeButton(drawer, '真ん中')).toHaveCount(0);
   await expect(modeButton(drawer, '横')).toHaveAttribute('aria-pressed', 'true');
   await expect(drawer).toHaveAttribute('aria-modal', 'true');
-  await expect(page.locator('.binding')).toHaveAttribute('inert', '');
+  await expect(page.locator('.mobile-navigation')).toHaveAttribute('inert', '');
   await drawer.getByRole('button', { name: '閉じる', exact: true }).click();
-  await expect(page.locator('.binding')).not.toHaveAttribute('inert', '');
+  await expect(page.locator('.mobile-navigation')).not.toHaveAttribute('inert', '');
   await page.getByRole('link', { name: '裏を操作できない', exact: true }).click();
   await expect(drawer).not.toHaveClass(/is-center/);
   await page.setViewportSize({ width: 621, height: 800 });
