@@ -14,6 +14,7 @@ const row = (id: string, changes: Partial<BacklogTask> = {}): BacklogTask => ({
   points: null,
   due_on: null,
   assignee: null,
+  delegatee: null,
   category: null,
   repository: null,
   sprint: null,

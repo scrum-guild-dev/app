@@ -1,5 +1,6 @@
 // バックログの絞り込みを URL の問い合わせに持つ形（docs/design.md のバックログの画面）。
-// `?assignee=&category=&repository=&epic=&q=` の5つで、どれも無ければ絞らない。値は ID か「なし」（none）、担当だけは「自分」（me）も。
+// `?assignee=&category=&repository=&epic=&delegatee=&q=` の6つで、どれも無ければ絞らない。値は ID か「なし」（none）、担当だけは「自分」（me）も。
+// 依頼先（delegatee）は自分用の組織だけが帯に出す。
 // リンクを受け取った人には、me はその人自身になる。引き出しの `?task=` など、ほかの問い合わせはそのまま残す
 import { BACKLOG_QUERY_MAX_LENGTH, BACKLOG_QUERY_MAX_WORDS, searchWordsOf } from '../shared/backlog-filter.ts';
 import { ID_MAX_LENGTH } from '../shared/id.ts';
@@ -8,11 +9,25 @@ export const FILTER_NONE = 'none';
 export const FILTER_ME = 'me';
 
 // '' は「すべて」（絞らない）
-export type BacklogFilter = { assignee: string; category: string; repository: string; epic: string; q: string };
+export type BacklogFilter = {
+  assignee: string;
+  category: string;
+  repository: string;
+  epic: string;
+  delegatee: string;
+  q: string;
+};
 
-export const emptyFilter: BacklogFilter = { assignee: '', category: '', repository: '', epic: '', q: '' };
+export const emptyFilter: BacklogFilter = {
+  assignee: '',
+  category: '',
+  repository: '',
+  epic: '',
+  delegatee: '',
+  q: '',
+};
 
-const selectKeys = ['assignee', 'category', 'repository', 'epic'] as const;
+const selectKeys = ['assignee', 'category', 'repository', 'epic', 'delegatee'] as const;
 
 export type FilterSelectKey = (typeof selectKeys)[number];
 
@@ -32,6 +47,7 @@ export function filterFromParams(params: URLSearchParams): BacklogFilter {
     category: value('category'),
     repository: value('repository'),
     epic: value('epic'),
+    delegatee: value('delegatee'),
     q: cleanQuery(params.get('q') ?? ''),
   };
 }
@@ -61,6 +77,7 @@ export function filterInput(filter: BacklogFilter): {
   category_id?: string | null;
   repository_id?: string | null;
   epic_id?: string | null;
+  delegatee_id?: string | null;
   query?: string;
 } {
   const ref = (value: string) => (value === FILTER_NONE ? null : value);
@@ -69,6 +86,7 @@ export function filterInput(filter: BacklogFilter): {
     ...(filter.category === '' ? {} : { category_id: ref(filter.category) }),
     ...(filter.repository === '' ? {} : { repository_id: ref(filter.repository) }),
     ...(filter.epic === '' ? {} : { epic_id: ref(filter.epic) }),
+    ...(filter.delegatee === '' ? {} : { delegatee_id: ref(filter.delegatee) }),
     ...(filter.q === '' ? {} : { query: filter.q }),
   };
 }

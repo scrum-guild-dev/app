@@ -25,6 +25,7 @@ import {
   createComment,
   createCompletion,
   createDetailField,
+  createDelegatee,
   createEpic,
   createEpicPartyMember,
   createInvitation,
@@ -84,6 +85,7 @@ async function fillOrganization(organization: Awaited<ReturnType<typeof createOr
   const field = await createDetailField(organization, ws);
   const category = await createCategory(organization, ws);
   const repository = await createRepository(organization, ws);
+  const delegatee = await createDelegatee(organization);
   const epic = await createEpic(organization, ws, admin.id, { category_id: category.id });
   const story = await createStory(organization, ws, admin.id, { epic_id: epic.id, category_id: category.id });
   const sprint = await createSprint(organization, ws, { started_by: admin.id });
@@ -95,6 +97,7 @@ async function fillOrganization(organization: Awaited<ReturnType<typeof createOr
     column_id: column.id,
     column_position: 'a0',
     assignee_user_id: member.id,
+    delegatee_id: delegatee.id,
   });
   await createSprintEntry(organization, ws, sprint.id, task.id, admin.id);
   await createTaskFieldValue(organization, task.id, field.id, member.id);

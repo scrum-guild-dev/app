@@ -70,6 +70,7 @@ const TEXT_FIELDS = new Set(['title', 'link_url', 'due_on', 'today_on', 'complet
 const NUMBER_FIELDS = new Set(['points']);
 const NAMED_FIELDS = new Set([
   'assignee',
+  'delegatee',
   'completed_by',
   'story',
   'category',

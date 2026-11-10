@@ -280,6 +280,7 @@ function todayTask(): TodayTask {
     is_today_completed: false,
     reopenable: false,
     assignee: null,
+    delegatee: null,
     repository: null,
     sprint: null,
   };

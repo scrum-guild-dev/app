@@ -11,6 +11,32 @@ export function defineDictionary<const T extends Record<string, string>>(entries
 }
 
 export const dictionary = defineDictionary({
+  delegateeEmptyText: 'タスクの引き出しで新しい名前を入力すると、名簿に追加できます。',
+  delegateeAssignFailed: '依頼先を変更できませんでした。タスクの状態や名簿を確認し、もう一度選んでください。',
+  delegateeAssignUnavailable:
+    '依頼先またはタスクの状態が変わった可能性があります。名簿とタスクを確認して、もう一度試してください。',
+  delegateeDeleteFailed: '依頼先を削除できませんでした。一覧を確認して、もう一度試してください。',
+  delegateeReloadFailed: '依頼先は保存済みですが、タスクを読み直せませんでした。引き出しを開き直してください。',
+  delegateeLoading: '名簿を読み込んでいます',
+  delegateeReadonly: '完了済み、バックログ以外、または書き込みできないタスクの依頼先は変更できません。',
+
+  delegateeNone: '依頼先なし',
+  delegateeNew: '新しい依頼先の名前',
+  delegateeAdd: '「{name}」を足す',
+  delegateeSave: '名前を保存する',
+  delegateeRemove: '削除する',
+  delegateeCancel: 'やめる',
+  delegateeDeleteTitle: '依頼先を削除しますか',
+  delegateeDeleteText:
+    '「{name}」を名簿から削除し、未完了のタスクから外します。元には戻せません。完了したタスクには名前が残ります。',
+  delegateeFailed: '依頼先を更新できませんでした。名前の重複や名簿の上限を確認し、もう一度試してください。',
+  delegateeLoadFailed: '依頼先を読み込めませんでした',
+  delegateeRefreshFailed: '依頼先の一覧を更新できませんでした',
+  delegateeEmpty: '依頼先はまだありません',
+  delegateeDesc: 'タスクの引き出しで足した依頼先の名前を直したり、削除できます。',
+  delegateeBusy: '保存しています',
+  delegateeInvalid: '名前は1〜50文字で入力してください。改行や制御文字は使えません。',
+
   createSheet: '起票',
   createSheetReloadFailed: '作成済みですが、一覧を読み直せませんでした。画面を開き直してください。',
   createKind: '作る種類',
@@ -419,6 +445,7 @@ export const dictionary = defineDictionary({
   assistant: 'アシスタント',
 
   // ---- 本番の画面の文言 ----
+  delegatee: '依頼先',
   // 枠の共通の文言
   appName: 'Scrum Guild',
   pageTitle: '{page} - {app}',
@@ -428,6 +455,7 @@ export const dictionary = defineDictionary({
   menuCollapse: 'メニューを畳む',
   menuExpand: 'メニューを広げる',
   breadcrumb: 'パンくず',
+  mobilePageToolsLabel: '検索とアカウント',
   navSearchLabel: '画面とタスクを探す',
   navSearchPlaceholder: '画面やタスクを探す',
   navSearchBacklog: '{backlog}で「{query}」を探す',
@@ -466,6 +494,10 @@ export const dictionary = defineDictionary({
   todayEmptyAction: '{backlog}を開く',
   todayEmptyNoWorkspaceText: '{workspace}に所属すると、自分が{assignee}する{task}がここに並びます。',
   sectionOpen: '開くと一覧を表示',
+  // 依頼先（自分用の組織）の付いた、自分が担当の未完了のタスク。人に振ったものを期日の早い順に確かめる
+  sectionDelegated: '依頼中',
+  sectionDelegatedHint: '{delegatee}を外すか{done}にするまで残ります',
+  delegatedTo: '{delegatee}: {name}',
   overdue: '期日切れ',
   weekDue: '今週が期日',
   dueIsToday: '期日は今日',
@@ -777,7 +809,7 @@ export const dictionary = defineDictionary({
   moveParentHint: '移す先の末尾に置きます。',
   moveParentSubmit: '移す',
   // ストーリーの親（エピック）を移すときの、完了か中止した{epic}が移す元か移す先のとき（向きは問わない）の知らせ
-  moveEpicDone: '{done}か中止した{epic}との間では、{story}を移せません。一覧を読み直します',
+  moveEpicDone: '{done}か中止した{epic}の配下からも配下へも、{story}を移せません。一覧を読み直します',
 
   // エピックの行（木の最上段）。{title} はエピックの題
   epicCreate: '{epic}を作る',
@@ -1809,6 +1841,12 @@ export const dictionary = defineDictionary({
   // ワークスペースの行が無く、名前の分からない終了と再開
   orgHistoryWorkspaceClosedNoName: '{workspace}を終了しました',
   orgHistoryWorkspaceReopenedNoName: '{workspace}を再開しました',
+  // 依頼先の名簿。名前は記録に残っている場合だけ添える
+  orgHistoryDelegateeCreated: '依頼先「{name}」を追加しました',
+  orgHistoryDelegateeCreatedNoName: '依頼先を追加しました',
+  orgHistoryDelegateeRenamed: '依頼先の名前を「{name}」に変更しました',
+  orgHistoryDelegateeRenamedNoName: '依頼先の名前を変更しました',
+  orgHistoryDelegateeDeleted: '依頼先を削除しました',
   // 知らない組（entity_type と action）
   orgHistoryOther: '{organization}を変更しました',
   orgHistoryEmptyTitle: 'まだ変更の履歴がありません',
@@ -1899,6 +1937,11 @@ export const dictionary = defineDictionary({
   // 完了したタスクの担当は替えない（完了の経験値と完了の記録が、完了した時点の担当を使うため）
   taskAssigneeLocked: '{done}した{task}の{assignee}は替えられません',
   taskAssigneeDone: 'この{task}は{done}になっているため、{assignee}は替えられません。',
+  // バックログの行の依頼先のチップ（自分用の組織だけ。付いた行にだけ出す）と、絞り込みの「なし」
+  delegateeClear: '{delegatee}を外す',
+  delegateesLoadFailed: '{delegatee}の名簿を読み込めませんでした。再読み込みすると、もう一度読みます',
+  delegateeGone: '選んだ人は{delegatee}の名簿から削除されています。選び直してください',
+  taskDelegateeDone: 'この{task}は{done}になっているため、{delegatee}は替えられません。',
   taskReadOnly: '終了した{workspace}の{task}は、読み取りだけできます',
   // 書きかけがあるまま閉じる（か別のタスクへ移る）ときの確認
   discardTitle: '書きかけを捨てますか',
@@ -1920,6 +1963,7 @@ export const dictionary = defineDictionary({
   taskListReloadFailed: '画面を読み直せませんでした。ページを開き直してください。',
   // 行とカードの「⋯」から消した後と戻した後の読み直しが失敗した。画面に「もう一度試す」と並べて残す印（トーストだけで伝えない）。
   // 何が済んだかを先に言う。taskListStaleReloadFailed は、断られた後の読み直し（何も変えていない）
+  taskSavedReloadFailed: '保存しましたが、画面を読み直せませんでした。もう一度試してください。',
   taskDeletedReloadFailed: '{task}は削除しましたが、画面を読み直せませんでした。もう一度試してください。',
   taskRestoredReloadFailed: '{task}は戻しましたが、画面を読み直せませんでした。もう一度試してください。',
   taskListStaleReloadFailed: '画面を読み直せませんでした。もう一度試してください。',

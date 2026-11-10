@@ -1,4 +1,11 @@
 <script lang="ts">
+  import {
+    attributeAffectsFilter,
+    completedAfterAttributeRead,
+    FilteredAttributeReload,
+  } from '../../../../lib/attribute-filter-reload.ts';
+  import { taskWithSavedAttributes } from '../../../../lib/saved-task-attributes.ts';
+  import { onTaskAttributeSaved, type Attribute, type AttributeSaved } from '../../../../lib/task-attributes.svelte.ts';
   import { tick, untrack } from 'svelte';
   import { useShortcut } from '../../../../lib/shortcuts.svelte.ts';
   import { ariaKeyshortcuts, NEW_TASK_KEY } from '../../../../lib/shortcut-keys.ts';
@@ -21,6 +28,8 @@
   import TreeEpic from '../../../../lib/components/TreeEpic.svelte';
   import TreeStory from '../../../../lib/components/TreeStory.svelte';
   import { callOperation, type ApiResult } from '../../../../lib/api.ts';
+  import { delegateeList } from '../../../../shared/operations/organization/index.ts';
+  import type { DefinitionRef } from '../../../../shared/operations/definition/definition.ts';
   import { BacklogDnd } from '../../../../lib/backlog-dnd.svelte.ts';
   import { DropFlash } from '../../../../lib/drop-flash.svelte.ts';
   import { indexTree, ROOT, type DropMove, type DropRow } from '../../../../lib/backlog-drop.ts';
@@ -34,7 +43,6 @@
   } from '../../../../lib/backlog-filter.ts';
   import {
     carriesOver,
-    completionSettled,
     keepAddedRow,
     orphanedFromTree,
     parentStoryIds,
@@ -102,6 +110,27 @@
   let { data }: PageProps = $props();
 
   const workspace = $derived(data.workspace);
+  // 依頼先のチップと絞り込みは自分用の組織だけに出す。名簿（delegatee-list）は自分用の組織だけ、木を読むたびに読み直す
+  // （load で読むと、チーム用の組織の最初の読み込みにも要求が足され、組織の種類を待つ parent() は枠の読み直しで木まで読み直すため）。
+  // 読む前は undefined（チップと帯の欄を出さない）、読めなければ null。読み直しの間は前の名簿を残す
+  const personal = $derived(data.organization?.organization.kind === 'personal');
+  let delegatees = $state<readonly DefinitionRef[] | null | undefined>(undefined);
+  $effect(() => {
+    void data.tree;
+    if (!personal) {
+      delegatees = undefined;
+      return;
+    }
+    let stale = false;
+    void callOperation(delegateeList, {}, { slug: page.params.slug ?? '' }).then((result) => {
+      if (stale) return;
+      if (result.ok) delegatees = result.data.delegatees;
+      else if (result.status !== 401) delegatees = null;
+    });
+    return () => {
+      stale = true;
+    };
+  });
   const tree = $derived(data.tree);
   // 行の「⋯」から消した（戻した）後の読み直しの失敗の印（#979。task-reload-failure.svelte.ts）。木が読めたら下ろす
   $effect(() => {
@@ -193,6 +222,40 @@
   });
   let completedIds = $state<string[]>([]);
   let savedPoints = $state<SavedBacklogPoints>({});
+  let savedAttributes = $state<Record<string, Partial<Record<Attribute, AttributeSaved>>>>({});
+  $effect(() => {
+    const slug = page.params.slug;
+    const workspaceId = page.params.id;
+    return onTaskAttributeSaved((saved) => {
+      if (saved.slug !== slug || saved.workspaceId !== workspaceId) return;
+      savedAttributes = {
+        ...savedAttributes,
+        [saved.taskId]: { ...savedAttributes[saved.taskId], [saved.field]: saved },
+      };
+      if (saved.field === 'points')
+        savedPoints = { ...savedPoints, [saved.taskId]: { value: saved.task.points, at: saved.at } };
+      if (attributeAffectsFilter(saved.field, filter)) {
+        const savedFilter = filter;
+        void attributeReload
+          .request(() => page.params.id === workspaceId && sameFilter(filter, savedFilter))
+          .catch(() => {
+            /* 読み直しの失敗は調整処理が1回だけ通知する */
+          });
+      }
+    });
+  });
+  let movedToRootAt = $state<Record<string, number>>({});
+  function savedRow(task: BacklogTask): BacklogTask {
+    const parentId = taskPlaces[task.id]?.parentId;
+    const inherited = parentId == null ? undefined : inheritedTaskCategories.get(parentId);
+    return taskWithSavedAttributes(task, savedAttributes[task.id] ?? {}, inherited, movedToRootAt[task.id]);
+  }
+  function rememberCategoryForMove(task: BacklogTask, parentId: string | null): void {
+    if (parentId === null) {
+      if (taskPlaces[task.id]?.parentId != null) movedToRootAt[task.id] = performance.now();
+    } else delete movedToRootAt[task.id];
+  }
+
   // 完了の応答が返った時刻（performance.now()）。これより前に始まった読み直しが遅れて届いても、完了の印を捨てない（completionSettled）
   let completedAt: Record<string, number> = {};
   let pendingIds = $state<string[]>([]);
@@ -217,6 +280,18 @@
     },
     dropped: () => showToast(t('moveReloaded'), 'alert'),
   });
+  const attributeReload = new FilteredAttributeReload({
+    whenIdle: () => moves.whenIdle(),
+    failed: () => markReloadFailed('saved', page.params.id ?? ''),
+    reload: async () => {
+      const saved = focusedControl();
+      const lost = document.activeElement === null || document.activeElement === document.body;
+      await invalidate('app:backlog-tree');
+      await tick();
+      await restoreFocus(saved, lost);
+      await throwIfListFailed(() => data);
+    },
+  });
   $effect.pre(() => {
     // 足した行は、読み直した木に入るまで残す。作る前に読んだ木が遅れて届いても、作った行を消さないため。
     // 作った後に始まった読み直しの木に無い行（別の人の削除、親ごとの消失）は、木に入る日が来ないので捨てる
@@ -235,9 +310,17 @@
     const done = untrack(() => completedIds);
     const loadedAtForDone = untrack(() => data.loadedAt);
     // 完了の応答より前に始まった読み直しの木は、完了を含むとは限らない。その行は木に無くても捨てず、印も残す
-    const unsettled = done.filter((id) => !completionSettled(completedAt[id] ?? Infinity, loadedAtForDone));
+    const unsettled = completedAfterAttributeRead(done, completedAt, loadedAtForDone, attributeReload.preservesState);
     // 木に無い行を残すかは、足した時刻と読み直しを始めた時刻で決める（src/lib/added-rows.ts）
     const loadedAt = untrack(() => data.loadedAt);
+    savedAttributes = carry
+      ? Object.fromEntries(
+          Object.entries(untrack(() => savedAttributes)).map(([id, fields]) => [
+            id,
+            Object.fromEntries(Object.entries(fields).filter(([, saved]) => loaded === null || saved.at >= loadedAt)),
+          ]),
+        )
+      : {};
     savedPoints = carry
       ? pendingBacklogPoints(
           untrack(() => savedPoints),
@@ -295,12 +378,16 @@
     const keptDone = carry ? unsettled.filter((id) => !orphanIds.includes(id)) : [];
     completedIds = keptDone;
     completedAt = Object.fromEntries(keptDone.map((id) => [id, completedAt[id]]));
-    movedParents = {};
-    taskOrders = {};
-    movedStoryParents = {};
-    storyOrders = {};
-    epicOrder = null;
-    moves.reloaded();
+    const preserveMoves = carry && attributeReload.preservesState;
+    if (!preserveMoves) {
+      movedToRootAt = {};
+      movedParents = {};
+      taskOrders = {};
+      movedStoryParents = {};
+      storyOrders = {};
+      epicOrder = null;
+    }
+    moves.reloaded(preserveMoves);
   });
 
   // order の順に並べる。order に無い行（後から足した行）は、元の順のまま後ろに置く
@@ -402,6 +489,13 @@
       };
     });
   });
+  const inheritedTaskCategories = $derived(
+    new Map(
+      [...allStories, ...openStories].map(
+        (parent) => [parent.id, parentEpicOf(parent.id)?.category ?? parent.category] as const,
+      ),
+    ),
+  );
   // 空の行で作ったエピックは、読み直すまで choices に無いので、画面に足した分も親の候補に入れる
   const openEpics = $derived([
     ...choiceEpics.filter((epic) => !epic.finished).map((epic) => ({ id: epic.id, title: epic.title })),
@@ -495,7 +589,11 @@
     const gained = rows.filter((task) => !known.has(task.id) && !fromTreeIds.has(task.id));
     const lost = story.tasks.filter((task) => !here.has(task.id));
     const sum = (tasks: readonly BacklogTask[]) => tasks.reduce((total, task) => total + (task.points ?? 0), 0);
-    return story.points_all + sum(gained) - sum(lost);
+    const changed = rows.filter((task) => known.has(task.id));
+    const delta = changed.reduce((total, task) => total + (savedRow(task).points ?? 0) - (task.points ?? 0), 0);
+    return (
+      story.points_all + gained.reduce((total, task) => total + (savedRow(task).points ?? 0), 0) - sum(lost) + delta
+    );
   }
 
   // 完了にした行のポイントを、親の「完了」に足す。完了にした行は、読み直した一覧では未完了だった行か、足した行なので、
@@ -506,7 +604,7 @@
     const done = storyRows(story).filter(
       (task) => completedIds.includes(task.id) && (known.has(task.id) || !fromTreeIds.has(task.id)),
     );
-    return story.points_done + done.reduce((sum, task) => sum + (task.points ?? 0), 0);
+    return story.points_done + done.reduce((sum, task) => sum + (savedRow(task).points ?? 0), 0);
   }
 
   // エピックの合計は、今その下に並ぶストーリーの合計（画面で移したストーリーと、足した行、完了にした行の分を含む）に、
@@ -972,6 +1070,7 @@
 
   // 画面で動かした並びを捨てる。まだ送っていない操作も、世代を進めて捨てる
   function discardMoves(): void {
+    movedToRootAt = {};
     movedParents = {};
     taskOrders = {};
     movedStoryParents = {};
@@ -1107,6 +1206,7 @@
     if (workspace === null) return;
     const key = storyId ?? ROOT;
     const ids = (taskLists[key] ?? []).map((row) => row.id).filter((id) => id !== task.id);
+    rememberCategoryForMove(task, storyId);
     movedParents = { ...movedParents, [task.id]: storyId };
     taskOrders = { ...taskOrders, [key]: [...ids, task.id] };
     if (storyId !== null) expandStory(storyId);
@@ -1174,6 +1274,7 @@
     const key = move.parentId ?? ROOT;
     const next = (taskLists[key] ?? []).map((row) => row.id).filter((id) => id !== task.id);
     next.splice(move.index, 0, task.id);
+    if (move.reparent) rememberCategoryForMove(task, move.parentId);
     movedParents = { ...movedParents, [task.id]: move.parentId };
     taskOrders = { ...taskOrders, [key]: next };
     if (move.parentId !== null) expandStory(move.parentId);
@@ -1277,7 +1378,7 @@
   <TaskEntry
     addedFlash={wasAdded('task', task.id)}
     bind:this={entries[task.id]}
-    {task}
+    task={savedRow(task)}
     {clock}
     done={completedIds.includes(task.id)}
     justDone={completedIds.includes(task.id)}
@@ -1297,11 +1398,10 @@
           slug: page.params.slug ?? '',
           workspaceId: workspace.id,
           onSaved: () => invalidateAll(),
-          onPointsSaved: (row, value) => {
-            savedPoints = { ...savedPoints, [row.id]: { value, at: performance.now() } };
-          },
+          loadedAt: data.loadedAt,
           onStale: () => void invalidateAll(),
           definitions: data.definitions,
+          delegatees: personal ? delegatees : undefined,
         }
       : undefined}
   />
@@ -1421,6 +1521,8 @@
           categories={data.definitions?.categories ?? []}
           repositories={data.definitions?.repositories ?? []}
           definitionsFailed={data.definitions === null}
+          delegatees={personal && delegatees !== undefined ? (delegatees ?? []) : undefined}
+          delegateesFailed={personal && delegatees === null}
           onchange={(next) => void applyFilter(next)}
         />
       {/if}

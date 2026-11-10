@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures.ts';
 import type { Page } from '@playwright/test';
+import { A11Y_THEMES, applyTheme } from './helpers.ts';
 
 // 見本（design/）の、行で直に操作する部品（空の行、チップ、「⋯」、自動保存、取り消せるトースト、「/」の小窓）を
 // バックログとスプリントの見本で通す。見本はアプリの配信対象外なので、共有の見本ファイルをそのまま返す。
 const files: Record<string, string> = {
   'backlog.html': 'text/html',
+  'index.html': 'text/html',
   'sprint.html': 'text/html',
   'tokens.css': 'text/css',
   'components.css': 'text/css',
@@ -15,7 +17,7 @@ const files: Record<string, string> = {
   'kit.js': 'text/javascript',
 };
 
-async function openSample(page: Page, name: 'backlog.html' | 'sprint.html'): Promise<string[]> {
+async function openSample(page: Page, name: 'backlog.html' | 'sprint.html' | 'index.html'): Promise<string[]> {
   await page.route('**/__design-catalog/**', async (route) => {
     const file = new URL(route.request().url()).pathname.split('/').pop()!;
     const contentType = files[file];
@@ -338,17 +340,39 @@ test('見本の引き出し: タイトルとリンクを保存すると、見出
   await expect(drawer.locator('a[data-drawer-open]')).toHaveCount(0);
 });
 
-test('見本のバックログ: 幅 390px で、チップの上端の外側 20px を押してもチップが押される', async ({ page }) => {
+test('見本のバックログ: 幅390pxで横送りした各チップを44px四方で押せる', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openSample(page, 'backlog.html');
-  const chip = page.locator('.chip-btn').first();
-  await chip.scrollIntoViewIfNeeded();
-  const hit = await chip.evaluate((el) => {
-    const r = el.getBoundingClientRect();
-    const target = document.elementFromPoint(r.left + r.width / 2, r.top - 10);
-    return target === el || el.contains(target);
-  });
-  expect(hit).toBe(true);
+  const chips = page.locator('.tree .entry.has-attrs .entry-chips').first().locator('.chip-btn');
+  await expect(chips).toHaveCount(5);
+  for (const theme of A11Y_THEMES) {
+    await applyTheme(page, theme);
+    for (const chip of await chips.all()) {
+      // 画面下に浮くタブバーと重ならない位置へ、縦と横をそれぞれ送る。
+      await chip.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+      const result = await chip.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const offsets = [
+          [0, 0],
+          [-21, 0],
+          [21, 0],
+          [0, -21],
+          [0, 21],
+        ];
+        return {
+          width: r.width,
+          height: r.height,
+          hits: offsets.every(([x, y]) => {
+            const target = document.elementFromPoint(r.left + r.width / 2 + x, r.top + r.height / 2 + y);
+            return target === el || el.contains(target);
+          }),
+        };
+      });
+      expect(result.width, theme).toBeGreaterThanOrEqual(44);
+      expect(result.height, theme).toBeGreaterThanOrEqual(44);
+      expect(result.hits, theme).toBe(true);
+    }
+  }
 });
 
 test('見本のバックログ: 下の行を先に、上の行を後に消し、古い方から取り消しても元の並びに戻る', async ({ page }) => {
@@ -404,4 +428,94 @@ test('見本のバックログ: 配下の未完了が残るストーリーは、
   const drawer = page.locator('#drawer');
   await drawer.locator('[data-story-done]').click({ force: true });
   await expect(drawer.locator('.hanko')).toHaveCount(0);
+});
+
+test('見本のチップ: ロックの理由、読み込み中、再試行と離脱済みの候補', async ({ page }) => {
+  await openSample(page, 'backlog.html');
+  const examples = page.locator('.attr-chip-examples');
+  await examples.locator('summary').click();
+  const locked = examples.locator('[data-chip-example="locked"] .chip-btn').first();
+  await expect(locked).toHaveAttribute('aria-disabled', 'true');
+  await expect(locked).toHaveAccessibleDescription('このタスクは完了になっているため、ポイントは直せません。');
+  await locked.focus();
+  await locked.press('Enter');
+  await expect(locked).not.toHaveAttribute('aria-expanded');
+  const lockedAssignee = examples.locator('[data-chip-example="locked"] .attr-chip').last().locator('.chip-btn');
+  await expect(lockedAssignee).toHaveAttribute('aria-disabled', 'true');
+  await expect(lockedAssignee).toHaveAccessibleDescription('このタスクは完了になっているため、担当は替えられません。');
+
+  const loading = examples.locator('[data-chip-example="loading"] .attr-chip').last();
+  await loading.locator('.chip-btn').click();
+  await expect(loading.getByRole('menu')).toHaveAttribute('aria-busy', 'true');
+  await expect(loading.getByRole('menuitem')).toHaveText('読み込んでいます');
+  await page.keyboard.press('Escape');
+  await expect(loading.locator('.chip-btn')).toBeFocused();
+
+  const failed = examples.locator('[data-chip-example="failed"] .attr-chip').last();
+  await failed.locator('.chip-btn').click();
+  await failed.getByRole('menuitem', { name: /もう一度試す/ }).click();
+  await expect(failed.getByRole('menuitemradio', { name: /離脱済み/ })).toHaveAttribute('aria-checked', 'true');
+  await failed.getByRole('menuitemradio', { name: '担当なし', exact: true }).click();
+  await expect(failed.locator('.chip-btn')).toBeFocused();
+  await expect(failed.locator('.avatar')).toHaveCount(0);
+
+  const left = examples.locator('[data-chip-example="left"] .attr-chip').last();
+  await expect(left.locator(':scope > .avatar')).toHaveClass(/is-left/);
+  await expect(left.locator('.chip-btn .avatar')).toHaveCount(0);
+});
+
+for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+  test(`見本のチップ: ${theme}、320px・文字150%で長い担当名が収まる`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await openSample(page, 'backlog.html');
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+      document.documentElement.style.fontSize = '150%';
+    }, theme);
+    await page.locator('.attr-chip-examples summary').click();
+    await page.evaluate(() => document.fonts.ready);
+    const row = page.locator('[data-chip-example="long"]');
+    const chip = row.locator('.attr-chip').last().locator('.chip-btn');
+    const box = (await chip.boundingBox())!;
+    const bounds = (await row.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+    expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    const dimensions = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    }));
+    expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
+    const text = await chip.locator('.chip-text').evaluate((element) => ({
+      scroll: element.scrollWidth,
+      client: element.clientWidth,
+    }));
+    expect(text.scroll).toBeGreaterThan(text.client);
+    await expect(chip.locator('.ico')).toHaveCount(1);
+    // 行に説明や他の属性が並んでも、包み自体を残りの幅まで縮める。
+    const end = row.locator('.entry-end');
+    await end.evaluate((element) => (element.style.width = '160px'));
+    const endBox = (await end.boundingBox())!;
+    const wrapper = (await row.locator('.attr-chip').last().boundingBox())!;
+    expect(wrapper.width).toBeLessThanOrEqual(endBox.width);
+    expect(wrapper.x + wrapper.width).toBeLessThanOrEqual(endBox.x + endBox.width + 1);
+  });
+}
+
+test('カタログの横送りの見本で属性と行の操作を選んでも、同じ見本へフォーカスが戻る', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors = await openSample(page, 'index.html');
+  const points = page.locator('#tree [data-chip-for="t15:pts"]');
+  await expect(page.locator('[data-chip-for="t15:pts"]')).toHaveCount(1);
+  await points.click();
+  await page.getByRole('menuitemradio', { name: '5 pt', exact: true }).click();
+  await expect(points).toHaveText('5 pt');
+  await expect(points).toBeFocused();
+  const menu = page.locator('#tree [data-menu-for="t15"]');
+  await expect(page.locator('[data-menu-for="t15"]')).toHaveCount(1);
+  await menu.click();
+  await page.getByRole('menuitem', { name: '今日やる', exact: true }).click();
+  await expect(menu).toBeFocused();
+  expect(errors).toEqual([]);
 });

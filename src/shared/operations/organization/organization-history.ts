@@ -46,13 +46,17 @@ const event = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace_created'), workspace_name: z.string().nullable() }),
   z.object({ kind: z.literal('workspace_closed'), workspace_name: z.string().nullable() }),
   z.object({ kind: z.literal('workspace_reopened'), workspace_name: z.string().nullable() }),
+  // 依頼先の名簿。名前は現在値ではなく記録の値。削除には名前を保存していない
+  z.object({ kind: z.literal('delegatee_created'), name: z.string().nullable() }),
+  z.object({ kind: z.literal('delegatee_renamed'), name: z.string().nullable() }),
+  z.object({ kind: z.literal('delegatee_deleted') }),
   // 知らない組。画面は「組織を変更しました」とだけ出す
   z.object({ kind: z.literal('other') }),
 ]);
 
 export const organizationHistory = defineOperation({
   name: 'organization-history',
-  description: `組織の変更の履歴（組織の作成、管理者の指名、運用者の操作、ワークスペースの作成・終了・再開）を、新しい順に ${ORGANIZATION_HISTORY_PAGE_SIZE} 件ずつ返す。before を渡すと、その行より前を返す`,
+  description: `組織の変更の履歴（組織の作成、管理者の指名、運用者の操作、ワークスペースの作成・終了・再開、依頼先の名簿の追加・名前変更・削除）を、新しい順に ${ORGANIZATION_HISTORY_PAGE_SIZE} 件ずつ返す。before を渡すと、その行より前を返す`,
   mode: 'read',
   permission: 'admin',
   input: z.object({ before: cursor.nullable().optional() }),

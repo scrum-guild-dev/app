@@ -106,12 +106,17 @@ test('担当変更後の遅い読み直しがポイントの保存を戻さな�
   try {
     await assignee.selectOption({ label: '担当なし' });
     await expect.poll(() => captured).toBe(true);
+    const saved = waitForResponses(page, '/task-update');
+    const history = waitForResponses(page, '/task-history');
     await points.check();
     await expect(
       page
         .locator('.entry', { hasText: '別の欄も保存する' })
         .getByRole('button', { name: 'ポイント: 5 pt', exact: true }),
     ).toBeVisible();
+    await (await saved).finished();
+    // 行の楽観表示ではなく、保存結果を表示した後で古い詳細を返す。
+    await history;
   } finally {
     release();
   }

@@ -96,6 +96,13 @@ SQ.mount("admin", () => `
       <p class="field-hint">終了したワークスペースと、削除後30日の保持中の Wiki も含みます。Wiki は題と本文を数えます。</p>
       ${D.storage.byWorkspace.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>${t("workspace")}</th><th class="is-num">ファイル</th><th class="is-num">合計</th></tr></thead>
         <tbody><tr><td>組織の Wiki</td><td class="is-num">—</td><td class="is-num">0 MB</td></tr>${D.storage.byWorkspace.map(([ws, n, gb]) => `<tr><td>${esc(D.workspaces[ws].name)}</td><td class="is-num">${n} 件</td><td class="is-num">${gb} GB</td></tr>`).join("")}</tbody></table></div>` : ""}`)}
+    ${new URLSearchParams(location.search).has("personal") ? setting(t("delegatee"), t("delegateeDesc"), `
+      <div class="form">${D.delegatees.length ? D.delegatees.map((row) => `<form class="field" aria-labelledby="delegatee-label-${row.id}" data-delegatee-rename="${row.id}">
+        <label class="field-label" id="delegatee-label-${row.id}" for="delegatee-${row.id}">${esc(row.name)}</label>
+        <input class="input" id="delegatee-${row.id}" value="${esc(row.name)}" maxlength="50" required>
+        <div class="form-actions"><button class="btn is-sm" type="submit">${t("delegateeSave")}</button><button class="btn is-sm is-danger" type="button" data-delegatee-delete="${row.id}">${t("delegateeRemove")}</button></div>
+      </form>`).join("") : SQ.emptyState("users", t("delegateeEmpty"), t("delegateeEmptyText"))}</div>`) : ""}
+
     ${setting("組織の休日", `祝日など、すべての${t("workspace")}に効く休日。日付の一覧を貼り付けて、まとめて登録できます。`, `
       <div class="field"><label class="field-label" for="paste">貼り付けて登録</label><textarea class="textarea" id="paste" aria-describedby="paste-hint" placeholder="2027-02-11 建国記念の日&#10;2027-02-23 天皇誕生日"></textarea><span class="field-hint" id="paste-hint">1行に1日。日付（2026-11-03 か 2026/11/3、2000〜2099 年）のあとに、空白、タブ、カンマで区切って名前を書けます。表計算から写した行は、名前より後の列を読みません。登録済みの日付は飛ばします。</span></div>
       <div class="form-actions"><button class="btn" type="button" data-toast="2 日を登録しました">登録する</button></div>
@@ -134,6 +141,27 @@ SQ.mount("admin", () => `
         <tbody>${A.audit.map(([at, who, kind, name]) => `<tr><td class="mono">${at}</td><td data-label="した人">${who ? `<span class="person is-wrap">${avatarOf(who)}${esc(user(who).name)}</span>` : `<span class="props-note">運用者</span>`}</td><td class="is-wrap" data-label="内容">${esc(AUDIT[kind](name))}</td></tr>`).join("")}</tbody></table></div>
       ${A.auditMore ? `<div class="form-actions"><button class="btn is-sm" type="button">古い履歴を読む</button></div>` : ""}`)}
   </div>`);
+// 自分用の名簿。見本だけのデータで操作を確かめる。
+document.addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-delegatee-rename]"); if (!form) return;
+  event.preventDefault(); const row = D.delegatees.find((entry) => entry.id === form.dataset.delegateeRename);
+  const name = form.querySelector("input").value.trim();
+  if (!name || D.delegatees.some((entry) => entry !== row && entry.name === name)) return;
+  row.name = name; SQ.redraw();
+});
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delegatee-delete]"); if (!button) return;
+  const row = D.delegatees.find((entry) => entry.id === button.dataset.delegateeDelete);
+  SQ.openDialog(t("delegateeDeleteTitle"), `<p>${esc(t("delegateeDeleteText", { name: row.name }))}</p>`,
+    `<button class="btn is-primary" type="button" data-close-dialog>${t("delegateeCancel")}</button><button class="btn is-danger" type="button" data-delegatee-confirm="${row.id}">${t("delegateeRemove")}</button>`);
+});
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delegatee-confirm]"); if (!button) return;
+  const id = button.dataset.delegateeConfirm;
+  D.delegatees = D.delegatees.filter((entry) => entry.id !== id);
+  for (const task of D.tasks) if (task.delegatee === id && !task.doneAt) task.delegatee = null;
+  SQ.closeDialog(); SQ.redraw();
+});
 // 見本の中だけの切り替え。有効を外すと、アシスタントは「使えません」の表示になる
 document.addEventListener("change", (ev) => {
   if (ev.target.matches("[data-ai-enabled]")) {

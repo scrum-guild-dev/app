@@ -41,6 +41,23 @@ test.describe('本物の API', () => {
     await expect(page).not.toHaveURL(/\/consent/);
   });
 
+  // 設定の「すべての端末とトークンを締め出す」も同意の門の例外にしない（#770）。マイプロフィールを開くと先に同意の画面へ移る
+  test('同意していない人がマイプロフィール（全失効のある設定の画面）を開くと同意の画面に移り、同意するとその画面に戻る', async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await signIn(context, baseURL, 'unconsented');
+    await page.goto('/aoba/me');
+    await expect(page).toHaveURL(/\/consent\?return_to=%2Faoba%2Fme$/);
+    await page.getByRole('checkbox', { name: CHECKBOX_NAME }).check();
+    await page.getByRole('button', { name: '同意して進む' }).click();
+    await expect(page).toHaveURL(/\/aoba\/me$/);
+    // unconsented はどの組織にも入っていないので、戻った画面は「見つからない」になる。描かれてから同意の画面へ戻っていないことを見る
+    await expect(page.getByRole('heading', { name: '組織が見つかりません' })).toBeVisible();
+    await expect(page).not.toHaveURL(/\/consent/);
+  });
+
   test('同意していない人が / を開くと同意の画面に移る', async ({ page, context, baseURL }) => {
     await signIn(context, baseURL, 'unconsented');
     await page.goto('/');

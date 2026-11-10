@@ -14,6 +14,7 @@ import { revokeSameEmailStatements } from '../src/server/operations/invitation.t
 import { todayOperation } from '../src/server/operations/today.ts';
 import {
   createComment,
+  createDelegatee,
   createEpic,
   createOrganization,
   createStory,
@@ -1813,4 +1814,62 @@ test('外部キーと作成日時の形を検査する', async () => {
   await expect(insertFavoriteSchema(f.user.id, f.workspace.id, f.task.id, null, null, null, 'invalid')).rejects.toThrow(
     /CHECK/,
   );
+});
+
+describe('delegatees と tasks.delegatee_id', () => {
+  test.each(['', 'あ'.repeat(51)])('空と50字を超える名前を断る（%j）', async (name) => {
+    const org = await createOrganization();
+    await expect(createDelegatee(org, { name })).rejects.toThrow(/CHECK constraint failed/);
+  });
+
+  test('名前の両端は1字と50字。同じ名前はSQLの一意では制約しない', async () => {
+    const org = await createOrganization();
+    await createDelegatee(org, { name: 'あ' });
+    await createDelegatee(org, { name: 'あ'.repeat(50) });
+    await createDelegatee(org, { name: 'あ' });
+  });
+
+  test('依頼先は存在する組織だけを指す', async () => {
+    const org = await createOrganization();
+    await expect(createDelegatee(org, { organization_id: id() })).rejects.toThrow(/FOREIGN KEY constraint failed/);
+  });
+
+  test('タスクは依頼先なしで作れ、存在しない依頼先は指せない', async () => {
+    const org = await createOrganization();
+    const author = await createUser(org);
+    const ws = await createWorkspace(org, author.id);
+    expect((await createTask(org, ws.id, author.id)).delegatee_id).toBeNull();
+    await expect(createTask(org, ws.id, author.id, { delegatee_id: id() })).rejects.toThrow(
+      /FOREIGN KEY constraint failed/,
+    );
+  });
+
+  test('依頼先を参照したタスクがあれば、名簿の物理削除を断る', async () => {
+    const org = await createOrganization();
+    const author = await createUser(org);
+    const ws = await createWorkspace(org, author.id);
+    const delegatee = await createDelegatee(org);
+    await createTask(org, ws.id, author.id, { delegatee_id: delegatee.id });
+    await expect(run('DELETE FROM delegatees WHERE id = ?', delegatee.id)).rejects.toThrow(
+      /FOREIGN KEY constraint failed/,
+    );
+  });
+
+  test('未完了の依頼タスクを部分索引で引く', async () => {
+    const plan = await env.DB.prepare(
+      'EXPLAIN QUERY PLAN SELECT id FROM tasks WHERE delegatee_id = ? AND completed_at IS NULL',
+    )
+      .bind(id())
+      .all<{ detail: string }>();
+    expect(plan.results.some((row) => row.detail.includes('USING INDEX tasks_delegatee_completed'))).toBe(true);
+  });
+
+  test('名簿の一覧は組織と名前の部分索引で引く', async () => {
+    const plan = await env.DB.prepare(
+      'EXPLAIN QUERY PLAN SELECT id, name FROM delegatees WHERE organization_id = ? AND deleted_at IS NULL ORDER BY name',
+    )
+      .bind(id())
+      .all<{ detail: string }>();
+    expect(plan.results.some((row) => row.detail.includes('USING INDEX delegatees_organization_name'))).toBe(true);
+  });
 });

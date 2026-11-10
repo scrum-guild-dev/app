@@ -553,7 +553,7 @@ describe('マイグレーションと seed の期限', () => {
   test('seed の期限の式は、ISO の形で今から90日後になり、その行を readApiToken が読める', async () => {
     const seedSql = (await import('../seed/data.sql?raw')).default;
     const expression = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+90 days')";
-    expect(seedSql.split(expression)).toHaveLength(4);
+    expect(seedSql.split(expression)).toHaveLength(5);
     const account = await createAccount();
     const raw = rawApiToken();
     const hash = await hashApiToken(raw);

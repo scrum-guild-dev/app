@@ -17,6 +17,7 @@ import {
   createComment,
   createConnection,
   createDetailField,
+  createDelegatee,
   createEpic,
   createEpicPartyMember,
   createInvitation,
@@ -160,7 +161,60 @@ async function wikiFor(target: Target, organization = false, author = target.mem
   return id;
 }
 
+// 依頼先の書き込みは自分用だけ。権限を網羅するfixtureの人はそのままに、
+// この操作で使う組織だけを自分用にする（製品からは本人1人で作られる）。
+async function prepareDelegatees(target: Target): Promise<void> {
+  const db = commonDb(env);
+  await db.run(
+    db.statement((q) =>
+      q
+        .updateTable('organizations')
+        .set({ kind: 'personal', created_by_account_id: target.admin.accountId })
+        .where('id', '=', target.organization.id),
+    ),
+  );
+}
+
 export const pointers: Pointers = {
+  'delegatee-list': { noReference: {} },
+  'delegatee-create': {
+    noReference: { name: '白川 葵' },
+    prepare: async (target) => {
+      await prepareDelegatees(target);
+      // 同じfixtureへの複数の成功呼び出しで、同名の拒否に当たらないよう準備する。
+      const db = orgDb(env, target.organization.verified);
+      await db.run(
+        db.statement((q) =>
+          q
+            .updateTable('delegatees')
+            .set({ deleted_at: '2026-11-10T00:00:00.000Z', updated_at: '2026-11-10T00:00:00.000Z' })
+            .where('organization_id', '=', target.organization.id)
+            .where('name', '=', '白川 葵')
+            .where('deleted_at', 'is', null),
+        ),
+      );
+    },
+  },
+  'delegatee-update': async (target) => {
+    await prepareDelegatees(target);
+    const delegatee = await createDelegatee(target.organization);
+    return { delegatee_id: delegatee.id, name: `依頼先-${delegatee.id}` };
+  },
+  'delegatee-delete': async (target) => {
+    await prepareDelegatees(target);
+    return { delegatee_id: (await createDelegatee(target.organization)).id };
+  },
+  'task-delegate': async (target) => {
+    await prepareDelegatees(target);
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      assignee_user_id: target.admin.userId!,
+    });
+    return {
+      workspace_id: target.workspace.id,
+      task_id: task.id,
+      delegatee_id: (await createDelegatee(target.organization)).id,
+    };
+  },
   'attachment-list': async (target) => ({
     workspace_id: target.workspace.id,
     task_id: (await createTask(target.organization, target.workspace.id, target.admin.userId!)).id,

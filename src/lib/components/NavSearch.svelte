@@ -14,7 +14,7 @@
   // screens の href と backlogHref は呼び出し側が resolve した経路
   let { screens, backlogHref }: { screens: NavSearchScreen[]; backlogHref: string | null } = $props();
 
-  // 760px 以下では欄を虫眼鏡のボタンに畳み、押すとパンくずの行の下に欄を出す（expanded。CSS が data-open で出し分け、
+  // 760px 以下では欄を虫眼鏡のボタンに畳み、押すと見出しの行の下に欄を出す（expanded。CSS が data-open で出し分け、
   // 広い幅では欄を常に出してボタンを隠す）。Esc で閉じるか欄の外へフォーカスが移ると畳む
   const listId = $props.id();
   const boxId = `${listId}-box`;

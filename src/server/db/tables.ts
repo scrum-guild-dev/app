@@ -213,6 +213,14 @@ export const organizationTableColumns = {
     created_at: text,
     updated_at: text,
   },
+  delegatees: {
+    id: text,
+    organization_id: text,
+    name: text,
+    deleted_at: textOrNull,
+    created_at: text,
+    updated_at: text,
+  },
   categories: {
     id: text,
     workspace_id: text,
@@ -363,6 +371,7 @@ export const organizationTableColumns = {
     sprint_id: textOrNull,
     column_id: textOrNull,
     assignee_user_id: textOrNull,
+    delegatee_id: textOrNull,
     points: integerOrNull,
     due_on: textOrNull,
     today_on: textOrNull,

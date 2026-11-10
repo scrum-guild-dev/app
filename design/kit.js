@@ -59,6 +59,31 @@
 
   // ---- 言葉の辞書（各キーはスクラムの言葉の文字列1つ） ----
   const DICT = {
+  delegateeEmptyText: 'タスクの引き出しで新しい名前を入力すると、名簿に追加できます。',
+  delegateeAssignFailed: '依頼先を変更できませんでした。タスクの状態や名簿を確認し、もう一度選んでください。',
+  delegateeAssignUnavailable: '依頼先またはタスクの状態が変わった可能性があります。名簿とタスクを確認して、もう一度試してください。',
+  delegateeDeleteFailed: '依頼先を削除できませんでした。一覧を確認して、もう一度試してください。',
+  delegateeReloadFailed: '依頼先は保存済みですが、タスクを読み直せませんでした。引き出しを開き直してください。',
+  delegateeLoading: '名簿を読み込んでいます',
+  delegateeReadonly: '完了済み、バックログ以外、または書き込みできないタスクの依頼先は変更できません。',
+
+  delegateeNone: '依頼先なし',
+  delegateeNew: '新しい依頼先の名前',
+  delegateeAdd: '「{name}」を足す',
+  delegateeSave: '名前を保存する',
+  delegateeRemove: '削除する',
+  delegateeCancel: 'やめる',
+  delegateeDeleteTitle: '依頼先を削除しますか',
+  delegateeDeleteText: '「{name}」を名簿から削除し、未完了のタスクから外します。元には戻せません。完了したタスクには名前が残ります。',
+  delegateeFailed: '依頼先を更新できませんでした。名前の重複や名簿の上限を確認し、もう一度試してください。',
+  delegateeLoadFailed: '依頼先を読み込めませんでした',
+  delegateeRefreshFailed: '依頼先の一覧を更新できませんでした',
+  delegateeEmpty: '依頼先はまだありません',
+  delegateeDesc: 'タスクの引き出しで足した依頼先の名前を直したり、削除できます。',
+  delegateeBusy: '保存しています',
+  delegateeInvalid: '名前は1〜50文字で入力してください。改行や制御文字は使えません。',
+
+    mobilePageToolsLabel: "検索とアカウント",
     menu: "メニュー",
     close: "閉じる",
     taskTitleRequired: "タイトルを入れてください",
@@ -72,6 +97,9 @@
     discardKeep: "書き続ける",
     discardConfirm: "捨てる",
     loading: "読み込んでいます",
+    taskSaveConflict: "この{task}は{done}になっているため、{points}は直せません。",
+    taskAssigneeDone: "この{task}は{done}になっているため、{assignee}は替えられません。",
+    assigneeCandidatesFailed: "{assignee}の候補を読み込めませんでした",
     storyCreating: "作っています",
     dueClear: "クリア",
     storyTitlePlaceholder: "どこまで進めば区切りか",
@@ -538,20 +566,44 @@
     return `<div class="draft-row" data-draft-row>${icon("plus")}<label class="visually-hidden" for="${id}">${esc(label)}</label>` +
       `<input class="input" id="${id}" data-draft="${kind}:${key}" placeholder="${esc(placeholder ?? `${label}（題を打って Enter）`)}" autocomplete="off" enterkeyhint="done"></div>`;
   }
-  // 属性のチップ。タスクの属性（pts か who）を、行のチップを押して後から決める。値がなければ薄い破線の形（未設定）。
+  // 属性のチップ。タスクの属性（期日、リポジトリ、区分、ポイント、担当）を、行のチップを押して後から決める。値がなければ薄い破線の形（未設定）。
   // 押すと値の一覧（行の「⋯」と同じメニュー）が開き、選ぶと見本の中で保存する
-  function attrChip(x, name) {
-    const isPts = name === "pts";
-    const label = isPts ? t("points") : t("assignee");
-    const set = isPts ? x.pts != null : Boolean(x.who);
-    const shown = isPts ? (set ? `${x.pts} pt` : label) : (set ? user(x.who).name : label);
-    const options = isPts
-      ? [["", "未見積もり"], ...[0, 1, 2, 3, 5, 8, 13].map((v) => [String(v), `${v} pt`])]
-      : [["", `${label}なし`], ...Object.entries(D.users).filter(([, u]) => !u.left).map(([id, u]) => [id, u.name])];
-    const current = isPts ? (x.pts == null ? "" : String(x.pts)) : (x.who || "");
+  let attrChipSequence = 0;
+  function attrChip(x, name, opts = {}) {
+    const isPts = name === "pts", isWho = name === "who";
+    const member = x.who ? user(x.who) : null;
+    const cat = categoryOf(x);
+    const config = {
+      pts: { label: t("points"), current: x.pts == null ? "" : String(x.pts), options: [["", "未見積もり"], ...[0, 1, 2, 3, 5, 8, 13].map((v) => [String(v), `${v} pt`])] },
+      who: { label: t("assignee"), current: x.who || "", options: [["", `${t("assignee")}なし`], ...Object.entries(D.users).filter(([, u]) => !u.left).map(([id, u]) => [id, u.name])] },
+      due: { label: t("due"), current: dueOf(x)?.date || "", options: [["", "期日なし"], [D.today, "今日まで"], [D.weekEnd, "今週まで"]] },
+      repo: { label: "リポジトリ", current: x.repo || "", options: [["", "リポジトリなし"], ...Object.entries(D.repositories).map(([id, r]) => [id, r.name])] },
+      cat: { label: t("category"), current: cat?.id || "", options: [["", "区分なし"], ...Object.entries(D.categories).map(([id, c]) => [id, c.name])] },
+    }[name];
+    const { label, current, options } = config;
+    const set = current !== "";
+    if (isWho && member?.left) options.push([x.who, `${opts.text || member.name}${t("leftMember")}`]);
+    const shown = set ? (name === "who" ? `${opts.text || member.name}${member.left ? t("leftMember") : ""}` : options.find(([value]) => value === current)?.[1] || current) : label;
+    const locked = x.doneAt && (isPts || isWho) ? t(isPts ? "taskSaveConflict" : "taskAssigneeDone").replace("{task}", t("task")).replace("{done}", t("done")).replace(isPts ? "{points}" : "{assignee}", label) : name === "cat" && cat?.inherited ? "親から引き継いだ区分" : name === "due" && dueOf(x)?.fromSource ? "取り込み元の期日" : null;
     const items = options.map(([value, text]) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${value === current}" data-chip-set="${x.id}:${name}:${value}">${value === current ? icon("check") : ""}<span>${esc(text)}</span></button></li>`).join("");
-    return `<span class="row-menu"><button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-row-menu data-chip-for="${x.id}:${name}" aria-haspopup="menu" aria-expanded="false" aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(shown)}"><span class="chip-text">${esc(shown)}</span></button>` +
-      `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" hidden>${items}</ul></span>`;
+    const state = opts.state || "ready";
+    const pending = state === "loading" ? `<li role="none"><button class="menu-item" type="button" role="menuitem" aria-disabled="true">${t("loading")}</button></li>` : `<li role="none"><button class="menu-item" type="button" role="menuitem" data-chip-retry>${t("assigneeCandidatesFailed").replace("{assignee}", t("assignee"))}。${t("retry")}</button></li>`;
+    const reasonId = `chip-reason-${x.id}-${name}-${++attrChipSequence}`;
+    return `<span class="row-menu attr-chip${isPts ? " is-points" : ""}">${isWho && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked ? `${shown} — ${locked}` : shown)}"><span class="chip-text">${esc(shown)}</span>${locked || !opts.proposal ? "" : icon("chevron")}</button>` +
+      (locked ? `<span class="visually-hidden" id="${reasonId}">${locked}</span>` : `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" aria-busy="${state === "loading"}"${state === "failed" ? ` data-ready-items="${esc(items)}"` : ""} hidden>${state === "ready" ? items : pending}</ul>`) + `</span>`;
+  }
+
+  // 本番へ移す前に人が確認する状態の見本。実データと混ぜず、値の選択もこの領域だけで終える。
+  function attrChipExamples() {
+    const left = Object.keys(D.users).find((id) => D.users[id].left);
+    const example = { id: "preview", who: left, pts: 5 };
+    return `<details class="attr-chip-examples"><summary>行のチップの状態と見た目の案（本番への反映前）</summary><div class="book">` +
+      [["locked", "完了した行", { ...example, doneAt: "2026-11-01" }, {}],
+       ["loading", "候補の読み込み中", example, { state: "loading" }],
+       ["failed", "候補の読み込み失敗（もう一度試すで復帰）", example, { state: "failed" }],
+       ["left", "離脱済みの担当", example, {}],
+       ["long", "長い名前・320px・文字150%", example, { text: "長い担当名を持つメンバーの名前を省略して表示する見本" }]]
+      .map(([key, title, x, opts]) => `<div class="entry" data-chip-example="${key}"><span>${title}</span><div class="entry-end">${attrChip({ ...x, id: `preview-${key}` }, "pts", { proposal: true })}${attrChip({ ...x, id: `preview-${key}` }, "who", { ...opts, proposal: true })}</div></div>`).join("") + `</div></details>`;
   }
 
   // 行の先頭のつまみ（飾りで、aria-hidden）。order を渡した行（書き込めるとき）だけに付く。
@@ -576,23 +628,23 @@
       : `<button class="sun" type="button" data-sun="${x.id}" aria-pressed="${x.todayOn === D.today}" aria-label="今日やる: ${esc(x.title)}" title="今日やる" aria-disabled="false">${icon("sun")}</button>`;
     const title = opts.noLink ? `<span class="entry-title">${titleOf(x)}</span>` : `<a class="entry-title" href="#" data-task="${x.id}">${titleOf(x)}</a>`;
     const mark = opts.mark || {};
-    return `<div class="entry ${x.doneAt ? "is-done" : ""}${opts.order ? " has-grip" : ""}${mark.state ? ` ${mark.state}` : ""}"${dropAttr(mark)}>
+    return `<div class="entry ${x.doneAt ? "is-done" : ""}${opts.order ? " has-grip" : ""}${compact ? " has-attrs" : ""}${mark.state ? ` ${mark.state}` : ""}"${dropAttr(mark)}>
       ${opts.order ? gripCell(Boolean(x.doneAt)) : ""}${lead}
       <div class="entry-main">
         ${title}
         <span class="entry-meta">
           ${opts.showWs ? `<span class="tag">${esc(D.workspaces[x.ws].name)}</span>` : ""}
-          ${opts.showSprint ? sprintTag(x) : ""}${repoTag(x)}${x.story ? "" : categoryTag(x.cat)}${sourceKey(x)}
+          ${opts.showSprint ? sprintTag(x) : ""}${compact ? "" : repoTag(x)}${!compact && !x.story ? categoryTag(x.cat) : ""}${sourceKey(x)}
           ${showParent && parent ? `<span>${icon("flag")} ${esc(parent)}</span>` : ""}
           ${compact && x.todayOn === D.today ? `<span class="entry-today">${icon("sun")}今日やる</span>` : ""}${x.doneAt ? `<span>${t("done")} ${esc(x.doneAt)}</span>` : colName(x) ? `<span class="status-dot">${esc(colName(x))}</span>` : ""}
           ${taskFlags(x)}${opts.meta ? opts.meta(x) : ""}
         </span>
       </div>
-      <div class="entry-end">${taskDue(x)}${opts.hidePts ? "" : compact ? attrChip(x, "pts") : pts(x.pts)}${opts.showAssignee ? (compact ? attrChip(x, "who") : avatarOf(x.who)) : ""}${compact ? rowMenu(x.title, [
+      <div class="entry-end"><div class="entry-attributes"><div class="entry-chips"${compact ? ` role="group" aria-label="${esc(x.title)}"` : ""}>${compact ? attrChip(x, "due") + attrChip(x, "repo") + attrChip(x, "cat") : taskDue(x)}${opts.hidePts ? "" : compact ? attrChip(x, "pts") : pts(x.pts)}${opts.showAssignee ? (compact ? attrChip(x, "who") : avatarOf(x.who)) : ""}</div></div><div class="entry-actions">${compact ? rowMenu(x.title, [
         { attr: `data-sun="${x.id}"`, label: x.todayOn === D.today ? "今日やるを外す" : "今日やる", icon: "sun" },
         ...orderItems(opts.order),
         { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除する`, icon: "trash", danger: true },
-      ], x.id) : ""}${opts.actions ? opts.actions(x) : doneControl(x)}</div>
+      ], x.id) : ""}${opts.actions ? opts.actions(x) : doneControl(x)}</div></div>
     </div>`;
   }
   // opts.empty があれば、空のときに台帳の代わりに出す（emptyState で作る）
@@ -734,9 +786,14 @@
       : `${counts(tallies)}${meta}`;
     return `<header class="page-head${compactSummary ? " is-compact" : ""}">
       ${eyebrow ? `<span class="page-eyebrow">${eyebrow}</span>` : ""}
-      <div class="page-head-row"><h1 class="page-title">${title}</h1>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
+      <div class="page-head-row"><div class="page-title-row"><h1 class="page-title">${title}</h1></div>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
       ${metrics}
     </header>`;
+  }
+
+  // カタログ用のスマホ見出し。実際の検索とメニューは画面見本で操作する。
+  function mobilePageHead(title) {
+    return `<header class="page-head"><div class="page-head-row page-title-row"><h1 class="page-title">${esc(title)}</h1><div class="mobile-page-tools" role="group" aria-label="${t("mobilePageToolsLabel")}"><button class="nav-search-toggle" type="button" aria-label="画面とタスクを探す" data-toast="画面見本の検索から画面を探せます">${icon("search")}</button><button class="account-menu-button" type="button" aria-label="${t("accountMenuLabel").replace("{name}", "ミナト")}" data-toast="画面見本のアカウントからメニューを開けます">${avatarOf(D.me)}</button></div></div></header>`;
   }
 
   // スプリントのカード（列の中）
@@ -836,7 +893,7 @@
     return `<button class="tree-folded${opts.root ? " is-root" : ""}" type="button" aria-expanded="${open}" aria-controls="${id}"${opts.title ? ` aria-label="${esc(named(open ? opened : closed))}"` : ""} data-completed-toggle="${id}" data-closed="${esc(closed)}" data-opened="${esc(opened)}" data-title="${esc(opts.title || "")}"${dropAttr(opts.tail || {})}>${icon("chevron")}<span>${esc(open ? opened : closed)}</span></button>
       <div id="${id}" class="completed-list" role="group" aria-label="${esc(groupName)}"${open ? "" : " hidden"}>${rows}${status}</div>`;
   }
-  // バックログの木。opts.order を渡すと、ストーリーの行に「上へ」「下へ」（order.parent が真なら「親を移す」も）を、
+  // バックログの木。opts.order を渡すと、ストーリーの行に「上へ」「下へ」（order.parent が真で opts.blocked が偽なら「親を移す」も）を、
   // 配下のタスクの行に並べ替えと「親を移す」を出す。opts.doneAt で、完了したストーリーとして描ける（カタログの見本）。
   // opts.blocked は親のエピックが完了か中止している、opts.key は同じストーリーを2回描くときの id の区別
   function treeStory(sid, solo, opts = {}) {
@@ -862,7 +919,7 @@
           <span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span>
           ${st.doneAt ? "" : `<button class="btn is-sm" type="button" data-dialog="createTask" aria-label="${t("task")}を足す: ${esc(st.title)}">${icon("plus")}${t("task")}</button>`}
           ${storyDoneControl(key, st, open.length, Boolean(opts.blocked))}
-          ${opts.order ? rowMenu(st.title, orderItems(opts.order)) : ""}
+          ${opts.order ? rowMenu(st.title, orderItems({ ...opts.order, parent: opts.order.parent && !opts.blocked })) : ""}
         </span>
       </div>
       <div class="tree-children" id="tree-${key}">${open.map((x, i) => entry(x, { showParent: false, showAssignee: true, showSprint: true,
@@ -882,7 +939,7 @@
   // エピックの画面へのリンクは、エピックの画面の Issue（#65）で足す。
   // 区分の印はエピックに振ったものを出す（配下の行では繰り返さない。本番と同じ）。
   // カタログの見本用に、opts.cleared（クリア済み。配下は完了したストーリー）、opts.canceled（中止）、opts.empty（配下なし）、
-  // opts.key（同じエピックを2回描くときの id の区別）を受ける。完了か中止したエピックは、期日に色を付けず、配下の取り消しを押せなくする
+  // opts.key（同じエピックを2回描くときの id の区別）を受ける。完了か中止したエピックは、期日に色を付けず、配下の取り消しを押せなくし、「親を移す」を隠す
   function treeEpic(eid, opts = {}) {
     const key = opts.key || eid;
     const e = D.epics[eid];
@@ -1404,6 +1461,34 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       <div class="comment-head"><b>${esc(user(c.who).name)}</b><span class="mono">${c.at}</span>${c.edited ? "<span>編集済み</span>" : ""}${actions ? `<span class="comment-actions">${actions}</span>` : ""}</div>
       ${body}${files}</div></div>`;
   }
+  // ?personal で自分用の依頼先を確認する。既存の選択欄と入力欄だけを使う。
+  D.delegatees = D.delegatees || [{ id: "sample-delegatee", name: "架空の依頼先" }];
+  function drawerDelegateeHtml(x) {
+    if (!new URLSearchParams(location.search).has("personal")) return "";
+    const selected = D.delegatees.find((row) => row.id === x.delegatee);
+    const content = x.doneAt || drawerReadOnly()
+      ? `<span>${esc(selected?.name || t("delegateeNone"))}</span><span class="props-note">${t("delegateeReadonly")}</span>`
+      : `<select class="select" id="drawer-delegatee" data-delegatee-select><option value="">${t("delegateeNone")}</option>${D.delegatees.map((row) => `<option value="${row.id}"${row.id === x.delegatee ? " selected" : ""}>${esc(row.name)}</option>`).join("")}</select>
+         <form class="field" data-delegatee-create><label class="visually-hidden" for="drawer-delegatee-new">${t("delegateeNew")}</label><input class="input" id="drawer-delegatee-new" placeholder="${t("delegateeNew")}" maxlength="50" required><button class="btn is-sm" type="submit">${t("delegateeAdd", { name: "新しい名前" })}</button></form>`;
+    return `<div><dt>${x.doneAt || drawerReadOnly() ? t("delegatee") : `<label for="drawer-delegatee">${t("delegatee")}</label>`}</dt><dd>${content}</dd></div>`;
+  }
+  document.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-delegatee-select]")) return;
+    const x = drawerItem();
+    x.delegatee = event.target.value || null;
+    if (x.delegatee && !x.who) x.who = D.me;
+    renderDrawer();
+  });
+  document.addEventListener("submit", (event) => {
+    if (!event.target.matches("[data-delegatee-create]")) return;
+    event.preventDefault();
+    const name = event.target.querySelector("input").value.trim();
+    if (!name) return;
+    let row = D.delegatees.find((entry) => entry.name === name);
+    if (!row) { row = { id: `sample-${Date.now()}`, name }; D.delegatees.push(row); }
+    const x = drawerItem(); x.delegatee = row.id; if (!x.who) x.who = D.me;
+    renderDrawer(); document.getElementById("drawer-delegatee-new")?.focus();
+  });
   // 2つのタブの中身は描いたまま隠す（本番は書きかけのコメントを、タブを切り替えても保つ）。左右の矢印キーでタブを移る
   function drawerHtml() {
     if (isStoryDrawer()) return storyDrawerHtml();
@@ -1436,6 +1521,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       <dl class="props">
         <div><dt>${t("column")}</dt><dd>${colName(x) ? `<span class="status-dot is-wrap">${esc(colName(x))}</span>` : "—"}</dd></div>
         <div><dt>${t("assignee")}</dt><dd>${drawerAssigneeHtml(x)}</dd></div>
+        ${drawerDelegateeHtml(x)}
         <div><dt>${t("points")}</dt><dd>${drawerPointsHtml(x)}</dd></div>
         <div><dt>${t("due")}</dt><dd>${drawerDueHtml(x)}</dd></div>
         <div><dt>親</dt><dd>${parent ? `${icon("flag")} ${esc(parent.title)}${epic ? `<span class="props-note">${esc(epic.title)}</span>` : ""}` : "なし"}</dd></div>
@@ -1663,7 +1749,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function redrawContent() {
     if (!page) return;
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
+    restoreMobilePageTools();
     document.getElementById("content").innerHTML = page.render();
+    syncMobilePageTools();
     drafts.forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
   }
   // 保存した欄に応じて、引き出しの見出し、リンクの「開く」、「未記入」の印だけを差し替える（書いている欄は作り直さない）
@@ -1738,6 +1826,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // ポイントと期日は、選んだら保存する（保存のボタンは無い）
   document.addEventListener("change", (ev) => {
+    if (ev.target.name === "d-del") { const b = document.querySelector("[data-delete-needs-choice]"); b?.setAttribute("aria-disabled", "false"); b?.removeAttribute("aria-describedby"); }
     const el = ev.target.closest && ev.target.closest("[data-drawer-pts], [data-drawer-due]");
     if (!el || !drawer.id) return;
     const x = drawerItem();
@@ -2146,8 +2235,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   }
   // エピックとストーリーの削除の確認（本番の TreeDeleteDialog）。kind は "epic" か "story"。
   // opts.empty は配下の無い形（選択肢を出さない）、opts.leaderOnly は「まとめて削除する」を選べない形（リーダーでない人で、他の人の作った配下がある）。
-  // opts.cleared はクリア済みで配下のあるエピックの形（配下なしの opts.empty とは組み合わせない。見本の e1 は未完了だが、クリア済みのつもりで見る）。「配下を親なしで残す」のまま「削除する」を押すと 409 の epic_finished で断られ、
-  // 理由を確認の中の role="alert" に出して確認は閉じない（まとめて削除できない人には、依頼主かリーダーに完了の取り消しを頼む文を出す）。「まとめて削除する」を選べば削除できる。
+  // opts.cleared はクリア済みで配下のあるエピックの形（配下なしの opts.empty とは組み合わせない。見本の e1 は未完了だが、クリア済みのつもりで見る）。
+  // 「配下を親なしで残す」は最初から選べず（disabled）、理由を選択肢の下の .field-hint に出す（サーバーは 409 の epic_finished で断るが、確認を開く時点で止める）。
+  // 取り消せない「配下もまとめて削除する」は既定で選ばず（どちらも未選択）、選ぶまで「削除する」は aria-disabled で押せない（理由の .field-hint を aria-describedby で結ぶ）。
+  // まとめて削除できない人（opts.leaderOnly）は、どちらも選べず、依頼主かリーダーに完了の取り消しを頼む文を出し、「削除する」は押せないまま。
   // 見本は1枠のダイアログなので、元のエピックのダイアログを置き換えて開く。ストーリーは引き出しの「⋯」から、引き出しの上に開く。
   // 本番は元のダイアログの上に重ねて開き、開いたときに get を読み直して件数と可否を差し替える
   function treeDeleteDialog(kind, id, opts = {}) {
@@ -2167,25 +2258,17 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
        ${has
          ? `<div class="field"><span class="field-label" id="d-del-label">配下の扱い</span>
            <div class="choice-list" role="radiogroup" aria-labelledby="d-del-label">
-             <label class="choice"><input type="radio" name="d-del" checked><div><b>配下を親なしで残す</b><span>${keep}</span></div></label>
+             <label class="choice"><input type="radio" name="d-del"${opts.cleared ? ` disabled aria-describedby="d-del-cleared"` : " checked"}><div><b>配下を親なしで残す</b><span>${keep}</span></div></label>
              <label class="choice"><input type="radio" name="d-del"${opts.leaderOnly ? ` disabled aria-describedby="d-del-leader"` : ""}><div><b>配下もまとめて削除する</b><span>${all}</span></div></label>
-           </div>${opts.leaderOnly ? `<span class="field-hint" id="d-del-leader">配下に他の人が作ったものがあるため、まとめて削除できるのは${t("leader")}だけです。</span>` : ""}</div>`
+           </div>${opts.cleared ? `<span class="field-hint" id="d-del-cleared">${opts.leaderOnly
+             ? `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。${t("requester")}か${t("leader")}に、${t("epic")}の${t("done")}を取り消してもらってください。`
+             : `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先に${t("epic")}の${t("done")}を取り消してください。`}</span>` : ""}${opts.leaderOnly ? `<span class="field-hint" id="d-del-leader">配下に他の人が作ったものがあるため、まとめて削除できるのは${t("leader")}だけです。</span>` : ""}</div>`
          : `<p class="field-hint">配下の${t(kind === "epic" ? "story" : "task")}はありません。</p>`}
        <p class="field-hint">完了の記録と経験値は残ります。</p>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button>${opts.cleared
-        ? `<button class="btn is-danger" type="button" data-delete-cleared>削除する</button>`
+        ? `<button class="btn is-danger" type="button" aria-disabled="true" aria-describedby="d-del-cleared"${opts.leaderOnly ? "" : " data-delete-needs-choice"}>削除する</button>`
         : `<button class="btn is-danger" type="button" data-close-dialog${kind === "story" ? ` data-close-story-drawer="${id}"` : ""} data-toast="${t(kind)}を削除しました">削除する</button>`}`);
     document.querySelector(".dialog-sheet").classList.add("is-danger");
-  }
-  // クリア済みのエピックを配下を残して削除しようとして断られた形（本番の TreeDeleteDialog の 409 epic_finished）。確認は閉じず、理由を role="alert" に出す
-  function treeDeleteClearedRefused(el) {
-    const body = el.closest("#dialog").querySelector(".dialog-body");
-    const all = body.querySelectorAll("input[name=d-del]")[1];
-    if (all && all.checked) { closeDialog(); toast(`${icon("check")}${t("epic")}を削除しました`); return; }
-    body.querySelector("[data-delete-refused]")?.remove();
-    body.insertAdjacentHTML("beforeend", `<div class="callout is-danger" role="alert" data-delete-refused>${icon("alert")}<span>${all && !all.disabled
-      ? `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。「配下もまとめて削除する」を選ぶか、先に${t("epic")}の${t("done")}を取り消してください。`
-      : `${t("done")}した${t("epic")}は、配下の${t("story")}を親なしで残して削除できません。${t("requester")}か${t("leader")}に、${t("epic")}の${t("done")}を取り消してもらってください。`}</span></div>`);
   }
   // エピックの作成と変更のダイアログ（本番の EpicDialog）。欄はストーリーのダイアログから受け入れ基準を除いたもの。
   // 見本のカタログ（「ダイアログと演出」）と、木のエピックの行の題から開く（本番には無く、木の空の行で作り、引き出しで直す）。依頼主、クリア報酬、討伐隊はエピックの画面（#65）で直す。
@@ -3279,6 +3362,47 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     location.href = firstHref(target, next);
   }
   let page = null;
+  // 同じ検索とアカウントを見出しに移し、本文の再描画前には帯へ戻す。
+  let mobileToolsNarrow = null;
+  function restoreMobilePageTools() {
+    mobileToolsNarrow = null;
+    const bar = document.querySelector(".topbar");
+    if (!bar) return;
+    for (const selector of ["[data-nav-search-toggle]", "#nav-search-box", "#account-menu-slot"]) {
+      const node = document.querySelector(selector);
+      if (node && node.parentElement !== bar) {
+        if (selector === "#account-menu-slot") bar.append(node);
+        else bar.insertBefore(node, bar.querySelector(".topbar-tools"));
+      }
+    }
+    document.querySelector(".mobile-page-tools")?.remove();
+    document.querySelector(".mobile-page-head")?.remove();
+  }
+  function syncMobilePageTools() {
+    if (!page || page.operator) return;
+    const narrow = matchMedia("(max-width: 760px)").matches;
+    if (narrow === mobileToolsNarrow && (!narrow || document.querySelector(".mobile-page-tools"))) return;
+    restoreMobilePageTools();
+    if (!narrow) { mobileToolsNarrow = false; return; }
+    const content = document.getElementById("content");
+    let row = content.querySelector(".page-title-row");
+    if (!row) {
+      row = document.createElement("header");
+      row.className = "mobile-page-head page-head-row";
+      row.innerHTML = `<h2 class="page-title">${esc(currentCrumbs().at(-1)?.label || "")}</h2>`;
+      content.prepend(row);
+    }
+    const tools = document.createElement("div");
+    tools.className = "mobile-page-tools";
+    tools.setAttribute("role", "group"); tools.setAttribute("aria-label", t("mobilePageToolsLabel"));
+    row.append(tools);
+    for (const selector of ["[data-nav-search-toggle]", "#nav-search-box", "#account-menu-slot"]) {
+      const node = document.querySelector(selector);
+      if (node) tools.append(node);
+    }
+    mobileToolsNarrow = true;
+  }
+  window.addEventListener("resize", syncMobilePageTools);
   function redraw() {
     if (!page) return;
     if (!page.operator) {
@@ -3292,7 +3416,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     syncMobileMenu();
     document.querySelectorAll("[data-assist-label]").forEach((el) => (el.textContent = `${t("assistant")}に頼む`));
     const drafts = [...document.querySelectorAll("input[data-draft]")].filter((i) => i.value).map((i) => [i.id, i.value]);
+    restoreMobilePageTools();
     document.getElementById("content").innerHTML = page.render();
+    syncMobilePageTools();
     drafts.forEach(([id, value]) => { const el = document.getElementById(id); if (el) el.value = value; });
     applyNavCollapsed();
     applyTheme();
@@ -3525,13 +3651,37 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const hit = (attr) => ev.target.closest(`[${attr}]`);
     let el;
     // 行の「⋯」とチップの一覧。開閉は属性だけで、外を押すか項目を選ぶと閉じる（項目を選んだときは元のボタンにフォーカスを戻す）
+    if ((el = hit("data-chip-retry"))) {
+      const menu = el.closest('[role="menu"]');
+      menu.innerHTML = menu.dataset.readyItems;
+      menu.setAttribute("aria-busy", "false");
+      placeRowMenu(menu.parentElement.querySelector("[data-row-menu]"), menu);
+      menu.querySelector('[aria-checked="true"]')?.focus(); return;
+    }
     const rowToggle = hit("data-row-menu");
     closeRowMenus(rowToggle, ev.target);
     if (rowToggle) { toggleRowMenu(rowToggle); return; }
     if ((el = hit("data-chip-set"))) {
       const [id, name, value] = el.dataset.chipSet.split(":");
+      if (id.startsWith("preview")) {
+        const root = el.closest(".row-menu"), button = root.querySelector("[data-chip-for]");
+        const attr = name === "pts" ? t("points") : t("assignee");
+        const text = value === "" ? attr : el.querySelector("span").textContent;
+        button.querySelector(".chip-text").textContent = text;
+        button.setAttribute("aria-label", `${attr}: ${value === "" ? "未設定" : text}`);
+        button.title = text;
+        button.classList.toggle("is-unset", value === "");
+        root.querySelector(".avatar")?.remove();
+        if (name === "who" && value) button.insertAdjacentHTML("beforebegin", avatarOf(value));
+        root.querySelectorAll('[role="menuitemradio"]').forEach((item) => {
+          item.setAttribute("aria-checked", String(item === el));
+          item.querySelector(".ico")?.remove();
+          if (item === el) item.insertAdjacentHTML("afterbegin", icon("check"));
+        });
+        closeAllRowMenus(); button.focus(); return;
+      }
       const x = task(id);
-      if (x) { if (name === "pts") x.pts = value === "" ? null : Number(value); else x.who = value || null; }
+      if (x) { if (name === "pts") x.pts = value === "" ? null : Number(value); else if (["who", "due", "repo", "cat"].includes(name)) x[name] = value || null; }
       redrawAll(); document.querySelector(`[data-chip-for="${id}:${name}"]`)?.focus(); toast(`${icon("check")}保存しました`); return;
     }
     // 組織の切り替えを開閉する。外を押したら閉じる（押したものの動きは続ける）
@@ -3672,7 +3822,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
     if ((el = hit("data-drawer-mode"))) { changeDrawerMode(el.dataset.drawerMode); return; }
     if ((el = hit("data-drawer-step"))) { stepDrawer(Number(el.dataset.drawerStep), false, true); return; }
-    if ((el = hit("data-delete-cleared"))) { treeDeleteClearedRefused(el); return; }
+    if ((el = hit("data-delete-needs-choice"))) {
+      if (el.getAttribute("aria-disabled") !== "true") { closeDialog(); toast(`${icon("check")}${t("epic")}を削除しました`); }
+      return;
+    }
     if (hit("data-discard-draft")) {
       const next = pendingDrawer;
       closeDialog();
@@ -4127,7 +4280,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     D, t, brandMark, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer, flashRow,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
-    avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead,
+    attrChipExamples, avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead, mobilePageHead,
     narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
     filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter,

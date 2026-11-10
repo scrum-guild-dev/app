@@ -7,6 +7,7 @@ import { previousStatementChanged, type OrganizationDb, type VerifiedWorkspace }
 import { ApiError } from '../errors.ts';
 import { uuidv7 } from '../uuid.ts';
 import {
+  type ChangeMap,
   asIs,
   changeLogStatement,
   linkUrl,
@@ -24,7 +25,7 @@ import {
   refOf,
   repositoryRow,
 } from './definition-refs.ts';
-import { taskAssigneePartyStatements } from './epic-party.ts';
+import { taskAssignmentStatements } from './task-assignment.ts';
 import { implement } from './implement.ts';
 import { sprintRefColumns, sprintRefOf } from './sprint-refs.ts';
 import { readTaskFields } from './task-field.ts';
@@ -53,6 +54,9 @@ async function readTask(db: OrganizationDb, workspaceId: string, taskId: string)
         .selectFrom('tasks')
         .leftJoin('users as assignee', (join) =>
           join.onRef('assignee.id', '=', 'tasks.assignee_user_id').on('assignee.organization_id', '=', organizationId),
+        )
+        .leftJoin('delegatees', (join) =>
+          join.onRef('delegatees.id', '=', 'tasks.delegatee_id').on('delegatees.organization_id', '=', organizationId),
         )
         .leftJoin('memberships as assignee_membership', (join) =>
           join
@@ -110,6 +114,8 @@ async function readTask(db: OrganizationDb, workspaceId: string, taskId: string)
           'tasks.completed_at',
           'tasks.created_by',
           'tasks.assignee_user_id',
+          'tasks.delegatee_id',
+          'delegatees.name as delegatee_name',
           'tasks.today_on',
           'tasks.column_id',
           'assignee.name as assignee_name',
@@ -202,6 +208,7 @@ async function detailOf(
     due_on: row.due_on,
     link_url: row.link_url,
     assignee: assigneeOf(row),
+    delegatee: refOf(row.delegatee_id, row.delegatee_name),
     is_imported: row.is_imported === 1,
     completed_at: row.completed_at,
     reopenable:
@@ -518,66 +525,24 @@ export const taskAssignOperation = implement(taskAssign, async ({ db, actor, wor
     // 履歴には、そのときの名前を残す（後で名前が変わっても、履歴は変えない）
     const previous =
       current.assignee_user_id === null ? null : { id: current.assignee_user_id, name: current.assignee_name ?? '' };
-    const changes = {
+    const changes: ChangeMap = {
       assignee: [previous, next],
       ...(current.today_on === null ? {} : { today_on: [current.today_on, null] }),
     };
 
     const at = now();
-    const updatedAt = at.toISOString();
-    const results = await db.batch([
-      db.statement((q) =>
-        q
-          .updateTable('tasks')
-          .set({ assignee_user_id: nextId, today_on: null, updated_at: updatedAt })
-          .where((eb) =>
-            eb.and([
-              eb('id', '=', taskId),
-              eb('workspace_id', '=', workspaceId),
-              eb('deleted_at', 'is', null),
-              eb('completed_at', 'is', null),
-              // 読んだときの担当と今日やるの印のまま（履歴の「前」がずれないように）
-              eb('assignee_user_id', 'is', current.assignee_user_id),
-              eb('today_on', 'is', current.today_on),
-              eb.exists(openWorkspace(q, organizationId, workspaceId)),
-              ...(nextId === null ? [] : [eb.exists(activeMemberName(q, organizationId, workspaceId, nextId))]),
-            ]),
-          ),
-      ),
-      // 直前の更新が行を変えたときだけ履歴を書く
-      db.statement((q) =>
-        q
-          .insertInto('change_logs')
-          .columns(changeLogColumns)
-          .expression(
-            q
-              .selectNoFrom((eb) => [
-                eb.val(uuidv7(at)).as('id'),
-                eb.val(organizationId).as('organization_id'),
-                eb.val(workspaceId).as('workspace_id'),
-                eb.val(actorUserId).as('actor_user_id'),
-                eb.val('task').as('entity_type'),
-                eb.val(taskId).as('entity_id'),
-                eb.val('update').as('action'),
-                eb.val(JSON.stringify(changes)).as('changes_json'),
-                eb.val(updatedAt).as('created_at'),
-              ])
-              .where(previousStatementChanged),
-          ),
-      ),
-      // 担当を付けたら、タスクの親のストーリーの親の進行中のエピックの討伐隊に、担当を task_assignee で足す（既にいれば何もしない）。
-      // 直前のタスクの履歴が入った（= 上の更新が通った）ときだけ。外すとき（null）は何もしない
-      ...(next === null
-        ? []
-        : taskAssigneePartyStatements(db, {
-            workspaceId,
-            taskId,
-            assignee: next,
-            actorUserId,
-            at,
-            taskUpdatedAt: updatedAt,
-          })),
-    ]);
+    const results = await db.batch(
+      taskAssignmentStatements(db, {
+        workspaceId,
+        taskId,
+        actorUserId,
+        at,
+        current,
+        assignee: next,
+        todayOn: null,
+        changes,
+      }),
+    );
 
     if ((results[0]?.changes ?? 0) > 0) {
       const updated = await readTask(db, workspaceId, taskId);
