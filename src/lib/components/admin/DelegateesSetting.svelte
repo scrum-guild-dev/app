@@ -7,6 +7,8 @@
   import { isUnauthenticated, loginUrl } from '../../login-redirect.ts';
   import { t } from '../../vocabulary.svelte.ts';
   import Setting from '../Setting.svelte';
+  import EmptyState from '../EmptyState.svelte';
+  import Icon from '../Icon.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import SectionBoundary from './SectionBoundary.svelte';
   import { SectionLoad } from './section-load.svelte.ts';
@@ -69,7 +71,8 @@
         return;
       }
       if (!result.ok) {
-        error = t('delegateeFailed');
+        error = t(remove ? 'delegateeDeleteFailed' : 'delegateeFailed');
+        await section.load();
         return;
       }
       // 保存した行だけを確定し、ほかの行の書きかけは一覧の再取得でも残す。
@@ -85,28 +88,34 @@
   }
 </script>
 
-<Setting title={t('delegateeTitle')} description={t('delegateeDesc')}>
+<Setting title={t('delegatee')} description={t('delegateeDesc')}>
   <SectionBoundary {section} failedTitle={t('delegateeLoadFailed')} refreshFailedText={t('delegateeRefreshFailed')}>
-    <div bind:this={list} tabindex="-1">
-      {#if rows.length === 0}<p>{t('delegateeEmpty')}</p>{/if}
+    <div class="form" bind:this={list} tabindex="-1">
+      {#if rows.length === 0}<EmptyState icon="users" title={t('delegateeEmpty')} text={t('delegateeEmptyText')} />{/if}
       {#each rows as row (row.id)}
-        <div class="field">
-          <label class="field-label" for={`${ids}-${row.id}`}>{row.name}</label>
+        <form
+          class="field"
+          aria-labelledby={`${ids}-${row.id}-label`}
+          onsubmit={(event) => {
+            event.preventDefault();
+            const trigger = event.currentTarget.querySelector<HTMLButtonElement>('button');
+            if (trigger) void change(row, false, trigger);
+          }}
+        >
+          <label id={`${ids}-${row.id}-label`} class="field-label" for={`${ids}-${row.id}`}>{row.name}</label>
           <input
             class="input"
             id={`${ids}-${row.id}`}
             bind:value={drafts[row.id]}
             readonly={busy}
+            oninput={() => {
+              if (errorRow === row.id) error = '';
+            }}
             aria-invalid={errorRow === row.id && error !== ''}
             aria-describedby={errorRow === row.id && error ? `${ids}-error` : undefined}
           />
           <div class="form-actions">
-            <button
-              class="btn is-sm"
-              type="button"
-              aria-disabled={busy}
-              onclick={(event) => change(row, false, event.currentTarget)}>{t('delegateeSave')}</button
-            >
+            <button class="btn is-sm" type="submit" aria-disabled={busy}>{t('delegateeSave')}</button>
             <button
               class="btn is-sm is-danger"
               type="button"
@@ -114,11 +123,13 @@
               onclick={(event) => change(row, true, event.currentTarget)}>{t('delegateeRemove')}</button
             >
           </div>
-        </div>
+        </form>
       {/each}
     </div>
   </SectionBoundary>
-  <span id={`${ids}-error`} role="alert" class="field-error">{error}</span>
+  <span id={`${ids}-error`} role="alert"
+    >{#if error}<span class="field-error"><Icon name="alert" />{error}</span>{/if}</span
+  >
   <span role="status" class="visually-hidden">{busy ? t('delegateeBusy') : ''}</span>
 </Setting>
 <ConfirmDialog
