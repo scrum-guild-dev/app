@@ -243,6 +243,8 @@ test.describe('高さの低い指で押す画面の左のメニュー', () => {
       await page.locator('.org-menu-button').click();
       const list = page.getByRole('list', { name: '入れる組織' });
       await expect(list).toBeVisible();
+      // 表示直後は translate: 0 -4px から出る途中なので、動きが終わってから位置を測る。
+      await expect(list).toHaveCSS('translate', /^0px(?: 0px)?$/);
       const headBottom = (await page.locator('.binding-head').boundingBox())!;
       expect((await list.boundingBox())!.y).toBeGreaterThanOrEqual(headBottom.y + headBottom.height);
       const lastLink = list.getByRole('link').last();
