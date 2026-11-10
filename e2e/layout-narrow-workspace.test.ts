@@ -223,6 +223,22 @@ test('バックログのタスクの行が 390px で今より低く、チップ�
       // Tabで、隠れていたチップも横送りされて押せる。
       if (index > 0) await page.keyboard.press('Tab');
       await expect(button).toBeFocused();
+      const ring = await button.evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        const outside = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+        const clip = el.closest('.entry-chips')!.getBoundingClientRect();
+        return {
+          visible: style.outlineStyle !== 'none',
+          fits:
+            rect.top - outside >= clip.top &&
+            rect.bottom + outside <= clip.bottom &&
+            rect.left - outside >= clip.left &&
+            rect.right + outside <= clip.right,
+        };
+      });
+      expect(ring.visible, `${theme}: フォーカスの輪がある`).toBe(true);
+      expect(ring.fits, `${theme}: フォーカスの輪が横送り領域に切られない`).toBe(true);
       const box = (await button.boundingBox())!;
       const viewport = (await chips.boundingBox())!;
       expect(Math.abs(box.y - firstY)).toBeLessThanOrEqual(1);
