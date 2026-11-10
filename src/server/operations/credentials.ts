@@ -6,9 +6,23 @@
 import { credentialsRevokeAll } from '../../shared/operations/session/index.ts';
 import { revokeAllApiTokensStatement } from '../auth/api-token.ts';
 import { deleteOtherSessionsStatement } from '../auth/session.ts';
+import { ApiError } from '../errors.ts';
 import { implement } from './implement.ts';
 
 export const credentialsRevokeAllOperation = implement(credentialsRevokeAll, async ({ db, accountId, session }) => {
+  // 全失効の日時比較ができないセッションからは書き込まない。JS で読めても SQLite の範囲外なら拒む。
+  // created_at は作成後に変えない。ここで行が既に消えていれば、従来どおり batch の EXISTS で何も書かず0件を返す。
+  const current = await db.first(
+    db.statement((q) =>
+      q
+        .selectFrom('sessions')
+        .select((eb) => eb.fn<number | null>('julianday', ['created_at']).as('created_day'))
+        .where('account_id', '=', accountId)
+        .where('token_hash', '=', session.tokenHash),
+    ),
+  );
+  if (current?.created_day === null) throw new ApiError(401, 'unauthenticated');
+
   // 取り消す時刻と期限内かどうかの比較に、同じ now を使う。ちょうど now に切れる行は期限内に数えない（ISO 文字列どうしの比較）
   const now = new Date();
   const nowIso = now.toISOString();
