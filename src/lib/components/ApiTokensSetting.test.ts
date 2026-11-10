@@ -128,6 +128,7 @@ test('節の末尾に、危険な操作の小見出しと説明とボタンを�
     // 一覧より後ろ（節の末尾）に置く
     expect(body.indexOf(dictionary.apiTokenRevokeAllTitle)).toBeGreaterThan(body.indexOf('<form'));
   }
+  expect(dictionary.apiTokenRevokeAllDesc).toMatch(/^端末をなくしたとき/);
   const withRow = renderWith([token]);
   expect(withRow.lastIndexOf('</table>')).toBeLessThan(withRow.indexOf(dictionary.apiTokenRevokeAllTitle));
 });
@@ -149,7 +150,7 @@ test('確認のダイアログは、元に戻せないことと、今のログ�
   expect(dictionary.apiTokenRevokeAllText).toContain('元に戻せません');
   expect(dictionary.apiTokenRevokeAllText).toContain('このブラウザのログインは残ります');
   expect(dictionary.apiTokenRevokeAllText).toContain('後からログインした端末は残ります');
-  expect(dictionary.apiTokenRevokeAllText).toContain('先にこのブラウザでログインし直してから実行してください');
+  expect(dictionary.apiTokenRevokeAllText).toContain('疑わしいときは「やめる」で戻り');
   expect(body).toMatch(/<button[^>]*class="btn is-primary"[^>]*>やめる<\/button>/);
   expect(body).toMatch(/<button[^>]*class="btn is-danger"[^>]*>締め出す<\/button>/);
 });

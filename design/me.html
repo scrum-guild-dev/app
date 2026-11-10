@@ -99,8 +99,8 @@ SQ.mount("me", () => `
         </tbody></table></div>
       <!-- 危険な操作。節の末尾に置く。確認のダイアログ（元に戻せない）を経て、今の画面以外のすべての端末と、すべてのトークンを無効にする -->
       <h3 class="field-label">ほかの端末とトークンを締め出す</h3>
-      <p class="action-note">先にこのブラウザでログインし直してください。後からログインした端末は残るためです。ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。</p>
-      <div class="callout is-info">${icon("alert")}<span id="tk-revoke-all-hint">後からログインした端末は残ります。ほかの端末を締め出すには、ログインし直してもう一度実行してください。</span><div class="callout-actions"><a class="btn" href="login.html?return_to=%2Faoba%2Fme" aria-describedby="tk-revoke-all-hint">締め出す前にログインし直す</a></div></div>
+      <p class="action-note">端末をなくしたときや、値が漏れたかもしれないときのための操作です。ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。</p>
+      <div class="callout is-info">${icon("alert")}<span id="tk-revoke-all-hint">後からログインした端末は残ります。疑わしいときは、このブラウザでログインし直してから実行してください。</span><div class="callout-actions"><a class="btn" href="login.html?return_to=%2Faoba%2Fme" aria-describedby="tk-revoke-all-hint">締め出す前にログインし直す</a></div></div>
       <div class="form-actions"><button class="btn is-danger" type="button" data-dialog="tokenRevokeAll">ほかの端末とトークンを締め出す</button></div>`)}
   <!-- 経験値の明細は5列の表なので、.setting（見出しの列 260px）にも、横の面と並ぶ本文にも入れず、説明を表の上に置いて
        画面の幅いっぱいに出す（上の API トークンの節も同じ）。760px 以下は is-stacked で行を縦に積む。今所属していないワークスペースの行は内容を伏せる（最後の行） -->

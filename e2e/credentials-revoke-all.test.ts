@@ -105,7 +105,7 @@ test('確認を経て実行すると、今の画面は使い続けられ、ほ�
     await expect(confirm).toBeVisible();
     for (const paragraph of [
       'ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。このブラウザのログインは残ります。',
-      '後からログインした端末は残ります。先にこのブラウザでログインし直してから実行してください。',
+      '後からログインした端末は残ります。疑わしいときは「やめる」で戻り、このブラウザでログインし直してから実行してください。',
       '元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。',
     ]) {
       await expect(confirm.getByText(paragraph, { exact: true })).toBeVisible();
@@ -232,7 +232,7 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     await expect(toast(page, 'ほかの端末のセッション2件と、API トークン5件を締め出しました')).toHaveCount(0);
     await expect(
       section.getByText(
-        '後からログインした端末は残ります。ほかの端末を締め出すには、ログインし直してもう一度実行してください。',
+        '後からログインした端末は残ります。疑わしいときは、このブラウザでログインし直してから実行してください。',
         { exact: true },
       ),
     ).toBeVisible();
