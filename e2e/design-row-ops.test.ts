@@ -470,12 +470,25 @@ for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
       document.documentElement.style.fontSize = '150%';
     }, theme);
     await page.locator('.attr-chip-examples summary').click();
+    await page.evaluate(() => document.fonts.ready);
     const row = page.locator('[data-chip-example="long"]');
     const chip = row.locator('.attr-chip').last().locator('.chip-btn');
     const box = (await chip.boundingBox())!;
     const bounds = (await row.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(bounds.x);
     expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(320);
+    const dimensions = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    }));
+    expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
+    const text = await chip.locator('.chip-text').evaluate((element) => ({
+      scroll: element.scrollWidth,
+      client: element.clientWidth,
+    }));
+    expect(text.scroll).toBeGreaterThan(text.client);
     await expect(chip.locator('.ico')).toHaveCount(1);
   });
 }
