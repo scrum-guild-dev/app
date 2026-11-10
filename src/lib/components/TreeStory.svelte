@@ -26,7 +26,7 @@
   // （parentFinished）、完了と取り消しは必ず断られるので aria-disabled にし、理由を横に出す。送っている間（pending）は、どちらも aria-disabled。
   // onMove を渡すと（書き込めるとき）、メニューに「上へ」「下へ」を出し、ストーリーの行の中で Alt と ↑ ↓ を押しても同じことをする。
   // キーは配下のタスクの行には掛けない（タスクの行は自分で受け持つ）。端の向きは aria-disabled にする。
-  // onMoveParent を渡すと、メニューに「親を移す」（親のエピックを選ぶダイアログ）も出す。絞り込み中は、画面が onMove を渡さず
+  // onMoveParent を渡し、親のエピックが完了も中止もしていなければ、メニューに「親を移す」（親のエピックを選ぶダイアログ）も出す。絞り込み中は、画面が onMove を渡さず
   // （並べ替えは隣を使うため。Alt と ↑ ↓ も効かない）、「親を移す」だけを出す
   // onMove と dnd を渡すと（書き込めて、絞っていないとき）、行の先頭にドラッグのつまみ（.grip。飾りで aria-hidden）を置く。つかむのはここだけ。
   // 行は、タスクを運ぶときの落とし先（囲み。離すと配下の末尾に入り、畳まれていれば開く）と、ストーリーを運ぶときの前後の線の落とし先を兼ねる。
@@ -133,7 +133,7 @@
           { key: 'down', label: t('moveDown'), icon: 'down' as const, disabled: !canMoveDown, onselect: () => move(1) },
         ]
       : []),
-    ...(onMoveParent !== undefined
+    ...(onMoveParent !== undefined && !parentFinished
       ? [
           {
             key: 'swap',

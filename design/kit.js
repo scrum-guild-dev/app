@@ -868,7 +868,7 @@
           <span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span>
           ${st.doneAt ? "" : `<button class="btn is-sm" type="button" data-dialog="createTask" aria-label="${t("task")}を足す: ${esc(st.title)}">${icon("plus")}${t("task")}</button>`}
           ${storyDoneControl(key, st, open.length, Boolean(opts.blocked))}
-          ${opts.order ? rowMenu(st.title, orderItems(opts.order)) : ""}
+          ${opts.order ? rowMenu(st.title, orderItems({ ...opts.order, parent: opts.order.parent && !opts.blocked })) : ""}
         </span>
       </div>
       <div class="tree-children" id="tree-${key}">${open.map((x, i) => entry(x, { showParent: false, showAssignee: true, showSprint: true,
