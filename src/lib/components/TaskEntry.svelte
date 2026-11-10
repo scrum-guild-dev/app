@@ -658,155 +658,161 @@
     {/if}
   </div>
   <div class="entry-end">
-    {#if attrs === undefined && task.due_on !== null}
-      <DueChip dueOn={task.due_on} today={clock.today} weekStart={clock.weekStart} {done} />
-    {/if}
-    {#if attrs !== undefined}
-      <AttrChip
-        attr={t('due')}
-        text={dueView === null ? t('due') : dueView.text}
-        unset={dueView === null}
-        tone={dueView?.tone}
-        options={[]}
-        current={dueShown ?? ''}
-        onselect={(value) => chooseField('due_on', value === '' ? null : value)}
-      >
-        {#snippet panel(close)}
-          <div>
-            <input
-              class="input"
-              type="date"
-              aria-label={t('due')}
-              value={dueShown ?? ''}
-              onchange={(event) => scheduleDue(event.currentTarget, close)}
-              onkeydown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  commitDue(event.currentTarget, close);
-                }
-              }}
-              onblur={(event) => commitDue(event.currentTarget, close)}
-            />
-            {#if dueShown !== null}
-              <button
-                class="menu-item"
-                type="button"
-                onclick={() => {
-                  clearTimeout(dueTimer);
-                  close();
-                  chooseField('due_on', null);
-                }}>{t('dueClear')}</button
-              >
-            {/if}
-          </div>
-        {/snippet}
-      </AttrChip>
-      <AttrChip
-        attr={t('repository')}
-        text={repositoryShownId === null ? t('repository') : repositoryText}
-        unset={repositoryShownId === null}
-        options={repositoryOptions}
-        current={repositoryShownId ?? ''}
-        onselect={(value) => chooseField('repository_id', value === '' ? null : value)}
-      />
-      <AttrChip
-        attr={t('category')}
-        text={categoryShownId === null ? t('category') : categoryText}
-        unset={categoryShownId === null}
-        options={categoryOptions}
-        current={categoryShownId ?? ''}
-        onselect={(value) => chooseField('category_id', value === '' ? null : value)}
-        locked={categoryLocked}
-      />
-      <AttrChip
-        attr={t('points')}
-        text={pointsShown === null ? t('points') : t('pointsValue', { value: pointsShown })}
-        unset={pointsShown === null}
-        options={pointOptions}
-        current={pointsShown === null ? '' : String(pointsShown)}
-        onselect={choosePoints}
-        locked={pointsLockedReason}
-      />
-      <AttrChip
-        attr={t('assignee')}
-        text={assigneeText}
-        unset={assigneeShownId === ''}
-        options={assigneeOptions}
-        current={assigneeShownId}
-        onselect={chooseAssignee}
-        locked={assigneeLockedReason}
-        onopen={() => void loadCandidates()}
-        retry={candidatesFailed ? () => void loadCandidates() : undefined}
-        retrying={candidatesLoading}
-        failedNote={t('assigneeCandidatesFailed', { assignee: t('assignee') })}
-        busy={candidatesLoading}
-      >
-        {#snippet lead()}
-          {#if assigneeShownId === ''}
-            <Avatar userId={null} decorative />
-          {:else}
-            <Avatar userId={assigneeShownId} name={assigneeShown?.text ?? ''} decorative />
-          {/if}
-        {/snippet}
-      </AttrChip>
-    {:else if task.points === null}
-      <span class="pts is-none" role="img" aria-label={t('pointsUnsetTitle')} title={t('pointsUnsetTitle')}
-        >{t('pointsUnsetMark')}</span
-      >
-    {:else}
-      <span
-        class="pts"
-        role="img"
-        aria-label={t('pointsLabel', { points: t('points'), value: task.points })}
-        title={t('pointsLabel', { points: t('points'), value: task.points })}>{task.points}</span
-      >
-    {/if}
-    {#if attrs !== undefined}
-      <!-- 担当は、上のチップが出している -->
-    {:else if task.assignee === null}
-      <Avatar userId={null} />
-    {:else}
-      <Avatar userId={task.assignee.id} name={task.assignee.name} />
-    {/if}
-    {#if menuItems.length > 0}
-      <RowMenu title={task.title} items={menuItems} bind:this={menu} />
-    {/if}
-    {#if done}
-      <!-- tabindex="-1" は、完了にした後にフォーカスを置くため（キーボードの Tab 順には入らない） -->
-      <span
-        class="hanko"
-        class:is-new={justDone}
-        role="img"
-        aria-label={t('doneMarkLabel', { title: task.title, done: t('done') })}
-        tabindex="-1"
-        bind:this={mark}
-      >
-        <Icon name="check" /><b>{t('doneStamp')}</b>
-      </span>
-      {#if onReopen !== undefined}
+    <div class="entry-attributes">
+      <div class="entry-chips" role="group" aria-label={task.title}>
+        {#if attrs === undefined && task.due_on !== null}
+          <DueChip dueOn={task.due_on} today={clock.today} weekStart={clock.weekStart} {done} />
+        {/if}
+        {#if attrs !== undefined}
+          <AttrChip
+            attr={t('due')}
+            text={dueView === null ? t('due') : dueView.text}
+            unset={dueView === null}
+            tone={dueView?.tone}
+            options={[]}
+            current={dueShown ?? ''}
+            onselect={(value) => chooseField('due_on', value === '' ? null : value)}
+          >
+            {#snippet panel(close)}
+              <div>
+                <input
+                  class="input"
+                  type="date"
+                  aria-label={t('due')}
+                  value={dueShown ?? ''}
+                  onchange={(event) => scheduleDue(event.currentTarget, close)}
+                  onkeydown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      commitDue(event.currentTarget, close);
+                    }
+                  }}
+                  onblur={(event) => commitDue(event.currentTarget, close)}
+                />
+                {#if dueShown !== null}
+                  <button
+                    class="menu-item"
+                    type="button"
+                    onclick={() => {
+                      clearTimeout(dueTimer);
+                      close();
+                      chooseField('due_on', null);
+                    }}>{t('dueClear')}</button
+                  >
+                {/if}
+              </div>
+            {/snippet}
+          </AttrChip>
+          <AttrChip
+            attr={t('repository')}
+            text={repositoryShownId === null ? t('repository') : repositoryText}
+            unset={repositoryShownId === null}
+            options={repositoryOptions}
+            current={repositoryShownId ?? ''}
+            onselect={(value) => chooseField('repository_id', value === '' ? null : value)}
+          />
+          <AttrChip
+            attr={t('category')}
+            text={categoryShownId === null ? t('category') : categoryText}
+            unset={categoryShownId === null}
+            options={categoryOptions}
+            current={categoryShownId ?? ''}
+            onselect={(value) => chooseField('category_id', value === '' ? null : value)}
+            locked={categoryLocked}
+          />
+          <AttrChip
+            attr={t('points')}
+            text={pointsShown === null ? t('points') : t('pointsValue', { value: pointsShown })}
+            unset={pointsShown === null}
+            options={pointOptions}
+            current={pointsShown === null ? '' : String(pointsShown)}
+            onselect={choosePoints}
+            locked={pointsLockedReason}
+          />
+          <AttrChip
+            attr={t('assignee')}
+            text={assigneeText}
+            unset={assigneeShownId === ''}
+            options={assigneeOptions}
+            current={assigneeShownId}
+            onselect={chooseAssignee}
+            locked={assigneeLockedReason}
+            onopen={() => void loadCandidates()}
+            retry={candidatesFailed ? () => void loadCandidates() : undefined}
+            retrying={candidatesLoading}
+            failedNote={t('assigneeCandidatesFailed', { assignee: t('assignee') })}
+            busy={candidatesLoading}
+          >
+            {#snippet lead()}
+              {#if assigneeShownId === ''}
+                <Avatar userId={null} decorative />
+              {:else}
+                <Avatar userId={assigneeShownId} name={assigneeShown?.text ?? ''} decorative />
+              {/if}
+            {/snippet}
+          </AttrChip>
+        {:else if task.points === null}
+          <span class="pts is-none" role="img" aria-label={t('pointsUnsetTitle')} title={t('pointsUnsetTitle')}
+            >{t('pointsUnsetMark')}</span
+          >
+        {:else}
+          <span
+            class="pts"
+            role="img"
+            aria-label={t('pointsLabel', { points: t('points'), value: task.points })}
+            title={t('pointsLabel', { points: t('points'), value: task.points })}>{task.points}</span
+          >
+        {/if}
+        {#if attrs !== undefined}
+          <!-- 担当は、上のチップが出している -->
+        {:else if task.assignee === null}
+          <Avatar userId={null} />
+        {:else}
+          <Avatar userId={task.assignee.id} name={task.assignee.name} />
+        {/if}
+      </div>
+    </div>
+    <div class="entry-actions">
+      {#if menuItems.length > 0}
+        <RowMenu title={task.title} items={menuItems} bind:this={menu} />
+      {/if}
+      {#if done}
+        <!-- tabindex="-1" は、完了にした後にフォーカスを置くため（キーボードの Tab 順には入らない） -->
+        <span
+          class="hanko"
+          class:is-new={justDone}
+          role="img"
+          aria-label={t('doneMarkLabel', { title: task.title, done: t('done') })}
+          tabindex="-1"
+          bind:this={mark}
+        >
+          <Icon name="check" /><b>{t('doneStamp')}</b>
+        </span>
+        {#if onReopen !== undefined}
+          <button
+            class="link-btn"
+            type="button"
+            aria-label={t('taskReopenLabel', { done: t('done'), title: task.title })}
+            aria-disabled={pending}
+            onclick={() => {
+              if (!pending) onReopen(task);
+            }}>{t('taskReopen')}</button
+          >
+        {/if}
+      {:else if canComplete}
         <button
-          class="link-btn"
+          class="done-btn"
           type="button"
-          aria-label={t('taskReopenLabel', { done: t('done'), title: task.title })}
+          aria-label={t('taskCompleteLabel', { complete: t('complete'), title: task.title })}
+          title={t('complete')}
           aria-disabled={pending}
           onclick={() => {
-            if (!pending) onReopen(task);
-          }}>{t('taskReopen')}</button
+            if (!pending) onComplete?.(task);
+          }}
         >
+          <Icon name="check" />
+        </button>
       {/if}
-    {:else if canComplete}
-      <button
-        class="done-btn"
-        type="button"
-        aria-label={t('taskCompleteLabel', { complete: t('complete'), title: task.title })}
-        title={t('complete')}
-        aria-disabled={pending}
-        onclick={() => {
-          if (!pending) onComplete?.(task);
-        }}
-      >
-        <Icon name="check" />
-      </button>
-    {/if}
+    </div>
   </div>
 </div>
