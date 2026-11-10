@@ -189,7 +189,7 @@
   {#if narrow.current}
     <MobileNavigation
       {createSheetId}
-      oncreate={(trigger) => createSheet?.show(trigger)}
+      oncreate={(trigger) => void createSheet?.show(trigger)}
       {current}
       {slug}
       workspaceId={hasWorkspace ? workspace?.id : undefined}

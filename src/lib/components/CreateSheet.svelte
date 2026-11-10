@@ -60,9 +60,10 @@
     }
   }
 
-  export function show(opener: HTMLButtonElement): void {
+  export async function show(opener: HTMLButtonElement): Promise<void> {
     trigger = opener;
     open = true;
+    await tick();
     dialog.showModal();
     titleInput.focus();
     void loadChoices();
@@ -92,7 +93,7 @@
 
   // 遷移が終わる直前に開いたときも、SvelteKit のフォーカス復帰の後で題へ置く。
   afterNavigate(() => {
-    if (open && !confirming && !dialog.contains(document.activeElement)) titleInput.focus();
+    if (open && dialog.open && !confirming && !dialog.contains(document.activeElement)) titleInput.focus();
   });
 
   beforeNavigate((navigation) => {
@@ -216,141 +217,153 @@
     }
   }}
 >
-  <form
-    class="create-sheet-form"
-    onsubmit={(event) => {
-      event.preventDefault();
-      void create();
-    }}
-  >
-    <header class="create-sheet-head">
-      <button
-        class="icon-btn"
-        type="button"
-        aria-label={t('close')}
-        aria-disabled={busy || confirming}
-        onclick={() => void close()}><Icon name="x" /></button
-      >
-      <div class="create-sheet-kind" role="group" aria-label={t('createKind')}>
+  {#if open}
+    <form
+      class="create-sheet-form"
+      onsubmit={(event) => {
+        event.preventDefault();
+        void create();
+      }}
+    >
+      <header class="create-sheet-head">
         <button
-          class="btn is-sm"
-          class:is-on={kind === 'task'}
+          class="icon-btn"
           type="button"
-          aria-pressed={kind === 'task'}
-          disabled={busy}
-          onclick={() => (kind = 'task')}>{t('task')}</button
+          aria-label={t('close')}
+          aria-disabled={busy || confirming}
+          onclick={() => void close()}><Icon name="x" /></button
         >
-        <button
-          class="btn is-sm"
-          class:is-on={kind === 'story'}
-          type="button"
-          aria-pressed={kind === 'story'}
-          disabled={busy}
-          onclick={() => (kind = 'story')}>{t('story')}</button
-        >
-      </div>
-      <button
-        class="btn is-primary create-sheet-submit"
-        type="submit"
-        aria-label={t(busy ? 'storyCreating' : 'storyCreateSubmit')}
-        aria-disabled={busy || !title.trim()}
-        aria-describedby={!title.trim() ? `${uid}-reason` : undefined}><Icon name="up" /></button
-      >
-    </header>
-    <div class="create-sheet-body">
-      {#if !title.trim()}<p class="muted" id={`${uid}-reason`}>{t('taskTitleRequired')}</p>{/if}
-      {#if failure}<p class="callout is-danger" role="alert">{failure}</p>{/if}
-      <label class="field"
-        ><span class="field-label">{t('fieldTitle')}</span><input
-          class="input create-sheet-title"
-          id={`${uid}-title`}
-          bind:this={titleInput}
-          bind:value={title}
-          readonly={busy}
-          placeholder={t(kind === 'task' ? 'taskTitlePlaceholder' : 'storyTitlePlaceholder')}
-        /></label
-      >
-      <div class="field">
-        <label class="field-label" for={`${uid}-body`}>{t('fieldBody')}</label><MarkdownEditor
-          id={`${uid}-body`}
-          bind:value={body}
-          {slug}
-          {workspaceId}
-          readonly={busy}
-          attachments={false}
-        />
-      </div>
-      <div class="create-sheet-attrs">
-        {#if kind === 'task'}
-          <AttrChip
-            attr={t('taskParent', { story: t('story') })}
-            text={stories.find((s) => s.id === storyId)?.title ?? t('taskParentNone')}
-            unset={!storyId}
-            current={storyId}
-            options={[
-              { value: '', text: t('taskParentNone') },
-              ...stories.map((s) => ({ value: s.id, text: s.title })),
-            ]}
-            onselect={(value) => (storyId = value)}
-            {locked}
-          />
-          <AttrChip
-            attr={t('assignee')}
-            text={people.find((p) => p.id === assignee)?.name ?? t('taskParentNone')}
-            unset={!assignee}
-            current={assignee}
-            options={[{ value: '', text: t('taskParentNone') }, ...people.map((p) => ({ value: p.id, text: p.name }))]}
-            onselect={(value) => (assignee = value)}
-            {locked}
-          />
-          <AttrChip
-            attr={t('points')}
-            text={points || t('taskParentNone')}
-            unset={points === ''}
-            current={points}
-            options={[
-              { value: '', text: t('taskParentNone') },
-              ...TASK_POINT_VALUES.map((p) => ({ value: String(p), text: String(p) })),
-            ]}
-            onselect={(value) => (points = value)}
-            locked={busy ? t('storyCreating') : undefined}
-          />
-        {:else}
-          <AttrChip
-            attr={t('epic')}
-            text={epics.find((e) => e.id === epicId)?.title ?? t('taskParentNone')}
-            unset={!epicId}
-            current={epicId}
-            options={[{ value: '', text: t('taskParentNone') }, ...epics.map((e) => ({ value: e.id, text: e.title }))]}
-            onselect={(value) => (epicId = value)}
-            {locked}
-          />
-          <AttrChip
-            attr={t('due')}
-            text={due || t('taskParentNone')}
-            unset={!due}
-            current={due}
-            options={[]}
-            onselect={() => {}}
-            locked={busy ? t('storyCreating') : undefined}
+        <div class="create-sheet-kind" role="group" aria-label={t('createKind')}>
+          <button
+            class="btn is-sm"
+            class:is-on={kind === 'task'}
+            type="button"
+            aria-pressed={kind === 'task'}
+            disabled={busy}
+            onclick={() => (kind = 'task')}>{t('task')}</button
           >
-            {#snippet panel(closePanel)}
-              <label class="field"
-                ><span class="field-label">{t('due')}</span><input class="input" type="date" bind:value={due} /></label
-              >
-              <button class="btn" type="button" onclick={closePanel}>{t('close')}</button>
-            {/snippet}
-          </AttrChip>
-        {/if}
+          <button
+            class="btn is-sm"
+            class:is-on={kind === 'story'}
+            type="button"
+            aria-pressed={kind === 'story'}
+            disabled={busy}
+            onclick={() => (kind = 'story')}>{t('story')}</button
+          >
+        </div>
+        <button
+          class="btn is-primary create-sheet-submit"
+          type="submit"
+          aria-label={t(busy ? 'storyCreating' : 'storyCreateSubmit')}
+          aria-disabled={busy || !title.trim()}
+          aria-describedby={!title.trim() ? `${uid}-reason` : undefined}><Icon name="up" /></button
+        >
+      </header>
+      <div class="create-sheet-body">
+        {#if !title.trim()}<p class="muted" id={`${uid}-reason`}>{t('taskTitleRequired')}</p>{/if}
+        {#if failure}<p class="callout is-danger" role="alert">{failure}</p>{/if}
+        <label class="field"
+          ><span class="field-label">{t('fieldTitle')}</span><input
+            class="input create-sheet-title"
+            id={`${uid}-title`}
+            bind:this={titleInput}
+            bind:value={title}
+            readonly={busy}
+            placeholder={t(kind === 'task' ? 'taskTitlePlaceholder' : 'storyTitlePlaceholder')}
+          /></label
+        >
+        <div class="field">
+          <label class="field-label" for={`${uid}-body`}>{t('fieldBody')}</label><MarkdownEditor
+            id={`${uid}-body`}
+            bind:value={body}
+            {slug}
+            {workspaceId}
+            readonly={busy}
+            attachments={false}
+          />
+        </div>
+        <div class="create-sheet-attrs">
+          {#if kind === 'task'}
+            <AttrChip
+              attr={t('taskParent', { story: t('story') })}
+              text={stories.find((s) => s.id === storyId)?.title ?? t('taskParentNone')}
+              unset={!storyId}
+              current={storyId}
+              options={[
+                { value: '', text: t('taskParentNone') },
+                ...stories.map((s) => ({ value: s.id, text: s.title })),
+              ]}
+              onselect={(value) => (storyId = value)}
+              {locked}
+            />
+            <AttrChip
+              attr={t('assignee')}
+              text={people.find((p) => p.id === assignee)?.name ?? t('taskParentNone')}
+              unset={!assignee}
+              current={assignee}
+              options={[
+                { value: '', text: t('taskParentNone') },
+                ...people.map((p) => ({ value: p.id, text: p.name })),
+              ]}
+              onselect={(value) => (assignee = value)}
+              {locked}
+            />
+            <AttrChip
+              attr={t('points')}
+              text={points || t('taskParentNone')}
+              unset={points === ''}
+              current={points}
+              options={[
+                { value: '', text: t('taskParentNone') },
+                ...TASK_POINT_VALUES.map((p) => ({ value: String(p), text: String(p) })),
+              ]}
+              onselect={(value) => (points = value)}
+              locked={busy ? t('storyCreating') : undefined}
+            />
+          {:else}
+            <AttrChip
+              attr={t('epic')}
+              text={epics.find((e) => e.id === epicId)?.title ?? t('taskParentNone')}
+              unset={!epicId}
+              current={epicId}
+              options={[
+                { value: '', text: t('taskParentNone') },
+                ...epics.map((e) => ({ value: e.id, text: e.title })),
+              ]}
+              onselect={(value) => (epicId = value)}
+              {locked}
+            />
+            <AttrChip
+              attr={t('due')}
+              text={due || t('taskParentNone')}
+              unset={!due}
+              current={due}
+              options={[]}
+              onselect={() => {}}
+              locked={busy ? t('storyCreating') : undefined}
+            >
+              {#snippet panel(closePanel)}
+                <label class="field"
+                  ><span class="field-label">{t('due')}</span><input
+                    class="input"
+                    type="date"
+                    bind:value={due}
+                  /></label
+                >
+                <button class="btn" type="button" onclick={closePanel}>{t('close')}</button>
+              {/snippet}
+            </AttrChip>
+          {/if}
+        </div>
+        {#if loading}<p role="status">{t('loading')}</p>{/if}
+        {#if choicesFailed}<p class="field-error" role="alert">{t('createChoicesFailed')}</p>
+          <button class="btn" type="button" disabled={loading || busy} onclick={() => void loadChoices()}
+            >{t('retry')}</button
+          >{/if}
       </div>
-      {#if loading}<p role="status">{t('loading')}</p>{/if}
-      {#if choicesFailed}<p class="field-error" role="alert">{t('createChoicesFailed')}</p>
-        <button class="btn" type="button" disabled={loading || busy} onclick={() => void loadChoices()}
-          >{t('retry')}</button
-        >{/if}
-    </div>
-  </form>
-  <ToastRegion inDialog />
+    </form>
+    <ToastRegion inDialog />
+  {/if}
 </dialog>
 <ConfirmDialog
   bind:this={discard}

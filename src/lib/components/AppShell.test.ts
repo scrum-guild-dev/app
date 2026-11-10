@@ -114,3 +114,11 @@ test('枠の中の遅い移動だけ本文をbusyにし、操作を止めない'
     navigationLoading.kind = null;
   }
 });
+
+test('閉じている起票シートは、ほかの画面の本文欄や属性メニューと重なる要素を描かない', () => {
+  const body = shell('/aoba/w/w1', { id: 'w1', name: '架空のワークスペース', role: 'member' });
+  expect(body).toContain('class="create-sheet"');
+  expect(body).not.toContain('class="create-sheet-title"');
+  expect(body).not.toContain('class="markdown-editor"');
+  expect(body).not.toContain('class="row-menu"');
+});
