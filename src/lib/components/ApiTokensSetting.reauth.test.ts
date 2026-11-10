@@ -52,7 +52,8 @@ test('一覧が空なら通常の空の文を出し、再認証の理由とロ�
     expect(body).toContain(dictionary.apiTokenEmptyTitle);
     expect(body).toContain(dictionary.apiTokenEmptyText);
   }
-  expect(needs.match(/ログインし直してください/g)).toHaveLength(1);
+  // 全失効にも再ログインの説明があるため、発行の猶予を説明する文だけを数える。
+  expect(needs.match(/API トークンを発行するには、ログインし直してください。/g)).toHaveLength(1);
   expect(needs.match(/#i-lock/g)).toHaveLength(1);
   expect(needs).toContain('class="callout is-info"');
 });
