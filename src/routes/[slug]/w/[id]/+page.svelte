@@ -102,6 +102,8 @@
   let { data }: PageProps = $props();
 
   const workspace = $derived(data.workspace);
+  // 依頼先のチップと絞り込みは自分用の組織だけに出す（名簿は load が組織の種類を見ずに読む）
+  const personal = $derived(data.organization?.organization.kind === 'personal');
   const tree = $derived(data.tree);
   // 行の「⋯」から消した（戻した）後の読み直しの失敗の印（#979。task-reload-failure.svelte.ts）。木が読めたら下ろす
   $effect(() => {
@@ -1302,7 +1304,7 @@
           },
           onStale: () => void invalidateAll(),
           definitions: data.definitions,
-          delegatees: data.delegatees,
+          delegatees: personal ? data.delegatees : undefined,
         }
       : undefined}
   />
@@ -1422,8 +1424,8 @@
           categories={data.definitions?.categories ?? []}
           repositories={data.definitions?.repositories ?? []}
           definitionsFailed={data.definitions === null}
-          delegatees={data.delegatees === undefined ? undefined : (data.delegatees ?? [])}
-          delegateesFailed={data.delegatees === null}
+          delegatees={personal ? (data.delegatees ?? []) : undefined}
+          delegateesFailed={personal && data.delegatees === null}
           onchange={(next) => void applyFilter(next)}
         />
       {/if}

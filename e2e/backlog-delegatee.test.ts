@@ -1,6 +1,6 @@
 // バックログの依頼先のチップと絞り込み（#907）。自分用の組織だけに出す。
 // 自分用の組織（seed の personal）: 依頼先の付いた行にだけチップが出る → チップで別の人を選び直す → 帯の「依頼先」で絞り、
-// URL に残って再読み込みしても残る → 「依頼先なし」で絞る → チップで外すとチップが消え、フォーカスはタイトルへ移る。
+// URL に残って再読み込みしても残る（選んだ人が名簿から消えていた 404 は理由を出して元の値に戻す）→ 「依頼先なし」で絞る → チップで外すとチップが消え、フォーカスはタイトルへ移る。
 // チーム用の組織（あおば開発）: 帯にも行にも依頼先を出さない。
 // 名簿とタスクは毎回 API で作り、後で消す（seed の行と、並べて走る e2e/delegatee.test.ts の行は変えない）
 import type { APIRequestContext } from '@playwright/test';
@@ -15,6 +15,7 @@ import { delegateeCreate, delegateeDelete } from '../src/shared/operations/organ
 import { taskCreate, taskDelegate, taskDelete, taskDetail } from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
 import { signIn, waitForResponses, watchViolations } from './helpers.ts';
+import { failOperation } from './operations.ts';
 
 const PERSONAL_WORKSPACE_ID = '019a0000-0000-7000-8000-000000000406';
 const PERSONAL_BACKLOG = `/personal/w/${PERSONAL_WORKSPACE_ID}`;
@@ -85,6 +86,14 @@ test('自分用の組織では、依頼先の付いた行にチップが出て�
         .delegatee,
     ).toEqual(b);
 
+    // 選んだ人が名簿から消えていた（task-delegate の 404。タスクは読める）ときは、理由を出して元の値に戻す
+    const unroute = await failOperation(page, taskDelegate, { slug: 'personal' }, 404, 'not_found');
+    await delegatedRow.getByRole('button', { name: `依頼先: ${second}` }).click();
+    await page.getByRole('menu', { name: '依頼先を選ぶ' }).getByRole('menuitemradio', { name: first }).click();
+    await expect(page.getByText('選んだ人は依頼先の名簿から削除されています。選び直してください')).toBeVisible();
+    await expect(delegatedRow.getByRole('button', { name: `依頼先: ${second}` })).toBeVisible();
+    await unroute();
+
     // 帯の「依頼先」で絞ると、その人の付いたタスクだけが出て、URL に残る
     const bar = page.getByRole('search', { name: 'バックログの絞り込み' });
     const select = bar.getByRole('combobox', { name: '依頼先', exact: true });
@@ -111,7 +120,8 @@ test('自分用の組織では、依頼先の付いた行にチップが出て�
     await cleared;
     await expect(delegatedRow.getByRole('button', { name: /^依頼先/ })).toHaveCount(0);
     await expect(delegatedRow.getByRole('link', { name: delegated })).toBeFocused();
-    expect(await collect()).toEqual([]);
+    // 名簿から消えていた 404 を返した1回だけ
+    expect(await collect()).toEqual(['Failed to load resource: the server responded with a status of 404 (Not Found)']);
   } finally {
     for (const id of taskIds) await call(request, taskDelete, { workspace_id: PERSONAL_WORKSPACE_ID, task_id: id });
     for (const id of delegateeIds) await call(request, delegateeDelete, { delegatee_id: id });

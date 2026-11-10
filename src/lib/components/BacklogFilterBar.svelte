@@ -240,6 +240,9 @@
   {#if problem !== null}
     <p class="field-error toolbar-note" id={noteId} role="alert"><Icon name="alert" />{problemText}</p>
   {/if}
+  {#if delegatees !== undefined && delegateesFailed}
+    <p class="field-hint toolbar-note">{t('delegateesLoadFailed', { delegatee: t('delegatee') })}</p>
+  {/if}
   {#if definitionsFailed}
     <!-- 起票のダイアログと同じ文。区分とリポジトリの選択欄は「すべて」と「なし」（と選んでいる値）だけになる -->
     <p class="field-hint toolbar-note">{t('definitionsLoadFailed', { category: t('category') })}</p>

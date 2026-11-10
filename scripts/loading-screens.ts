@@ -60,7 +60,6 @@ export const screens: Screen[] = [
       w('experience-team-total', true),
       op('delegatee-list', {}, true),
     ],
-    note: 'delegatee-list は自分用の組織だけ parent() の後に読む。',
   },
   { route: '/[slug]/w/[id]/plan', operations: [w('sprint-list'), w('plan-summary', true)] },
   { route: '/[slug]/w/[id]/sprint', operations: [w('sprint-board')] },

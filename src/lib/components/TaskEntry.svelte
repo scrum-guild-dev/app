@@ -54,7 +54,7 @@
   // ドラッグの代わりは「上へ」「下へ」と Alt と ↑ ↓
   // 完了の印の判を押す動き（.is-new）は、今押した行（justDone が真）だけで再生する。開いた時点で完了済みの行（今日やることの今日完了）は静止した印を出す
   // definitions は、画面が読んだ区分とリポジトリの一覧（読めなかったときは null で、「なし」と今の値だけを選べる）
-  // delegatees は、自分用の組織で画面が読んだ依頼先の名簿（読めなかったときは null で、「外す」と今の値だけを選べる）。渡すと、
+  // delegatees は、自分用の組織で画面が読んだ依頼先の名簿（読めなかったときは null で、今の値と「外す」だけを選べる）。渡すと、
   // 依頼先の付いた行にだけ依頼先のチップを出し、選び直すと task-delegate で保存する（担当なしの行に付けると自分が担当になる）。
   // チーム用の組織は渡さず、チップを出さない。外すとチップが消えるので、チップにあったフォーカスはタイトルへ移す
   type RowAttrs = {
@@ -395,14 +395,14 @@
     attrs?.delegatees !== undefined && (task.delegatee !== null || delegateePending !== null),
   );
   const delegateeOptions = $derived.by(() => {
-    const options: { value: string; text: string }[] = [
-      { value: '', text: t('delegateeClear', { delegatee: t('delegatee') }) },
-    ];
+    // 外す項目は、選んでいる人（開いた最初のフォーカス）から矢印1つで届かないよう末尾に置く
+    const options: { value: string; text: string }[] = [];
     for (const person of attrs?.delegatees ?? []) options.push({ value: person.id, text: person.name });
     const current = task.delegatee;
     if (current !== null && !options.some((option) => option.value === current.id)) {
       options.push({ value: current.id, text: current.name });
     }
+    options.push({ value: '', text: t('delegateeClear', { delegatee: t('delegatee') }) });
     return options;
   });
   const delegateeText = $derived(

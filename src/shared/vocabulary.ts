@@ -1873,6 +1873,7 @@ export const dictionary = defineDictionary({
   // バックログの行の依頼先のチップ（自分用の組織だけ。付いた行にだけ出す）と、絞り込みの「なし」
   delegateeNone: '{delegatee}なし',
   delegateeClear: '{delegatee}を外す',
+  delegateesLoadFailed: '{delegatee}の名簿を読み込めませんでした。再読み込みすると、もう一度読みます',
   delegateeGone: '選んだ人は{delegatee}の名簿から削除されています。選び直してください',
   taskDelegateeDone: 'この{task}は{done}になっているため、{delegatee}は替えられません。',
   taskReadOnly: '終了した{workspace}の{task}は、読み取りだけできます',
