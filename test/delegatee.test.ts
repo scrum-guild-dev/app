@@ -45,6 +45,8 @@ async function logs(target: Target) {
 describe('依頼先の名簿', () => {
   test('件数上限の最後の枠に並行登録しても50人まで。削除後は枠を再利用できる', async () => {
     const target = await createPersonalTarget();
+    const foreign = await createPersonalTarget();
+    for (let n = 0; n < 50; n++) await createDelegatee(foreign.organization, { name: `別組織-${n}` });
     for (let n = 0; n < 49; n++) await createDelegatee(target.organization, { name: `名簿-${n}` });
     const responses = await Promise.all([
       call(target, delegateeCreate, { name: '最後の候補1' }),
@@ -53,11 +55,22 @@ describe('依頼先の名簿', () => {
     expect(responses.map((res) => res.status).sort()).toEqual([200, 409]);
     const refused = responses.find((res) => res.status === 409)!;
     expect(await refused.json()).toMatchObject({ error: { code: 'conflict', details: { reason: 'limit' } } });
+    expect(await logs(target)).toHaveLength(1);
     const people = await list(target);
     expect(people).toHaveLength(50);
     expect((await call(target, delegateeDelete, { delegatee_id: people[0]!.id })).status).toBe(200);
     expect((await call(target, delegateeCreate, { name: '削除した枠' })).status).toBe(200);
     expect(await list(target)).toHaveLength(50);
+  });
+
+  test('既に51人以上いる名簿でも一覧は名前順の50人まで', async () => {
+    const target = await createPersonalTarget();
+    for (let n = 0; n < 51; n++)
+      await createDelegatee(target.organization, { name: `依頼先-${String(n).padStart(2, '0')}` });
+    const people = await list(target);
+    expect(people).toHaveLength(50);
+    expect(people[0]!.name).toBe('依頼先-00');
+    expect(people[49]!.name).toBe('依頼先-49');
   });
 
   test('追加・名前変更・名前順の一覧。名前の前後の空白を除く', async () => {
