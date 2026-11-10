@@ -460,6 +460,10 @@ export const dictionary = defineDictionary({
   todayEmptyAction: '{backlog}を開く',
   todayEmptyNoWorkspaceText: '{workspace}に所属すると、自分が{assignee}する{task}がここに並びます。',
   sectionOpen: '開くと一覧を表示',
+  // 依頼先（自分用の組織）の付いた、自分が担当の未完了のタスク。人に振ったものを期日の早い順に確かめる
+  sectionDelegated: '依頼中',
+  sectionDelegatedHint: '{delegatee}を外すか{done}にするまで残ります',
+  delegatedTo: '{delegatee}: {name}',
   overdue: '期日切れ',
   weekDue: '今週が期日',
   dueIsToday: '期日は今日',

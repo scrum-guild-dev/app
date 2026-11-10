@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { today } from '../src/shared/operations/organization/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
-import { inboxToBacklog, taskReopen } from '../src/shared/operations/task/index.ts';
+import { delegateeCreate, delegateeDelete } from '../src/shared/operations/organization/index.ts';
+import { inboxToBacklog, taskComplete, taskDelegate, taskReopen } from '../src/shared/operations/task/index.ts';
 import {
   createBoardColumn,
+  createDelegatee,
   createMembership,
   createOrganization,
   createRepository,
@@ -19,7 +21,7 @@ import {
   createWorkspace,
 } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
-import { createPerson, createTarget, type Person } from './operations/world.ts';
+import { createPerson, createPersonalTarget, createTarget, type Person, type Target } from './operations/world.ts';
 
 const app = createApp(implementedOperations);
 
@@ -45,6 +47,7 @@ type TodayTaskView = {
   is_today_completed: boolean;
   reopenable: boolean;
   assignee: { id: string; name: string } | null;
+  delegatee: { id: string; name: string } | null;
   repository: { id: string; name: string } | null;
   sprint: { id: string; name: string | null; start_on: string; end_on: string } | null;
 };
@@ -744,6 +747,119 @@ describe('today: 完了を戻せるか（reopenable）', () => {
     expect(((await res.json()) as { error: { details: { reason: string } } }).error.details.reason).toBe(
       'parent_completed',
     );
+  });
+});
+
+// #906: 自分用の組織で依頼先を付けたタスクは、印や期日が無くても返り、画面の「依頼中」に出る
+describe('today: 依頼先', () => {
+  async function personal() {
+    const target = await createPersonalTarget();
+    await createMembership(target.organization, target.workspace.id, target.admin.userId!);
+    return target;
+  }
+  async function addDelegatee(target: Target, name: string): Promise<{ id: string; name: string }> {
+    const res = await post(app, delegateeCreate, { slug: target.slug, token: target.admin.token, body: { name } });
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { delegatee: { id: string; name: string } }).delegatee;
+  }
+  async function call<T extends typeof taskDelegate | typeof taskComplete>(target: Target, op: T, body: object) {
+    const res = await post(app, op, {
+      slug: target.slug,
+      token: target.admin.token,
+      body: { workspace_id: target.workspace.id, ...body },
+    } as never);
+    expect(res.status).toBe(200);
+  }
+  const readOf = (target: Target) => readToday(target.slug, target.admin);
+
+  test('担当なしのタスクに依頼先を付けると、印も期日も無くても依頼先つきで返り、外すと返らない', async () => {
+    const target = await personal();
+    const person = await addDelegatee(target, '青葉 透');
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!);
+
+    expect((await readOf(target)).tasks).toEqual([]);
+
+    await call(target, taskDelegate, { task_id: task.id, delegatee_id: person.id });
+    const delegated = (await readOf(target)).tasks;
+    expect(delegated.map((row) => row.id)).toEqual([task.id]);
+    expect(delegated[0]!.delegatee).toEqual({ id: person.id, name: '青葉 透' });
+    expect(delegated[0]!.assignee?.id).toBe(target.admin.userId);
+
+    await call(target, taskDelegate, { task_id: task.id, delegatee_id: null });
+    expect((await readOf(target)).tasks).toEqual([]);
+  });
+
+  test('印のあるタスクは、依頼先を外すと依頼先なしの行に戻る', async () => {
+    const target = await personal();
+    const person = await addDelegatee(target, '青葉 透');
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      assignee_user_id: target.admin.userId,
+      today_on: '2026-11-01',
+    });
+    await call(target, taskDelegate, { task_id: task.id, delegatee_id: person.id });
+    expect((await readOf(target)).tasks.map((row) => [row.id, row.delegatee?.name ?? null])).toEqual([
+      [task.id, '青葉 透'],
+    ]);
+
+    await call(target, taskDelegate, { task_id: task.id, delegatee_id: null });
+    expect((await readOf(target)).tasks.map((row) => [row.id, row.delegatee, row.today_on])).toEqual([
+      [task.id, null, '2026-11-01'],
+    ]);
+  });
+
+  test('今日完了にした依頼中のタスクは完了の行で返り、名簿から消した後も依頼先の名前を返す', async () => {
+    const target = await personal();
+    const person = await addDelegatee(target, '青葉 透');
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!);
+    await call(target, taskDelegate, { task_id: task.id, delegatee_id: person.id });
+    await call(target, taskComplete, { task_id: task.id });
+    const res = await post(app, delegateeDelete, {
+      slug: target.slug,
+      token: target.admin.token,
+      body: { delegatee_id: person.id },
+    });
+    expect(res.status).toBe(200);
+
+    const rows = (await readOf(target)).tasks;
+    expect(rows.map((row) => [row.id, row.is_today_completed, row.delegatee?.name ?? null])).toEqual([
+      [task.id, true, '青葉 透'],
+    ]);
+  });
+
+  test('別の組織の依頼先を指すタスクは、依頼先を結ばず、印も期日も無ければ返らない', async () => {
+    const target = await personal();
+    const other = await createOrganization();
+    const foreign = await createDelegatee(other, { name: 'ほかの組織の人' });
+    // API では作れない行を直に入れ、結合が組織で絞れていることを確かめる
+    await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      assignee_user_id: target.admin.userId,
+      delegatee_id: foreign.id,
+    });
+    const marked = await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      assignee_user_id: target.admin.userId,
+      delegatee_id: foreign.id,
+      today_on: '2026-11-01',
+    });
+    expect((await readOf(target)).tasks.map((row) => [row.id, row.delegatee])).toEqual([[marked.id, null]]);
+  });
+
+  test('チーム用の組織のタスクは、依頼先が null で返る', async () => {
+    const world = await createWorld();
+    const ws = await world.workspace();
+    await world.task(ws, { today_on: '2026-11-01' });
+    const rows = (await world.read()).tasks;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.delegatee).toBeNull();
+  });
+
+  test('期日が来週以降の依頼中のタスクも返る', async () => {
+    const target = await personal();
+    const person = await addDelegatee(target, '青葉 透');
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      due_on: '2027-01-15',
+    });
+    await call(target, taskDelegate, { task_id: task.id, delegatee_id: person.id });
+    expect((await readOf(target)).tasks.map((row) => row.id)).toEqual([task.id]);
   });
 });
 

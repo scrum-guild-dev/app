@@ -20,6 +20,8 @@ const todayTaskSchema = z.object({
   is_today_completed: z.boolean(),
   reopenable: z.boolean(),
   assignee: z.object({ id: z.string(), name: z.string() }).nullable(),
+  // 依頼先（自分用の組織だけ）。付いた未完了のタスクは「依頼中」の区分に出る
+  delegatee: z.object({ id: z.string(), name: z.string() }).nullable(),
   repository: z.object({ id: z.string(), name: z.string() }).nullable(),
   sprint: sprintRefSchema.nullable(),
 });
