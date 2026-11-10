@@ -140,6 +140,12 @@ test('390px: 書式の付け外しは選択とフォーカスを保ち、44px以
   const body = sheet.getByLabel('本文', { exact: true });
   const toolbar = sheet.getByRole('group', { name: '本文の書式' });
   await expect(toolbar.getByRole('button')).toHaveCount(4);
+  await body.fill('変換中の本文');
+  await body.dispatchEvent('compositionstart');
+  await toolbar.getByRole('button', { name: '箇条書き', exact: true }).click();
+  await expect(body).toHaveValue('変換中の本文');
+  await expect(body).toBeFocused();
+  await body.dispatchEvent('compositionend');
   for (const [name, prefix] of [
     ['箇条書き', '- '],
     ['チェックリスト', '- [ ] '],

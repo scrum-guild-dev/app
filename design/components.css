@@ -2126,7 +2126,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 /* Markdown を書く欄と、上げる場所・ファイルごとの状態を同じ間隔で並べる。 */
 .markdown-editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); min-width: 0; }
 .markdown-toolbar { display: flex; gap: var(--space-1); flex-wrap: wrap; }
-.markdown-toolbar .pill { min-width: 44px; min-height: 44px; justify-content: center; font-family: var(--font-mono); }
+.markdown-toolbar .pill { min-width: 44px; min-height: 44px; justify-content: center; }
 .markdown-toolbar .pill:disabled { opacity: 0.45; cursor: not-allowed; }
 /* 添付ファイルの一覧は、画像も動画もそれ以外も1行ずつ（容量、上げた人、日時）。縮小した絵（.file-thumb）は本文に差し込んだ画像にだけ使う */
 .files { display: grid; gap: var(--space-2); }

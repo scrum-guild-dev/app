@@ -81,7 +81,7 @@
   let slashItems = $state<SlashItem[]>([]);
   let slashAt = $state(0);
   let slashText = '';
-  let composing = $state(false);
+  let composing = false;
   const slashOpen = $derived(slashItems.length > 0);
   const slashStatus = $derived(
     slashOpen
@@ -524,7 +524,8 @@
           class="pill"
           aria-label={t(format.label)}
           title={t(format.label)}
-          disabled={readonly || composing}
+          disabled={readonly}
+          onmousedown={(event) => event.preventDefault()}
           onpointerdown={(event) => event.preventDefault()}
           onclick={() => formatBody(format.key)}><Icon name={format.icon} /></button
         >
