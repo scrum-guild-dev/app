@@ -20,6 +20,7 @@ import { deleteStatements } from '../src/server/operations/tree-delete.ts';
 import {
   AT,
   createCategory,
+  createDelegatee,
   createEpic,
   createMembership,
   createRepository,
@@ -33,7 +34,14 @@ import { createTarget, type Person, type Target } from './operations/world.ts';
 const app = createApp(implementedOperations);
 
 type Ref = { id: string; name: string } | null;
-type TaskRow = { id: string; title: string; assignee: { id: string } | null; repository: Ref; category: Ref };
+type TaskRow = {
+  id: string;
+  title: string;
+  assignee: { id: string } | null;
+  delegatee: Ref;
+  repository: Ref;
+  category: Ref;
+};
 type StoryRow = {
   id: string;
   tasks: TaskRow[];
@@ -59,6 +67,7 @@ type Filter = {
   category_id?: string | null;
   repository_id?: string | null;
   epic_id?: string | null;
+  delegatee_id?: string | null;
   query?: string;
 };
 
@@ -473,6 +482,78 @@ describe('backlog-tree の絞り込み', () => {
     expect((await treeBody(w.target, { category_id: null })).tasks.map((task) => task.id)).toContain(orphan.id);
   });
 
+  test('依頼先で絞ると、その人が付いたタスクと親だけを出す。なしは依頼先の無いタスク。行は依頼先の名前を持つ', async () => {
+    const w = await world();
+    const { organization } = w.target;
+    const workspaceId = w.target.workspace.id;
+    const aoi = await createDelegatee(organization, { name: '白川 葵' });
+    const ren = await createDelegatee(organization, { name: '高槻 蓮' });
+    const db = orgDb(env, organization.verified);
+    const setDelegatee = (taskId: string, delegateeId: string) =>
+      db.run(
+        db.statement((q) =>
+          q
+            .updateTable('tasks')
+            .set({ delegatee_id: delegateeId })
+            .where('id', '=', taskId)
+            .where('workspace_id', '=', workspaceId),
+        ),
+      );
+    await setDelegatee(w.wording.id, aoi.id);
+    await setDelegatee(w.mail.id, aoi.id);
+    await setDelegatee(w.refundApi.id, ren.id);
+    // 完了したタスクは行を出さないので、依頼先が付いていても絞り込みに当たらない
+    await createTask(organization, workspaceId, w.target.admin.userId!, {
+      title: '済んだ依頼',
+      delegatee_id: aoi.id,
+      completed_at: AT,
+      completed_by: w.target.admin.userId!,
+    });
+
+    const all = await treeBody(w.target);
+    const rows = [...all.epics.flatMap((epic) => epic.stories.flatMap((story) => story.tasks)), ...all.tasks];
+    expect(rows.find((task) => task.id === w.wording.id)?.delegatee).toEqual({ id: aoi.id, name: '白川 葵' });
+    expect(rows.find((task) => task.id === w.refundApi.id)?.delegatee).toEqual({ id: ren.id, name: '高槻 蓮' });
+    expect(rows.find((task) => task.id === w.pointsApi.id)?.delegatee).toBeNull();
+
+    const byAoi = await treeBody(w.target, { delegatee_id: aoi.id });
+    expect(shape(byAoi)).toEqual({
+      epics: [{ [w.points.id]: [{ [w.memberScreen.id]: [w.wording.id] }] }],
+      stories: [],
+      tasks: [w.mail.id],
+    });
+    expect(byAoi.completed_count).toBeNull();
+    // 集計は全体の値のまま
+    expect(byAoi.epics[0]!.stories[0]).toMatchObject({ open_task_count: 2, points_all: 10 });
+
+    const nobody = await treeBody(w.target, { delegatee_id: null });
+    expect(shape(nobody)).toEqual({
+      epics: [{ [w.points.id]: [{ [w.memberScreen.id]: [w.pointsApi.id] }] }],
+      stories: [{ [w.logs.id]: [w.logStore.id] }],
+      tasks: [w.percent.id],
+    });
+
+    // ほかの絞り込みとは「かつ」で組み合わせる
+    expect(shape(await treeBody(w.target, { delegatee_id: aoi.id, epic_id: null }))).toEqual({
+      epics: [],
+      stories: [],
+      tasks: [w.mail.id],
+    });
+  });
+
+  test('名簿から削除した依頼先の ID で絞っても、未完了のタスクからは外れているので何にも当たらない', async () => {
+    const w = await world();
+    const { organization } = w.target;
+    const gone = await createDelegatee(organization, { name: '削除した人', deleted_at: AT });
+    // 完了したタスクにだけ参照が残る（delegatee-delete は未完了のタスクから外す）
+    await createTask(organization, w.target.workspace.id, w.target.admin.userId!, {
+      delegatee_id: gone.id,
+      completed_at: AT,
+      completed_by: w.target.admin.userId!,
+    });
+    expect(shape(await treeBody(w.target, { delegatee_id: gone.id }))).toEqual({ epics: [], stories: [], tasks: [] });
+  });
+
   test('担当の選択肢には、離脱した人のうち未完了のバックログのタスクの担当に残っている人も出す', async () => {
     const w = await world();
     const { organization } = w.target;
@@ -516,9 +597,11 @@ describe('実行計画', () => {
     ['区分', { category: 'c' }],
     ['リポジトリ', { repository: 'r' }],
     ['エピック', { epic: 'e' }],
+    ['依頼先', { delegatee: 'd' }],
+    ['依頼先なし', { delegatee: null }],
     ['検索', { words: ['請求'] }],
   ] as const)(
-    'ストーリーの下の未完了のタスクは、絞り込み（%s）によらず tasks_story_open で引き、担当の索引をストーリーごとに引かない',
+    'ストーリーの下の未完了のタスクは、絞り込み（%s）によらず tasks_story_open で引き、担当と依頼先の索引をストーリーごとに引かない',
     async (_name, filter) => {
       const target = await createTarget();
       const db = orgDb(env, target.organization.verified);
@@ -528,6 +611,7 @@ describe('実行計画', () => {
       expect(plan).toContain('stories_workspace_epic');
       expect(plan).toMatch(/SEARCH tasks USING INDEX tasks_story_open \(story_id=\?\)/);
       expect(plan).not.toContain('tasks_assignee_user');
+      expect(plan).not.toContain('tasks_delegatee_completed');
       expect(plan).not.toMatch(/^\s*SCAN tasks\b/m);
     },
   );
@@ -579,6 +663,20 @@ describe('実行計画', () => {
       expect(plan).toMatch(/USING INDEX tasks_workspace_tray/);
       expect(plan).not.toContain('tasks_story');
     });
+
+    test.each([
+      ['依頼先', 'd'],
+      ['依頼先なし', null],
+    ] as const)(
+      '木の読み取りの、親のない未完了のタスク（%s で絞る）は、依頼先の索引を使わない',
+      async (_name, delegatee) => {
+        const { db, workspaceId } = await analyzedWorld();
+        const plan = await planOf(rootOpenTasksStatement(db, workspaceId, { delegatee, words: [] }));
+        expect(plan).toMatch(/USING INDEX tasks_workspace_tray/);
+        expect(plan).not.toContain('tasks_delegatee_completed');
+        expect(plan).not.toContain('tasks_story');
+      },
+    );
 
     test('木の読み取りの、親のない完了の件数', async () => {
       const { db, workspaceId } = await analyzedWorld();
@@ -687,6 +785,12 @@ describe('backlog-tree の絞り込みと組織の分離', () => {
       assignee_user_id: w.target.bystander.userId,
     });
     await createTask(organization, elsewhere, w.target.admin.userId!, { category_id: elsewhereCategory.id });
+    // 別の組織の依頼先と、それが付いたタスク
+    const otherDelegatee = await createDelegatee(other.organization);
+    await createTask(other.organization, other.workspace.id, otherAdmin, { delegatee_id: otherDelegatee.id });
+    // 同じ組織の依頼先が、別のワークスペースのタスクにだけ付いている
+    const elsewhereDelegatee = await createDelegatee(organization, { name: '別の場所の依頼先' });
+    await createTask(organization, elsewhere, w.target.admin.userId!, { delegatee_id: elsewhereDelegatee.id });
 
     const empty = { epics: [], stories: [], tasks: [] };
     for (const filter of [
@@ -698,6 +802,8 @@ describe('backlog-tree の絞り込みと組織の分離', () => {
       { category_id: elsewhereCategory.id },
       { repository_id: elsewhereRepository.id },
       { epic_id: elsewhereEpic.id },
+      { delegatee_id: otherDelegatee.id },
+      { delegatee_id: elsewhereDelegatee.id },
     ] satisfies Filter[]) {
       const body = await treeBody(w.target, filter);
       expect(shape(body), JSON.stringify(filter)).toEqual(empty);

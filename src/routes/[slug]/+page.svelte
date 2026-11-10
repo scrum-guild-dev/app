@@ -62,6 +62,8 @@
       points: task.points,
       due_on: task.due_on,
       assignee: task.assignee,
+      // 行は attrs を渡さないので依頼先のチップは出ない（「依頼中」の区分は metaText で名前を出す）
+      delegatee: task.delegatee,
       category: null,
       repository: task.repository,
       sprint: task.sprint,

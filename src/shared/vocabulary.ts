@@ -1900,6 +1900,11 @@ export const dictionary = defineDictionary({
   // 完了したタスクの担当は替えない（完了の経験値と完了の記録が、完了した時点の担当を使うため）
   taskAssigneeLocked: '{done}した{task}の{assignee}は替えられません',
   taskAssigneeDone: 'この{task}は{done}になっているため、{assignee}は替えられません。',
+  // バックログの行の依頼先のチップ（自分用の組織だけ。付いた行にだけ出す）と、絞り込みの「なし」
+  delegateeClear: '{delegatee}を外す',
+  delegateesLoadFailed: '{delegatee}の名簿を読み込めませんでした。再読み込みすると、もう一度読みます',
+  delegateeGone: '選んだ人は{delegatee}の名簿から削除されています。選び直してください',
+  taskDelegateeDone: 'この{task}は{done}になっているため、{delegatee}は替えられません。',
   taskReadOnly: '終了した{workspace}の{task}は、読み取りだけできます',
   // 書きかけがあるまま閉じる（か別のタスクへ移る）ときの確認
   discardTitle: '書きかけを捨てますか',
