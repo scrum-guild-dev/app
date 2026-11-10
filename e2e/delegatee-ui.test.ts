@@ -56,7 +56,7 @@ test('自分用の引き出しで依頼先を作成・付け外しし、設定�
     } finally {
       releaseCreate();
     }
-    const select = page.getByRole('combobox', { name: '依頼先', exact: true });
+    const select = page.getByRole('dialog').getByRole('combobox', { name: '依頼先', exact: true });
     await expect(select.locator('option:checked')).toHaveText(name);
     await restoreCreate();
     expect(createCalls).toBe(1);
