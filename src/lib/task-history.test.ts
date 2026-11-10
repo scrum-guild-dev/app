@@ -237,3 +237,17 @@ test('添付の追加は値を出さず専用の文で示す', () => {
   const view = historyEntryView(entry({ changes: [{ field: 'attachments', before: null, after: null }] }), 'UTC', t);
   expect(view.lines).toEqual([{ label: null, text: '添付ファイルを追加した' }]);
 });
+
+test('依頼先の付与・解除・付け替えは、依頼先の名前と「なし」を出す', () => {
+  const first = { id: 'd1', name: 'アサヒ' };
+  const second = { id: 'd2', name: 'ナツメ' };
+  for (const [before, after, text] of [
+    [null, first, 'なし → アサヒ'],
+    [first, null, 'アサヒ → なし'],
+    [first, second, 'アサヒ → ナツメ'],
+  ] as const) {
+    expect(historyEntryView(entry({ changes: [{ field: 'delegatee', before, after }] }), 'UTC', t).lines).toEqual([
+      { label: '依頼先', text },
+    ]);
+  }
+});
