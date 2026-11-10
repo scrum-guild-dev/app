@@ -4,6 +4,7 @@
   import MobileNavigation from './MobileNavigation.svelte';
   import { navigationLoading } from '../navigation-loading.svelte.ts';
   import { onMount, setContext, tick, type Snippet } from 'svelte';
+  import { PageHeadOwners } from '../page-head-owners.svelte.ts';
   import { MOBILE_PAGE_HEAD, type MobilePageHead } from '../mobile-page-head.ts';
   import { resolve } from '$app/paths';
   import { t } from '../vocabulary.svelte.ts';
@@ -58,7 +59,7 @@
   } = $props();
 
   const narrow = new MediaQuery('(max-width: 760px)');
-  let pageHeads = $state<symbol[]>([]);
+  const pageHeads = new PageHeadOwners();
   let mounted = $state(false);
   onMount(() => {
     // 子の PageHead が登録を終えるまでは代わりの入口を描かない。
@@ -74,12 +75,9 @@
       return mobileTools;
     },
     register(id) {
-      pageHeads = [...pageHeads, id];
-      return () => {
-        pageHeads = pageHeads.filter((head) => head !== id);
-      };
+      return pageHeads.register(id);
     },
-    owns: (id) => pageHeads[0] === id,
+    owns: (id) => pageHeads.owns(id),
   });
 
   // パンくず。ワークスペースは、ワークスペースの画面を開いているときだけ出す（組織の画面では、メニューの対象でも出さない）。
@@ -217,7 +215,7 @@
 
     {@render notice?.(narrow.current)}
     <main class="content" id="content" aria-busy={navigationLoading.kind === 'inside' ? true : undefined}>
-      {#if mounted && narrow.current && pageHeads.length === 0}
+      {#if mounted && narrow.current && pageHeads.empty}
         <header class="mobile-page-head page-head-row">
           <h1 class="page-title">{shownCrumbs.at(-1)?.label}</h1>
           {@render mobileTools()}
