@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { DEV_WARNING_CODE, e2eGlobalSetup, e2eHealthURL } from '../scripts/e2e-server.ts';
 import { formatStallSummary, nodeProbeDeps, stallLogger, startStallProbe } from '../scripts/e2e-stall-probe.ts';
+import { startProcessProbe } from '../scripts/e2e-process-probe.ts';
 
 // build した画面の JS（build/_app の下の .js）のどれかに、開発時の警告を出すコードがあるか（E2E_DEV_BUILD=1 のときだけ呼ぶ）。
 // build/_app が無ければ（build の外で立てたサーバーを使い回した）、ENOENT でなく理由の分かる文で止める
@@ -33,7 +34,12 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const probe = startStallProbe(new URL(e2eHealthURL(process.env)).origin, nodeProbeDeps, {
     onStall: stallLogger((line) => console.log(line)),
   });
+  const processes = startProcessProbe();
   return async () => {
-    console.log(formatStallSummary(await probe.stop()));
+    try {
+      console.log(formatStallSummary(await probe.stop()));
+    } finally {
+      await processes.stop();
+    }
   };
 }
