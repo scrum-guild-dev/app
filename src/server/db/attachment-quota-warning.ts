@@ -136,6 +136,7 @@ export async function reconcileAttachmentQuotaWarning(
           .where('id', '=', organizationId)
           .where('suspended_at', 'is', null)
           .where('attachment_quota_bytes', '=', quota)
+          .where('attachment_quota_check_generation', '=', current.attachment_quota_check_generation)
           .where('attachment_quota_warned_at', 'is', null)
           .where('attachment_quota_warning_pending_at', 'is', null),
       ),

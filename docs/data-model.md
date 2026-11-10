@@ -294,7 +294,7 @@
 | attachment_quota_warned_at | TEXT | | 合計が上限の80%を超えた通知の周期の開始日時。合計が80%を下回るか、上限を上げたら空に戻す |
 | attachment_quota_warning_pending_at | TEXT | | その周期の通知の配信待ち日時。共通 DB の確保後に組織 DB への配信に失敗しても、同じ日時を使って再試行する。配信完了、80%未満、上限の引上げで空に戻す |
 | attachment_quota_check_pending_at | TEXT | | 保存後の容量確認待ち日時。通常の応答はこの安価な印の更新だけを待ち、本文と過去版の集計・配信は defer で続ける。非NULLの間は日時を単調に更新し、読んだ世代と日時が一致するときだけ空に戻す |
-| attachment_quota_check_generation | INTEGER | NOT NULL、既定 0、0〜9007199254740991 の CHECK | 確認待ちを登録する同じ UPDATE で増やす世代。印を空に戻しても残し、同時刻の再登録を古い集計が消す ABA を防ぐ |
+| attachment_quota_check_generation | INTEGER | NOT NULL、既定 0、0〜9007199254740991 の CHECK | 確認待ちを登録する同じ UPDATE で増やす世代。印を空に戻しても残す。周期の確保と印の消去で読み取った世代を照合し、古い集計が新しい周期を使い切ったり変更待ちを消したりする ABA を防ぐ |
 | stores_source_payload | INTEGER | NOT NULL、既定 0 | 取り込み元の応答（`task_source_payloads`）を保存するか。管理者が組織の設定で選ぶ |
 | created_by_operator | TEXT | NOT NULL | 作った運用者のログインの ID（`github:12345`、`google:<sub>` の形）。会員が自分で作った組織は `'self-service'`（運用者のログインの ID と重ならない） |
 | created_by_account_id | TEXT | FK accounts | 会員が自分で作った組織の作成者。運用者が作る組織は空 |
