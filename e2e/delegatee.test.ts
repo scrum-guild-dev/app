@@ -14,6 +14,7 @@ import {
   delegateeList,
   delegateeUpdate,
   organizationInfo,
+  organizationHistory,
 } from '../src/shared/operations/organization/index.ts';
 import {
   taskComplete,
@@ -54,6 +55,12 @@ test('名簿を手入れし、担当なしのタスクへ依頼先を付け外�
     const updated = await call(request, delegateeUpdate, { delegatee_id: delegateeId, name: renamed });
     expect(updated.delegatee).toEqual({ id: delegateeId, name: renamed });
     expect((await call(request, delegateeList, {})).delegatees).toContainEqual(updated.delegatee);
+    expect((await call(request, organizationHistory, {})).entries.map((entry) => entry.event)).toEqual(
+      expect.arrayContaining([
+        { kind: 'delegatee_created', name },
+        { kind: 'delegatee_renamed', name: renamed },
+      ]),
+    );
 
     const createdTask = await call(request, taskCreate, {
       workspace_id: WORKSPACE_ID,

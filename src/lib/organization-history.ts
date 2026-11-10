@@ -76,6 +76,16 @@ export function historyEventText(event: HistoryEntry['event'], translate: Transl
       return event.name === null
         ? translate('orgHistoryAdminDesignationRemovedNoName', words)
         : translate('orgHistoryAdminDesignationRemoved', { ...words, name: event.name });
+    case 'delegatee_created':
+      return event.name === null
+        ? translate('orgHistoryDelegateeCreatedNoName')
+        : translate('orgHistoryDelegateeCreated', { name: event.name });
+    case 'delegatee_renamed':
+      return event.name === null
+        ? translate('orgHistoryDelegateeRenamedNoName')
+        : translate('orgHistoryDelegateeRenamed', { name: event.name });
+    case 'delegatee_deleted':
+      return translate('orgHistoryDelegateeDeleted');
     case 'other':
       return translate('orgHistoryOther', words);
   }
