@@ -2470,7 +2470,7 @@ export const dictionary = defineDictionary({
   // 節の末尾の危険な操作。今のセッションと同時刻以前のほかのセッションと、すべてのトークンを無効にする。{sessions} と {tokens} は件数
   apiTokenRevokeAllTitle: 'ほかの端末とトークンを締め出す',
   apiTokenRevokeAllDesc:
-    '端末をなくしたときや、値が漏れたかもしれないときに使います。先にこのブラウザでログインし直してください。後からログインした端末は残るためです。ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。',
+    '先にこのブラウザでログインし直してください。後からログインした端末は残るためです。ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。',
   apiTokenRevokeAll: 'ほかの端末とトークンを締め出す',
   apiTokenRevokeAllDialogTitle: 'ほかの端末とトークンを締め出しますか',
   apiTokenRevokeAllText:
