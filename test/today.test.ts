@@ -10,6 +10,7 @@ import { delegateeCreate, delegateeDelete } from '../src/shared/operations/organ
 import { inboxToBacklog, taskComplete, taskDelegate, taskReopen } from '../src/shared/operations/task/index.ts';
 import {
   createBoardColumn,
+  createDelegatee,
   createMembership,
   createOrganization,
   createRepository,
@@ -823,6 +824,32 @@ describe('today: 依頼先', () => {
     expect(rows.map((row) => [row.id, row.is_today_completed, row.delegatee?.name ?? null])).toEqual([
       [task.id, true, '青葉 透'],
     ]);
+  });
+
+  test('別の組織の依頼先を指すタスクは、依頼先を結ばず、印も期日も無ければ返らない', async () => {
+    const target = await personal();
+    const other = await createOrganization();
+    const foreign = await createDelegatee(other, { name: 'ほかの組織の人' });
+    // API では作れない行を直に入れ、結合が組織で絞れていることを確かめる
+    await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      assignee_user_id: target.admin.userId,
+      delegatee_id: foreign.id,
+    });
+    const marked = await createTask(target.organization, target.workspace.id, target.admin.userId!, {
+      assignee_user_id: target.admin.userId,
+      delegatee_id: foreign.id,
+      today_on: '2026-11-01',
+    });
+    expect((await readOf(target)).tasks.map((row) => [row.id, row.delegatee])).toEqual([[marked.id, null]]);
+  });
+
+  test('チーム用の組織のタスクは、依頼先が null で返る', async () => {
+    const world = await createWorld();
+    const ws = await world.workspace();
+    await world.task(ws, { today_on: '2026-11-01' });
+    const rows = (await world.read()).tasks;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.delegatee).toBeNull();
   });
 
   test('期日が来週以降の依頼中のタスクも返る', async () => {

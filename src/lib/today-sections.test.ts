@@ -52,6 +52,15 @@ describe('todaySections', () => {
     expect(sections.sprint).toEqual([]);
   });
 
+  test('依頼中は持ち越しの日数でなく期日の早い順に並ぶ', () => {
+    const delegatee = { id: 'd1', name: '青葉 透' };
+    const sections = todaySections([
+      task('carried', { delegatee, today_on: '2026-11-01', carry_days: 3, due_on: '2026-11-20' }),
+      task('early', { delegatee, due_on: '2026-11-05' }),
+    ]);
+    expect(ids(sections.delegated)).toEqual(['early', 'carried']);
+  });
+
   test('依頼先の付いたタスクも、今日完了にしたものは今日完了だけに出る', () => {
     const sections = todaySections([
       task('done', {

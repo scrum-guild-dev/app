@@ -372,7 +372,7 @@
       id="s-delegated"
       title={t('sectionDelegated')}
       count={sections.delegated.length}
-      hint={t('sectionDelegatedHint', { delegatee: t('delegatee'), done: t('done') })}
+      hint={t('sectionDelegatedHint', { done: t('done') })}
     >
       {@render rows(sections.delegated, { delegated: true })}
     </Section>
