@@ -6,7 +6,13 @@ import { orgDb } from '../src/server/db/index.ts';
 import { envWithD1Hooks, runStatementsForTest } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { delegateeCreate, delegateeDelete } from '../src/shared/operations/organization/index.ts';
-import { taskComplete, taskDelegate, taskDetail, taskHistory } from '../src/shared/operations/task/index.ts';
+import {
+  taskComplete,
+  taskDelegate,
+  taskDetail,
+  taskHistory,
+  taskReopen,
+} from '../src/shared/operations/task/index.ts';
 import { afterFirstQuery } from './auth/helpers.ts';
 import { createEpic, createMembership, createStory, createTask, uuidv7 } from './factories.ts';
 import { post } from './operations/harness.ts';
@@ -71,6 +77,63 @@ async function detail(target: Target, taskId: string) {
 }
 
 describe('task-delegate', () => {
+  test('完了を戻す直前に名簿が削除されたら競合にし、読み直して解除する', async () => {
+    const target = await createPersonalTarget();
+    const person = await add(target);
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!);
+    expect((await delegate(target, task.id, person.id)).status).toBe(200);
+    const body = { workspace_id: target.workspace.id, task_id: task.id };
+    expect((await post(app, taskComplete, { slug: target.slug, token: target.admin.token, body })).status).toBe(200);
+    let raced = false;
+    const racing = envWithD1Hooks(testEnv, {
+      async afterBatch(sqls) {
+        if (!raced && sqls.some((sql) => sql.includes('from "tasks"') && sql.includes('join "delegatees"'))) {
+          raced = true;
+          expect(
+            (
+              await post(app, delegateeDelete, {
+                slug: target.slug,
+                token: target.admin.token,
+                body: { delegatee_id: person.id },
+              })
+            ).status,
+          ).toBe(200);
+        }
+      },
+    });
+    expect(
+      (await post(app, taskReopen, { slug: target.slug, token: target.admin.token, body, env: racing })).status,
+    ).toBe(409);
+    expect(raced).toBe(true);
+    expect((await row(target, task.id))!.completed_at).not.toBeNull();
+    expect((await post(app, taskReopen, { slug: target.slug, token: target.admin.token, body })).status).toBe(200);
+    expect((await detail(target, task.id)).task.delegatee).toBeNull();
+  });
+  test.each([false, true])('完了を戻すと、削除済みの依頼先だけを外す（削除: %s）', async (deleted) => {
+    const target = await createPersonalTarget();
+    const person = await add(target);
+    const task = await createTask(target.organization, target.workspace.id, target.admin.userId!);
+    expect((await delegate(target, task.id, person.id)).status).toBe(200);
+    const body = { workspace_id: target.workspace.id, task_id: task.id };
+    expect((await post(app, taskComplete, { slug: target.slug, token: target.admin.token, body })).status).toBe(200);
+    if (deleted)
+      expect(
+        (
+          await post(app, delegateeDelete, {
+            slug: target.slug,
+            token: target.admin.token,
+            body: { delegatee_id: person.id },
+          })
+        ).status,
+      ).toBe(200);
+    expect((await post(app, taskReopen, { slug: target.slug, token: target.admin.token, body })).status).toBe(200);
+    expect((await detail(target, task.id)).task.delegatee).toEqual(deleted ? null : person);
+    if (deleted) {
+      const reopened = (await logs(target, task.id)).find((log) => log.action === 'reopen')!;
+      expect(JSON.parse(reopened.changes_json).delegatee).toEqual([person, null]);
+    }
+  });
+
   test('所属していない管理者を自動担当にせず404で断る', async () => {
     const target = await createPersonalTargetWithoutMembership();
     const person = await add(target);

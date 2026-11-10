@@ -639,7 +639,7 @@
 - 組織の物理削除のために `(organization_id)`、一覧のために `(organization_id, name) WHERE deleted_at IS NULL` の索引を持つ。`delegatee-list`（`organization`、読み取り）は、削除していない行を名前、ID の順に返す。チーム用の組織でも読み取りは断らない。
 - `delegatee-create`、`delegatee-update`（名前）、`delegatee-delete` は管理者の書き込み。名簿と `task-delegate` の書き込みの先頭に共通の検査を置き、チーム用では何も読み書きせず 409（`conflict`、`details.reason = 'team_organization'`）で断る。
 - 名前は区分と同じ正規化と比較にする。同じ組織の削除していない行どうしの同名は 409（`conflict`、`details.reason = 'duplicate_name'`）。一意の索引ではなく、作成と変更の文の `NOT EXISTS` で同時の書き込みにも守る。削除した名前は足し直せる。
-- 削除は論理削除。閉じたワークスペースと削除済みのタスクも含め、組織の未完了のタスクの `delegatee_id` を空にする。完了したタスクは参照を残し、`task-detail` は削除後も名前を返す。名前の写しは持たない。
+- 削除は論理削除。閉じたワークスペースと削除済みのタスクも含め、組織の未完了のタスクの `delegatee_id` を空にする。完了したタスクは参照を残し、`task-detail` は削除後も名前を返す。完了を戻すときは、削除済みの依頼先だけを同じ更新で外し、完了を戻した履歴にも依頼先の解除を残す。有効な依頼先は保持する。戻す直前に名簿が削除された場合は変更競合で断り、読み直してから戻す。名前の写しは持たない。
 - 作成、変更、削除は、区分と同じ形の `change_logs`（`entity_type = 'delegatee'`）を同じ `batch()` で残す。別組織、削除済み、存在しない依頼先の ID はすべて 404。
 
 - 削除していない依頼先は組織ごとに50人まで。区分と同じ上限にそろえ、`INSERT ... SELECT` の件数条件で並行登録も止める。超えたら 409（`conflict`、`details.reason = limit`）。一覧も名前順で最大50人を返す。

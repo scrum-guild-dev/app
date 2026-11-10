@@ -15,7 +15,14 @@ import {
   delegateeUpdate,
   organizationInfo,
 } from '../src/shared/operations/organization/index.ts';
-import { taskCreate, taskDelegate, taskDelete, taskDetail } from '../src/shared/operations/task/index.ts';
+import {
+  taskComplete,
+  taskCreate,
+  taskDelegate,
+  taskDelete,
+  taskDetail,
+  taskReopen,
+} from '../src/shared/operations/task/index.ts';
 import { expect, test } from './fixtures.ts';
 
 const WORKSPACE_ID = '019a0000-0000-7000-8000-000000000406';
@@ -65,7 +72,11 @@ test('名簿を手入れし、担当なしのタスクへ依頼先を付け外�
     expect(undelegated.delegatee).toBeNull();
     expect(undelegated.assignee).toEqual(delegated.assignee);
 
+    await call(request, taskDelegate, { ...taskInput, delegatee_id: delegateeId });
+    await call(request, taskComplete, taskInput);
     await call(request, delegateeDelete, { delegatee_id: delegateeId });
+    await call(request, taskReopen, taskInput);
+    expect((await call(request, taskDetail, taskInput)).task.delegatee).toBeNull();
     expect((await call(request, delegateeList, {})).delegatees.some((row) => row.id === delegateeId)).toBe(false);
     delegateeId = null;
   } finally {

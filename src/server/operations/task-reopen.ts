@@ -49,6 +49,9 @@ async function readReopenTarget(db: OrganizationDb, workspaceId: string, taskId:
     db.statement((q) =>
       q
         .selectFrom('tasks')
+        .leftJoin('delegatees', (join) =>
+          join.onRef('delegatees.id', '=', 'tasks.delegatee_id').on('delegatees.organization_id', '=', organizationId),
+        )
         .leftJoin('sprints', (join) =>
           join.onRef('sprints.id', '=', 'tasks.sprint_id').on('sprints.workspace_id', '=', workspaceId),
         )
@@ -68,6 +71,9 @@ async function readReopenTarget(db: OrganizationDb, workspaceId: string, taskId:
           'tasks.column_id',
           'tasks.completed_at',
           'tasks.completed_by',
+          'tasks.delegatee_id',
+          'delegatees.name as delegatee_name',
+          'delegatees.deleted_at as delegatee_deleted_at',
           'users.name as completed_by_name',
           'current.name as column_name',
           'sprints.status as sprint_status',
@@ -240,6 +246,8 @@ export const taskReopenOperation = implement(taskReopen, async ({ db, actor, wor
       null,
     ],
   };
+  const clearDelegatee = task.delegatee_id !== null && task.delegatee_deleted_at !== null;
+  if (clearDelegatee) changes.delegatee = [{ id: task.delegatee_id, name: task.delegatee_name ?? '' }, null];
   if (destination !== null) {
     changes.column = [
       task.column_id === null ? null : { id: task.column_id, name: task.column_name },
@@ -256,12 +264,27 @@ export const taskReopenOperation = implement(taskReopen, async ({ db, actor, wor
         .set({
           completed_at: null,
           completed_by: null,
+          ...(clearDelegatee ? { delegatee_id: null } : {}),
           updated_at: reopenedAt,
           ...(destination === null ? {} : { column_id: destination.column.id, column_position: destination.position }),
         })
         .where('id', '=', taskId)
         .where('workspace_id', '=', workspaceId)
         .where('tray', '=', 'backlog')
+        .where('delegatee_id', 'is', task.delegatee_id)
+        // 読んだ後に名簿が削除された場合は変更競合にし、再読後に外してから戻す。
+        .where((eb) =>
+          task.delegatee_id === null
+            ? eb.val(true)
+            : eb.exists(
+                eb
+                  .selectFrom('delegatees')
+                  .select('id')
+                  .where('id', '=', task.delegatee_id)
+                  .where('organization_id', '=', organizationId)
+                  .where('deleted_at', 'is', task.delegatee_deleted_at),
+              ),
+        )
         .where('deleted_at', 'is', null)
         .where('completed_at', '=', completedAt)
         .where('sprint_id', sprintId === null ? 'is' : '=', sprintId)
