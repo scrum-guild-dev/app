@@ -1,0 +1,74 @@
+name: release
+
+# Release を publish したとき、本番用のブランチ production をタグのコミットへ進める（docs/development.md の「ブランチ戦略」と「CI」）。
+# production は誰もコミットもマージもしないポインタで、動かすのはこのワークフローだけ。force push はしない。
+# 進めてよいかの判定は scripts/release-production.ts に置く（タグの形、draft と prerelease、main に入っているか、production が真の祖先か）
+on:
+  release:
+    # publish したときだけ受ける。prerelease は判定の関数で断る。prerelease を後から正式にする操作は released だけが届き、
+    # published は届かないので production は進まない。正式な版は新しいタグで publish し直す（docs/development.md の「リリース」）
+    types: [published]
+
+# 続けて publish したとき、古いタグで production を進めないよう1本ずつ走らせる。進行中の実行は取り消さない。
+# 待ちの実行は新しい実行に置き換えられうるが、最後の実行が判定を通れば production は最新へ進み、古いタグは判定が断る
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+# GITHUB_TOKEN は読むだけ。production への push は GitHub App の短命のトークンで行う。
+# GITHUB_TOKEN の push は、.github/workflows/ に触れるコミットを含むと fast-forward でも拒まれるため
+permissions:
+  contents: read
+
+jobs:
+  production:
+    # App の鍵は Environment release のシークレットに置き、リポジトリのシークレットには置かない。
+    # Environment の対象は v* のタグだけに人が絞る。Environment が縛るのはジョブの ref だけで YAML は縛らないので、
+    # v* のタグを作れる人は、自分の YAML のコミットにタグを付けて鍵を読める。タグの作成を管理者に絞る Ruleset が要る
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # 判定のスクリプトは、イベントの ref（タグ）ではなく main の版で動かす。fetch-depth: 0 で全部のブランチとタグを取る。
+      # このワークフローの YAML そのものは、GitHub がタグのコミットの版で動かす。YAML を書き換えたコミットにタグを付けられないよう、
+      # v* のタグはセッションから作らせない（.claude/hooks/bash-rules.mjs）
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: production を進めてよいかを判定する
+        id: decide
+        run: node scripts/release-production.ts "$GITHUB_EVENT_PATH"
+
+      # 判定を通った後にだけトークンを作る。権限はこのリポジトリの contents と workflows の書き込みに絞る
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: token
+        with:
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-workflows: write
+
+      # force を付けない。判定の後に production が動いていれば、fast-forward にならず GitHub が拒む。
+      # トークンは URL に入れず、git の設定の環境変数（GIT_CONFIG_*）でヘッダーとして渡す（コマンドラインとエラーの出力に載せない）
+      - name: production をタグのコミットへ進める
+        env:
+          TOKEN: ${{ steps.token.outputs.token }}
+          REPO: ${{ github.repository }}
+          COMMIT: ${{ steps.decide.outputs.commit }}
+          TAG: ${{ steps.decide.outputs.tag }}
+        run: |
+          set -euo pipefail
+          : "${COMMIT:?判定の出力に commit が無い}" "${TAG:?判定の出力に tag が無い}"
+          basic=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          echo "::add-mask::$basic"
+          GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic" \
+            git push "https://github.com/${REPO}.git" "${COMMIT}:refs/heads/production"
+          echo "production を ${TAG}（${COMMIT}）へ進めた"

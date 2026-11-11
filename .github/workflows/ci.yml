@@ -170,6 +170,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/playwright
+      # 手元の D1 を tmpfs に置き、ディスクの fsync 待ちでサーバーごと止まるのを避ける（#1149）
+      - uses: ./.github/actions/local-d1-tmpfs
       # 割り当ては scripts/e2e-shard.ts（ファイルごとの重みで割る）。FILES=$(...) の失敗（不正な引数、空のシャード）は -e で止める。
       # ファイル引数なしの e2e-run normal/dev は全件を走らせるので、割り当てスクリプトが空なら非 0 で落とす
       - run: |
@@ -207,6 +209,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/playwright
+      # 手元の D1 を tmpfs に置き、ディスクの fsync 待ちでサーバーごと止まるのを避ける（#1149）
+      - uses: ./.github/actions/local-d1-tmpfs
       # 割り当ては scripts/e2e-shard.ts（ファイルごとの重みで割る）。FILES=$(...) の失敗（不正な引数、空のシャード）は -e で止める。
       # ファイル引数なしの e2e-run normal/dev は全件を走らせるので、割り当てスクリプトが空なら非 0 で落とす
       - run: |
@@ -256,6 +260,8 @@ jobs:
 
       - if: steps.count.outputs.run == 'true'
         uses: ./.github/actions/playwright
+      - if: steps.count.outputs.run == 'true'
+        uses: ./.github/actions/local-d1-tmpfs
       # ファイルが少ないとテストの無いシャードができるので、--pass-with-no-tests を付ける
       - if: steps.count.outputs.run == 'true'
         run: >-

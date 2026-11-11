@@ -572,7 +572,8 @@
       `<input class="input" id="${id}" data-draft="${kind}:${key}" placeholder="${esc(placeholder ?? `${label}（題を打って Enter）`)}" autocomplete="off" enterkeyhint="done"></div>`;
   }
   // 属性のチップ。タスクの属性（期日、リポジトリ、区分、ポイント、担当）を、行のチップを押して後から決める。値がなければ薄い破線の形（未設定）。
-  // 押すと値の一覧（行の「⋯」と同じメニュー）が開き、選ぶと見本の中で保存する
+  // 押すと値の一覧（行の「⋯」と同じメニュー）が開き、選ぶと見本の中で保存する。押せるチップは題の後ろに下向きの山形を置く。
+  // opts.bare は、スプリントのカード（本番の SprintCard は AttrChip を使わない）の見た目を変えないため、包みの規則（.attr-chip）と山形を付けない
   let attrChipSequence = 0;
   function attrChip(x, name, opts = {}) {
     const isPts = name === "pts", isWho = name === "who";
@@ -594,21 +595,21 @@
     const state = opts.state || "ready";
     const pending = state === "loading" ? `<li role="none"><button class="menu-item" type="button" role="menuitem" aria-disabled="true">${t("loading")}</button></li>` : `<li role="none"><button class="menu-item" type="button" role="menuitem" data-chip-retry>${t("assigneeCandidatesFailed").replace("{assignee}", t("assignee"))}。${t("retry")}</button></li>`;
     const reasonId = `chip-reason-${x.id}-${name}-${++attrChipSequence}`;
-    return `<span class="row-menu attr-chip${isPts ? " is-points" : ""}">${isWho && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked ? `${shown} — ${locked}` : shown)}"><span class="chip-text">${esc(shown)}</span>${locked || !opts.proposal ? "" : icon("chevron")}</button>` +
+    return `<span class="row-menu${opts.bare ? "" : ` attr-chip${isPts ? " is-points" : ""}`}">${isWho && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked ? `${shown} — ${locked}` : shown)}"><span class="chip-text">${esc(shown)}</span>${locked || opts.bare ? "" : icon("chevron")}</button>` +
       (locked ? `<span class="visually-hidden" id="${reasonId}">${locked}</span>` : `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" aria-busy="${state === "loading"}"${state === "failed" ? ` data-ready-items="${esc(items)}"` : ""} hidden>${state === "ready" ? items : pending}</ul>`) + `</span>`;
   }
 
-  // 本番へ移す前に人が確認する状態の見本。実データと混ぜず、値の選択もこの領域だけで終える。
+  // 行のチップの状態の見本（本番の AttrChip と同じ形）。実データと混ぜず、値の選択もこの領域だけで終える。
   function attrChipExamples() {
     const left = Object.keys(D.users).find((id) => D.users[id].left);
     const example = { id: "preview", who: left, pts: 5 };
-    return `<details class="attr-chip-examples"><summary>行のチップの状態と見た目の案（本番への反映前）</summary><div class="book">` +
+    return `<details class="attr-chip-examples"><summary>行のチップの状態</summary><div class="book">` +
       [["locked", "完了した行", { ...example, doneAt: "2026-11-01" }, {}],
        ["loading", "候補の読み込み中", example, { state: "loading" }],
        ["failed", "候補の読み込み失敗（もう一度試すで復帰）", example, { state: "failed" }],
        ["left", "離脱済みの担当", example, {}],
        ["long", "長い名前・320px・文字150%", example, { text: "長い担当名を持つメンバーの名前を省略して表示する見本" }]]
-      .map(([key, title, x, opts]) => `<div class="entry" data-chip-example="${key}"><span>${title}</span><div class="entry-end">${attrChip({ ...x, id: `preview-${key}` }, "pts", { proposal: true })}${attrChip({ ...x, id: `preview-${key}` }, "who", { ...opts, proposal: true })}</div></div>`).join("") + `</div></details>`;
+      .map(([key, title, x, opts]) => `<div class="entry" data-chip-example="${key}"><span>${title}</span><div class="entry-end">${attrChip({ ...x, id: `preview-${key}` }, "pts")}${attrChip({ ...x, id: `preview-${key}` }, "who", opts)}</div></div>`).join("") + `</div></details>`;
   }
 
   // 行の先頭のつまみ（飾りで、aria-hidden）。order を渡した行（書き込めるとき）だけに付く。
@@ -820,7 +821,7 @@
       ${parent ? `<span class="card-parent">${icon("flag")} ${esc(parent)}</span>` : ""}
       <a class="card-title" id="card-${k}${x.id}-title" href="#" data-task="${x.id}" draggable="false">${titleOf(x)}</a>
       <div class="card-meta">${repoTag(x)}${sourceKey(x)}${taskFlags(x)}${taskDue(x)}</div>
-      <div class="card-foot">${order ? attrChip(x, "pts") : pts(x.pts)}${order ? attrChip(x, "who") : avatarOf(x.who)}<span class="card-end">${order ? rowMenu(x.title, [
+      <div class="card-foot">${order ? attrChip(x, "pts", { bare: true }) : pts(x.pts)}${order ? attrChip(x, "who", { bare: true }) : avatarOf(x.who)}<span class="card-end">${order ? rowMenu(x.title, [
         { attr: `data-sun="${x.id}"`, label: x.todayOn === D.today ? "今日やるを外す" : "今日やる", icon: "sun" },
         ...orderItems(order),
         { attr: `data-task-delete="${x.id}"`, label: `この${t("task")}を削除する`, icon: "trash", danger: true },
@@ -2925,6 +2926,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     else if (navSearch.input() && !ev.target.closest(".nav-search")
       && (!document.getElementById("nav-search-list").hidden || document.getElementById("nav-search-box").hasAttribute("data-open"))) navSearch.close(false);
   });
+  // 横送りの中の属性のチップ（.attr-chip）は、フォーカスしたら全体が見えるまで送る。一部だけ見えているチップは、ブラウザがフォーカスで送らず、フォーカスの輪が切れるため（本番の AttrChip と同じ）
+  document.addEventListener("focusin", (ev) => {
+    const chip = ev.target.closest && ev.target.closest(".attr-chip > .chip-btn") && ev.target.closest(".attr-chip");
+    if (chip) chip.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
   // 開いた欄から虫眼鏡を押してもフォーカスを動かさない（欄の外へのフォーカスで先に畳み、click で開き直すのを防ぐ）
   document.addEventListener("mousedown", (ev) => {
     if (!ev.target.closest) return;
@@ -3046,8 +3052,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }).join("");
   }
   // 全画面の起票の見本。属性は横に送り、種類を替えても題と本文を保つ。
-  function createSheetChip(label, values) {
-    return `<span class="row-menu"><button class="chip chip-btn is-unset" type="button" data-row-menu data-create-chip="${esc(label)}" aria-label="${esc(label)}: 未設定" aria-haspopup="menu" aria-expanded="false"><span class="chip-text">${esc(label)}</span></button><ul class="account-menu-list row-menu-list" role="menu" aria-label="${esc(label)}を選ぶ" hidden>${["なし", ...values].map((text, index) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${index === 0}" data-create-option>${esc(text)}</button></li>`).join("")}</ul></span>`;
+  // 本番の CreateSheet も行と同じ AttrChip を使うので、包み（.attr-chip）と山形を付ける。ポイントは等幅の書体（.is-points）
+  function createSheetChip(label, values, points = false) {
+    return `<span class="row-menu attr-chip${points ? " is-points" : ""}"><button class="chip chip-btn is-unset" type="button" data-row-menu data-create-chip="${esc(label)}" aria-label="${esc(label)}: 未設定" aria-haspopup="menu" aria-expanded="false"><span class="chip-text">${esc(label)}</span>${icon("chevron")}</button><ul class="account-menu-list row-menu-list" role="menu" aria-label="${esc(label)}を選ぶ" hidden>${["なし", ...values].map((text, index) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${index === 0}" data-create-option>${esc(text)}</button></li>`).join("")}</ul></span>`;
   }
   // 本番の markdown-toolbar.ts と同じ行単位の書き換え。
   function toolbarEdit(value, from, to, format) {
@@ -3144,11 +3151,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
           <div class="create-sheet-attrs" data-create-task>
             ${createSheetChip(t("taskParent").replace("{story}", t("story")), ["架空の親ストーリー"])}
             ${createSheetChip(t("assignee"), ["架空の担当"])}
-            ${createSheetChip(t("points"), [0,1,2,3,5,8,13].map(String))}
+            ${createSheetChip(t("points"), [0,1,2,3,5,8,13].map(String), true)}
           </div>
           <div class="create-sheet-attrs" data-create-story hidden>
             ${createSheetChip(t("epic"), ["架空のエピック"])}
-            <span class="row-menu"><button class="chip chip-btn is-unset" type="button" data-row-menu aria-haspopup="dialog" aria-expanded="false" aria-label="${t("due")}: 未設定"><span class="chip-text">${t("due")}</span></button><div class="account-menu-list row-menu-list attr-panel" role="dialog" aria-label="${t("due")}" hidden><label class="field"><span class="field-label">${t("due")}</span><input class="input" type="date" data-create-due></label><button class="btn" type="button" data-create-due-clear>${t("dueClear")}</button><button class="btn" type="button" data-create-due-close>${t("close")}</button></div></span>
+            <span class="row-menu attr-chip"><button class="chip chip-btn is-unset" type="button" data-row-menu aria-haspopup="dialog" aria-expanded="false" aria-label="${t("due")}: 未設定"><span class="chip-text">${t("due")}</span>${icon("chevron")}</button><div class="account-menu-list row-menu-list attr-panel" role="dialog" aria-label="${t("due")}" hidden><label class="field"><span class="field-label">${t("due")}</span><input class="input" type="date" data-create-due></label><button class="btn" type="button" data-create-due-clear>${t("dueClear")}</button><button class="btn" type="button" data-create-due-close>${t("close")}</button></div></span>
           </div>
         </div>
       </form>
