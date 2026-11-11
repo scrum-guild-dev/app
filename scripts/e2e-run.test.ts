@@ -173,7 +173,13 @@ describe('CI とクラウドで共有する e2e の実行', () => {
       ['e2e-dev', 'dev'],
       ['e2e-repeat', 'repeat'],
     ]) {
-      assert.ok(workflow.jobs[job!]!.steps.some((step) => step.run?.includes(`node scripts/e2e-run.ts ${mode}`)));
+      const steps = workflow.jobs[job!]!.steps;
+      const run = steps.findIndex((step) => step.run?.includes(`node scripts/e2e-run.ts ${mode}`));
+      assert.ok(run >= 0);
+      // 手元の D1 を tmpfs に置く段は、wrangler を動かす e2e より前に、実行と同じ条件で置く（#1149）
+      const tmpfs = steps.findIndex((step) => step.uses === './.github/actions/local-d1-tmpfs');
+      assert.ok(tmpfs >= 0 && tmpfs < run, `${job} に local-d1-tmpfs が e2e の前に無い`);
+      assert.equal(steps[tmpfs]!.if, steps[run]!.if, `${job} の local-d1-tmpfs の条件が e2e の実行と違う`);
     }
     const repeat = workflow.jobs['e2e-repeat']!.steps;
     assert.ok(repeat.some((step) => step.run?.includes('node scripts/e2e-repeat-count.ts $REPEAT_FILES')));
