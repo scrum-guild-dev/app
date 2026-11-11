@@ -271,14 +271,13 @@ test('外の手段のボタンと注記は詰めて並び、会員登録のま�
   expect(gapButtons).toBeLessThan(gapLeadToButtons);
   expect(gapToNote).toBeLessThan(gapLeadToButtons);
   expect(gapToFoot).toBeGreaterThan(gapLeadToButtons);
-  // 紙の下のまとまりの中は詰めない。狭い幅で小さいボタンの押せる範囲（44px）が上下に広がり、18px 未満だと会員登録と利用規約が重なる
-  await page.setViewportSize({ width: 390, height: 900 });
+  // 紙の下のまとまりの中は詰めない。狭い幅で小さいボタンの押せる範囲（44px）が上下に広がるので、
+  // 見た目の間隔でなく、押せる範囲が隣（会員登録、利用規約、プライバシーポリシー）に取られないことを点を突いて確かめる
   const terms = page.getByRole('link', { name: '利用規約', exact: true });
-  const [footSignup, termsBox] = await Promise.all([signup.boundingBox(), terms.boundingBox()]);
-  if (!footSignup || !termsBox) throw new Error('紙の下のリンクが見えない');
-  expect(termsBox.y - (footSignup.y + footSignup.height)).toBeGreaterThanOrEqual(18);
   expect(await signup.evaluate((el) => el.closest('.gate-foot') !== null)).toBe(true);
   expect(await terms.evaluate((el) => el.closest('.gate-foot') !== null)).toBe(true);
+  await page.setViewportSize(NARROW_VIEWPORT);
+  expect(await findTargetSizeViolations(page)).toEqual([]);
 });
 
 test('GitHub のボタンは GitHub のマークを文字の色で出し、紙の上端の線は操作の色にしない', async ({ page }) => {
