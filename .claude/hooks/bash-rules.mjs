@@ -609,7 +609,8 @@ const MAIN_REF = /\/git\/refs\/heads\/main(?![\w.-]|\/[^\s?#])/;
 const PRODUCTION_REF = /\/git\/refs\/heads\/production(?![\w.-]|\/[^\s?#])/;
 const RELEASE_TAG_REF = /\/git\/refs\/tags\/v/;
 // repos/<owner>/<repo>/releases の宛先（URL の形も）。リポジトリや組織の名前が releases のもの（repos/o/releases/issues）は当てない
-const RELEASES_PATH = /(?:^|[\s/])repos\/[^/\s]+\/[^/\s]+\/releases(?![\w-])/;
+// repositories/<数値の ID>/releases も同じ資源
+const RELEASES_PATH = /(?:^|[\s/])(?:repos\/[^/\s]+\/[^/\s]+|repositories\/[^/\s]+)\/releases(?![\w-])/;
 
 // 展開より前の字面で資源の種類が決まる宛先か（repos/o/r/issues/$n/comments は issues、repos/o/r/git/refs/$x は git/refs）。
 // repos/$R/… や repos/o/r/$kind/… のように、種類が展開で決まるものは決まらない。種類は repos/<owner>/<repo>/<種類>/ の種類で、
@@ -676,7 +677,9 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
     // 本文を読めない（--input のファイル、curl -d @ファイル）と、どの ref を作るかを判定できない
     // 作るのは POST git/refs だけで、名前は本文にある（PATCH と DELETE は名前が宛先にある）
     const creates = /\/git\/refs(?:$|[\s?#])/.test(path) && method !== 'PATCH' && method !== 'DELETE';
-    if (creates && (unreadable || /[$`]/.test(refText) || (refText === '' && bodies.some(({ literal }) => !literal)))) return [ASK, 'ref を作る本文を読めず、production や v* のタグを作るかを判定できない。本文は引数かヒアドキュメントで字面を渡す。人が確かめる'];
+    // -F ref=@ファイル は値を読めず、名前が展開で決まるフィールド（-f "$X"）は ref になりうる
+    const opaqueField = fields.some((f) => hasExpansion(f.split('=')[0]) || /^ref=@/.test(f));
+    if (creates && (unreadable || opaqueField || /[$`]/.test(refText) || (refText === '' && bodies.some(({ literal }) => !literal)))) return [ASK, 'ref を作る本文を読めず、production や v* のタグを作るかを判定できない。本文は引数かヒアドキュメントで字面を渡す。人が確かめる'];
     // %2F、.、..、// を挟むと、字面の判定（heads/main、heads/production、tags/v）を外れうる
     if (/%2f|\/\.{1,2}(\/|$|[\s?#])|\/\/[^\s]/i.test(path.replace(/^[a-z][a-z0-9+.-]*:\/\//i, ''))) {
       return [ASK, 'ref の宛先に %2F、.、..、// があり、main、production、v* のタグかを字面で判定できない。人が確かめる'];
@@ -687,6 +690,8 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
   // Release の作成（POST repos/<o>/<r>/releases）、編集と publish（PATCH releases/<id>）、削除と資産の書き込み。
   // generate-notes は本文を作るだけで Release を書き換えない。uploads.github.com の資産の書き込みも Release の書き込み
   if (RELEASES_PATH.test(path) && !/\/releases\/generate-notes(?:$|[\s?#])/.test(path)) return [DENY, RELEASE_REASON];
+  // repos/$R/releases のように、展開で資源の位置がずれうる宛先に releases があれば、Release の書き込みかを判定できない
+  if (isDynamic(path) && /\/releases(?![\w-])/.test(path)) return [ASK, 'Release の宛先を展開で渡すと、Release を書き換えるかを判定できない。人が確かめる'];
   // contents API の書き込みは、ブランチを指定しなければ既定のブランチ（main）へ直にコミットする
   if (/\/contents\//.test(path)) return [DENY, 'contents API でのファイルの書き込みはしない。作業ブランチで git を使う'];
   return null;

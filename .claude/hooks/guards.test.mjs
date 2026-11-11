@@ -6247,3 +6247,18 @@ describe('production と Release: すり抜けと誤検知', () => {
     test(`[${kind}] ${command} は ${expected}`, () => assert.equal(decision(command), expected, command));
   }
 });
+
+// AI レビューで見つかったすり抜け（#1164、PR #1173）
+describe('production と Release: 宛先と ref を読めない形', () => {
+  for (const [command, expected] of [
+    ['gh api -X POST repos/$R/releases -f tag_name=v9.9.9 -F draft=false', 'ask'],
+    ['gh api -X POST "repos/${REPO}/releases" -f tag_name=v9.9.9', 'ask'],
+    ['gh api -X POST repositories/123/releases -f tag_name=v9.9.9', 'deny'],
+    ['gh api -X PATCH repositories/123/releases/1 -F draft=false', 'deny'],
+    ['gh api -X POST repos/o/r/git/refs -F ref=@r.txt -f sha=abc', 'ask'],
+    ['gh api -X POST repos/o/r/git/refs -f "$X" -f sha=abc', 'ask'],
+    ['gh api repos/$R/releases', 'allow'],
+  ]) {
+    test(`${command} は ${expected}`, () => assert.equal(decision(command), expected, command));
+  }
+});
