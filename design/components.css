@@ -117,7 +117,7 @@ h1, h2, h3 { text-wrap: balance; }
 /* アイコンだけのボタンに、目で読める名前を横に浮かせる札。読み上げはボタンの aria-label が受け持つので、札は aria-hidden */
 .nav-tip { display: none; }
 
-.nav { display: grid; gap: 1px; }
+.nav { display: grid; gap: 2px; }
 .nav-group { font-size: var(--text-xs); color: var(--color-muted); letter-spacing: var(--tracking-label); padding: var(--space-2) var(--space-2) var(--space-1); }
 .nav-item {
   position: relative;
@@ -996,7 +996,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     .mobile-tab[aria-current="page"]::after { background: CanvasText; forced-color-adjust: none; }
   }
   .mobile-menu .icon-btn { min-width: 44px; min-height: 44px; }
-  .mobile-menu .nav { display: grid; gap: 1px; overflow: visible; width: auto; }
+  .mobile-menu .nav { display: grid; gap: 2px; overflow: visible; width: auto; }
   .mobile-menu .nav-group { display: block; }
   .mobile-menu .nav-favorites { display: grid; }
   .mobile-menu .nav-item { white-space: normal; min-width: 44px; min-height: 44px; }
@@ -1377,7 +1377,6 @@ label.pick-row:hover { background: var(--color-accent-soft); }
  * （any-pointer: coarse）は、押せる範囲 44px のための余白を残して詰めない。
  * どのテーマでも同じ。上の各部品の規則より後ろに置く（同じ詳細度なので、後ろが勝つ） */
 @media (min-width: 761px) and (pointer: fine) and (not (any-pointer: coarse)) {
-  .nav { gap: 2px; }
   .nav-item { padding-block: 4px; }
   .content { gap: var(--space-6); }
   .page-head { padding-bottom: var(--space-4); }
