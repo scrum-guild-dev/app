@@ -12,25 +12,24 @@ export type GitResult = { status: number; stdout: string; stderr: string };
 export type Git = (args: string[]) => GitResult;
 export type ReleaseVersion = { ok: true; version: string } | { ok: false; reason: string };
 
-function parts(tag: string): [number, number, number] {
-  const match = RELEASE_TAG.exec(tag)!;
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+// 安全な整数を超える成分は、比べると並びで結果が変わるので版にしない（現実の番号では起きない）
+function parts(tag: string): [number, number, number] | undefined {
+  const match = RELEASE_TAG.exec(tag);
+  if (!match) return undefined;
+  const numbers: [number, number, number] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  return numbers.every(Number.isSafeInteger) ? numbers : undefined;
 }
 
 // タグの並びから最大の版を返す。形の違うタグは無視し、1つも無ければ undefined
 export function latestReleaseTag(tags: readonly string[]): string | undefined {
-  let best: string | undefined;
+  let best: { tag: string; parts: [number, number, number] } | undefined;
   for (const tag of tags) {
-    if (!RELEASE_TAG.test(tag)) continue;
-    if (best === undefined) {
-      best = tag;
-      continue;
-    }
-    const [a, b] = [parts(tag), parts(best)];
-    const diff = a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
-    if (diff > 0) best = tag;
+    const a = parts(tag);
+    if (!a) continue;
+    const b = best?.parts;
+    if (!b || (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) > 0) best = { tag, parts: a };
   }
-  return best;
+  return best?.tag;
 }
 
 function tagsAtHead(git: Git): { ok: true; tags: string[] } | { ok: false; reason: string } {
@@ -68,13 +67,24 @@ export function resolveReleaseVersion(git: Git): ReleaseVersion {
 // origin への通信が止まってもビルドの時間切れまで待たないよう、1回の git を打ち切る。認証を聞いて待たない
 export const GIT_TIMEOUT_MS = 60_000;
 
-export const spawnGit: Git = (args) => {
-  const result = spawnSync('git', args, {
+type GitSpawnOptions = {
+  stdio: ['ignore', 'pipe', 'pipe'];
+  encoding: 'utf8';
+  timeout: number;
+  env: Record<string, string | undefined>;
+};
+
+export function gitSpawnOptions(env: Record<string, string | undefined> = process.env): GitSpawnOptions {
+  return {
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
     timeout: GIT_TIMEOUT_MS,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-  });
+    env: { ...env, GIT_TERMINAL_PROMPT: '0' },
+  };
+}
+
+export const spawnGit: Git = (args) => {
+  const result = spawnSync('git', args, gitSpawnOptions());
   if (result.error) return { status: 1, stdout: '', stderr: result.error.message };
   return { status: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 };

@@ -281,13 +281,13 @@ describe('deploy', () => {
     const switched = statusOf([{ version_id: 'version-new', percentage: 100 }]);
     const f = fake({ wrangler: { deploy: fail() }, statuses: [status100, status100, switched] });
     assert.equal(await deploy(f.deps), 1);
-    assert.deepEqual(lastCall(f), ['rollback', CURRENT]);
+    assert.deepEqual(f.calls.at(-1), ['rollback', CURRENT, '--message', `デプロイの失敗で ${VERSION} から戻す`]);
   });
 
   test('wrangler deploy が落ち、切り替わったか確かめられなければ、控えた版へ戻す', async () => {
     const f = fake({ wrangler: { deploy: fail() }, statuses: [status100, status100, fail('network')] });
     assert.equal(await deploy(f.deps), 1);
-    assert.deepEqual(lastCall(f), ['rollback', CURRENT]);
+    assert.deepEqual(f.calls.at(-1), ['rollback', CURRENT, '--message', `デプロイの失敗で ${VERSION} から戻す`]);
   });
 
   test('煙のテストに落ちたら、控えた版の ID を指定して戻し、失敗する', async () => {

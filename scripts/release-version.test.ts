@@ -5,7 +5,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from 'node:test';
-import { latestReleaseTag, resolveReleaseVersion, type Git, type GitResult } from './release-version.ts';
+import {
+  GIT_TIMEOUT_MS,
+  gitSpawnOptions,
+  latestReleaseTag,
+  resolveReleaseVersion,
+  type Git,
+  type GitResult,
+} from './release-version.ts';
 
 const ok = (stdout = ''): GitResult => ({ status: 0, stdout, stderr: '' });
 
@@ -40,6 +47,13 @@ describe('latestReleaseTag', () => {
     assert.equal(latestReleaseTag(['v1.2.9', 'v1.2.10']), 'v1.2.10');
   });
 
+  test('安全な整数を超える成分のタグは無視し、並びによらず同じ結果を返す', () => {
+    const big = ['v1.0.9007199254740993', 'v1.0.9007199254740992', 'v0.1.0'];
+    assert.equal(latestReleaseTag(big), 'v0.1.0');
+    assert.equal(latestReleaseTag([...big].reverse()), 'v0.1.0');
+    assert.equal(latestReleaseTag(['v9007199254740991.0.0']), 'v9007199254740991.0.0');
+  });
+
   test('形の違うタグは無視する', () => {
     const others = [
       '0.1.0',
@@ -62,6 +76,19 @@ describe('resolveReleaseVersion', () => {
     const { git, calls } = fakeGit({ tags: ['v0.1.0\n'] });
     assert.deepEqual(resolveReleaseVersion(git), { ok: true, version: 'v0.1.0' });
     assert.deepEqual(calls, [['tag', '--points-at', 'HEAD']]);
+  });
+
+  test('行の前後の空白と CR は除いて読む', () => {
+    assert.deepEqual(resolveReleaseVersion(fakeGit({ tags: ['v0.1.0\r\n'] }).git), { ok: true, version: 'v0.1.0' });
+    assert.deepEqual(resolveReleaseVersion(fakeGit({ tags: [' v0.2.0 \n'] }).git), { ok: true, version: 'v0.2.0' });
+  });
+
+  test('git は時間の上限を付け、認証を聞かずに動かす', () => {
+    const options = gitSpawnOptions({ PATH: '/usr/bin', GIT_TERMINAL_PROMPT: '1' });
+    assert.equal(options.timeout, GIT_TIMEOUT_MS);
+    assert.ok(GIT_TIMEOUT_MS > 0 && GIT_TIMEOUT_MS <= 120_000);
+    assert.equal(options.env.GIT_TERMINAL_PROMPT, '0');
+    assert.equal(options.env.PATH, '/usr/bin');
   });
 
   test('複数のタグが HEAD を指せば最大の版を返し、形の違うタグは無視する', () => {
