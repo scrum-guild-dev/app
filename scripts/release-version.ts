@@ -65,8 +65,16 @@ export function resolveReleaseVersion(git: Git): ReleaseVersion {
   };
 }
 
+// origin への通信が止まってもビルドの時間切れまで待たないよう、1回の git を打ち切る。認証を聞いて待たない
+export const GIT_TIMEOUT_MS = 60_000;
+
 export const spawnGit: Git = (args) => {
-  const result = spawnSync('git', args, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+  const result = spawnSync('git', args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    timeout: GIT_TIMEOUT_MS,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+  });
   if (result.error) return { status: 1, stdout: '', stderr: result.error.message };
   return { status: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 };

@@ -69,7 +69,12 @@ Workers & Pages の「Create application」→「Continue with GitHub」で、�
 見本の Worker も移管先のリポジトリを参照し、Git 連携のエラーが無いことと、既存のコマンド・監視パス・トークンの選択が維持されていることを確認した。
 本番の `/api/health` は `status: ok`、`database: ok`、版 `0ffa585f7e3ea2e1d0d10357227e1dfc3ea85f92` のまま。再接続後の実際のビルドは、次の `main` への反映で確認する。
 
-#1165 で、本番の Worker の Builds のブランチを `main` から `production` に替え、版をコミットの SHA から Release のタグ（`vX.Y.Z`）に替える（下の「出し方」）。`production` を進めるのは Release のワークフローだけ（`docs/development.md` の「リリース」）。替えるときは「Disable builds」を挟み、ブランチ、ビルドのコマンド、build watch paths を下の表の値にしてから有効に戻す。替えるのは、`refs/tags/v*` の作成・更新・削除を管理者に絞る Ruleset が入っていることを確かめた後（#1164 の申し送り。Environment `release` が縛るのはジョブの ref だけで、タグを作れる人は Release のワークフローの YAML を差し替えられるため）。
+#1165 で、本番の Worker の Builds のブランチを `main` から `production` に替え、版をコミットの SHA から Release のタグ（`vX.Y.Z`）に替える（下の「出し方」）。`production` を進めるのは Release のワークフローだけ（`docs/development.md` の「リリース」）。替えるときは「Disable builds」を挟み、ブランチ、ビルドのコマンド、build watch paths を下の表の値にしてから有効に戻す。替えるのは、次の2つの Ruleset が入っていることを確かめた後。
+
+- `refs/tags/v*` の作成・更新・削除を管理者に絞る（#1164 の申し送り。Environment `release` が縛るのはジョブの ref だけで、タグを作れる人は Release のワークフローの YAML を差し替えられるため）
+- `refs/heads/production` の更新を Release の GitHub App だけに許し（bypass をその App だけにする）、削除と force push を禁じる。Workers Builds は `production` のコミットの中のスクリプト（`scripts/release-version.ts`、`scripts/deploy.ts`）でビルドとデプロイをするので、デプロイのスクリプトのタグの検査は手違いを止める踏み線にすぎず、`production` を直に動かせる人は Release を経ないコードや古い版を本番に出せるため
+
+切り替えは「ダッシュボードの切り替え → #1165 の PR のマージ → v0.1.0 の publish」の順にする。先にマージすると、`main` を見たままの Workers Builds がタグの無い HEAD でビルドを始め、本番に触らずに失敗するビルドが残るため。
 
 | 項目 | 値 |
 | --- | --- |
@@ -83,7 +88,8 @@ Workers & Pages の「Create application」→「Continue with GitHub」で、�
 
 - Node の版は `.node-version`、pnpm の版は `package.json` の `packageManager` から入る（2026-10-25 に確かめた）
 - デプロイのスクリプトは、Workers Builds が入れる `WORKERS_CI=1` が無いか、HEAD を指す `vX.Y.Z` のタグが無いか、`git rev-parse HEAD` でコミットの SHA を取れないと、本番に触らずに止まる。`WORKERS_CI=1` と `git rev-parse HEAD` がデプロイのコマンドで使えることを、2026-10-25 のビルド `ab64e8c1` で確かめた
-- 版は `scripts/release-version.ts` が、HEAD を指す `vX.Y.Z` のタグから決める（複数あれば最大の版、形の違うタグは無視）。checkout にタグが無ければ `git fetch --tags origin` で取ってから読み直す。ビルドのコマンドとデプロイのスクリプトが同じ関数を使う。Workers Builds の checkout でタグを読めるか（そのまま読めるか、`fetch` が要るか）は、v0.1.0 の最初のビルドのログで確かめる
+- 版は `scripts/release-version.ts` が、HEAD を指す `vX.Y.Z` のタグから決める（複数あれば最大の版、形の違うタグは無視）。checkout にタグが無ければ `git fetch --tags origin` で取ってから読み直す。ビルドのコマンドとデプロイのスクリプトが同じ関数を使う。Workers Builds の checkout でタグを読めるか（そのまま読めるか、`fetch` が要るか）は、#1165 の時点で確かめていない（人が決めた）。v0.1.0 の最初のビルドのログで確かめる。どちらでも読めずにビルドが止まったときは、本番は前の版のまま。Builds を「Disable builds」を挟んでブランチ `main`、ビルドのコマンド `APP_VERSION=$(git rev-parse HEAD) && export APP_VERSION && pnpm build` に戻すかを相談する（戻すなら、デプロイのスクリプトも SHA を受ける版に戻す PR が要る）
+- 同じコミットを指す `vX.Y.Z` のタグが複数あると、最大の版が本番の版になる。publish したタグより大きいタグ（プレリリースで打ったものを含む）が同じコミットにあると、版がそちらに化けるので、正式な版は前に打ったどのタグより大きい番号で publish する
 - Create application で作ると、Cloudflare が Worker を作るときに初期の版を出す。最初のデプロイは「戻し先無し」にならず、この版を戻し先として控える（2026-10-25 は `56208d33`）。初期の版はこのリポジトリのコードではない
 - 作った直後に `main` のビルドが1回走る。この初回のビルドは手で動かしたビルドの扱いになる
 - ビルドのコマンドは、版を決められなければビルドを始めない。`APP_VERSION=$(...) pnpm build` の1行ではコマンドの失敗が無視され、画面の版が `dev` のまま出るため
@@ -626,7 +632,7 @@ Wiki、お気に入り（`favorites`）、依頼先（`delegatees`）の表を�
 
 残る危険（受け入れた）: `message` の伏せ方は、引用符、区切り（`: `、` in `）、英字でない文字を目印にする。英字だけの値（人の名前や英単語のパスワードなど）が、引用符の外で、区切りに当たらない位置に入る文言は、伏せられずに残りうる。ログを読めるのは運用者（Cloudflare のアカウントのメンバー）だけ。読んだ行を Issue などに貼るときは、`message` に利用者の値が残っていないかを見てから貼る。
 
-元の位置へ戻す: `file` は build で圧縮したファイルなので、`clientVersion` の版を手元で同じに build し、ソースマップで元のファイルと行に戻す。`clientVersion` が `vX.Y.Z` なら、そのタグ（`git fetch --tags origin` の後の `vX.Y.Z`）を下の `<SHA>` の代わりに使う。
+元の位置へ戻す: `file` は build で圧縮したファイルなので、`clientVersion` の版を手元で同じに build し、ソースマップで元のファイルと行に戻す。`clientVersion` は画面が送る値なので、`vX.Y.Z` の形か16進の SHA であることを確かめてから使う（`-` で始まる値やブランチ名を git に渡さない）。`vX.Y.Z` なら、そのタグを完全な名前（`refs/tags/vX.Y.Z`）で下の `<版か SHA>` に使う。
 
 1. その版のワークツリーを切る: `git fetch --tags origin && git worktree add worktrees/client-error-<版か SHA の先頭7字> <版か SHA>`。切ったワークツリーで `pnpm install`
 2. 本番と同じ版で、ソースマップを出して build する: `APP_VERSION=<clientVersion の値> pnpm exec vite build --sourcemap hidden`。`hidden` は JS に参照を足さないので、出る JS は本番と同じ（2026-10-27 に確かめた）。`build<file>` があることを確かめる。無ければ版か依存が違う

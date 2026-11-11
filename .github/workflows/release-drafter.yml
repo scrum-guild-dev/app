@@ -1,7 +1,7 @@
 name: release-drafter
 
 # main へのマージで下書きの Release を作り直し、PR のタイトルの種別でラベルを付ける（docs/development.md の「リリース」）。
-# 下書きを作るだけで publish はしない。本番の出し方（main への push で Workers Builds が出す）は変わらない。
+# 下書きを作るだけで publish はしない。本番に出すのは人の publish で、Release のワークフローが production を進め、Workers Builds が出す（#1165）。
 # label.yml に混ぜない。label はマージの判定に使うチェックで、リリースの道具の不調で落ちるとマージが止まるため
 on:
   push:

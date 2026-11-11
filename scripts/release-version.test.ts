@@ -107,18 +107,25 @@ describe('resolveReleaseVersion', () => {
 describe('release-version.ts を直に動かす', () => {
   const script = fileURLToPath(new URL('./release-version.ts', import.meta.url));
 
+  // GIT_DIR などを継いでいると、使い捨てではなく呼び出し元のリポジトリを書き換えるので外す
+  const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+
   // 使い捨ての git のリポジトリで、ビルドのコマンドと同じように動かす。origin は持たない
   function repo(setup: (git: (...args: string[]) => void) => void) {
     const dir = mkdtempSync(path.join(tmpdir(), 'release-version-'));
     const git = (...args: string[]) => {
-      const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+      const result = spawnSync('git', ['-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', ...args], {
+        cwd: dir,
+        encoding: 'utf8',
+        env: cleanEnv,
+      });
       assert.equal(result.status, 0, result.stderr);
     };
     git('init', '-q');
     git('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'first');
     setup(git);
     try {
-      return spawnSync(process.execPath, [script], { cwd: dir, encoding: 'utf8' });
+      return spawnSync(process.execPath, [script], { cwd: dir, encoding: 'utf8', env: cleanEnv });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
