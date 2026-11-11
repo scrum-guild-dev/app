@@ -69,16 +69,16 @@ const RELEASE_TOOL = /(^|_)(releases?|tags?)(_|$)/;
 // refs/heads/ と heads/ は外す。判定できない形なら undefined
 function branchName(value) {
   if (typeof value !== 'string') return undefined;
-  // 先頭の / は外してから見る（//production も production とみなす）
-  const name = value.trim().toLowerCase().replace(/^\/+/, '');
-  // 制御文字、パーセントエンコード、\、. と .. の区切り、// は、字面の判定を外れうる
-  if (name === '' || /[\u0000-\u001f\u007f%\\]/.test(name) || /(^|\/)\.\.?(\/|$)|\/\//.test(name)) return undefined;
-  // 先頭の / と、前置きを何段重ねても外す。GitHub は refs/heads//main を refs/heads/main に解くので、/main も main とみなす。
-  // refs/heads/refs/heads/main も main とみなし、止める側に倒す
+  // 続いた / を1つに畳み、先頭の / を外してから見る。GitHub は refs/heads//main を refs/heads/main に解くので、
+  // /main、//production、refs/heads//main も同じ名前とみなし、止める側に倒す
+  const name = value.trim().toLowerCase().replace(/\/{2,}/g, '/').replace(/^\//, '');
+  // 制御文字、パーセントエンコード、\、. と .. の区切りは、字面の判定を外れうる
+  if (name === '' || /[\u0000-\u001f\u007f%\\]/.test(name) || /(^|\/)\.\.?(\/|$)/.test(name)) return undefined;
+  // 前置きを何段重ねても外す（refs/heads/refs/heads/main も main とみなす）
   let short = name;
   for (let prev = ''; prev !== short; ) {
     prev = short;
-    short = short.replace(/^\/+/, '').replace(/^refs\/heads\//, '').replace(/^heads\//, '');
+    short = short.replace(/^refs\/heads\//, '').replace(/^heads\//, '');
   }
   if (short === '') return undefined;
   return short;

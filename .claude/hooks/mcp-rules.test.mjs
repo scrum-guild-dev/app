@@ -94,6 +94,9 @@ describe('judgeMcp', () => {
           '//production',
           '/refs/heads/main',
           '/tags/v1',
+          'heads//production',
+          'refs/heads//main',
+          'refs//heads//main',
         ]) {
           assert.equal(decision(tool, { ...repo, branch }), 'deny', branch);
         }
@@ -106,7 +109,7 @@ describe('judgeMcp', () => {
       });
 
       test('ブランチの名前を字面で読めなければ確かめる', () => {
-        for (const branch of [undefined, null, 42, '', 'produc%74ion', 'refs/heads/./production', 'heads//production', 'a/../production', 'pro\nduction', 'pro\tduction', 'pro\u007fduction', 'x\\y', '/', 'refs/heads/']) {
+        for (const branch of [undefined, null, 42, '', 'produc%74ion', 'refs/heads/./production', 'a/../production', 'pro\nduction', 'pro\tduction', 'pro\u007fduction', 'x\\y', '/', 'refs/heads/']) {
           assert.equal(decision(tool, { ...repo, branch }), 'ask', String(branch));
         }
       });
