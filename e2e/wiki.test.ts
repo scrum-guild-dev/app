@@ -354,6 +354,126 @@ test('同時保存の競合で入力を残し、今の版と見比べてから�
   await other.close();
 });
 
+for (const scope of ['organization', 'workspace'] as const) {
+  test(`${scope}: Wiki の本文は Markdown のエディタで書け、ファイルを落とすか貼ると上げられないと知らせる`, async ({
+    page,
+  }) => {
+    const violations = await watchViolations(page);
+    if (scope === 'organization') {
+      await page.goto('/aoba');
+      await page.locator('.nav-item', { hasText: 'あおば開発の Wiki' }).click();
+      await expect(page).toHaveURL(/\/aoba\/wiki$/);
+    } else {
+      await createWorkspace(page, 'Wikiのエディタ');
+      await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();
+    }
+    const uploads: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().endsWith('/attachment-upload')) uploads.push(request.url());
+    });
+    await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
+    await page.getByLabel('題', { exact: true }).fill(`エディタの手順-${crypto.randomUUID().slice(0, 8)}`);
+    const body = page.getByLabel('本文', { exact: true });
+    const menu = page.getByRole('listbox', { name: 'Markdown を入れる' });
+    // 添付の口は無い
+    await expect(page.locator('.wiki-main .dropzone')).toHaveCount(0);
+
+    // 「/」の小窓で見出しを入れ、一覧は Enter で続く
+    await body.click();
+    await page.keyboard.type('/');
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('準備');
+    await expect(menu).toBeHidden();
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('- 鍵を受け取る');
+    await page.keyboard.press('Enter');
+    await expect(body).toHaveValue('## 準備\n- 鍵を受け取る\n- ');
+
+    // 書式ボタンで、カーソルの行を引用にする
+    await page.keyboard.type('名簿を見る');
+    const toolbar = page.getByRole('group', { name: '本文の書式' });
+    await toolbar.getByRole('button', { name: '箇条書き', exact: true }).click();
+    await expect(body).toHaveValue('## 準備\n- 鍵を受け取る\n名簿を見る');
+    await toolbar.getByRole('button', { name: '引用', exact: true }).click();
+    await expect(body).toHaveValue('## 準備\n- 鍵を受け取る\n> 名簿を見る');
+    await expect(body).toBeFocused();
+
+    // ファイルを落としても貼っても、本文は変わらず、欄の下に知らせる
+    const notice = page.getByRole('alert').filter({ hasText: 'Wiki にはファイルを上げられません。' });
+    for (const kind of ['drop', 'paste'] as const) {
+      const prevented = await body.evaluate((element, kind) => {
+        const data = new DataTransfer();
+        data.items.add(new File(['sample'], '架空の図.png', { type: 'image/png' }));
+        const event =
+          kind === 'paste'
+            ? new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+            : new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true });
+        return !element.dispatchEvent(event);
+      }, kind);
+      expect(prevented).toBe(true);
+      await expect(notice).toBeVisible();
+      await expect(body).toHaveValue('## 準備\n- 鍵を受け取る\n> 名簿を見る');
+      // 続けて書くと知らせは消える
+      await page.keyboard.type('。');
+      await expect(notice).toHaveCount(0);
+      await page.keyboard.press('Backspace');
+    }
+    // 書式ボタンの上（欄の周り）に落としても、ブラウザにファイルを開かせずに知らせる。
+    // 先に「/」の小窓を開いておき、知らせが出た後に小窓から入れても消えることを確かめる（input の無い書き換えの経路）
+    await body.press('ControlOrMeta+End');
+    await page.keyboard.type('\n/');
+    await expect(menu).toBeVisible();
+    const droppedOnToolbar = await toolbar.evaluate((element) => {
+      const data = new DataTransfer();
+      data.items.add(new File(['sample'], '架空の図.png', { type: 'image/png' }));
+      return !element.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
+    });
+    expect(droppedOnToolbar).toBe(true);
+    await expect(notice).toBeVisible();
+    // 出ている間だけ、知らせを欄の説明（aria-describedby）に足す
+    const noticeId = await notice.getAttribute('id');
+    expect(noticeId).toBeTruthy();
+    const describedByNotice = new RegExp(`(^| )${noticeId!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`);
+    await expect(body).toHaveAttribute('aria-describedby', describedByNotice);
+    await expect(menu).toBeVisible();
+    // 「/」の小窓から入れて本文が変わっても消える
+    await page.keyboard.press('Enter');
+    await expect(notice).toHaveCount(0);
+    await expect(body).not.toHaveAttribute('aria-describedby', describedByNotice);
+    await expect(body).toHaveValue('## 準備\n- 鍵を受け取る\n> 名簿を見る\n## ');
+    await body.fill('## 準備');
+
+    // ファイル名の並びだけの文字とファイルは、何も入れずに知らせる。文字も一緒なら、文字の貼り付けに任せて知らせない
+    for (const [text, rejected] of [
+      ['架空の図.png', true],
+      ['表のセルの文字', false],
+    ] as const) {
+      const prevented = await body.evaluate((element, text) => {
+        const data = new DataTransfer();
+        data.setData('text/plain', text);
+        data.items.add(new File(['sample'], '架空の図.png', { type: 'image/png' }));
+        return !element.dispatchEvent(
+          new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+        );
+      }, text);
+      expect(prevented).toBe(rejected);
+      await expect(notice).toHaveCount(rejected ? 1 : 0);
+      await expect(body).toHaveValue('## 準備');
+      if (rejected) {
+        await page.keyboard.type('。');
+        await page.keyboard.press('Backspace');
+      }
+    }
+    expect(uploads).toEqual([]);
+
+    await page.getByRole('button', { name: '保存する', exact: true }).click();
+    await expect(page.getByRole('button', { name: '編集する' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '準備', exact: true })).toBeVisible();
+    expect(await violations()).toEqual([]);
+  });
+}
+
 test('保存前の入力を捨てるときは確かめ、文字数の誤りは欄に示す', async ({ page }) => {
   await createWorkspace(page, 'Wikiの入力確認');
   await page.locator('.nav-item', { hasText: /^Wiki$/ }).click();

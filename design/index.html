@@ -276,7 +276,7 @@ const SECTIONS = [
     ["現在地は背景と枠、aria-currentで示す。各タブは48px四方。", "右の48pxは起票シートを開く丸ボタン。所属先が無いときはバックログと起票を出さない。", "浮きメニューは背景を操作できなくし、Escと外を押すと閉じる。"], ".mobile-navigation .mobile-tabs .mobile-tab / .mobile-menu .mobile-menu-sheet")],
   ["create-sheet", "全画面の起票シート", () => block("create-sheet", "全画面の起票シート", "題・本文・横に送る属性チップでタスクかストーリーを作る。",
     `<button class="btn" type="button" data-create-sheet-open>起票シートを開く</button><p><a href="create-sheet.html?state=loading">読み込み中</a> ／ <a href="create-sheet.html?state=sending">送信中</a> ／ <a href="create-sheet.html?state=error">エラー</a></p>`,
-    ["上の行は固定し、本文と属性を送る。", "題が空の理由、破棄の確認、送信中・失敗の状態を示す。", "本文の下に箇条書き・チェックリスト・コード・引用の44px四方のボタンを置く。書式ボタンは起票シートにだけ出す。"], ".create-sheet .create-sheet-head .create-sheet-body .create-sheet-attrs / .markdown-toolbar")],
+    ["上の行は固定し、本文と属性を送る。", "題が空の理由、破棄の確認、送信中・失敗の状態を示す。", "本文の下に箇条書き・チェックリスト・コード・引用の44px四方のボタンを置く。書式ボタンは起票シートと Wiki の編集の本文にだけ出す。"], ".create-sheet .create-sheet-head .create-sheet-body .create-sheet-attrs / .markdown-toolbar")],
   ["heads", "見出しと集計", () => block("heads", "画面の見出しと集計", "画面の先頭には、見出しと「今気にすること」の件数を置く。画面の主な操作は見出しの右。",
     `${SQ.mobilePageHead("長い画面の名前も丸ボタンの手前で折り返す")}
      ${pageHead(D.todayLabel, SQ.sprintLabel("sp14"), [["", "check", "完了", "4 / 24 pt"], ["is-danger", "alert", `${t("due")}切れ`, 1], ["is-warn", "pen", `${t("detail")} 未記入`, 1], ["is-ok", "check", "取り込み元で完了", 0]], `<button class="btn" type="button">延長する</button>`)}

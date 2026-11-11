@@ -337,6 +337,7 @@ export const dictionary = defineDictionary({
   wikiTitle: '題',
   wikiBody: '本文',
   wikiBodyHint: 'Markdown で書けます。本文は10万字までです。',
+  wikiFilesNotAllowed: 'Wiki にはファイルを上げられません。',
   wikiTitleFromBody: '題は本文の title から取っています。変えるときは本文を直します。',
   wikiTitleInvalid: '題は使えない文字を含めず、1〜100字で入れてください。',
   wikiBodyInvalid: '本文は10万字までです。使えない文字が含まれていないかも確かめてください。',

@@ -28,3 +28,21 @@ test('指定した本文欄だけに、名前を持つ4つの書式ボタンを�
   }
   expect(body.match(/<button[^>]* disabled/g)?.length).toBe(5);
 });
+
+test('添付を切った欄は上げる先を省いて描け、行数を渡せ、ファイルの知らせは落とすか貼るまで出さない', () => {
+  const body = render(MarkdownEditor, {
+    props: {
+      value: 'Wiki の本文',
+      id: 'wiki-body',
+      attachments: false,
+      toolbar: true,
+      rows: 20,
+      filesNotice: 'Wiki にはファイルを上げられません。',
+    },
+  }).body;
+  expect(body).toContain('rows="20"');
+  expect(body).toContain('class="markdown-toolbar"');
+  expect(body).not.toContain('class="dropzone"');
+  expect(body).not.toContain('type="file"');
+  expect(body).not.toContain('Wiki にはファイルを上げられません。');
+});
