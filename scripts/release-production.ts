@@ -3,8 +3,8 @@
 // 依存パッケージを導入せずに動かす。
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
+import { isReleaseTag } from './release-version.ts';
 
-export const VERSION_TAG = /^v\d+\.\d+\.\d+$/;
 const SHA = /^[0-9a-f]{40}$/;
 // 完全な名前で渡す。origin/main のままだと、同じ名前のタグ（refs/tags/origin/main）が先に当たり、main の判定を偽れる
 export const MAIN_REF = 'refs/remotes/origin/main';
@@ -25,7 +25,8 @@ export type Decision = { ok: true; commit: string; from: string } | { ok: false;
 
 export function decide(release: Release, git: Git): Decision {
   // タグの名前は git に渡す前に形で絞る（Release を作れる人なら、任意の名前を付けられる）
-  if (!VERSION_TAG.test(release.tag))
+  // 判定はビルドとデプロイ（scripts/release-version.ts）と同じ関数にする。ずれると production だけが進み、ビルドが版を決められずに止まる
+  if (!isReleaseTag(release.tag))
     return { ok: false, reason: `タグ ${JSON.stringify(release.tag)} が vX.Y.Z の形でない` };
   if (release.draft) return { ok: false, reason: `${release.tag} は下書き（draft）` };
   if (release.prerelease) return { ok: false, reason: `${release.tag} はプレリリース。本番には出さない` };

@@ -49,7 +49,7 @@ Node は `.node-version`（26）、pnpm は `package.json` の `packageManager` 
 - AI レビューの指摘は全件、対応方針と結果を返信し、インラインのスレッドは解決済みを確認して対応完了とする。修正・検査・必要なベース取り込みを済ませ、ローカルのコミットをまとめて1回で push する。指摘ごと・コミットごとに push しない（詳細は `docs/development.md` の「AI レビューへの対応と push」）
 - PR を作ったら、マージされるか閉じるまで監視する（クラウドは `subscribe_pr_activity`）。指摘は直すかを判断して直し、まとめて1回で push して返事をし、インラインは resolve する。`main` とコンフリクトしたらすぐに `sync-base` で取り込む。CI が落ちたら直して成功するまで続け、原因が `main` にあるときはその旨を伝えて止まる（`docs/development.md` の「PR の監視」）
 - ローカルのセッションは e2e を走らせない。クラウドは変更に関わる e2e で修正を確かめ、PR 作成前に対象・理由を指定した `pnpm e2e:preflight` を通す（`e2e:preflight` が Playwright が無いとして終了コード 3 を返したときだけ、e2e を省いて PR を作り、CI で担保する）。変えた画面を開く e2e のテストを差分に足し、PR の CI も通す。落ちたときの直し方は `docs/development.md` の「CI の e2e が落ちたとき」と「開発の流れ」
-- 本番に触らない。`wrangler deploy`、`wrangler versions deploy`、`wrangler rollback`、`--remote` を付けた `wrangler d1` は Cloudflare の Workers Builds だけが実行する
+- 本番に触らない。`wrangler deploy`、`wrangler versions deploy`、`wrangler rollback`、`--remote` を付けた `wrangler d1` は Cloudflare の Workers Builds だけが実行する。本番に出すのは人の Release の publish だけで（`main` へのマージは本番に出ない）、セッションは Release を publish せず、`production` と `v*` のタグを動かさない（`docs/development.md` の「CD」「リリース」）
 - 組織の中の表を読み書きするときは、必ず組織で絞る。共通の表と組織の中の表を結合せず、1回の `batch()` に混ぜない（`docs/data-model.md` の「データベースの分け方」）
 - DB への書き込みは、文を並べて `batch()` で1つのトランザクションとして送る
 - D1 には Kysely の入口（共通の表の入口と、組織を確かめた後の入口）からだけ問い合わせる。まとめて書くときも入口の `batch()` の関数を使う。D1 の binding を直接使わない

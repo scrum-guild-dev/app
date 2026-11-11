@@ -37,7 +37,22 @@ describe('decide', () => {
     assert.deepEqual(decide(published, fakeGit()), { ok: true, commit: B, from: A });
   });
 
-  for (const tag of ['0.1.0', 'v0.1', 'v0.1.0-rc.1', 'v0.1.0 ', 'v01.a.0', 'release-1', '', 'v0.1.0\n', '-v0.1.0']) {
+  for (const tag of [
+    '0.1.0',
+    'v0.1',
+    'v0.1.0-rc.1',
+    'v0.1.0 ',
+    'v01.a.0',
+    'release-1',
+    '',
+    'v0.1.0\n',
+    '-v0.1.0',
+    // ビルド（scripts/release-version.ts）が版にしないタグも断る。通すと production だけが進み、ビルドが止まる
+    'v01.0.0',
+    'v0.01.0',
+    'v0.1.00',
+    'v1.0.9007199254740993',
+  ]) {
     test(`タグ ${JSON.stringify(tag)} は vX.Y.Z の形でないので断る`, () => {
       const decision = decide({ ...published, tag }, fakeGit({ tags: { [tag]: B } }));
       assert.equal(decision.ok, false);

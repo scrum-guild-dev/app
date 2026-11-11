@@ -7,6 +7,7 @@ import { SEED_SESSIONS } from '../seed/sessions.ts';
 import { deploy, PRODUCTION_URL, versionFromHealth, type DeployDeps, type WranglerResult } from './deploy.ts';
 
 const SHA = 'abc1234';
+const VERSION = 'v0.1.0';
 const CURRENT = 'version-current';
 
 const ok = (stdout = ''): WranglerResult => ({ status: 0, stdout, stderr: '' });
@@ -35,6 +36,7 @@ type Fake = {
 // fetchMs は1回の問い合わせにかかる時間
 function fake(options: {
   inWorkersBuilds?: boolean;
+  version?: string | undefined;
   commitSha?: string | undefined;
   wrangler?: Partial<Record<'status' | 'bookmark' | 'apply' | 'deploy' | 'rollback', WranglerResult>>;
   statuses?: WranglerResult[];
@@ -52,7 +54,7 @@ function fake(options: {
   const errors: string[] = [];
   let clock = 0;
   let statusCalls = 0;
-  const versions = options.versions ?? [SHA];
+  const versions = options.versions ?? [VERSION];
   const result: Fake = {
     calls,
     logs,
@@ -64,6 +66,7 @@ function fake(options: {
     clock: () => clock,
     deps: {
       inWorkersBuilds: options.inWorkersBuilds ?? true,
+      version: 'version' in options ? options.version : VERSION,
       commitSha: 'commitSha' in options ? options.commitSha : SHA,
       wrangler: (args) => {
         calls.push(args);
@@ -134,7 +137,7 @@ describe('deploy', () => {
       'deployments status',
     ]);
     assert.deepEqual(f.calls[0], ['deployments', 'status', '--json']);
-    assert.deepEqual(f.calls[2], ['deploy', '--var', `APP_VERSION:${SHA}`, '--message', SHA]);
+    assert.deepEqual(f.calls[2], ['deploy', '--var', `APP_VERSION:${VERSION}`, '--message', `${VERSION} ${SHA}`]);
     // 障害のときに頼るログの行
     assert.ok(f.logs.includes(`戻し先の版: ${CURRENT}`));
     assert.ok(f.logs.some((message) => message.startsWith('煙のテスト: 1回目で版が一致しました')));
@@ -162,7 +165,16 @@ describe('deploy', () => {
     assert.deepEqual(f.calls, []);
   });
 
-  test('版が無いかコミットの SHA の形でなければ、wrangler を1つも呼ばずに失敗する', async () => {
+  test('版が無い（HEAD に Release のタグが無い）か vX.Y.Z の形でなければ、wrangler を1つも呼ばずに失敗する', async () => {
+    for (const version of [undefined, '', 'dev', SHA, '0.1.0', 'v0.1', 'v01.0.0', 'v0.1.0-rc.1', 'v0.1.0 --remote']) {
+      const f = fake({ version });
+      assert.equal(await deploy(f.deps), 1, String(version));
+      assert.deepEqual(f.calls, []);
+      assert.ok(f.errors.some((message) => message.includes('Release のタグ（vX.Y.Z）ではありません')));
+    }
+  });
+
+  test('コミットの SHA が無いか SHA の形でなければ、wrangler を1つも呼ばずに失敗する', async () => {
     for (const commitSha of [undefined, '', 'dev', 'main', 'ABC1234', 'abc12', 'abc1234 --remote']) {
       const f = fake({ commitSha });
       assert.equal(await deploy(f.deps), 1, String(commitSha));
@@ -269,13 +281,13 @@ describe('deploy', () => {
     const switched = statusOf([{ version_id: 'version-new', percentage: 100 }]);
     const f = fake({ wrangler: { deploy: fail() }, statuses: [status100, status100, switched] });
     assert.equal(await deploy(f.deps), 1);
-    assert.deepEqual(lastCall(f), ['rollback', CURRENT]);
+    assert.deepEqual(f.calls.at(-1), ['rollback', CURRENT, '--message', `デプロイの失敗で ${VERSION} から戻す`]);
   });
 
   test('wrangler deploy が落ち、切り替わったか確かめられなければ、控えた版へ戻す', async () => {
     const f = fake({ wrangler: { deploy: fail() }, statuses: [status100, status100, fail('network')] });
     assert.equal(await deploy(f.deps), 1);
-    assert.deepEqual(lastCall(f), ['rollback', CURRENT]);
+    assert.deepEqual(f.calls.at(-1), ['rollback', CURRENT, '--message', `デプロイの失敗で ${VERSION} から戻す`]);
   });
 
   test('煙のテストに落ちたら、控えた版の ID を指定して戻し、失敗する', async () => {
@@ -283,6 +295,13 @@ describe('deploy', () => {
     assert.equal(await deploy(f.deps), 1);
     assert.deepEqual(lastCall(f), ['rollback', CURRENT]);
     assert.ok(f.calls.at(-1)!.includes('--message'));
+  });
+
+  test('煙のテストは vX.Y.Z との一致を待ち、コミットの SHA が返っても一致とみなさずに控えた版へ戻す', async () => {
+    const f = fake({ versions: [SHA] });
+    assert.equal(await deploy(f.deps), 1);
+    assert.deepEqual(f.calls.at(-1), ['rollback', CURRENT, '--message', `煙のテストの失敗で ${VERSION} から戻す`]);
+    assert.ok(f.errors.some((message) => message.includes(`版が ${VERSION} になりませんでした`)));
   });
 
   test('煙のテストの間に別のデプロイが版を上げていれば、それを潰さないよう戻さずに失敗する', async () => {
@@ -582,7 +601,7 @@ describe('deploy', () => {
   });
 
   test('反映が遅れても、何回目かで版が一致すれば成功する', async () => {
-    const f = fake({ versions: [new Error('HTTP 503'), CURRENT, SHA] });
+    const f = fake({ versions: [new Error('HTTP 503'), SHA, VERSION] });
     assert.equal(await deploy(f.deps), 0);
     assert.equal(f.fetches, 3);
     assert.ok(!f.calls.some((args) => args[0] === 'rollback'));
