@@ -431,11 +431,16 @@ for (const scope of ['organization', 'workspace'] as const) {
     });
     expect(droppedOnToolbar).toBe(true);
     await expect(notice).toBeVisible();
-    await expect(body).toHaveAttribute('aria-describedby', /.+ .+/);
+    // 出ている間だけ、知らせを欄の説明（aria-describedby）に足す
+    const noticeId = await notice.getAttribute('id');
+    expect(noticeId).toBeTruthy();
+    const describedByNotice = new RegExp(`(^| )${noticeId!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`);
+    await expect(body).toHaveAttribute('aria-describedby', describedByNotice);
     await expect(menu).toBeVisible();
     // 「/」の小窓から入れて本文が変わっても消える
     await page.keyboard.press('Enter');
     await expect(notice).toHaveCount(0);
+    await expect(body).not.toHaveAttribute('aria-describedby', describedByNotice);
     await expect(body).toHaveValue('## 準備\n- 鍵を受け取る\n> 名簿を見る\n## ');
     await body.fill('## 準備');
 
