@@ -1,4 +1,5 @@
 // Bash の判定。本番に触る操作、WORKERS_CI の設定、main の上のコミットと main への push、force push、
+// production と v* のタグへの push、Release の作成と編集と削除、
 // シークレット（.dev.vars と .env）の読み取りと書き込み、gh pr merge を通さないマージを止め、
 // 依存の変更、マイグレーションの作成、判定しきれない push と場所を判定できないデプロイのスクリプト、git のフックを外す --no-verify、
 // 道具の名前が展開で決まるコマンド、env -S、読むだけの道具以外の xargs、wrangler の設定の書き換えと wrangler dev の -c、
@@ -311,6 +312,14 @@ function isOption(arg, full, shortest) {
 }
 
 const FORCE_PUSH_REASON = 'force push はしない。ベースは sync-base で merge して取り込み、通常の push をする';
+const PRODUCTION_BRANCH_REASON = 'production は Release のワークフローだけが進める。push も削除もしない（docs/development.md の「ブランチ戦略」）';
+const RELEASE_TAG_REASON = 'v* のタグは人が Release の publish で作る。セッションは push しない（docs/development.md の「ブランチ戦略」）';
+const RELEASE_REASON = 'Release の作成、編集、publish、削除は人が行う。本番に出るのは人の publish だけ（docs/development.md の「ブランチ戦略」）';
+// v* のタグの名前。refs/tags/ を付けた形は v で始まる名前すべて、付けない形は版らしい v<数字> だけ（v で始まるブランチと分ける）。
+// 付けない v<数字> は、git がタグにもブランチにも解決しうるので止める。refs/heads/ を明示した形はブランチなので止めない
+const isReleaseTag = (name) => /^(refs\/)?tags\/v/.test(name) || /^v\d/.test(name);
+// push.followTags を有効にする値か（false と 0 は無効）
+const enablesFollowTags = (value) => value === undefined || !/^(false|0|no|off)$/i.test(value);
 
 // push の位置引数の位置。--repo を付けると、先頭の位置引数もリモートではなく refspec になる
 function pushOperands(rest) {
@@ -367,6 +376,14 @@ function judgeGit(args, dir, branchOf) {
   const sub = args[i];
   const rest = sliceWords(args, i + 1);
   if (sub === 'push' && forcesPush(rest)) return [DENY, FORCE_PUSH_REASON];
+  // git -c push.followTags=true push は、--follow-tags と同じく v* のタグも push しうる
+  if (sub === 'push' && args.slice(0, i).some((a) => /^push\.followtags(=|$)/i.test(a) && enablesFollowTags(a.split('=')[1]))) {
+    return [DENY, RELEASE_TAG_REASON];
+  }
+  // git -c remote.origin.push=… push は、refspec を設定から足す。先を語から読めない
+  if (sub === 'push' && args.slice(0, i).some((a) => /^remote\..+\.push(=|$)/i.test(a))) {
+    return [ASK, 'remote.<名前>.push の設定は push する先を足し、main、production、v* のタグを含むかを判定できない。人が確かめる'];
+  }
   // 括弧の glob の後ろに語が続く形（git --no-pager(N) commit）は、judgeBash が道具を問わず確認を挟む。
   // ここで見るのは後ろに語が続かない push の refspec（git push origin x(N)）で、zsh が当たらない語を消して git push origin になり、
   // 今のブランチを push する
@@ -401,9 +418,19 @@ function judgeGitCommand(sub, rest, gitDir, branchOf) {
   // main の上の判定を先に効かせた後、ブランチを問わず人が確かめる
   if (COMMITTING.has(sub) && (skipsHooks(rest, sub === 'commit') || mayAddFlag(rest, GIT_SHORT_FLAGS_WITH_VALUE[sub]))) return [ASK, NO_VERIFY_REASON];
   if (sub === 'clean' && cleansIgnored(rest)) return [ASK, CLEAN_IGNORED_REASON];
+  // 設定に残すと、後の引数の無い git push が v* のタグや別の先も push する。読むだけの形は通す
+  if (sub === 'config' && !rest.some((a) => /^--(get|get-all|get-regexp|list|unset|unset-all)$|^-l$/.test(a) || a === 'get' || a === 'list' || a === 'unset')) {
+    const at = rest.findIndex((a) => /^push\.followtags$/i.test(a));
+    if (at !== -1 && enablesFollowTags(rest[at + 1])) return [DENY, RELEASE_TAG_REASON];
+    if (rest.some((a) => /^remote\..+\.push$/i.test(a))) {
+      return [ASK, 'remote.<名前>.push の設定は後の git push の先を足し、main、production、v* のタグを含むかを判定できない。人が確かめる'];
+    }
+  }
   if (sub !== 'push') return null;
 
   if (rest.some((a) => isOption(a, '--all', 4))) return [DENY, '--all は main も push する'];
+  // --tags と --follow-tags は v* のタグも push しうる。Release のタグは人が publish で作る
+  if (rest.some((a) => isOption(a, '--tags', 4) || isOption(a, '--follow-tags', 5))) return [DENY, RELEASE_TAG_REASON];
 
   const { hasRepo, pos, refspecs } = pushOperands(rest);
 
@@ -422,6 +449,8 @@ function judgeGitCommand(sub, rest, gitDir, branchOf) {
     if (name === 'main') {
       return [DENY, 'main へは push しない。作業ブランチから PR を通す（文書だけの変更も同じ）'];
     }
+    if (name === 'production') return [DENY, PRODUCTION_BRANCH_REASON];
+    if (!/^refs\/heads\//.test(target.name) && isReleaseTag(name)) return [DENY, RELEASE_TAG_REASON];
   }
   if (skipsHooks(rest, false) || mayAddFlag(rest, 'o')) return [ASK, NO_VERIFY_REASON];
   if (targets.some((t) => t.expands)) return [ASK, '変数、$(...)、{a,b}、glob を含む refspec は、main を含むかを判定できない'];
@@ -577,6 +606,11 @@ function forceOf({ fields, bodies, unreadable }) {
 const isGraphqlEndpoint = (endpoint) => /graphql/i.test(endpoint);
 // main の後ろに続く語（-fix、.json、/x）は別のブランチ。末尾の / だけは main と同じ ref に読まれうるので止める
 const MAIN_REF = /\/git\/refs\/heads\/main(?![\w.-]|\/[^\s?#])/;
+const PRODUCTION_REF = /\/git\/refs\/heads\/production(?![\w.-]|\/[^\s?#])/;
+const RELEASE_TAG_REF = /\/git\/refs\/tags\/v/;
+// repos/<owner>/<repo>/releases の宛先（URL の形も）。リポジトリや組織の名前が releases のもの（repos/o/releases/issues）は当てない
+// repositories/<数値の ID>/releases も同じ資源
+const RELEASES_PATH = /(?:^|[\s/])(?:repos\/[^/\s]+\/[^/\s]+|repositories\/[^/\s]+)\/releases(?![\w-])/;
 
 // 展開より前の字面で資源の種類が決まる宛先か（repos/o/r/issues/$n/comments は issues、repos/o/r/git/refs/$x は git/refs）。
 // repos/$R/… や repos/o/r/$kind/… のように、種類が展開で決まるものは決まらない。種類は repos/<owner>/<repo>/<種類>/ の種類で、
@@ -600,6 +634,13 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
   if (/enablePullRequestAutoMerge/.test(text)) return [DENY, 'auto-merge は使わない'];
   if (/mergePullRequest/.test(text)) return [DENY, MERGE_REASON];
   if (/updateRefs?\b/.test(text)) return [DENY, 'main は PR のマージでだけ進める'];
+  // GraphQL の createRef と deleteRef で production と v* のタグを作る、消す
+  if (/\b(createRef|deleteRef)\b/.test(text) && /refs\/heads\/production\b/.test(text)) return [DENY, PRODUCTION_BRANCH_REASON];
+  if (/\b(createRef|deleteRef)\b/.test(text) && /refs\/tags\/v/.test(text)) return [DENY, RELEASE_TAG_REASON];
+  // deleteRef は ref をノードの ID（refId）で受けるので、名前が字面に無ければ何を消すかを判定できない
+  if (/\bdeleteRef\b/.test(text)) return [ASK, 'deleteRef は refId で ref を受け、main、production、v* のタグを消すかを判定できない。人が確かめる'];
+  // mergeBranch と createCommitOnBranch は、PR も push も通さずにブランチへコミットを足す（main と production を含む）
+  if (/\b(mergeBranch|createCommitOnBranch)\b/.test(text)) return [DENY, 'mergeBranch と createCommitOnBranch はブランチへ直にコミットを足す。作業ブランチで git を使い、PR を通す'];
   // gh pr update-branch --rebase の中身。updateMethod を付けないか MERGE なら merge のコミットを足す通常の更新
   if (/updatePullRequestBranch/.test(text)) {
     if (/\bREBASE\b/.test(text)) return [DENY, REBASE_BRANCH_REASON];
@@ -621,6 +662,36 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
   }
   if (/\/pulls\/[^/\s]+\/merge\b|\/merges\b/.test(path)) return [DENY, MERGE_REASON];
   if (MAIN_REF.test(path)) return [DENY, 'main は PR のマージでだけ進める'];
+  // production と v* のタグの ref は、宛先（git/refs/heads/production、git/refs/tags/v…）でも、
+  // ref を作る POST git/refs の本文（ref=refs/heads/production）でも止める
+  if (PRODUCTION_REF.test(path)) return [DENY, PRODUCTION_BRANCH_REASON];
+  if (RELEASE_TAG_REF.test(path)) return [DENY, RELEASE_TAG_REASON];
+  if (/\/git\/refs(?![\w-])/.test(path)) {
+    // 作る ref の名前は、フィールドの ref= か本文の "ref" で渡す
+    const refText = [
+      ...fields.filter((f) => /^ref=/.test(f)),
+      ...bodies.flatMap(({ text: body }) => [...body.matchAll(/"ref"\s*:\s*"([^"]*)"/g)].map((m) => m[1])),
+    ].join(' ');
+    if (/refs\/heads\/production(?![\w.-]|\/)/.test(refText)) return [DENY, PRODUCTION_BRANCH_REASON];
+    if (/refs\/tags\/v/.test(refText)) return [DENY, RELEASE_TAG_REASON];
+    // 本文を読めない（--input のファイル、curl -d @ファイル）と、どの ref を作るかを判定できない
+    // 作るのは POST git/refs だけで、名前は本文にある（PATCH と DELETE は名前が宛先にある）
+    const creates = /\/git\/refs(?:$|[\s?#])/.test(path) && method !== 'PATCH' && method !== 'DELETE';
+    // -F ref=@ファイル は値を読めず、名前が展開で決まるフィールド（-f "$X"）は ref になりうる
+    const opaqueField = fields.some((f) => hasExpansion(f.split('=')[0]) || /^ref=@/.test(f));
+    if (creates && (unreadable || opaqueField || /[$`]/.test(refText) || (refText === '' && bodies.some(({ literal }) => !literal)))) return [ASK, 'ref を作る本文を読めず、production や v* のタグを作るかを判定できない。本文は引数かヒアドキュメントで字面を渡す。人が確かめる'];
+    // %2F、.、..、// を挟むと、字面の判定（heads/main、heads/production、tags/v）を外れうる
+    if (/%2f|\/\.{1,2}(\/|$|[\s?#])|\/\/[^\s]/i.test(path.replace(/^[a-z][a-z0-9+.-]*:\/\//i, ''))) {
+      return [ASK, 'ref の宛先に %2F、.、..、// があり、main、production、v* のタグかを字面で判定できない。人が確かめる'];
+    }
+  }
+  // ブランチの名前の変更は、production と main を消すか、別のコミットに差し替えるのと同じになる
+  if (/\/branches\/[^\s]+\/rename\b/.test(path)) return [DENY, 'ブランチの名前は変えない。main と production を差し替えうる'];
+  // Release の作成（POST repos/<o>/<r>/releases）、編集と publish（PATCH releases/<id>）、削除と資産の書き込み。
+  // generate-notes は本文を作るだけで Release を書き換えない。uploads.github.com の資産の書き込みも Release の書き込み
+  if (RELEASES_PATH.test(path) && !/\/releases\/generate-notes(?:$|[\s?#])/.test(path)) return [DENY, RELEASE_REASON];
+  // repos/$R/releases のように、展開で資源の位置がずれうる宛先に releases があれば、Release の書き込みかを判定できない
+  if (isDynamic(path) && /\/releases(?![\w-])/.test(path)) return [ASK, 'Release の宛先を展開で渡すと、Release を書き換えるかを判定できない。人が確かめる'];
   // contents API の書き込みは、ブランチを指定しなければ既定のブランチ（main）へ直にコミットする
   if (/\/contents\//.test(path)) return [DENY, 'contents API でのファイルの書き込みはしない。作業ブランチで git を使う'];
   return null;
@@ -820,6 +891,9 @@ function judgeGh(args, stdinContext, merge = {}) {
   }
   // エイリアスは中身のサブコマンドをフックから隠す（gh alias set m 'pr merge --auto' の後の gh m）
   if (pos[0] === 'alias' && ['set', 'import'].includes(pos[1])) return [DENY, 'gh のエイリアスはフックから中身が見えないので作らない'];
+  // gh release create（new）、edit（--draft=false で publish）、delete、upload、delete-asset。list、view、download は読むだけ
+  if (pos[0] === 'release' && ['create', 'new', 'edit', 'delete', 'upload', 'delete-asset'].includes(pos[1])) return [DENY, RELEASE_REASON];
+  if (pos[0] === 'release' && pos[1] !== undefined && (isDynamic(pos[1]) || /[*?[{]/.test(pos[1]))) return [ASK, 'gh release のサブコマンドを展開で渡すと、Release を書き換えるかを判定できない。人が確かめる'];
   if (pos[0] === 'stack' && pos[1] === 'merge') return [DENY, 'スタック PR は原則使わない。マージは gh pr merge で1本ずつ行う'];
   if (pos[0] === 'stack' && ['push', 'sync', 'submit', 'rebase'].includes(pos[1])) {
     return [ASK, `gh stack ${pos[1]} は force push を伴う。スタック PR は原則使わない（docs/development.md の「並行して作業するときの決まり」）`];
@@ -928,7 +1002,7 @@ function curlBody(options, args, stdinContext) {
 
 function judgeHttpClient(tool, args, stdinContext) {
   // URL のホストは大文字と小文字を区別しない。Host ヘッダーに書いて IP 宛てに送る形もあるので、語のどこかにあれば判定する
-  const mentionsGitHub = args.some((a) => a.toLowerCase().includes('api.github.com'));
+  const mentionsGitHub = args.some((a) => /(?:api|uploads)\.github\.com/i.test(a));
   if (!mentionsGitHub) return null;
   if (tool === 'curl') {
     // --next と -: で区切った要求ごとに判定し、どれかが止めるなら止める
