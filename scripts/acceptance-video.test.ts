@@ -14,6 +14,7 @@ const skillDir = fileURLToPath(new URL('../.claude/skills/acceptance-video/', im
 const recordScript = join(skillDir, 'record.mjs');
 const composeScript = join(skillDir, 'compose.py');
 const FONT = '/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc';
+const SYMBOL_FONT = '/System/Library/Fonts/Apple Symbols.ttf';
 
 function inTempDir<T>(files: Record<string, string>, run: (path: (name: string) => string) => T): T {
   const dir = mkdtempSync(join(tmpdir(), 'acceptance-video-'));
@@ -1549,4 +1550,138 @@ describe('compose.py', () => {
     assert.equal(result.status, 3, result.stderr);
     assert.ok(Number(probe.format.duration) > 30);
   });
+
+  test('「⋯」を含む字幕は、代わりのフォントで描いて合成する（#1159）', options, () => {
+    const { result, probe } = run('1280x640', 3, [
+      { t: 0.2, text: '担当まで送っても「⋯」は右端に残る' },
+      { t: 2, text: '' },
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(probe);
+  });
+
+  test('どのフォントにも無い字を含む字幕は、豆腐のまま合成せずに字を挙げて断る（#1159）', options, () => {
+    const { result, probe } = run('1280x640', 3, [
+      { t: 0.2, text: 'あ\u{10FFFD}' },
+      { t: 2, text: '' },
+    ]);
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /どのフォントにも無い（U\+10FFFD/);
+    assert.equal(probe, undefined, '断るときは動画を書かない');
+  });
+});
+
+// 字幕の字ごとに、字を持つフォントを選ぶ処理（#1159）。compose.py を読み込んで関数を呼ぶ
+describe('compose.py のフォントの選択', () => {
+  // -B: 読み込んだ compose.py の __pycache__ をスキルの置き場に書かない
+  const python = (code: string) => {
+    const result = spawnSync(
+      'python3',
+      ['-I', '-B', '-c', `import sys\nsys.path.insert(0, sys.argv[1])\nimport compose\n${code}`, skillDir],
+      {
+        encoding: 'utf8',
+      },
+    );
+    assert.ifError(result.error);
+    return result;
+  };
+  const json = (code: string) => {
+    const result = python(code);
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  const hasPillow = spawnSync('python3', ['-I', '-c', 'import PIL']).status === 0;
+
+  // フォントの代わりに字の集合を渡し、字を持つかの判定を差し替える。Pillow もフォントも要らない
+  const runs = (text: string, fonts: string[]) =>
+    json(
+      `import json\nprint(json.dumps(compose.split_runs(${JSON.stringify(text)}, ${JSON.stringify(fonts)}, has=lambda font, ch: ch in font), ensure_ascii=False))`,
+    );
+
+  test('1つ目のフォントに無い字だけを、字を持つ次のフォントで描く', () => {
+    assert.deepEqual(runs('担当「⋯」右', ['担当「」右', '⋯']), [
+      ['担当「', 0],
+      ['⋯', 1],
+      ['」右', 0],
+    ]);
+  });
+
+  test('1つ目のフォントにある字は、代わりのフォントにあっても1つ目で描く', () => {
+    assert.deepEqual(runs('あい', ['あい', 'あい']), [['あい', 0]]);
+  });
+
+  test('代わりのフォントが複数あれば、字を持つ最初のものを選ぶ', () => {
+    assert.deepEqual(runs('あ⋯…', ['あ', '…', '⋯…']), [
+      ['あ', 0],
+      ['⋯', 2],
+      ['…', 1],
+    ]);
+  });
+
+  test('どのフォントにも無い字は、重ねずに字の番号と一緒に挙げて断る', () => {
+    const result = python(
+      `try:\n    compose.split_runs('あ☒い☒⋯', ['あい', '⋯'], has=lambda font, ch: ch in font)\nexcept ValueError as err:\n    print(err)\n    sys.exit(1)`,
+    );
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /どのフォントにも無い（U\+2612「☒」。/);
+    assert.doesNotMatch(result.stdout, /☒」、/);
+  });
+
+  // 実際のフォントで、字の有無を .notdef の形と比べて見分けられるか。Linux の DejaVu と macOS のフォントで確かめる
+  const DEJAVU = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+  test(
+    '字を持たないフォントは .notdef を描くので、その形と比べて字の有無を見分ける',
+    { skip: hasPillow && existsSync(DEJAVU) ? false : 'Pillow か DejaVu Sans が無い' },
+    () => {
+      assert.deepEqual(
+        json(
+          `import json\nfrom PIL import ImageFont\nfont = ImageFont.truetype(${JSON.stringify(DEJAVU)}, 32)\nprint(json.dumps([compose.has_glyph(font, ch) for ch in ['⋯', 'A', ' ', 'あ', '\\U0010FFFD']]))`,
+        ),
+        [true, true, true, false, false],
+      );
+    },
+  );
+
+  test(
+    '1つ目のフォントだけで描ける字幕は、これまでと同じ位置と大きさで描く',
+    { skip: hasPillow && existsSync(DEJAVU) ? false : 'Pillow か DejaVu Sans が無い' },
+    () => {
+      // これまでの draw_band（1つのフォントで幅を測り、帯の中央に anchor の lm で描く）と、画素が一致するか
+      const code = [
+        'import os, tempfile',
+        'from PIL import Image, ImageChops, ImageDraw, ImageFont',
+        `font = ImageFont.truetype(${JSON.stringify(DEJAVU)}, compose.FONT_SIZE)`,
+        'text = "Move the item to Done"',
+        'ref = Image.new("RGB", (compose.WIDTH, compose.BAND_H), compose.BAND_BG)',
+        'draw = ImageDraw.Draw(ref)',
+        'width = draw.textlength(text, font=font)',
+        'draw.text(((compose.WIDTH - width) / 2, compose.BAND_H / 2), text, font=font, fill=(255, 255, 255), anchor="lm")',
+        'with tempfile.TemporaryDirectory() as tmp:',
+        '    path = os.path.join(tmp, "band.png")',
+        '    compose.draw_band(text, [font, font], path)',
+        '    got = Image.open(path).convert("RGB")',
+        '    print(ImageChops.difference(ref, got).getbbox())',
+      ].join('\n');
+      const result = python(code);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout.trim(), 'None');
+    },
+  );
+
+  test(
+    'macOS のヒラギノ角ゴシックは「⋯」を持たず、代わりの Apple Symbols が持つ',
+    { skip: hasPillow && existsSync(FONT) && existsSync(SYMBOL_FONT) ? false : 'Pillow か macOS のフォントが無い' },
+    () => {
+      assert.deepEqual(
+        json(
+          `import json\nfrom PIL import ImageFont\nmain = ImageFont.truetype(${JSON.stringify(FONT)}, 32)\nsymbols = ImageFont.truetype(${JSON.stringify(SYMBOL_FONT)}, 32)\nprint(json.dumps(compose.split_runs('「⋯」と完了', [main, symbols])))`,
+        ),
+        [
+          ['「', 0],
+          ['⋯', 1],
+          ['」と完了', 0],
+        ],
+      );
+    },
+  );
 });
