@@ -256,7 +256,7 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 | マージ方法 | squash merge だけ。PR のタイトルが `main` のコミットの件名になり、本文は空にする |
 | PR のタイトル | 今のコミットと同じ書き方（`feat:`、`fix:`、`docs:`、`design:`、`refactor:`、`chore:`、`test:`、`ci:` の後に日本語）。末尾に紐づく Issue の番号を `(#<Issue の番号>)` で付ける（例 `feat(me): 自分の設定でテーマを選べる (#674)`）。squash merge で GitHub が PR の番号を `(#<PR の番号>)` で後ろに足すので、`main` の件名には2つ並ぶ。紐づく Issue が無い PR は付けない。タイトルの `(#<番号>)` は GitHub が閉じる合図に読む語の直後ではないので、Issue を閉じない。種別は、次の版の上げ方とリリースノートの分類も決める（`feat` は minor で「新しい機能」、`fix` は patch で「直し」、ほかは patch で「その他」。下の「リリース」） |
 | マージ後 | ブランチを自動で消す |
-| 文書だけの変更 | ほかの変更と同じく PR を通す。CI は重いジョブを飛ばし（下の「文書だけの PR」）、マージの後に Workers Builds はビルドしない |
+| 文書だけの変更 | ほかの変更と同じく PR を通す。CI は重いジョブを飛ばす（下の「文書だけの PR」）。`main` へのマージは本番に出ない（下の「CD」） |
 
 ### `main` を守る仕組み
 
@@ -352,7 +352,7 @@ vite の転送先も同じ値から作るので、画面は自分のワークツ
 
 ### 版
 
-版はコミットの SHA にする。build のときの環境変数 `APP_VERSION` を、画面には SvelteKit の `kit.version.name` として、API には wrangler の `vars` の上書き（`--var APP_VERSION:<SHA>`）として渡し、`/api/health` の `version` と画面の版を同じ値にする。手元で埋めなければ `dev` になる（`pnpm e2e` は除く。下の「e2e のサーバー」）。本番では Workers Builds が checkout したコミットの `git rev-parse HEAD` を渡す（下の「CD」）。
+本番の版は Release のタグ（`vX.Y.Z`。下の「リリース」）にする（2026-11-11 に人が決めた。#1165）。build のときの環境変数 `APP_VERSION` を、画面には SvelteKit の `kit.version.name` として、API には wrangler の `vars` の上書き（`--var APP_VERSION:<vX.Y.Z>`）として渡し、`/api/health` の `version` と画面の版を同じ値にする。本番では、Workers Builds が checkout したコミット（`production`）を指す `vX.Y.Z` のタグを `scripts/release-version.ts` が読んで渡す（複数あれば最大の版。下の「CD」）。どのコミットの版かは、版の message（`<vX.Y.Z> <コミットの SHA>`）で分かる。版の正はタグだけにし、`package.json` の `version` には持たない（タグの前に版を上げるコミットが要り、人が確かめた下書きとずれるため）。手元で埋めなければ `dev` になる（`pnpm e2e` は除く。下の「e2e のサーバー」）。CI と手元の版（コミットの SHA、`dev`、e2e の版）は変えない。
 
 ### e2e のサーバー
 
@@ -835,7 +835,7 @@ git の保護フックと CI は既存のものを使う。
 7. `pr` が `ci-ok` と AI レビューの終わりを待つ（CI が落ちたら先に直す）。AI レビューは done-check の印から後の差分だけを見て、差分が無ければ「差分が無いので見ない」のコメントだけを付ける（`pr` は新しい指摘なしとして読む）。指摘はすべて直してから push し、bot のスレッドに対応の内容か直さない理由を返して resolve する。AI レビューの指摘を直したら、`pr` が `ai-review` のラベルを1回付け、直しの分だけを AI レビューに見せる。その後の直しにはラベルを付けず、AI に見られていない直しとして短い SHA を報告に並べ、ラベルを付けるかを人に聞く（直しのレビューは1回まで。2026-10-31 に決めた。#614）。人のスレッドへの返事と resolve は、人の承認を経て行う。書き込みの権限の無い人の指摘は、直す前に人に扱いを聞く。直しで新たに置いた判断は「セッションが置いた前提」に、新しい head の点検の行は「やらないこと」に足す
 8. セッションが、CI と AI レビューの結果と人に伝えることを返答に短く書き、人が判断すべきことを `AskUserQuestion` で聞く（マージするかは聞かない）。実装中に前提として置いた判断に人が答えたら、答えを言い換えずに「人が決めたこと」に写す
 9. 下の「マージの判定」に従って、確かめを満たす PR は手元のセッションが人に聞かずにマージし、満たさない PR（`needs-human` など）は人がマージする。マージで Issue は閉じず、`accepting.yml` が `status:accepting` を付ける。人が受け入れで閉じる（上の「Issue の運用」）。受け入れは、人がまとまった時間を取り、`sprint-review` で受け入れ条件を1つずつ確かめて行う。`sprint-review` は、Issue ごとに最初の条件の前に、「人が決めたこと」、「セッションが置いた前提」、「やらないこと」の最後の点検の行を見せる（問いは足さない。人の異議は見つけたことにためる）。スプリントの終わりには `sprint-review` を行ってから `sprint-plan` で締める。済みに数えるのは受け入れで閉じた Issue だけなので、受け入れを後に回すと、実装が終わっていてもベロシティに入らないため。人が見送ったときは、受け入れ待ちのまま持ち越し、締めの記録に見送ったことを残す。締めの後は `retro` でスプリントを振り返る。スプリントの間は、`daily-scrum` でゴールに向けた進み具合を点検する
-10. `main` から Workers Builds で自動でデプロイされる（下の「CD」）
+10. `main` へのマージは本番に出ない。人が Release を publish すると、`production` がタグのコミットへ進み、Workers Builds がデプロイする（下の「CD」）。本番の画面で確かめるのは、その変更を含む Release が出た後
 
 仕様を変える実装は、同じ PR で `docs/` も直す。
 
@@ -880,7 +880,7 @@ git の保護フックと CI は既存のものを使う。
 
 ラベルは付けるだけで、機械は外さない。人が外したときは、パスに当たっていれば付け直す。新しい領域を足すときや置き場所を変えるときは、`.github/labeler.yml` と上の表を同じ PR で直す。運用者の権限を確かめるコードは、判定が `src/server/auth/operators.ts`、検査が操作の定義を登録する関数（`src/server/operations/register.ts`）にあり、どちらもこの表の領域に入る。登録の関数と同じ `src/server/operations/` に置く各操作の処理は、この表の領域に入れない。
 
-`needs-human` の PR は、AI レビューが通っていても人が差分を読んでからマージする。マイグレーションを含む PR では、このマージが本番に当てる承認になる（下の「CD」）。`label` のチェックが成功していない PR も、`needs-human` と同じに扱う（ジョブが落ちるとラベルが付かず、付いていない PR と見分けが付かないため）。付いていない PR は、`label` の成功を確かめたうえで、`ci-ok`、AI レビューの指摘を見て決めてよい。
+`needs-human` の PR は、AI レビューが通っていても人が差分を読んでからマージする。マイグレーションを含む PR は、マージしても本番には当たらない。本番に当てる承認は、その PR を含む Release の publish（下の「CD」）。`label` のチェックが成功していない PR も、`needs-human` と同じに扱う（ジョブが落ちるとラベルが付かず、付いていない PR と見分けが付かないため）。付いていない PR は、`label` の成功を確かめたうえで、`ci-ok`、AI レビューの指摘を見て決めてよい。
 
 人に聞けない実行（`claude -p` などの非対話の実行、CI の中）で、差分が Issue の「やらないこと」に触れた PR には、セッションが `pr/issue-update.md` で `needs-human` を足す（`done-check` が触れたことを出力に残す。CI の `label` の機械的な付与とは別の経路で、パスの規則に当たらない PR にも付く）。付けるだけで外さない。触らないと決めたものを変えた差分を、人が読まずにマージしないようにするため。対話の実行では、`done-check` が `AskUserQuestion` で人に聞いて止まるので、足さない。
 
@@ -965,7 +965,7 @@ ai-review は Claude のサブスクリプションで動かす。手元で `cla
 
 ### 文書だけの PR
 
-`changes` のジョブが、PR の base と head の差分（`git diff --no-renames`）を `scripts/ci.ts` の `isDocsOnly` にかける。変わったファイルがすべて文書の範囲（`docs/`、`CLAUDE.md`、`.claude/` のスキルとエージェントとチェックリスト、`.github/ISSUE_TEMPLATE/`）の `.md` に収まるときだけ、文書だけとみなす。範囲の外に置いた `.md` も、範囲の中に置いた `.md` 以外のファイル（スクリプトや設定）も文書に数えない。検査を飛ばしてよいのは文書だけで、スクリプトや設定は検査で確かめるため（`.claude/` の下には `.md` も含めて `needs-human` が付くが、人が読むことは検査の代わりにならない）。Workers Builds の build watch paths の Exclude も同じ範囲にする。範囲を変えるときは、この段落と `scripts/ci.ts` を同じ PR で直し、マージの前に build watch paths（`docs/operations.md` の「Workers Builds の接続」）も直す。
+`changes` のジョブが、PR の base と head の差分（`git diff --no-renames`）を `scripts/ci.ts` の `isDocsOnly` にかける。変わったファイルがすべて文書の範囲（`docs/`、`CLAUDE.md`、`.claude/` のスキルとエージェントとチェックリスト、`.github/ISSUE_TEMPLATE/`）の `.md` に収まるときだけ、文書だけとみなす。範囲の外に置いた `.md` も、範囲の中に置いた `.md` 以外のファイル（スクリプトや設定）も文書に数えない。検査を飛ばしてよいのは文書だけで、スクリプトや設定は検査で確かめるため（`.claude/` の下には `.md` も含めて `needs-human` が付くが、人が読むことは検査の代わりにならない）。範囲を変えるときは、この段落と `scripts/ci.ts` を同じ PR で直す。Workers Builds の build watch paths の Exclude は空にし、この範囲を入れない（#1165。本番は `production` から出し、文書だけの Release でもビルドを走らせて本番の版をタグに進めるため。値は `docs/operations.md` の「Workers Builds の接続」）。
 
 - `ci-ok` の判定の置き場所は `scripts/ci.ts` の `ciOkVerdict`。`needs` のうち `changes` 以外をすべて重いジョブとして扱うので、重いジョブを足すときは `ci-ok` の `needs` に入れるだけでよい
 - 文書だけなら check、test、test-node、migration、e2e、e2e-dev、e2e-repeat を飛ばし、7つがすべて飛んでいれば `ci-ok` は成功
@@ -1064,18 +1064,18 @@ PR で変えていない領域のテストが、前の head では通ってい�
 
 ## CD
 
-`main` への push で、Cloudflare の Workers Builds（Git との連携）が動く（2026-10-23 に決めた）。デプロイの鍵を GitHub に置かないため（上の「`main` を守る仕組み」）。
+`production` への push で、Cloudflare の Workers Builds（Git との連携）が動く（2026-10-23 に決めた。#1165 で `main` から `production` に替える）。デプロイの鍵を GitHub に置かないため（上の「`main` を守る仕組み」）。`production` を進めるのは、人の Release の publish で動く Release のワークフローだけ（下の「リリース」）。`main` へのマージは本番に出ない。Claude のセッションは publish しない。
 
-1. ビルドする。checkout したコミットの SHA（`git rev-parse HEAD`）を `APP_VERSION` として `pnpm build` に渡す（上の「版」）。Workers Builds の `WORKERS_CI_COMMIT_SHA` は使わない。接続した直後の初回のビルド（手で動かしたビルド）で、ブランチ名の `main` が入っていたため。git が失敗したらビルドを始めない（ビルドのコマンドは `docs/operations.md` の「Workers Builds の接続」）
+1. ビルドする。checkout したコミットを指す `vX.Y.Z` のタグを `scripts/release-version.ts` で読み、`APP_VERSION` として `pnpm build` に渡す（上の「版」）。checkout にタグが無ければ `git fetch --tags origin` で取ってから読み直す。タグが無ければビルドを始めない（ビルドのコマンドは `docs/operations.md` の「Workers Builds の接続」）
 2. デプロイのコマンドで、デプロイのスクリプト（`scripts/deploy.ts`、入口は `scripts/deploy-production.ts`）を動かす。スクリプトの手順は次のとおり
-   1. Workers Builds の外（`WORKERS_CI` が `1` でない）か、`git rev-parse HEAD` で取った版がコミットの SHA の形（16進の7〜40文字）でなければ、本番に触らずに失敗。手元のログインで作業ツリーを出さず、`dev` や任意の文字列を版にしないため
+   1. Workers Builds の外（`WORKERS_CI` が `1` でない）か、ビルドと同じ関数で読んだ版が `vX.Y.Z` の形でない（HEAD にタグが無いときを含む）か、`git rev-parse HEAD` で取ったコミットがコミットの SHA の形（16進の7〜40文字）でなければ、本番に触らずに失敗。手元のログインで作業ツリーを出さず、`dev` や任意の文字列を版にせず、Release を経ないコミットを出さないため。Workers Builds の `WORKERS_CI_COMMIT_SHA` は使わない。接続した直後の初回のビルド（手で動かしたビルド）で、ブランチ名の `main` が入っていたため
    2. 本番に触る前に、戻し先として今 100% で動いている版の ID を `wrangler deployments status --json` で控える
       - Worker が無い（API のエラーコード `10007`）か、デプロイが1つも無い: 戻し先無しで進む
       - それ以外のエラー、版が分かれて流れている: 本番に触らずに失敗
    3. `migrations/` にファイルがあれば、D1 の Time Travel のブックマークをログに出してから `wrangler d1 migrations apply --remote` で当てる。未適用が無い回の apply は何もしないので、未適用の有無は見ない。ブックマークが取れないか apply が落ちたら、版は切り替えずに失敗
    4. 版を上げる直前に今の版を取り直し、控えた版と違えば（別のビルドが割り込んだ）版を切り替えずに失敗
-   5. `wrangler deploy --var APP_VERSION:<SHA> --message <SHA>` で新しい版を上げ、100% に切り替える。`wrangler deploy` は版を切り替えた後の triggers の反映でも落ちるので、落ちたら今の版を取り直す。控えた版のままなら、そのまま失敗。切り替わっていれば、または確かめられなければ、控えた版へ戻して失敗
-   6. 煙のテストで、本番の `/api/health` の `version` が SHA に一致するまで、5秒おきに問い合わせを始め、2分で打ち切る。1回の問い合わせは10秒（期限が近ければ残りの時間）で打ち切り、200 以外（D1 に届かない 503 を含む）と、200 でも版が違うものは失敗として数える。反映にかかった時間をログに出す
+   5. `wrangler deploy --var APP_VERSION:<vX.Y.Z> --message "<vX.Y.Z> <SHA>"` で新しい版を上げ、100% に切り替える。`wrangler deploy` は版を切り替えた後の triggers の反映でも落ちるので、落ちたら今の版を取り直す。控えた版のままなら、そのまま失敗。切り替わっていれば、または確かめられなければ、控えた版へ戻して失敗
+   6. 煙のテストで、本番の `/api/health` の `version` が `vX.Y.Z` に一致するまで、5秒おきに問い合わせを始め、2分で打ち切る。1回の問い合わせは10秒（期限が近ければ残りの時間）で打ち切り、200 以外（D1 に届かない 503 を含む）と、200 でも版が違うものは失敗として数える。反映にかかった時間をログに出す
    7. 一致しなければ、控えた版の ID を指定して `wrangler rollback <ID>` で戻し、ビルドを失敗で終える。ただし次の2つは戻さずに失敗
       - 上げた直後に控えた自分の版から、本番の版が変わっている（別のビルドが上げた）
       - 戻し先が無い。壊れた版が残っていると書く
@@ -1089,7 +1089,7 @@ PR で変えていない領域のテストが、前の head では通ってい�
 - 煙のテストの URL はスクリプトの定数（`PRODUCTION_URL`）。ドメインへ移すときに直す
 - マイグレーションは自動では戻さない。戻すかは人が決め、ログのブックマークで Time Travel から戻す（`docs/operations.md` の「戻し方」）
 
-マイグレーションの承認は別に挟まない。マイグレーションを含む PR には `needs-human` が付き、人が差分を読んでマージするので、そのマージを承認とみなす。`main` への直接の push ではマイグレーションを入れない。
+マイグレーションの承認は別に挟まない。マイグレーションを含む PR には `needs-human` が付き、人が差分を読んでマージする。本番に当たるのはその PR を含む Release の publish の後なので、publish を本番に当てる承認とみなす。publish の前に、下書きのノートにマイグレーションを含む PR があるかを人が見る。`main` への直接の push ではマイグレーションを入れない。
 
 マイグレーションを当ててから版を切り替え、戻すときはコードだけを戻す。どちらの順でも動くように、マイグレーションは `d1-migration` の「広げてから縮める」に従う。
 
@@ -1100,10 +1100,10 @@ Workers Builds の API トークンは、Builds が作ったトークンの権�
 - Workers Builds は `.node-version` から Node 26.12.1 を、`packageManager` から pnpm 12.12.0 を入れた。corepack を使わずに入るので、ビルドのコマンドで pnpm を入れ直す必要は無い
 - `WORKERS_CI=1` と `git rev-parse HEAD` は、ビルドとデプロイの両方のコマンドで使える
 - rollback を実地で確かめた。版をずらした PR（#84）のマージのビルドで、煙のテストが2分で打ち切られ、控えた版へ `wrangler rollback` で戻り、ビルドは失敗で終わった。revert の PR（#85）のビルドは成功した
-- 文書だけの PR のマージではビルドを飛ばす。build watch paths の Exclude に、上の「文書だけの PR」と同じ範囲を入れた（値は `docs/operations.md` の「Workers Builds の接続」）。build watch paths のワイルドカードは規則の先頭か末尾にしか置けないので、CI のように `.md` だけに絞らず、フォルダごと除く。今の範囲のフォルダには `.md` しか無い。1回の push で 3000 ファイル以上か 20 コミット以上が変わると、Exclude を見ずにビルドが走る
-- 続けて push すると、ビルドは一列に並ばず同時に走る（Workers Paid のビルドの枠は6つ）。2つの push を25秒あけたときは、2つ目のビルドが1つ目の途中で始まり、デプロイの段はたまたま重ならずにどちらも通った。重なれば、2つ目はスクリプトの割り込みの検査で止まる。前のデプロイが終わるまで次をマージしない（`docs/operations.md` の「出し方」）
+- `main` を見ていたあいだ（#1165 まで）は、文書だけの PR のマージでビルドを飛ばすよう、build watch paths の Exclude に上の「文書だけの PR」と同じ範囲を入れていた。`production` に替えてからは Exclude を空にした。文書だけの Release でビルドが走らないと、Release は出たのに本番の版がタグに進まないため。1回の push で 3000 ファイル以上か 20 コミット以上が変わると、Exclude を見ずにビルドが走る
+- 続けて push すると、ビルドは一列に並ばず同時に走る（Workers Paid のビルドの枠は6つ）。2つの push を25秒あけたときは、2つ目のビルドが1つ目の途中で始まり、デプロイの段はたまたま重ならずにどちらも通った。重なれば、2つ目はスクリプトの割り込みの検査で止まる。前のデプロイが終わるまで次の Release を publish しない（`docs/operations.md` の「出し方」）
 
-スクリプトは、版を上げる直前に割り込みが見えたら止め、煙のテストに落ちても本番が上げた版から変わっていれば戻さない。別のビルドを潰さないためで、そのときは人が本番の版を確かめる。スクリプトで `main` の先頭と比べる案は、GitHub のトークンを Cloudflare に置くことになるので採らない。
+スクリプトは、版を上げる直前に割り込みが見えたら止め、煙のテストに落ちても本番が上げた版から変わっていれば戻さない。別のビルドを潰さないためで、そのときは人が本番の版を確かめる。スクリプトで `production` の先頭と比べる案は、GitHub のトークンを Cloudflare に置くことになるので採らない。
 
 ### 見本の Worker
 
@@ -1119,7 +1119,7 @@ Workers Builds の API トークンは、Builds が作ったトークンの権�
 
 ## リリース
 
-マージのたびに、次の版の番号と変更の一覧を、下書きの Release にそろえる（2026-11-11 に決めた。#1162）。Release を出すときに、版とリリースノートを手で組まないため。下書きを作るだけで publish はせず、本番の出し方（上の「CD」）と画面に出す版（上の「版」）は変わらない。publish すると Release のワークフローが `production` をタグのコミットへ進める（上の「CI」の release の行。#1164）が、Workers Builds が `production` を見るように替えるまでは本番は変わらない（#1163、#1165）。プレリリースは `production` を進めない。プレリリースを後から正式にしても `released` だけが届き、ワークフローは動かないので、正式な版は新しいタグで publish し直す。
+マージのたびに、次の版の番号と変更の一覧を、下書きの Release にそろえる（2026-11-11 に決めた。#1162）。Release を出すときに、版とリリースノートを手で組まないため。publish は人が行い、Claude のセッションは行わない。publish すると Release のワークフローが `production` をタグのコミットへ進め（上の「CI」の release の行。#1164）、Workers Builds が本番にデプロイする（上の「CD」）。本番と画面の版はタグの `vX.Y.Z` になる（上の「版」。#1165）。プレリリースは `production` を進めない。プレリリースを後から正式にしても `released` だけが届き、ワークフローは動かないので、正式な版は新しいタグで publish し直す。
 
 - 道具は release-drafter（`release-drafter/release-drafter` と、ラベルを付ける `release-drafter/release-drafter/autolabeler`。コミットの SHA で固定する）。設定は `.github/release-drafter.yml`、ワークフローは `.github/workflows/release-drafter.yml`、決まりは `scripts/release-drafter-workflow.test.ts` が確かめる
 - 版はセマンティックバージョニングの `vX.Y.Z`。Release の名前とタグに使う。最初の版は `v0.1.0`

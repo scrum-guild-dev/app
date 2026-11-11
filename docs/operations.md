@@ -69,21 +69,24 @@ Workers & Pages の「Create application」→「Continue with GitHub」で、�
 見本の Worker も移管先のリポジトリを参照し、Git 連携のエラーが無いことと、既存のコマンド・監視パス・トークンの選択が維持されていることを確認した。
 本番の `/api/health` は `status: ok`、`database: ok`、版 `0ffa585f7e3ea2e1d0d10357227e1dfc3ea85f92` のまま。再接続後の実際のビルドは、次の `main` への反映で確認する。
 
+#1165 で、本番の Worker の Builds のブランチを `main` から `production` に替え、版をコミットの SHA から Release のタグ（`vX.Y.Z`）に替える（下の「出し方」）。`production` を進めるのは Release のワークフローだけ（`docs/development.md` の「リリース」）。替えるときは「Disable builds」を挟み、ブランチ、ビルドのコマンド、build watch paths を下の表の値にしてから有効に戻す。替えるのは、`refs/tags/v*` の作成・更新・削除を管理者に絞る Ruleset が入っていることを確かめた後（#1164 の申し送り。Environment `release` が縛るのはジョブの ref だけで、タグを作れる人は Release のワークフローの YAML を差し替えられるため）。
+
 | 項目 | 値 |
 | --- | --- |
-| ブランチ | `main` |
-| ビルドのコマンド | `APP_VERSION=$(git rev-parse HEAD) && export APP_VERSION && pnpm build` |
+| ブランチ | `production` |
+| ビルドのコマンド | `APP_VERSION=$(node scripts/release-version.ts) && export APP_VERSION && pnpm build` |
 | デプロイのコマンド | `node scripts/deploy-production.ts` |
 | ルートのディレクトリ（Path） | `/`（リポジトリのルート） |
 | preview builds（Enable Preview builds） | 無効 |
-| build watch paths | Include は `*`。Exclude は `docs/*`、`HANDOFF.md`、`CLAUDE.md`、`.claude/skills/*`、`.claude/agents/*`、`.claude/checklists/*`、`.github/ISSUE_TEMPLATE/*`（`docs/development.md` の「文書だけの PR」の範囲に、既存の `HANDOFF.md` の除外を加えたもの） |
+| build watch paths | Include は `*`。Exclude は空（文書だけの Release でもビルドを走らせ、本番の版をタグに進めるため） |
 | API トークン | 下の「API トークン」 |
 
 - Node の版は `.node-version`、pnpm の版は `package.json` の `packageManager` から入る（2026-10-25 に確かめた）
-- デプロイのスクリプトは、Workers Builds が入れる `WORKERS_CI=1` が無いか、`git rev-parse HEAD` で版を取れないと、本番に触らずに止まる。どちらもデプロイのコマンドで使えることを、2026-10-25 のビルド `ab64e8c1` で確かめた
+- デプロイのスクリプトは、Workers Builds が入れる `WORKERS_CI=1` が無いか、HEAD を指す `vX.Y.Z` のタグが無いか、`git rev-parse HEAD` でコミットの SHA を取れないと、本番に触らずに止まる。`WORKERS_CI=1` と `git rev-parse HEAD` がデプロイのコマンドで使えることを、2026-10-25 のビルド `ab64e8c1` で確かめた
+- 版は `scripts/release-version.ts` が、HEAD を指す `vX.Y.Z` のタグから決める（複数あれば最大の版、形の違うタグは無視）。checkout にタグが無ければ `git fetch --tags origin` で取ってから読み直す。ビルドのコマンドとデプロイのスクリプトが同じ関数を使う。Workers Builds の checkout でタグを読めるか（そのまま読めるか、`fetch` が要るか）は、v0.1.0 の最初のビルドのログで確かめる
 - Create application で作ると、Cloudflare が Worker を作るときに初期の版を出す。最初のデプロイは「戻し先無し」にならず、この版を戻し先として控える（2026-10-25 は `56208d33`）。初期の版はこのリポジトリのコードではない
 - 作った直後に `main` のビルドが1回走る。この初回のビルドは手で動かしたビルドの扱いになる
-- ビルドのコマンドは、`git rev-parse HEAD` が失敗したらビルドを始めない。`APP_VERSION=$(...) pnpm build` の1行では git の失敗が無視され、画面の版が `dev` のまま出るため
+- ビルドのコマンドは、版を決められなければビルドを始めない。`APP_VERSION=$(...) pnpm build` の1行ではコマンドの失敗が無視され、画面の版が `dev` のまま出るため
 - 版に `WORKERS_CI_COMMIT_SHA` は使わない。接続した直後の初回のビルドで、コミットの SHA ではなくブランチ名（`main`）が入っていた
 
 ### API トークン
@@ -240,13 +243,19 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 
 ## 出し方
 
-`main` に入ると Workers Builds がビルドし、デプロイのコマンドが `scripts/deploy.ts` の手順を動かす。人の操作は要らない。変わったファイルがすべて build watch paths の Exclude に当たるマージ（文書だけの PR）では、ビルドは走らない。
+本番に出すのは、人が Release を publish したときだけ。`main` へのマージは本番に出ない。Claude のセッションは publish しない。
+
+1. 人が Releases の下書き（`docs/development.md` の「リリース」）のノートと版を確かめ、プレリリースにせずに publish する。publish でタグ `vX.Y.Z` ができる
+2. Release のワークフローが `production` をタグのコミットへ進める（Actions の Release の実行で見る）
+3. `production` への push で Workers Builds がビルドし（版はタグの `vX.Y.Z`）、デプロイのコマンドが `scripts/deploy.ts` の手順を動かす。build watch paths の Exclude は空なので、文書だけの Release でもビルドは走る
+
+デプロイのスクリプトの手順は次のとおり。
 
 1. 今 100% で動いている版の ID を、戻し先として控える。Worker が無いか、デプロイが1つも無ければ戻し先無し
 2. `migrations/` にファイルがあれば、Time Travel のブックマークをログに出してから、マイグレーションを当てる
 3. 版を上げる直前に今の版を取り直し、控えた版と違えば止める（別のビルドの割り込み）
-4. `wrangler deploy` で版（コミットの SHA）を上げ、100% に切り替える
-5. 煙のテストで、`/api/health` の `version` が SHA になるまで最大2分待つ。なったら、seed のセッションのトークン（`seed/sessions.ts` にある全部）を本番の `POST /api/logout` に送り、どれも 401 で、本文の code が `unauthenticated` になることを確かめる（5xx、429、届かないときは3回まで繰り返す）
+4. `wrangler deploy` で版（`vX.Y.Z`。message は `<vX.Y.Z> <コミットの SHA>`）を上げ、100% に切り替える
+5. 煙のテストで、`/api/health` の `version` が `vX.Y.Z` になるまで最大2分待つ。なったら、seed のセッションのトークン（`seed/sessions.ts` にある全部）を本番の `POST /api/logout` に送り、どれも 401 で、本文の code が `unauthenticated` になることを確かめる（5xx、429、届かないときは3回まで繰り返す）
 6. ならなければ、または seed のトークンが受け付けられるか確かめられなければ、控えた版へ戻し、ビルドを失敗で終える
 
 ビルドの状態とログは、ダッシュボードの Worker の「Deployments」で見る。ビルドの行の「Build」を開くとログが出る。一覧の状態が Ready なら成功、Failed なら失敗。ログで見るもの:
@@ -255,7 +264,7 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 - `マイグレーションを当てる前の Time Travel のブックマーク:` の行。続く数行の JSON の `bookmark` の値を、DB を戻すときに使う
 - `煙のテスト:` の行。何回目、何秒で版が一致したか
 
-続けてマージするときは、前のデプロイが終わってから次をマージする。Workers Builds はビルドを一列に並べず同時に走らせる（2026-10-25 に確かめた）。デプロイの段が重なると、スクリプトは別のビルドを潰さないよう戻さずに止まり、どちらの版が本番に残ったかを人が確かめることになる。ダッシュボードから古いコミットのビルドをやり直すのも、本番のコードを巻き戻すことになるので行わない。
+続けて publish するときは、前のデプロイが終わってから次を publish する。Workers Builds はビルドを一列に並べず同時に走らせる（2026-10-25 に確かめた）。デプロイの段が重なると、スクリプトは別のビルドを潰さないよう戻さずに止まり、どちらの版が本番に残ったかを人が確かめることになる。ダッシュボードから古いコミットのビルドをやり直すのも、本番のコードを巻き戻すことになるので行わない。
 
 ### 規約への同意の門を出す前に
 
@@ -282,15 +291,16 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 
 ### デプロイが失敗で終わったとき
 
-何が起きたかは、ログの最後の行で分かる。本番の今の版は、Deployments の一番上の「Active deployment」か `wrangler deployments status` で見る。スクリプトが `--message <SHA>` を付けるので、版の message がコミットの SHA。
+何が起きたかは、ログの最後の行で分かる。本番の今の版は、Deployments の一番上の「Active deployment」か `wrangler deployments status` で見る。スクリプトが `--message "<vX.Y.Z> <SHA>"` を付けるので、版の message が Release の版とコミットの SHA。
 
 | ログの文言 | 本番 | すること |
 | --- | --- | --- |
-| `Workers Builds の外では動かしません`、`版がコミットの SHA ではありません` | 触っていない | ビルドの設定（デプロイのコマンド、ビルドのコマンド）を上の表と見比べる |
+| `Workers Builds の外では動かしません`、`コミットの SHA を取れませんでした` | 触っていない | ビルドの設定（デプロイのコマンド、ビルドのコマンド）を上の表と見比べる |
+| `HEAD を指す vX.Y.Z のタグがありません`、`git fetch --tags origin に失敗しました`、`版が Release のタグ（vX.Y.Z）ではありません` | 触っていない | ビルドしたコミットにタグが無い。Builds のブランチが `production` か、`production` を Release のワークフロー以外が進めていないか（Actions の Release の実行とブランチの履歴）を見る。ビルドのコマンドで版を決められなかったときは、ビルドの段で同じ文言で止まる。タグを読めないなら Workers Builds の checkout の扱いを確かめ、相談する |
 | `今の版を取れませんでした`、`今の版の JSON を…`、`今の版が 100% で動いていません` | 触っていない | 人がダッシュボードで版を分けていないか、API トークンが失効していないかを見る。版が分かれていれば1つに戻してから、ビルドをやり直す |
 | `Time Travel のブックマークを取れませんでした` | 触っていない | D1 の状態とトークンの D1 の権限を見て、ビルドをやり直す |
 | `マイグレーションを当てられませんでした` | コードはそのまま。DB は途中まで当たっていることがある | ログの wrangler の出力で、どのマイグレーションで落ちたかを見る。当たった分は `d1_migrations` に記録されるので、直した PR を入れれば次のデプロイが残りを当てる |
-| `控えた後に本番の版が変わりました` | 別のビルドが上げた版のまま | 別のビルドが終わるのを待ち、今の版の SHA が `main` の先頭と同じかを見る。違えば、`main` の先頭でビルドをやり直す |
+| `控えた後に本番の版が変わりました` | 別のビルドが上げた版のまま | 別のビルドが終わるのを待ち、今の版の message の `vX.Y.Z` が最新の Release と同じかを見る。違えば、`production` の先頭でビルドをやり直す |
 | `版を上げられませんでした。版は切り替わっていません` | 触っていない | wrangler の出力を見て直し、ビルドをやり直す |
 | `本番の版が、上げた版（…）から … に変わっています` | 別のビルドが上げた版のまま | 上の「控えた後に本番の版が変わりました」と同じ |
 | `… へ戻しました` | 控えた版に戻った | 下の「戻したあと」に進む |
@@ -332,20 +342,21 @@ seed のセッションのトークン（`seed/sessions.ts`）と API トーク�
 
 煙のテストに落ちたときは、スクリプトが自動で戻す。手で戻すのは、煙のテストを通ったが本番で壊れていると分かったときと、自動の rollback が失敗したとき。
 
-1. ダッシュボードの Worker の Deployments か `wrangler deployments list` で、戻したい版の ID を確かめる。版の message がコミットの SHA。シークレットを入れ替えた後なら、入れ替えより前の版は選ばない（下の「戻るもの、戻らないもの」）。Create application が出した初期の版（message が無い）は選ばない
+1. ダッシュボードの Worker の Deployments か `wrangler deployments list` で、戻したい版の ID を確かめる。版の message が `<vX.Y.Z> <コミットの SHA>`（#1165 より前の版はコミットの SHA だけ）。シークレットを入れ替えた後なら、入れ替えより前の版は選ばない（下の「戻るもの、戻らないもの」）。Create application が出した初期の版（message が無い）は選ばない
 2. 手元（上の「手元の準備」）で `wrangler rollback <版の ID> --message "<理由>"` を実行する。確認が出たら版の ID を見て進める。版の ID は必ず渡す。渡さないと wrangler が履歴から戻し先を選び、意図した版とずれることがある
-3. `https://scrum-guild.ucan-lab.workers.dev/api/health` の `version` が戻した版の SHA になったことを確かめる
+3. `https://scrum-guild.ucan-lab.workers.dev/api/health` の `version` が戻した版（`vX.Y.Z`）になったことを確かめる
 4. 下の「戻したあと」に進む
 
-戻し先が無い（デプロイの無い Worker に出した版が煙のテストに落ちた）ときは、ビルドのログに「戻し先が無く、壊れた版が残っています」と出る。直したコミットを `main` に入れて出し直す。
+戻し先が無い（デプロイの無い Worker に出した版が煙のテストに落ちた）ときは、ビルドのログに「戻し先が無く、壊れた版が残っています」と出る。直したコミットを `main` に入れ、次の Release を publish して出し直す。
 
 ### 戻したあと
 
-rollback も DB の復元も `main` には触らない。`main` には壊れたコミットが残り、次に `main` へ文書だけでない PR が入ると、そのデプロイが壊れたコードをもう一度出す。自動で戻ったときも同じ。
+rollback も DB の復元も `main`、`production`、タグには触らない。`main` には壊れたコミットが残り、次の Release がそのまま壊れたコードをもう一度出す。自動で戻ったときも同じ。`main` へのマージは本番に出ないので、止めなくてよい。
 
-1. 直す PR か revert の PR が入るまで、`main` へのマージと push を止める
-2. 壊れたコミットを revert する PR を作り、マージする（2026-10-25 の実地の試しでは #84 を #85 で戻した）。DB も戻したなら、戻した時点より後のマイグレーションのファイルも revert に含める。含めないと、`d1_migrations` も戻っているので、次のデプロイが同じマイグレーションをまた当てる
-3. revert のデプロイが成功し、`/api/health` の `version` が revert のコミットの SHA になったことを確かめる
+1. 直す PR か、壊れたコミットを revert する PR を作り、`main` にマージする（2026-10-25 の実地の試しでは #84 を #85 で戻した）。DB も戻したなら、戻した時点より後のマイグレーションのファイルも revert に含める。含めないと、`d1_migrations` も戻っているので、次のデプロイが同じマイグレーションをまた当てる
+2. 直しが入るまで、次の Release を publish しない
+3. 次の Release（新しい版の番号）を publish する。publish したタグは動かさず、消さない（壊れた版のタグも残す。タグを付け直すと、同じ版の番号が別のコードを指す）
+4. デプロイが成功し、`/api/health` の `version` が新しい版になったことを確かめる
 
 ### 戻るもの、戻らないもの
 
@@ -356,7 +367,7 @@ rollback で戻るのは、版が持つものすべて。コードと設定の�
 次のものは戻らない。
 
 - D1 のデータとスキーマ（下の「DB を戻す」）
-- cron やルート（triggers）の変更。`wrangler deploy` が版と一緒に反映する。triggers を変えた版を戻すときは、手元（上の「手元の準備」）で戻し先の版のコミットを checkout し、その `wrangler.jsonc` で `wrangler triggers deploy` を実行して当て直す。今の `main` で実行すると、戻したい triggers をもう一度当てるだけになる。今の `wrangler.jsonc` の triggers は、毎分（`* * * * *`）の期限切れ・保持期限後の行の掃除と容量警告の再試行、および毎時 0 分（`0 * * * *`）のお試しの期限切れの停止と未添付ファイルの掃除、という2つの式
+- cron やルート（triggers）の変更。`wrangler deploy` が版と一緒に反映する。triggers を変えた版を戻すときは、手元（上の「手元の準備」）で戻し先の版のコミットを checkout し、その `wrangler.jsonc` で `wrangler triggers deploy` を実行して当て直す。今の `production` で実行すると、戻したい triggers をもう一度当てるだけになる。今の `wrangler.jsonc` の triggers は、毎分（`* * * * *`）の期限切れ・保持期限後の行の掃除と容量警告の再試行、および毎時 0 分（`0 * * * *`）のお試しの期限切れの停止と未添付ファイルの掃除、という2つの式
 
 ### DB を戻す
 
@@ -607,7 +618,7 @@ Wiki、お気に入り（`favorites`）、依頼先（`delegatees`）の表を�
 | `message` | メッセージ。サーバーが次の順に `…` に伏せた先頭200字: 1. `スキーム://` から末尾までと、V8 の `Invalid regular expression: /…/` の元の文字列 2. 引用符の種類ごとに最初の引用符から最後の引用符まで（1つだけなら末尾まで） 3. 最初の「`: `」か「` in `」の後ろを末尾まで 4. 英字だけでない語（数字、`@`、`/`、`.`、`-`、`_`、英字でない文字を含む語）と UUID。伏せすぎることが多い（`can't save 'x'` は `can'…'`、`Unexpected token "x" in JSON` は `Unexpected token "…" in …` になる）ので、元の文言は `name` と場所から、手元で再現して確かめる。Error でない拒否は文字列ならそのまま、ほかは `Non-Error rejection (<型>)` |
 | `location` | 起きた場所の1か所（`file`、`line`、`column`）。`file` は `/_app/` の下のファイルで、ほかのオリジンや拡張機能なら `external`。場所が取れなければ `null` |
 | `route` | 画面の `route.id`（`/[slug]/w/[id]/plan` など）。当たらない経路は `null` |
-| `clientVersion` | 画面の版（build のコミットの SHA）。開いたままの古い画面からは、前の版の SHA が来る。形の合わない値（英数字と `.`、`_`、`-` の64字まででない）は `invalid` |
+| `clientVersion` | 画面の版（Release の `vX.Y.Z`。#1165 より前の版は build のコミットの SHA）。開いたままの古い画面からは、前の版が来る。形の合わない値（英数字と `.`、`_`、`-` の64字まででない）は `invalid` |
 | `version` | 受けた Worker の版 |
 | `browser` | `family`（`chrome`、`firefox`、`safari`、`edge`、`other`）、`major`（主な版）、`mobile` |
 
@@ -615,10 +626,10 @@ Wiki、お気に入り（`favorites`）、依頼先（`delegatees`）の表を�
 
 残る危険（受け入れた）: `message` の伏せ方は、引用符、区切り（`: `、` in `）、英字でない文字を目印にする。英字だけの値（人の名前や英単語のパスワードなど）が、引用符の外で、区切りに当たらない位置に入る文言は、伏せられずに残りうる。ログを読めるのは運用者（Cloudflare のアカウントのメンバー）だけ。読んだ行を Issue などに貼るときは、`message` に利用者の値が残っていないかを見てから貼る。
 
-元の位置へ戻す: `file` は build で圧縮したファイルなので、`clientVersion` の SHA を手元で同じに build し、ソースマップで元のファイルと行に戻す。
+元の位置へ戻す: `file` は build で圧縮したファイルなので、`clientVersion` の版を手元で同じに build し、ソースマップで元のファイルと行に戻す。`clientVersion` が `vX.Y.Z` なら、そのタグ（`git fetch --tags origin` の後の `vX.Y.Z`）を下の `<SHA>` の代わりに使う。
 
-1. その SHA のワークツリーを切る: `git fetch origin && git worktree add worktrees/client-error-<SHA の先頭7字> <SHA>`。切ったワークツリーで `pnpm install`
-2. 本番と同じ版で、ソースマップを出して build する: `APP_VERSION=<SHA> pnpm exec vite build --sourcemap hidden`。`hidden` は JS に参照を足さないので、出る JS は本番と同じ（2026-10-27 に確かめた）。`build<file>` があることを確かめる。無ければ SHA か依存が違う
+1. その版のワークツリーを切る: `git fetch --tags origin && git worktree add worktrees/client-error-<版か SHA の先頭7字> <版か SHA>`。切ったワークツリーで `pnpm install`
+2. 本番と同じ版で、ソースマップを出して build する: `APP_VERSION=<clientVersion の値> pnpm exec vite build --sourcemap hidden`。`hidden` は JS に参照を足さないので、出る JS は本番と同じ（2026-10-27 に確かめた）。`build<file>` があることを確かめる。無ければ版か依存が違う
 3. 行と列を戻す（`column` は1から数え、ソースマップは0から数えるので1を引く）
 
 ```sh

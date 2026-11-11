@@ -16,7 +16,7 @@
     "run_worker_first": ["/api", "/api/*"]
   },
   "vars": {
-    // ビルドで埋めたコミットの SHA に上書きする（scripts/dev.ts の --var、本番はデプロイのスクリプト）
+    // 上書きする。本番はデプロイのスクリプトが Release のタグ（vX.Y.Z。scripts/release-version.ts）を --var で渡し、手元は scripts/dev.ts の --var
     "APP_VERSION": "dev",
     // 公開する URL。更新系の API の Origin の検査に使う。scripts/dev.ts が pnpm dev と pnpm preview の画面の URL に上書きする。
     // 独自ドメインへ移すときに直す（docs/operations.md）

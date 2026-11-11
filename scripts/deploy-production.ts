@@ -6,19 +6,28 @@ import path from 'node:path';
 import { isErrorBody } from '../src/shared/errors.ts';
 import { migrationFiles } from './ci.ts';
 import { deploy, versionFromHealth } from './deploy.ts';
+import { resolveReleaseVersion, spawnGit } from './release-version.ts';
 
 // デプロイのコマンドは pnpm の外で動くので、node_modules/.bin が PATH に無い
 const wranglerBin = path.join('node_modules', '.bin', 'wrangler');
 
 // WORKERS_CI_COMMIT_SHA は、接続した直後の初回のビルド（手で動かしたビルド）でブランチ名の main だった。
-// Workers Builds はコミットを checkout してからデプロイのコマンドを動かすので、作業ツリーの HEAD を版にする
+// Workers Builds はコミットを checkout してからデプロイのコマンドを動かすので、作業ツリーの HEAD を見る
 function headCommit(): string | undefined {
-  const result = spawnSync('git', ['rev-parse', 'HEAD'], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+  const result = spawnGit(['rev-parse', 'HEAD']);
   if (result.status !== 0) {
-    console.error(`git rev-parse HEAD に失敗しました: ${result.error?.message ?? result.stderr.trim()}`);
+    console.error(`git rev-parse HEAD に失敗しました: ${result.stderr.trim()}`);
     return undefined;
   }
   return result.stdout.trim() || undefined;
+}
+
+// 版はビルドのコマンドと同じ関数で、HEAD を指す vX.Y.Z のタグから決める。決められなければ理由を出し、deploy() に止めさせる
+function releaseVersion(): string | undefined {
+  const resolved = resolveReleaseVersion(spawnGit);
+  if (resolved.ok) return resolved.version;
+  console.error(resolved.reason);
+  return undefined;
 }
 
 // import しても本番の入口が動かないよう、直に動かしたときだけ deploy() を呼ぶ（テストや別のスクリプトからの import を守る）。
@@ -34,7 +43,8 @@ if (import.meta.main) {
   const inWorkersBuilds = process.env.WORKERS_CI === '1';
   const status = await deploy({
     inWorkersBuilds,
-    // Workers Builds の外では、止まる理由を WORKERS_CI の1つにする
+    // Workers Builds の外では、止まる理由を WORKERS_CI の1つにする（git fetch も走らせない）
+    version: inWorkersBuilds ? releaseVersion() : undefined,
     commitSha: inWorkersBuilds ? headCommit() : undefined,
     wrangler: (args, { capture }) => {
       // 標準入力を閉じ、確認を待って止まらないようにする
