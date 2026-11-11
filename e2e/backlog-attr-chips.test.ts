@@ -4,6 +4,8 @@
 // 担当: 候補を読んでいる間に開いても Esc でチップへ戻り、読めなければ「担当なし」と「もう一度試す」だけが出る。task-assign が断られたら（タスクが消えた、
 // 所属を外れた、競合）理由を出して元の値に戻す。送っている間に選び直したときは、応答を保留して解放し、順序を固定して確かめる。
 // 高さだけが変わる resize（スマホのアドレスバー）ではメニューを閉じず、幅が変わると閉じる。
+// 見た目（#1158）: 押せるチップは題の後ろに下向きの山形を置き、完了した行のロックしたチップには置かない。ポイントの数は等幅の書体で、
+// 長い担当名は 320px・文字150% でも行からはみ出さずに省略する。
 // 最後に、選択の窓を開いた状態を4つの見た目で axe にかける。
 import { expect, test } from './fixtures.ts';
 import { memberList } from '../src/shared/operations/workspace/member-list.ts';
@@ -23,7 +25,7 @@ import {
   waitForSettled,
   watchViolations,
 } from './helpers.ts';
-import { failOperation, routeOperation } from './operations.ts';
+import { failOperation, rewriteOperation, routeOperation } from './operations.ts';
 
 // 次の描画まで待ってから、画面の高さを返す（resize のイベントは描画の前に届く）
 function nextFrameHeight(): Promise<number> {
@@ -644,4 +646,82 @@ test('絞り込みから外れる担当変更は行を外し、残る完了の�
   await reloaded;
   await expect(edited).toHaveCount(0);
   await expect(completed.locator('.hanko')).toBeVisible();
+});
+
+test('押せるチップに山形が出て、完了した行のチップには出ない。ポイントは等幅の書体で、長い担当名は 320px・文字150%で省略する', async ({
+  page,
+}) => {
+  const long = '長い担当名を持つメンバーの名前を省略して表示する確かめの名前';
+  // 候補の1人目（このワークスペースを作った人）の名前だけを長くする。DB は書き換えない
+  await rewriteOperation(page, memberList, { slug: 'aoba' }, (output) => ({
+    ...output,
+    members: output.members.map((member, index) => (index === 0 ? { ...member, name: long } : member)),
+  }));
+  await createWorkspace(page, '山形のワークスペース');
+  await addTaskRow(page, '山形を見る件');
+  const row = page.locator('.entry', { hasText: '山形を見る件' });
+
+  // 押せる5つのチップ（期日、リポジトリ、区分、ポイント、担当）に、題の後ろの山形が1つずつ出る
+  for (const attr of ['期日', 'リポジトリ', '区分', 'ポイント', '担当']) {
+    const chip = row.getByRole('button', { name: `${attr}: 未設定` });
+    await expect(chip.locator('.ico')).toHaveCount(1);
+    await expect(chip.locator('.chip-text + .ico')).toHaveCount(1);
+  }
+
+  // ポイントの数は、見本と同じ等幅の書体（--font-mono）で出る
+  await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
+  const pointSaved = waitForResponses(page, '/task-update');
+  await page.getByRole('menuitemradio', { name: '5 pt', exact: true }).click();
+  await pointSaved;
+  const points = row.getByRole('button', { name: 'ポイント: 5 pt' });
+  const fonts = await points.locator('.chip-text').evaluate((element) => {
+    const normalize = (value: string) => value.replace(/["'\s]/g, '');
+    return {
+      shown: normalize(getComputedStyle(element).fontFamily),
+      mono: normalize(getComputedStyle(document.documentElement).getPropertyValue('--font-mono')),
+    };
+  });
+  expect(fonts.mono).not.toBe('');
+  expect(fonts.shown).toBe(fonts.mono);
+
+  // 長い名前の人を担当にする
+  await row.getByRole('button', { name: '担当: 未設定' }).click();
+  const assigned = waitForResponses(page, '/task-assign');
+  await page.getByRole('menuitemradio', { name: long, exact: true }).click();
+  await assigned;
+  const assignee = row.getByRole('button', { name: `担当: ${long}` });
+  await expect(assignee).toBeVisible();
+  await expect(assignee.locator('.ico')).toHaveCount(1);
+
+  // 320px・文字150%: チップは行の幅を超えず、名前を省略する。ページは横にはみ出さない
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.evaluate(() => (document.documentElement.style.fontSize = '150%'));
+  await page.evaluate(() => document.fonts.ready);
+  await assignee.scrollIntoViewIfNeeded();
+  const wrapper = row.locator('.attr-chip', { has: assignee });
+  const box = (await wrapper.boundingBox())!;
+  const bounds = (await row.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(bounds.x - 1);
+  expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+  expect(box.x + box.width).toBeLessThanOrEqual(320 + 1);
+  const text = await assignee.locator('.chip-text').evaluate((element) => ({
+    scroll: element.scrollWidth,
+    client: element.clientWidth,
+  }));
+  expect(text.scroll).toBeGreaterThan(text.client);
+  const widths = await page.evaluate(() => ({
+    document: document.documentElement.scrollWidth,
+    viewport: window.innerWidth,
+  }));
+  expect(widths.document).toBeLessThanOrEqual(widths.viewport);
+
+  // 完了にした行（読み直すまで残る）のロックしたチップ（ポイント、担当）には山形を置かない
+  await page.evaluate(() => (document.documentElement.style.fontSize = ''));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await waitForSettled(page);
+  await row.getByRole('button', { name: '完了にする: 山形を見る件' }).click();
+  await expect(points).toHaveAttribute('aria-disabled', 'true');
+  await expect(points.locator('.ico')).toHaveCount(0);
+  await expect(assignee).toHaveAttribute('aria-disabled', 'true');
+  await expect(assignee.locator('.ico')).toHaveCount(0);
 });

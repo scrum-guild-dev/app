@@ -591,21 +591,21 @@
     const state = opts.state || "ready";
     const pending = state === "loading" ? `<li role="none"><button class="menu-item" type="button" role="menuitem" aria-disabled="true">${t("loading")}</button></li>` : `<li role="none"><button class="menu-item" type="button" role="menuitem" data-chip-retry>${t("assigneeCandidatesFailed").replace("{assignee}", t("assignee"))}。${t("retry")}</button></li>`;
     const reasonId = `chip-reason-${x.id}-${name}-${++attrChipSequence}`;
-    return `<span class="row-menu attr-chip${isPts ? " is-points" : ""}">${isWho && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked ? `${shown} — ${locked}` : shown)}"><span class="chip-text">${esc(shown)}</span>${locked || !opts.proposal ? "" : icon("chevron")}</button>` +
+    return `<span class="row-menu attr-chip${isPts ? " is-points" : ""}">${isWho && set ? avatarOf(x.who) : ""}<button class="chip chip-btn${set ? "" : " is-unset"}" type="button" data-chip-for="${x.id}:${name}" ${locked ? `aria-disabled="true" aria-describedby="${reasonId}"` : 'data-row-menu aria-haspopup="menu" aria-expanded="false"'} aria-label="${label}: ${set ? esc(shown) : "未設定"}" title="${esc(locked ? `${shown} — ${locked}` : shown)}"><span class="chip-text">${esc(shown)}</span>${locked ? "" : icon("chevron")}</button>` +
       (locked ? `<span class="visually-hidden" id="${reasonId}">${locked}</span>` : `<ul class="account-menu-list row-menu-list" role="menu" aria-label="${label}を選ぶ" aria-busy="${state === "loading"}"${state === "failed" ? ` data-ready-items="${esc(items)}"` : ""} hidden>${state === "ready" ? items : pending}</ul>`) + `</span>`;
   }
 
-  // 本番へ移す前に人が確認する状態の見本。実データと混ぜず、値の選択もこの領域だけで終える。
+  // 行のチップの状態の見本（本番の AttrChip と同じ形）。実データと混ぜず、値の選択もこの領域だけで終える。
   function attrChipExamples() {
     const left = Object.keys(D.users).find((id) => D.users[id].left);
     const example = { id: "preview", who: left, pts: 5 };
-    return `<details class="attr-chip-examples"><summary>行のチップの状態と見た目の案（本番への反映前）</summary><div class="book">` +
+    return `<details class="attr-chip-examples"><summary>行のチップの状態</summary><div class="book">` +
       [["locked", "完了した行", { ...example, doneAt: "2026-11-01" }, {}],
        ["loading", "候補の読み込み中", example, { state: "loading" }],
        ["failed", "候補の読み込み失敗（もう一度試すで復帰）", example, { state: "failed" }],
        ["left", "離脱済みの担当", example, {}],
        ["long", "長い名前・320px・文字150%", example, { text: "長い担当名を持つメンバーの名前を省略して表示する見本" }]]
-      .map(([key, title, x, opts]) => `<div class="entry" data-chip-example="${key}"><span>${title}</span><div class="entry-end">${attrChip({ ...x, id: `preview-${key}` }, "pts", { proposal: true })}${attrChip({ ...x, id: `preview-${key}` }, "who", { ...opts, proposal: true })}</div></div>`).join("") + `</div></details>`;
+      .map(([key, title, x, opts]) => `<div class="entry" data-chip-example="${key}"><span>${title}</span><div class="entry-end">${attrChip({ ...x, id: `preview-${key}` }, "pts")}${attrChip({ ...x, id: `preview-${key}` }, "who", opts)}</div></div>`).join("") + `</div></details>`;
   }
 
   // 行の先頭のつまみ（飾りで、aria-hidden）。order を渡した行（書き込めるとき）だけに付く。

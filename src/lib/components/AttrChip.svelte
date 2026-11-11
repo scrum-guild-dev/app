@@ -8,6 +8,8 @@
   // 開くと、選んでいる項目（無ければ先頭）へフォーカスを移し、上下の矢印、Home、End で移る。Esc で閉じてチップへフォーカスを戻す。
   // 外を押す、Tab、項目を選ぶと閉じる（選んだ後はチップへ戻す）。メニューは position: fixed で押したボタンの右端に合わせ、収まらなければ上に開く。
   // スクロールでは置き直し、幅の変化では閉じる。
+  // 押せるときは、題の後ろに下向きの山形（見本の icon("chevron")）を置く。ロックしたときは置かない。
+  // points を真にすると、数を等幅の書体で出す（.attr-chip.is-points）。長い名前は包み（.attr-chip）ごと縮み、題を省略する。
   // locked に理由を渡すと押せない（aria-disabled）。理由は見える注記にはせず、読み上げ（aria-describedby）と title で読める。
   // retry を渡すと、メニューの末尾に「もう一度試す」を出す（候補を読めなかったとき）。onopen は開くたびに呼ぶ（候補を読み直すため）。
   // 「もう一度試す」を押した後の読み直しが終わって retry が残っていれば、また失敗したということ（成功すれば retry は外れる）。
@@ -32,6 +34,7 @@
     lead,
     panel,
     tone,
+    points = false,
   }: {
     attr: string;
     text: string;
@@ -50,6 +53,8 @@
     panel?: Snippet<[() => void]>;
     // 期日の切れ、今日、今週の色（DueChip と同じ .is-danger、.is-warn）
     tone?: 'danger' | 'warn';
+    // ポイントのチップ。数を見本と同じ等幅の書体（.is-points）で出す
+    points?: boolean;
   } = $props();
 
   const ids = $props.id();
@@ -255,7 +260,13 @@
 
 <!-- キーは中のボタンから届く。包む要素そのものはフォーカスを受けない -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<span class="row-menu" bind:this={root} onkeydown={onKeydown} onfocusout={onFocusOut}>
+<span
+  class="row-menu attr-chip"
+  class:is-points={points}
+  bind:this={root}
+  onkeydown={onKeydown}
+  onfocusout={onFocusOut}
+>
   <!-- アバター（lead）はボタンの外に置く。頭文字が文字として数えられ、見える名前が aria-label を含まなくなるため -->
   {@render lead?.()}
   <button
@@ -274,6 +285,7 @@
     onclick={toggle}
   >
     <span class="chip-text">{text}</span>
+    {#if locked === undefined}<Icon name="chevron" />{/if}
   </button>
   {#if locked !== undefined}
     <span class="visually-hidden" id={reasonId}>{locked}</span>

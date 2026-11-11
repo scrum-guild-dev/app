@@ -678,6 +678,7 @@
             current={pointsShown === null ? '' : String(pointsShown)}
             onselect={choosePoints}
             locked={pointsLockedReason}
+            points
           />
           <AttrChip
             attr={t('assignee')}
