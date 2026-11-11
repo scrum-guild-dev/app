@@ -141,6 +141,16 @@ MCP で代えるときは、一覧を `list_issues`（`labels` に `status:accep
 | PR ごとのプレビュー | 手元と同じ。#374 が入ってから使う | PR に付いた URL |
 | PR の記録 | 画面で見られないこと（`batch()` で1つのトランザクションにした、履歴の行、CI の時間、テストの件数） | 下の「画面で見られない条件」 |
 
+本番で確かめられるのは、その Issue の PR を含む Release が publish され、本番に出た後だけ（`main` へのマージは本番に出ない。`docs/development.md` の「CD」）。本番の場所を案に置く前に、本番の版を読み、PR のマージのコミットを含むかを確かめる。
+
+```bash
+curl -fsS https://scrum-guild.ucan-lab.workers.dev/api/health                      # version が本番の版（vX.Y.Z）
+git fetch --tags origin
+git merge-base --is-ancestor <PR の merge_commit_sha> refs/tags/<version>           # 0 なら本番に出ている
+```
+
+含まなければ、本番の条件は確かめずに残し、「次の Release の後に本番で確かめる」と手順 11 で報告する（publish は人が行い、セッションは行わない）。`version` が `vX.Y.Z` の形でないか、取れなければ、本番の版を判定できないと伝える。
+
 Issue ごとに、場所と条件の数を表にして出し、`AskUserQuestion` で、どれから確かめるか、場所の案でよいかを聞く。推す案を先頭にする（手元でまとめて確かめられるものを先に、本番で人が操作するものを後に）。
 
 #### 手元を立てる

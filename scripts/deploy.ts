@@ -8,6 +8,7 @@ import { isHealth } from '../src/shared/health.ts';
 import { operationPath } from '../src/shared/operations/define.ts';
 import { logout, me } from '../src/shared/operations/session/index.ts';
 import { sessionCookieName } from '../src/shared/session-cookie.ts';
+import { RELEASE_TAG } from './release-version.ts';
 
 // 煙のテストが叩く本番の URL。ドメインへ移すときはここを直す（docs/operations.md の「ドメインへ移す」）
 export const PRODUCTION_URL = 'https://scrum-guild.ucan-lab.workers.dev';
@@ -23,6 +24,9 @@ export type WranglerResult = { status: number; stdout: string; stderr: string };
 export type DeployDeps = {
   // Workers Builds の中か（WORKERS_CI）
   inWorkersBuilds: boolean;
+  // HEAD を指す Release のタグ（vX.Y.Z。scripts/release-version.ts）。本番の /api/health の version になる
+  version: string | undefined;
+  // HEAD のコミットの SHA。版の message に添え、どのコミットの版かを見分ける
   commitSha: string | undefined;
   // capture が真なら出力を受け取り、偽ならそのままログに流す
   wrangler: (args: string[], options: { capture: boolean }) => WranglerResult;
@@ -45,7 +49,7 @@ export type DeployDeps = {
 // Worker が無い（API の 10007）か、Worker はあってもデプロイが1つも無い。どちらも戻し先が無い
 const NO_DEPLOYMENT = [/\[code: 10007\]/, /has no deployments/];
 
-// コミットの SHA の形（git rev-parse HEAD の出力）。dev やブランチ名を版として出さない
+// コミットの SHA の形（git rev-parse HEAD の出力）。dev やブランチ名を message に添えない
 const COMMIT_SHA = /^[0-9a-f]{7,40}$/;
 
 type RollbackTarget = { ok: true; versionId: string | null } | { ok: false; reason: string };
@@ -235,10 +239,15 @@ export async function deploy(deps: DeployDeps): Promise<number> {
     deps.error('Workers Builds の外では動かしません（WORKERS_CI が 1 でない）。本番に触らずに終えます');
     return 1;
   }
+  const version = deps.version;
+  // 版の無いまま出すと、本番の版が dev になり煙のテストで見分けられない。Release のタグの無いコミットは本番に出さない
+  if (!version || !RELEASE_TAG.test(version)) {
+    deps.error(`版が Release のタグ（vX.Y.Z）ではありません（${version ?? '無し'}）。本番に触らずに終えます`);
+    return 1;
+  }
   const sha = deps.commitSha;
-  // 版の無いまま出すと、本番の版が dev になり煙のテストで見分けられない
   if (!sha || !COMMIT_SHA.test(sha)) {
-    deps.error(`版がコミットの SHA ではありません（${sha ?? '無し'}）。本番に触らずに終えます`);
+    deps.error(`コミットの SHA を取れませんでした（${sha ?? '無し'}）。本番に触らずに終えます`);
     return 1;
   }
 
@@ -273,7 +282,8 @@ export async function deploy(deps: DeployDeps): Promise<number> {
     return 1;
   }
 
-  if (deps.wrangler(['deploy', '--var', `APP_VERSION:${sha}`, '--message', sha], { capture: false }).status !== 0) {
+  const deployArgs = ['deploy', '--var', `APP_VERSION:${version}`, '--message', `${version} ${sha}`];
+  if (deps.wrangler(deployArgs, { capture: false }).status !== 0) {
     // wrangler deploy は版を 100% に切り替えた後の triggers の反映でも落ちるので、切り替わったかを見直す
     const after = rollbackTarget(deps.wrangler(['deployments', 'status', '--json'], { capture: true }));
     if (after.ok && after.versionId === target.versionId) {
@@ -281,14 +291,14 @@ export async function deploy(deps: DeployDeps): Promise<number> {
       return 1;
     }
     deps.error('版を上げる途中で失敗しました。版が切り替わったか確かめられないか、切り替わっています');
-    return failAfterSwitch(deps, target.versionId, `デプロイの失敗で ${sha} から戻す`);
+    return failAfterSwitch(deps, target.versionId, `デプロイの失敗で ${version} から戻す`);
   }
 
   // 煙のテストの間に別のビルドが版を上げると、戻すとその版を潰す。戻す前に比べられるよう、上げた直後の版を控える
   const deployed = rollbackTarget(deps.wrangler(['deployments', 'status', '--json'], { capture: true }));
   const ownVersionId = deployed.ok ? deployed.versionId : null;
 
-  if (await waitForVersion(deps, sha)) {
+  if (await waitForVersion(deps, version)) {
     // 例外で終わっても、確かめられなかった失敗として前の版へ戻す手順に進む
     let seed: SeedCheck;
     try {
@@ -302,7 +312,7 @@ export async function deploy(deps: DeployDeps): Promise<number> {
     if (seed.ok) return 0;
     deps.error(`煙のテスト: ${seed.reason}`);
   } else {
-    deps.error(`煙のテスト: ${SMOKE_TIMEOUT_MS / 1000}秒待っても版が ${sha} になりませんでした`);
+    deps.error(`煙のテスト: ${SMOKE_TIMEOUT_MS / 1000}秒待っても版が ${version} になりませんでした`);
   }
   if (ownVersionId) {
     const current = rollbackTarget(deps.wrangler(['deployments', 'status', '--json'], { capture: true }));
@@ -313,7 +323,7 @@ export async function deploy(deps: DeployDeps): Promise<number> {
       return 1;
     }
   }
-  return failAfterSwitch(deps, target.versionId, `煙のテストの失敗で ${sha} から戻す`);
+  return failAfterSwitch(deps, target.versionId, `煙のテストの失敗で ${version} から戻す`);
 }
 
 // 本番が切り替わった後の失敗。戻し先があれば戻し、どちらでも失敗で終える
