@@ -10,7 +10,8 @@ import {
 } from './helpers.ts';
 
 for (const path of ['/login', '/signup', '/invite', '/terms']) {
-  test(`${path} の静かな操作とロゴの絵が本文の左端にそろう`, async ({ page }) => {
+  // ロゴは、紙の中では白い下地の箱の左端を、紙の無い会員登録の画面では絵の左端を、本文にそろえる
+  test(`${path} の静かな操作とロゴが本文の左端にそろう`, async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -25,14 +26,15 @@ for (const path of ['/login', '/signup', '/invite', '/terms']) {
           .evaluate((sheet) => {
             const title = sheet.querySelector('h1')!.getBoundingClientRect();
             const image = document.querySelector('.gate-brand .brand-name')!.getBoundingClientRect();
-            const logoAnchor = document.querySelector('.onboarding-header')?.getBoundingClientRect().left ?? title.left;
+            const box = document.querySelector('.gate-brand .brand-art')!.getBoundingClientRect();
+            const header = document.querySelector('.onboarding-header')?.getBoundingClientRect();
             const button = sheet.querySelector('.form-actions > .btn.is-sm.is-quiet:first-child')!;
             const text = document.createRange();
             text.selectNodeContents(button);
             return {
               text: text.getBoundingClientRect().left - title.left,
               // 画像のアルファが始まる位置は600px中34px。
-              logo: image.left + (image.width * 34) / 600 - logoAnchor,
+              logo: header ? image.left + (image.width * 34) / 600 - header.left : box.left - title.left,
             };
           });
         expect(Math.abs(offsets.text)).toBeLessThan(1);

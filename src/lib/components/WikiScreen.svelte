@@ -28,6 +28,7 @@
   import ConfirmDialog from './ConfirmDialog.svelte';
   import EmptyState from './EmptyState.svelte';
   import LoadFailed from './LoadFailed.svelte';
+  import MarkdownEditor from './MarkdownEditor.svelte';
   import WikiContent from './WikiContent.svelte';
   import PageHead from './PageHead.svelte';
   import FavoriteButton from './FavoriteButton.svelte';
@@ -551,17 +552,21 @@
           </div>
           <div class="field">
             <label for="wiki-body">{t('wikiBody')}</label>
-            <textarea
+            <!-- Wiki にファイルを上げる口は無いので、添付を切り、落とすか貼ったときは知らせる -->
+            <MarkdownEditor
               id="wiki-body"
-              class="textarea"
-              rows="20"
+              rows={20}
+              attachments={false}
+              toolbar
+              filesNotice={t('wikiFilesNotAllowed')}
               readonly={saving}
               bind:value={body}
-              aria-invalid={bodyError || undefined}
-              aria-describedby={bodyError ? 'wiki-body-error' : 'wiki-body-hint'}
+              invalid={bodyError}
+              describedby={bodyError ? 'wiki-body-error' : 'wiki-body-hint'}
               oninput={() => {
                 bodyError = false;
-              }}></textarea>
+              }}
+            />
             <p id="wiki-body-hint" class="field-hint">{t('wikiBodyHint')}</p>
             {#if bodyError}<p id="wiki-body-error" class="field-error" role="alert">{t('wikiBodyInvalid')}</p>{/if}
           </div>

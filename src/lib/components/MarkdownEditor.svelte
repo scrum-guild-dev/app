@@ -35,13 +35,16 @@
     dataCommentInput,
     attachments = true,
     toolbar = false,
+    rows,
+    filesNotice,
   }: {
     value: string;
     input?: HTMLTextAreaElement;
     attachmentIds?: string[];
     uploading?: boolean;
-    slug: string;
-    workspaceId: string;
+    // 添付を上げる先。添付を切った欄（attachments = false）では使わないので省ける（組織の Wiki にはワークスペースが無い）
+    slug?: string;
+    workspaceId?: string;
     id?: string;
     readonly?: boolean;
     placeholder?: string;
@@ -51,6 +54,9 @@
     dataCommentInput?: string;
     attachments?: boolean;
     toolbar?: boolean;
+    rows?: number;
+    // 添付を切った欄にファイルを落とすか貼ったときに、欄の下に出す知らせ。省くと何も出さない
+    filesNotice?: string;
   } = $props();
 
   type Upload = {
@@ -66,6 +72,7 @@
   };
   const uid = $props.id();
   const quotaId = `${uid}-quota`;
+  const noticeId = `${uid}-notice`;
   let files = $state<Upload[]>([]);
   let picker = $state<HTMLInputElement>();
   let sequence = 0;
@@ -141,10 +148,17 @@
       }
     }
     previous = value;
+    clearFilesNotice();
     oninput?.();
   }
 
+  // 添付を切った欄の「ファイルを上げられません」は、本文が変わったら（書く、小窓で入れる、外から差し替わる）消す
+  function clearFilesNotice(): void {
+    if (filesNotice !== undefined && notice === filesNotice) notice = null;
+  }
+
   function synchronizePositions(): void {
+    clearFilesNotice();
     const edit = pendingInput?.before === previous ? resolveInputEdit(previous, value, pendingInput) : undefined;
     pendingInput = undefined;
     updatePositions(previous, value, edit);
@@ -158,7 +172,7 @@
   }
 
   function add(list: FileList | File[], anchor = input?.selectionStart ?? value.length): void {
-    if (!attachments || readonly || quota) return;
+    if (!attachments || readonly || quota || !slug || !workspaceId) return;
     notice = null;
     for (const file of Array.from(list)) {
       if (attachmentIds.length + active().length >= ATTACHMENTS_PER_SAVE) {
@@ -190,7 +204,7 @@
     try {
       while (!destroyed) {
         const file = files.find((entry) => entry.state === 'queued');
-        if (!file) break;
+        if (!file || !slug || !workspaceId) break;
         file.state = 'uploading';
         try {
           const uploaded = await uploadAttachment(file.file, {
@@ -389,8 +403,27 @@
     applyAssist(toolbarEdit(input.value, input.selectionStart, input.selectionEnd, format));
   }
 
+  // 添付を切った欄にファイルが来たときの知らせ。続けて同じ知らせを出しても読み上げるよう、一度消してから出す
+  async function rejectFiles(): Promise<void> {
+    if (filesNotice === undefined || readonly) return;
+    notice = null;
+    await tick();
+    if (!destroyed) notice = filesNotice;
+  }
+
   function paste(event: ClipboardEvent): void {
     const clipboard = event.clipboardData;
+    // 添付を切った欄に、ファイルだけ（ファイル名の並びだけの文字を含む）を貼ったときは、何も入れずに知らせる。
+    // 文字も一緒のとき（表計算のセルのコピーなど）は、下の文字の貼り付けに任せる（ブラウザの貼り付けなので Ctrl+Z で戻せる）
+    if (
+      !attachments &&
+      clipboard?.files.length &&
+      clipboardTextToInsert(clipboard.getData('text/plain'), Array.from(clipboard.files)) === ''
+    ) {
+      event.preventDefault();
+      void rejectFiles();
+      return;
+    }
     if (!attachments || !clipboard?.files.length) {
       // 文字を選んで URL を1つ貼ったときだけリンクにする。ファイルの貼り付けは下のまま
       const edit =
@@ -430,18 +463,33 @@
     if (!event.dataTransfer?.types.includes('Files') && !event.dataTransfer?.files.length) return;
     event.preventDefault();
     event.stopPropagation();
-    if (!attachments) return;
+    if (!attachments) {
+      void rejectFiles();
+      return;
+    }
     if (!readonly && !quota && event.dataTransfer) add(event.dataTransfer.files);
   }
 </script>
 
-<div class="markdown-editor" aria-busy={uploading}>
+<!-- 添付を切った欄は、欄の周り（書式ボタンや知らせ）に落としたファイルも受け止めて知らせる（ブラウザがファイルを開いて書きかけを失わないように） -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="markdown-editor"
+  aria-busy={uploading}
+  ondragover={(event) => {
+    if (!attachments && event.dataTransfer?.types.includes('Files')) event.preventDefault();
+  }}
+  ondrop={(event) => {
+    if (!attachments) drop(event);
+  }}
+>
   <span class="visually-hidden" role="status" aria-live="polite">{removalNotice}</span>
   <span class="visually-hidden" role="status" aria-live="polite">{slashStatus}</span>
   <div class="slash-wrap">
     <textarea
       class="textarea"
       {id}
+      {rows}
       bind:this={input}
       {value}
       {readonly}
@@ -449,7 +497,9 @@
       aria-invalid={invalid}
       aria-controls={slashOpen ? menuId : undefined}
       aria-activedescendant={slashOpen && slashItems[slashAt] ? optionId(slashItems[slashAt]) : undefined}
-      aria-describedby={[describedby, quota ? quotaId : undefined].filter(Boolean).join(' ') || undefined}
+      aria-describedby={[describedby, quota ? quotaId : undefined, notice ? noticeId : undefined]
+        .filter(Boolean)
+        .join(' ') || undefined}
       data-comment-input={dataCommentInput}
       onbeforeinput={(event) => {
         const element = event.currentTarget;
@@ -562,7 +612,7 @@
     </div>
   {/if}
   {#if quota}<p class="field-error" id={quotaId} role="alert"><Icon name="alert" />{t('attachmentQuota')}</p>{/if}
-  {#if notice}<p class="field-error" role="alert">{notice}</p>{/if}
+  {#if notice}<p class="field-error" id={noticeId} role="alert"><Icon name="alert" />{notice}</p>{/if}
   {#each files.filter((file) => file.state !== 'done' || attachmentIds.includes(file.attachmentId ?? '')) as file (file.key)}
     <div class="file-row" class:is-error={file.error !== null}>
       <Icon name={file.error ? 'alert' : file.state === 'done' ? 'file' : 'upload'} />

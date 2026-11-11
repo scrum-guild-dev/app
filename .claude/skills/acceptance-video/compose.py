@@ -2,7 +2,9 @@
 # 使い方: python3 -I compose.py <recording.webm> <cues.json> <out.mp4>
 #         python3 -I compose.py --spans <cues.json>    字幕を出す区間を JSON で出す（ffmpeg を使わない）
 # 字幕は Pillow で画像にして overlay で重ねる。ffmpeg には subtitles と drawtext のフィルタが無い環境があるため。
-# 終了コード: 0 は書けて 30 秒以内、1 は入力の誤り（cues.json、録画の大きさ）、2 は環境の問題（ffmpeg、Pillow、フォント、書き込み）、
+# 字幕は FONT_CANDIDATES の1つ目のフォントで描き、そのフォントに無い字（「⋯」など）だけを FALLBACK_FONT_CANDIDATES の字を持つフォントで描く。
+# 終了コード: 0 は書けて 30 秒以内、1 は入力の誤り（cues.json、どのフォントにも無い字、録画の大きさ）、
+#             2 は環境の問題（ffmpeg、Pillow、日本語のフォント、書き込み）、
 #             3 は書いたが 30 秒を超えた
 import json
 import math
@@ -22,6 +24,12 @@ FONT_CANDIDATES = [
     '/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc',
     '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
 ]
+# 1つ目のフォントに無い字を描く代わりのフォント。ヒラギノ角ゴシックは「⋯」（U+22EF）を持たず、Apple Symbols は持つ（#1159）
+FALLBACK_FONT_CANDIDATES = [
+    '/System/Library/Fonts/Apple Symbols.ttf',
+]
+# どのフォントも字を割り当てない非文字。字の無いフォントが描く .notdef（豆腐）の形を、この字を描いて取る
+MISSING_PROBE = '\U0010FFFF'
 USAGE = '使い方: python3 -I compose.py <recording.webm> <cues.json> <out.mp4> | --spans <cues.json>'
 
 
@@ -59,24 +67,107 @@ def spans_from_cues(cues):
     ]
 
 
-def load_font():
+def load_fonts():
+    """字幕を描くフォントを、1つ目のフォント、代わりのフォントの順に返す。
+    1つ目か代わりのフォントが無い、開けないときは環境の問題（字幕を直しても直らないので、入力の誤りにしない）"""
     from PIL import ImageFont
 
     font_path = next((p for p in FONT_CANDIDATES if Path(p).exists()), None)
     if font_path is None:
         raise SetupError('日本語のフォントが無い（compose.py の FONT_CANDIDATES）')
-    return ImageFont.truetype(font_path, FONT_SIZE)
+    fallbacks = [p for p in FALLBACK_FONT_CANDIDATES if Path(p).exists()]
+    if not fallbacks:
+        raise SetupError('代わりのフォントが無い（compose.py の FALLBACK_FONT_CANDIDATES）')
+    fonts = []
+    for path in [font_path, *fallbacks]:
+        try:
+            fonts.append(ImageFont.truetype(path, FONT_SIZE))
+        except OSError as err:
+            raise SetupError(f'フォントを開けない: {path}: {err}')
+    return fonts
 
 
-def draw_band(text, font, dest):
+_notdef_masks = {}
+
+
+def has_glyph(font, ch):
+    """font が ch の字を持つか。字の無いフォントは .notdef を描くので、非文字を描いた形と同じなら持たないとみなす"""
+    if font not in _notdef_masks:
+        missing = font.getmask(MISSING_PROBE)
+        _notdef_masks[font] = (missing.size, bytes(missing))
+    size, data = _notdef_masks[font]
+    mask = font.getmask(ch)
+    return not (mask.size == size and bytes(mask) == data)
+
+
+def is_mark(ch):
+    """前の字に付いて1つの字になる字（結合文字、異体字セレクタ、ゼロ幅接合子）。前の字と同じフォントで描く"""
+    import unicodedata
+
+    return unicodedata.combining(ch) != 0 or '\ufe00' <= ch <= '\ufe0f' or ch == '\u200d'
+
+
+def is_unusable(ch):
+    """フォントの有無にかかわらず字幕に描けない字（制御文字、対になっていないサロゲート）"""
+    import unicodedata
+
+    return unicodedata.category(ch) in ('Cc', 'Cs')
+
+
+def split_runs(text, fonts, has=has_glyph):
+    """text を、字ごとに字を持つ最初のフォントで分け、(文, fonts の番号) の並びにする。
+    どのフォントにも無い字があれば、豆腐のまま描かずに入力の誤りとして字を挙げる。
+    has は字の有無の判定で、テストがフォントを読まずに差し替えるために受け取る"""
+    runs, missing = [], []
+    for ch in text:
+        if runs and is_mark(ch):
+            runs[-1] = (runs[-1][0] + ch, runs[-1][1])
+            continue
+        index = None if is_unusable(ch) else next((i for i, font in enumerate(fonts) if has(font, ch)), None)
+        if index is None:
+            if ch not in missing:
+                missing.append(ch)
+        elif runs and runs[-1][1] == index:
+            runs[-1] = (runs[-1][0] + ch, index)
+        else:
+            runs.append((ch, index))
+    if missing:
+        chars = '、'.join(f'U+{ord(ch):04X}「{ch}」' if ch.isprintable() else f'U+{ord(ch):04X}' for ch in missing)
+        raise ValueError(
+            f'字幕の字がどのフォントにも無い（{chars}。compose.py の FONT_CANDIDATES と FALLBACK_FONT_CANDIDATES）: {text!r}'
+        )
+    return runs
+
+
+def baseline_y(font):
+    """font で anchor の lm（縦の中央）に描いた字を、anchor の ls（ベースライン）で同じ画素に描く y。
+    Pillow が lm から求めるずれを、同じ字の2つの anchor の外接矩形の差で取る（getmetrics から計算すると 1px ずれるフォントがある）"""
+    middle = font.getbbox('H', anchor='lm')
+    base = font.getbbox('H', anchor='ls')
+    return BAND_H / 2 + middle[1] - base[1]
+
+
+def draw_band(text, fonts, dest):
     from PIL import Image, ImageDraw
 
     img = Image.new('RGB', (WIDTH, BAND_H), BAND_BG)
     draw = ImageDraw.Draw(img)
-    width = draw.textlength(text, font=font)
+    runs = split_runs(text, fonts)
+    # 字の幅は描くフォントで測り、全体を中央に寄せる
+    widths = [draw.textlength(run, font=fonts[index]) for run, index in runs]
+    width = sum(widths)
     if width > WIDTH - TEXT_MARGIN * 2:
         raise ValueError(f'字幕が帯に収まらない（{width:.0f}px）: {text}')
-    draw.text(((WIDTH - width) / 2, BAND_H / 2), text, font=font, fill=(255, 255, 255), anchor='lm')
+    # 1つ目のフォントの字は、これまでどおり帯の縦の中央（anchor の m）に置く。
+    # 代わりのフォントの字は、1つ目のフォントのベースラインにそろえる（m はフォントごとの上下の幅で決まり、ずれるため）
+    baseline = baseline_y(fonts[0])
+    x = (WIDTH - width) / 2
+    for (run, index), run_width in zip(runs, widths):
+        if index == 0:
+            draw.text((x, BAND_H / 2), run, font=fonts[0], fill=(255, 255, 255), anchor='lm')
+        else:
+            draw.text((x, baseline), run, font=fonts[index], fill=(255, 255, 255), anchor='ls')
+        x += run_width
     img.save(dest)
 
 
@@ -98,14 +189,14 @@ def compose(webm, cues, out):
     spans = spans_from_cues(cues)
     check_recording(webm)
     try:
-        font = load_font()
+        fonts = load_fonts()
     except ImportError as err:
         raise SetupError(f'Pillow が無い（python3 -I はユーザーの site-packages を読まない）: {err}')
     with tempfile.TemporaryDirectory() as tmp:
         inputs, chain, prev = [], [f'[0:v]pad={WIDTH}:{VIDEO_H + BAND_H}:0:{BAND_H}:color=#0f0f14[base]'], 'base'
         for i, span in enumerate(spans):
             png = Path(tmp) / f'cue{i}.png'
-            draw_band(span['text'], font, png)
+            draw_band(span['text'], fonts, png)
             inputs += ['-i', str(png)]
             label = f'v{i}'
             chain.append(
@@ -148,4 +239,5 @@ def main(argv):
     return 0
 
 
-sys.exit(main(sys.argv))
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

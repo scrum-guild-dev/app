@@ -21,8 +21,25 @@ async function expectHorizontalBrand(page: Page): Promise<void> {
   expect(box.width).toBeGreaterThan(100);
   expect(Math.abs(box.width / box.height - 3)).toBeLessThan(0.02);
   const parent = (await art.locator('..').boundingBox())!;
-  if (await art.evaluate((el) => el.parentElement?.classList.contains('gate-brand'))) {
-    // 枠の外では透明な左余白を外へ出している。素材そのもののアルファを読み、絵が切れず本文とそろうことを測る。
+  const placement = await art.evaluate((el) =>
+    el.closest('.gate-sheet') ? 'sheet' : el.parentElement?.classList.contains('gate-brand') ? 'header' : 'other',
+  );
+  if (placement === 'sheet') {
+    // 枠の外の紙の中では、白い下地の箱の左端を本文にそろえ、地が白いテーマでも箱が分かるよう内側に細い枠を引く
+    const artBox = (await art.boundingBox())!;
+    expect(Math.abs(artBox.x - parent.x)).toBeLessThan(1);
+    const frame = await art.evaluate((el) => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--color-line)';
+      el.append(probe);
+      const line = getComputedStyle(probe).color;
+      probe.remove();
+      return { shadow: getComputedStyle(el).boxShadow, line };
+    });
+    expect(frame.shadow).toContain(frame.line);
+    expect(frame.shadow).toMatch(/0px 0px 0px 1px inset/);
+  } else if (placement === 'header') {
+    // 紙を持たない会員登録と利用開始のヘッダーでは透明な左余白を外へ出している。素材そのもののアルファを読み、絵が切れず本文とそろうことを測る。
     const opaqueLeft = await logo.evaluate((element) => {
       const img = element as HTMLImageElement;
       const canvas = document.createElement('canvas');

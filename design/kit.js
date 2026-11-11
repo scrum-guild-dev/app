@@ -443,12 +443,15 @@
 
   // ---- 部品 ----
   // 提供された横組みロゴとマーク。名前は隣の視覚的に隠した文字で1回だけ読ませる。
-  // 枠の外では .gate-brand が透明余白（600pxの画像の左34px）を引いて本文とそろえる。BrandMark.svelte と共通。
+  // 枠の外の紙では白い下地の箱の左端を本文とそろえる。BrandMark.svelte と共通。
   const brandMark = `<span class="brand-art" aria-hidden="true"><img class="brand-name" src="brand/header/logo-transparent-600.png" srcset="brand/header/logo-transparent-600.png 600w, brand/header/logo-transparent-1200.png 1200w" sizes="240px" width="600" height="200" alt=""><img class="brand-mark" src="brand/master/symbol.png" width="629" height="678" alt=""></span>`;
   // 左上の角のマスのマーク単体。白い下地の枠の中に置く。BrandSymbol.svelte と共通
   const brandSymbol = `<span class="brand-art is-symbol" aria-hidden="true"><img class="brand-mark" src="brand/master/symbol.png" width="629" height="678" alt=""></span>`;
   // Google の G のロゴ。Google のブランドの決まりの公式の SVG で、形も4色も変えない（本番は GoogleMark.svelte）
   const googleMark = `<svg class="google-mark" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>`;
+  // GitHub のマーク。Primer Octicons mark-github 19.24.0: https://github.com/primer/octicons/blob/v19.24.0/icons/mark-github-16.svg
+  // （MIT; licenses/octicons.txt）。形は変えず、色は文字の色（本番は GithubMark.svelte）
+  const githubMark = `<svg class="github-mark" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656"/></svg>`;
   // opts.image はログインの手段の側のアバターの画像の URL（指名する人を確かめるときなど）。画像が読めないときは頭文字に戻す
   // （Avatar.svelte と同じ）。見本の画像は SAMPLE_PHOTO のような架空の data URI にし、外の URL を読まない
   function avatar(name, hue, opts = {}) {
@@ -3053,6 +3056,22 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function createSheetChip(label, values, points = false) {
     return `<span class="row-menu attr-chip${points ? " is-points" : ""}"><button class="chip chip-btn is-unset" type="button" data-row-menu data-create-chip="${esc(label)}" aria-label="${esc(label)}: 未設定" aria-haspopup="menu" aria-expanded="false"><span class="chip-text">${esc(label)}</span>${icon("chevron")}</button><ul class="account-menu-list row-menu-list" role="menu" aria-label="${esc(label)}を選ぶ" hidden>${["なし", ...values].map((text, index) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${index === 0}" data-create-option>${esc(text)}</button></li>`).join("")}</ul></span>`;
   }
+  // 本文の下の書式ボタン（本番の MarkdownEditor の toolbar）。起票シートと Wiki の編集で使う。
+  // 押すと、同じ .markdown-editor の中の textarea を書き換える（下の document の click）
+  function markdownToolbarHtml(disabled = false) {
+    return `<div class="markdown-toolbar" role="group" aria-label="${t("markdownToolbar")}">${[["bullet", "slashBullet", "list-bullet"], ["todo", "slashTodo", "list-check"], ["code", "slashCode", "code"], ["quote", "slashQuote", "quote"]].map(([key, label, mark]) => `<button class="pill" type="button" data-markdown-format="${key}" aria-label="${t(label)}" title="${t(label)}" ${disabled ? "disabled" : ""}>${icon(mark)}</button>`).join("")}</div>`;
+  }
+  // ボタンを押しても本文からフォーカスを外さない
+  document.addEventListener("pointerdown", (event) => { if (event.target.closest?.("[data-markdown-format]")) event.preventDefault(); });
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-markdown-format]");
+    const body = button?.closest(".markdown-editor")?.querySelector("textarea");
+    if (!body || body.readOnly) return;
+    const edit = toolbarEdit(body.value, body.selectionStart, body.selectionEnd, button.dataset.markdownFormat);
+    body.setRangeText(edit.text, edit.start, edit.end, "end");
+    body.focus(); body.setSelectionRange(edit.selectionStart, edit.selectionEnd);
+    body.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   // 本番の markdown-toolbar.ts と同じ行単位の書き換え。
   function toolbarEdit(value, from, to, format) {
       const start = from === 0 ? 0 : value.lastIndexOf('\n', from - 1) + 1;
@@ -3144,7 +3163,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
           ${sending ? `<p role="status">${t("storyCreating")}</p>` : ""}
           <p class="muted" id="create-sheet-reason">${t("taskTitleRequired")}</p>
           <label class="field"><span class="field-label">${t("fieldTitle")}</span><input class="input create-sheet-title" name="title" placeholder="${t("taskTitlePlaceholder")}"></label>
-          <div class="field"><label class="field-label" for="sample-create-body">${t("fieldBody")}</label><div class="markdown-editor"><div class="slash-wrap"><textarea class="textarea" id="sample-create-body" name="body" ${sending ? "readonly" : ""}></textarea></div><div class="markdown-toolbar" role="group" aria-label="${t("markdownToolbar")}">${[["bullet", "slashBullet", "list-bullet"], ["todo", "slashTodo", "list-check"], ["code", "slashCode", "code"], ["quote", "slashQuote", "quote"]].map(([key, label, mark]) => `<button class="pill" type="button" data-markdown-format="${key}" aria-label="${t(label)}" title="${t(label)}" ${sending ? "disabled" : ""}>${icon(mark)}</button>`).join("")}</div></div></div>
+          <div class="field"><label class="field-label" for="sample-create-body">${t("fieldBody")}</label><div class="markdown-editor"><div class="slash-wrap"><textarea class="textarea" id="sample-create-body" name="body" ${sending ? "readonly" : ""}></textarea></div>${markdownToolbarHtml(sending)}</div></div>
           <div class="create-sheet-attrs" data-create-task>
             ${createSheetChip(t("taskParent").replace("{story}", t("story")), ["架空の親ストーリー"])}
             ${createSheetChip(t("assignee"), ["架空の担当"])}
@@ -3167,16 +3186,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const sheet = document.querySelector("[data-create-sheet]");
     const title = sheet.querySelector('[name="title"]');
     const body = sheet.querySelector('[name="body"]');
-    sheet.querySelectorAll("[data-markdown-format]").forEach((button) => {
-      button.addEventListener("pointerdown", (event) => event.preventDefault());
-      button.addEventListener("click", () => {
-        if (body.readOnly) return;
-        const edit = toolbarEdit(body.value, body.selectionStart, body.selectionEnd, button.dataset.markdownFormat);
-        body.setRangeText(edit.text, edit.start, edit.end, "end");
-        body.focus(); body.setSelectionRange(edit.selectionStart, edit.selectionEnd);
-        body.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-    });
     let kind = "task";
     const finish = () => { sheet.close(); sheet.remove(); opener.focus(); };
     const close = () => {
@@ -4298,13 +4307,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     createSheetHtml, mobileTabsHtml, favoriteButtonHtml, favoritesNavHtml, favoriteRetryHtml, favoriteBackgroundHtml,
     formatTrialStopDateTime,
     first, firstHref, firstSteps, emptyState, art,
-    D, t, brandMark, brandSymbol, googleMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
+    D, t, brandMark, brandSymbol, googleMark, githubMark, THEMES, THEME_LABEL, THEME_NOTE, esc, icon, md, sumPts, cycleTheme, setTheme, applyTheme, mount,
     onRedraw: (fn) => extraRedraws.push(fn), openDrawer, drawerHtml, drawerState: drawer, flashRow,
     user, task, tasksWhere, repoTag, categoryTag, sprintTag, repoPicker, sprintLabel, colName, categoryOf, storyPts, epicPts, dueOf,
     attrChipExamples, avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead, mobilePageHead,
     narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
-    filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter, storageBytes,
+    filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, markdownToolbarHtml, mdBody, markdownSample, meter, storageBytes,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
     enableAssistOnCatalog: () => { assistOnCatalog = true; },
   };

@@ -6,8 +6,8 @@
   import { resetToDefaults } from '../../lib/organization.svelte.ts';
   import { RETURN_TO_MAX_LENGTH } from '../../shared/return-to.ts';
   import { setupReturnTo } from '../../lib/onboarding.ts';
+  import GithubMark from '../../lib/components/GithubMark.svelte';
   import GoogleMark from '../../lib/components/GoogleMark.svelte';
-  import Icon from '../../lib/components/Icon.svelte';
   import LegalLinks from '../../lib/components/LegalLinks.svelte';
   import { t } from '../../lib/vocabulary.svelte.ts';
   import { ExternalAuthNavigation } from '../../lib/external-auth-navigation.svelte.ts';
@@ -68,7 +68,7 @@
         data-sveltekit-reload
         aria-disabled={externalAuth.moving !== null}
         onclick={(event) => externalAuth.start(event, 'github')}
-        ><Icon name="git" />{externalAuth.moving === 'github' ? t('authMoving') : t('signupWithGithub')}</a
+        ><GithubMark />{externalAuth.moving === 'github' ? t('authMoving') : t('signupWithGithub')}</a
       >
       <a
         class="btn is-wide is-google"
