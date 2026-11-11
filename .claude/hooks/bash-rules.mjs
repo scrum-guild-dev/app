@@ -322,6 +322,8 @@ const isReleaseTag = (name) => /^(refs\/)?tags\/v/.test(name) || /^v\d/.test(nam
 const enablesFollowTags = (value) => value === undefined || !/^(false|0|no|off)$/i.test(value);
 // push の先を変える remote の設定（refspec を足す push、すべての ref を鏡にする mirror）
 const REMOTE_PUSH_CONFIG = /^remote\..+\.(push|mirror)$/i;
+const REMOTE_PUSH_REASON = 'remote.<名前>.push と remote.<名前>.mirror の設定は git push の先を変え、main、production、v* のタグを含むかを判定できない。人が確かめる';
+const FOLLOW_TAGS_CONFIG = /^push\.followtags$/i;
 
 // git の前に置く -c <名前>=<値>、-c<名前>=<値>、--config-env <名前>=<環境変数>、--config-env=<名前>=<環境変数> を { key, value, fromEnv } に読む。
 // -c <名前> だけ（= が無い）は true とみなされる。--config-env の値は環境変数の中身で、字面からは読めない
@@ -404,7 +406,7 @@ function judgeGit(args, dir, branchOf) {
   // -c と --config-env で渡す設定。--config-env=<名前>=<環境変数> は値を環境変数から読むので、値を字面で読めない
   const configs = gitConfigOptions(args.slice(0, i));
   // git -c push.followTags=true push は、--follow-tags と同じく v* のタグも push しうる。--config-env は値を読めないので有効とみなす
-  if (sub === 'push' && configs.some((c) => /^push\.followtags$/i.test(c.key) && (c.fromEnv || enablesFollowTags(c.value)))) {
+  if (sub === 'push' && configs.some((c) => FOLLOW_TAGS_CONFIG.test(c.key) && (c.fromEnv || enablesFollowTags(c.value)))) {
     return [DENY, RELEASE_TAG_REASON];
   }
   // 括弧の glob の後ろに語が続く形（git --no-pager(N) commit）は、judgeBash が道具を問わず確認を挟む。
@@ -422,8 +424,10 @@ function judgeGit(args, dir, branchOf) {
   if (verdict?.[0] === DENY) return verdict;
   // git -c remote.origin.push=… push は refspec を設定から足し、remote.origin.mirror=true push はすべての ref を鏡にする（削除と force も含む）。
   // 先を語から読めない。並べて書いた main などの DENY は上で先に返す
-  if (sub === 'push' && configs.some((c) => REMOTE_PUSH_CONFIG.test(c.key))) {
-    return [ASK, 'remote.<名前>.push と remote.<名前>.mirror の設定は push する先を変え、main、production、v* のタグを含むかを判定できない。人が確かめる'];
+  if (sub === 'push' && configs.some((c) => REMOTE_PUSH_CONFIG.test(c.key))) return [ASK, REMOTE_PUSH_REASON];
+  // -c alias.<名前>=push はサブコマンドを別名にして上の push の判定を外し、include.path と includeIf.* は読めない設定ファイルを足す
+  if (configs.some((c) => /^(alias\.|include\.path$|includeif\.)/i.test(c.key))) {
+    return [ASK, '-c と --config-env の alias.*、include.path、includeIf.* は、push をするかや設定を字面で判定できない。人が確かめる'];
   }
   // core.hooksPath を変えると .githooks/ の守りが外れる。止める判定はそのまま、それ以外は人が確かめる
   const touchesHooksPath = (a) => /core\.hookspath/i.test(a);
@@ -450,11 +454,11 @@ function judgeGitCommand(sub, rest, gitDir, branchOf) {
   // 設定に残すと、後の引数の無い git push が v* のタグや別の先も push する。読むだけの形は通す
   if (sub === 'config' && !rest.some((a) => /^--(get|get-all|get-regexp|list|unset|unset-all)$|^-l$/.test(a) || a === 'get' || a === 'list' || a === 'unset')) {
     // 名前の後ろに値の語が無い形（git config push.followTags）は読み取り
-    const at = rest.findIndex((a) => /^push\.followtags$/i.test(a));
-    if (at !== -1 && rest[at + 1] !== undefined && enablesFollowTags(rest[at + 1])) return [DENY, RELEASE_TAG_REASON];
-    if (rest.some((a, k) => REMOTE_PUSH_CONFIG.test(a) && rest[k + 1] !== undefined)) {
-      return [ASK, 'remote.<名前>.push と remote.<名前>.mirror の設定は後の git push の先を変え、main、production、v* のタグを含むかを判定できない。人が確かめる'];
-    }
+    // 値は名前の後ろの、- で始まらない最初の語（git config push.followTags --global true の true）
+    const valueAfter = (k) => rest.slice(k + 1).find((w) => !w.startsWith('-'));
+    const at = rest.findIndex((a) => FOLLOW_TAGS_CONFIG.test(a));
+    if (at !== -1 && valueAfter(at) !== undefined && enablesFollowTags(valueAfter(at))) return [DENY, RELEASE_TAG_REASON];
+    if (rest.some((a, k) => REMOTE_PUSH_CONFIG.test(a) && valueAfter(k) !== undefined)) return [ASK, REMOTE_PUSH_REASON];
   }
   if (sub !== 'push') return null;
 
@@ -660,8 +664,10 @@ const unescapeJson = (s) => s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String
 // words は引数ぜんたい、endpoints はエンドポイントの位置引数（gh api）か URL（curl）。ref の更新かどうかは、コマンドぜんたいの文字列でなく、
 // endpoints だけで見る（Issue のコメントの本文に書いた /git/refs/ や {"force":true} は、ref を動かさない）。
 // opaqueQuery は query のフィールドが字面でないか
-function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies = [], unreadable = false, opaqueQuery = false } = {}) {
+function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies: rawBodies = [], unreadable = false, opaqueQuery = false } = {}) {
   const path = endpoints.join(' ');
+  // 本文はキーも値も JSON のエスケープを戻してから読む（"\u0072ef"、"\u0066orce" も ref と force）
+  const bodies = rawBodies.map((body) => ({ ...body, text: unescapeJson(body.text) }));
   // mutation の名前は、宛先を問わず引数と本文のぜんたいで見る（glob、#、大文字、query string、--url-query、-F で graphql の宛先を字面から外せるため）。
   // コメントの本文に書いた語も止まる
   const text = unescapeJson([...words, ...bodies.map(({ text: body }) => body)].join(' '));
@@ -704,7 +710,7 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
     // 作る ref の名前は、フィールドの ref= か本文の "ref" で渡す
     const refText = [
       ...fields.filter((f) => /^ref=/.test(f)),
-      ...bodies.flatMap(({ text: body }) => [...body.matchAll(/"ref"\s*:\s*"((?:[^"\\]|\\.)*)"/g)].map((m) => unescapeJson(m[1]))),
+      ...bodies.flatMap(({ text: body }) => [...body.matchAll(/"ref"\s*:\s*"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1])),
     ].join(' ');
     if (/refs\/heads\/production(?![\w.-]|\/)/.test(refText)) return [DENY, PRODUCTION_BRANCH_REASON];
     if (/refs\/tags\/v/.test(refText)) return [DENY, RELEASE_TAG_REASON];
@@ -728,6 +734,11 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
   if (isDynamic(path) && /\/releases(?![\w-])/.test(path)) return [ASK, 'Release の宛先を展開で渡すと、Release を書き換えるかを判定できない。人が確かめる'];
   // contents API の書き込みは、ブランチを指定しなければ既定のブランチ（main）へ直にコミットする
   if (/\/contents\//.test(path)) return [DENY, 'contents API でのファイルの書き込みはしない。作業ブランチで git を使う'];
+  // 宛先の語（git、refs、releases）をパーセントエンコードすると、上の字面の判定に当たらない（repos/o/r/%67it/refs、repos/o/r/%72eleases）。
+  // query string（?name=a%20b）は資源を変えないので見ない
+  if (endpoints.some((e) => /%[0-9a-f]{2}/i.test(e.replace(/[?#].*$/, '')))) {
+    return [ASK, '書き込みの宛先にパーセントエンコードがあり、main、production、v* のタグ、Release に触れるかを字面で判定できない。人が確かめる'];
+  }
   return null;
 }
 
