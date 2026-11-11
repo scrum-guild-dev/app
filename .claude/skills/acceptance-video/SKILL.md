@@ -25,7 +25,7 @@ description: >-
 
 手元のセッションだけで使う。クラウドのセッションは対象にしない。
 
-- `ffmpeg`、`python3` と Pillow、macOS の日本語フォント（ヒラギノ）
+- `ffmpeg`、`python3` と Pillow、macOS の日本語フォント（ヒラギノ角ゴシック）と記号のフォント（Apple Symbols）。字幕はヒラギノ角ゴシックで描き、ヒラギノ角ゴシックに無い字（「⋯」など）だけを Apple Symbols で描く（`compose.py` の `FALLBACK_FONT_CANDIDATES`。#1159）
 - Playwright の Chromium（入っていなければ `pnpm exec playwright install chromium`）
 
 ## 手順
@@ -138,7 +138,7 @@ python3 -I .claude/skills/acceptance-video/compose.py <出力>/recording.webm <�
 - `goto` が HTTP 400 以上を返すと、見つからない扱いにする（録画は応答コードを見ない）
 - 試しが通っても、録画の待ちの揺れで落ちることはある。その場合は録画のログから直す
 
-`compose.py` の終了コードは、1 が入力の誤り（`cues.json`、録画の大きさ）、2 が環境の問題（`ffmpeg`、Pillow、フォント）、3 が 30 秒超え。3 なら、手順書の待ちを縮めるか場面を減らして、`pnpm db:seed` から撮り直す。
+`compose.py` の終了コードは、1 が入力の誤り（`cues.json`、どのフォントにも無い字、録画の大きさ）、2 が環境の問題（`ffmpeg`、Pillow、フォント）、3 が 30 秒超え。どのフォントにも無い字は、豆腐のまま合成せずに字（`U+XXXX`）を挙げて止まるので、辞書の言葉と見比べて字幕を直すか、字を持つフォントを `FALLBACK_FONT_CANDIDATES` に足す。3 なら、手順書の待ちを縮めるか場面を減らして、`pnpm db:seed` から撮り直す。
 録画が途中で失敗しても、seed の行は書き換わったままになる。手順 6 は行う。
 
 ### 5. 確かめる
