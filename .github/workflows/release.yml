@@ -23,7 +23,8 @@ permissions:
 jobs:
   production:
     # App の鍵は Environment release のシークレットに置き、リポジトリのシークレットには置かない。
-    # Environment の対象は v* のタグだけに人が絞るので、ほかのブランチのワークフローからは鍵を読めない
+    # Environment の対象は v* のタグだけに人が絞る。Environment が縛るのはジョブの ref だけで YAML は縛らないので、
+    # v* のタグを作れる人は、自分の YAML のコミットにタグを付けて鍵を読める。タグの作成を管理者に絞る Ruleset が要る
     environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 5
