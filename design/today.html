@@ -44,8 +44,8 @@ SQ.mount("today", () => {
   const todayEmpty = hasWs
     ? SQ.emptyState("sun", `今日やる${t("task")}はまだありません`,
         `${t("backlog")}や${t("sprint")}の行の左端にある太陽を押すと、ここに並びます。`,
-        `<a class="btn is-sm" href="${SQ.firstHref("backlog.html")}">${t("backlog")}を開く</a>`, undefined, "notice")
-    : SQ.emptyState("sun", `今日やる${t("task")}はまだありません`, `${t("workspace")}に所属すると、自分が担当する${t("task")}がここに並びます。`, "", undefined, "notice");
+        `<a class="btn is-sm" href="${SQ.firstHref("backlog.html")}">${t("backlog")}を開く</a>`, undefined, "sun")
+    : SQ.emptyState("sun", `今日やる${t("task")}はまだありません`, `${t("workspace")}に所属すると、自分が担当する${t("task")}がここに並びます。`, "", undefined, "sun");
   // 今日やる以外の区分は、空なら出さない
   const part = (id, title, list) => (list.length ? section(id, title, list.length, book(list, opts)) : "");
   const dueOpts = { ...opts, meta: (x) => (dueDate(x) === D.today ? '<span class="chip is-warn">期日は今日</span>' : "") };
@@ -61,7 +61,7 @@ SQ.mount("today", () => {
       ${SQ.first ? SQ.firstSteps(SQ.first) : ""}
       ${active.length ? `<div class="notice-grid">${active.map((id) => sprintNotice(id)).join("")}</div>` : ""}
       ${part("s-overdue", `${t("due")}切れ`, overdueList)}
-      ${section("s-today", "今日やると決めたもの", todayList.length, book(todayList, { ...opts, empty: todayEmpty }), "印を付けた日が過ぎても、完了にするか印を外すまで残ります")}
+      ${section("s-today", "今日やると決めたもの", todayList.length || null, book(todayList, { ...opts, empty: todayEmpty }), "印を付けた日が過ぎても、完了にするか印を外すまで残ります")}
       ${dueList.length ? section("s-due", `今週が${t("due")}`, dueList.length, book(dueList, dueOpts)) : ""}
       ${restList.length ? foldedSection("s-sprint", `進行中の${t("sprint")}`, restList.length, book(restList, opts)) : ""}
       ${part("s-done", t("doneToday"), doneList)}
