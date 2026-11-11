@@ -56,7 +56,7 @@ SQ.mount("today", () => {
         ["is-warn", "clock", `今週が${t("due")}`, dueList.length],
         ["is-ok", "check", "取り込み元で完了", open.filter((x) => x.srcDone).length],
         ["", "check", t("doneToday"), doneList.length],
-      ], "", "", "", true)}
+      ])}
     <div class="layout-main">
       ${SQ.first ? SQ.firstSteps(SQ.first) : ""}
       ${active.length ? `<div class="notice-grid">${active.map((id) => sprintNotice(id)).join("")}</div>` : ""}

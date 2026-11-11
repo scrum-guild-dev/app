@@ -410,7 +410,7 @@
   <LoadFailed inShell />
 {:else}
   <!-- 見出しの上に、ブラウザのタイムゾーンの今日の日付を出す。区分の判定はワークスペースのタイムゾーンの今日で、時差のある所から開くと1日ずれうる -->
-  <PageHead eyebrow={todayLabel} title={t('pageToday')} {tallies} focusable reading />
+  <PageHead eyebrow={todayLabel} title={t('pageToday')} {tallies} focusable />
   <div class="layout-main">{@render main()}</div>
   {#if data.organization?.me.is_admin}<WorkspaceCreateDialog
       bind:this={createDialog}

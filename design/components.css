@@ -476,11 +476,6 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* 画面より高くなりうる脇（エピックの画面の討伐隊は人数に上限が無い）は貼り付けず、本文と一緒にスクロールさせる。
    中でスクロールさせると、面の影とフォーカスの輪が切れ、押せる要素の無い脇は読み上げとキーボードで動かせない */
 .layout-side.is-static { position: static; }
-/* 読む画面（今日やること、マイプロフィール、エピックの詳細）は、見出しに .is-reading を付け、本文の枠ごと中身を 1200px（と左右の余白）で止めて左に寄せる。
-   行と空の状態の箱が画面の端まで伸びると、題と右端の印が離れて読めないため。バックログの木、スプリントの列、計画は付けず画面の幅を使う。
-   子に幅を付けず枠で止めるのは、.content の直下に出る固定配置の部品（引き出しの幕 .scrim、ダイアログ、クリアの演出）が
-   画面を基準に置かれ、枠の幅に縛られないため。子に付けると、幅の指定の無い幕が左の 1200px しか覆わない */
-.content:has(> .page-head.is-reading) { max-width: calc(75rem + 2 * var(--space-8)); }
 /* 同じ画面の値を読み直している間は、木（.tree[aria-busy]）と同じく薄くして、古い値のまま止まっていないことを見せる */
 .layout-aside[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) var(--ease-out); }
 
@@ -704,7 +699,8 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .row-check input { accent-color: var(--color-accent); }
 /* 行のメタ行に置く選択欄（受信箱のリポジトリ）は、行いっぱいに伸ばさず小さい文字で置く */
 .entry-meta .select { width: auto; max-width: min(100%, 18rem); padding-block: 4px; font-size: var(--text-sm); }
-.book { background: var(--color-surface); border: 1px solid var(--color-line); border-left: var(--rule-double); border-radius: var(--radius-1); }
+/* 台帳は 1200px で止める。本文（.content）は上限を持たないので、広い画面で行が伸びると、題と右端の印が離れて読めなくなる（空の状態の .empty も同じ） */
+.book { max-width: 75rem; background: var(--color-surface); border: 1px solid var(--color-line); border-left: var(--rule-double); border-radius: var(--radius-1); }
 /* --row-indent は行の中身が始まる左の位置。落とす位置の線（[data-drop]）もここから始める。
    --grip-col は先頭のつまみ（.grip）の列で、つまみを持つ行（.has-grip）だけが幅を持つ */
 .entry {
@@ -1944,7 +1940,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 }
 
 /* ===== 空の状態 ===== */
-.empty { display: grid; gap: var(--space-2); justify-items: center; text-align: center; padding: var(--space-10) var(--space-4); color: var(--color-muted); border: 1px dashed var(--color-line); border-radius: var(--radius-1); }
+.empty { max-width: 75rem; display: grid; gap: var(--space-2); justify-items: center; text-align: center; padding: var(--space-10) var(--space-4); color: var(--color-muted); border: 1px dashed var(--color-line); border-radius: var(--radius-1); }
 .empty > .ico { width: 28px; height: 28px; }
 /* 線画。アイコンと同じ線（太さ2px、丸い端）で、色はテーマの文字の薄い色に従う。絵柄はテーマで替えない。文とボタンより目立たせない */
 .art { width: 64px; height: 64px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

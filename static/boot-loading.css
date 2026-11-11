@@ -239,10 +239,6 @@ html[data-boot] #boot-loading .boot-frame {
   padding: 16px 32px 40px;
   gap: 32px;
 }
-/* 読む画面（today と aside の形）は、描けた画面（components.css の .page-head.is-reading）と同じく見出しと本文を 1200px で止める */
-html:is([data-boot='today'], [data-boot='aside']) #boot-loading .boot-content > * {
-  max-width: 75rem;
-}
 #boot-loading .boot-body {
   gap: 16px;
 }

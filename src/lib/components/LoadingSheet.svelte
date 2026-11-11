@@ -54,8 +54,7 @@
       <main class="content">
         <h1 class="visually-hidden">{t('loading')}</h1>
         {#if shape !== 'task'}
-          <!-- 読む画面（today と aside の形）は、読み込んだ後と同じく本文の幅を止める（PageHead の reading） -->
-          <div class="page-head skeleton" class:is-reading={shape === 'today' || shape === 'aside'} aria-hidden="true">
+          <div class="page-head skeleton" aria-hidden="true">
             <span class="skeleton-line is-eyebrow"></span>
             <div class="page-head-row">
               <span class="skeleton-line is-title"></span>

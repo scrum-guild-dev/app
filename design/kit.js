@@ -784,14 +784,13 @@
     button.setAttribute("aria-expanded", String(open));
     button.parentElement.dataset.open = String(open);
   });
-  // reading は読む画面（今日やること、マイプロフィール、エピックの詳細）。本文の幅を 1200px で止める（components.css の .is-reading）
-  function pageHead(eyebrow, title, tallies = [], actions = "", meta = "", narrowSummary = "", reading = false) {
+  function pageHead(eyebrow, title, tallies = [], actions = "", meta = "", narrowSummary = "") {
     const counts = (items) => items.length ? `<dl class="tally">${items.map(([cls, ic, label, n]) => `<div class="${n ? cls : ""}"><dt>${ic ? icon(ic) : ""}${label}</dt><dd>${n}</dd></div>`).join("")}</dl>` : "";
     const compactSummary = tallies.length > 1 || meta ? narrowSummary : "";
     const metrics = compactSummary
       ? `<div class="page-head-metrics">${counts(tallies.slice(0, 1))}${narrowDisclosure(compactSummary, `${counts(tallies.slice(1))}${meta ? `<div class="page-head-meta">${meta}</div>` : ""}`)}</div>`
       : `${counts(tallies)}${meta}`;
-    return `<header class="page-head${compactSummary ? " is-compact" : ""}${reading ? " is-reading" : ""}">
+    return `<header class="page-head${compactSummary ? " is-compact" : ""}">
       ${eyebrow ? `<span class="page-eyebrow">${eyebrow}</span>` : ""}
       <div class="page-head-row"><div class="page-title-row"><h1 class="page-title">${title}</h1></div>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
       ${metrics}

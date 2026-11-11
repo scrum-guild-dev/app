@@ -267,7 +267,7 @@
 {/snippet}
 
 {#if workspace && data.notFound}
-  <PageHead title={t('epicPageNotFoundTitle', { epic: t('epic') })} eyebrow={workspace.name} focusable reading />
+  <PageHead title={t('epicPageNotFoundTitle', { epic: t('epic') })} eyebrow={workspace.name} focusable />
   <EmptyState
     icon="search"
     title={t('epicPageNotFoundTitle', { epic: t('epic') })}
@@ -305,7 +305,6 @@
     {actions}
     meta={epic.completed_at !== null || epic.canceled_at !== null ? status : undefined}
     focusable
-    reading
   />
 
   {#if stale}

@@ -14,7 +14,6 @@
   // kit.js の pageHead。画面の見出し（h1）、上の小さな見出し、集計、右上の操作。
   // focusable は、画面を移った後や、操作した行が消えた後に見出しへフォーカスを置く画面（作ったワークスペースの画面、今日やること）が付ける。
   // meta は集計の下に置く1行（バックログの画面のチーム全体の経験値。kit.js の pageHead の meta）
-  // reading は読む画面（今日やること、マイプロフィール、エピックの詳細）が付け、本文の幅を 1200px で止める（kit.js の pageHead の reading）
   let {
     title,
     eyebrow,
@@ -23,7 +22,6 @@
     meta,
     focusable = false,
     narrowSummary,
-    reading = false,
   }: {
     title: string;
     eyebrow?: string;
@@ -32,7 +30,6 @@
     meta?: Snippet;
     focusable?: boolean;
     narrowSummary?: string;
-    reading?: boolean;
   } = $props();
 
   const mobileHead = getContext<MobilePageHead | undefined>(MOBILE_PAGE_HEAD);
@@ -43,7 +40,7 @@
   const compactSummary = $derived(tallies.length > 1 || meta ? narrowSummary : undefined);
 </script>
 
-<header class="page-head" class:is-compact={!!compactSummary} class:is-reading={reading}>
+<header class="page-head" class:is-compact={!!compactSummary}>
   {#if eyebrow}<span class="page-eyebrow">{eyebrow}</span>{/if}
   <div class="page-head-row">
     <div class="page-title-row">

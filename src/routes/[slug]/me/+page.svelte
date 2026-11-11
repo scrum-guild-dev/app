@@ -217,7 +217,7 @@
   <span class="field-hint" role="status">{retryStatus(grantsRetry)}</span>
 {/snippet}
 
-<PageHead title={t('pageMe')} eyebrow={me?.name} reading />
+<PageHead title={t('pageMe')} eyebrow={me?.name} />
 
 <!-- 届いた招待（この組織のワークスペースへの承諾待ち）。招待が無ければ何も出さない -->
 <MeInvitations {slug} list={data.invitations} />
