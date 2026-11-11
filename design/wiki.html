@@ -349,7 +349,7 @@ function editHtml(p) {
         <span class="field-hint" id="wk-title-hint">${fixed ? "本文の frontmatter の title が題です。変えるときは本文を直します。" : "前後の空白を除いて 1〜100 字。本文の先頭の frontmatter に title を書くと、そちらが題になります。"}</span>
         <span class="field-error" id="wk-title-error" role="alert" hidden>${icon("alert")}<span></span></span></div>
       <div class="field"><label class="field-label" for="wk-body">本文（Markdown）</label>
-        <textarea class="textarea" id="wk-body" rows="16" spellcheck="false" aria-describedby="wk-body-hint wk-body-error">${esc(md)}</textarea>
+        <div class="slash-wrap"><textarea class="textarea" id="wk-body" rows="16" spellcheck="false" data-slash aria-describedby="wk-body-hint wk-body-error">${esc(md)}</textarea></div>
         <span class="field-hint" id="wk-body-hint">10 万字まで。先頭に --- で囲んだ frontmatter を書けます。キーは自由で、title 以外はページの頭に表で出ます。</span>
         <span class="field-error" id="wk-body-error" role="alert" hidden>${icon("alert")}<span></span></span></div>
       <div class="form-actions"><button class="btn is-primary" type="submit" id="wk-submit" data-label="${isNew ? "ページを足す" : "保存する"}">${isNew ? "ページを足す" : "保存する"}</button><button class="btn is-quiet" type="button" data-wiki="cancel">やめる</button>

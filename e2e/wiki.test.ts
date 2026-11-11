@@ -78,6 +78,52 @@ for (const theme of A11Y_THEMES) {
   });
 }
 
+test('組織の Wiki の本文はタスクの本文と同じエディタで書け、添付の口は出さない', async ({ page }) => {
+  const violations = await watchViolations(page);
+  await page.goto('/aoba/wiki');
+  await page.getByRole('button', { name: 'ページを足す', exact: true }).click();
+  await page.getByLabel('題', { exact: true }).fill(`エディタ-${crypto.randomUUID().slice(0, 8)}`);
+  const input = page.getByRole('textbox', { name: '本文', exact: true });
+  const menu = page.getByRole('listbox', { name: 'Markdown を入れる' });
+  // Wiki にはアップロードの口が無いので、ファイルを選ぶ入口とドロップの場所を出さない
+  await expect(page.locator('.wiki-main input[type="file"]')).toHaveCount(0);
+  await expect(page.locator('.wiki-main .dropzone')).toHaveCount(0);
+
+  // 「/」の小窓から見出しを入れる
+  await input.click();
+  await page.keyboard.type('/見');
+  await expect(menu.getByRole('option')).toHaveText([/見出し/]);
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeHidden();
+  await page.keyboard.type('手順');
+  await expect(input).toHaveValue('# 手順');
+
+  // Esc は小窓だけを閉じ、編集の画面と書いた本文を残す
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('/');
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(input).toHaveValue('# 手順\n/');
+  await expect(page.getByRole('heading', { level: 2, name: 'ページを足す', exact: true })).toBeVisible();
+
+  // Enter でリストを続け、空の項目の Enter で抜ける
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('- 準備');
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('# 手順\n- 準備\n- ');
+  await page.keyboard.type('確認');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('# 手順\n- 準備\n- 確認\n');
+
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await expect(page).toHaveURL(/\/aoba\/wiki\/[0-9a-f-]{36}$/);
+  await expect(page.locator('.doc-box').getByRole('heading', { name: '手順', exact: true })).toBeVisible();
+  await expect(page.locator('.doc-box li')).toHaveText(['準備', '確認']);
+  expect(await violations()).toEqual([]);
+});
+
 test('画面内の移動で Wiki の権限を失ったときは見つからないと示す', async ({ page }) => {
   await page.goto('/aoba/wiki');
   await page.getByRole('button', { name: 'ページを足す', exact: true }).click();

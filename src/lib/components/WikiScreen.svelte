@@ -29,6 +29,7 @@
   import EmptyState from './EmptyState.svelte';
   import LoadFailed from './LoadFailed.svelte';
   import WikiContent from './WikiContent.svelte';
+  import MarkdownEditor from './MarkdownEditor.svelte';
   import PageHead from './PageHead.svelte';
   import FavoriteButton from './FavoriteButton.svelte';
   import WikiTree from './WikiTree.svelte';
@@ -551,17 +552,21 @@
           </div>
           <div class="field">
             <label for="wiki-body">{t('wikiBody')}</label>
-            <textarea
+            <!-- タスクの本文と同じエディタ。Wiki にはアップロードの口が無いので、添付は出さない -->
+            <MarkdownEditor
               id="wiki-body"
-              class="textarea"
-              rows="20"
+              rows={20}
+              {slug}
+              {workspaceId}
+              attachments={false}
               readonly={saving}
               bind:value={body}
-              aria-invalid={bodyError || undefined}
-              aria-describedby={bodyError ? 'wiki-body-error' : 'wiki-body-hint'}
+              invalid={bodyError}
+              describedby={bodyError ? 'wiki-body-error' : 'wiki-body-hint'}
               oninput={() => {
                 bodyError = false;
-              }}></textarea>
+              }}
+            />
             <p id="wiki-body-hint" class="field-hint">{t('wikiBodyHint')}</p>
             {#if bodyError}<p id="wiki-body-error" class="field-error" role="alert">{t('wikiBodyInvalid')}</p>{/if}
           </div>

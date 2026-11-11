@@ -28,3 +28,12 @@ test('指定した本文欄だけに、名前を持つ4つの書式ボタンを�
   }
   expect(body.match(/<button[^>]* disabled/g)?.length).toBe(5);
 });
+
+test('ワークスペースの外の欄（組織の Wiki）は、添付を止めて行数を指定して描ける', () => {
+  const body = render(MarkdownEditor, {
+    props: { ...props, workspaceId: null, attachments: false, rows: 20 },
+  }).body;
+  expect(body).toMatch(/<textarea[^>]* rows="20"/);
+  expect(body).not.toContain('type="file"');
+  expect(body).toContain('class="slash-menu"');
+});

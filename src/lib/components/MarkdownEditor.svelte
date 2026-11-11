@@ -35,13 +35,15 @@
     dataCommentInput,
     attachments = true,
     toolbar = false,
+    rows,
   }: {
     value: string;
     input?: HTMLTextAreaElement;
     attachmentIds?: string[];
     uploading?: boolean;
     slug: string;
-    workspaceId: string;
+    // 組織の Wiki のようにワークスペースの外の欄は null。添付の口は持たない
+    workspaceId: string | null;
     id?: string;
     readonly?: boolean;
     placeholder?: string;
@@ -51,6 +53,7 @@
     dataCommentInput?: string;
     attachments?: boolean;
     toolbar?: boolean;
+    rows?: number;
   } = $props();
 
   type Upload = {
@@ -158,7 +161,7 @@
   }
 
   function add(list: FileList | File[], anchor = input?.selectionStart ?? value.length): void {
-    if (!attachments || readonly || quota) return;
+    if (!attachments || workspaceId === null || readonly || quota) return;
     notice = null;
     for (const file of Array.from(list)) {
       if (attachmentIds.length + active().length >= ATTACHMENTS_PER_SAVE) {
@@ -190,7 +193,7 @@
     try {
       while (!destroyed) {
         const file = files.find((entry) => entry.state === 'queued');
-        if (!file) break;
+        if (!file || workspaceId === null) break;
         file.state = 'uploading';
         try {
           const uploaded = await uploadAttachment(file.file, {
@@ -442,6 +445,7 @@
     <textarea
       class="textarea"
       {id}
+      {rows}
       bind:this={input}
       {value}
       {readonly}
