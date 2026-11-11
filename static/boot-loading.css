@@ -202,7 +202,7 @@ html[data-boot] #boot-loading .boot-frame {
   margin-left: 8px;
 }
 #boot-loading .boot-binding > .is-org {
-  height: 60px;
+  height: 44px;
   margin-inline: 0;
 }
 #boot-loading .boot-binding > .is-group-label {

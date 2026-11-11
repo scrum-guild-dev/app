@@ -1976,7 +1976,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
    メニューの項目、パンくず、検索の欄（.nav-search-input の 36px）、アカウントのボタン、行、カードのおおよその大きさを写した値で、
    本物の部品を変えても追従しない（形が近ければよく、位置を揃えるのは枠の部品）。最初の読み込みの static/boot-loading.css も同じ値を写す */
 .skeleton-frame .binding-head > .skeleton-line.is-org-name { flex: 1 1 auto; height: 1.25em; margin-inline: var(--space-2) calc(36px + var(--space-1)); }
-.skeleton-frame .skeleton-line.is-org { height: 60px; }
+.skeleton-frame .skeleton-line.is-org { height: 44px; }
 .skeleton-frame .skeleton-nav { gap: var(--space-4); padding-inline: var(--space-2); }
 .skeleton-frame .skeleton-nav .skeleton-line.is-org { margin-inline: calc(-1 * var(--space-2)); }
 .skeleton-frame .skeleton-line.is-group-label { width: 5rem; height: .75em; margin-top: var(--space-2); }
