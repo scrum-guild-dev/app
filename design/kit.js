@@ -3046,6 +3046,22 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function createSheetChip(label, values) {
     return `<span class="row-menu"><button class="chip chip-btn is-unset" type="button" data-row-menu data-create-chip="${esc(label)}" aria-label="${esc(label)}: 未設定" aria-haspopup="menu" aria-expanded="false"><span class="chip-text">${esc(label)}</span></button><ul class="account-menu-list row-menu-list" role="menu" aria-label="${esc(label)}を選ぶ" hidden>${["なし", ...values].map((text, index) => `<li role="none"><button class="menu-item" type="button" role="menuitemradio" aria-checked="${index === 0}" data-create-option>${esc(text)}</button></li>`).join("")}</ul></span>`;
   }
+  // 本文の下の書式ボタン（本番の MarkdownEditor の toolbar）。起票シートと Wiki の編集で使う。
+  // 押すと、同じ .markdown-editor の中の textarea を書き換える（下の document の click）
+  function markdownToolbarHtml(disabled = false) {
+    return `<div class="markdown-toolbar" role="group" aria-label="${t("markdownToolbar")}">${[["bullet", "slashBullet", "list-bullet"], ["todo", "slashTodo", "list-check"], ["code", "slashCode", "code"], ["quote", "slashQuote", "quote"]].map(([key, label, mark]) => `<button class="pill" type="button" data-markdown-format="${key}" aria-label="${t(label)}" title="${t(label)}" ${disabled ? "disabled" : ""}>${icon(mark)}</button>`).join("")}</div>`;
+  }
+  // ボタンを押しても本文からフォーカスを外さない
+  document.addEventListener("pointerdown", (event) => { if (event.target.closest?.("[data-markdown-format]")) event.preventDefault(); });
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-markdown-format]");
+    const body = button?.closest(".markdown-editor")?.querySelector("textarea");
+    if (!body || body.readOnly) return;
+    const edit = toolbarEdit(body.value, body.selectionStart, body.selectionEnd, button.dataset.markdownFormat);
+    body.setRangeText(edit.text, edit.start, edit.end, "end");
+    body.focus(); body.setSelectionRange(edit.selectionStart, edit.selectionEnd);
+    body.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   // 本番の markdown-toolbar.ts と同じ行単位の書き換え。
   function toolbarEdit(value, from, to, format) {
       const start = from === 0 ? 0 : value.lastIndexOf('\n', from - 1) + 1;
@@ -3137,7 +3153,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
           ${sending ? `<p role="status">${t("storyCreating")}</p>` : ""}
           <p class="muted" id="create-sheet-reason">${t("taskTitleRequired")}</p>
           <label class="field"><span class="field-label">${t("fieldTitle")}</span><input class="input create-sheet-title" name="title" placeholder="${t("taskTitlePlaceholder")}"></label>
-          <div class="field"><label class="field-label" for="sample-create-body">${t("fieldBody")}</label><div class="markdown-editor"><div class="slash-wrap"><textarea class="textarea" id="sample-create-body" name="body" ${sending ? "readonly" : ""}></textarea></div><div class="markdown-toolbar" role="group" aria-label="${t("markdownToolbar")}">${[["bullet", "slashBullet", "list-bullet"], ["todo", "slashTodo", "list-check"], ["code", "slashCode", "code"], ["quote", "slashQuote", "quote"]].map(([key, label, mark]) => `<button class="pill" type="button" data-markdown-format="${key}" aria-label="${t(label)}" title="${t(label)}" ${sending ? "disabled" : ""}>${icon(mark)}</button>`).join("")}</div></div></div>
+          <div class="field"><label class="field-label" for="sample-create-body">${t("fieldBody")}</label><div class="markdown-editor"><div class="slash-wrap"><textarea class="textarea" id="sample-create-body" name="body" ${sending ? "readonly" : ""}></textarea></div>${markdownToolbarHtml(sending)}</div></div>
           <div class="create-sheet-attrs" data-create-task>
             ${createSheetChip(t("taskParent").replace("{story}", t("story")), ["架空の親ストーリー"])}
             ${createSheetChip(t("assignee"), ["架空の担当"])}
@@ -3160,16 +3176,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const sheet = document.querySelector("[data-create-sheet]");
     const title = sheet.querySelector('[name="title"]');
     const body = sheet.querySelector('[name="body"]');
-    sheet.querySelectorAll("[data-markdown-format]").forEach((button) => {
-      button.addEventListener("pointerdown", (event) => event.preventDefault());
-      button.addEventListener("click", () => {
-        if (body.readOnly) return;
-        const edit = toolbarEdit(body.value, body.selectionStart, body.selectionEnd, button.dataset.markdownFormat);
-        body.setRangeText(edit.text, edit.start, edit.end, "end");
-        body.focus(); body.setSelectionRange(edit.selectionStart, edit.selectionEnd);
-        body.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-    });
     let kind = "task";
     const finish = () => { sheet.close(); sheet.remove(); opener.focus(); };
     const close = () => {
@@ -4297,7 +4303,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     attrChipExamples, avatar, avatarOf, SAMPLE_PHOTO, BROKEN_PHOTO, emblem, pts, dueChip, taskDue, tier, sourceKey, entry, rowMenu, orderItems, draftRow, attrChip, book, section, foldedSection, wikiTree, wikiCrumbs, wikiHit, pageHead, mobilePageHead,
     narrowDisclosure, card, board, treeStory, treeEpic, completedTasks, sprintNotice, raidNotice, progress, levelPanel, teamXp, xpDelta, load, capacityRows,
     openDialog, closeDialog, toast, celebrate, miniCap, redraw: () => redrawAll(), DIALOGS, loginTarget, orgMenuHtml, workspaceMenuHtml, accountMenuHtml, breadcrumbHtml,
-    filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, mdBody, markdownSample, meter, storageBytes,
+    filesOf, fileThumb, fileRow, dropzone, attachments, markdownEditor, markdownToolbarHtml, mdBody, markdownSample, meter, storageBytes,
     PROVIDER, ASSIST_KEY, assistMsg, assistBlocked, assistSuggest, openAssist,
     enableAssistOnCatalog: () => { assistOnCatalog = true; },
   };

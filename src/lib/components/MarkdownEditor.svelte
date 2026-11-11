@@ -35,13 +35,16 @@
     dataCommentInput,
     attachments = true,
     toolbar = false,
+    rows,
+    filesNotice,
   }: {
     value: string;
     input?: HTMLTextAreaElement;
     attachmentIds?: string[];
     uploading?: boolean;
-    slug: string;
-    workspaceId: string;
+    // 添付を上げる先。添付を切った欄（attachments = false）では使わないので省ける（組織の Wiki にはワークスペースが無い）
+    slug?: string;
+    workspaceId?: string;
     id?: string;
     readonly?: boolean;
     placeholder?: string;
@@ -51,6 +54,9 @@
     dataCommentInput?: string;
     attachments?: boolean;
     toolbar?: boolean;
+    rows?: number;
+    // 添付を切った欄にファイルを落とすか貼ったときに、欄の下に出す知らせ。省くと何も出さない
+    filesNotice?: string;
   } = $props();
 
   type Upload = {
@@ -154,11 +160,12 @@
   function changed(): void {
     // The reactive effect may run before a delegated input handler; both consume the same actual edit.
     synchronizePositions();
+    if (filesNotice !== undefined && notice === filesNotice) notice = null;
     oninput?.();
   }
 
   function add(list: FileList | File[], anchor = input?.selectionStart ?? value.length): void {
-    if (!attachments || readonly || quota) return;
+    if (!attachments || readonly || quota || !slug || !workspaceId) return;
     notice = null;
     for (const file of Array.from(list)) {
       if (attachmentIds.length + active().length >= ATTACHMENTS_PER_SAVE) {
@@ -190,7 +197,7 @@
     try {
       while (!destroyed) {
         const file = files.find((entry) => entry.state === 'queued');
-        if (!file) break;
+        if (!file || !slug || !workspaceId) break;
         file.state = 'uploading';
         try {
           const uploaded = await uploadAttachment(file.file, {
@@ -389,10 +396,18 @@
     applyAssist(toolbarEdit(input.value, input.selectionStart, input.selectionEnd, format));
   }
 
+  // 添付を切った欄にファイルが来たときの知らせ。続けて同じ知らせを出しても読み上げるよう、一度消してから出す
+  async function rejectFiles(): Promise<void> {
+    if (filesNotice === undefined || readonly) return;
+    notice = null;
+    await tick();
+    if (!destroyed) notice = filesNotice;
+  }
+
   function paste(event: ClipboardEvent): void {
     const clipboard = event.clipboardData;
-    if (!attachments || !clipboard?.files.length) {
-      // 文字を選んで URL を1つ貼ったときだけリンクにする。ファイルの貼り付けは下のまま
+    if (!clipboard?.files.length) {
+      // 文字を選んで URL を1つ貼ったときだけリンクにする。ファイルの貼り付けは下のまま（添付を切った欄でも、文字は入れて知らせを出す）
       const edit =
         readonly || !input
           ? null
@@ -423,14 +438,18 @@
       }
     }
     if (slashOpen) updateSlash();
-    add(clipboard.files, caret);
+    if (attachments) add(clipboard.files, caret);
+    else void rejectFiles();
   }
 
   function drop(event: DragEvent): void {
     if (!event.dataTransfer?.types.includes('Files') && !event.dataTransfer?.files.length) return;
     event.preventDefault();
     event.stopPropagation();
-    if (!attachments) return;
+    if (!attachments) {
+      void rejectFiles();
+      return;
+    }
     if (!readonly && !quota && event.dataTransfer) add(event.dataTransfer.files);
   }
 </script>
@@ -442,6 +461,7 @@
     <textarea
       class="textarea"
       {id}
+      {rows}
       bind:this={input}
       {value}
       {readonly}

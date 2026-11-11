@@ -349,7 +349,8 @@ function editHtml(p) {
         <span class="field-hint" id="wk-title-hint">${fixed ? "本文の frontmatter の title が題です。変えるときは本文を直します。" : "前後の空白を除いて 1〜100 字。本文の先頭の frontmatter に title を書くと、そちらが題になります。"}</span>
         <span class="field-error" id="wk-title-error" role="alert" hidden>${icon("alert")}<span></span></span></div>
       <div class="field"><label class="field-label" for="wk-body">本文（Markdown）</label>
-        <textarea class="textarea" id="wk-body" rows="16" spellcheck="false" aria-describedby="wk-body-hint wk-body-error">${esc(md)}</textarea>
+        <div class="markdown-editor"><div class="slash-wrap"><textarea class="textarea" id="wk-body" rows="16" spellcheck="false" data-slash aria-describedby="wk-body-hint wk-body-error">${esc(md)}</textarea></div>${SQ.markdownToolbarHtml()}
+          <p class="field-error" id="wk-body-files" role="alert" hidden></p></div>
         <span class="field-hint" id="wk-body-hint">10 万字まで。先頭に --- で囲んだ frontmatter を書けます。キーは自由で、title 以外はページの頭に表で出ます。</span>
         <span class="field-error" id="wk-body-error" role="alert" hidden>${icon("alert")}<span></span></span></div>
       <div class="form-actions"><button class="btn is-primary" type="submit" id="wk-submit" data-label="${isNew ? "ページを足す" : "保存する"}">${isNew ? "ページを足す" : "保存する"}</button><button class="btn is-quiet" type="button" data-wiki="cancel">やめる</button>
@@ -733,8 +734,26 @@ function endSearchComposition(ev) {
 }
 document.addEventListener("compositionend", endSearchComposition);
 document.addEventListener("focusout", (ev) => { if (searchComposing) endSearchComposition(ev); });
+// 本文の欄にファイルを落とすか貼ったとき。Wiki にファイルを上げる口は無いので、本文は変えずに欄の下で知らせる（本番の MarkdownEditor の filesNotice）。
+// 貼った文字は入れる（ファイル名だけの並びは入れない）。続けて書くと知らせを消す
+function rejectWikiFiles(ev, files, text = "") {
+  if (ev.target.id !== "wk-body" || !files?.length) return;
+  ev.preventDefault();
+  const names = Array.from(files, (file) => file.name).join("\n").normalize("NFC");
+  const plain = text.replace(/\r\n?/g, "\n");
+  if (plain && plain.normalize("NFC") !== names && plain.normalize("NFC") !== `${names}\n`) {
+    ev.target.setRangeText(plain, ev.target.selectionStart, ev.target.selectionEnd, "end");
+    ev.target.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  const notice = document.getElementById("wk-body-files");
+  notice.hidden = true; notice.textContent = "";
+  requestAnimationFrame(() => { notice.textContent = "Wiki にはファイルを上げられません。"; notice.hidden = false; });
+}
+document.addEventListener("drop", (ev) => rejectWikiFiles(ev, ev.dataTransfer?.files));
+document.addEventListener("paste", (ev) => rejectWikiFiles(ev, ev.clipboardData?.files, ev.clipboardData?.getData("text/plain") ?? ""));
 document.addEventListener("input", (ev) => {
   const id = ev.target.id;
+  if (id === "wk-body") { const notice = document.getElementById("wk-body-files"); if (notice) notice.hidden = true; }
   if (id === "wiki-q") {
     S.query = ev.target.value;
     clearTimeout(searchTimer);
