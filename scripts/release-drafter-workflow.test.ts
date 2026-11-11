@@ -184,7 +184,7 @@ describe('ワークフロー', () => {
     }
   });
 
-  test('下書きは publish せず、動いた push のコミットに固定する', () => {
+  test('下書きは publish せず、実行の時点の main の先頭に固定する', () => {
     const drafter = workflow.jobs.draft.steps.find((s) => s.uses?.startsWith('release-drafter/release-drafter@'));
     assert.ok(drafter);
     assert.equal(drafter.with?.commitish, '${{ steps.head.outputs.sha }}');
