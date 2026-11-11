@@ -108,26 +108,27 @@ test.each(['github', 'google'])(
   },
 );
 
-test('canCreate が true なら発行の欄を出し、再ログインの案内を出さない', () => {
+test('canCreate が true なら発行の欄を出し、発行専用の再認証案内を出さない', () => {
   const body = renderWith([]);
   expect(body).toContain('<form');
-  expect(body).not.toContain('ログインし直す');
+  expect(body).not.toContain('API トークンを発行するには、ログインし直してください。');
 });
 
 test('一覧が読めなくても発行の欄を出す', () => {
   expect(renderWith(null)).toContain('<form');
 });
 
-// 危険な操作「すべての端末とトークンを締め出す」。押す先の確認のダイアログと、成功と失敗の知らせの文は辞書から出す
+// 危険な操作「ほかの端末とトークンを締め出す」。押す先の確認のダイアログと、成功と失敗の知らせの文は辞書から出す
 test('節の末尾に、危険な操作の小見出しと説明とボタンを辞書の文言で出す（一覧が空でも、行があっても、読めなくても）', () => {
   for (const initial of [[], [token], null]) {
     const body = renderWith(initial);
     expect(body).toContain(`<h3 class="field-label">${dictionary.apiTokenRevokeAllTitle}</h3>`);
     expect(body).toContain(dictionary.apiTokenRevokeAllDesc);
-    expect(body).toMatch(/<button[^>]*class="btn is-danger"[^>]*>すべての端末とトークンを締め出す<\/button>/);
+    expect(body).toMatch(/<button[^>]*class="btn is-danger"[^>]*>ほかの端末とトークンを締め出す<\/button>/);
     // 一覧より後ろ（節の末尾）に置く
     expect(body.indexOf(dictionary.apiTokenRevokeAllTitle)).toBeGreaterThan(body.indexOf('<form'));
   }
+  expect(dictionary.apiTokenRevokeAllDesc).toMatch(/^端末をなくしたとき/);
   const withRow = renderWith([token]);
   expect(withRow.lastIndexOf('</table>')).toBeLessThan(withRow.indexOf(dictionary.apiTokenRevokeAllTitle));
 });
@@ -137,15 +138,19 @@ test('再認証が必要で発行の欄が無いときも、締め出すボタ�
     props: { initial: [token], canCreate: false, loginProvider: 'github', slug: 'aoba' },
   }).body;
   expect(body).not.toContain('<form');
-  expect(body).toContain('すべての端末とトークンを締め出す</button>');
+  expect(body).toContain('ほかの端末とトークンを締め出す</button>');
 });
 
-test('確認のダイアログは、元に戻せないことと、いま使っているブラウザのログインだけが残ることを辞書の文言で書き、やめるを主ボタン、締め出すを危険のボタンにする', () => {
+test('確認のダイアログは、元に戻せないことと、今のログインと後からのログインが残ることを辞書の文言で書き、やめるを主ボタン、締め出すを危険のボタンにする', () => {
   const body = renderWith([token]);
   expect(body).toContain(dictionary.apiTokenRevokeAllDialogTitle);
-  expect(body).toContain(dictionary.apiTokenRevokeAllText);
+  const paragraphs = dictionary.apiTokenRevokeAllText.split('\n\n');
+  expect(paragraphs).toHaveLength(3);
+  for (const paragraph of paragraphs) expect(body).toContain(`<p>${paragraph}</p>`);
   expect(dictionary.apiTokenRevokeAllText).toContain('元に戻せません');
-  expect(dictionary.apiTokenRevokeAllText).toContain('このブラウザのログインだけが残り');
+  expect(dictionary.apiTokenRevokeAllText).toContain('このブラウザのログインは残ります');
+  expect(dictionary.apiTokenRevokeAllText).toContain('後からログインした端末は残ります');
+  expect(dictionary.apiTokenRevokeAllText).toContain('疑わしいときは「やめる」で戻り');
   expect(body).toMatch(/<button[^>]*class="btn is-primary"[^>]*>やめる<\/button>/);
   expect(body).toMatch(/<button[^>]*class="btn is-danger"[^>]*>締め出す<\/button>/);
 });
@@ -157,6 +162,9 @@ test('件数の知らせは、消したセッションと取り消したトー�
   expect(text.replace('{sessions}', '2').replace('{tokens}', '3')).toBe(
     'ほかの端末のセッション2件と、API トークン3件を締め出しました',
   );
+  expect(text.replace('{sessions}', '0').replace('{tokens}', '0')).toBe(
+    'ほかの端末のセッション0件と、API トークン0件を締め出しました',
+  );
   for (const key of ['apiTokenRevokingAll', 'apiTokenRevokeAllFailed'] as const) {
     expect(dictionary[key].length, key).toBeGreaterThan(0);
   }
@@ -167,4 +175,18 @@ test('ログインの手段が読めなければ、戻り先を保ったログ�
     props: { initial: [], canCreate: false, loginProvider: null, slug: 'aoba' },
   }).body;
   expect(body).toContain('/login?return_to=%2Faoba%2Fme');
+});
+
+// トーストが消えても、締め出せない端末と次の手順を見失わない。
+test.each([true, false])('全失効の注意と再ログイン導線は発行可否 %j によらず常設する', (canCreate) => {
+  const body = render(ApiTokensSetting, {
+    props: { initial: [], canCreate, loginProvider: 'github', slug: 'aoba' },
+  }).body;
+  const notice = /<span id="([^"]+-revoke-all-hint)">([^<]+)<\/span>/.exec(body);
+  expect(notice).not.toBeNull();
+  expect(notice![2]).toContain('後からログインした端末は残ります');
+  expect(notice![2]).toContain('ログインし直して');
+  expect(body).toContain(`aria-describedby="${notice![1]}"`);
+  expect(body).toContain('class="callout is-info"');
+  expect(body.indexOf(notice![1]!)).toBeGreaterThan(body.indexOf(dictionary.apiTokenRevokeAllTitle));
 });

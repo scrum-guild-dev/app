@@ -2415,7 +2415,8 @@ export const dictionary = defineDictionary({
   tokenNoticeTitle: '未確認の API トークンの発行が{count}件あります',
   tokenNoticeLatest: '最新: {name} / {scope}',
   tokenNoticeRevoked: '取り消し済み',
-  tokenNoticeHint: '身に覚えがなければ、設定でトークンを確かめ、すべての端末とトークンを締め出してください。',
+  tokenNoticeHint:
+    '身に覚えがなければ、設定でトークンを確かめ、ログインし直してから、ほかの端末とトークンを締め出してください。',
   tokenNoticeSettings: '設定を開く',
   tokenNoticeSeen: '確かめた',
   tokenNoticeSaved: 'API トークンの発行を確かめました',
@@ -2467,14 +2468,17 @@ export const dictionary = defineDictionary({
   apiTokenRevoking: '取り消しています',
   apiTokenRevoked: '「{name}」を取り消しました',
   apiTokenRevokeFailed: '取り消せませんでした。時間をおいて、もう一度試してください',
-  // 節の末尾の危険な操作。今のセッション以外のすべてのセッションと、すべてのトークンを無効にする。{sessions} と {tokens} は件数
-  apiTokenRevokeAllTitle: 'すべての端末とトークンを締め出す',
+  // 節の末尾の危険な操作。今のセッションと同時刻以前のほかのセッションと、すべてのトークンを無効にする。{sessions} と {tokens} は件数
+  apiTokenRevokeAllTitle: 'ほかの端末とトークンを締め出す',
   apiTokenRevokeAllDesc:
-    '端末をなくしたときや、値が漏れたかもしれないときに使います。いま使っているこのブラウザのログインだけを残し、ほかのすべての端末（同じ端末のほかのブラウザを含む）のログインと、発行済みのすべての API トークンを、まとめて使えなくします。',
-  apiTokenRevokeAll: 'すべての端末とトークンを締め出す',
-  apiTokenRevokeAllDialogTitle: 'すべての端末とトークンを締め出しますか',
+    '端末をなくしたときや、値が漏れたかもしれないときのための操作です。ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。',
+  apiTokenRevokeAllReauth: '締め出す前にログインし直す',
+  apiTokenRevokeAllNotice:
+    '後からログインした端末は残ります。疑わしいときは、このブラウザでログインし直してから実行してください。',
+  apiTokenRevokeAll: 'ほかの端末とトークンを締め出す',
+  apiTokenRevokeAllDialogTitle: 'ほかの端末とトークンを締め出しますか',
   apiTokenRevokeAllText:
-    'いま使っているこのブラウザのログインだけが残り、ほかのすべての端末（同じ端末のほかのブラウザを含む）はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。',
+    'ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。このブラウザのログインは残ります。\n\n後からログインした端末は残ります。疑わしいときは「やめる」で戻り、このブラウザでログインし直してから実行してください。\n\n元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。',
   apiTokenRevokeAllConfirm: '締め出す',
   apiTokenRevokingAll: '締め出しています',
   apiTokenRevokedAll: 'ほかの端末のセッション{sessions}件と、API トークン{tokens}件を締め出しました',

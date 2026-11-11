@@ -1,4 +1,4 @@
-// 設定からの全失効（credentials-revoke-all）。今のセッション以外のすべてのセッションと、取り消していないすべての API トークンを無効にする。
+// 設定からの全失効（credentials-revoke-all）。今のセッションと同時刻以前に作られたほかのセッションと、取り消していないすべての API トークンを無効にする。
 // Cookie のセッションだけが使える（cookieOnly）。一覧を回す検査は test/operation-registry.test.ts、トークン全般の取り決めは test/api-token-operations.test.ts
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -42,7 +42,10 @@ async function revoked(token: string): Promise<Counts> {
 
 // 同じ人の別のセッション（別の端末、盗まれた Cookie の想定）
 async function otherSession(person: Person, overrides: Parameters<typeof createSessionWithToken>[1] = {}) {
-  return createSessionWithToken(person.accountId, overrides);
+  // 既存の全削除・同時実行の検査では作成時刻を揃え、新しいセッションの保護とは分ける。
+  const currentHash = await hashSessionToken(person.token);
+  const current = (await sessionRowsOf(person.accountId)).find((row) => row.token_hash === currentHash)!;
+  return createSessionWithToken(person.accountId, { created_at: current.created_at, ...overrides });
 }
 
 async function expectSignedOut(res: Response) {
@@ -96,7 +99,7 @@ describe('操作の定義', () => {
   });
 });
 
-describe('完了条件1: 今のセッション以外のセッションが消える', () => {
+describe('完了条件1: 同時刻以前のほかのセッションが消える', () => {
   test('今のセッション、別端末、盗まれた Cookie の想定のセッションのうち、実行したセッションだけが残る', async () => {
     const person = await createLoginPerson();
     const laptop = await otherSession(person);
@@ -497,7 +500,7 @@ describe('断る場合: 認証、Origin、同意、入力', () => {
     const account = await createAccount({}, { consented: true });
     await createAccountLogin(account.id);
     const current = await createSessionWithToken(account.id);
-    const laptop = await createSessionWithToken(account.id);
+    const laptop = await createSessionWithToken(account.id, { created_at: current.row.created_at });
     const res = await revokeAll(current.token);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ revoked_sessions: 1, revoked_tokens: 0 });
@@ -586,7 +589,7 @@ describe('同じ batch() で送る（半端な状態を残さない）', () => {
 describe('deleteOtherSessionsOf', () => {
   const db = () => commonDb(env);
 
-  test('今のセッション以外を消し、消した数を返す', async () => {
+  test('同時刻以前のほかのセッションを消し、消した行数（期限切れも含む）を返す', async () => {
     const person = await createLoginPerson();
     const a = await otherSession(person);
     const b = await otherSession(person);

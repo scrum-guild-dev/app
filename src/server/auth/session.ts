@@ -135,9 +135,11 @@ export async function deleteSessionsOf(db: CommonDb, accountId: string, checkedA
   ]);
 }
 
-// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消す文。期限が切れた行も、期限内の行も消す。
+// その人の、今のセッション（currentTokenHash）と同時刻以前に作られた、ほかのセッションを消す文。期限切れも含む。
+// 後から作られたセッションは残すので、古い盗難 Cookie の全失効が、本人の再ログインを消せない。
+// 他セッションの作成日時が読めなければ最古として消す（不正な日時で盗難セッションが残らないようにする）。
 // ほかのアカウントのセッションは account_id で除く。別の文と同じ batch() に入れて送るために、文のまま返す。
-// 今のセッションの行（token_hash と account_id が両方一致する行）がまだあるときだけ消す。同じアカウントの2つのセッションが
+// 今のセッションの行（token_hash と account_id が両方一致する行）がまだあるときだけ消す。同時刻に作られた2つのセッションが
 // 同時に全失効を実行しても、後から来た側（自分の行が先に消された側）は何も消さず、両方のセッションが消えることを防ぐ。
 // 消した行の expires_at を返す（呼び手が期限内の行だけを数えるため。何も消さなかったときは行が返らない）
 export function deleteOtherSessionsStatement(
@@ -155,14 +157,23 @@ export function deleteOtherSessionsStatement(
           selectFrom('sessions as cs')
             .select('cs.token_hash')
             .where('cs.token_hash', '=', currentTokenHash)
-            .where('cs.account_id', '=', accountId),
+            .where('cs.account_id', '=', accountId)
+            // 旧来の SQLite 表記と UTC ミリ秒表記を、文字列の大小でなく同じ日時として比較する。
+            // 今の作成日時もこの DELETE で読むので、事前の認証からの間に行が消えても何も消さない。
+            .where(({ eb, fn }) =>
+              eb(
+                fn.coalesce(fn<number | null>('julianday', ['sessions.created_at']), eb.val(-1)),
+                '<=',
+                fn<number>('julianday', ['cs.created_at']),
+              ),
+            ),
         ),
       )
       .returning('expires_at'),
   );
 }
 
-// その人の、今のセッション（currentTokenHash）以外のセッションをすべて消し、消した行数（changes。期限切れの行も含む）を返す。
+// その人の、今のセッション（currentTokenHash）と同時刻以前に作られた、ほかのセッションを消し、行数（changes。期限切れも含む）を返す。
 // 全失効の応答の件数（期限内の行だけ）とは意味が違う。
 // 今のセッションと、ほかのアカウントのセッションは残す。本番の道（credentials-revoke-all）は、トークンの取り消しと
 // 同じ batch() に入れるため、文（deleteOtherSessionsStatement）を直に使う。この関数を呼ぶのは今はテストだけ

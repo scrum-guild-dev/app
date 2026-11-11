@@ -33,7 +33,7 @@ test.describe('API トークンの再認証', () => {
     ]);
     await page.goto('/aoba/me');
     const section = page.getByRole('region', { name: 'API トークン', exact: true });
-    const link = section.getByRole('link', { name: 'ログインし直す' });
+    const link = section.getByRole('link', { name: 'ログインし直す', exact: true });
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute('href', '/api/auth/github/start?return_to=%2Faoba%2Fme');
     await expect(section.getByRole('button', { name: '発行する', exact: true })).toHaveCount(0);
@@ -47,7 +47,7 @@ test.describe('API トークンの再認証', () => {
     await section.getByLabel('名前', { exact: true }).fill('手元の CLI');
     await failOperation(page, tokenCreate, 403, 'reauth_required');
     await section.getByRole('button', { name: '発行する', exact: true }).click();
-    const link = section.getByRole('link', { name: 'ログインし直す' });
+    const link = section.getByRole('link', { name: 'ログインし直す', exact: true });
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute('href', '/api/auth/github/start?return_to=%2Faoba%2Fme');
     await expect(link).toBeFocused();
@@ -77,7 +77,7 @@ test.describe('API トークンの再認証', () => {
         const dialog = page.getByRole('dialog', { name: 'API トークンを発行しました' });
         await expect(dialog).toBeVisible();
         // ダイアログを開いた後の reload が発行の欄を消したことを、閉じる前に待つ。
-        if (!canCreate) await expect(section.getByRole('link', { name: 'ログインし直す' })).toHaveCount(1);
+        if (!canCreate) await expect(section.getByRole('link', { name: 'ログインし直す', exact: true })).toHaveCount(1);
         await dialog
           .getByRole('button', { name: '閉じる', exact: true })
           .nth(closeWith === '×' ? 0 : 1)
@@ -85,7 +85,7 @@ test.describe('API トークンの再認証', () => {
         await expect(dialog).not.toBeVisible();
         const target = canCreate
           ? section.getByLabel('名前', { exact: true })
-          : section.getByRole('link', { name: 'ログインし直す' });
+          : section.getByRole('link', { name: 'ログインし直す', exact: true });
         await expect(target).toBeFocused();
         await expect(page.locator(`input[value="sgp_${'a'.repeat(43)}"]`)).toHaveCount(0);
       });

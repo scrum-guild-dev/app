@@ -1,5 +1,5 @@
-// マイプロフィール（/<slug>/me）の「API トークン」の節の末尾の、危険な操作「すべての端末とトークンを締め出す」（#715）。
-// 今の画面のセッション以外のすべてのセッションと、取り消していないすべてのトークンを無効にする（credentials-revoke-all）。
+// マイプロフィール（/<slug>/me）の「API トークン」の節の末尾の、危険な操作「ほかの端末とトークンを締め出す」（#715）。
+// 今の画面のセッションと同時刻以前のほかのセッションと、取り消していないすべてのトークンを無効にする（credentials-revoke-all）。
 // 本物の実行は、くもラボのコハル（lookThemed）で行う。実行すると、そのアカウントのほかのセッションがすべて消えるので、
 // admin など、並べて走るほかのテストが共有する seed のセッションがあるアカウントでは行わない（実行するのは seed のセッション、
 // 消えるのは e2e/local-d1.ts の OTHER_DEVICE_SESSION だけ）。やめる、失敗は、応答を差し替えて共有のセッション（admin）で確かめる
@@ -12,8 +12,8 @@ import { signIn, waitForSettled, watchViolations } from './helpers.ts';
 import { insertOtherDeviceSession, OTHER_DEVICE_SESSION } from './local-d1.ts';
 import { failOperation, routeOperation } from './operations.ts';
 
-const BUTTON = 'すべての端末とトークンを締め出す';
-const DIALOG = 'すべての端末とトークンを締め出しますか';
+const BUTTON = 'ほかの端末とトークンを締め出す';
+const DIALOG = 'ほかの端末とトークンを締め出しますか';
 
 const sectionOf = (page: Page) => page.getByRole('region', { name: 'API トークン', exact: true });
 const toast = (page: Page, text: string | RegExp) => page.getByRole('status').filter({ hasText: text });
@@ -70,6 +70,18 @@ test('確認を経て実行すると、今の画面は使い続けられ、ほ�
   ).toBeVisible();
   await waitForSettled(page);
 
+  // 古い盗難 Cookie が全失効を繰り返しても、ログインし直した本人の画面は使える。
+  // signIn は seed の作成日時を更新するので、先に作った OTHER_DEVICE_SESSION より新しい。
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const attack = await request.post('/api/credentials-revoke-all', {
+      headers: { Origin: origin, Cookie: `${cookieName}=${OTHER_DEVICE_SESSION.token}` },
+      data: {},
+    });
+    expect(attack.status()).toBe(200);
+    expect(await attack.json()).toMatchObject({ revoked_sessions: 0 });
+    expect(await meWithCookie(SEED_SESSIONS.lookThemed.token)).toBe(200);
+  }
+
   // 取り消していないトークンを1つ作る（値は発行の直後に1回だけ見える）
   const bearer = await issue(page, `締め出しの確かめ ${Date.now().toString(36)}`);
   await expect(section.getByRole('table', { name: '発行済みの API トークン' })).toBeVisible();
@@ -91,12 +103,13 @@ test('確認を経て実行すると、今の画面は使い続けられ、ほ�
     await button.click();
     const confirm = page.getByRole('dialog', { name: DIALOG });
     await expect(confirm).toBeVisible();
-    await expect(
-      confirm.getByText(
-        'いま使っているこのブラウザのログインだけが残り、ほかのすべての端末（同じ端末のほかのブラウザを含む）はログアウトされ、発行済みのすべての API トークンはすぐ使えなくなります。元に戻せません。',
-        { exact: false },
-      ),
-    ).toBeVisible();
+    for (const paragraph of [
+      'ほかの端末のログインと、発行済みのすべての API トークンを使えなくします。このブラウザのログインは残ります。',
+      '後からログインした端末は残ります。疑わしいときは「やめる」で戻り、このブラウザでログインし直してから実行してください。',
+      '元に戻せません。使っている CLI や MCP は、新しく発行したトークンに替えてください。',
+    ]) {
+      await expect(confirm.getByText(paragraph, { exact: true })).toBeVisible();
+    }
     await confirm.getByRole('button', { name: 'やめる' }).click();
     await expect(confirm).toHaveCount(0);
     await expect(button).toBeFocused();
@@ -216,6 +229,17 @@ test.describe('応答を差し替える（共有の seed のセッションで�
     await section.getByRole('button', { name: BUTTON }).click();
     await page.getByRole('dialog', { name: DIALOG }).getByRole('button', { name: '締め出す', exact: true }).click();
     await expect(toast(page, 'ほかの端末のセッション2件と、API トークン5件を締め出しました')).toBeVisible();
+    await expect(toast(page, 'ほかの端末のセッション2件と、API トークン5件を締め出しました')).toHaveCount(0);
+    await expect(
+      section.getByText(
+        '後からログインした端末は残ります。疑わしいときは、このブラウザでログインし直してから実行してください。',
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(section.locator('a[aria-describedby$="-revoke-all-hint"]')).toHaveAttribute(
+      'href',
+      /return_to=%2Faoba%2Fme/,
+    );
     await unroute();
   });
 

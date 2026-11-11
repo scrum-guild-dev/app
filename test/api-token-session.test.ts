@@ -21,7 +21,7 @@ describe('API トークン発行時のセッションの再確認', () => {
   test('全失効で行を消したセッションからは401となり、トークンを作らない', async () => {
     const account = await createAccount();
     const current = await createSession(account.id);
-    const stolen = await createSession(account.id);
+    const stolen = await createSession(account.id, { created_at: current.created_at });
     const input = inputFor(account.id, stolen.token_hash);
     await db.batch([deleteOtherSessionsStatement(db, account.id, current.token_hash)]);
 
@@ -73,7 +73,7 @@ describe('API トークン発行時のセッションの再確認', () => {
   test('上限に達していても消えたセッションは409と取り違えず401になる', async () => {
     const account = await createAccount();
     const current = await createSession(account.id);
-    const stolen = await createSession(account.id);
+    const stolen = await createSession(account.id, { created_at: current.created_at });
     for (let i = 0; i < 20; i++) await insertApiToken(account.id, { expiresAt: '2026-12-01T00:00:00.000Z' });
     await db.batch([deleteOtherSessionsStatement(db, account.id, current.token_hash)]);
 

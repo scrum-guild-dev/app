@@ -38,8 +38,8 @@
   //   allowedToCreate が true なら nameInput、false なら reauthLink にフォーカスを戻す
   // - 一覧が読めなければ、この節にだけ失敗と「もう一度試す」を出す（画面のほかの節は生かす）。読み直せたら節の題へフォーカスを移す。
   //   読み直しの失敗は、今の一覧を残して知らせる
-  // - 節の末尾の「すべての端末とトークンを締め出す」（危険な操作。見本は design/me.html）は、確認のダイアログを経て、今のセッション以外の
-  //   すべてのセッションと、取り消していないすべてのトークンを無効にする。今の画面は使い続けられる（移動しない）。
+  // - 節の末尾の「ほかの端末とトークンを締め出す」（危険な操作。見本は design/me.html）は、確認のダイアログを経て、今のセッションと
+  //   同時刻以前のほかのセッションと、取り消していないすべてのトークンを無効にする。今の画面は使い続けられる（移動しない）。
   //   できたら、消した数と取り消した数をトーストで知らせ、一覧を読み直す（空になる）。失敗したら知らせて、一覧も読み直す。
   //   ただし 401 はログインの画面へ、403 の terms_required は同意の画面へ、知らせずに移す（#770）
   // 操作は1件ずつ送り、送っている間はどの操作も aria-disabled にして押しても無視する
@@ -77,6 +77,7 @@
   const sectionId = 'api-tokens';
   const nameId = `${ids}-name`;
   const reauthHintId = `${ids}-reauth-hint`;
+  const revokeAllHintId = `${ids}-revoke-all-hint`;
   const nameHintId = `${ids}-name-hint`;
   const nameErrorId = `${ids}-name-error`;
   const scopeLabelId = `${ids}-scope-label`;
@@ -327,7 +328,7 @@
     else reauthLink?.focus();
   }
 
-  // 今のセッション以外のすべてのセッションと、すべてのトークンを無効にする。今の画面は使い続けられるので、成功しても移動しない。
+  // 今のセッションと同時刻以前のほかのセッションと、すべてのトークンを無効にする。今の画面は使い続けられるので、成功しても移動しない。
   // 押したボタンは残るので、確認のダイアログが戻したフォーカスのままにする。失敗しても、一覧は今の状態に合わせて読み直す
   async function revokeAll(trigger: HTMLElement): Promise<void> {
     if (busy !== null) return;
@@ -549,6 +550,18 @@
   <!-- 危険な操作。トークンの一覧の読み込みに失敗していても、セッションを締め出す側は使える -->
   <h3 class="field-label">{t('apiTokenRevokeAllTitle')}</h3>
   <p class="action-note">{t('apiTokenRevokeAllDesc')}</p>
+  <div class="callout is-info">
+    <Icon name="alert" />
+    <span id={revokeAllHintId}>{t('apiTokenRevokeAllNotice')}</span>
+    <div class="callout-actions">
+      <!-- 全失効の注意からも、発行可否に関係なく同じ安全な戻り先でログインし直せる。 -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -->
+      <a class="btn" href={reauthUrl} aria-describedby={revokeAllHintId} data-sveltekit-reload
+        >{t('apiTokenRevokeAllReauth')}</a
+      >
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
+    </div>
+  </div>
   <div class="form-actions">
     <button
       class="btn is-danger"
@@ -604,5 +617,7 @@
   cancelLabel={t('cancel')}
   danger
 >
-  <p>{t('apiTokenRevokeAllText')}</p>
+  {#each t('apiTokenRevokeAllText').split('\n\n') as paragraph (paragraph)}
+    <p>{paragraph}</p>
+  {/each}
 </ConfirmDialog>
