@@ -419,7 +419,11 @@ for (const scope of ['organization', 'workspace'] as const) {
       await expect(notice).toHaveCount(0);
       await page.keyboard.press('Backspace');
     }
-    // 書式ボタンの上（欄の周り）に落としても、ブラウザにファイルを開かせずに知らせる
+    // 書式ボタンの上（欄の周り）に落としても、ブラウザにファイルを開かせずに知らせる。
+    // 先に「/」の小窓を開いておき、知らせが出た後に小窓から入れても消えることを確かめる（input の無い書き換えの経路）
+    await body.press('ControlOrMeta+End');
+    await page.keyboard.type('\n/');
+    await expect(menu).toBeVisible();
     const droppedOnToolbar = await toolbar.evaluate((element) => {
       const data = new DataTransfer();
       data.items.add(new File(['sample'], '架空の図.png', { type: 'image/png' }));
@@ -428,9 +432,8 @@ for (const scope of ['organization', 'workspace'] as const) {
     expect(droppedOnToolbar).toBe(true);
     await expect(notice).toBeVisible();
     await expect(body).toHaveAttribute('aria-describedby', /.+ .+/);
+    await expect(menu).toBeVisible();
     // 「/」の小窓から入れて本文が変わっても消える
-    await body.press('ControlOrMeta+End');
-    await page.keyboard.type('\n/');
     await page.keyboard.press('Enter');
     await expect(notice).toHaveCount(0);
     await expect(body).toHaveValue('## 準備\n- 鍵を受け取る\n> 名簿を見る\n## ');
