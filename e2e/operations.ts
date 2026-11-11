@@ -131,7 +131,17 @@ export async function routeOperation<D extends AnyOperationDefinition>(
         const response = await route.fetch().catch((error: unknown) => {
           throw new RouteCallError(error);
         });
-        const json: unknown = await response.json().catch(() => undefined);
+        // 本文の取得がテスト終了などで失敗したときは、JSON の構文エラーに置き換えない。
+        // route.fetch と同じく元の失敗を投げ、fixture の unrouteAll（ignoreErrors）に任せる。
+        const text = await response.text().catch((error: unknown) => {
+          throw new RouteCallError(error);
+        });
+        let json: unknown;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          json = undefined;
+        }
         if (json === undefined && response.ok()) {
           // 転送が効かず index.html が返ったときなど。書き換えの続きは throw で止め、下の catch が失敗を付ける
           throw new Error(`操作 ${name} の本物の応答が JSON でない（${response.status()}）`);
