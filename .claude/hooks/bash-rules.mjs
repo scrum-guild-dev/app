@@ -348,7 +348,9 @@ function gitConfigOptions(globals) {
     // -c は最初の = で、--config-env は最後の = で分ける（git の config.c の git_config_push_env は strrchr）。
     // --config-env=remote.a=b.push=P は remote.a=b の push の設定
     const at = fromEnv ? spec.lastIndexOf('=') : spec.indexOf('=');
-    configs.push({ key: at === -1 ? spec : spec.slice(0, at), value: at === -1 ? undefined : spec.slice(at + 1), fromEnv, expands: hasExpansion(spec) });
+    const key = at === -1 ? spec : spec.slice(0, at);
+    const value = at === -1 ? undefined : spec.slice(at + 1);
+    configs.push({ key, value, fromEnv, keyExpands: hasExpansion(key), valueExpands: hasExpansion(value ?? '') });
   }
   return configs;
 }
@@ -430,8 +432,9 @@ function judgeGit(args, dir, branchOf) {
   // git -c remote.origin.push=… push は refspec を設定から足し、remote.origin.mirror=true push はすべての ref を鏡にする（削除と force も含む）。
   // 先を語から読めない。並べて書いた main などの DENY は上で先に返す
   if (sub === 'push' && configs.some((c) => changesPushTarget(c.key, c.fromEnv ? undefined : c.value))) return [ASK, REMOTE_PUSH_REASON];
-  // -c "$K=true" のように名前が展開で決まると、push.followTags や remote.<名前>.mirror かを字面で読めない
-  if (configs.some((c) => c.expands)) {
+  // -c "$K=true" のように名前が展開で決まると、push.followTags や remote.<名前>.mirror かを字面で読めない（サブコマンドを問わない。alias.* にもなりうる）。
+  // 値の展開（-c push.default=$M）は push のときだけ先を変えうる
+  if (configs.some((c) => c.keyExpands || (sub === 'push' && c.valueExpands))) {
     return [ASK, '-c と --config-env の設定の名前や値を変数、$(...) で渡すと、push の先や v* のタグの push を変えるかを判定できない。人が確かめる'];
   }
   // -c alias.<名前>=push はサブコマンドを別名にして上の push の判定を外し、include.path と includeIf.* は読めない設定ファイルを足す
@@ -732,9 +735,10 @@ function unescapeJson(text) {
   return s;
 }
 
-// パーセントエンコードを戻すと、守る資源の語が新しく現れるか（戻せない宛先も含む）
+// パーセントエンコードか . と .. の区切りがある宛先に、守る資源の語が現れるか（戻せない宛先も含む）
+// curl の URL の /x/../releases、/./git/refs のような . と .. の区切りも、字面の判定（repos/<o>/<r>/releases）を外す
 function percentHidesResource(endpoint) {
-  if (!/%[0-9a-f]{2}/i.test(endpoint)) return false;
+  if (!/%[0-9a-f]{2}|\/\.{1,2}(\/|$)/i.test(endpoint)) return false;
   let decoded;
   try {
     decoded = decodeURIComponent(endpoint);
@@ -820,7 +824,7 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
   // 戻すと守る資源（git、releases、branches、contents、merge）の語が現れるか、戻せない宛先だけを確かめる。
   // query string（?name=a%20b）とラベルの名前（issues/1/labels/sprint%3A1）は資源を変えないので通す
   if (endpoints.some((e) => percentHidesResource(e.replace(/[?#].*$/, '')))) {
-    return [ASK, '書き込みの宛先にパーセントエンコードがあり、main、production、v* のタグ、Release に触れるかを字面で判定できない。人が確かめる'];
+    return [ASK, '書き込みの宛先にパーセントエンコードか . と .. の区切りがあり、main、production、v* のタグ、Release に触れるかを字面で判定できない。人が確かめる'];
   }
   return null;
 }
