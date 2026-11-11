@@ -341,6 +341,7 @@
               ]}
               onselect={(value) => (points = value)}
               locked={busy ? t('storyCreating') : undefined}
+              points={true}
             />
           {:else}
             <AttrChip
