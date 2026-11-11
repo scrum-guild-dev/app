@@ -169,6 +169,16 @@ describe('.githooks', () => {
     assert.equal(git(work, 'push', 'origin', 'HEAD:production-notes').status, 0);
   });
 
+  test('v* のタグの push を止め、ほかのタグは通す', () => {
+    const work = setUp('push-tag');
+    git(work, 'tag', 'v0.1.0');
+    git(work, 'tag', 'note-1');
+    assert.match(git(work, 'push', 'origin', 'v0.1.0').stderr, /v\* のタグは push しない/);
+    assert.match(git(work, 'push', 'origin', '--tags').stderr, /v\* のタグは push しない/);
+    assert.equal(git(work, 'ls-remote', '--tags', 'origin', 'v0.1.0').stdout, '');
+    assert.equal(git(work, 'push', 'origin', 'note-1').status, 0);
+  });
+
   describe('post-checkout', () => {
     // 本物の gh の代わりに、受けた引数を記録するか失敗するだけの gh を PATH の先頭に置く
     function fakeGh(name: string, body: string) {

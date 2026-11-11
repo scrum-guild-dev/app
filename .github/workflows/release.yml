@@ -5,10 +5,12 @@ name: release
 # 進めてよいかの判定は scripts/release-production.ts に置く（タグの形、draft と prerelease、main に入っているか、production が真の祖先か）
 on:
   release:
-    # released は prerelease を除くが、prerelease から正式にしたときも届く。断る条件を判定の関数の1か所に置くため、published で受ける
+    # publish したときだけ受ける。prerelease は判定の関数で断る。prerelease を後から正式にする操作は released だけが届き、
+    # published は届かないので production は進まない。正式な版は新しいタグで publish し直す（docs/development.md の「リリース」）
     types: [published]
 
-# 続けて publish したとき、古いタグで production を進めないよう1本ずつ走らせる（古いタグは判定でも断る）。取り消さない
+# 続けて publish したとき、古いタグで production を進めないよう1本ずつ走らせる。進行中の実行は取り消さない。
+# 待ちの実行は新しい実行に置き換えられうるが、最後の実行が判定を通れば production は最新へ進み、古いタグは判定が断る
 concurrency:
   group: release-production
   cancel-in-progress: false
@@ -20,10 +22,15 @@ permissions:
 
 jobs:
   production:
+    # App の鍵は Environment release のシークレットに置き、リポジトリのシークレットには置かない。
+    # Environment の対象は v* のタグだけに人が絞るので、ほかのブランチのワークフローからは鍵を読めない
+    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # 判定のスクリプトは、イベントの ref（タグ）ではなく main の版で動かす。fetch-depth: 0 で全部のブランチとタグを取る
+      # 判定のスクリプトは、イベントの ref（タグ）ではなく main の版で動かす。fetch-depth: 0 で全部のブランチとタグを取る。
+      # このワークフローの YAML そのものは、GitHub がタグのコミットの版で動かす。YAML を書き換えたコミットにタグを付けられないよう、
+      # v* のタグはセッションから作らせない（.claude/hooks/bash-rules.mjs）
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
@@ -46,7 +53,8 @@ jobs:
           permission-contents: write
           permission-workflows: write
 
-      # force を付けない。判定の後に production が動いていれば、fast-forward にならず GitHub が拒む
+      # force を付けない。判定の後に production が動いていれば、fast-forward にならず GitHub が拒む。
+      # トークンは URL に入れず、git の設定の環境変数（GIT_CONFIG_*）でヘッダーとして渡す（コマンドラインとエラーの出力に載せない）
       - name: production をタグのコミットへ進める
         env:
           TOKEN: ${{ steps.token.outputs.token }}
@@ -55,5 +63,11 @@ jobs:
           TAG: ${{ steps.decide.outputs.tag }}
         run: |
           set -euo pipefail
-          git push "https://x-access-token:${TOKEN}@github.com/${REPO}.git" "${COMMIT}:refs/heads/production"
+          : "${COMMIT:?判定の出力に commit が無い}" "${TAG:?判定の出力に tag が無い}"
+          basic=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          echo "::add-mask::$basic"
+          GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic" \
+            git push "https://github.com/${REPO}.git" "${COMMIT}:refs/heads/production"
           echo "production を ${TAG}（${COMMIT}）へ進めた"

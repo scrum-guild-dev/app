@@ -6,6 +6,8 @@ import { appendFileSync, readFileSync } from 'node:fs';
 
 export const VERSION_TAG = /^v\d+\.\d+\.\d+$/;
 const SHA = /^[0-9a-f]{40}$/;
+// 完全な名前で渡す。origin/main のままだと、同じ名前のタグ（refs/tags/origin/main）が先に当たり、main の判定を偽れる
+export const MAIN_REF = 'refs/remotes/origin/main';
 
 export type Release = { tag: string; draft: boolean; prerelease: boolean };
 
@@ -29,7 +31,7 @@ export function decide(release: Release, git: Git): Decision {
   if (release.prerelease) return { ok: false, reason: `${release.tag} はプレリリース。本番には出さない` };
   const commit = git.tagCommit(release.tag);
   if (!commit || !SHA.test(commit)) return { ok: false, reason: `タグ ${release.tag} のコミットを引けない` };
-  if (!git.isAncestor(commit, 'origin/main')) {
+  if (!git.isAncestor(commit, MAIN_REF)) {
     return {
       ok: false,
       reason: `${release.tag}（${commit}）は origin/main に入っていない。main に入ったコミットだけを出す`,
@@ -87,17 +89,30 @@ export function releaseOf(event: unknown): Release {
 }
 
 // node scripts/release-production.ts <event.json>。進めてよければ GITHUB_OUTPUT に commit と tag を書く
+export function main(eventPath: string, git: Git, output: string | undefined): number {
+  try {
+    const release = releaseOf(JSON.parse(readFileSync(eventPath, 'utf8')));
+    const decision = decide(release, git);
+    if (!decision.ok) {
+      console.error(`::error::production を進めない: ${decision.reason}`);
+      return 1;
+    }
+    console.log(`production を ${decision.from} から ${release.tag}（${decision.commit}）へ進める`);
+    if (output) appendFileSync(output, `commit=${decision.commit}\ntag=${release.tag}\n`);
+    return 0;
+  } catch (error) {
+    // イベントを読めない、git が予期しない失敗をした。判定できないので進めない
+    console.error(
+      `::error::production を進めるかを判定できない: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return 1;
+  }
+}
+
 if (import.meta.main) {
-  const [eventPath] = process.argv.slice(2);
-  const release = releaseOf(JSON.parse(readFileSync(eventPath ?? process.env.GITHUB_EVENT_PATH ?? '', 'utf8')));
-  const decision = decide(release, localGit());
-  if (!decision.ok) {
-    console.error(`::error::production を進めない: ${decision.reason}`);
-    process.exit(1);
-  }
-  console.log(`production を ${decision.from} から ${release.tag}（${decision.commit}）へ進める`);
-  const output = process.env.GITHUB_OUTPUT;
-  if (output) {
-    appendFileSync(output, `commit=${decision.commit}\ntag=${release.tag}\n`);
-  }
+  process.exitCode = main(
+    process.argv[2] ?? process.env.GITHUB_EVENT_PATH ?? '',
+    localGit(),
+    process.env.GITHUB_OUTPUT,
+  );
 }

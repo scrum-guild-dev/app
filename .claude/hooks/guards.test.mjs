@@ -6209,3 +6209,41 @@ describe('production と Release', () => {
     test(`[通す] ${command} は allow`, () => assert.equal(decision(command), 'allow', command));
   }
 });
+
+// レビューで見つかったすり抜けと誤検知（#1164）
+describe('production と Release: すり抜けと誤検知', () => {
+  for (const [kind, command, expected] of [
+    ['すり抜け', 'git config push.followTags true', 'deny'],
+    ['すり抜け', 'git config --global push.followTags true', 'deny'],
+    ['すり抜け', 'git config set push.followTags true', 'deny'],
+    ['すり抜け', 'git config remote.origin.push HEAD:production', 'ask'],
+    ['すり抜け', 'git -c remote.origin.push=HEAD:production push', 'ask'],
+    ['すり抜け', "gh api graphql -f query='mutation{deleteRef(input:{refId:\"REF_x\"}){clientMutationId}}'", 'ask'],
+    ['すり抜け', "gh api graphql -f query='mutation{mergeBranch(input:{repositoryId:\"R\",base:\"production\",head:\"x\"}){clientMutationId}}'", 'deny'],
+    ['すり抜け', "gh api graphql -f query='mutation{createCommitOnBranch(input:{branch:{branchName:\"production\"}}){clientMutationId}}'", 'deny'],
+    ['すり抜け', 'gh api -X POST repos/o/r/branches/production/rename -f new_name=x', 'deny'],
+    ['すり抜け', 'gh api -X POST repos/o/r/branches/x/rename -f new_name=production', 'deny'],
+    ['すり抜け', 'gh api repos/o/r/git/refs --input body.json -X POST', 'ask'],
+    ['すり抜け', 'curl -X POST https://api.github.com/repos/o/r/git/refs -d @body.json', 'ask'],
+    ['すり抜け', 'curl -X POST https://api.github.com/repos/o/r/git/refs --data-binary @body.json', 'ask'],
+    ['すり抜け', 'gh api -X POST repos/o/r/git/refs -f ref=refs/heads/$B -f sha=abc', 'ask'],
+    ['すり抜け', 'gh api -X PATCH "repos/o/r/git/refs/heads%2Fproduction" -f sha=abc', 'ask'],
+    ['すり抜け', 'gh api -X DELETE repos/o/r/git/refs/heads/x/../production', 'ask'],
+    ['すり抜け', 'gh api -X DELETE repos/o/r/git/refs//heads/production', 'ask'],
+    ['すり抜け', 'gh api -X PATCH repos/o/r/releases/generate-notes/../1 -F draft=false', 'deny'],
+    ['すり抜け', "curl -X POST 'https://uploads.github.com/repos/o/r/releases/1/assets?name=a' -d x", 'deny'],
+    ['すり抜け', "curl -F file=@a.zip 'https://uploads.github.com/repos/o/r/releases/1/assets?name=a'", 'deny'],
+    ['すり抜け', 'git push origin 21-x:v2-fix', 'deny'],
+    ['誤検知', 'git config push.followTags false', 'allow'],
+    ['誤検知', 'git config --get push.followTags', 'allow'],
+    ['誤検知', 'git -c push.followTags=false push origin 21-x', 'allow'],
+    ['誤検知', 'git push origin 21-x:refs/heads/v1.0.0-hotfix', 'allow'],
+    ['誤検知', 'gh api -X POST repos/o/releases/issues/1/comments -f body=x', 'allow'],
+    ['誤検知', 'gh api -X POST repos/releases/r/issues/1/comments -f body=x', 'allow'],
+    ['誤検知', 'gh api -X POST repos/o/r/releases-notes', 'allow'],
+    ['誤検知', 'gh api -X POST repos/o/r/git/refs -f ref=refs/heads/21-x -f sha=abc -f note=refs/tags/v1', 'allow'],
+    ['誤検知', `curl -sX PATCH https://api.github.com/repos/o/r/git/refs/heads/x -d "{\\"sha\\":\\"$SHA\\"}"`, 'allow'],
+  ]) {
+    test(`[${kind}] ${command} は ${expected}`, () => assert.equal(decision(command), expected, command));
+  }
+});
