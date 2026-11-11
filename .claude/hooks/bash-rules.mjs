@@ -320,6 +320,40 @@ const RELEASE_REASON = 'Release の作成、編集、publish、削除は人が�
 const isReleaseTag = (name) => /^(refs\/)?tags\/v/.test(name) || /^v\d/.test(name);
 // push.followTags を有効にする値か（false と 0 は無効）
 const enablesFollowTags = (value) => value === undefined || !/^(false|0|no|off)$/i.test(value);
+// push の先を変える remote の設定（refspec を足す push、すべての ref を鏡にする mirror）
+const REMOTE_PUSH_CONFIG = /^remote\..+\.(push|mirror)$/i;
+const REMOTE_PUSH_REASON =
+  'remote.<名前>.push、remote.<名前>.mirror、push.default（matching、upstream、tracking）の設定は git push の先を変え、main、production、v* のタグを含むかを判定できない。人が確かめる';
+// push の先を変える設定か。push.default の matching は同じ名前のブランチをすべて（main も）push し、upstream と tracking は上流（main もありうる）へ push する
+const changesPushTarget = (key, value) => REMOTE_PUSH_CONFIG.test(key) || (/^push\.default$/i.test(key) && !/^(simple|current|nothing)$/i.test(value ?? ''));
+const FOLLOW_TAGS_CONFIG = /^push\.followtags$/i;
+
+// git の前に置く -c <名前>=<値>、-c<名前>=<値>、--config-env <名前>=<環境変数>、--config-env=<名前>=<環境変数> を { key, value, fromEnv } に読む。
+// -c <名前> だけ（= が無い）は true とみなされる。--config-env の値は環境変数の中身で、字面からは読めない
+function gitConfigOptions(globals) {
+  const configs = [];
+  for (let k = 0; k < globals.length; k++) {
+    const a = globals[k];
+    let spec;
+    let fromEnv = false;
+    if (a === '-c' || a === '--config-env') {
+      spec = globals[k + 1] ?? '';
+      fromEnv = a === '--config-env';
+      k++;
+    } else if (/^-c./.test(a)) spec = a.slice(2);
+    else if (a.startsWith('--config-env=')) {
+      spec = a.slice('--config-env='.length);
+      fromEnv = true;
+    } else continue;
+    // -c は最初の = で、--config-env は最後の = で分ける（git の config.c の git_config_push_env は strrchr）。
+    // --config-env=remote.a=b.push=P は remote.a=b の push の設定
+    const at = fromEnv ? spec.lastIndexOf('=') : spec.indexOf('=');
+    const key = at === -1 ? spec : spec.slice(0, at);
+    const value = at === -1 ? undefined : spec.slice(at + 1);
+    configs.push({ key, value, fromEnv, keyExpands: hasExpansion(key), valueExpands: hasExpansion(value ?? '') });
+  }
+  return configs;
+}
 
 // push の位置引数の位置。--repo を付けると、先頭の位置引数もリモートではなく refspec になる
 function pushOperands(rest) {
@@ -376,13 +410,11 @@ function judgeGit(args, dir, branchOf) {
   const sub = args[i];
   const rest = sliceWords(args, i + 1);
   if (sub === 'push' && forcesPush(rest)) return [DENY, FORCE_PUSH_REASON];
-  // git -c push.followTags=true push は、--follow-tags と同じく v* のタグも push しうる
-  if (sub === 'push' && args.slice(0, i).some((a) => /^push\.followtags(=|$)/i.test(a) && enablesFollowTags(a.split('=')[1]))) {
+  // -c と --config-env で渡す設定。--config-env=<名前>=<環境変数> は値を環境変数から読むので、値を字面で読めない
+  const configs = gitConfigOptions(args.slice(0, i));
+  // git -c push.followTags=true push は、--follow-tags と同じく v* のタグも push しうる。--config-env は値を読めないので有効とみなす
+  if (sub === 'push' && configs.some((c) => FOLLOW_TAGS_CONFIG.test(c.key) && (c.fromEnv || enablesFollowTags(c.value)))) {
     return [DENY, RELEASE_TAG_REASON];
-  }
-  // git -c remote.origin.push=… push は、refspec を設定から足す。先を語から読めない
-  if (sub === 'push' && args.slice(0, i).some((a) => /^remote\..+\.push(=|$)/i.test(a))) {
-    return [ASK, 'remote.<名前>.push の設定は push する先を足し、main、production、v* のタグを含むかを判定できない。人が確かめる'];
   }
   // 括弧の glob の後ろに語が続く形（git --no-pager(N) commit）は、judgeBash が道具を問わず確認を挟む。
   // ここで見るのは後ろに語が続かない push の refspec（git push origin x(N)）で、zsh が当たらない語を消して git push origin になり、
@@ -396,13 +428,56 @@ function judgeGit(args, dir, branchOf) {
     sub !== undefined && isUnresolved(args, i)
       ? [ASK, 'git のサブコマンドを変数、$(...)、{a,b}、glob で渡すと、コミットや push をするかを判定できない。人が確かめる']
       : judgeGitCommand(sub, rest, gitDir, branchOf);
+  if (verdict?.[0] === DENY) return verdict;
+  // git -c remote.origin.push=… push は refspec を設定から足し、remote.origin.mirror=true push はすべての ref を鏡にする（削除と force も含む）。
+  // 先を語から読めない。並べて書いた main などの DENY は上で先に返す
+  if (sub === 'push' && configs.some((c) => changesPushTarget(c.key, c.fromEnv ? undefined : c.value))) return [ASK, REMOTE_PUSH_REASON];
+  // -c "$K=true" のように名前が展開で決まると、push.followTags や remote.<名前>.mirror かを字面で読めない（サブコマンドを問わない。alias.* にもなりうる）。
+  // 値の展開（-c push.default=$M）は push のときだけ先を変えうる
+  if (configs.some((c) => c.keyExpands || (sub === 'push' && c.valueExpands))) {
+    return [ASK, '-c と --config-env の設定の名前や値を変数、$(...) で渡すと、push の先や v* のタグの push を変えるかを判定できない。人が確かめる'];
+  }
+  // -c alias.<名前>=push はサブコマンドを別名にして上の push の判定を外し、include.path と includeIf.* は読めない設定ファイルを足す
+  if (configs.some((c) => /^(alias\.|include\.path$|includeif\.)/i.test(c.key))) {
+    return [ASK, '-c と --config-env の alias.*、include.path、includeIf.* は、push をするかや設定を字面で判定できない。人が確かめる'];
+  }
   // core.hooksPath を変えると .githooks/ の守りが外れる。止める判定はそのまま、それ以外は人が確かめる
   const touchesHooksPath = (a) => /core\.hookspath/i.test(a);
-  const readsConfig = rest.some((a) => /^--(get|get-all|get-regexp|list)$|^-l$/.test(a));
+  const readsConfig = readConfigArgs(rest).reads;
   if (args.slice(0, i).some(touchesHooksPath) || (sub === 'config' && !readsConfig && rest.some(touchesHooksPath))) {
     if (verdict?.[0] !== DENY) return [ASK, 'core.hooksPath を変えると main を守る git のフック（.githooks/）が外れる。人が確かめる'];
   }
   return verdict;
+}
+
+// git config の値を次の語で取るオプション（--comment は git 2.45 から）
+const CONFIG_FLAGS_WITH_VALUE = new Set(['-f', '--file', '--blob', '--type', '--default', '--value', '--comment']);
+const CONFIG_READ_FLAG = /^--(get|get-all|get-regexp|get-urlmatch|get-color|get-colorbool|list)$|^-l$/;
+const CONFIG_REMOVE_FLAG = /^--(unset|unset-all|remove-section|rename-section)$/;
+
+// git config の引数を、読み取り（reads）か、消す操作（removes）か、書く名前（key）と値（value）に読む。値を取るオプションの値は位置引数に数えない。
+// 位置引数の先頭の get、list、unset は新しい形のサブコマンドで、set は次の2語が名前と値。旧い形は位置引数の1つ目が名前、2つ目が値で、
+// 3つ目（value-pattern）の get や list は読み取りではない（git config push.followTags true list は書く）。-1 は値（オプションではない）
+function readConfigArgs(rest) {
+  const positionals = [];
+  let reads = false;
+  let removes = false;
+  for (let k = 0; k < rest.length; k++) {
+    const a = rest[k];
+    if (a === '--') {
+      positionals.push(...rest.slice(k + 1));
+      break;
+    }
+    if (!/^--?[a-z]/i.test(a)) positionals.push(a);
+    else if (CONFIG_READ_FLAG.test(a)) reads = true;
+    else if (CONFIG_REMOVE_FLAG.test(a)) removes = true;
+    else if (CONFIG_FLAGS_WITH_VALUE.has(a)) k++;
+  }
+  const [first] = positionals;
+  if (['get', 'list'].includes(first)) return { reads: true, removes: false };
+  if (['unset', 'remove-section', 'rename-section'].includes(first)) return { reads: false, removes: true };
+  const [key, value] = first === 'set' ? positionals.slice(1) : positionals;
+  return { reads, removes, key, value };
 }
 
 function judgeGitCommand(sub, rest, gitDir, branchOf) {
@@ -419,13 +494,20 @@ function judgeGitCommand(sub, rest, gitDir, branchOf) {
   if (COMMITTING.has(sub) && (skipsHooks(rest, sub === 'commit') || mayAddFlag(rest, GIT_SHORT_FLAGS_WITH_VALUE[sub]))) return [ASK, NO_VERIFY_REASON];
   if (sub === 'clean' && cleansIgnored(rest)) return [ASK, CLEAN_IGNORED_REASON];
   // 設定に残すと、後の引数の無い git push が v* のタグや別の先も push する。読むだけの形は通す
-  if (sub === 'config' && !rest.some((a) => /^--(get|get-all|get-regexp|list|unset|unset-all)$|^-l$/.test(a) || a === 'get' || a === 'list' || a === 'unset')) {
-    const at = rest.findIndex((a) => /^push\.followtags$/i.test(a));
-    if (at !== -1 && enablesFollowTags(rest[at + 1])) return [DENY, RELEASE_TAG_REASON];
-    if (rest.some((a) => /^remote\..+\.push$/i.test(a))) {
-      return [ASK, 'remote.<名前>.push の設定は後の git push の先を足し、main、production、v* のタグを含むかを判定できない。人が確かめる'];
+  if (sub === 'config') {
+    const { reads, removes, key, value } = readConfigArgs(rest);
+    if (!reads && !removes && key !== undefined && value !== undefined) {
+      // git config "$K" true のように名前が展開で決まると、どの設定を書くかを字面で読めない
+      if (hasExpansion(key)) return [ASK, 'git config の名前を変数、$(...) で渡すと、push の先や v* のタグの push を変えるかを判定できない。人が確かめる'];
+      if (FOLLOW_TAGS_CONFIG.test(key) && enablesFollowTags(value)) return [DENY, RELEASE_TAG_REASON];
+      if (changesPushTarget(key, value)) return [ASK, REMOTE_PUSH_REASON];
+      // alias.* は push を別名にし、include.path と includeIf.*.path は読めない設定ファイルを足す
+      if (/^(alias\.|include\.path$|includeif\.)/i.test(key)) return [ASK, 'alias.*、include.path、includeIf.* の設定は、後の git の push の判定を外しうる。人が確かめる'];
     }
   }
+  // git remote add --mirror は remote.<名前>.mirror を書く。後の git push がすべての ref を鏡にする（main の force、production の削除）。
+  // 一意な省略形（--mi=push）も受ける。--m は --master と紛れるので git が断る
+  if (sub === 'remote' && rest.some((a) => isOption(a, '--mirror', 4))) return [ASK, REMOTE_PUSH_REASON];
   if (sub !== 'push') return null;
 
   if (rest.some((a) => isOption(a, '--all', 4))) return [DENY, '--all は main も push する'];
@@ -442,7 +524,8 @@ function judgeGitCommand(sub, rest, gitDir, branchOf) {
     refspecs.length === 0
       ? [{ name: 'HEAD', expands: false }]
       : refspecs.map((at) => ({ name: rest[at].split(':').pop(), expands: isUnresolved(rest, at) || rest[at].includes('*') }));
-  const unknown = (t) => t.expands || ((t.name === 'HEAD' || t.name === '@') && !current);
+  // 先の空の refspec（git push origin :）は matching で、同じ名前のブランチをすべて（main も）push する
+  const unknown = (t) => t.expands || t.name === '' || ((t.name === 'HEAD' || t.name === '@') && !current);
   // 判定できない先があっても、並べて書いた main は先に止める
   for (const target of targets.filter((t) => !unknown(t))) {
     const name = (target.name === 'HEAD' || target.name === '@' ? current : target.name).replace(/^(refs\/)?heads\//, '');
@@ -578,6 +661,21 @@ const JSON_STRING = /"(?:[^"\\]|\\.)*"/g;
 // 要求の force を 'yes'（字面で true）、'unknown'（読めない）、'no' で返す。
 // fields は gh api の -f と -F の値（key=value）、bodies は本文 { text, literal }（literal は展開を含まない字面）、unreadable は中身が見えない本文があるか。
 // JSON のキーの形だけを見る（-f note=force=true は note の値）
+// JSON の本文のキーと値の組。文字列の切れ目は生の本文で決め（戻してから切ると "x\\" の終わりの引用符がずれる）、
+// 切り出したキーと値だけを unescapeJson で戻す（"\u0072ef" も ref）。入れ子のオブジェクトのキーも拾う
+function jsonPairs(text) {
+  const pairs = [];
+  const string = /"(?:[^"\\]|\\.)*"/g;
+  for (let m = string.exec(text); m; m = string.exec(text)) {
+    const colon = /^\s*:\s*/.exec(text.slice(string.lastIndex));
+    if (!colon) continue;
+    const after = text.slice(string.lastIndex + colon[0].length);
+    const quoted = /^"((?:[^"\\]|\\.)*)"/.exec(after);
+    pairs.push({ key: unescapeJson(m[0].slice(1, -1)), value: quoted ? unescapeJson(quoted[1]) : /^[^,}\]\s]*/.exec(after)[0] });
+  }
+  return pairs;
+}
+
 function forceOf({ fields, bodies, unreadable }) {
   const verdicts = [unreadable ? 'unknown' : 'no'];
   for (const field of fields) {
@@ -591,7 +689,7 @@ function forceOf({ fields, bodies, unreadable }) {
     else if (key === 'force' && value !== 'false') verdicts.push('unknown');
   }
   for (const { text, literal } of bodies) {
-    for (const [, value] of text.matchAll(/"force"\s*:\s*"?([^,}\s"]*)/g)) {
+    for (const { value } of jsonPairs(text).filter((p) => p.key === 'force')) {
       verdicts.push(value === 'true' ? 'yes' : value === 'false' ? 'no' : 'unknown');
     }
     // 展開を含む本文は、JSON の文字列の外（キー、値、区切り）に展開が来る形（{"sha":"a",$F}）と、JSON のキー、
@@ -622,6 +720,34 @@ function resourceKnown(endpoint) {
   return complete[0] === 'repos' && complete.length >= (complete[3] === 'git' ? 5 : 4);
 }
 
+// JSON の文字列のエスケープ（\/、\\、\uXXXX）を戻す。本文の "refs\/tags\/v1" や "\u0070roduction" も、字面の判定に当てるため。
+// JSON の本文の中の GraphQL の文字列のように二重に書いた \\u0070 も、変わらなくなるまで戻す。GraphQL の \u{70} も戻す。
+// 戻すと当たる語が増えるだけなので、JSON でない語に当てても止める側にしか倒れない
+function unescapeJson(text) {
+  let s = text;
+  for (let n = 0; n < 8; n++) {
+    const next = s.replace(/\\(?:u([0-9a-fA-F]{4})|u\{([0-9a-fA-F]{1,6})\}|(\/)|(\\))/g, (m, hex4, hexN, slash, bs) =>
+      hex4 || hexN ? (parseInt(hex4 || hexN, 16) <= 0x10ffff ? String.fromCodePoint(parseInt(hex4 || hexN, 16)) : m) : slash ? '/' : bs ? '\\' : m,
+    );
+    if (next === s) return s;
+    s = next;
+  }
+  return s;
+}
+
+// パーセントエンコードか . と .. の区切りがある宛先に、守る資源の語が現れるか（戻せない宛先も含む）
+// curl の URL の /x/../releases、/./git/refs のような . と .. の区切りも、字面の判定（repos/<o>/<r>/releases）を外す
+function percentHidesResource(endpoint) {
+  if (!/%[0-9a-f]{2}|\/\.{1,2}(\/|$)/i.test(endpoint)) return false;
+  let decoded;
+  try {
+    decoded = decodeURIComponent(endpoint);
+  } catch {
+    return true;
+  }
+  return /\/(git|releases|branches|contents|merges?|refs|tags|heads)(?![\w-])/i.test(decoded);
+}
+
 // GitHub の API でも ref の強制更新は force push と同じに扱う。GET（読むだけ）は通す。
 // words は引数ぜんたい、endpoints はエンドポイントの位置引数（gh api）か URL（curl）。ref の更新かどうかは、コマンドぜんたいの文字列でなく、
 // endpoints だけで見る（Issue のコメントの本文に書いた /git/refs/ や {"force":true} は、ref を動かさない）。
@@ -630,7 +756,7 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
   const path = endpoints.join(' ');
   // mutation の名前は、宛先を問わず引数と本文のぜんたいで見る（glob、#、大文字、query string、--url-query、-F で graphql の宛先を字面から外せるため）。
   // コメントの本文に書いた語も止まる
-  const text = [...words, ...bodies.map(({ text: body }) => body)].join(' ');
+  const text = unescapeJson([...words, ...bodies.map(({ text: body }) => body)].join(' '));
   if (/enablePullRequestAutoMerge/.test(text)) return [DENY, 'auto-merge は使わない'];
   if (/mergePullRequest/.test(text)) return [DENY, MERGE_REASON];
   if (/updateRefs?\b/.test(text)) return [DENY, 'main は PR のマージでだけ進める'];
@@ -670,7 +796,7 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
     // 作る ref の名前は、フィールドの ref= か本文の "ref" で渡す
     const refText = [
       ...fields.filter((f) => /^ref=/.test(f)),
-      ...bodies.flatMap(({ text: body }) => [...body.matchAll(/"ref"\s*:\s*"([^"]*)"/g)].map((m) => m[1])),
+      ...bodies.flatMap(({ text: body }) => jsonPairs(body).filter((p) => p.key === 'ref').map((p) => p.value)),
     ].join(' ');
     if (/refs\/heads\/production(?![\w.-]|\/)/.test(refText)) return [DENY, PRODUCTION_BRANCH_REASON];
     if (/refs\/tags\/v/.test(refText)) return [DENY, RELEASE_TAG_REASON];
@@ -680,9 +806,9 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
     // -F ref=@ファイル は値を読めず、名前が展開で決まるフィールド（-f "$X"）は ref になりうる
     const opaqueField = fields.some((f) => hasExpansion(f.split('=')[0]) || /^ref=@/.test(f));
     if (creates && (unreadable || opaqueField || /[$`]/.test(refText) || (refText === '' && bodies.some(({ literal }) => !literal)))) return [ASK, 'ref を作る本文を読めず、production や v* のタグを作るかを判定できない。本文は引数かヒアドキュメントで字面を渡す。人が確かめる'];
-    // %2F、.、..、// を挟むと、字面の判定（heads/main、heads/production、tags/v）を外れうる
-    if (/%2f|\/\.{1,2}(\/|$|[\s?#])|\/\/[^\s]/i.test(path.replace(/^[a-z][a-z0-9+.-]*:\/\//i, ''))) {
-      return [ASK, 'ref の宛先に %2F、.、..、// があり、main、production、v* のタグかを字面で判定できない。人が確かめる'];
+    // パーセントエンコード（%2F、%70 など）、.、..、// を挟むと、字面の判定（heads/main、heads/production、tags/v）を外れうる
+    if (/%[0-9a-f]{2}|\/\.{1,2}(\/|$|[\s?#])|\/\/[^\s]/i.test(path.replace(/^[a-z][a-z0-9+.-]*:\/\//i, ''))) {
+      return [ASK, 'ref の宛先にパーセントエンコード（%2F など）、.、..、// があり、main、production、v* のタグかを字面で判定できない。人が確かめる'];
     }
   }
   // ブランチの名前の変更は、production と main を消すか、別のコミットに差し替えるのと同じになる
@@ -694,6 +820,12 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
   if (isDynamic(path) && /\/releases(?![\w-])/.test(path)) return [ASK, 'Release の宛先を展開で渡すと、Release を書き換えるかを判定できない。人が確かめる'];
   // contents API の書き込みは、ブランチを指定しなければ既定のブランチ（main）へ直にコミットする
   if (/\/contents\//.test(path)) return [DENY, 'contents API でのファイルの書き込みはしない。作業ブランチで git を使う'];
+  // 宛先の語（git、refs、releases）をパーセントエンコードすると、上の字面の判定に当たらない（repos/o/r/%67it/refs、repos/o/r/%72eleases）。
+  // 戻すと守る資源（git、releases、branches、contents、merge）の語が現れるか、戻せない宛先だけを確かめる。
+  // query string（?name=a%20b）とラベルの名前（issues/1/labels/sprint%3A1）は資源を変えないので通す
+  if (endpoints.some((e) => percentHidesResource(e.replace(/[?#].*$/, '')))) {
+    return [ASK, '書き込みの宛先にパーセントエンコードか . と .. の区切りがあり、main、production、v* のタグ、Release に触れるかを字面で判定できない。人が確かめる'];
+  }
   return null;
 }
 
