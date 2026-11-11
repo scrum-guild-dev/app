@@ -254,7 +254,7 @@ Wikiの一括取り込みは、`requestRateLimit` の要求枠（本文を読む
 | 長く残すブランチ | `main` だけ。`develop` や `release` は作らない。ステージングが無いので、分けても受け皿がない |
 | 作業ブランチ | 1 Issue に 1 ブランチ、1 PR。クラウドのセッションが作る `claude/*` はそのまま使う。手で切るときは `<Issue番号>-<短い名前>`（例 `12-org-create`）。スラッシュを使わず、ワークツリーと同じ名前にする。種別は PR のタイトルで表す |
 | マージ方法 | squash merge だけ。PR のタイトルが `main` のコミットの件名になり、本文は空にする |
-| PR のタイトル | 今のコミットと同じ書き方（`feat:`、`fix:`、`docs:`、`design:`、`refactor:`、`chore:`、`test:`、`ci:` の後に日本語）。末尾に紐づく Issue の番号を `(#<Issue の番号>)` で付ける（例 `feat(me): 自分の設定でテーマを選べる (#674)`）。squash merge で GitHub が PR の番号を `(#<PR の番号>)` で後ろに足すので、`main` の件名には2つ並ぶ。紐づく Issue が無い PR は付けない。タイトルの `(#<番号>)` は GitHub が閉じる合図に読む語の直後ではないので、Issue を閉じない |
+| PR のタイトル | 今のコミットと同じ書き方（`feat:`、`fix:`、`docs:`、`design:`、`refactor:`、`chore:`、`test:`、`ci:` の後に日本語）。末尾に紐づく Issue の番号を `(#<Issue の番号>)` で付ける（例 `feat(me): 自分の設定でテーマを選べる (#674)`）。squash merge で GitHub が PR の番号を `(#<PR の番号>)` で後ろに足すので、`main` の件名には2つ並ぶ。紐づく Issue が無い PR は付けない。タイトルの `(#<番号>)` は GitHub が閉じる合図に読む語の直後ではないので、Issue を閉じない。種別は、次の版の上げ方とリリースノートの分類も決める（`feat` は minor で「新しい機能」、`fix` は patch で「直し」、ほかは patch で「その他」。下の「リリース」） |
 | マージ後 | ブランチを自動で消す |
 | 文書だけの変更 | ほかの変更と同じく PR を通す。CI は重いジョブを飛ばし（下の「文書だけの PR」）、マージの後に Workers Builds はビルドしない |
 
@@ -906,6 +906,7 @@ PR ごとと main への push、毎日 06:43 JST の定期実行、手動実行�
 | label | パスを見て `needs-human` のラベルを付ける（上の「マージの判定」）。`.github/workflows/label.yml` に分けて置き、`pull_request_target` で動かす。ワークフローも規則も PR のベース（`main`）の版が使われるので、PR の側で書き換えてもラベルは付く。別のブランチをベースに開いてから `main` へ付け替えたときも、判定し直す。PR のコードはチェックアウトしない（書き込みのトークンで PR のコードを動かさないため）。ジョブはどのイベントでも飛ばさず、ラベルもどのイベントでも付け直す。ベースを付け替えた後にその head で CI が動き直していなければ、失敗で終わる（下の「文書だけの PR」）。判定はイベントの中身でなく、そのときの PR の状態から行い、`concurrency` も置かない |
 | accepting | `main` へ PR がマージされたとき、その PR が指す Issue に `status:accepting` を付ける（上の「Issue の状態」）。`.github/workflows/accepting.yml` に分けて置き、`pull_request_target` の `closed` で、マージされ、ベースが `main` で、このリポジトリのブランチの PR のときだけ動く（fork の PR はブランチ名も本文も外の人が決めるので、人が付け替える）。PR のコードはチェックアウトせず、ブランチ名と本文は環境変数で渡す。`permissions` は `issues: write` だけ。`ci-ok` にも PR のチェックにも入らないので、落ちても気づきにくい。落ちたら Actions からその実行を走らせ直す（付け外しは何度走っても同じ） |
 | ready | 着手できる Issue に `status:ready` を付け、当てはまらなくなったら外す（上の「Issue の状態」）。`.github/workflows/ready.yml` に分けて置き、`issues`（`opened`、`reopened`、`closed`、`labeled`、`unlabeled`。開閉は、作者がオーナーかメンバーかコラボレーターの Issue だけで動かす。ラベルの付け外しは、判定に効くラベル（`pt:`、`status:` で始まるもの、`epic`、`sprint-log`）のときだけ動かす。`epic` は、作者がオーナーかメンバーかコラボレーターか、作者とは別の人が付け外ししたときだけ拾い、外部作者自身へのテンプレートの自動付与では動かさない。他人の Issue のラベルの操作には GitHub の triage 以上の権限が要るので、人が外部作者の Issue を分類したときは拾える。誰でも自分の Issue を開閉でき、Issue のテンプレートが付けるラベルでも `labeled` が来るうえ、1回に API を数十回呼ぶので、繰り返されると、リポジトリのワークフローで共有する `GITHUB_TOKEN` の上限を使い切られるため）、`accepting` の成功（`workflow_run`。`GITHUB_TOKEN` が付けた `status:accepting` では `issues` のイベントが来ないため）、1時間ごとの `schedule`（依存関係とサブ Issue の付け外しでは Actions のイベントが来ないため。公開リポジトリでは60日動きが無いと止まるので、止まったら手動で動かし直す）、手動の実行で動く。どのきっかけでも、開いている Issue をすべて数え直し（`scripts/ready.ts`）、変わる Issue だけ付け外しする。イベントの中身は読まず（job の `if` で作者の区分を見るだけ）、手動の実行のほかは既定のブランチの版で動くので、チェックアウトしてよい（手動の実行は選んだブランチの版で動くが、動かせるのは書き込みの権限を持つ人だけ。依存は入れない）。`concurrency` で並べ、待ちの実行を置き換えても失うものが無い。`permissions` は `contents: read` と `issues: write`。`ci-ok` にも PR のチェックにも入らない。落ちたら Actions からその実行を走らせ直す |
+| release-drafter | main への push で下書きの Release を作り直し、PR のタイトルの種別で `release:feat` と `release:fix` を付ける（下の「リリース」）。`.github/workflows/release-drafter.yml` に分けて置く。下書きの段（`draft`）は `push` で、`contents: write` と `pull-requests: read`、ラベルの段（`autolabel`）は `pull_request_target`（`opened`、`reopened`、タイトルを直した `edited`。開いた PR だけ。PR ごとに最新の実行だけを残す）で、`contents: read` と `pull-requests: write`。どちらも checkout せず、設定（`.github/release-drafter.yml`）は API で読む。ラベルの段は PR のベース（`main`）の版のワークフローと設定で動くので、PR の側で書き換えても効かず、ワークフローを足す PR そのものでは動かない。`label` に混ぜず、`ci-ok` にも入れない。リリースの道具の不調でマージの判定を止めないため。下書きの段は、実行の時点の main の先頭を API で読み、そのコミットを下書きの対象にする。古い push の実行を走らせ直しても、先頭に push の実行が作られなくても（`[skip ci]` の件名など）、そこまでのマージをすべて拾う。落ちたら Actions から走らせ直す |
 | ci-ok | `ci.yml` の changes、check、test、test-node、migration、e2e、e2e-dev、e2e-repeat をまとめる1つのジョブ。マージの前に確かめるのは、これと label |
 
 ### GitHub の書き込み権限
@@ -1110,6 +1111,26 @@ Workers Builds の API トークンは、Builds が作ったトークンの権�
 - `workers.dev` の URL を Cloudflare Access（Zero Trust の無料の枠、50人まで）で守る。Access のアプリ（`scrum-guild-design - Cloudflare Workers`）は Worker の本番とプレビューの URL を覆い、セッションは1か月。ログインの手段は Cloudflare アカウントとワンタイム PIN。版ごとのプレビュー URL は設定の `preview_urls` で作らない
 - 見る人を足すときは、Zero Trust の Access controls の Applications で見本の Worker のアプリを開き、メールアドレス（Emails）で許可する方針を足す。今の方針は Cloudflare アカウントのメンバーだけを許可する
 - 指摘はチャットで受け取り、直すことは Issue にし、決まったことは `docs/design.md` に移す
+
+## リリース
+
+マージのたびに、次の版の番号と変更の一覧を、下書きの Release にそろえる（2026-11-11 に決めた。#1162）。Release を出すときに、版とリリースノートを手で組まないため。下書きを作るだけで publish はせず、本番の出し方（上の「CD」）と画面に出す版（上の「版」）は変わらない。publish で本番に出す形は #1163 で決める。
+
+- 道具は release-drafter（`release-drafter/release-drafter` と、ラベルを付ける `release-drafter/release-drafter/autolabeler`。コミットの SHA で固定する）。設定は `.github/release-drafter.yml`、ワークフローは `.github/workflows/release-drafter.yml`、決まりは `scripts/release-drafter-workflow.test.ts` が確かめる
+- 版はセマンティックバージョニングの `vX.Y.Z`。Release の名前とタグに使う。最初の版は `v0.1.0`
+- PR を開くかタイトルを直すと、タイトルの種別でラベルを付け直す。`feat:` と `feat(…):` は `release:feat`、`fix:` と `fix(…):` は `release:fix`。ほかの種別には付けず、当たらなくなったラベルは外す。`!` の付いた種別（`feat!:`）も同じラベル
+- 次の版は、前に出した Release から後にマージした PR のラベルで決める。`release:breaking` があれば major、`release:feat` があれば minor、どちらも無ければ patch
+- `release:breaking` は、非互換の変更（API の操作の形を変える、データの移行を人に求めるなど）に人が手で付ける。自動では付けず、タイトルを直しても外れない。0.x のあいだは付けない。非互換の変更も `release:feat` の minor で上げる。1.0.0 にするのは、人が決めたときだけ
+- ノートは「新しい機能」（`release:feat`）、「直し」（`release:fix`）、「その他」（ラベルの無い PR）の順に、`- <PR のタイトル> (#<PR の番号>)` で並べる。1つの PR は先に当たった節にだけ並ぶ
+- 下書きは、main への push の実行が作り直す。対象のコミット（`commitish`）は、実行の時点の main の先頭のコミットに固定する。publish の直前に別のマージが入っても、ノートとタグのコミットをそろえるため。続けてマージしたときは1つずつ動かし（`concurrency`）、下書きが2件にならないようにする
+- 出した Release がまだ無いあいだは、main の最初のコミット（`3a8b99f`）からマージした PR を拾い、版は `v0.1.0` にする。release-drafter は前に出した Release が無いと PR を1件も拾わず、0.0.0 から上げるため。プレリリースは出した Release に数えない（release-drafter の既定の `include-pre-releases: false` にそろえる）ので、最初の版はプレリリースにしない。プレリリースで出すと、次の下書きも `v0.1.0` に戻り、同じタグになる。これまでの PR はラベルが無いので「その他」に並ぶ。既にマージした PR にラベルは付け直さない
+- 最初の publish まで、下書きの本文は増え続ける。2026-11-11 の時点で 528 件・約 3.2 万字（`- <タイトル> (#<番号>)` の字数の実測）で、直近は1日に約 30 件・約 1,800 字ずつ増えるので、Release の本文の上限の 125,000 字に 2027 年 1 月の初めに届く見込み。release-drafter は本文を切り詰めず、超えると `draft` の段が落ちる。それまでに最初の版を publish する（#1163）。間に合わないときは、`from` に渡す最初のコミットを近いマージに寄せ、それより前の PR をノートから外す
+- `release:feat` と `release:fix` は、手で付けても、次にタイトルを直したときにタイトルに当たらなければ外れる。種別を変えたいときはタイトルを直す。ラベルを付け直すのは開いた PR だけで、マージの後にタイトルを直しても版の上げ方は変わらない
+- ノートの行は、下書きを作り直すときの PR の今のタイトルで書く。PR の作者はマージの後もタイトルを直せるので、publish の前に、ノートの行を main のコミットの件名（squash merge なので、マージした時点のタイトル）と照らす（publish の手順は #1163）
+- タイトルの Markdown の記号（`\ < * _ & @ [ ] ! ~`）はエスケープし、強調、メンション、リンク、画像、打ち消し線にしない。素の URL は GitHub が自動でリンクにするので止められず、publish の前に人が見る。バッククォートで囲んだ部分は、コードとして見せるためにエスケープしない。開きと閉じのバッククォートの数を変えるとコードにならず、中のリンクやメンションが効くので、これも publish の前に人が見る
+- ラベルは PR を開いたとき、開き直したとき、タイトルを直したときに付く。このワークフローより前に開いた PR には、タイトルを直すまで付かないので、マージの前に手で付けるか、タイトルを直す
+- 種別の後のスコープは括弧の入れ子を読まない（`fix(api(v2)): …` には付かない）。全角のコロン（`feat：`）にも付かない
+- PR のタイトルの形式は検査しない。種別を書き誤ると、ラベルが付かず「その他」の patch に入る。マージの前にタイトルを直せば付け直される
 
 ## 本番で壊れたことに気づく
 

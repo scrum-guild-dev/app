@@ -1,0 +1,51 @@
+# 下書きの Release と、PR のタイトルの種別のラベル（docs/development.md の「リリース」）。
+# release-drafter のワークフロー（.github/workflows/release-drafter.yml）が、どちらの段でも API でこのファイルを読む。
+# 下書きの段は main への push の版、ラベルの段は pull_request_target なので PR のベース（main）の版を読み、PR の側で書き換えても効かない
+
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+# 上から順に見る。exclusive で、1つの PR は先に当たった節にだけ並ぶ。
+# 版の上げ方は、当たった節の semver-increment のうち一番大きいもの。どれにも当たらなければ下の patch
+categories:
+  - title: '新しい機能'
+    semver-increment: minor
+    exclusive: true
+    when:
+      label: 'release:feat'
+  - title: '直し'
+    semver-increment: patch
+    exclusive: true
+    when:
+      label: 'release:fix'
+  # when の無い節は、ほかの節に入らなかった PR を受け取る（ラベルの無い PR と、これまでの PR）
+  - title: 'その他'
+  # 非互換の変更。人が手で付ける。0.x のあいだは付けない（docs/development.md の「リリース」）
+  - type: version-resolver
+    semver-increment: major
+    when:
+      label: 'release:breaking'
+  - type: version-resolver
+    semver-increment: patch
+
+category-template: '### $TITLE'
+change-template: '- $TITLE (#$NUMBER)'
+# タイトルの Markdown の記号と @ をそのまま出す（強調、メンション、リンク、画像、打ち消し線に化けさせない）。
+# # は Issue の番号へのリンクに使い、( ) は `(#674)` と `feat(me):` を崩すので除かない
+change-title-escapes: '\<*_&@[]!~'
+no-changes-template: '- 変更なし'
+template: |
+  ## 変更
+
+  $CHANGES
+
+# PR のタイトルの種別でラベルを付ける。sync-labels で、タイトルを直すと付け直し、当たらなくなったラベルは外す。
+# 外すのは下の規則に書いたラベル（release:feat と release:fix）だけで、人が付ける release:breaking は残る
+sync-labels: true
+autolabeler:
+  - labels: ['release:feat']
+    title:
+      - '/^feat(\([^)]*\))?!?:/'
+  - labels: ['release:fix']
+    title:
+      - '/^fix(\([^)]*\))?!?:/'
