@@ -1,0 +1,66 @@
+name: release-drafter
+
+# main へのマージで下書きの Release を作り直し、PR のタイトルの種別でラベルを付ける（docs/development.md の「リリース」）。
+# 下書きを作るだけで publish はしない。本番の出し方（main への push で Workers Builds が出す）は変わらない。
+# label.yml に混ぜない。label はマージの判定に使うチェックで、リリースの道具の不調で落ちるとマージが止まるため
+on:
+  push:
+    branches: [main]
+  # pull_request_target なので、このワークフローも .github/release-drafter.yml も PR のベース（main）の版で動く
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize]
+
+jobs:
+  draft:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # 続けてマージしたとき、2つの実行が同時に下書きを作って2件にならないよう、1つずつ動かす。
+    # 待ちの実行が新しい実行に置き換えられても、新しい実行がそれまでの PR をすべて拾うので、取りこぼさない
+    concurrency:
+      group: release-drafter
+      cancel-in-progress: false
+    permissions:
+      # 下書きの Release を作り、書き換える
+      contents: write
+      # 前の Release からマージした PR とそのラベルを読む
+      pull-requests: read
+    steps:
+      # actions/checkout を置かない。release-drafter は設定を API で読む
+      - name: 出した Release があるかを確かめる
+        id: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # gh の失敗で止まるよう、代入で受けてから数える（パイプに流すと、途中の失敗が消える）
+          ids=$(gh api --paginate "repos/$REPO/releases?per_page=100" --jq '.[] | select(.draft == false) | .id')
+          count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')
+          echo "出した Release: $count 件"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
+        with:
+          # 動いた push のコミットに固定する。publish の直前に別のマージが入っても、ノートとタグのコミットがそろう
+          commitish: ${{ github.sha }}
+          # 出した Release が無いと、release-drafter は比べる起点が無いので PR を1件も拾わない。
+          # そのあいだは main の最初のコミット（3a8b99f。親の無いコミット）から拾い、これまでの PR を下書きに並べる。
+          # 出した後は空にし、前に出した Release のタグから拾う（空の入力は渡していないものとして読まれる）
+          from: ${{ steps.published.outputs.count == '0' && '3a8b99f62d026162454adedccad4c3397520f5d2' || '' }}
+          # 出した Release が無いと、release-drafter は 0.0.0 から上げる（ラベルの無いこれまでの PR だけなら v0.0.1）。
+          # 最初の版は v0.1.0 にする（人が決めた。#1162）。出した後は空にし、前の版から上げる
+          version: ${{ steps.published.outputs.count == '0' && '0.1.0' || '' }}
+
+  autolabel:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # .github/release-drafter.yml を API で読む
+      contents: read
+      pull-requests: write
+    steps:
+      # actions/checkout を置かない。pull_request_target のトークンは書き込めるので、PR のコードを取り込むと
+      # そのコードが書き込みの権限で動く。autolabeler は PR のタイトルとファイルの一覧を API で読むだけ
+      - uses: release-drafter/release-drafter/autolabeler@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
