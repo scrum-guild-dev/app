@@ -335,11 +335,18 @@ describe('main の先頭を読む段', () => {
           '#!/bin/bash',
           'printf \'%s\\n\' "$@" > "$FAKE_GH_DIR/args"',
           `[ ${ghStatus} -eq 0 ] || exit ${ghStatus}`,
-          'printf \'%s\\n\' "$FAKE_HEAD"',
+          // 渡された --jq の式を、本物の jq で commits/main の応答に当てる
+          'while [ $# -gt 0 ]; do [ "$1" = --jq ] && expr="$2"; shift; done',
+          'jq -r "$expr" "$FAKE_GH_DIR/commit.json"',
           '',
         ].join('\n'),
       );
       chmodSync(gh, 0o755);
+      // commits/main の応答の形。.sha がコミット、.commit.tree.sha は別の 40 桁
+      writeFileSync(
+        join(dir, 'commit.json'),
+        JSON.stringify({ sha: output, commit: { tree: { sha: 'c'.repeat(40) } }, parents: [{ sha: 'd'.repeat(40) }] }),
+      );
       const outputFile = join(dir, 'output');
       writeFileSync(outputFile, '');
       let status = 0;
@@ -349,7 +356,6 @@ describe('main の先頭を読む段', () => {
             ...process.env,
             PATH: `${dir}:${process.env.PATH}`,
             FAKE_GH_DIR: dir,
-            FAKE_HEAD: output,
             GITHUB_OUTPUT: outputFile,
             REPO: 'scrum-guild-dev/app',
           },
