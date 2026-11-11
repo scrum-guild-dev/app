@@ -667,13 +667,24 @@ test('押せるチップに山形が出て、完了した行のチップには�
     await expect(chip.locator('.ico')).toHaveCount(1);
     await expect(chip.locator('.chip-text + .ico')).toHaveCount(1);
   }
+  // 右向きの chevron を 90 度回して、下向きにする
+  const transform = await row
+    .getByRole('button', { name: 'ポイント: 未設定' })
+    .locator('.ico')
+    .evaluate((element) => getComputedStyle(element).transform);
+  expect(transform).toMatch(/^matrix\(\s*-?0(?:\.0+)?(?:e-?\d+)?,\s*1,\s*-1,\s*-?0/);
 
-  // ポイントの数は、見本と同じ等幅の書体（--font-mono）で出る
+  // ポイントの数は、見本と同じ等幅の書体（.attr-chip.is-points の --font-mono）で出る。担当のチップには当てない。
+  // 今のトークンでは --font-mono が本文と同じ書体に解決されうるので、書体の値だけでなく包みの class も確かめる
   await row.getByRole('button', { name: 'ポイント: 未設定' }).click();
   const pointSaved = waitForResponses(page, '/task-update');
   await page.getByRole('menuitemradio', { name: '5 pt', exact: true }).click();
   await pointSaved;
   const points = row.getByRole('button', { name: 'ポイント: 5 pt' });
+  await expect(
+    row.locator('.attr-chip.is-points', { has: page.getByRole('button', { name: 'ポイント: 5 pt' }) }),
+  ).toHaveCount(1);
+  await expect(row.locator('.attr-chip.is-points')).toHaveCount(1);
   const fonts = await points.locator('.chip-text').evaluate((element) => {
     const normalize = (value: string) => value.replace(/["'\s]/g, '');
     return {
@@ -698,7 +709,8 @@ test('押せるチップに山形が出て、完了した行のチップには�
   await page.evaluate(() => (document.documentElement.style.fontSize = '150%'));
   await page.evaluate(() => document.fonts.ready);
   await assignee.scrollIntoViewIfNeeded();
-  const wrapper = row.locator('.attr-chip', { has: assignee });
+  // has の locator は包みの中から探すので、行からではなくページから組む
+  const wrapper = row.locator('.attr-chip', { has: page.getByRole('button', { name: `担当: ${long}` }) });
   const box = (await wrapper.boundingBox())!;
   const bounds = (await row.boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(bounds.x - 1);
@@ -724,4 +736,14 @@ test('押せるチップに山形が出て、完了した行のチップには�
   await expect(points.locator('.ico')).toHaveCount(0);
   await expect(assignee).toHaveAttribute('aria-disabled', 'true');
   await expect(assignee.locator('.ico')).toHaveCount(0);
+
+  // 親のストーリーから区分を引き継ぐタスクの区分のチップも、押せないので山形を置かない
+  await page.reload();
+  await addStoryRow(page, '山形の親');
+  await addTaskRow(page, '山形の子', '山形の親');
+  const child = page.locator('.entry', { hasText: '山形の子' });
+  const category = child.getByRole('button', { name: /^区分: / });
+  await expect(category).toHaveAttribute('aria-disabled', 'true');
+  await expect(category.locator('.ico')).toHaveCount(0);
+  await expect(child.getByRole('button', { name: 'ポイント: 未設定' }).locator('.ico')).toHaveCount(1);
 });

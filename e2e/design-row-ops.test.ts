@@ -443,6 +443,10 @@ test('見本のチップ: ロックの理由、読み込み中、再試行と離
   const lockedAssignee = examples.locator('[data-chip-example="locked"] .attr-chip').last().locator('.chip-btn');
   await expect(lockedAssignee).toHaveAttribute('aria-disabled', 'true');
   await expect(lockedAssignee).toHaveAccessibleDescription('このタスクは完了になっているため、担当は替えられません。');
+  // ロックしたチップには押せる印（山形）を置かず、押せるチップには置く（本番の AttrChip と同じ）
+  await expect(examples.locator('[data-chip-example="locked"] .chip-btn .ico')).toHaveCount(0);
+  await expect(examples.locator('[data-chip-example="left"] .chip-btn')).toHaveCount(2);
+  await expect(examples.locator('[data-chip-example="left"] .chip-btn > .ico')).toHaveCount(2);
 
   const loading = examples.locator('[data-chip-example="loading"] .attr-chip').last();
   await loading.locator('.chip-btn').click();
