@@ -243,7 +243,53 @@ test('?error=denied の警告は 3 行以内で、会員登録のボタンを含
   expect(hintBox && box && hintBox.y).toBeGreaterThan((box?.y ?? 0) + (box?.height ?? 0));
 });
 
-test('リード文に、初めての人の行き先がある', async ({ page }) => {
+test('初めての人の行き先は紙の下の会員登録のボタンだけで、リード文は繰り返さない', async ({ page }) => {
   await page.goto('/login');
-  await expect(page.getByText('初めての人は、下の会員登録から始められます。')).toBeVisible();
+  await expect(page.getByRole('link', { name: '初めての人は会員登録' })).toHaveAttribute('href', '/signup');
+  await expect(page.getByText('下の会員登録から')).toHaveCount(0);
+});
+
+// 余白でまとまりを示す: 外の手段のボタン2つと注記は紙の間隔より詰め、会員登録と法文のリンクは間を広げて離す
+test('外の手段のボタンと注記は詰めて並び、会員登録のまとまりは離れる', async ({ page }) => {
+  await page.goto('/login');
+  const lead = page.getByText('招待されている人がログインできます');
+  const github = page.getByRole('link', { name: 'GitHub でログイン' });
+  const google = page.getByRole('link', { name: 'Google でログイン' });
+  const note = page.getByText('GitHub と Google は本人確認だけに使います');
+  const signup = page.getByRole('link', { name: '初めての人は会員登録' });
+  const [leadBox, githubBox, googleBox, noteBox, signupBox] = await Promise.all(
+    [lead, github, google, note, signup].map((locator) => locator.boundingBox()),
+  );
+  if (!leadBox || !githubBox || !googleBox || !noteBox || !signupBox) throw new Error('部品が見えない');
+  const gapLeadToButtons = githubBox.y - (leadBox.y + leadBox.height);
+  const gapButtons = googleBox.y - (githubBox.y + githubBox.height);
+  const gapToNote = noteBox.y - (googleBox.y + googleBox.height);
+  const gapToFoot = signupBox.y - (noteBox.y + noteBox.height);
+  expect(gapButtons).toBeLessThan(gapLeadToButtons);
+  expect(gapToNote).toBeLessThan(gapLeadToButtons);
+  expect(gapToFoot).toBeGreaterThan(gapLeadToButtons);
+});
+
+test('GitHub のボタンは GitHub のマークを文字の色で出し、紙の上端の線は操作の色にしない', async ({ page }) => {
+  await page.goto('/login');
+  const github = page.getByRole('link', { name: 'GitHub でログイン' });
+  const mark = github.locator('svg.github-mark');
+  await expect(mark).toBeVisible();
+  expect(await mark.locator('path').evaluate((path) => getComputedStyle(path).fill)).toBe(
+    await github.evaluate((link) => getComputedStyle(link).color),
+  );
+  const edge = await page
+    .locator('.gate-sheet')
+    .first()
+    .evaluate((sheet) => {
+      const style = getComputedStyle(sheet);
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--color-accent)';
+      sheet.append(probe);
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      return { top: style.borderTopColor, side: style.borderLeftColor, accent };
+    });
+  expect(edge.top).toBe(edge.side);
+  expect(edge.top).not.toBe(edge.accent);
 });

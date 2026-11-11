@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import BrandMark from './BrandMark.svelte';
+  import GithubMark from './GithubMark.svelte';
   import GoogleMark from './GoogleMark.svelte';
   import Icon from './Icon.svelte';
   import { resetToDefaults } from '../organization.svelte.ts';
@@ -73,7 +74,7 @@
             ><GoogleMark />{t('onboardingGoogle')}</button
           >
           <button class="btn is-wide" type="button" onclick={() => move(1)}
-            ><Icon name="git" />{t('onboardingGithubAccount')}</button
+            ><GithubMark />{t('onboardingGithubAccount')}</button
           >
           <p class="field-hint">{t('onboardingAuthNote')}</p>
         </div>
