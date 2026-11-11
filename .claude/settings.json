@@ -91,6 +91,16 @@
         ]
       },
       {
+        "matcher": "mcp__.*[Gg][Ii][Tt][Hh][Uu][Bb].*__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-mcp.mjs\"",
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
         "matcher": "Agent",
         "hooks": [
           {
