@@ -153,7 +153,7 @@ test.describe('今日やることの画面', () => {
       await page.setViewportSize({ width, height: 900 });
       await expect(entry, `${width}px`).toHaveCSS('padding-top', '12px');
       await expect(entry, `${width}px`).toHaveCSS('min-height', '60px');
-      await expect(navItem, `${width}px`).toHaveCSS('padding-top', '7px');
+      await expect(navItem, `${width}px`).toHaveCSS('padding-top', '6px');
       await expect(navItem, `${width}px`).toHaveCSS('min-height', '44px');
     }
   });
