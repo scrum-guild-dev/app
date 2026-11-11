@@ -632,7 +632,7 @@ Wiki、お気に入り（`favorites`）、依頼先（`delegatees`）の表を�
 
 残る危険（受け入れた）: `message` の伏せ方は、引用符、区切り（`: `、` in `）、英字でない文字を目印にする。英字だけの値（人の名前や英単語のパスワードなど）が、引用符の外で、区切りに当たらない位置に入る文言は、伏せられずに残りうる。ログを読めるのは運用者（Cloudflare のアカウントのメンバー）だけ。読んだ行を Issue などに貼るときは、`message` に利用者の値が残っていないかを見てから貼る。
 
-元の位置へ戻す: `file` は build で圧縮したファイルなので、`clientVersion` の版を手元で同じに build し、ソースマップで元のファイルと行に戻す。`clientVersion` は画面が送る値なので、`vX.Y.Z` の形か16進の SHA であることを確かめてから使う（`-` で始まる値やブランチ名を git に渡さない）。`vX.Y.Z` なら、そのタグを完全な名前（`refs/tags/vX.Y.Z`）で下の `<版か SHA>` に使う。
+元の位置へ戻す: `file` は build で圧縮したファイルなので、`clientVersion` の版を手元で同じに build し、ソースマップで元のファイルと行に戻す。`clientVersion` は画面が送る値なので、`vX.Y.Z` の形か16進の SHA であることを確かめてから使う（`-` で始まる値やブランチ名を git に渡さない）。`vX.Y.Z` なら、そのタグを完全な名前（`refs/tags/vX.Y.Z`）で下の `<版か SHA>` に使う。SHA（#1165 より前の版）なら、`git fetch origin` の後に `git merge-base --is-ancestor <SHA> origin/main` が 0 で終わる（`main` に入ったコミットである）ことを確かめてから使う。ブランチを push できる人が選んだコミットを、運用者の端末で build しないため。
 
 1. その版のワークツリーを切る: `git fetch --tags origin && git worktree add worktrees/client-error-<版か SHA の先頭7字> <版か SHA>`。切ったワークツリーで `pnpm install`
 2. 本番と同じ版で、ソースマップを出して build する: `APP_VERSION=<clientVersion の値> pnpm exec vite build --sourcemap hidden`。`hidden` は JS に参照を足さないので、出る JS は本番と同じ（2026-10-27 に確かめた）。`build<file>` があることを確かめる。無ければ版か依存が違う
