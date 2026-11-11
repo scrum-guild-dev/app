@@ -7,6 +7,9 @@
   const ARTS = {
     // 空の掲示板: 一覧に何も貼られていない場面
     notice: '<path d="M8 8h48v34H8z"/><path d="M20 42v14M44 42v14"/><path d="M16 14h16v14H16z"/><path d="M24 14v.01"/><path d="M40 16h10M40 22h10M40 28h6" stroke-dasharray="1 5"/>',
+    // 帳簿の上の日の出: 今日やると決めたものがまだ無い場面。太陽は今日やるの印と同じ
+    // 帳簿の罫は長さ0の点（丸い端で点になる）。地図の道筋と同じく、線4の .art.is-lead でも隙間が閉じない
+    sun: '<path d="M8 40h48"/><path d="M20 40a12 12 0 0 1 24 0"/><path d="M32 16v6M17 23l4 4M47 23l-4 4M8 32h6M50 32h6"/><path d="M16 48h32M24 56h16" stroke-dasharray="0 6"/>',
     // 空の宝箱: 報酬や明細がまだ入っていない場面
     chest: '<path d="M10 32h44v20H10z"/><path d="M10 32l4-16h36l4 16"/><path d="M28 32v6h8v-6"/><path d="M32 4v5M21 7l2 4M43 7l-2 4"/>',
     // 出発の地図: 最初の一歩を踏み出す場面

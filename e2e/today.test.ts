@@ -300,8 +300,11 @@ test('担当のタスクが無いときは今日やると決めたものだけ�
 
   await expect(sectionHeadings(page)).toHaveText(['今日やると決めたもの']);
   const section = region(page, '今日やると決めたもの');
-  await expect(section.locator('.section-count')).toHaveText('0 件');
+  // 空でも出す節なので件数は出さず、集計の 0 と空の状態の案内で伝える。線画は今日やるの印と同じ太陽
+  await expect(section.locator('.section-count')).toHaveCount(0);
   await expect(section.getByText('今日やるタスクはまだありません')).toBeVisible();
+  await expect(section.locator('.empty .art use')).toHaveAttribute('href', '#a-sun');
+  await expect(page.locator('symbol#a-sun path').first()).toBeAttached();
   await expect(section.locator('.empty')).not.toContainText('太陽');
   await expect(tally(page, '今日やると決めたもの')).toHaveText('0');
 

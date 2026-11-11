@@ -36,7 +36,6 @@
     bind:this={menu.button}
     onclick={menu.toggle}
   >
-    <span class="ws-menu-label">{t('workspace')}</span>
     <b>{currentName}</b>
     <Icon name="chevron" />
   </button>

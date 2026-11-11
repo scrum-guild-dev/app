@@ -117,16 +117,16 @@ h1, h2, h3 { text-wrap: balance; }
 /* アイコンだけのボタンに、目で読める名前を横に浮かせる札。読み上げはボタンの aria-label が受け持つので、札は aria-hidden */
 .nav-tip { display: none; }
 
-.nav { display: grid; gap: 1px; }
+.nav { display: grid; gap: 2px; }
 .nav-group { font-size: var(--text-xs); color: var(--color-muted); letter-spacing: var(--tracking-label); padding: var(--space-2) var(--space-2) var(--space-1); }
 .nav-item {
   position: relative;
   display: flex; align-items: center; gap: var(--space-3);
-  padding: 7px var(--space-2); border-radius: var(--radius-1);
+  padding: 6px var(--space-2); border-radius: var(--radius-1);
   color: var(--color-fg); text-decoration: none;
 }
 .nav-item:hover { background: var(--color-rule); }
-.nav-item[aria-current="page"] { background: var(--color-surface); font-weight: 700; box-shadow: 0 0 0 1px var(--color-line); }
+.nav-item[aria-current="page"] { background: var(--color-surface); font-weight: 600; box-shadow: 0 0 0 1px var(--color-line); }
 .nav-item .ico { color: var(--color-muted); }
 .nav-item[aria-current="page"] .ico { color: var(--color-accent); }
 .nav-item-label { min-width: 0; }
@@ -146,7 +146,8 @@ h1, h2, h3 { text-wrap: balance; }
   border-radius: var(--radius-1); border: 1px solid var(--color-control-edge); background: var(--color-surface);
 }
 :is(.org-menu-button, .ws-menu-button):hover { border-color: var(--color-muted); }
-:is(.org-menu-label, .ws-menu-label) { grid-column: 1; font-size: var(--text-xs); color: var(--color-muted); }
+/* ワークスペースの切り替えは、左のメニューの「ワークスペース」の見出しのすぐ下にだけ出すので、枠の中にラベルを持たない */
+.org-menu-label { grid-column: 1; font-size: var(--text-xs); color: var(--color-muted); }
 :is(.org-menu-button, .ws-menu-button) > b { grid-column: 1; font-weight: 700; overflow-wrap: anywhere; }
 :is(.org-menu-button, .ws-menu-button) > .chip { grid-column: 1; justify-self: start; margin-top: var(--space-1); }
 :is(.org-menu-button, .ws-menu-button) > .ico { grid-column: 2; grid-row: 1 / span 3; color: var(--color-muted); transform: rotate(90deg); }
@@ -384,7 +385,7 @@ h1, h2, h3 { text-wrap: balance; }
 .breadcrumb-sep { color: var(--color-faint); }
 .breadcrumb-item { min-width: 0; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); text-decoration: none; }
 a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
-.breadcrumb-item[aria-current="page"] { max-width: 100%; color: var(--color-fg); font-weight: 700; }
+.breadcrumb-item[aria-current="page"] { max-width: 100%; color: var(--color-fg); font-weight: 600; }
 /* 上の帯の検索。パンくずの右。画面の名前を絞り、今のワークスペースがあれば末尾にバックログの検索の行を足す。Ctrl+K（⌘K）で欄へ移る。
    候補の小窓は帯の下へ重ね、狭い幅では欄を帯の1行に広げて小窓を画面の幅に収める */
 .nav-search {
@@ -495,7 +496,8 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .section-head { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
 .section-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-xl); letter-spacing: 0.04em; }
 .section-count { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-muted); }
-.section-hint { margin-left: auto; font-size: var(--text-xs); color: var(--color-muted); }
+/* 補足は件数のすぐ後ろに置く。右端へ寄せると、広い画面で見出しから離れて何の補足か読めない */
+.section-hint { font-size: var(--text-xs); color: var(--color-muted); }
 /* 閉じた節: 見出しの行を押して開く。ブラウザ既定の三角は消し、押せることは .section-hint の文字で伝える */
 .section.is-folded > summary { cursor: pointer; list-style: none; }
 .section.is-folded > summary::-webkit-details-marker { display: none; }
@@ -697,7 +699,8 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .row-check input { accent-color: var(--color-accent); }
 /* 行のメタ行に置く選択欄（受信箱のリポジトリ）は、行いっぱいに伸ばさず小さい文字で置く */
 .entry-meta .select { width: auto; max-width: min(100%, 18rem); padding-block: 4px; font-size: var(--text-sm); }
-.book { background: var(--color-surface); border: 1px solid var(--color-line); border-left: var(--rule-double); border-radius: var(--radius-1); }
+/* 台帳は 1200px で止める。本文（.content）は上限を持たないので、広い画面で行が伸びると、題と右端の印が離れて読めなくなる（空の状態の .empty も同じ） */
+.book { max-width: 75rem; background: var(--color-surface); border: 1px solid var(--color-line); border-left: var(--rule-double); border-radius: var(--radius-1); }
 /* --row-indent は行の中身が始まる左の位置。落とす位置の線（[data-drop]）もここから始める。
    --grip-col は先頭のつまみ（.grip）の列で、つまみを持つ行（.has-grip）だけが幅を持つ */
 .entry {
@@ -989,7 +992,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     .mobile-tab[aria-current="page"]::after { background: CanvasText; forced-color-adjust: none; }
   }
   .mobile-menu .icon-btn { min-width: 44px; min-height: 44px; }
-  .mobile-menu .nav { display: grid; gap: 1px; overflow: visible; width: auto; }
+  .mobile-menu .nav { display: grid; gap: 2px; overflow: visible; width: auto; }
   .mobile-menu .nav-group { display: block; }
   .mobile-menu .nav-favorites { display: grid; }
   .mobile-menu .nav-item { white-space: normal; min-width: 44px; min-height: 44px; }
@@ -1937,7 +1940,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 }
 
 /* ===== 空の状態 ===== */
-.empty { display: grid; gap: var(--space-2); justify-items: center; text-align: center; padding: var(--space-10) var(--space-4); color: var(--color-muted); border: 1px dashed var(--color-line); border-radius: var(--radius-1); }
+.empty { max-width: 75rem; display: grid; gap: var(--space-2); justify-items: center; text-align: center; padding: var(--space-10) var(--space-4); color: var(--color-muted); border: 1px dashed var(--color-line); border-radius: var(--radius-1); }
 .empty > .ico { width: 28px; height: 28px; }
 /* 線画。アイコンと同じ線（太さ2px、丸い端）で、色はテーマの文字の薄い色に従う。絵柄はテーマで替えない。文とボタンより目立たせない */
 .art { width: 64px; height: 64px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1969,7 +1972,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
    メニューの項目、パンくず、検索の欄（.nav-search-input の 36px）、アカウントのボタン、行、カードのおおよその大きさを写した値で、
    本物の部品を変えても追従しない（形が近ければよく、位置を揃えるのは枠の部品）。最初の読み込みの static/boot-loading.css も同じ値を写す */
 .skeleton-frame .binding-head > .skeleton-line.is-org-name { flex: 1 1 auto; height: 1.25em; margin-inline: var(--space-2) calc(36px + var(--space-1)); }
-.skeleton-frame .skeleton-line.is-org { height: 60px; }
+.skeleton-frame .skeleton-line.is-org { height: 44px; }
 .skeleton-frame .skeleton-nav { gap: var(--space-4); padding-inline: var(--space-2); }
 .skeleton-frame .skeleton-nav .skeleton-line.is-org { margin-inline: calc(-1 * var(--space-2)); }
 .skeleton-frame .skeleton-line.is-group-label { width: 5rem; height: .75em; margin-top: var(--space-2); }

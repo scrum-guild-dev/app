@@ -3334,7 +3334,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const name = workspaces.find((w) => w.id === current.id)?.name || current.name;
     const label = t("workspaceSwitchLabel").replace("{name}", name).replace("{workspace}", t("workspace"));
     const listLabel = t("workspaceSwitchListLabel").replace("{workspace}", t("workspace"));
-    return `<div class="ws-menu"><button class="ws-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-ws-menu" : ""}><span class="ws-menu-label">${t("workspace")}</span><b>${esc(name)}</b>${icon("chevron")}</button>
+    return `<div class="ws-menu"><button class="ws-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-ws-menu" : ""}><b>${esc(name)}</b>${icon("chevron")}</button>
       <ul class="ws-menu-list" id="${id}" aria-label="${esc(listLabel)}" ${open ? "" : "hidden"}>${workspaces.some((w) => w.id === current.id) ? "" : `<li class="ws-menu-current"><span aria-current="page">${esc(current.name)}</span>${icon("check")}</li>`}${workspaces.map((w) => `<li><a href="${firstHref("backlog.html")}${first ? "&" : "?"}workspace=${encodeURIComponent(w.id)}" ${live ? `data-ws-target="${esc(w.id)}"` : ""}${w.id === current.id && inWorkspaceScreen ? ' aria-current="page"' : ""}><span class="org-menu-name">${esc(w.name)}</span>${w.id === current.id ? icon("check") : ""}</a></li>`).join("")}</ul></div>`;
   }
   function setWorkspaceMenu(open, focus) {
