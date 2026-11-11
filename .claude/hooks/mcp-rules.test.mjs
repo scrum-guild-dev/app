@@ -26,7 +26,7 @@ describe('judgeMcp', () => {
   });
 
   test('前置きを何段重ねても外して比べる', () => {
-    for (const branch of ['refs/heads/refs/heads/main', 'heads/refs/heads/production', 'refs/heads/heads/production']) {
+    for (const branch of ['production/', 'refs/heads/main/', 'refs/heads/refs/heads/main', 'heads/refs/heads/production', 'refs/heads/heads/production']) {
       assert.equal(decision('push_files', { branch }), 'deny', branch);
     }
   });
@@ -46,6 +46,21 @@ describe('judgeMcp', () => {
     assert.equal(decision('push_files', { branch: 'claude/x', files: [{ path: 'docs/github/x.md' }, { path: 'x.github/y' }] }), null);
     assert.equal(decision('delete_file', { branch: 'claude/x', path: '.github/workflows/x.yml' }), 'ask');
     assert.equal(decision('create_branch', { branch: 'claude/x', from_branch: 'main' }), null);
+  });
+
+  test('サーバーの名前に __ があっても、最後の __ でツールの名前を読む', () => {
+    assert.equal(judgeMcp('mcp__my__github__push_files', { branch: 'production' })?.[0], 'deny');
+    assert.equal(judgeMcp('mcp__my__github__merge_pull_request', {})?.[0], 'deny');
+  });
+
+  test('.github/ の宛先を読めない形も確かめる', () => {
+    for (const input of [
+      { branch: 'claude/x', files: { path: '.github/workflows/x.yml' } },
+      { branch: 'claude/x', files: ['.github/workflows/x.yml'] },
+      { branch: 'claude/x', path: '.%67ithub/workflows/x.yml' },
+    ]) {
+      assert.equal(decision('push_files', input), 'ask', JSON.stringify(input));
+    }
   });
 
   test('GitHub のサーバーでないツールは見ない', () => {
@@ -121,6 +136,16 @@ describe('judgeMcp', () => {
     assert.equal(decision('create_pull_request', { ...repo, base: 'refs/heads/production', head: 'x' }), 'deny');
     assert.equal(decision('create_pull_request', { ...repo, base: 'Production', head: 'x' }), 'deny');
     assert.equal(decision('update_pull_request', { ...repo, pullNumber: 1, base: 'production' }), 'deny');
+    for (const base of ['tags/v1', 'refs/tags/v1']) {
+      assert.equal(decision('create_pull_request', { ...repo, base, head: 'x' }), 'deny', base);
+      assert.equal(decision('update_pull_request', { ...repo, pullNumber: 1, base }), 'deny', base);
+    }
+  });
+
+  test('base が文字列でなければ確かめる', () => {
+    for (const base of [0, false, 42, ['production']]) {
+      assert.equal(decision('update_pull_request', { ...repo, pullNumber: 1, base }), 'ask', String(base));
+    }
   });
 
   test('base が main か作業ブランチの PR はふだんの作業なので通す', () => {
@@ -227,8 +252,12 @@ describe('guard-mcp.mjs', () => {
     const settings = JSON.parse(readFileSync(path.join(hooks, '..', 'settings.json'), 'utf8'));
     const entry = settings.hooks.PreToolUse.find((e) => e.hooks.some((h) => h.command.includes('guard-mcp.mjs')));
     assert.ok(entry, 'guard-mcp.mjs の PreToolUse が無い');
-    for (const name of ['mcp__github__push_files', 'mcp__plugin_github_github__push_files', 'mcp__claude_ai_GitHub__merge_pull_request']) {
+    for (const name of ['mcp__github__push_files', 'mcp__plugin_github_github__push_files', 'mcp__claude_ai_GitHub__merge_pull_request', 'mcp__my__github__push_files']) {
       assert.ok(new RegExp(`^(${entry.matcher})$`).test(name), name);
+    }
+    // GitHub でない MCP には掛けない（フックが落ちたときに、ほかの MCP まで止めない）
+    for (const name of ['mcp__Claude_Docs__update', 'mcp__Slack__slack_send_message']) {
+      assert.ok(!new RegExp(`^(${entry.matcher})$`).test(name), name);
     }
     assert.equal(entry.hooks.find((h) => h.command.includes('guard-mcp.mjs')).onFailure, 'block');
   });

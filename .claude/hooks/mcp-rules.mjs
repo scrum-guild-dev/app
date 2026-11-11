@@ -80,19 +80,25 @@ function branchName(value) {
     prev = short;
     short = short.replace(/^refs\/heads\//, '').replace(/^heads\//, '');
   }
+  // 末尾の / も外す（production/ を production とみなす）。前置きだけの refs/heads/ は空になり、読めない名前になる
+  short = short.replace(/\/$/, '');
   if (short === '') return undefined;
   return short;
 }
 
 // ファイルを書くツールの宛先のうち、.github/ の下（ワークフロー、CODEOWNERS、Actions の設定）。
 // 作業ブランチに置いたワークフローは push で動き、トークンの権限しだいで production を進めうるので、人が確かめる
+// 読めない形（文字列でない path、配列でない files、パーセントエンコード、. と .. の区切り）も確かめる側に倒す
 function touchesGithubDir(input) {
-  const paths = [input?.path, ...(Array.isArray(input?.files) ? input.files.map((file) => file?.path) : [])];
+  const files = input?.files;
+  if (files !== undefined && !Array.isArray(files)) return true;
+  const paths = [input?.path, ...(files ?? []).map((file) => (typeof file === 'string' ? file : file?.path))];
   return paths.some((value) => {
     if (value === undefined) return false;
     if (typeof value !== 'string') return true;
     const normalized = value.trim().replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '').toLowerCase();
-    return normalized.startsWith('.github/') || normalized === '.github' || /(^|\/)\.\.?(\/|$)/.test(normalized);
+    if (/%/.test(normalized) || /(^|\/)\.\.?(\/|$)/.test(normalized)) return true;
+    return normalized.startsWith('.github/') || normalized === '.github';
   });
 }
 
@@ -120,8 +126,10 @@ function judgeBase(value, required) {
 
 // toolName は mcp__<サーバー>__<ツール>。サーバーの名前に github を含むもの（大文字小文字を問わない。手元で別名で登録したもの、
 // プラグインの mcp__plugin_github_github__、claude.ai のコネクタの mcp__claude_ai_GitHub__ も）だけを見る。止めるものが無ければ null
+// ツールの名前に __ は無いので、最後の __ で分ける（サーバーの名前に __ があっても読み違えない）。
+// github を名前に含まない別名（gh など）は見ない（docs/development.md の表）
 export function judgeMcp(toolName, input) {
-  const match = /^mcp__(.+?)__(.+)$/.exec(toolName ?? '');
+  const match = /^mcp__(.+)__([^_].*?)$/.exec(toolName ?? '');
   if (!match || !/github/i.test(match[1])) return null;
   const tool = match[2];
   if (READ_ONLY.test(tool)) return null;

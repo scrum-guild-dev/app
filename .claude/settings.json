@@ -91,7 +91,7 @@
         ]
       },
       {
-        "matcher": "mcp__.*",
+        "matcher": "mcp__.*[Gg][Ii][Tt][Hh][Uu][Bb].*__.*",
         "hooks": [
           {
             "type": "command",
