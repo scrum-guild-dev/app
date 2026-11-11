@@ -2923,6 +2923,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     else if (navSearch.input() && !ev.target.closest(".nav-search")
       && (!document.getElementById("nav-search-list").hidden || document.getElementById("nav-search-box").hasAttribute("data-open"))) navSearch.close(false);
   });
+  // 横送りの中の属性のチップ（.attr-chip）は、フォーカスしたら全体が見えるまで送る。一部だけ見えているチップは、ブラウザがフォーカスで送らず、フォーカスの輪が切れるため（本番の AttrChip と同じ）
+  document.addEventListener("focusin", (ev) => {
+    const chip = ev.target.closest && ev.target.closest(".attr-chip > .chip-btn") && ev.target.closest(".attr-chip");
+    if (chip) chip.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
   // 開いた欄から虫眼鏡を押してもフォーカスを動かさない（欄の外へのフォーカスで先に畳み、click で開き直すのを防ぐ）
   document.addEventListener("mousedown", (ev) => {
     if (!ev.target.closest) return;

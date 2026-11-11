@@ -10,6 +10,8 @@
   // スクロールでは置き直し、幅の変化では閉じる。
   // 押せるときは、題の後ろに下向きの山形（見本の icon("chevron")）を置く。ロックしたときは置かない。
   // points を真にすると、数を等幅の書体で出す（.attr-chip.is-points）。長い名前は包み（.attr-chip）ごと縮み、題を省略する。
+  // 横送り（狭いバックログの .entry-chips、起票のシート）の中でフォーカスしたら、包み（アバターを含む）の全体が見えるまで送る。
+  // 一部だけ見えているチップは、ブラウザがフォーカスで送らず、フォーカスの輪が切れるため。端の余白は CSS の scroll-margin-inline
   // locked に理由を渡すと押せない（aria-disabled）。理由は見える注記にはせず、読み上げ（aria-describedby）と title で読める。
   // retry を渡すと、メニューの末尾に「もう一度試す」を出す（候補を読めなかったとき）。onopen は開くたびに呼ぶ（候補を読み直すため）。
   // 「もう一度試す」を押した後の読み直しが終わって retry が残っていれば、また失敗したということ（成功すれば retry は外れる）。
@@ -282,6 +284,7 @@
     aria-describedby={locked !== undefined ? reasonId : undefined}
     aria-label={label}
     title={locked ?? text}
+    onfocus={() => root?.scrollIntoView({ block: 'nearest', inline: 'nearest' })}
     onclick={toggle}
   >
     <span class="chip-text">{text}</span>
