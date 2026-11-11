@@ -106,6 +106,8 @@
     else if (option.offsetTop + option.offsetHeight > menu.scrollTop + menu.clientHeight)
       menu.scrollTop = option.offsetTop + option.offsetHeight - menu.clientHeight;
   }
+  // 添付の口を持つのは、指定で止めておらず、ワークスペースの中の欄だけ（組織の Wiki は workspaceId が null）
+  const canAttach = $derived(attachments && workspaceId !== null);
   const size = (file: File) => (file.size / 1_048_576).toFixed(2);
   const active = () => files.filter((file) => file.state === 'uploading' || file.state === 'queued');
 
@@ -161,7 +163,7 @@
   }
 
   function add(list: FileList | File[], anchor = input?.selectionStart ?? value.length): void {
-    if (!attachments || workspaceId === null || readonly || quota) return;
+    if (!canAttach || readonly || quota) return;
     notice = null;
     for (const file of Array.from(list)) {
       if (attachmentIds.length + active().length >= ATTACHMENTS_PER_SAVE) {
@@ -394,7 +396,7 @@
 
   function paste(event: ClipboardEvent): void {
     const clipboard = event.clipboardData;
-    if (!attachments || !clipboard?.files.length) {
+    if (!canAttach || !clipboard?.files.length) {
       // 文字を選んで URL を1つ貼ったときだけリンクにする。ファイルの貼り付けは下のまま
       const edit =
         readonly || !input
@@ -433,7 +435,7 @@
     if (!event.dataTransfer?.types.includes('Files') && !event.dataTransfer?.files.length) return;
     event.preventDefault();
     event.stopPropagation();
-    if (!attachments) return;
+    if (!canAttach) return;
     if (!readonly && !quota && event.dataTransfer) add(event.dataTransfer.files);
   }
 </script>
@@ -536,7 +538,7 @@
       {/each}
     </div>
   {/if}
-  {#if attachments}
+  {#if canAttach}
     <div
       class="dropzone"
       class:is-disabled={readonly || quota}

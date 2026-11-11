@@ -95,8 +95,9 @@ test('組織の Wiki の本文はタスクの本文と同じエディタで書�
   await expect(menu.getByRole('option')).toHaveText([/見出し/]);
   await page.keyboard.press('Enter');
   await expect(menu).toBeHidden();
+  await expect(input).toHaveValue('## ');
   await page.keyboard.type('手順');
-  await expect(input).toHaveValue('# 手順');
+  await expect(input).toHaveValue('## 手順');
 
   // Esc は小窓だけを閉じ、編集の画面と書いた本文を残す
   await page.keyboard.press('Enter');
@@ -104,18 +105,22 @@ test('組織の Wiki の本文はタスクの本文と同じエディタで書�
   await expect(menu).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
-  await expect(input).toHaveValue('# 手順\n/');
+  await expect(input).toHaveValue('## 手順\n/');
+  await expect(page.getByRole('heading', { level: 2, name: 'ページを足す', exact: true })).toBeVisible();
+  // 小窓の閉じた状態の Esc でも、編集をやめない
+  await page.keyboard.press('Escape');
+  await expect(input).toHaveValue('## 手順\n/');
   await expect(page.getByRole('heading', { level: 2, name: 'ページを足す', exact: true })).toBeVisible();
 
   // Enter でリストを続け、空の項目の Enter で抜ける
   await page.keyboard.press('Backspace');
   await page.keyboard.type('- 準備');
   await page.keyboard.press('Enter');
-  await expect(input).toHaveValue('# 手順\n- 準備\n- ');
+  await expect(input).toHaveValue('## 手順\n- 準備\n- ');
   await page.keyboard.type('確認');
   await page.keyboard.press('Enter');
   await page.keyboard.press('Enter');
-  await expect(input).toHaveValue('# 手順\n- 準備\n- 確認\n');
+  await expect(input).toHaveValue('## 手順\n- 準備\n- 確認\n');
 
   await page.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(page).toHaveURL(/\/aoba\/wiki\/[0-9a-f-]{36}$/);

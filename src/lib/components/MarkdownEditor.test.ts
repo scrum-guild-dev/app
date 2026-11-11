@@ -29,11 +29,13 @@ test('指定した本文欄だけに、名前を持つ4つの書式ボタンを�
   expect(body.match(/<button[^>]* disabled/g)?.length).toBe(5);
 });
 
-test('ワークスペースの外の欄（組織の Wiki）は、添付を止めて行数を指定して描ける', () => {
-  const body = render(MarkdownEditor, {
-    props: { ...props, workspaceId: null, attachments: false, rows: 20 },
-  }).body;
-  expect(body).toMatch(/<textarea[^>]* rows="20"/);
+test('ワークスペースの外の欄（組織の Wiki）は、添付の指定を省いても添付の口を出さない', () => {
+  const body = render(MarkdownEditor, { props: { ...props, workspaceId: null } }).body;
   expect(body).not.toContain('type="file"');
-  expect(body).toContain('class="slash-menu"');
+  expect(body).not.toContain('class="dropzone"');
+});
+
+test('行数を指定すると本文の欄に渡す', () => {
+  const body = render(MarkdownEditor, { props: { ...props, rows: 20 } }).body;
+  expect(body).toMatch(/<textarea[^>]* rows="20"/);
 });
