@@ -98,6 +98,7 @@ describe('needsDevBuild', () => {
     'scripts/headers.ts',
     '.github/actions/setup/action.yml',
     '.github/actions/playwright/action.yml',
+    '.github/actions/local-d1-tmpfs/action.yml',
     'pnpm-workspace.yaml',
     '.node-version',
     'wrangler.jsonc',
