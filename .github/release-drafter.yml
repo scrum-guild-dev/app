@@ -30,9 +30,9 @@ categories:
 
 category-template: '### $TITLE'
 change-template: '- $TITLE (#$NUMBER)'
-# タイトルの Markdown の記号と @ をそのまま出す（強調やメンションに化けさせない）。
-# # は Issue の番号へのリンクに使うので除かない
-change-title-escapes: '\<*_&@'
+# タイトルの Markdown の記号と @ をそのまま出す（強調、メンション、リンク、画像、打ち消し線に化けさせない）。
+# # は Issue の番号へのリンクに使い、( ) は `(#674)` と `feat(me):` を崩すので除かない
+change-title-escapes: '\<*_&@[]!~'
 no-changes-template: '- 変更なし'
 template: |
   ## 変更

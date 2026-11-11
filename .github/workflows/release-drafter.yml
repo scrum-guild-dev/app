@@ -7,8 +7,10 @@ on:
   push:
     branches: [main]
   # pull_request_target なので、このワークフローも .github/release-drafter.yml も PR のベース（main）の版で動く
+  # ラベルはタイトルだけで決まるので、push（synchronize）では動かさない。外の人の PR からも動くので、
+  # 共有する GITHUB_TOKEN の API の枠を、タイトルの変わらないイベントで使わせない
   pull_request_target:
-    types: [opened, reopened, edited, synchronize]
+    types: [opened, reopened, edited]
 
 jobs:
   draft:
@@ -27,7 +29,26 @@ jobs:
       pull-requests: read
     steps:
       # actions/checkout を置かない。release-drafter は設定を API で読む
+      # 古い push の実行を走らせ直すと、github.sha はその push のままなので、後にマージした PR の抜けた下書きに戻る。
+      # 動いた push のコミットが今の main の先頭のときだけ、下書きを作り直す
+      - name: main の先頭の push かを確かめる
+        id: head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          head=$(gh api "repos/$REPO/commits/main" --jq .sha)
+          if [ "$head" = "$SHA" ]; then
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "main の先頭は $head で、この実行（$SHA）より新しい。下書きは先頭の実行が作り直すので、何もしない"
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 出した Release があるかを確かめる
+        if: steps.head.outputs.latest == 'true'
         id: published
         env:
           GH_TOKEN: ${{ github.token }}
@@ -35,12 +56,14 @@ jobs:
         run: |
           set -euo pipefail
           # gh の失敗で止まるよう、代入で受けてから数える（パイプに流すと、途中の失敗が消える）
-          ids=$(gh api --paginate "repos/$REPO/releases?per_page=100" --jq '.[] | select(.draft == false) | .id')
+          # プレリリースは数えない。release-drafter は既定（include-pre-releases: false）でプレリリースを前の Release に使わないため
+          ids=$(gh api --paginate "repos/$REPO/releases?per_page=100" --jq '.[] | select(.draft == false and .prerelease == false) | .id')
           count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')
           echo "出した Release: $count 件"
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
       - uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
+        if: steps.head.outputs.latest == 'true'
         with:
           # 動いた push のコミットに固定する。publish の直前に別のマージが入っても、ノートとタグのコミットがそろう
           commitish: ${{ github.sha }}
@@ -53,7 +76,17 @@ jobs:
           version: ${{ steps.published.outputs.count == '0' && '0.1.0' || '' }}
 
   autolabel:
-    if: github.event_name == 'pull_request_target'
+    # 開いた PR だけ。マージの後にタイトルを直しても、ラベル（版の上げ方）は変えさせない。
+    # edited は、タイトルを直したときだけ（本文の編集とベースの付け替えでは動かさない）
+    if: >-
+      github.event_name == 'pull_request_target'
+      && github.event.pull_request.state == 'open'
+      && (github.event.action != 'edited' || github.event.changes.title != null)
+    # autolabeler はイベントの中のタイトルで決めるので、続けて直したときは最新の実行だけを残す。
+    # 古いタイトルの実行が後に終わって、ラベルが今のタイトルとずれないようにする
+    concurrency:
+      group: release-autolabel-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
