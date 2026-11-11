@@ -117,7 +117,7 @@
   --radius-2: 4px;
   --radius-show: 6px;                           /* 見せ場（経験値と積載量のゲージ、クリアの演出）の角。記録の角を詰めても形を変えない */
   --rule-double: 1px solid var(--color-line);   /* 台帳の左や見出しの下の区切り */
-  --edge-top: 2px;                              /* 貼り紙、計画のレーン、ダイアログ、枠の外の紙の上の色の線 */
+  --edge-top: 2px;                              /* 貼り紙、計画のレーン、ダイアログ、枠の外の紙の上の線（レーンと枠の外の紙は無彩色） */
   --chip-state-edge: transparent;               /* 地の色を持つ状態の印（期日切れなど）は、地の色で示し枠を引かない */
   --pts-edge: var(--color-line);                /* ポイントの枠 */
   --shadow-sheet: 0 1px 1px rgb(0 0 0 / 0.04);  /* 貼り紙 */

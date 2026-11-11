@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import Gate from '../../lib/components/Gate.svelte';
   import GateSheet from '../../lib/components/GateSheet.svelte';
+  import GithubMark from '../../lib/components/GithubMark.svelte';
   import GoogleMark from '../../lib/components/GoogleMark.svelte';
   import Icon from '../../lib/components/Icon.svelte';
   import LegalLinks from '../../lib/components/LegalLinks.svelte';
@@ -119,25 +120,32 @@
       <div class="callout is-info"><Icon name="shield" /><span>{t('loggedOut')}</span></div>
     {/if}
     <p>{t('loginLead', words)}</p>
-    <!-- 画面の経路ではなく Worker の GET。resolve() は経路の ID を要るので通さず、data-sveltekit-reload で直に開く -->
-    <!-- eslint-disable svelte/no-navigation-without-resolve -->
-    <a
-      class="btn is-wide"
-      href={githubStartHref}
-      data-sveltekit-reload
-      aria-disabled={externalAuth.moving !== null}
-      onclick={(event) => externalAuth.start(event, 'github')}
-      ><Icon name="git" />{externalAuth.moving === 'github' ? t('authMoving') : t('loginWithGithub')}</a
-    >
-    <a
-      class="btn is-wide is-google"
-      href={googleStartHref}
-      data-sveltekit-reload
-      aria-disabled={externalAuth.moving !== null}
-      onclick={(event) => externalAuth.start(event, 'google')}
-      ><GoogleMark />{externalAuth.moving === 'google' ? t('authMoving') : t('loginWithGoogle')}</a
-    >
-    <!-- eslint-enable svelte/no-navigation-without-resolve -->
+    <!-- 外の手段のボタンと、その手段についての注記を1つのまとまりにする（紙の間隔より詰める） -->
+    <div class="gate-group">
+      <!-- 画面の経路ではなく Worker の GET。resolve() は経路の ID を要るので通さず、data-sveltekit-reload で直に開く -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -->
+      <a
+        class="btn is-wide"
+        href={githubStartHref}
+        data-sveltekit-reload
+        aria-disabled={externalAuth.moving !== null}
+        onclick={(event) => externalAuth.start(event, 'github')}
+        ><GithubMark />{externalAuth.moving === 'github' ? t('authMoving') : t('loginWithGithub')}</a
+      >
+      <a
+        class="btn is-wide is-google"
+        href={googleStartHref}
+        data-sveltekit-reload
+        aria-disabled={externalAuth.moving !== null}
+        onclick={(event) => externalAuth.start(event, 'google')}
+        ><GoogleMark />{externalAuth.moving === 'google' ? t('authMoving') : t('loginWithGoogle')}</a
+      >
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
+      {#if errorKey === 'loginErrorDenied' && !formError}
+        <p class="gate-note" id={deniedHintId}>{t('loginErrorDeniedHint', words)}</p>
+      {/if}
+      <p class="gate-note">{t('loginNote', words)}</p>
+    </div>
     <!-- 閉じている間（PASSWORD_LOGIN_ENABLED が偽）は、区切りもフォームも出さない。API の口も閉じている（src/server/app.ts） -->
     {#if PASSWORD_LOGIN_ENABLED}
       <p class="gate-divider">{t('loginDivider')}</p>
@@ -180,15 +188,14 @@
         </button>
       </form>
     {/if}
-    {#if errorKey === 'loginErrorDenied' && !formError}
-      <p class="gate-note" id={deniedHintId}>{t('loginErrorDeniedHint', words)}</p>
-    {/if}
-    <p class="gate-note">{t('loginNote', words)}</p>
-    <!-- 会員登録の画面へ。戻り先は引き継がない（組織の画面から来た人は、登録した後に入れない組織の画面でなく `/` に着く）。
-         ログインのボタンはアカウントを作らないので、作りたい人はここから -->
-    <div class="form-actions">
-      <a class="btn is-sm" href={resolve('/signup')}>{t('loginSignupLink')}</a>
+    <!-- 紙の下の入口とリンク。ボタンの組から間を空けて離す -->
+    <div class="gate-foot">
+      <!-- 会員登録の画面へ。戻り先は引き継がない（組織の画面から来た人は、登録した後に入れない組織の画面でなく `/` に着く）。
+           ログインのボタンはアカウントを作らないので、作りたい人はここから -->
+      <div class="form-actions">
+        <a class="btn is-sm" href={resolve('/signup')}>{t('loginSignupLink')}</a>
+      </div>
+      <LegalLinks />
     </div>
-    <LegalLinks />
   </GateSheet>
 </Gate>

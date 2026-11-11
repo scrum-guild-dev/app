@@ -1380,7 +1380,7 @@ export const dictionary = defineDictionary({
   loginErrorOrganizationReauthRequired:
     'この{organization}に入るには、ログインし直してください。API トークンも、ログインし直してから発行し直す必要があります。',
   loginLead:
-    'いずれかの{organization}に所属しているか、招待されている人がログインできます。招待されたときの手段でログインしてください。初めての人は、下の会員登録から始められます。',
+    'いずれかの{organization}に所属しているか、招待されている人がログインできます。招待されたときの手段でログインしてください。',
   authMoving: '移っています',
   authMovingProvider: '{provider} へ移っています',
   loginWithGithub: 'GitHub でログイン',
@@ -1422,7 +1422,7 @@ export const dictionary = defineDictionary({
   loginErrorUnavailable:
     'いまログインを受け付けられません。時間をおいてもう一度試してください。続くときは運用者に連絡してください。',
   // ログインの画面の、会員登録への入口。アカウントがまだ無い人向け（ログインのボタンはアカウントを作らない）
-  loginSignupLink: 'アカウントがまだ無い人は会員登録',
+  loginSignupLink: '初めての人は会員登録',
 
   // 会員登録の画面（/signup。枠の外）。招待の無い人が GitHub か Google でアカウントを作る。パスワードでの登録は無い。
   // 失敗の理由（?error=）はログインの画面に戻して出すので、この画面には出し口を持たない

@@ -27,12 +27,16 @@ function render() {
     <section class="gate-sheet">
       <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
       <h1 class="gate-title">ログイン</h1>
-      <p>いずれかの${t("organization")}に所属しているか、招待されている人がログインできます。招待されたときの手段でログインしてください。初めての人は、下の会員登録から始められます。</p>
-      <button class="btn is-wide" type="button">${icon("git")}GitHub でログイン</button>
-      <button class="btn is-wide is-google" type="button">${SQ.googleMark}Google でログイン</button>
-      <p class="gate-note">GitHub と Google は本人確認だけに使います。入れる${t("organization")}が2つ以上あれば、ログインのあとに選びます。</p>
-      <div class="form-actions"><a class="btn is-sm" href="#">アカウントがまだ無い人は会員登録</a></div>
-      <div class="form-actions" role="group" aria-label="利用規約とプライバシーポリシー"><a class="btn is-sm is-quiet" href="#">利用規約</a><a class="btn is-sm is-quiet" href="#">プライバシーポリシー</a></div>
+      <p>いずれかの${t("organization")}に所属しているか、招待されている人がログインできます。招待されたときの手段でログインしてください。</p>
+      <div class="gate-group">
+        <button class="btn is-wide" type="button">${SQ.githubMark}GitHub でログイン</button>
+        <button class="btn is-wide is-google" type="button">${SQ.googleMark}Google でログイン</button>
+        <p class="gate-note">GitHub と Google は本人確認だけに使います。入れる${t("organization")}が2つ以上あれば、ログインのあとに選びます。</p>
+      </div>
+      <div class="gate-foot">
+        <div class="form-actions"><a class="btn is-sm" href="#">初めての人は会員登録</a></div>
+        <div class="form-actions" role="group" aria-label="利用規約とプライバシーポリシー"><a class="btn is-sm is-quiet" href="#">利用規約</a><a class="btn is-sm is-quiet" href="#">プライバシーポリシー</a></div>
+      </div>
     </section>
     <p class="gate-note"><a href="signup.html">会員登録と利用開始の見本へ</a></p>
     <section class="gate-sheet">

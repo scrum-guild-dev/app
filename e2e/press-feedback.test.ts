@@ -7,7 +7,7 @@ for (const path of ['/login', '/signup']) {
     test(`${path}: ${provider} への移動を知らせ、連打を止め、戻ったら復元する`, async ({ page }) => {
       await page.setViewportSize(NARROW_VIEWPORT);
       const links = page.locator('a[data-sveltekit-reload][href^="/api/auth/"]');
-      const selected = links.filter({ has: page.locator(provider === 'github' ? '.ico' : '.google-mark') });
+      const selected = links.filter({ has: page.locator(provider === 'github' ? '.github-mark' : '.google-mark') });
       // ページのハンドラーの後で実際の外部移動だけを止め、既定動作が許された回数を見る。
       await page.addInitScript(() => {
         const results: boolean[] = [];
