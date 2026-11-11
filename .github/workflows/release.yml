@@ -1,0 +1,59 @@
+name: release
+
+# Release を publish したとき、本番用のブランチ production をタグのコミットへ進める（docs/development.md の「ブランチ戦略」と「CI」）。
+# production は誰もコミットもマージもしないポインタで、動かすのはこのワークフローだけ。force push はしない。
+# 進めてよいかの判定は scripts/release-production.ts に置く（タグの形、draft と prerelease、main に入っているか、production が真の祖先か）
+on:
+  release:
+    # released は prerelease を除くが、prerelease から正式にしたときも届く。断る条件を判定の関数の1か所に置くため、published で受ける
+    types: [published]
+
+# 続けて publish したとき、古いタグで production を進めないよう1本ずつ走らせる（古いタグは判定でも断る）。取り消さない
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+# GITHUB_TOKEN は読むだけ。production への push は GitHub App の短命のトークンで行う。
+# GITHUB_TOKEN の push は、.github/workflows/ に触れるコミットを含むと fast-forward でも拒まれるため
+permissions:
+  contents: read
+
+jobs:
+  production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # 判定のスクリプトは、イベントの ref（タグ）ではなく main の版で動かす。fetch-depth: 0 で全部のブランチとタグを取る
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: production を進めてよいかを判定する
+        id: decide
+        run: node scripts/release-production.ts "$GITHUB_EVENT_PATH"
+
+      # 判定を通った後にだけトークンを作る。権限はこのリポジトリの contents と workflows の書き込みに絞る
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: token
+        with:
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-workflows: write
+
+      # force を付けない。判定の後に production が動いていれば、fast-forward にならず GitHub が拒む
+      - name: production をタグのコミットへ進める
+        env:
+          TOKEN: ${{ steps.token.outputs.token }}
+          REPO: ${{ github.repository }}
+          COMMIT: ${{ steps.decide.outputs.commit }}
+          TAG: ${{ steps.decide.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git push "https://x-access-token:${TOKEN}@github.com/${REPO}.git" "${COMMIT}:refs/heads/production"
+          echo "production を ${TAG}（${COMMIT}）へ進めた"

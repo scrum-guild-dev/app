@@ -2102,7 +2102,7 @@ describe('bash-rules: 通す', () => {
     'pnpm run build',
     'git push origin 21-claude-settings',
     'git push -u origin 21-claude-settings',
-    'git push --follow-tags origin x',
+    'git push --thin origin x',
     'git push origin main:21-claude-settings',
     'git push',
     'git push origin feature # not main',
@@ -5530,7 +5530,8 @@ describe('bash-rules: force push は作業ブランチ宛てでも止める', ()
     ['すり抜け', "bash -c 'gh api -X PATCH repos/o/r/git/refs/heads/x -F force=true'", 'deny'],
 
     // 通す: 通常の push、打ち消しだけの --no-force-with-lease、merge での取り込み、force でない ref の読み書き
-    ['通す', 'git push --follow-tags origin x', 'allow'],
+    // --follow-tags は force ではないが、v* のタグも push しうるので別の理由で止める（#1164）
+    ['断る', 'git push --follow-tags origin x', 'deny'],
     ['通す', 'git push --no-force-with-lease origin x', 'allow'],
     ['通す', 'git -C worktrees/x push origin x', 'allow'],
     ['通す', 'git push origin x 2>&1', 'allow'],
@@ -6130,5 +6131,81 @@ describe('bash-rules: done-check 2 巡目の指摘（mutation の名前の判定
     'gh api -X PATCH repos/o/r/git/refs/heads/main/?x=1 -f sha=abc',
   ]) {
     test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+});
+
+// production と v* のタグは Release のワークフローと人の publish だけが動かす（#1164。docs/development.md の「ブランチ戦略」）
+describe('production と Release', () => {
+  for (const command of [
+    'git push origin production',
+    'git push origin HEAD:production',
+    'git push origin HEAD:refs/heads/production',
+    'git push origin HEAD:heads/production',
+    'git push origin :production',
+    'git push origin --delete production',
+    'git push -u origin 21-x production',
+    'git push origin v0.1.0',
+    'git push origin refs/tags/v0.1.0',
+    'git push origin HEAD:refs/tags/v0.1.0',
+    'git push origin tags/v0.1.0',
+    'git push origin :refs/tags/v0.1.0',
+    'git push origin --delete v0.1.0',
+    'git push --tags',
+    'git push origin --tags',
+    'git push --ta origin',
+    'git push --follow-tags origin 21-x',
+    'git push --fol origin 21-x',
+    'git -c push.followTags=true push origin 21-x',
+    'gh release create v0.1.0',
+    'gh release new v0.1.0',
+    'gh release edit v0.1.0 --draft=false',
+    'gh -R o/r release edit v0.1.0 --draft=false',
+    'gh release delete v0.1.0 --yes',
+    'gh release upload v0.1.0 a.zip',
+    'gh release delete-asset v0.1.0 a.zip',
+    'gh api -X POST repos/o/r/releases -f tag_name=v1.0.0',
+    'gh api repos/o/r/releases -f tag_name=v1.0.0',
+    'gh api -X PATCH repos/o/r/releases/123 -F draft=false',
+    'gh api -X DELETE repos/o/r/releases/123',
+    'gh api -X DELETE repos/o/r/releases/assets/9',
+    'curl -X POST https://api.github.com/repos/o/r/releases -d \'{"tag_name":"v1.0.0"}\'',
+    'curl -X PATCH https://api.github.com/repos/o/r/releases/1 -d \'{"draft":false}\'',
+    'gh api -X PATCH repos/o/r/git/refs/heads/production -f sha=abc',
+    'gh api -X DELETE repos/o/r/git/refs/heads/production',
+    'gh api -X POST repos/o/r/git/refs -f ref=refs/heads/production -f sha=abc',
+    `gh api -X POST repos/o/r/git/refs --input - <<'EOF'\n{"ref":"refs/heads/production","sha":"abc"}\nEOF`,
+    'gh api -X POST repos/o/r/git/refs -f ref=refs/tags/v1.0.0 -f sha=abc',
+    'gh api -X DELETE repos/o/r/git/refs/tags/v1.0.0',
+    'curl -X POST https://api.github.com/repos/o/r/git/refs -d \'{"ref":"refs/heads/production","sha":"abc"}\'',
+    'gh api graphql -f query="mutation { createRef(input: {name: \\"refs/heads/production\\"}) { clientMutationId } }"',
+    'gh api graphql -f query="mutation { createRef(input: {name: \\"refs/tags/v1.0.0\\"}) { clientMutationId } }"',
+  ]) {
+    test(`[止める] ${command} は deny`, () => assert.equal(decision(command), 'deny', command));
+  }
+  test('[止める] production の上での git push は deny', () => assert.equal(decision('git push', 'production'), 'deny'));
+  test('[確認] gh release のサブコマンドを変数で渡すと ask', () => assert.equal(decision('gh release $SUB v1.0.0'), 'ask'));
+
+  for (const command of [
+    'git push origin 21-x',
+    'git push -u origin HEAD',
+    'git push origin vite-fix',
+    'git push origin production-notes',
+    'git push origin 21-production',
+    'git tag v0.1.0',
+    'git fetch --tags origin',
+    'git push --thin origin 21-x',
+    'gh release list',
+    'gh release view v0.1.0',
+    'gh release download v0.1.0',
+    'gh api repos/o/r/releases',
+    'gh api repos/o/r/releases/latest',
+    'gh api -X POST repos/o/r/releases/generate-notes -f tag_name=v1.0.0',
+    'gh api repos/o/r/git/refs/heads/production',
+    'gh api -X POST repos/o/r/git/refs -f ref=refs/heads/21-x -f sha=abc',
+    'gh api -X POST repos/o/r/git/refs -f ref=refs/heads/production-x -f sha=abc',
+    'gh api -X PATCH repos/o/r/git/refs/heads/production-x -f sha=abc',
+    'gh api -X POST repos/o/r/issues/1/comments -f body="release を publish してください"',
+  ]) {
+    test(`[通す] ${command} は allow`, () => assert.equal(decision(command), 'allow', command));
   }
 });

@@ -153,6 +153,22 @@ describe('.githooks', () => {
     assert.equal(git(work, 'push', 'origin', '1-x').status, 0);
   });
 
+  test('production への push と削除を止める', () => {
+    const work = setUp('push-production');
+    git(work, 'checkout', '-b', '1-x');
+    git(work, 'commit', '--allow-empty', '-m', 'x');
+    // 削除を止めるのを見るため、フックを切って main の位置に production を作っておく
+    assert.equal(git(work, '-c', 'core.hooksPath=/dev/null', 'push', 'origin', 'main:production').status, 0);
+    const before = git(work, 'ls-remote', 'origin', 'refs/heads/production').stdout;
+    const toProduction = git(work, 'push', 'origin', 'HEAD:production');
+    assert.notEqual(toProduction.status, 0);
+    assert.match(toProduction.stderr, /production へは push しない/);
+    assert.match(git(work, 'push', 'origin', 'HEAD:refs/heads/production').stderr, /production へは push しない/);
+    assert.match(git(work, 'push', 'origin', '--delete', 'production').stderr, /production へは push しない/);
+    assert.equal(git(work, 'ls-remote', 'origin', 'refs/heads/production').stdout, before);
+    assert.equal(git(work, 'push', 'origin', 'HEAD:production-notes').status, 0);
+  });
+
   describe('post-checkout', () => {
     // 本物の gh の代わりに、受けた引数を記録するか失敗するだけの gh を PATH の先頭に置く
     function fakeGh(name: string, body: string) {
