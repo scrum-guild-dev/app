@@ -247,6 +247,9 @@ test('初めての人の行き先は紙の下の会員登録のボタンだけ�
   await page.goto('/login');
   await expect(page.getByRole('link', { name: '初めての人は会員登録' })).toHaveAttribute('href', '/signup');
   await expect(page.getByText('下の会員登録から')).toHaveCount(0);
+  // リード文は所属者向けの説明の2文だけ
+  const lead = await page.getByText('招待されている人がログインできます').textContent();
+  expect(lead?.match(/。/g)).toHaveLength(2);
 });
 
 // 余白でまとまりを示す: 外の手段のボタン2つと注記は紙の間隔より詰め、会員登録と法文のリンクは間を広げて離す
@@ -268,6 +271,14 @@ test('外の手段のボタンと注記は詰めて並び、会員登録のま�
   expect(gapButtons).toBeLessThan(gapLeadToButtons);
   expect(gapToNote).toBeLessThan(gapLeadToButtons);
   expect(gapToFoot).toBeGreaterThan(gapLeadToButtons);
+  // 紙の下のまとまりの中は詰めない。狭い幅で小さいボタンの押せる範囲（44px）が上下に広がり、18px 未満だと会員登録と利用規約が重なる
+  await page.setViewportSize({ width: 390, height: 900 });
+  const terms = page.getByRole('link', { name: '利用規約', exact: true });
+  const [footSignup, termsBox] = await Promise.all([signup.boundingBox(), terms.boundingBox()]);
+  if (!footSignup || !termsBox) throw new Error('紙の下のリンクが見えない');
+  expect(termsBox.y - (footSignup.y + footSignup.height)).toBeGreaterThanOrEqual(18);
+  expect(await signup.evaluate((el) => el.closest('.gate-foot') !== null)).toBe(true);
+  expect(await terms.evaluate((el) => el.closest('.gate-foot') !== null)).toBe(true);
 });
 
 test('GitHub のボタンは GitHub のマークを文字の色で出し、紙の上端の線は操作の色にしない', async ({ page }) => {
@@ -275,6 +286,8 @@ test('GitHub のボタンは GitHub のマークを文字の色で出し、紙�
   const github = page.getByRole('link', { name: 'GitHub でログイン' });
   const mark = github.locator('svg.github-mark');
   await expect(mark).toBeVisible();
+  // 色は直書きでなく文字の色を継ぐ（テーマと押せない状態の文字色に合わせるため）
+  await expect(mark.locator('path')).toHaveAttribute('fill', 'currentColor');
   expect(await mark.locator('path').evaluate((path) => getComputedStyle(path).fill)).toBe(
     await github.evaluate((link) => getComputedStyle(link).color),
   );
@@ -282,14 +295,20 @@ test('GitHub のボタンは GitHub のマークを文字の色で出し、紙�
     .locator('.gate-sheet')
     .first()
     .evaluate((sheet) => {
-      const style = getComputedStyle(sheet);
-      const probe = document.createElement('span');
-      probe.style.color = 'var(--color-accent)';
-      sheet.append(probe);
-      const accent = getComputedStyle(probe).color;
-      probe.remove();
-      return { top: style.borderTopColor, side: style.borderLeftColor, accent };
+      const resolve = (value: string) => {
+        const probe = document.createElement('span');
+        probe.style.color = value;
+        sheet.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      };
+      return {
+        top: getComputedStyle(sheet).borderTopColor,
+        line: resolve('var(--color-line)'),
+        accent: resolve('var(--color-accent)'),
+      };
     });
-  expect(edge.top).toBe(edge.side);
+  expect(edge.top).toBe(edge.line);
   expect(edge.top).not.toBe(edge.accent);
 });
