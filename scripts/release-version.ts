@@ -20,6 +20,11 @@ function parts(tag: string): [number, number, number] | undefined {
   return numbers.every(Number.isSafeInteger) ? numbers : undefined;
 }
 
+// Release の版として扱えるタグか（形と、成分が安全な整数か）。Release のワークフローの判定（release-production.ts）も使う
+export function isReleaseTag(tag: string): boolean {
+  return parts(tag) !== undefined;
+}
+
 // タグの並びから最大の版を返す。形の違うタグは無視し、1つも無ければ undefined
 export function latestReleaseTag(tags: readonly string[]): string | undefined {
   let best: { tag: string; parts: [number, number, number] } | undefined;
