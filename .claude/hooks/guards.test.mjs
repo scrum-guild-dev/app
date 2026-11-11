@@ -6248,6 +6248,33 @@ describe('production と Release: すり抜けと誤検知', () => {
   }
 });
 
+// #1173 の AI レビューのまとめに残ったすり抜けと誤検知（#1177）
+describe('production と Release: --config-env、mirror、本文のエスケープ', () => {
+  for (const [kind, command, expected] of [
+    ['すり抜け', 'git --config-env=push.followTags=V push origin 21-x', 'deny'],
+    ['すり抜け', 'git --config-env push.followTags=V push origin 21-x', 'deny'],
+    ['すり抜け', 'git -cpush.followTags=true push origin 21-x', 'deny'],
+    ['すり抜け', 'git -c push.followTags push origin 21-x', 'deny'],
+    ['すり抜け', 'git --config-env=remote.origin.push=V push', 'ask'],
+    ['すり抜け', 'git -c remote.origin.mirror=true push origin', 'ask'],
+    ['すり抜け', 'git --config-env=remote.origin.mirror=V push origin', 'ask'],
+    ['すり抜け', 'git config remote.origin.mirror true', 'ask'],
+    ['すり抜け', 'git -c remote.origin.push=HEAD:x push origin main', 'deny'],
+    ['すり抜け', `gh api -X POST repos/o/r/git/refs --input - <<'EOF'\n{"ref":"refs\\/heads\\/production","sha":"abc"}\nEOF`, 'deny'],
+    ['すり抜け', `gh api -X POST repos/o/r/git/refs --input - <<'EOF'\n{"ref":"refs/tags/\\u00761.0.0","sha":"abc"}\nEOF`, 'deny'],
+    ['すり抜け', 'curl -X POST https://api.github.com/repos/o/r/git/refs -d \'{"ref":"refs/heads/\\u0070roduction","sha":"abc"}\'', 'deny'],
+    ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/heads/%70roduction -f sha=abc', 'ask'],
+    ['すり抜け', 'gh api -X DELETE repos/o/r/git/refs/tags/%761.0.0', 'ask'],
+    ['誤検知', 'git config push.followTags', 'allow'],
+    ['誤検知', 'git config remote.origin.push', 'allow'],
+    ['誤検知', 'git config remote.origin.mirror', 'allow'],
+    ['誤検知', 'git --config-env=core.editor=EDITOR push origin 21-x', 'allow'],
+    ['誤検知', 'git -c remote.origin.url=x push origin 21-x', 'allow'],
+  ]) {
+    test(`[${kind}] ${command} は ${expected}`, () => assert.equal(decision(command), expected, command));
+  }
+});
+
 // AI レビューで見つかったすり抜け（#1164、PR #1173）
 describe('production と Release: 宛先と ref を読めない形', () => {
   for (const [command, expected] of [
