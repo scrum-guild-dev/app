@@ -68,14 +68,23 @@ def spans_from_cues(cues):
 
 
 def load_fonts():
-    """字幕を描くフォントを、1つ目のフォント、代わりのフォントの順に返す。1つ目が無ければ環境の問題"""
+    """字幕を描くフォントを、1つ目のフォント、代わりのフォントの順に返す。
+    1つ目か代わりのフォントが無い、開けないときは環境の問題（字幕を直しても直らないので、入力の誤りにしない）"""
     from PIL import ImageFont
 
     font_path = next((p for p in FONT_CANDIDATES if Path(p).exists()), None)
     if font_path is None:
         raise SetupError('日本語のフォントが無い（compose.py の FONT_CANDIDATES）')
     fallbacks = [p for p in FALLBACK_FONT_CANDIDATES if Path(p).exists()]
-    return [ImageFont.truetype(p, FONT_SIZE) for p in [font_path, *fallbacks]]
+    if not fallbacks:
+        raise SetupError('代わりのフォントが無い（compose.py の FALLBACK_FONT_CANDIDATES）')
+    fonts = []
+    for path in [font_path, *fallbacks]:
+        try:
+            fonts.append(ImageFont.truetype(path, FONT_SIZE))
+        except OSError as err:
+            raise SetupError(f'フォントを開けない: {path}: {err}')
+    return fonts
 
 
 _notdef_masks = {}
@@ -91,26 +100,51 @@ def has_glyph(font, ch):
     return not (mask.size == size and bytes(mask) == data)
 
 
+def is_mark(ch):
+    """前の字に付いて1つの字になる字（結合文字、異体字セレクタ、ゼロ幅接合子）。前の字と同じフォントで描く"""
+    import unicodedata
+
+    return unicodedata.combining(ch) != 0 or '\ufe00' <= ch <= '\ufe0f' or ch == '\u200d'
+
+
+def is_unusable(ch):
+    """フォントの有無にかかわらず字幕に描けない字（制御文字、対になっていないサロゲート）"""
+    import unicodedata
+
+    return unicodedata.category(ch) in ('Cc', 'Cs')
+
+
 def split_runs(text, fonts, has=has_glyph):
     """text を、字ごとに字を持つ最初のフォントで分け、(文, fonts の番号) の並びにする。
-    どのフォントにも無い字があれば、豆腐のまま描かずに入力の誤りとして字を挙げる"""
+    どのフォントにも無い字があれば、豆腐のまま描かずに入力の誤りとして字を挙げる。
+    has は字の有無の判定で、テストがフォントを読まずに差し替えるために受け取る"""
     runs, missing = [], []
     for ch in text:
-        index = next((i for i, font in enumerate(fonts) if has(font, ch)), None)
+        if runs and is_mark(ch):
+            runs[-1] = (runs[-1][0] + ch, runs[-1][1])
+            continue
+        index = None if is_unusable(ch) else next((i for i, font in enumerate(fonts) if has(font, ch)), None)
         if index is None:
             if ch not in missing:
                 missing.append(ch)
-            continue
-        if runs and runs[-1][1] == index:
-            runs[-1][0] += ch
+        elif runs and runs[-1][1] == index:
+            runs[-1] = (runs[-1][0] + ch, index)
         else:
-            runs.append([ch, index])
+            runs.append((ch, index))
     if missing:
-        chars = '、'.join(f'U+{ord(ch):04X}「{ch}」' for ch in missing)
+        chars = '、'.join(f'U+{ord(ch):04X}「{ch}」' if ch.isprintable() else f'U+{ord(ch):04X}' for ch in missing)
         raise ValueError(
-            f'字幕の字がどのフォントにも無い（{chars}。compose.py の FONT_CANDIDATES と FALLBACK_FONT_CANDIDATES）: {text}'
+            f'字幕の字がどのフォントにも無い（{chars}。compose.py の FONT_CANDIDATES と FALLBACK_FONT_CANDIDATES）: {text!r}'
         )
-    return [(run, index) for run, index in runs]
+    return runs
+
+
+def baseline_y(font):
+    """font で anchor の lm（縦の中央）に描いた字を、anchor の ls（ベースライン）で同じ画素に描く y。
+    Pillow が lm から求めるずれを、同じ字の2つの anchor の外接矩形の差で取る（getmetrics から計算すると 1px ずれるフォントがある）"""
+    middle = font.getbbox('H', anchor='lm')
+    base = font.getbbox('H', anchor='ls')
+    return BAND_H / 2 + middle[1] - base[1]
 
 
 def draw_band(text, fonts, dest):
@@ -126,8 +160,7 @@ def draw_band(text, fonts, dest):
         raise ValueError(f'字幕が帯に収まらない（{width:.0f}px）: {text}')
     # 1つ目のフォントの字は、これまでどおり帯の縦の中央（anchor の m）に置く。
     # 代わりのフォントの字は、1つ目のフォントのベースラインにそろえる（m はフォントごとの上下の幅で決まり、ずれるため）
-    ascent, descent = fonts[0].getmetrics()
-    baseline = BAND_H / 2 + (ascent - descent) / 2
+    baseline = baseline_y(fonts[0])
     x = (WIDTH - width) / 2
     for (run, index), run_width in zip(runs, widths):
         if index == 0:

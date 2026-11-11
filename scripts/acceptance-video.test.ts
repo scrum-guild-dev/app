@@ -1551,15 +1551,6 @@ describe('compose.py', () => {
     assert.ok(Number(probe.format.duration) > 30);
   });
 
-  test('「⋯」を含む字幕は、代わりのフォントで描いて合成する（#1159）', options, () => {
-    const { result, probe } = run('1280x640', 3, [
-      { t: 0.2, text: '担当まで送っても「⋯」は右端に残る' },
-      { t: 2, text: '' },
-    ]);
-    assert.equal(result.status, 0, result.stderr);
-    assert.ok(probe);
-  });
-
   test('どのフォントにも無い字を含む字幕は、豆腐のまま合成せずに字を挙げて断る（#1159）', options, () => {
     const { result, probe } = run('1280x640', 3, [
       { t: 0.2, text: 'あ\u{10FFFD}' },
@@ -1627,61 +1618,145 @@ describe('compose.py のフォントの選択', () => {
     assert.doesNotMatch(result.stdout, /☒」、/);
   });
 
-  // 実際のフォントで、字の有無を .notdef の形と比べて見分けられるか。Linux の DejaVu と macOS のフォントで確かめる
-  const DEJAVU = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
-  test(
-    '字を持たないフォントは .notdef を描くので、その形と比べて字の有無を見分ける',
-    { skip: hasPillow && existsSync(DEJAVU) ? false : 'Pillow か DejaVu Sans が無い' },
-    () => {
-      assert.deepEqual(
-        json(
-          `import json\nfrom PIL import ImageFont\nfont = ImageFont.truetype(${JSON.stringify(DEJAVU)}, 32)\nprint(json.dumps([compose.has_glyph(font, ch) for ch in ['⋯', 'A', ' ', 'あ', '\\U0010FFFD']]))`,
-        ),
-        [true, true, true, false, false],
-      );
-    },
-  );
+  test('結合文字と異体字セレクタは、前の字と同じフォントで描く', () => {
+    assert.deepEqual(runs('あ⋯́️い', ['あい́️', '⋯']), [
+      ['あ', 0],
+      ['⋯́️', 1],
+      ['い', 0],
+    ]);
+  });
 
-  test(
-    '1つ目のフォントだけで描ける字幕は、これまでと同じ位置と大きさで描く',
-    { skip: hasPillow && existsSync(DEJAVU) ? false : 'Pillow か DejaVu Sans が無い' },
-    () => {
-      // これまでの draw_band（1つのフォントで幅を測り、帯の中央に anchor の lm で描く）と、画素が一致するか
-      const code = [
-        'import os, tempfile',
-        'from PIL import Image, ImageChops, ImageDraw, ImageFont',
-        `font = ImageFont.truetype(${JSON.stringify(DEJAVU)}, compose.FONT_SIZE)`,
-        'text = "Move the item to Done"',
-        'ref = Image.new("RGB", (compose.WIDTH, compose.BAND_H), compose.BAND_BG)',
-        'draw = ImageDraw.Draw(ref)',
-        'width = draw.textlength(text, font=font)',
-        'draw.text(((compose.WIDTH - width) / 2, compose.BAND_H / 2), text, font=font, fill=(255, 255, 255), anchor="lm")',
+  test('制御文字と対になっていないサロゲートは、フォントにあっても描けない字として断る', () => {
+    const result = python(
+      `try:\n    compose.split_runs('あ\\n\\ud83dい', ['あい\\n\\ud83d'], has=lambda font, ch: ch in font)\nexcept ValueError as err:\n    print(err)\n    sys.exit(1)`,
+    );
+    assert.equal(result.status, 1, result.stderr);
+    // 改行そのものを文に埋め込まず、番号だけを出す
+    assert.match(result.stdout, /どのフォントにも無い（U\+000A、U\+D83D。/);
+    assert.equal(result.stdout.trim().split('\n').length, 1);
+  });
+
+  // 実際のフォントで確かめる。Linux にある DejaVu、Liberation、日本語ゴシックと、macOS のフォントを使い、無ければ飛ばす
+  const LINUX_FONTS = '/usr/share/fonts/truetype';
+  const DEJAVU = `${LINUX_FONTS}/dejavu/DejaVuSans.ttf`;
+  const LIBERATION = `${LINUX_FONTS}/liberation/LiberationSerif-Regular.ttf`;
+  const GOTHIC = `${LINUX_FONTS}/fonts-japanese-gothic.ttf`;
+  const JETBRAINS = `${LINUX_FONTS}/jetbrains-mono/JetBrainsMono-Regular.ttf`;
+  const needs = (...paths: string[]) => ({
+    skip: hasPillow && paths.every((path) => existsSync(path)) ? false : `Pillow か ${paths.join('、')} が無い`,
+  });
+  const fontsOf = (...paths: string[]) =>
+    `from PIL import ImageFont\nfonts = [ImageFont.truetype(p, compose.FONT_SIZE) for p in ${JSON.stringify(paths)}]`;
+  // 描いた帯の、字の入った画素の外接矩形を、run ごとの x の範囲で取る
+  const band = (paths: string[], text: string) =>
+    json(
+      [
+        'import json, os, tempfile',
+        'from PIL import Image, ImageDraw',
+        fontsOf(...paths),
+        `text = ${JSON.stringify(text)}`,
+        'runs = compose.split_runs(text, fonts)',
         'with tempfile.TemporaryDirectory() as tmp:',
         '    path = os.path.join(tmp, "band.png")',
-        '    compose.draw_band(text, [font, font], path)',
-        '    got = Image.open(path).convert("RGB")',
-        '    print(ImageChops.difference(ref, got).getbbox())',
-      ].join('\n');
-      const result = python(code);
-      assert.equal(result.status, 0, result.stderr);
-      assert.equal(result.stdout.trim(), 'None');
+        '    compose.draw_band(text, fonts, path)',
+        '    img = Image.open(path).convert("L").point(lambda v: 255 if v > 128 else 0)',
+        'draw = ImageDraw.Draw(img)',
+        'widths = [draw.textlength(run, font=fonts[index]) for run, index in runs]',
+        'x = (compose.WIDTH - sum(widths)) / 2',
+        'boxes = []',
+        'for width in widths:',
+        '    boxes.append(img.crop((round(x), 0, round(x + width), compose.BAND_H)).getbbox())',
+        '    x += width',
+        'print(json.dumps({"runs": runs, "ink": img.getbbox(), "boxes": boxes}))',
+      ].join('\n'),
+    );
+  // これまでの draw_band（1つ目のフォントで幅を測り、帯の中央に anchor の lm で描く）と、画素が一致するか
+  const sameAsBefore = (paths: string[], text: string) =>
+    json(
+      [
+        'import json, os, tempfile',
+        'from PIL import Image, ImageChops, ImageDraw',
+        fontsOf(...paths),
+        `text = ${JSON.stringify(text)}`,
+        'ref = Image.new("RGB", (compose.WIDTH, compose.BAND_H), compose.BAND_BG)',
+        'draw = ImageDraw.Draw(ref)',
+        'width = draw.textlength(text, font=fonts[0])',
+        'draw.text(((compose.WIDTH - width) / 2, compose.BAND_H / 2), text, font=fonts[0], fill=(255, 255, 255), anchor="lm")',
+        'with tempfile.TemporaryDirectory() as tmp:',
+        '    path = os.path.join(tmp, "band.png")',
+        '    compose.draw_band(text, fonts, path)',
+        '    print(json.dumps(ImageChops.difference(ref, Image.open(path).convert("RGB")).getbbox()))',
+      ].join('\n'),
+    );
+
+  test('字を持たないフォントは .notdef を描くので、その形と比べて字の有無を見分ける', needs(DEJAVU, LIBERATION), () => {
+    const glyphs = (path: string, chars: string[]) =>
+      json(
+        `import json\n${fontsOf(path)}\nprint(json.dumps([compose.has_glyph(fonts[0], ch) for ch in ${JSON.stringify(chars)}]))`,
+      );
+    assert.deepEqual(glyphs(DEJAVU, ['⋯', 'A', ' ', 'あ', '\u{10FFFD}']), [true, true, true, false, false]);
+    // .notdef が空の形のフォントでも、空白を「無い字」にしない
+    assert.deepEqual(glyphs(LIBERATION, [' ', 'A', 'あ']), [true, true, false]);
+  });
+
+  test('1つ目のフォントだけで描ける日本語の字幕は、これまでと同じ位置と大きさで描く', needs(GOTHIC, DEJAVU), () => {
+    assert.equal(sameAsBefore([GOTHIC, DEJAVU], '担当まで送っても 完了の丸は右端に残る'), null);
+  });
+
+  test('代わりのフォントの字は、1つ目のフォントの字と並べて、帯の中央に描く', needs(GOTHIC, DEJAVU), () => {
+    const { runs: split, ink, boxes } = band([GOTHIC, DEJAVU], 'あ⋯あ');
+    assert.deepEqual(split, [
+      ['あ', 0],
+      ['⋯', 1],
+      ['あ', 0],
+    ]);
+    // 代わりのフォントの字も描かれ、豆腐にならず、字幕全体の左右の余白がそろう
+    assert.ok(boxes[1], '「⋯」が描かれていない');
+    assert.ok(Math.abs(ink[0] - (1280 - ink[2])) <= 2, JSON.stringify(ink));
+    // 「⋯」は字の高さの中ほどに並ぶ。ベースラインがずれると、「あ」の縦の中央から離れる
+    const middle = (box: number[]) => (box[1] + box[3]) / 2;
+    assert.ok(Math.abs(middle(boxes[1]) - middle(boxes[0])) <= 5, JSON.stringify(boxes));
+    // 「⋯」の点は細く、「あ」の高さより低い（.notdef の箱なら「あ」と同じほど高い）
+    assert.ok(boxes[1][3] - boxes[1][1] < (boxes[0][3] - boxes[0][1]) / 3, JSON.stringify(boxes));
+  });
+
+  test(
+    '代わりのフォントのベースラインは、1つ目のフォントを anchor の lm で描いたときと同じ画素にそろう',
+    needs(GOTHIC, JETBRAINS, DEJAVU),
+    () => {
+      // ascent と descent の差が奇数のフォント（日本語ゴシック、JetBrains Mono）を含める
+      for (const path of [GOTHIC, JETBRAINS, DEJAVU]) {
+        const diff = json(
+          [
+            'import json',
+            'from PIL import Image, ImageChops, ImageDraw',
+            fontsOf(path),
+            'a = Image.new("L", (400, compose.BAND_H))',
+            'ImageDraw.Draw(a).text((10, compose.BAND_H / 2), "Hあg", font=fonts[0], fill=255, anchor="lm")',
+            'b = Image.new("L", (400, compose.BAND_H))',
+            'ImageDraw.Draw(b).text((10, compose.baseline_y(fonts[0])), "Hあg", font=fonts[0], fill=255, anchor="ls")',
+            'print(json.dumps(ImageChops.difference(a, b).getbbox()))',
+          ].join('\n'),
+        );
+        assert.equal(diff, null, path);
+      }
     },
   );
 
   test(
-    'macOS のヒラギノ角ゴシックは「⋯」を持たず、代わりの Apple Symbols が持つ',
-    { skip: hasPillow && existsSync(FONT) && existsSync(SYMBOL_FONT) ? false : 'Pillow か macOS のフォントが無い' },
+    'macOS: ヒラギノ角ゴシックに無い「⋯」だけを Apple Symbols で描き、日本語は変えない',
+    needs(FONT, SYMBOL_FONT),
     () => {
-      assert.deepEqual(
-        json(
-          `import json\nfrom PIL import ImageFont\nmain = ImageFont.truetype(${JSON.stringify(FONT)}, 32)\nsymbols = ImageFont.truetype(${JSON.stringify(SYMBOL_FONT)}, 32)\nprint(json.dumps(compose.split_runs('「⋯」と完了', [main, symbols])))`,
-        ),
-        [
-          ['「', 0],
-          ['⋯', 1],
-          ['」と完了', 0],
-        ],
-      );
+      const { runs: split, boxes } = band([FONT, SYMBOL_FONT], '担当まで送っても「⋯」と完了');
+      assert.deepEqual(split, [
+        ['担当まで送っても「', 0],
+        ['⋯', 1],
+        ['」と完了', 0],
+      ]);
+      const middle = (box: number[]) => (box[1] + box[3]) / 2;
+      assert.ok(boxes[1] && boxes[1][3] - boxes[1][1] < (boxes[0][3] - boxes[0][1]) / 3, JSON.stringify(boxes));
+      assert.ok(Math.abs(middle(boxes[1]) - middle(boxes[0])) <= 5, JSON.stringify(boxes));
+      assert.equal(sameAsBefore([FONT, SYMBOL_FONT], '担当まで送っても 完了の丸は右端に残る'), null);
     },
   );
 });
