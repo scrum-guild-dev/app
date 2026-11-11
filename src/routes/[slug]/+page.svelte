@@ -318,7 +318,7 @@
   {:else if firstWorkspace !== null}
     <EmptyState
       icon="sun"
-      art="notice"
+      art="sun"
       title={t('todayEmptyTitle', { task: t('task') })}
       text={t('todayEmptyText', { assignee: t('assignee'), task: t('task'), backlog: t('backlog') })}
     >
@@ -331,7 +331,7 @@
   {:else}
     <EmptyState
       icon="sun"
-      art="notice"
+      art="sun"
       title={t('todayEmptyTitle', { task: t('task') })}
       text={t('todayEmptyNoWorkspaceText', { workspace: t('workspace'), assignee: t('assignee'), task: t('task') })}
     />
@@ -362,7 +362,13 @@
       {@render rows(sections.overdue)}
     </Section>
   {/if}
-  <Section id="s-today" title={t('sectionToday')} count={sections.today.length} hint={t('sectionTodayHint')}>
+  <!-- 空でも出す節なので、空のときは件数を出さない（集計の 0 と空の状態の案内が同じことを伝える） -->
+  <Section
+    id="s-today"
+    title={t('sectionToday')}
+    count={sections.today.length > 0 ? sections.today.length : undefined}
+    hint={t('sectionTodayHint')}
+  >
     {#if sections.today.length === 0}
       {@render todayEmpty()}
     {:else}
@@ -404,7 +410,7 @@
   <LoadFailed inShell />
 {:else}
   <!-- 見出しの上に、ブラウザのタイムゾーンの今日の日付を出す。区分の判定はワークスペースのタイムゾーンの今日で、時差のある所から開くと1日ずれうる -->
-  <PageHead eyebrow={todayLabel} title={t('pageToday')} {tallies} focusable />
+  <PageHead eyebrow={todayLabel} title={t('pageToday')} {tallies} focusable reading />
   <div class="layout-main">{@render main()}</div>
   {#if data.organization?.me.is_admin}<WorkspaceCreateDialog
       bind:this={createDialog}

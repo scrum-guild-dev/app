@@ -784,13 +784,14 @@
     button.setAttribute("aria-expanded", String(open));
     button.parentElement.dataset.open = String(open);
   });
-  function pageHead(eyebrow, title, tallies = [], actions = "", meta = "", narrowSummary = "") {
+  // reading は読む画面（今日やること、マイプロフィール、エピックの詳細）。本文の幅を 1200px で止める（components.css の .is-reading）
+  function pageHead(eyebrow, title, tallies = [], actions = "", meta = "", narrowSummary = "", reading = false) {
     const counts = (items) => items.length ? `<dl class="tally">${items.map(([cls, ic, label, n]) => `<div class="${n ? cls : ""}"><dt>${ic ? icon(ic) : ""}${label}</dt><dd>${n}</dd></div>`).join("")}</dl>` : "";
     const compactSummary = tallies.length > 1 || meta ? narrowSummary : "";
     const metrics = compactSummary
       ? `<div class="page-head-metrics">${counts(tallies.slice(0, 1))}${narrowDisclosure(compactSummary, `${counts(tallies.slice(1))}${meta ? `<div class="page-head-meta">${meta}</div>` : ""}`)}</div>`
       : `${counts(tallies)}${meta}`;
-    return `<header class="page-head${compactSummary ? " is-compact" : ""}">
+    return `<header class="page-head${compactSummary ? " is-compact" : ""}${reading ? " is-reading" : ""}">
       ${eyebrow ? `<span class="page-eyebrow">${eyebrow}</span>` : ""}
       <div class="page-head-row"><div class="page-title-row"><h1 class="page-title">${title}</h1></div>${actions ? `<div class="page-actions">${actions}</div>` : ""}</div>
       ${metrics}
@@ -3334,7 +3335,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const name = workspaces.find((w) => w.id === current.id)?.name || current.name;
     const label = t("workspaceSwitchLabel").replace("{name}", name).replace("{workspace}", t("workspace"));
     const listLabel = t("workspaceSwitchListLabel").replace("{workspace}", t("workspace"));
-    return `<div class="ws-menu"><button class="ws-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-ws-menu" : ""}><span class="ws-menu-label">${t("workspace")}</span><b>${esc(name)}</b>${icon("chevron")}</button>
+    return `<div class="ws-menu"><button class="ws-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-ws-menu" : ""}><b>${esc(name)}</b>${icon("chevron")}</button>
       <ul class="ws-menu-list" id="${id}" aria-label="${esc(listLabel)}" ${open ? "" : "hidden"}>${workspaces.some((w) => w.id === current.id) ? "" : `<li class="ws-menu-current"><span aria-current="page">${esc(current.name)}</span>${icon("check")}</li>`}${workspaces.map((w) => `<li><a href="${firstHref("backlog.html")}${first ? "&" : "?"}workspace=${encodeURIComponent(w.id)}" ${live ? `data-ws-target="${esc(w.id)}"` : ""}${w.id === current.id && inWorkspaceScreen ? ' aria-current="page"' : ""}><span class="org-menu-name">${esc(w.name)}</span>${w.id === current.id ? icon("check") : ""}</a></li>`).join("")}</ul></div>`;
   }
   function setWorkspaceMenu(open, focus) {

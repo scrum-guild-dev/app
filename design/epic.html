@@ -39,7 +39,7 @@ SQ.mount("epic", () => {
       ["", "check", `${t("done")}の${t("points")}`, p.done],
       ["", "", `残りの${t("points")}`, p.all - p.done],
       ["", "users", t("party"), e.party.length],
-    ], `<a class="btn is-sm is-quiet" href="backlog.html">${t("backlog")}へ戻る</a><button class="btn" type="button" data-dialog="editEpic">${icon("pen")}${t("epic")}を直す</button>`)}
+    ], `<a class="btn is-sm is-quiet" href="backlog.html">${t("backlog")}へ戻る</a><button class="btn" type="button" data-dialog="editEpic">${icon("pen")}${t("epic")}を直す</button>`, "", "", true)}
     <div class="layout-aside">
       <div class="layout-main">
         <section class="section">

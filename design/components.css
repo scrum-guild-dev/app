@@ -122,11 +122,11 @@ h1, h2, h3 { text-wrap: balance; }
 .nav-item {
   position: relative;
   display: flex; align-items: center; gap: var(--space-3);
-  padding: 7px var(--space-2); border-radius: var(--radius-1);
+  padding: 6px var(--space-2); border-radius: var(--radius-1);
   color: var(--color-fg); text-decoration: none;
 }
 .nav-item:hover { background: var(--color-rule); }
-.nav-item[aria-current="page"] { background: var(--color-surface); font-weight: 700; box-shadow: 0 0 0 1px var(--color-line); }
+.nav-item[aria-current="page"] { background: var(--color-surface); font-weight: 600; box-shadow: 0 0 0 1px var(--color-line); }
 .nav-item .ico { color: var(--color-muted); }
 .nav-item[aria-current="page"] .ico { color: var(--color-accent); }
 .nav-item-label { min-width: 0; }
@@ -146,7 +146,8 @@ h1, h2, h3 { text-wrap: balance; }
   border-radius: var(--radius-1); border: 1px solid var(--color-control-edge); background: var(--color-surface);
 }
 :is(.org-menu-button, .ws-menu-button):hover { border-color: var(--color-muted); }
-:is(.org-menu-label, .ws-menu-label) { grid-column: 1; font-size: var(--text-xs); color: var(--color-muted); }
+/* ワークスペースの切り替えは、左のメニューの「ワークスペース」の見出しのすぐ下にだけ出すので、枠の中にラベルを持たない */
+.org-menu-label { grid-column: 1; font-size: var(--text-xs); color: var(--color-muted); }
 :is(.org-menu-button, .ws-menu-button) > b { grid-column: 1; font-weight: 700; overflow-wrap: anywhere; }
 :is(.org-menu-button, .ws-menu-button) > .chip { grid-column: 1; justify-self: start; margin-top: var(--space-1); }
 :is(.org-menu-button, .ws-menu-button) > .ico { grid-column: 2; grid-row: 1 / span 3; color: var(--color-muted); transform: rotate(90deg); }
@@ -384,7 +385,7 @@ h1, h2, h3 { text-wrap: balance; }
 .breadcrumb-sep { color: var(--color-faint); }
 .breadcrumb-item { min-width: 0; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); text-decoration: none; }
 a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
-.breadcrumb-item[aria-current="page"] { max-width: 100%; color: var(--color-fg); font-weight: 700; }
+.breadcrumb-item[aria-current="page"] { max-width: 100%; color: var(--color-fg); font-weight: 600; }
 /* 上の帯の検索。パンくずの右。画面の名前を絞り、今のワークスペースがあれば末尾にバックログの検索の行を足す。Ctrl+K（⌘K）で欄へ移る。
    候補の小窓は帯の下へ重ね、狭い幅では欄を帯の1行に広げて小窓を画面の幅に収める */
 .nav-search {
@@ -475,6 +476,11 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* 画面より高くなりうる脇（エピックの画面の討伐隊は人数に上限が無い）は貼り付けず、本文と一緒にスクロールさせる。
    中でスクロールさせると、面の影とフォーカスの輪が切れ、押せる要素の無い脇は読み上げとキーボードで動かせない */
 .layout-side.is-static { position: static; }
+/* 読む画面（今日やること、マイプロフィール、エピックの詳細）は、見出しに .is-reading を付け、本文の子をすべて 1200px で止めて左に寄せる。
+   行と空の状態の箱が画面の端まで伸びると、題と右端の印が離れて読めないため。バックログの木、スプリントの列、計画は付けず画面の幅を使う。
+   見出しと本文を1つの要素で包まないのは、.content の間（gap）と、見出しの後に並ぶ節や知らせの並びをそのまま使うため */
+/* 詳細度を 0 にし、子が自分で持つ幅（より狭い max-width）を上書きしない */
+:where(.content:has(> .page-head.is-reading)) > * { max-width: 75rem; }
 /* 同じ画面の値を読み直している間は、木（.tree[aria-busy]）と同じく薄くして、古い値のまま止まっていないことを見せる */
 .layout-aside[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) var(--ease-out); }
 
@@ -495,7 +501,8 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .section-head { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
 .section-title { font-family: var(--font-display); font-weight: var(--weight-display); font-size: var(--text-xl); letter-spacing: 0.04em; }
 .section-count { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-muted); }
-.section-hint { margin-left: auto; font-size: var(--text-xs); color: var(--color-muted); }
+/* 補足は件数のすぐ後ろに置く。右端へ寄せると、広い画面で見出しから離れて何の補足か読めない */
+.section-hint { font-size: var(--text-xs); color: var(--color-muted); }
 /* 閉じた節: 見出しの行を押して開く。ブラウザ既定の三角は消し、押せることは .section-hint の文字で伝える */
 .section.is-folded > summary { cursor: pointer; list-style: none; }
 .section.is-folded > summary::-webkit-details-marker { display: none; }
@@ -1370,6 +1377,7 @@ label.pick-row:hover { background: var(--color-accent-soft); }
  * （any-pointer: coarse）は、押せる範囲 44px のための余白を残して詰めない。
  * どのテーマでも同じ。上の各部品の規則より後ろに置く（同じ詳細度なので、後ろが勝つ） */
 @media (min-width: 761px) and (pointer: fine) and (not (any-pointer: coarse)) {
+  .nav { gap: 2px; }
   .nav-item { padding-block: 4px; }
   .content { gap: var(--space-6); }
   .page-head { padding-bottom: var(--space-4); }
