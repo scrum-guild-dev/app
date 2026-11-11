@@ -2074,6 +2074,16 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 .card-foot .row-menu { min-width: 0; max-width: 100%; }
 /* 行の「⋯」（.row-menu）。広い幅ではホバーと行の中のフォーカスで出し、開いている間は出したままにする。opacity だけなので、見えなくてもキーボードで届く */
 .row-menu { position: relative; display: inline-flex; flex: none; align-items: center; gap: var(--space-1); }
+/* 属性のチップの包み（#890、#1158）。行が狭いと包みごと縮んで題を省略し、アバターと山形は縮めない。
+   押せるチップは題の後ろに下向きの山形を置く（ロックしたチップには置かない）。ポイントの数は等幅の書体。
+   .row-menu の flex: none を上書きするので、.row-menu の後に置く */
+/* 横送りの中でフォーカスして送るとき（AttrChip の scrollIntoView）、端に余白を残す。小数の位置で輪が端から切れないように */
+.attr-chip { flex: 0 1 auto; min-width: 0; max-width: 100%; scroll-margin-inline: var(--space-1); }
+.attr-chip .avatar { flex: none; }
+.attr-chip .chip-btn { min-width: 0; }
+.attr-chip .chip-text { min-width: 0; }
+.attr-chip.is-points .chip-text { font-family: var(--font-mono); }
+.attr-chip .chip-btn > .ico { flex: none; width: 1em; height: 1em; transform: rotate(90deg); }
 .row-menu-btn { opacity: 0; }
 :is(.entry, .tree-row, .card):is(:hover, :focus-within) .row-menu-btn, .row-menu-btn[aria-expanded="true"], .row-menu-btn:focus-visible { opacity: 1; }
 /* 引き出しの帯の「⋯」（ストーリーの引き出しの親を移すと削除）は、ホバーする行が無いので常に出す */
@@ -2591,13 +2601,7 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 .create-sheet-kind { min-width: 0; flex-wrap: wrap; justify-content: center; }
 .create-sheet-head > .icon-btn, .create-sheet-submit { flex: 0 0 44px; }
 
-/* #890: 見本で確認する案。本番の AttrChip には、人の確認後に反映する。 */
-.attr-chip-examples .attr-chip { flex: 0 1 auto; min-width: 0; max-width: 100%; }
-.attr-chip-examples .attr-chip .avatar { flex: none; }
-.attr-chip-examples .attr-chip .chip-btn { min-width: 0; }
-.attr-chip-examples .attr-chip .chip-text { min-width: 0; }
-.attr-chip-examples .attr-chip.is-points .chip-text { font-family: var(--font-mono); }
-.attr-chip-examples .attr-chip .chip-btn > .ico { flex: none; width: 1em; height: 1em; transform: rotate(90deg); }
+/* カタログの「行のチップの状態」の並べ方。チップそのものの規則は .attr-chip（本番と共通） */
 .attr-chip-examples .entry { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .attr-chip-examples .entry-end { min-width: 0; max-width: 100%; flex-wrap: wrap; }
 
