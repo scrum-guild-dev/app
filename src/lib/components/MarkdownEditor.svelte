@@ -72,6 +72,7 @@
   };
   const uid = $props.id();
   const quotaId = `${uid}-quota`;
+  const noticeId = `${uid}-notice`;
   let files = $state<Upload[]>([]);
   let picker = $state<HTMLInputElement>();
   let sequence = 0;
@@ -147,10 +148,17 @@
       }
     }
     previous = value;
+    clearFilesNotice();
     oninput?.();
   }
 
+  // 添付を切った欄の「ファイルを上げられません」は、本文が変わったら（書く、小窓で入れる、外から差し替わる）消す
+  function clearFilesNotice(): void {
+    if (filesNotice !== undefined && notice === filesNotice) notice = null;
+  }
+
   function synchronizePositions(): void {
+    clearFilesNotice();
     const edit = pendingInput?.before === previous ? resolveInputEdit(previous, value, pendingInput) : undefined;
     pendingInput = undefined;
     updatePositions(previous, value, edit);
@@ -160,7 +168,6 @@
   function changed(): void {
     // The reactive effect may run before a delegated input handler; both consume the same actual edit.
     synchronizePositions();
-    if (filesNotice !== undefined && notice === filesNotice) notice = null;
     oninput?.();
   }
 
@@ -406,8 +413,19 @@
 
   function paste(event: ClipboardEvent): void {
     const clipboard = event.clipboardData;
-    if (!clipboard?.files.length) {
-      // 文字を選んで URL を1つ貼ったときだけリンクにする。ファイルの貼り付けは下のまま（添付を切った欄でも、文字は入れて知らせを出す）
+    // 添付を切った欄に、ファイルだけ（ファイル名の並びだけの文字を含む）を貼ったときは、何も入れずに知らせる。
+    // 文字も一緒のとき（表計算のセルのコピーなど）は、下の文字の貼り付けに任せる（ブラウザの貼り付けなので Ctrl+Z で戻せる）
+    if (
+      !attachments &&
+      clipboard?.files.length &&
+      clipboardTextToInsert(clipboard.getData('text/plain'), Array.from(clipboard.files)) === ''
+    ) {
+      event.preventDefault();
+      void rejectFiles();
+      return;
+    }
+    if (!attachments || !clipboard?.files.length) {
+      // 文字を選んで URL を1つ貼ったときだけリンクにする。ファイルの貼り付けは下のまま
       const edit =
         readonly || !input
           ? null
@@ -438,8 +456,7 @@
       }
     }
     if (slashOpen) updateSlash();
-    if (attachments) add(clipboard.files, caret);
-    else void rejectFiles();
+    add(clipboard.files, caret);
   }
 
   function drop(event: DragEvent): void {
@@ -454,7 +471,18 @@
   }
 </script>
 
-<div class="markdown-editor" aria-busy={uploading}>
+<!-- 添付を切った欄は、欄の周り（書式ボタンや知らせ）に落としたファイルも受け止めて知らせる（ブラウザがファイルを開いて書きかけを失わないように） -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="markdown-editor"
+  aria-busy={uploading}
+  ondragover={(event) => {
+    if (!attachments && event.dataTransfer?.types.includes('Files')) event.preventDefault();
+  }}
+  ondrop={(event) => {
+    if (!attachments) drop(event);
+  }}
+>
   <span class="visually-hidden" role="status" aria-live="polite">{removalNotice}</span>
   <span class="visually-hidden" role="status" aria-live="polite">{slashStatus}</span>
   <div class="slash-wrap">
@@ -469,7 +497,9 @@
       aria-invalid={invalid}
       aria-controls={slashOpen ? menuId : undefined}
       aria-activedescendant={slashOpen && slashItems[slashAt] ? optionId(slashItems[slashAt]) : undefined}
-      aria-describedby={[describedby, quota ? quotaId : undefined].filter(Boolean).join(' ') || undefined}
+      aria-describedby={[describedby, quota ? quotaId : undefined, notice ? noticeId : undefined]
+        .filter(Boolean)
+        .join(' ') || undefined}
       data-comment-input={dataCommentInput}
       onbeforeinput={(event) => {
         const element = event.currentTarget;
@@ -582,7 +612,7 @@
     </div>
   {/if}
   {#if quota}<p class="field-error" id={quotaId} role="alert"><Icon name="alert" />{t('attachmentQuota')}</p>{/if}
-  {#if notice}<p class="field-error" role="alert">{notice}</p>{/if}
+  {#if notice}<p class="field-error" id={noticeId} role="alert"><Icon name="alert" />{notice}</p>{/if}
   {#each files.filter((file) => file.state !== 'done' || attachmentIds.includes(file.attachmentId ?? '')) as file (file.key)}
     <div class="file-row" class:is-error={file.error !== null}>
       <Icon name={file.error ? 'alert' : file.state === 'done' ? 'file' : 'upload'} />

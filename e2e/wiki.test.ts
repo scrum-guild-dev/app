@@ -419,12 +419,49 @@ for (const scope of ['organization', 'workspace'] as const) {
       await expect(notice).toHaveCount(0);
       await page.keyboard.press('Backspace');
     }
+    // 書式ボタンの上（欄の周り）に落としても、ブラウザにファイルを開かせずに知らせる
+    const droppedOnToolbar = await toolbar.evaluate((element) => {
+      const data = new DataTransfer();
+      data.items.add(new File(['sample'], '架空の図.png', { type: 'image/png' }));
+      return !element.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
+    });
+    expect(droppedOnToolbar).toBe(true);
+    await expect(notice).toBeVisible();
+    await expect(body).toHaveAttribute('aria-describedby', /.+ .+/);
+    // 「/」の小窓から入れて本文が変わっても消える
+    await body.press('ControlOrMeta+End');
+    await page.keyboard.type('\n/');
+    await page.keyboard.press('Enter');
+    await expect(notice).toHaveCount(0);
+    await expect(body).toHaveValue('## 準備\n- 鍵を受け取る\n> 名簿を見る\n## ');
+    await body.fill('## 準備');
+
+    // ファイル名の並びだけの文字とファイルは、何も入れずに知らせる。文字も一緒なら、文字の貼り付けに任せて知らせない
+    for (const [text, rejected] of [
+      ['架空の図.png', true],
+      ['表のセルの文字', false],
+    ] as const) {
+      const prevented = await body.evaluate((element, text) => {
+        const data = new DataTransfer();
+        data.setData('text/plain', text);
+        data.items.add(new File(['sample'], '架空の図.png', { type: 'image/png' }));
+        return !element.dispatchEvent(
+          new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+        );
+      }, text);
+      expect(prevented).toBe(rejected);
+      await expect(notice).toHaveCount(rejected ? 1 : 0);
+      await expect(body).toHaveValue('## 準備');
+      if (rejected) {
+        await page.keyboard.type('。');
+        await page.keyboard.press('Backspace');
+      }
+    }
     expect(uploads).toEqual([]);
 
     await page.getByRole('button', { name: '保存する', exact: true }).click();
     await expect(page.getByRole('button', { name: '編集する' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '準備', exact: true })).toBeVisible();
-    await expect(page.locator('.doc-box blockquote')).toContainText('名簿を見る');
     expect(await violations()).toEqual([]);
   });
 }
