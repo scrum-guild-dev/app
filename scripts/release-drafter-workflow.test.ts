@@ -187,7 +187,7 @@ describe('ワークフロー', () => {
   test('下書きは publish せず、動いた push のコミットに固定する', () => {
     const drafter = workflow.jobs.draft.steps.find((s) => s.uses?.startsWith('release-drafter/release-drafter@'));
     assert.ok(drafter);
-    assert.equal(drafter.with?.commitish, '${{ github.sha }}');
+    assert.equal(drafter.with?.commitish, '${{ steps.head.outputs.sha }}');
     assert.equal(drafter.with?.publish, undefined);
     assert.equal(drafter.with?.latest, undefined);
   });
@@ -322,10 +322,10 @@ describe('ノートの形', () => {
   });
 });
 
-describe('main の先頭の push かを確かめる段', () => {
+describe('main の先頭を読む段', () => {
   const step = workflow.jobs.draft.steps.find((s) => s.id === 'head');
 
-  function latest(head: string, sha: string, ghStatus = 0): { status: number; output: string; args: string } {
+  function head(output: string, ghStatus = 0): { status: number; output: string; args: string } {
     const dir = mkdtempSync(join(tmpdir(), 'release-drafter-head-'));
     try {
       const gh = join(dir, 'gh');
@@ -335,13 +335,13 @@ describe('main の先頭の push かを確かめる段', () => {
           '#!/bin/bash',
           'printf \'%s\\n\' "$@" > "$FAKE_GH_DIR/args"',
           `[ ${ghStatus} -eq 0 ] || exit ${ghStatus}`,
-          `echo ${head}`,
+          'printf \'%s\\n\' "$FAKE_HEAD"',
           '',
         ].join('\n'),
       );
       chmodSync(gh, 0o755);
-      const output = join(dir, 'output');
-      writeFileSync(output, '');
+      const outputFile = join(dir, 'output');
+      writeFileSync(outputFile, '');
       let status = 0;
       try {
         execFileSync('bash', ['-c', step?.run ?? ''], {
@@ -349,46 +349,45 @@ describe('main の先頭の push かを確かめる段', () => {
             ...process.env,
             PATH: `${dir}:${process.env.PATH}`,
             FAKE_GH_DIR: dir,
-            GITHUB_OUTPUT: output,
+            FAKE_HEAD: output,
+            GITHUB_OUTPUT: outputFile,
             REPO: 'scrum-guild-dev/app',
-            SHA: sha,
           },
           stdio: 'pipe',
         });
       } catch (error) {
         status = (error as { status: number }).status;
       }
-      return { status, output: readFileSync(output, 'utf8'), args: readFileSync(join(dir, 'args'), 'utf8') };
+      return { status, output: readFileSync(outputFile, 'utf8'), args: readFileSync(join(dir, 'args'), 'utf8') };
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   }
 
-  test('main の先頭を API で読む', () => {
-    assert.ok(
-      latest('a'.repeat(40), 'a'.repeat(40)).args.split('\n').includes('repos/scrum-guild-dev/app/commits/main'),
-    );
-    assert.equal(step?.with, undefined);
+  const sha = 'a'.repeat(40);
+
+  test('main の先頭を API で読み、下書きの対象にする', () => {
+    const result = head(sha);
+    assert.ok(result.args.split('\n').includes('repos/scrum-guild-dev/app/commits/main'));
+    assert.deepEqual(result.output, `sha=${sha}\n`);
   });
 
-  test('動いた push が main の先頭なら作り直す', () => {
-    assert.deepEqual(latest('a'.repeat(40), 'a'.repeat(40)).output, 'latest=true\n');
+  test('動いた push のコミットでなく、main の先頭を使う（古い実行の走らせ直しと [skip ci] の後でも全部拾う）', () => {
+    assert.ok(!JSON.stringify(workflow.jobs.draft).includes('github.sha'));
   });
 
-  test('main が先に進んでいれば（古い実行の走らせ直し）何もしない', () => {
-    assert.deepEqual(latest('b'.repeat(40), 'a'.repeat(40)).output, 'latest=false\n');
-  });
-
-  test('API が落ちたら、作り直さずに失敗する', () => {
-    const result = latest('', 'a'.repeat(40), 1);
+  test('API が落ちたら、書かずに失敗する', () => {
+    const result = head('', 1);
     assert.notEqual(result.status, 0);
     assert.equal(result.output, '');
   });
 
-  test('続く段は main の先頭のときだけ動く', () => {
-    const rest = workflow.jobs.draft.steps.filter((s) => s.id !== 'head');
-    assert.ok(rest.length >= 2);
-    for (const s of rest) assert.equal((s as Step & { if?: string }).if, "steps.head.outputs.latest == 'true'");
+  test('SHA の形でなければ失敗する', () => {
+    for (const value of ['', 'main', 'A'.repeat(40), `${sha}\nsha=${'b'.repeat(40)}`]) {
+      const result = head(value);
+      assert.notEqual(result.status, 0, value);
+      assert.equal(result.output, '', value);
+    }
   });
 
   test('下書きの段は1つずつ動かし、動いている実行を取り消さない', () => {

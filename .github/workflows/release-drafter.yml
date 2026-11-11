@@ -29,26 +29,24 @@ jobs:
       pull-requests: read
     steps:
       # actions/checkout を置かない。release-drafter は設定を API で読む
-      # 古い push の実行を走らせ直すと、github.sha はその push のままなので、後にマージした PR の抜けた下書きに戻る。
-      # 動いた push のコミットが今の main の先頭のときだけ、下書きを作り直す
-      - name: main の先頭の push かを確かめる
+      # 下書きの対象は、この実行の時点の main の先頭にする。古い push の実行を走らせ直したときも、
+      # 先頭に push の実行が作られなかったとき（[skip ci] の件名など）も、そこまでのマージをすべて拾う
+      - name: main の先頭を読む
         id: head
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           head=$(gh api "repos/$REPO/commits/main" --jq .sha)
-          if [ "$head" = "$SHA" ]; then
-            echo "latest=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "main の先頭は $head で、この実行（$SHA）より新しい。下書きは先頭の実行が作り直すので、何もしない"
-            echo "latest=false" >> "$GITHUB_OUTPUT"
+          if ! [[ "$head" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::main の先頭を読めない: $head"
+            exit 1
           fi
+          echo "main の先頭: $head"
+          echo "sha=$head" >> "$GITHUB_OUTPUT"
 
       - name: 出した Release があるかを確かめる
-        if: steps.head.outputs.latest == 'true'
         id: published
         env:
           GH_TOKEN: ${{ github.token }}
@@ -63,10 +61,9 @@ jobs:
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
       - uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
-        if: steps.head.outputs.latest == 'true'
         with:
-          # 動いた push のコミットに固定する。publish の直前に別のマージが入っても、ノートとタグのコミットがそろう
-          commitish: ${{ github.sha }}
+          # 実行の時点の main の先頭のコミットに固定する。publish の直前に別のマージが入っても、ノートとタグのコミットがそろう
+          commitish: ${{ steps.head.outputs.sha }}
           # 出した Release が無いと、release-drafter は比べる起点が無いので PR を1件も拾わない。
           # そのあいだは main の最初のコミット（3a8b99f。親の無いコミット）から拾い、これまでの PR を下書きに並べる。
           # 出した後は空にし、前に出した Release のタグから拾う（空の入力は渡していないものとして読まれる）
