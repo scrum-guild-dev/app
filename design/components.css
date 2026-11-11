@@ -476,11 +476,11 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 /* 画面より高くなりうる脇（エピックの画面の討伐隊は人数に上限が無い）は貼り付けず、本文と一緒にスクロールさせる。
    中でスクロールさせると、面の影とフォーカスの輪が切れ、押せる要素の無い脇は読み上げとキーボードで動かせない */
 .layout-side.is-static { position: static; }
-/* 読む画面（今日やること、マイプロフィール、エピックの詳細）は、見出しに .is-reading を付け、本文の子をすべて 1200px で止めて左に寄せる。
+/* 読む画面（今日やること、マイプロフィール、エピックの詳細）は、見出しに .is-reading を付け、本文の枠ごと中身を 1200px（と左右の余白）で止めて左に寄せる。
    行と空の状態の箱が画面の端まで伸びると、題と右端の印が離れて読めないため。バックログの木、スプリントの列、計画は付けず画面の幅を使う。
-   見出しと本文を1つの要素で包まないのは、.content の間（gap）と、見出しの後に並ぶ節や知らせの並びをそのまま使うため */
-/* 詳細度を 0 にし、子が自分で持つ幅（より狭い max-width）を上書きしない */
-:where(.content:has(> .page-head.is-reading)) > * { max-width: 75rem; }
+   子に幅を付けず枠で止めるのは、.content の直下に出る固定配置の部品（引き出しの幕 .scrim、ダイアログ、クリアの演出）が
+   画面を基準に置かれ、枠の幅に縛られないため。子に付けると、幅の指定の無い幕が左の 1200px しか覆わない */
+.content:has(> .page-head.is-reading) { max-width: calc(75rem + 2 * var(--space-8)); }
 /* 同じ画面の値を読み直している間は、木（.tree[aria-busy]）と同じく薄くして、古い値のまま止まっていないことを見せる */
 .layout-aside[aria-busy="true"] { opacity: 0.6; transition: opacity var(--duration-fast) var(--ease-out); }
 

@@ -43,12 +43,14 @@ test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'member');
 });
 
-// 本文の直下の子の幅の最大と、左端がそろっているか
+// 本文の直下の子の幅の最大と、左端がそろっているか。available は、本文の枠を止めなかったときに使えた幅
+// （枠の親の幅から枠の左右の余白を引いたもの。読む画面は枠ごと止めるので、枠の幅では測れない）
 async function contentChildren(page: Page): Promise<{ widest: number; lefts: number[]; available: number }> {
   return page.evaluate(() => {
     const content = document.querySelector('main.content')!;
     const style = getComputedStyle(content);
-    const available = content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const available =
+      content.parentElement!.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     const boxes = [...content.children]
       .filter((child) => child instanceof HTMLElement && child.offsetParent !== null)
       .map((child) => child.getBoundingClientRect())
@@ -82,6 +84,23 @@ for (const screen of [
     expect(measured.lefts).toHaveLength(1);
   });
 }
+
+test.describe('読む画面で開く引き出し', () => {
+  test.beforeEach(async ({ context, baseURL }) => {
+    await signIn(context, baseURL, 'admin');
+  });
+
+  test('幅 2000px のエピックの詳細で引き出しを開くと、幕は読む幅で止まらず画面全体を覆う', async ({ page }) => {
+    await page.goto(`/aoba/w/${WORKSPACE.id}/epics/${EPIC_ID}`);
+    await expect(page.locator('.page-head.is-reading')).toBeVisible();
+    await page.getByRole('link', { name: 'エピックを直す' }).click();
+    const scrim = page.locator('.scrim');
+    await expect(scrim).toBeVisible();
+    const box = (await scrim.boundingBox())!;
+    expect(box.x).toBe(0);
+    expect(box.width).toBe(2000);
+  });
+});
 
 test(`幅 2000px のバックログは、読む画面の幅で止めず画面の幅まで広がる`, async ({ page }) => {
   await page.goto(`/aoba/w/${WORKSPACE.id}`);
