@@ -192,7 +192,7 @@ test('760px 以下では、押したタブの読み込みを待つ間も先に�
   await expect(todayTab).toHaveCSS('border-top-color', selectedBorder);
   await expect(favoritesTab).not.toHaveCSS('border-top-color', selectedBorder);
 
-  await release();
+  release();
   await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
   await expect(todayTab).toHaveAttribute('aria-current', 'page');
   await expect(todayTab).toHaveAttribute('data-selected', '');
@@ -218,7 +218,7 @@ test('760px 以下でタブで無い画面へ移る間は、今のタブの印�
   await expect(favoritesTab).toHaveAttribute('aria-current', 'page');
   await expect(tabs.locator('[data-selected]')).toHaveCount(1);
 
-  await release();
+  release();
   await expect(page).toHaveURL(/\/aoba\/wiki$/);
   await expect(tabs.locator('[data-selected]')).toHaveCount(0);
 });
@@ -269,19 +269,16 @@ test.describe('画面の入れ替え（View Transitions）', () => {
   });
 });
 
-// 行き先の操作の応答を止めておき、返す関数で流す。止めた後に来た呼び出しも、流した後はそのまま通す
-async function holdOperations(page: Page, pattern: RegExp): Promise<() => Promise<void>> {
+// 行き先の操作の応答を止めておき、返す関数で流す。流した後に来た呼び出しもそのまま通す。
+// 流した直後に unroute すると、止めていた呼び出しが既に処理済みになり route が投げるので、テストの終わりまで外さない
+async function holdOperations(page: Page, pattern: RegExp): Promise<() => void> {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => (release = resolve));
-  const handler = async (route: Parameters<Parameters<Page['route']>[1]>[0]) => {
+  await page.route(pattern, async (route) => {
     await gate;
-    await route.continue();
-  };
-  await page.route(pattern, handler);
-  return async () => {
-    release();
-    await page.unroute(pattern, handler);
-  };
+    await route.fallback();
+  });
+  return release;
 }
 
 // 選んだタブの縁の色（--color-line）。待つ間の行き先のタブが、現在地と同じ見た目になることを確かめる
