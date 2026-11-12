@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { shouldFadeNavigation, type NavigationFadeInput } from './navigation-fade.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { shouldFadeNavigation, startNavigationFade, type NavigationFadeInput } from './navigation-fade.ts';
 
 const base: NavigationFadeInput = {
   narrow: true,
@@ -32,5 +32,43 @@ describe('shouldFadeNavigation', () => {
     expect(shouldFadeNavigation({ ...base, to: '/aoba' })).toBe(false);
     expect(shouldFadeNavigation({ ...base, from: undefined })).toBe(false);
     expect(shouldFadeNavigation({ ...base, to: undefined })).toBe(false);
+  });
+});
+
+describe('startNavigationFade', () => {
+  it('入れ替えの更新が始まったら解け、描き終える（complete）まで更新を待つ', async () => {
+    let finish!: () => void;
+    const complete = new Promise<void>((resolve) => (finish = resolve));
+    let update: Promise<void> | undefined;
+    const start = vi.fn((cb: () => Promise<void>) => {
+      update = cb();
+      return { finished: Promise.resolve(), ready: Promise.resolve() };
+    });
+    await startNavigationFade(complete, start);
+    expect(start).toHaveBeenCalledTimes(1);
+    let updated = false;
+    void update!.then(() => (updated = true));
+    await Promise.resolve();
+    expect(updated).toBe(false);
+    finish();
+    await update;
+    expect(updated).toBe(true);
+  });
+
+  it('移動が失敗し、入れ替えが取り消されても、拒否を外へ漏らさない', async () => {
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      let update: Promise<void> | undefined;
+      await startNavigationFade(Promise.reject(new Error('aborted')), (cb) => {
+        update = cb();
+        return { finished: Promise.reject(new Error('skipped')), ready: Promise.reject(new Error('skipped')) };
+      });
+      await expect(update).resolves.toBeUndefined();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
   });
 });

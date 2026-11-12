@@ -960,19 +960,21 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
     color: var(--color-muted); background: transparent; text-decoration: none;
     -webkit-tap-highlight-color: transparent;
     transition: color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out),
-      border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+      border-color var(--duration-fast) var(--ease-out);
   }
   @media (hover: hover) { .mobile-tab:hover { background: var(--color-rule); } }
-  /* 押している間は少し沈め、指が届いたことをすぐに返す（動きを減らす設定では沈めない） */
-  .mobile-tab:active { transform: scale(0.92); }
-  @media (prefers-reduced-motion: reduce) { .mobile-tab:active { transform: none; } }
-  /* 押したタブへ移る間（行き先の読み込み中）は、本番の MobileNavigation が帯に data-pending、行き先のタブに data-pending-target を付け、
-     選んだ印を先に移す。aria-current は着いた画面のタブに残すので、待つ間はその見た目だけを外す */
-  .mobile-tab:is([aria-current="page"]:not(.mobile-tabs[data-pending] *), [data-pending-target]), .mobile-tab[aria-expanded="true"] {
+  /* 押している間は中の絵だけを少し沈め、指が届いたことをすぐに返す。押せる箱の大きさは変えない（縁を押した指が外れないように）。
+     同じ帯の起票の丸ボタンも揃える。動きを減らす設定では沈めない */
+  .mobile-tab > *, .mobile-create > .ico { transition: transform var(--duration-fast) var(--ease-out); }
+  .mobile-tab:active > *, .mobile-create:active > .ico { transform: scale(0.86); }
+  @media (prefers-reduced-motion: reduce) { .mobile-tab:active > *, .mobile-create:active > .ico { transform: none; } }
+  /* 選んだタブの見た目は data-selected で付ける（aria-current と同じタブに付ける）。本番の MobileNavigation は、押したタブへ移る間
+     （行き先の読み込み中）だけ data-selected を行き先のタブへ先に移し、aria-current は着くまで元のタブに残す */
+  .mobile-tab[data-selected], .mobile-tab[aria-expanded="true"] {
     color: var(--color-fg); background: var(--color-sunken); border-color: var(--color-line);
   }
-  /* 背景の差だけに頼らず、操作の色の点で現在地を示す。点は付くたびに小さく弾んで出る */
-  .mobile-tab:is([aria-current="page"]:not(.mobile-tabs[data-pending] *), [data-pending-target])::after {
+  /* 背景の差だけに頼らず、操作の色の点で現在地を示す。点は出るたびに小さく弾む */
+  .mobile-tab[data-selected]::after {
     content: ""; position: absolute; bottom: var(--space-1);
     width: var(--space-1); height: var(--space-1); border-radius: var(--radius-full);
     background: var(--color-accent);
@@ -980,13 +982,20 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   }
   @keyframes mobile-tab-dot { from { transform: scale(0); } to { transform: scale(1); } }
   /* 760px 以下で別の画面へ移るときの入れ替え（本番の AppShell が View Transitions で始める。動きを減らす設定と戻る・進むでは始めない）。
-     前の画面は短く抜き、次の画面は少し下から浮かせて出す。タブバーは入れ替えの外に置き、動かさない */
-  .mobile-navigation { view-transition-name: mobile-navigation; }
-  ::view-transition-group(mobile-navigation) { animation: none; }
-  ::view-transition-old(root) { animation: page-swap-out var(--duration-fast) var(--ease-out) both; }
-  ::view-transition-new(root) { animation: page-swap-in var(--duration-stamp) var(--ease-out) both; }
-  @keyframes page-swap-out { to { opacity: 0; } }
+     前の画面は残したまま、次の画面を少し下から --duration-fast で重ねて出す（前の画面も消すと、途中で両方が薄くなり地が透ける）。
+     入れ替えの間は画面を押せないので短く保つ。タブバーは入れ替えの外に置き、動かさない */
+  @media (max-width: 760px) {
+    .mobile-navigation { view-transition-name: mobile-navigation; }
+    ::view-transition-group(mobile-navigation), ::view-transition-old(mobile-navigation), ::view-transition-new(mobile-navigation),
+    ::view-transition-old(root) { animation: none; }
+    ::view-transition-old(mobile-navigation) { display: none; }
+    ::view-transition-old(root), ::view-transition-new(root) { mix-blend-mode: normal; }
+    ::view-transition-new(root) { animation: page-swap-in var(--duration-fast) var(--ease-out) both; }
+  }
   @keyframes page-swap-in { from { opacity: 0; transform: translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+  }
   .mobile-tab .ico { width: var(--text-xl); height: var(--text-xl); }
   .mobile-menu-arrows { display: grid; grid-template-rows: repeat(2, var(--space-3)); }
   .mobile-menu-arrows .ico { width: var(--text-lg); height: var(--text-lg); }
@@ -1007,7 +1016,7 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
   .mobile-menu-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
   .mobile-menu-head h2 { margin: 0; font-size: var(--text-lg); }
   @media (forced-colors: active) {
-    .mobile-tab:is([aria-current="page"]:not(.mobile-tabs[data-pending] *), [data-pending-target])::after { background: CanvasText; forced-color-adjust: none; }
+    .mobile-tab[data-selected]::after { background: CanvasText; forced-color-adjust: none; }
   }
   .mobile-menu .icon-btn { min-width: 44px; min-height: 44px; }
   .mobile-menu .nav { display: grid; gap: 2px; overflow: visible; width: auto; }

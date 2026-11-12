@@ -12,7 +12,7 @@
   import { page } from '$app/state';
   import { accountScreenKey, workspaceIdOf } from '../breadcrumb.ts';
   import { goto, onNavigate } from '$app/navigation';
-  import { shouldFadeNavigation } from '../navigation-fade.ts';
+  import { shouldFadeNavigation, startNavigationFade } from '../navigation-fade.ts';
   import { prefersReducedMotion } from '../reduced-motion.ts';
   import { useShortcut } from '../shortcuts.svelte.ts';
   import { GO_KEYS, isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
@@ -65,7 +65,7 @@
   let mounted = $state(false);
 
   // 760px 以下で別の画面へ移るとき、画面を短く入れ替える（View Transitions。タブバーは動かさない）。
-  // onNavigate はデータの読み込みが済んだ後に呼ばれるので、待ち時間は延ばさない。
+  // onNavigate はデータの読み込みが済んだ後に呼ばれるので、読み込みの待ちは延ばさない。
   onNavigate((navigation) => {
     if (
       !shouldFadeNavigation({
@@ -78,15 +78,7 @@
       })
     )
       return;
-    return new Promise<void>((ready) => {
-      const transition = document.startViewTransition(async () => {
-        ready();
-        // 中断や失敗した移動では入れ替えをやめるだけにし、拒否を外へ漏らさない
-        await navigation.complete.catch(() => {});
-      });
-      transition.finished.catch(() => {});
-      transition.ready.catch(() => {});
-    });
+    return startNavigationFade(navigation.complete, (update) => document.startViewTransition(update));
   });
   onMount(() => {
     // 子の PageHead が登録を終えるまでは代わりの入口を描かない。

@@ -47,10 +47,10 @@
 
   // 押したタブへの移動を待つ間（行き先のデータの読み込み中）、選んだ印を先に移す。
   // aria-current は着いた画面に付けたままにし、見た目だけを先に替える。
-  const pendingHref = $derived.by(() => {
+  // 行き先がタブで無い画面なら、着くまで今のタブの印を残す。
+  const selectedHref = $derived.by(() => {
     const to = navigating.to?.url.pathname;
-    if (!to || to === current) return null;
-    return tabs.some((tab) => tab.href === to) ? to : null;
+    return to && tabs.some((tab) => tab.href === to) ? to : current;
   });
 
   function close(): void {
@@ -80,13 +80,7 @@
 </script>
 
 <div class="mobile-navigation">
-  <!-- タブの行き先の画面のコードは先に読んでおき、押した後はデータの読み込みだけを待つ -->
-  <nav
-    class="mobile-tabs"
-    aria-label={t('mobileTabs')}
-    data-pending={pendingHref ? '' : undefined}
-    data-sveltekit-preload-code="eager"
-  >
+  <nav class="mobile-tabs" aria-label={t('mobileTabs')}>
     {#each tabs as tab (tab.key)}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- tabs の href はすべて resolve 済み -->
       <a
@@ -94,7 +88,7 @@
         href={tab.href}
         aria-label={t(tab.key)}
         aria-current={current === tab.href ? 'page' : undefined}
-        data-pending-target={pendingHref === tab.href ? '' : undefined}
+        data-selected={selectedHref === tab.href ? '' : undefined}
       >
         <Icon name={tab.icon} />
       </a>

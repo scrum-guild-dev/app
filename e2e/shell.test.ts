@@ -181,41 +181,118 @@ test('760px 以下では、押したタブの読み込みを待つ間も先に�
   await expect(favoritesTab).toHaveAttribute('aria-current', 'page');
 
   // 今日やることの読み込み（today と firstSteps の操作）を止めておき、待っている間の見た目を確かめる
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => (release = resolve));
-  await page.route('**/api/**', async (route) => {
-    await gate;
-    await route.continue();
-  });
+  const release = await holdOperations(page, /\/api\/aoba\/(today|first-steps)(\?|$)/);
   await todayTab.click();
-  await expect(tabs).toHaveAttribute('data-pending', '');
-  await expect(todayTab).toHaveAttribute('data-pending-target', '');
+  await expect(todayTab).toHaveAttribute('data-selected', '');
+  await expect(favoritesTab).not.toHaveAttribute('data-selected');
   // 読み上げの現在地は、着くまで元の画面に残す
   await expect(favoritesTab).toHaveAttribute('aria-current', 'page');
+  await expect(todayTab).not.toHaveAttribute('aria-current');
   const selectedBorder = await selectedTabBorder(page);
   await expect(todayTab).toHaveCSS('border-top-color', selectedBorder);
   await expect(favoritesTab).not.toHaveCSS('border-top-color', selectedBorder);
 
-  release();
-  await page.unroute('**/api/**');
-  await expect(todayTab).toHaveAttribute('aria-current', 'page');
-  await expect(todayTab).not.toHaveAttribute('data-pending-target');
-  await expect(tabs).not.toHaveAttribute('data-pending');
+  await release();
   await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+  await expect(todayTab).toHaveAttribute('aria-current', 'page');
+  await expect(todayTab).toHaveAttribute('data-selected', '');
+  await expect(favoritesTab).not.toHaveAttribute('data-selected');
 });
+
+test('760px 以下でタブで無い画面へ移る間は、今のタブの印を残す', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto(`${today}/favorites`);
+  const tabs = page.locator('.mobile-tabs');
+  const favoritesTab = tabs.getByRole('link', { name: 'お気に入り', exact: true });
+  await expect(favoritesTab).toHaveAttribute('data-selected', '');
+
+  // 組織の Wiki（タブに無い画面）の読み込みを止め、浮きメニューから移る
+  const release = await holdOperations(page, /\/api\/aoba\/org-wiki-tree(\?|$)/);
+  await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('link', { name: /の Wiki$/ })
+    .click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(favoritesTab).toHaveAttribute('data-selected', '');
+  await expect(favoritesTab).toHaveAttribute('aria-current', 'page');
+  await expect(tabs.locator('[data-selected]')).toHaveCount(1);
+
+  await release();
+  await expect(page).toHaveURL(/\/aoba\/wiki$/);
+  await expect(tabs.locator('[data-selected]')).toHaveCount(0);
+});
+
+test.describe('画面の入れ替え（View Transitions）', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as Window & { fadeCount?: number };
+      w.fadeCount = 0;
+      const original = document.startViewTransition?.bind(document);
+      if (!original) return;
+      document.startViewTransition = ((update: () => Promise<void>) => {
+        w.fadeCount! += 1;
+        return original(update);
+      }) as unknown as typeof document.startViewTransition;
+    });
+  });
+  const fadeCount = (page: Page) => page.evaluate(() => (window as Window & { fadeCount?: number }).fadeCount);
+
+  test('760px 以下のタブの移動で入れ替え、戻るでは入れ替えない', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 700 });
+    await page.goto(`${today}/favorites`);
+    expect(await page.evaluate(() => typeof document.startViewTransition)).toBe('function');
+    await page.locator('.mobile-tabs').getByRole('link', { name: '今日やること', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+    await expect.poll(() => fadeCount(page)).toBe(1);
+
+    await page.goBack();
+    await expect(page.getByRole('heading', { level: 1, name: 'お気に入り' })).toBeVisible();
+    expect(await fadeCount(page)).toBe(1);
+  });
+
+  test('動きを減らす設定では入れ替えない', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 700 });
+    await page.goto(`${today}/favorites`);
+    await page.locator('.mobile-tabs').getByRole('link', { name: '今日やること', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+    expect(await fadeCount(page)).toBe(0);
+  });
+
+  test('761px 以上では入れ替えない', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`${today}/favorites`);
+    await page.locator(`#app-nav a[href="${today}"]`).click();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+    expect(await fadeCount(page)).toBe(0);
+  });
+});
+
+// 行き先の操作の応答を止めておき、返す関数で流す。止めた後に来た呼び出しも、流した後はそのまま通す
+async function holdOperations(page: Page, pattern: RegExp): Promise<() => Promise<void>> {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const handler = async (route: Parameters<Parameters<Page['route']>[1]>[0]) => {
+    await gate;
+    await route.continue();
+  };
+  await page.route(pattern, handler);
+  return async () => {
+    release();
+    await page.unroute(pattern, handler);
+  };
+}
 
 // 選んだタブの縁の色（--color-line）。待つ間の行き先のタブが、現在地と同じ見た目になることを確かめる
 async function selectedTabBorder(page: Page): Promise<string> {
   return page.evaluate(() => {
     const probe = document.createElement('a');
     probe.className = 'mobile-tab';
-    probe.setAttribute('aria-current', 'page');
-    const nav = document.createElement('nav');
-    nav.className = 'mobile-tabs';
-    nav.append(probe);
-    document.body.append(nav);
+    probe.dataset.selected = '';
+    document.body.append(probe);
     const color = getComputedStyle(probe).borderTopColor;
-    nav.remove();
+    probe.remove();
     return color;
   });
 }
