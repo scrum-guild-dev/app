@@ -172,6 +172,54 @@ test('760px 以下では、畳んだままでも下のタブバーと浮きメ�
   await expect(page.locator('.nav-item-label').first()).toHaveCSS('opacity', '1');
 });
 
+test('760px 以下では、押したタブの読み込みを待つ間も先に選んだ印を移す', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto(`${today}/favorites`);
+  const tabs = page.locator('.mobile-tabs');
+  const todayTab = tabs.getByRole('link', { name: '今日やること', exact: true });
+  const favoritesTab = tabs.getByRole('link', { name: 'お気に入り', exact: true });
+  await expect(favoritesTab).toHaveAttribute('aria-current', 'page');
+
+  // 今日やることの読み込み（today と firstSteps の操作）を止めておき、待っている間の見た目を確かめる
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/**', async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await todayTab.click();
+  await expect(tabs).toHaveAttribute('data-pending', '');
+  await expect(todayTab).toHaveAttribute('data-pending-target', '');
+  // 読み上げの現在地は、着くまで元の画面に残す
+  await expect(favoritesTab).toHaveAttribute('aria-current', 'page');
+  const selectedBorder = await selectedTabBorder(page);
+  await expect(todayTab).toHaveCSS('border-top-color', selectedBorder);
+  await expect(favoritesTab).not.toHaveCSS('border-top-color', selectedBorder);
+
+  release();
+  await page.unroute('**/api/**');
+  await expect(todayTab).toHaveAttribute('aria-current', 'page');
+  await expect(todayTab).not.toHaveAttribute('data-pending-target');
+  await expect(tabs).not.toHaveAttribute('data-pending');
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+});
+
+// 選んだタブの縁の色（--color-line）。待つ間の行き先のタブが、現在地と同じ見た目になることを確かめる
+async function selectedTabBorder(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const probe = document.createElement('a');
+    probe.className = 'mobile-tab';
+    probe.setAttribute('aria-current', 'page');
+    const nav = document.createElement('nav');
+    nav.className = 'mobile-tabs';
+    nav.append(probe);
+    document.body.append(nav);
+    const color = getComputedStyle(probe).borderTopColor;
+    nav.remove();
+    return color;
+  });
+}
+
 test.describe('ホバーのできない端末（1024px の指のタブレット）', () => {
   test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true, isMobile: true });
 
