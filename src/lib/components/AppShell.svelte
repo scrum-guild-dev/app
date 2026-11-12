@@ -78,7 +78,13 @@
       })
     )
       return;
-    return startNavigationFade(navigation.complete, (update) => document.startViewTransition(update));
+    // 移る前の画面にはこの枠のタブバーがある。行き先にタブバーが無い（枠の外の画面へ出た）ときは、
+    // 帯だけが先に消えて見えないよう、入れ替えずにそのまま見せる
+    return startNavigationFade(
+      navigation.complete,
+      (update) => document.startViewTransition(update),
+      () => document.querySelector('.mobile-navigation') !== null,
+    );
   });
   onMount(() => {
     // 子の PageHead が登録を終えるまでは代わりの入口を描かない。

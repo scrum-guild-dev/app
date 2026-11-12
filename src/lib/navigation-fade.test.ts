@@ -41,7 +41,7 @@ describe('startNavigationFade', () => {
     let update: Promise<void> | undefined;
     const start = vi.fn((cb: () => Promise<void>) => {
       update = cb();
-      return { finished: Promise.resolve(), ready: Promise.resolve() };
+      return { finished: Promise.resolve(), ready: Promise.resolve(), skipTransition: vi.fn() };
     });
     await startNavigationFade(complete, start);
     expect(start).toHaveBeenCalledTimes(1);
@@ -52,6 +52,24 @@ describe('startNavigationFade', () => {
     finish();
     await update;
     expect(updated).toBe(true);
+  });
+
+  it('描き終えた画面で keep が偽なら入れ替えを取りやめ、真なら続ける', async () => {
+    for (const keep of [false, true]) {
+      const skipTransition = vi.fn();
+      let update: Promise<void> | undefined;
+      await startNavigationFade(
+        Promise.resolve(),
+        (cb) => {
+          // 本物の startViewTransition も、前の画像を撮った後で更新を呼ぶ
+          queueMicrotask(() => (update = cb()));
+          return { finished: Promise.resolve(), ready: Promise.resolve(), skipTransition };
+        },
+        () => keep,
+      );
+      await update;
+      expect(skipTransition).toHaveBeenCalledTimes(keep ? 0 : 1);
+    }
   });
 
   it('入れ替えを始められず投げたときは、入れ替えずに解ける', async () => {
@@ -69,7 +87,11 @@ describe('startNavigationFade', () => {
       let update: Promise<void> | undefined;
       await startNavigationFade(Promise.reject(new Error('aborted')), (cb) => {
         update = cb();
-        return { finished: Promise.reject(new Error('skipped')), ready: Promise.reject(new Error('skipped')) };
+        return {
+          finished: Promise.reject(new Error('skipped')),
+          ready: Promise.reject(new Error('skipped')),
+          skipTransition: vi.fn(),
+        };
       });
       await expect(update).resolves.toBeUndefined();
       await new Promise((resolve) => setTimeout(resolve, 0));

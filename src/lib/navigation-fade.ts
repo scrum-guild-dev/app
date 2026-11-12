@@ -21,25 +21,32 @@ export function shouldFadeNavigation(input: NavigationFadeInput): boolean {
   return input.from !== input.to;
 }
 
-type Transition = { finished: Promise<unknown>; ready: Promise<unknown> };
+type Transition = { finished: Promise<unknown>; ready: Promise<unknown>; skipTransition: () => void };
 type StartTransition = (update: () => Promise<void>) => Transition;
 
 // onNavigate に返す Promise。解けると SvelteKit が新しい画面を描き、描き終える（complete）まで入れ替えの「後」の画像を待つ。
+// 描き終えた画面で keep() が偽なら（タブバーの無い枠の外の画面へ出たなど）、入れ替えずにそのまま見せる。
 // 中断や失敗した移動では入れ替えをやめるだけにし、拒否を外へ漏らさない（漏れると画面のエラーの報告に載る）
-export function startNavigationFade(complete: Promise<unknown>, start: StartTransition): Promise<void> {
+export function startNavigationFade(
+  complete: Promise<unknown>,
+  start: StartTransition,
+  keep: () => boolean = () => true,
+): Promise<void> {
   return new Promise<void>((ready) => {
-    let transition: Transition;
+    let transition: Transition | undefined;
     try {
       transition = start(async () => {
         ready();
         await complete.catch(() => {});
+        if (!keep()) transition?.skipTransition();
       });
     } catch {
       // 入れ替えを始められなければ、入れ替えずに移る（拒否すると SvelteKit の移動そのものが止まる）
       ready();
       return;
     }
-    transition.finished.catch(() => {});
+    // 更新が呼ばれずに入れ替えが終わったとき（取り消し、時間切れ）も、移動を止めない
+    transition.finished.catch(() => {}).finally(() => ready());
     transition.ready.catch(() => {});
   });
 }
