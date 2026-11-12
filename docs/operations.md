@@ -74,7 +74,14 @@ Workers & Pages の「Create application」→「Continue with GitHub」で、�
 - `refs/tags/v*` の作成・更新・削除を管理者に絞る（#1164 の申し送り。Environment `release` が縛るのはジョブの ref だけで、タグを作れる人は Release のワークフローの YAML を差し替えられるため）
 - `refs/heads/production` の更新を Release の GitHub App だけに許し（bypass をその App だけにする）、削除と force push を禁じる。Workers Builds は `production` のコミットの中のスクリプト（`scripts/release-version.ts`、`scripts/deploy.ts`）でビルドとデプロイをするので、デプロイのスクリプトのタグの検査は手違いを止める踏み線にすぎず、`production` を直に動かせる人は Release を経ないコードや古い版を本番に出せるため
 
-切り替えは「ダッシュボードの切り替え → #1165 の PR のマージ → v0.1.0 の publish」の順にする。先にマージすると、`main` を見たままの Workers Builds がタグの無い HEAD でビルドを始め、本番に触らずに失敗するビルドが残るため。
+切り替えは「ダッシュボードの切り替え → #1165 の PR のマージ → `production` を作る → v0.1.0 の publish」の順にする。先にマージすると、`main` を見たままの Workers Builds がタグの無い HEAD でビルドを始め、本番に触らずに失敗するビルドが残るため。
+
+`production` は、最初の1回だけ人が作る。Release のワークフロー（`scripts/release-production.ts`）は、今ある `production` をタグのコミットへ fast-forward するだけで、ブランチを作らない。無いまま publish すると「origin/production を引けない。先に人が production ブランチを作る」で止まり、本番は前の版のまま（2026-11-12 の v0.1.0 の最初の publish がこれで止まった）。
+
+1. 出すタグのコミットの祖先で、`v*` のタグの付いていない `main` のコミットを選ぶ。ふつうはタグのコミットの1つ前（`<タグのコミット>^`）。タグのコミットそのものでは作らない。判定が「production は既に v0.1.0 を指している」で断り、ワークフローが進めないため
+2. GitHub の Branches の「New branch」で、名前を `production`、元を選んだコミットにして作る。手元からなら `git push origin <選んだコミット>:refs/heads/production`。`production` の Ruleset が作成も App だけに絞っていて断られたら、作る間だけ管理者を bypass に入れ、作った後に外す
+3. 作った push で Workers Builds がビルドを始める。そのコミットにはタグが無いので、ビルドのコマンドが版を決められずに止まり、本番に触らない。失敗したビルドが1件残るが、そのままでよい
+4. 既に publish して止まった実行があれば、Actions の Release の実行で「Re-run jobs」を押す。同じ publish のイベントで判定し直し、`production` をタグのコミットへ進める。まだ publish していなければ、下の「出し方」のとおり publish する
 
 | 項目 | 値 |
 | --- | --- |
@@ -252,7 +259,7 @@ Worker のシークレットは、ダッシュボードの Worker の Settings �
 本番に出すのは、人が Release を publish したときだけ。`main` へのマージは本番に出ない。Claude のセッションは publish しない。
 
 1. 人が Releases の下書き（`docs/development.md` の「リリース」）のノートと版を確かめ、プレリリースにせずに publish する。publish でタグ `vX.Y.Z` ができる
-2. Release のワークフローが `production` をタグのコミットへ進める（Actions の Release の実行で見る）
+2. Release のワークフローが `production` をタグのコミットへ進める（Actions の Release の実行で見る）。`production` がまだ無ければ止まるので、上の「Workers Builds の接続」の手順で作ってから実行を走らせ直す
 3. `production` への push で Workers Builds がビルドし（版はタグの `vX.Y.Z`）、デプロイのコマンドが `scripts/deploy.ts` の手順を動かす。build watch paths の Exclude は空なので、文書だけの Release でもビルドは走る
 
 デプロイのスクリプトの手順は次のとおり。
