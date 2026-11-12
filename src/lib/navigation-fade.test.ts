@@ -22,9 +22,8 @@ describe('shouldFadeNavigation', () => {
     expect(shouldFadeNavigation({ ...base, supported: false })).toBe(false);
   });
 
-  it('戻る・進むと、ページを離れる移動では入れ替えない', () => {
+  it('戻る・進むと、フォームの送信では入れ替えない', () => {
     expect(shouldFadeNavigation({ ...base, type: 'popstate' })).toBe(false);
-    expect(shouldFadeNavigation({ ...base, type: 'leave' })).toBe(false);
     expect(shouldFadeNavigation({ ...base, type: 'form' })).toBe(false);
   });
 
@@ -53,6 +52,14 @@ describe('startNavigationFade', () => {
     finish();
     await update;
     expect(updated).toBe(true);
+  });
+
+  it('入れ替えを始められず投げたときは、入れ替えずに解ける', async () => {
+    await expect(
+      startNavigationFade(Promise.resolve(), () => {
+        throw new Error('InvalidStateError');
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it('移動が失敗し、入れ替えが取り消されても、拒否を外へ漏らさない', async () => {

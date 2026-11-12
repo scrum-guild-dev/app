@@ -65,7 +65,7 @@
   let mounted = $state(false);
 
   // 760px 以下で別の画面へ移るとき、画面を短く入れ替える（View Transitions。タブバーは動かさない）。
-  // onNavigate はデータの読み込みが済んだ後に呼ばれるので、読み込みの待ちは延ばさない。
+  // onNavigate はデータの読み込みが済んだ後に呼ばれるので、読み込みの待ちには重ならない（前の画面の画像を撮る1フレームほどは遅れる）。
   onNavigate((navigation) => {
     if (
       !shouldFadeNavigation({
