@@ -44,7 +44,7 @@ try {
     // セッションの CDPATH は、相対の cd の行き先を cwd の外へ変える（judgeBash は空文字を無いものとする）。
     // GH_REPO、GH_HOST、GIT_DIR、GIT_WORK_TREE、GIT_CONFIG_* は、gh が宛先と現在のブランチを決める元になるので、起動元の環境にあっても見る
     const env = Object.fromEntries(
-      ['CDPATH', 'GH_REPO', 'GH_HOST', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS'].map((name) => [name, process.env[name]]),
+      ['CDPATH', 'GH_REPO', 'GH_HOST', 'GIT_DIR', 'GIT_WORK_TREE', ...Object.keys(process.env).filter((name) => /^GIT_CONFIG_/.test(name))].map((name) => [name, process.env[name]]),
     );
     const verdict = judgeBash(command, { cwd: input.cwd ?? process.cwd(), branchOf, scriptOf, packageDirOf, env });
     if (verdict) {

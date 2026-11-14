@@ -713,6 +713,8 @@ function scanCommand(words) {
         continue;
       }
       const takesValue =
+        (previous === 'sudo' && w === '-E') || (['command', 'time'].includes(previous) && w === '-p') ? false :
+        (previous === 'exec' && w === '-a') || (previous === 'stdbuf' && ['-o', '-e', '-i'].includes(w)) ? true :
         previous === 'xargs'
           ? takesValueInXargs(w) || (w !== '-p' && PREFIX_FLAGS_WITH_VALUE.has(w))
           : PREFIX_FLAGS_WITH_VALUE.has(w) || (previous === 'env' && takesValueInEnv(w)) || (previous === 'arch' && ARCH_FLAGS_WITH_VALUE.has(w));

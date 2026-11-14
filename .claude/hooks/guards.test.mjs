@@ -6446,16 +6446,17 @@ describe('#1180: 設定ファイル、環境変数、GraphQL の変数、refs/ �
       ['通す', 'HOME=/tmp/h git status', 'allow'],
       ['通す', 'HOME=/tmp/h git log --oneline', 'allow'],
       ['通す', 'env HOME=/tmp/h git diff', 'allow'],
-      ['通す', 'GIT_CONFIG_GLOBAL=/dev/null git diff', 'allow'],
-      ['通す', 'GIT_CONFIG_SYSTEM=/dev/null git status', 'allow'],
-      ['通す', 'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=cat git log', 'allow'],
-      ['通す', `GIT_CONFIG_PARAMETERS="'core.pager=cat'" git show HEAD`, 'allow'],
+      // #293: GIT_CONFIG_* は設定値を読まず、git のサブコマンドを問わず代入自体に確認を挟む。
+      ['すり抜け', 'GIT_CONFIG_GLOBAL=/dev/null git diff', 'ask'],
+      ['すり抜け', 'GIT_CONFIG_SYSTEM=/dev/null git status', 'ask'],
+      ['すり抜け', 'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=cat git log', 'ask'],
+      ['すり抜け', `GIT_CONFIG_PARAMETERS="'core.pager=cat'" git show HEAD`, 'ask'],
       ['通す', 'XDG_CONFIG_HOME=/tmp/x git fetch origin', 'allow'],
       ['通す', 'export HOME=/tmp/h; git status', 'allow'],
-      ['通す', 'export GIT_CONFIG_GLOBAL=/tmp/x; git log', 'allow'],
+      ['すり抜け', 'export GIT_CONFIG_GLOBAL=/tmp/x; git log', 'ask'],
       // 道具の前の代入はその区切りだけに効くので、後ろの区切りの push には届かない
       ['通す', 'HOME=/tmp/h ls && git push origin 21-x', 'allow'],
-      ['通す', 'GIT_CONFIG_GLOBAL=/tmp/x git status; git push origin 21-x', 'allow'],
+      ['すり抜け', 'GIT_CONFIG_GLOBAL=/tmp/x git status; git push origin 21-x', 'ask'],
       // push の後で設定しても、その push には効かない
       ['通す', 'git push origin 21-x && export HOME=/tmp/h', 'allow'],
       // 名前が似ているだけの変数
