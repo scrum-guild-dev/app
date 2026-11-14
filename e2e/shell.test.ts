@@ -910,6 +910,51 @@ test('画面の build に埋めた版が API の版と同じ', async ({ request 
   expect(await res.json()).toEqual({ version });
 });
 
+test('組織の画面の右下に、画面の build の版を出す', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(today);
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+  const badge = page.locator('.app-version');
+  await expect(badge).toHaveText(`版 ${version}`);
+  const box = await badge.boundingBox();
+  if (!box) throw new Error('版の位置が取れない');
+  // 右下の角に置く（右は 16px の余白、下は 2px の余白）。縦のスクロールバーを除いた幅で測る
+  const { width, height } = await page.evaluate(() => ({
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight,
+  }));
+  expect(width - (box.x + box.width)).toBeCloseTo(16, 0);
+  expect(height - (box.y + box.height)).toBeCloseTo(2, 0);
+  // 操作を受けない
+  await expect(badge).toHaveCSS('pointer-events', 'none');
+});
+
+test('390px では、版が下のタブと重ならない', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(today);
+  const tabs = page.locator('.mobile-tabs');
+  await expect(tabs).toBeVisible();
+  const badge = page.locator('.app-version');
+  await expect(badge).toHaveText(`版 ${version}`);
+  const tabsBox = await tabs.boundingBox();
+  const badgeBox = await badge.boundingBox();
+  if (!tabsBox || !badgeBox) throw new Error('下のタブか版の位置が取れない');
+  expect(badgeBox.y).toBeGreaterThanOrEqual(tabsBox.y + tabsBox.height);
+  // CI の版（40 桁の SHA）でも画面の幅に収める
+  expect(badgeBox.x).toBeGreaterThanOrEqual(0);
+  expect(badgeBox.x + badgeBox.width).toBeLessThanOrEqual(390);
+});
+
+test('組織の枠の外（ログインの画面）にも版を出す', async ({ browser, baseURL }) => {
+  // beforeEach のログインを持たない context で、ログインの画面を開く
+  const context = await browser.newContext({ baseURL });
+  const page = await context.newPage();
+  await page.goto('/login');
+  await expect(page.getByRole('heading', { level: 1, name: 'ログイン' })).toBeVisible();
+  await expect(page.locator('.app-version')).toHaveText(`版 ${version}`);
+  await context.close();
+});
+
 // 本文（.content）は幅の上限を持たない。広い画面でも左のメニューの右から画面の右の端まで広がる
 // 4000px は、左のメニューを広げても畳んでも、2000px 台の上限を見逃さない幅
 const WIDE_VIEWPORT = { width: 4000, height: 900 };

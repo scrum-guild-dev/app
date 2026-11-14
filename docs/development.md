@@ -352,7 +352,7 @@ vite の転送先も同じ値から作るので、画面は自分のワークツ
 
 ### 版
 
-本番の版は Release のタグ（`vX.Y.Z`。下の「リリース」）にする（2026-11-11 に人が決めた。#1165）。build のときの環境変数 `APP_VERSION` を、画面には SvelteKit の `kit.version.name` として、API には wrangler の `vars` の上書き（`--var APP_VERSION:<vX.Y.Z>`）として渡し、`/api/health` の `version` と画面の版を同じ値にする。本番では、Workers Builds が checkout したコミット（`production`）を指す `vX.Y.Z` のタグを `scripts/release-version.ts` が読んで渡す（複数あれば最大の版。下の「CD」）。どのコミットの版かは、版の message（`<vX.Y.Z> <コミットの SHA>`）で分かる。版の正はタグだけにし、`package.json` の `version` には持たない（タグの前に版を上げるコミットが要り、人が確かめた下書きとずれるため）。手元で埋めなければ `dev` になる（`pnpm e2e` は除く。下の「e2e のサーバー」）。CI と手元の版（コミットの SHA、`dev`、e2e の版）は変えない。
+本番の版は Release のタグ（`vX.Y.Z`。下の「リリース」）にする（2026-11-11 に人が決めた。#1165）。build のときの環境変数 `APP_VERSION` を、画面には SvelteKit の `kit.version.name` として、API には wrangler の `vars` の上書き（`--var APP_VERSION:<vX.Y.Z>`）として渡し、`/api/health` の `version` と画面の版を同じ値にする。本番では、Workers Builds が checkout したコミット（`production`）を指す `vX.Y.Z` のタグを `scripts/release-version.ts` が読んで渡す（複数あれば最大の版。下の「CD」）。どのコミットの版かは、版の message（`<vX.Y.Z> <コミットの SHA>`）で分かる。版の正はタグだけにし、`package.json` の `version` には持たない（タグの前に版を上げるコミットが要り、人が確かめた下書きとずれるため）。手元で埋めなければ `dev` になる（`pnpm e2e` は除く。下の「e2e のサーバー」）。CI と手元の版（コミットの SHA、`dev`、e2e の版）は変えない。画面は全画面の右下に版を出す（`docs/design.md` の「画面の版」）。
 
 ### e2e のサーバー
 

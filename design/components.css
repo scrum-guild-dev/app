@@ -2157,6 +2157,28 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 .slash-item[aria-selected="true"] { background: var(--color-accent-soft); box-shadow: inset 3px 0 0 var(--color-accent); font-weight: 700; }
 @media (max-width: 760px), (pointer: coarse) { .slash-item { min-height: 44px; align-items: center; } }
 
+/* ===== 画面の版 =====
+ * 全画面の右下に、読み込んだ画面の build の版を小さく出す。トーストと下のタブが下に空ける --space-4 の余白に収め、
+ * 操作を受けない（pointer-events: none）。重なる部品（上の帯、引き出し、ダイアログ、トースト）より下に置く。
+ * 薄さは opacity や --color-faint でなく大きさで出す（axe の文字のコントラスト 4.5:1 を保つため）。
+ * 地を塗るのは、下を流れる要素や現代風の地のグラデーションでコントラストが変わらないようにするため。
+ * CI の e2e の版は 40 桁の SHA なので、狭い幅ではみ出さないよう省略する */
+.app-version {
+  position: fixed; z-index: 3;
+  right: max(var(--space-4), env(safe-area-inset-right, 0px)); bottom: calc(2px + env(safe-area-inset-bottom, 0px));
+  max-width: min(24ch, calc(100vw - 2 * var(--space-4))); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin: 0; padding-inline: var(--space-1); background: var(--color-bg); color: var(--color-muted);
+  font-size: var(--text-xs); line-height: 1; font-variant-numeric: tabular-nums; pointer-events: none;
+}
+/* 760px 以下の画面の入れ替え（View Transitions）で、版が本文と一緒に動かないよう入れ替えの外に置く */
+/* カタログの静止の見本は、固定せずに並びの中へ置く */
+.app-version.is-static { position: static; display: inline-block; }
+@media (max-width: 760px) {
+  .app-version:not(.is-static) { view-transition-name: app-version; }
+  ::view-transition-group(app-version), ::view-transition-new(app-version) { animation: none; }
+  ::view-transition-old(app-version) { display: none; }
+}
+
 /* ===== 知らせ（トースト） ===== */
 .toasts { position: fixed; z-index: 40; right: max(var(--space-4), env(safe-area-inset-right, 0px)); bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); display: grid; gap: var(--space-2); }
 @media (max-width: 760px) {
