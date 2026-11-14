@@ -72,7 +72,7 @@ export function removeDepartedPartyMemberStatements(
       q
         .deleteFrom('epic_party_members')
         .where('user_id', '=', userId)
-        .where((eb) => eb.exists(epics(q).select('e.id').whereRef('e.id', '=', 'epic_party_members.epic_id')))
+        .where((eb) => eb.exists(epics(q).select('e.id').where('e.id', '=', eb.ref('epic_party_members.epic_id'))))
         .where((eb) => eb.exists(succeeded(q))),
     ),
   ];
