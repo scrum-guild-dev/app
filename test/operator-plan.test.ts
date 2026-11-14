@@ -493,6 +493,69 @@ describe('契約の変更', () => {
     });
   });
 
+  // 契約を書く条件の列を1つずつ外したときに落ちるよう、読んだ後に1列だけを変える
+  for (const [label, column, value] of [
+    ['人数の上限だけ', 'member_limit', 20],
+    ['添付ファイルの上限だけ', 'attachment_quota_bytes', 40 * GIB],
+  ] as const) {
+    for (const contracted of [false, true]) {
+      test(`読んだ後に${label}が変わっていれば、${contracted ? '契約のある' : '未契約の'}組織でも 409 で書かない`, async () => {
+        const organization = await createOrganization();
+        if (contracted) await insertContract(organization.id, { plan: 'team', billing_interval: 'monthly' });
+        const racing = racingAfterRead(async () => {
+          const db = commonDb(env);
+          await db.batch([
+            db.statement((q) =>
+              q
+                .updateTable('organizations')
+                .set({ [column]: value })
+                .where('id', '=', organization.id),
+            ),
+          ]);
+        });
+        const res = await changePlanBy(
+          await operatorToken(),
+          organization.slug,
+          { plan: 'business', billing_interval: 'monthly' },
+          { env: racing.env },
+        );
+        expect(racing.state.armed).toBe(false);
+        expect(res.status).toBe(409);
+        expect((await organizationRow(organization.id))?.[column]).toBe(value);
+        if (contracted) expect(await contractRow(organization.id)).toMatchObject({ plan: 'team', updated_at: AT });
+        else expect(await contractRow(organization.id)).toBeUndefined();
+      });
+    }
+  }
+
+  for (const column of ['extra_10gb_units', 'extra_50gb_units'] as const) {
+    test(`読んだ後に契約の ${column} だけが変わっていれば 409 で、契約を書き換えない`, async () => {
+      const organization = await createOrganization();
+      await insertContract(organization.id, { plan: 'team', billing_interval: 'monthly' });
+      const racing = racingAfterRead(async () => {
+        const db = commonDb(env);
+        await db.batch([
+          db.statement((q) =>
+            q
+              .updateTable('organization_contracts')
+              .set({ [column]: 1 })
+              .where('organization_id', '=', organization.id),
+          ),
+        ]);
+      });
+      const res = await changePlanBy(
+        await operatorToken(),
+        organization.slug,
+        { plan: 'business', billing_interval: 'monthly' },
+        { env: racing.env },
+      );
+      expect(racing.state.armed).toBe(false);
+      expect(res.status).toBe(409);
+      expect(await contractRow(organization.id)).toMatchObject({ plan: 'team', [column]: 1 });
+      expect(await organizationRow(organization.id)).toMatchObject(TEAM);
+    });
+  }
+
   test('未契約と読んだ後に別の運用者が先に契約を付けていれば 409 で、先の契約と上限を書き換えない', async () => {
     const organization = await createOrganization({ trial_ends_on: '2026-12-01' });
     let armed = true;
