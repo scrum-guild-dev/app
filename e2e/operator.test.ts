@@ -2218,8 +2218,8 @@ test.describe('運用者', () => {
       await expect(dialog).toContainText('今はビジネス・月払いで、人数 38 人（上限 50 人）');
       await expect(dialog.getByRole('radio', { name: /ビジネス/ })).toBeChecked();
       await expect(dialog.getByRole('radio', { name: '月払い' })).toBeChecked();
-      // 停止中は、契約しても停止したままであることを添える。お試しの注意は出さない
-      await expect(dialog).toContainText('停止中の組織は、契約しても停止したままです。');
+      // 今の契約のままでは、停止したままの注記もお試しの注記も出さない（契約を変えるときだけ添える）
+      await expect(dialog).not.toContainText('契約しても停止したままです');
       await expect(dialog).not.toContainText('お試しはここで終わり');
 
       const change = dialog.getByRole('button', { name: '変える' });
@@ -2231,6 +2231,9 @@ test.describe('運用者', () => {
 
       await dialog.getByRole('radio', { name: /チーム/ }).check();
       await expect(change).toHaveAttribute('aria-disabled', 'false');
+      // 契約を変えるときは、停止中なら停止したままであることを添える。お試しの注意は出さない
+      await expect(dialog).toContainText('停止中の組織は、契約しても停止したままです。');
+      await expect(dialog).not.toContainText('お試しはここで終わり');
       await expect(dialog.locator('.callout.is-warn')).toHaveText([
         /今の人数（38 人）が、変えた後の上限（15 人）を超えます。/,
         /選んだ上限は今の合計より小さい/,

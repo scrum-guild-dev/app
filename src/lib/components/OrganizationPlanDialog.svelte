@@ -268,7 +268,7 @@
       {#if target?.trial && !unchanged}
         <p class="field-hint">{t('operatorPlanTrialNote')}</p>
       {/if}
-      {#if target?.suspended}
+      {#if target?.suspended && !unchanged}
         <p class="field-hint">{t('operatorPlanSuspendedNote', { organization: t('organization') })}</p>
       {/if}
       {#if target?.contract === null}
