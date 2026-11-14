@@ -3343,6 +3343,8 @@ function judgeSegment(words, ctx) {
       // bash/sh は -c の後でもオプションを読み、最初の位置引数を本文にする。
       // -o/+o と -O/+O の末尾のフラグは、次の語をオプション名として取る。
       let at = c + 1;
+      // -co pipefail や -cO extglob は、-c と同じ語の末尾の o/O も次の値を取る。
+      if (/[oO]$/.test(args[c])) at++;
       for (; at < args.length; at++) {
         if (args[at] === '--') { at++; break; }
         if (!/^[-+][a-zA-Z]+$/.test(args[at])) break;
