@@ -6896,3 +6896,123 @@ describe('#1180: 崩す 1 周目', () => {
     ]);
   });
 });
+
+describe('#1180: 崩す 2 周目', () => {
+  const PUSH = 'git push origin 21-x';
+  const CREATE_REF = `gh api graphql -f query='mutation($n:String!){createRef(input:{repositoryId:"R",name:$n,oid:"abc"}){ref{id}}}'`;
+  const run = (cases) => {
+    for (const [kind, command, expected] of cases) {
+      test(`[${kind}] ${JSON.stringify(command)} は ${expected}`, () => assert.equal(decision(command), expected, command));
+    }
+  };
+
+  describe('設定を読む場所を変える環境変数の、代入と宣言の別の形', () => {
+    run([
+      // 組み込みの道具を builtin、command、\ で呼んでも、宣言と read は同じに読む
+      ['すり抜け', `builtin export HOME=/tmp/h; ${PUSH}`, 'ask'],
+      ['すり抜け', `command export HOME=/tmp/h; ${PUSH}`, 'ask'],
+      ['すり抜け', `\\export HOME=/tmp/h; ${PUSH}`, 'ask'],
+      ['すり抜け', `builtin read HOME < /tmp/x; ${PUSH}`, 'ask'],
+      ['すり抜け', `while read HOME; do ${PUSH}; done < /tmp/x`, 'ask'],
+      // 関数が引数をそのまま動かす形（"$@"）
+      ['すり抜け', `f(){ "$@"; }; HOME=/tmp/h f ${PUSH}`, 'ask'],
+      ['すり抜け', `f(){ HOME=/tmp/h "$@"; }; f ${PUSH}`, 'ask'],
+      // 欠陥: bash では HOME[0]=x はスカラーの変数 HOME の値を書き換え、export 済みの HOME として子の git に渡る
+      // （bash 5.3 で HOME[0]=/tmp/h; env の HOME=/tmp/h を確かめた）。決定の「HOME= を付けた git」の言い換えだが、
+      // GIT_CONFIG_ASSIGNMENT が添字付きの代入を見ないので allow になる
+      ['すり抜け', `HOME[0]=/tmp/h; ${PUSH}`, 'ask'],
+      // 欠陥: declare -n の nameref を通した代入は、参照先の HOME を設定する（bash 5.3 で確かめた）。
+      // 宣言の引数は R=HOME で、次の代入は R=… なので、どちらも HOME の代入に見えず allow になる
+      ['すり抜け', `declare -n R=HOME; R=/tmp/h; ${PUSH}`, 'ask'],
+      // 欠陥: 算術の式の代入（((HOME=5))）も HOME を設定する（bash 5.3 で env の HOME=5 を確かめた）。
+      // 1 周目で直した read、for、printf -v と同じく、シェルが変数を設定する形なのに allow になる
+      ['すり抜け', `((HOME=5)); ${PUSH}`, 'ask'],
+      // 欠陥: bash は . を含む関数の名前（my.push）を許し、呼び出しの前の代入は関数の中の git に渡る（bash 5.3 で確かめた）。
+      // functionNames の正規表現が [\w-] の名前しか拾わず、1 周目で直した「関数を呼ぶ前の代入」を名前の付け方だけで抜ける
+      ['すり抜け', `my.push(){ ${PUSH}; }; HOME=/tmp/h my.push`, 'ask'],
+      // 欠陥: eval で定義した関数も同じく呼び出しの前の代入を受ける（bash 5.3 で確かめた）。
+      // runsGitPush が区切りの道具（eval）だけを見て、eval の文字列の中の git push を数えないので allow になる
+      ['すり抜け', `eval 'f(){ ${PUSH}; }'; HOME=/tmp/h f`, 'ask'],
+      ['通す', `bash -c 'export HOME=/tmp/h'; ${PUSH}`, 'allow'],
+      ['通す', `HOME=/tmp/h true | ${PUSH}`, 'allow'],
+      ['通す', `cd ~ && ${PUSH}`, 'allow'],
+      // 誤検知: push は関数の定義より前で、関数 f は push しない。保存したテストの「push の後で設定しても、その push には効かない」
+      // （git push origin 21-x && export HOME=/tmp/h は allow）と同じく allow のはずが、runsGitPush がコマンドのどこかの push を数えるので ask になる
+      ['通す', `${PUSH} && f(){ ls; }; HOME=/tmp/h f`, 'allow'],
+    ]);
+  });
+
+  describe('cd、pushd、popd の行き先の別の形', () => {
+    run([
+      // 欠陥: ~- は bash のチルダ展開で $OLDPWD（直前の場所）になり、cd - と同じく .git へ戻る（bash 5.3 で pwd を確かめた）。
+      // cdStateAfter が ~- を ~ で始まる絶対の行き先として扱うので、.git/config への書き込みが allow になる
+      ['すり抜け', 'cd .git; cd /tmp; cd ~-; echo x >> config', 'ask'],
+      // 欠陥: cd "$OLDPWD" も cd - と同じ行き先（bash 5.3 で確かめた）。$ で始まる行き先として前の字面を捨てるので allow になる
+      ['すり抜け', 'cd .git; cd /tmp; cd "$OLDPWD"; echo x >> config', 'ask'],
+      // 欠陥: pushd +1 はスタックを回して 1 番目（.git）を先頭にし、そこへ移る（bash 5.3 で確かめた）。
+      // cdStateAfter が +1 を相対の名前として /tmp/+1 につなぐので allow になる
+      ['すり抜け', 'pushd .git; pushd /tmp; pushd +1; echo x >> config', 'ask'],
+      // 欠陥: pushd -n はスタックに足すだけで場所を変えない（bash 5.3 で pwd が .git のままを確かめた）。
+      // cdStateAfter が -n を行き先の名前として .git/-n につなぐので、.git/config への書き込みが allow になる
+      ['すり抜け', 'cd .git && pushd -n /tmp && echo x >> config', 'ask'],
+      // 誤検知: popd +1 はスタックの 1 番目（.git）を捨て、場所は /tmp のまま（bash 5.3 で確かめた）。書き込み先は /tmp/config で、
+      // git の設定ファイルではない。cdStateAfter が popd の引数を見ずに .git へ戻すので ask になる
+      ['通す', 'pushd .git; pushd /tmp; popd +1; echo x >> config', 'allow'],
+      // 誤検知: 括弧の中の cd はサブシェルだけに効き、括弧の後の書き込み先は ./config（シェルの実際の振る舞い）。
+      // 作業場所と cdWords を括弧の外へ持ち越すので ask になる
+      ['通す', '(cd .git && cat config); echo x > config', 'allow'],
+    ]);
+  });
+
+  describe('git の設定ファイルの名前の別の書き方と、別の書き込みの道具', () => {
+    run([
+      ['すり抜け', 'echo x >> .git/con\\fig', 'ask'],
+      // 欠陥: bash と zsh はリダイレクトの先の glob を展開し、1 つに決まれば .git/config へ書く（bash 5.3 と /bin/bash で確かめた）。
+      // cp と tee の引数の glob とブレース展開も同じく .git/config になる。字面に config が無いので allow になる
+      ['すり抜け', 'echo x >> .git/conf*', 'ask'],
+      ['すり抜け', 'cp /tmp/x .git/conf[i]g', 'ask'],
+      ['すり抜け', 'echo x | tee .git/{config,x}', 'ask'],
+      // 欠陥: docs は curl -o と wget -O を書き込みの道具に挙げる。curl の --output-dir と、-O（URL の末尾の名前で書く）、
+      // wget の -P（--directory-prefix）も .git/config を書く（curl 8.23 と wget で、既にある .git/config の上書きまで確かめた）。
+      // downloadTargets が -o と -O の値の字面しか見ないので allow になる
+      ['すり抜け', 'curl --output-dir .git -o config https://example.com/x', 'ask'],
+      ['すり抜け', 'curl --output-dir .git -O https://example.com/config', 'ask'],
+      ['すり抜け', 'cd .git && curl -O https://example.com/config', 'ask'],
+      ['すり抜け', 'wget -P .git https://example.com/config', 'ask'],
+      // 欠陥: ワークツリーの .git は「gitdir: <本体>/.git/worktrees/<名前>」の1行のファイルで（このワークツリーで確かめた）、
+      // その ../../config は本体の .git/config。1 周目で直した rev-parse と同じ場所を、rev-parse を使わずに引く形で allow になる
+      ['すり抜け', `echo x >> "$(sed 's/gitdir: //' .git)/../../config"`, 'ask'],
+      // 欠陥: git は $(prefix)/etc/gitconfig を system の設定として読み（git-config(1) の FILES）、Homebrew の git では
+      // /opt/homebrew/etc/gitconfig を人の権限で書ける（git config --system --list --show-origin で確かめた）。
+      // 決定は設定ファイルの経路を全部 ask にし、GIT_CONFIG_SYSTEM で差し替える先も ask にしているのに、名前の . が無いので allow になる
+      ['すり抜け', 'echo x >> /opt/homebrew/etc/gitconfig', 'ask'],
+      ['通す', 'cp ~/dotfiles/ssh/config ~/.ssh/', 'allow'],
+      ['通す', 'cp x/config ~/.config/foo/', 'allow'],
+      ['通す', 'cd "$(git rev-parse --show-toplevel)" && echo x > config', 'allow'],
+    ]);
+  });
+
+  describe('GraphQL の createRef の名前の変数', () => {
+    run([
+      ['すり抜け', `${CREATE_REF} --field=n=@x`, 'ask'],
+      ['すり抜け', `${CREATE_REF.replace('name:$n', 'name:﻿$n')} -f n="$P"`, 'ask'],
+      // 欠陥: GraphQL の仕様ではカンマも空白と同じ読み飛ばすトークン（Ignored: UnicodeBOM、WhiteSpace、LineTerminator、Comment、Comma）で、
+      // name:,$n と name,:$n は name:$n と同じ。実装の skip が空白とコメントだけを読み飛ばすので allow になる
+      ['すり抜け', `${CREATE_REF.replace('name:$n', 'name:,$n')} -f n="$P"`, 'ask'],
+      ['すり抜け', `${CREATE_REF.replace('name:$n', 'name,:$n')} -f n="$P"`, 'ask'],
+      ['すり抜け', `gh api graphql -f query='mutation($i:CreateRefInput!){createRef(input:,$i){ref{id}}}' -F i=@x.json`, 'ask'],
+    ]);
+  });
+
+  describe('「見ない」の理由（書き換えた後の push は今のブランチで止まる）の固定', () => {
+    run([
+      ['断る', 'git checkout --orphan main && git push origin HEAD', 'deny'],
+      ['断る', 'git switch -c main && git push -u origin HEAD', 'deny'],
+      // 欠陥: docs は手元の main を書き換える操作を見ない理由を「書き換えた後の git push は、宛先の名前と今のブランチで止まる」とする。
+      // git branch -m main は今のブランチの名前を main に変え、git symbolic-ref HEAD refs/heads/main は今のブランチを main にする。
+      // git push origin HEAD は今のブランチを同じ名前で push する（git-push(1)）ので main へ届くが、今のブランチの追跡が checkout と switch しか見ないので allow になる
+      ['すり抜け', 'git branch -m main && git push origin HEAD', 'deny'],
+      ['すり抜け', 'git symbolic-ref HEAD refs/heads/main && git push origin HEAD', 'deny'],
+    ]);
+  });
+});
