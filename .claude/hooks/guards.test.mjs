@@ -7016,3 +7016,73 @@ describe('#1180: 崩す 2 周目', () => {
     ]);
   });
 });
+
+describe('#1180: 崩す 3 周目', () => {
+  const run = (cases) => {
+    for (const [kind, command, expected] of cases) {
+      test(`[${kind}] ${JSON.stringify(command)} は ${expected}`, () => assert.equal(decision(command), expected, command));
+    }
+  };
+
+  describe('サブシェルの閉じと作業場所の戻し', () => {
+    run([
+      // 欠陥: docs は「サブシェルの中の cd は外へ持ち越さない」とし、bash と zsh でも (cd /;) の後の作業場所は元の .git のまま
+      // （bash 5.3 と zsh で cd .git; (cd /;); pwd が .git を出すのを確かめた）。だから > config は .git/config に書く。
+      // 閉じの ) の手前が ; や改行や & だと、) は語の無い区切りになって closesSubshell の印が付く区切りが無く、
+      // 作業場所が / のまま外へ持ち越されて allow になる
+      ['すり抜け', 'cd .git; (cd /;); echo x > config', 'ask'],
+      ['すり抜け', 'cd .git; (cd /\n); echo x > config', 'ask'],
+      ['すり抜け', 'cd .git; (cd / &); echo x > config', 'ask'],
+      // 欠陥: 2つの ) が続けて閉じると、内側の区切りの印で戻すのは1段だけで、外側のサブシェルの cd / が外へ持ち越される（bash で pwd が .git のまま）
+      ['すり抜け', 'cd .git; (cd /; (cd /tmp)); echo x > config', 'ask'],
+      // 欠陥: 上と同じ持ち越しで、止めすぎる側にも倒れる。サブシェルの中の cd .git は外へ持ち越されず、> config は作業場所の config
+      // （.git/config ではない）。(cd .git && cat config); echo x > config を通すのと同じ理由で通すべきだが ask になる
+      ['止めすぎ', '(cd .git;); echo x > config', 'allow'],
+      // 欠陥: 同じ持ち越しで、サブシェルの中の変数の先への cd が外の git push を「作業場所を判定できない」にする。
+      // (cd "$X"); git push を通すのと同じく、作業場所は元のまま
+      ['止めすぎ', '(cd "$X";); git push', 'allow'],
+    ]);
+  });
+
+  describe('動かない cd', () => {
+    run([
+      // 欠陥: 関数の定義の本体は、呼ぶまで動かない（bash と zsh で f() { cd /; } の後の pwd が .git のままなのを確かめた）。
+      // 定義の中の cd / を動いたものとして作業場所を / にするので、.git/config への書き込みが allow になる
+      ['すり抜け', 'cd .git; f() { cd /; }; echo x > config', 'ask'],
+      // 欠陥: && の右の cd は左が失敗すると動かない（bash で false && cd / の後の pwd が .git のまま）。
+      // 動いたかどうかを字面で決められない cd の後の相対パスを、動いた側だけで読むので allow になる
+      ['すり抜け', 'cd .git; false && cd /; echo x >> config', 'ask'],
+    ]);
+  });
+
+  describe('今のブランチの追跡', () => {
+    run([
+      // 欠陥: git の長いオプションは一意な前方一致で受ける（parse-options）。git branch の --mo は --move だけに当たり、
+      // 手元の git で git branch --mo main の後の git branch --show-current が main を出すのを確かめた。
+      // 崩す 2 周目の git branch -m main && git push origin HEAD（deny）の言い換えなのに、--move の字面だけを見るので allow になる
+      ['すり抜け', 'git branch --mo main && git push origin HEAD', 'deny'],
+      // 欠陥: 置換の $( ) はサブシェルで動くが、git checkout が書き換える HEAD はリポジトリのファイルなので外にも残る。
+      // (git checkout main); git push は deny にするのに、$( ) の中の切り替えを追わないので allow になる
+      ['すり抜け', 'x=$(git checkout main); git push origin HEAD', 'deny'],
+    ]);
+  });
+
+  describe('push する関数', () => {
+    run([
+      // 欠陥: 呼び出しの前の代入は呼んだ関数の中の関数にも環境として渡る（bash で f(){ sh -c 'echo $HOME'; }; g(){ f; }; HOME=/tmp/h2 g が /tmp/h2 を出した）。
+      // docs の「同じコマンドで定義した push する関数を呼ぶ前の代入」なのに、本体に git push を直に書いた関数しか数えないので allow になる
+      ['すり抜け', 'f(){ git push origin 21-x; }; g(){ f; }; HOME=/tmp/h g', 'ask'],
+      // 欠陥: eval の前の代入も、eval が動かす関数の中の git に渡る（bash で HOME=/tmp/h eval f の中の sh が /tmp/h を出した）。allow になる
+      ['すり抜け', 'f(){ git push origin 21-x; }; HOME=/tmp/h eval f', 'ask'],
+    ]);
+  });
+
+  describe('curl の書き先', () => {
+    run([
+      // 欠陥: curl は -o の名前の #1 を URL の glob（{…}、[…]）の1つ目の当たりに置き換える（curl(1) の --output）。
+      // 手元の curl で -o '.git2/#1' 'file://…/{config}' が .git2/config を書くのを確かめた。.git/config に書くのに allow になる
+      ['すり抜け', "curl -o '.git/#1' 'https://example.com/{config}'", 'ask'],
+      ['すり抜け', "curl --output-dir .git -o '#1' 'https://example.com/{config,x}'", 'ask'],
+    ]);
+  });
+});
