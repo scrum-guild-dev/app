@@ -2335,7 +2335,8 @@ test.describe('運用者', () => {
         await expect(dialog.getByRole('radio', { name: /ビジネス/ })).toBeChecked();
         await expect(dialog).toContainText('変えた後の上限は 50 人・100 GB です。');
         await expect(dialog.locator('.callout.is-warn')).toHaveText([
-          /今の上限（120 人・500 GB）より下がります。/,
+          // 数と単位の間は改行しない空白なので、\s で受ける
+          /今の上限（120\s人・500\sGB）より下がります。/,
           /今の人数（60 人）が、変えた後の上限（50 人）を超えます。/,
           /選んだ上限は今の合計より小さい/,
         ]);
