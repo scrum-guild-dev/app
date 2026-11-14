@@ -32,6 +32,18 @@
       active = false;
     };
   });
+  // 速い0件応答では本文を押し下げない。遅い読み込みだけを300ms後に知らせる。
+  let loadingSlow = $state(false);
+  $effect(() => {
+    if (current !== undefined) return;
+    const timer = setTimeout(() => {
+      loadingSlow = true;
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      loadingSlow = false;
+    };
+  });
   let acknowledged = $state<string | null>(null);
   let saving = $state(false);
   let failed = $state(false);
@@ -145,7 +157,7 @@
 </script>
 
 {#if current === undefined}
-  <div class="shell-notice" role="status">{t('tokenNoticeLabel')}: {t('loading')}</div>
+  {#if loadingSlow}<div class="shell-notice" role="status">{t('tokenNoticeLabel')}: {t('loading')}</div>{/if}
 {:else if current === null}
   <section class="token-notice" aria-label={t('tokenNoticeLabel')}>
     <div class="token-notice-body"><p role="alert">{t('tokenNoticeLoadFailed')}</p></div>
