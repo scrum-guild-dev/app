@@ -411,7 +411,7 @@
                       class="hanko"
                       role="img"
                       aria-label={t('doneMarkLabel', { title: task.title, done: t('done') })}
-                      ><Icon name="check" /><b>{t('doneStamp')}</b></span
+                      ><Icon name="check" /></span
                     >
                   {/if}
                   {#if task.assignee === null}

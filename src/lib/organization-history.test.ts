@@ -18,6 +18,22 @@ describe('historyEventText', () => {
       ],
       [{ kind: 'organization_suspension_changed', purge_on: null }, '停止の理由を一時的な停止に切り替えました'],
       [{ kind: 'organization_settings_changed' }, '組織の設定を変更しました'],
+      [
+        {
+          kind: 'organization_plan_changed',
+          from: null,
+          to: { plan: 'team', billing_interval: 'monthly' },
+        },
+        'プランをチーム・月払いにしました',
+      ],
+      [
+        {
+          kind: 'organization_plan_changed',
+          from: { plan: 'team', billing_interval: 'monthly' },
+          to: { plan: 'business', billing_interval: 'yearly' },
+        },
+        'プランをチーム・月払いからビジネス・年払いに変更しました',
+      ],
       [{ kind: 'admin_designated', name: 'ミナト' }, 'ミナトを管理者に指名しました'],
       [{ kind: 'admin_designated', name: null }, 'Google で招待した人を管理者に指名しました'],
       [{ kind: 'admin_login_linked', name: 'ハルカ' }, 'ハルカが Google でログインし、管理者の指名を受けました'],

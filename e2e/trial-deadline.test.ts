@@ -32,9 +32,13 @@ test('お試しのメンバーには管理の節も API の期限の値も出さ
   await signIn(context, baseURL, 'trialMember');
   const response = page.waitForResponse((res) => res.url().endsWith(operationPath(organizationInfo, 'kaze')));
   await page.goto('/kaze/admin');
-  expect(((await (await response).json()) as OutputOf<typeof organizationInfo>).trial).toBeNull();
+  const result = (await (await response).json()) as OutputOf<typeof organizationInfo>;
+  expect(result.trial).toBeNull();
+  // 契約と上限も管理者にだけ返す（#1190）
+  expect(result.plan).toBeNull();
   await expect(page.getByRole('heading', { level: 1, name: '画面が見つかりません' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'お試し', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'プラン', exact: true })).toHaveCount(0);
 });
 
 test('期限のない組織の管理者にはお試しの節を出さない', async ({ page, context, baseURL }) => {

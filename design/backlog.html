@@ -104,9 +104,8 @@ SQ.mount("backlog", () => {
     <p class="action-note" id="filter-order-note" hidden>${t("backlogFilterOrderNote")}</p>
     <p class="action-note" id="totals-note" hidden>${t("filterTotalsNote").replace("{points}", t("points"))}</p>
     <div class="tree">
-      ${treeEpic("e1", { order: { first: true }, draft: true, storyOpts: () => ({ draft: true }) })}
-      ${treeEpic("e2", { order: { last: true }, draft: true, storyOpts: () => ({ draft: true }) })}
-      ${treeStory("s4", true, { order: { first: true, last: true, parent: true }, draft: true })}
+      ${Object.keys(D.epics).map((id, i, ids) => treeEpic(id, { order: { first: i === 0, last: i === ids.length - 1 }, draft: true, storyOpts: () => ({ draft: true }) })).join("")}
+      ${Object.keys(D.stories).filter((id) => !D.stories[id].epic).map((id, i, ids) => treeStory(id, true, { order: { first: i === 0, last: i === ids.length - 1, parent: true }, draft: true })).join("")}
       <div>${rootTasks.map((x, i) => entry(x, { showAssignee: true, showSprint: true, order: { first: i === 0, last: i === rootTasks.length - 1, parent: true } })).join("")}
         ${rootDone ? SQ.completedTasks("root", SQ.tasksWhere(x => x.ws === "wa" && !x.story && x.doneAt), { root: true }) : ""}
         ${SQ.draftRow("root", "backlog", `${t("task")}を足す`)}</div>

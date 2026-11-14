@@ -64,6 +64,12 @@ export function followsGlobGroup(words) {
   return words.followsGlobGroup === true;
 }
 
+// 区切りの並びにある算術のコマンド（(( … ))）と算術の展開（$(( … ))）の式の一覧（置換の中のものも含む）。
+// コマンドの頭の (( は区切りに残らず、$(( … )) は語の中の $(…) に置き換わるので、式の中身を判定の側が見られるよう配列の属性に持つ
+export function arithmeticOf(segments) {
+  return segments.arithmetic ?? [];
+}
+
 // 語と印を一緒に切り出す。Array.prototype.slice は印を落とすので、判定の途中で語を切り出すときはこれを使う。
 // リダイレクトは語の位置を持たず区切りぜんたいに掛かるので、切り出しても全部を運ぶ
 export function sliceWords(words, start, end) {
@@ -199,7 +205,7 @@ function arithmeticEnd(text, start) {
 function readSubstitution(text, j) {
   if (text[j + 2] === '(') {
     const end = arithmeticEnd(text, j + 3);
-    return { inner: substitutionsIn(text.slice(j + 3, end - 1)), end };
+    return { inner: substitutionsIn(text.slice(j + 3, end - 1)), end, expression: text.slice(j + 3, end - 1) };
   }
   const end = closingParen(text, j + 2);
   return { inner: [text.slice(j + 2, end)], end };
@@ -233,6 +239,8 @@ function substitutionsIn(body) {
 export function splitSegments(command) {
   const segments = [];
   const nested = [];
+  // 算術の式（(( … ))、$(( … ))）の中身
+  const arithmetic = [];
   const heredocs = [];
   let words = withMarks([], [], []);
   let word = '';
@@ -338,7 +346,8 @@ export function splitSegments(command) {
       continue;
     }
     if (command.startsWith('$(', i)) {
-      const { inner, end } = readSubstitution(command, i);
+      const { inner, end, expression } = readSubstitution(command, i);
+      if (expression !== undefined) arithmetic.push(expression);
       nested.push(...inner);
       add(SUBSTITUTION, true);
       expands = true;
@@ -372,7 +381,8 @@ export function splitSegments(command) {
           continue;
         }
         if (command.startsWith('$(', j)) {
-          const { inner, end } = readSubstitution(command, j);
+          const { inner, end, expression } = readSubstitution(command, j);
+          if (expression !== undefined) arithmetic.push(expression);
           nested.push(...inner);
           add(SUBSTITUTION, true);
           j = end + 1;
@@ -483,6 +493,7 @@ export function splitSegments(command) {
     // 中の置換は実行されるので、別の区切りとして取り出す
     if (command.startsWith('((', i) && !inWord && !openRedirect && (commandIndex(words) === -1 || words.at(-1) === 'for')) {
       const end = arithmeticEnd(command, i + 2);
+      arithmetic.push(command.slice(i + 2, end - 1));
       nested.push(...substitutionsIn(command.slice(i + 2, end - 1)));
       i = end;
       continue;
@@ -595,7 +606,12 @@ export function splitSegments(command) {
     add(c);
   }
   endSegment();
-  for (const inner of nested) segments.push(...splitSegments(inner));
+  for (const inner of nested) {
+    const innerSegments = splitSegments(inner);
+    arithmetic.push(...arithmeticOf(innerSegments));
+    segments.push(...innerSegments);
+  }
+  Object.defineProperty(segments, 'arithmetic', { value: arithmetic, configurable: true });
   return segments;
 }
 
@@ -613,6 +629,13 @@ const PREFIXES = new Set([
 // 前置きの道具が値を取るフラグ（sudo -u root、nice -n 10、xargs -I {}）
 const PREFIX_FLAGS_WITH_VALUE = new Set([
   '-u', '-g', '-n', '-s', '-k', '-I', '-P', '-L', '-d', '-E', '-C', '-p', '--package', '--chdir', '--unset',
+]);
+
+// sudo の -n、-s、-k、-E は値を取らない。他の前置きの -n や -s と共用すると実行名を読み飛ばす。
+const SUDO_FLAGS_WITH_VALUE = new Set([
+  '-C', '-c', '-D', '-g', '-h', '-p', '-R', '-r', '-t', '-T', '-u',
+  '--auth-type', '--bsd-auth-type', '--close-from', '--login-class', '--chdir', '--group', '--host',
+  '--prompt', '--chroot', '--role', '--type', '--command-timeout', '--user', '--other-user',
 ]);
 
 export function isAssignment(word) {
@@ -639,7 +662,7 @@ export function abbreviates(name, full) {
 
 // xargs だけが値を取るフラグ（-a と --arg-file は引数を読むファイル、--delimiter は区切り、--process-slot-var は環境変数の名前、
 // -J、-R、-S は BSD の置換と行数と置換の長さ）。
-// sudo -a のように他の前置きでは値を取らないので、直前の前置きが xargs のときだけ効かせる。
+// sudo -a は既存の保守的な解釈を残し、実行名を読み飛ばさない。値として飛ばすのは直前が xargs のときだけ。
 // GNU の getopt は長いオプションを一意な省略形でも受け付ける（--arg、--delim、--process）。-afile や --arg-file=file の連結の形は1語で済む。
 // 逆に -p は、npx -p と sudo -p では値を取るが、xargs では値を取らない確認のフラグなので、xargs の後ろでは値として飛ばさない
 const XARGS_FLAGS_WITH_VALUE = new Set(['-a', '-J', '-R', '-S']);
@@ -697,6 +720,9 @@ function scanCommand(words) {
         continue;
       }
       const takesValue =
+        previous === 'sudo' ? SUDO_FLAGS_WITH_VALUE.has(w) :
+        (['command', 'time'].includes(previous) && w === '-p') ? false :
+        (previous === 'exec' && w === '-a') || (previous === 'stdbuf' && ['-o', '-e', '-i'].includes(w)) ? true :
         previous === 'xargs'
           ? takesValueInXargs(w) || (w !== '-p' && PREFIX_FLAGS_WITH_VALUE.has(w))
           : PREFIX_FLAGS_WITH_VALUE.has(w) || (previous === 'env' && takesValueInEnv(w)) || (previous === 'arch' && ARCH_FLAGS_WITH_VALUE.has(w));

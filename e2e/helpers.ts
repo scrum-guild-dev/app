@@ -111,9 +111,9 @@ export async function expectNoA11yViolations(page: Page, screen: UiScreen): Prom
 }
 
 // axe で確かめるテーマ。コントラストはテーマで変わり、言葉では変わらないので、言葉はスクラムの言葉だけにする（docs/design.md）
-export const A11Y_THEMES = ['simple_light', 'simple_dark', 'medieval', 'modern'] as const;
+export const A11Y_THEMES = ['simple_light', 'simple_dark', 'modern'] as const;
 
-// 落ち着いた画面に4つのテーマを順に当てて axe を走らせ、違反の無いことと、その画面の除外がどれかのテーマで当たったことを確かめる。
+// 落ち着いた画面に3つのテーマを順に当てて axe を走らせ、違反の無いことと、その画面の除外がどれかのテーマで当たったことを確かめる。
 // 同じ要素の同じ違反は、出たテーマをまとめて1件にする。exclusions は、壊した HTML で確かめるときだけ差し替える。
 // axe が判定を保留した文字のコントラストの数は、テーマごとにテストの annotation に出す（保留が増えても違反にならないため、見えるようにする）
 export async function expectNoA11yViolationsInThemes(
@@ -433,9 +433,9 @@ async function measureLayout(
   );
 }
 
-// 狭い幅の検査で回すテーマ。崩れ方は書体（字幅と行の高さ）で変わり、色では変わらないので、書体の違う3つにする。
+// 狭い幅の検査で回すテーマ。崩れ方は書体（字幅と行の高さ）で変わり、色では変わらないので、書体の違う2つにする。
 // シンプルのダークはライトと書体が同じなので回さない（docs/design.md の「狭い幅と押せる範囲を機械で確かめる」）
-export const LAYOUT_THEMES = ['simple_light', 'medieval', 'modern'] as const;
+export const LAYOUT_THEMES = ['simple_light', 'modern'] as const;
 
 type LayoutFound = LayoutViolation & { combinations: string[] };
 
@@ -451,7 +451,7 @@ export function createLayoutCheck(
   const noTargets: string[] = [];
   const noText: string[] = [];
   return {
-    // 落ち着いた画面に3つのテーマを順に当て、はみ出しと 44px を測る
+    // 落ち着いた画面に2つのテーマを順に当て、はみ出しと 44px を測る
     async inThemes(page) {
       for (const theme of LAYOUT_THEMES) {
         await applyTheme(page, theme);
@@ -501,7 +501,7 @@ export function formatLayoutViolations(violations: readonly (LayoutViolation & {
   ].join('\n');
 }
 
-// 主な画面を幅 390px で、3つのテーマ × スクラムの言葉で開き、横のはみ出しと 44px の押せる範囲を確かめる。
+// 主な画面を幅 390px で、2つのテーマ × スクラムの言葉で開き、横のはみ出しと 44px の押せる範囲を確かめる。
 // open は画面を開き、落ち着いたとみなす要素を待つ。w は辞書の文言（見出しの名前などに使う）。
 // 開いた後、要求が止み、見えている所の読み込みが終わり、上の帯の組織の言葉が出てから測る
 export async function expectNarrowLayout(

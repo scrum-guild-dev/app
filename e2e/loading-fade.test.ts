@@ -81,7 +81,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   });
 
   test(`組織への移動の紙は重ねて消える（${reducedMotion}）`, async ({ page, context, baseURL }) => {
-    // 4テーマの axe は開発用ビルドでも最後まで検査する。フェードの時間の期待値は120msのまま。
+    // 3テーマの axe は開発用ビルドでも最後まで検査する。フェードの時間の期待値は120msのまま。
     if (reducedMotion === 'no-preference') test.setTimeout(90_000);
     if (reducedMotion === 'no-preference') await page.setViewportSize({ width: 1280, height: 320 });
     await page.emulateMedia({ reducedMotion });
@@ -92,8 +92,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await routeOperation(page, organizationInfo, { slug: 'aoba' }, async (call) => {
       await gate;
       const body = await call.fetch();
-      body.organization.theme = 'modern';
-      body.me.theme = null;
+      body.me.theme = 'modern';
       await call.fulfill(body);
     });
     await page.evaluate(() => {

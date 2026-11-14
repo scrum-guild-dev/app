@@ -1,5 +1,5 @@
 <script lang="ts">
-  import CreateSheet from './CreateSheet.svelte';
+  import CreateSheet from './LazyCreateSheet.svelte';
   import { MediaQuery } from 'svelte/reactivity';
   import MobileNavigation from './MobileNavigation.svelte';
   import { navigationLoading } from '../navigation-loading.svelte.ts';
@@ -11,7 +11,9 @@
   import { NAV_MENU_ID, navState, setNavCollapsed } from '../nav-collapse.svelte.ts';
   import { page } from '$app/state';
   import { accountScreenKey, workspaceIdOf } from '../breadcrumb.ts';
-  import { goto } from '$app/navigation';
+  import { goto, onNavigate } from '$app/navigation';
+  import { shouldFadeNavigation, startNavigationFade } from '../navigation-fade.ts';
+  import { prefersReducedMotion } from '../reduced-motion.ts';
   import { useShortcut } from '../shortcuts.svelte.ts';
   import { GO_KEYS, isNavItemCurrent, isWorkspaceId, isWorkspaceRoute, visibleNav } from '../nav.ts';
   import { organizationLabel } from '../organization-label.ts';
@@ -61,6 +63,29 @@
   const narrow = new MediaQuery('(max-width: 760px)');
   const pageHeads = new PageHeadOwners();
   let mounted = $state(false);
+
+  // 760px 以下で別の画面へ移るとき、画面を短く入れ替える（View Transitions。タブバーは動かさない）。
+  // onNavigate はデータの読み込みが済んだ後に呼ばれるので、読み込みの待ちには重ならない（前の画面の画像を撮る1フレームほどは遅れる）。
+  onNavigate((navigation) => {
+    if (
+      !shouldFadeNavigation({
+        narrow: narrow.current,
+        reducedMotion: prefersReducedMotion(),
+        supported: typeof document.startViewTransition === 'function',
+        type: navigation.type,
+        from: navigation.from?.url.pathname,
+        to: navigation.to?.url.pathname,
+      })
+    )
+      return;
+    // 移る前の画面にはこの枠のタブバーがある。行き先にタブバーが無い（枠の外の画面へ出た）ときは、
+    // 帯だけが先に消えて見えないよう、入れ替えずにそのまま見せる
+    return startNavigationFade(
+      navigation.complete,
+      (update) => document.startViewTransition(update),
+      () => document.querySelector('.mobile-navigation') !== null,
+    );
+  });
   onMount(() => {
     // 子の PageHead が登録を終えるまでは代わりの入口を描かない。
     void tick().then(() => {
