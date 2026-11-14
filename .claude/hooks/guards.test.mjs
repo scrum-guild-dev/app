@@ -7182,4 +7182,13 @@ describe('#1180: AI レビューの指摘', () => {
       ['通す', 'curl --output-d /tmp -O https://example.com/x', 'allow'],
     ]);
   });
+
+  describe('createRef の名前のブレース展開が上限を超える', () => {
+    const CREATE_REF = `gh api graphql -f query='mutation($n:String!){createRef(input:{repositoryId:"R",name:$n,oid:"abc"}){ref{id}}}'`;
+    run([
+      // 1024 通りの展開で、どれも refs/heads/production になる
+      ['すり抜け', `${CREATE_REF} -f n=refs/heads/{p,p}{r,r}{o,o}{d,d}{u,u}{c,c}{t,t}{i,i}{o,o}{n,n}`, 'ask'],
+      ['通す', `${CREATE_REF} -f n=refs/heads/21-{x,y}`, 'allow'],
+    ]);
+  });
 });

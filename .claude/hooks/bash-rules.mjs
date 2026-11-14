@@ -791,6 +791,8 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
     const skip = '(?:[\\s,]|#[^\\n]*(?:\\n|$))*';
     const variables = [...text.matchAll(new RegExp(`\\b(name|input)${skip}:${skip}\\$${skip}(\\w+)`, 'g'))].map((m) => ({ argument: m[1], name: m[2] }));
     const opaque = fields.some((f) => {
+      // 展開が大きすぎて上の braced で見なかった値は、production の名前に展開されうる（gitConfigFileAt と同じく当たる側に倒す）
+      if (f.includes('{') && expansionSize(f) > MAX_BRACE_EXPANSION) return true;
       const eq = f.indexOf('=');
       const value = eq === -1 ? '' : f.slice(eq + 1);
       if (!hasExpansion(value) && !value.startsWith('@')) return false;
