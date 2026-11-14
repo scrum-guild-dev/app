@@ -965,11 +965,22 @@ test('390px では、版が下のタブと重ならず、長い版は省略し�
     const box = element.getBoundingClientRect();
     const range = document.createRange();
     range.selectNodeContents(element);
-    return { left: box.left, right: box.right, textWidth: range.getBoundingClientRect().width };
+    return {
+      left: box.left,
+      right: box.right,
+      top: box.top,
+      height: box.height,
+      textWidth: range.getBoundingClientRect().width,
+    };
   });
   expect(long.textWidth).toBeGreaterThan(long.right - long.left);
   expect(long.left).toBeGreaterThanOrEqual(0);
   expect(long.right).toBeLessThanOrEqual(390);
+  // 折り返さずに1行のまま（--space-4 の 16px 未満）で、下のタブより下に残る
+  expect(long.height).toBeLessThan(16);
+  expect(long.top).toBeGreaterThanOrEqual(tabsBox.y + tabsBox.height);
+  await expect(badge).toHaveCSS('white-space', 'nowrap');
+  await expect(badge).toHaveCSS('text-overflow', 'ellipsis');
 
   // 手元の e2e の版（e2e-<時刻>）や preview のタグは、下に突き出る字を含む。字の上下の幅は行の高さより大きいので、縦は切らない
   await expect(badge).toHaveCSS('overflow-y', 'visible');
