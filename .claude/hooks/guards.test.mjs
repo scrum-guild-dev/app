@@ -6639,3 +6639,260 @@ describe('#1180: 設定ファイル、環境変数、GraphQL の変数、refs/ �
     }
   });
 });
+
+describe('#1180: 崩す 1 周目', () => {
+  const PUSH = 'git push origin 21-x';
+  const CREATE_REF = `gh api graphql -f query='mutation($n:String!){createRef(input:{repositoryId:"R",name:$n,oid:"abc"}){ref{id}}}'`;
+  // input ぜんたいを変数 $i で受ける createRef
+  const CREATE_REF_INPUT = `gh api graphql -f query='mutation($i:CreateRefInput!){createRef(input:$i){ref{id}}}'`;
+  const run = (cases) => {
+    for (const [kind, command, expected] of cases) {
+      test(`[${kind}] ${JSON.stringify(command)} は ${expected}`, () => assert.equal(decision(command), expected, command));
+    }
+  };
+
+  describe('設定を読む場所を変える環境変数を設定した git push', () => {
+    run([
+      // 経由の道具と前置き
+      ['すり抜け', `nice env HOME=/tmp/h ${PUSH}`, 'ask'],
+      ['すり抜け', `timeout 60 env HOME=/tmp/h ${PUSH}`, 'ask'],
+      ['すり抜け', `HOME=/tmp/h timeout 60 ${PUSH}`, 'ask'],
+      ['すり抜け', `HOME=/tmp/h nice ${PUSH}`, 'ask'],
+      ['すり抜け', `HOME=/tmp/h nohup ${PUSH}`, 'ask'],
+      ['すり抜け', `HOME=/tmp/h time ${PUSH}`, 'ask'],
+      ['すり抜け', `HOME=/tmp/h exec ${PUSH}`, 'ask'],
+      ['すり抜け', 'echo 21-x | HOME=/tmp/h xargs git push origin', 'ask'],
+      ['すり抜け', 'echo 21-x | xargs env HOME=/tmp/h git push origin', 'ask'],
+      ['すり抜け', `env -S 'HOME=/tmp/h ${PUSH}'`, 'ask'],
+      ['すり抜け', `env -u GIT_DIR HOME=/tmp/h ${PUSH}`, 'ask'],
+      ['すり抜け', `env -- HOME=/tmp/h ${PUSH}`, 'ask'],
+      ['すり抜け', `env 'HOME=/tmp/h' ${PUSH}`, 'ask'],
+      ['すり抜け', `HOME=/tmp/h pnpm exec ${PUSH}`, 'ask'],
+      ['すり抜け', `export HOME=/tmp/h; pnpm exec ${PUSH}`, 'ask'],
+      ['すり抜け', 'HOME=/tmp/h /usr/bin/git push origin 21-x', 'ask'],
+      ['すり抜け', 'HOME=/tmp/h \\git push origin 21-x', 'ask'],
+      ['すり抜け', `HOME=/tmp/h sudo ${PUSH}`, 'ask'],
+      ['すり抜け', 'HOME=/tmp/h git --git-dir=.git push origin 21-x', 'ask'],
+      ['すり抜け', `HOME=/tmp/h ${PUSH} 2>&1 | tee /tmp/log`, 'ask'],
+      ['すり抜け', `git status && HOME=/tmp/h ${PUSH}`, 'ask'],
+      // 宣言の道具の別の形と、区切りの入れ子
+      ['すり抜け', `export -- HOME=/tmp/h; ${PUSH}`, 'ask'],
+      ['すり抜け', `readonly HOME=/tmp/h; ${PUSH}`, 'ask'],
+      ['すり抜け', `declare HOME=/tmp/h; ${PUSH}`, 'ask'],
+      ['すり抜け', `declare -gx HOME=/tmp/h; ${PUSH}`, 'ask'],
+      ['すり抜け', `HOME=/tmp/h; export HOME; ${PUSH}`, 'ask'],
+      ['すり抜け', `set -a; HOME=/tmp/h; ${PUSH}`, 'ask'],
+      ['すり抜け', `export HOME=/tmp/h; (${PUSH})`, 'ask'],
+      ['すり抜け', `export HOME=/tmp/h; { ${PUSH}; }`, 'ask'],
+      ['すり抜け', `export HOME=/tmp/h; if true; then ${PUSH}; fi`, 'ask'],
+      ['すり抜け', `export HOME=/tmp/h; cd .. && ${PUSH}`, 'ask'],
+      ['すり抜け', `cd /tmp; export HOME=$PWD; cd -; ${PUSH}`, 'ask'],
+      ['すり抜け', `export HOME=/tmp/h; bash -c "cd /repo && ${PUSH}"`, 'ask'],
+      ['すり抜け', `bash -c 'export HOME=/tmp/h; bash -c "${PUSH}"'`, 'ask'],
+      // 欠陥: HOME は起動元で export 済みなので、代入の形を問わず値を変えれば子の git に渡る。
+      // Issue の決定は「道具の前の代入と、前の区切りの export など」を ask にし、保存したテストも `HOME=/tmp/h; git push`（export の無い代入）を ask にしている。
+      // printf -v、read、for の変数も同じシェルの代入（bash の実際の振る舞い）なのに allow になる
+      ['すり抜け', `printf -v HOME %s /tmp/h; ${PUSH}`, 'ask'],
+      ['すり抜け', `read HOME < /tmp/x; ${PUSH}`, 'ask'],
+      ['すり抜け', `for HOME in /tmp/h; do ${PUSH}; done`, 'ask'],
+      // 欠陥: 関数の呼び出しの前の代入は、関数の中のコマンドに環境として渡る（bash の実際の振る舞い）。push を関数に包むだけで allow になる
+      ['すり抜け', `f(){ ${PUSH}; }; HOME=/tmp/h f`, 'ask'],
+    ]);
+  });
+
+  describe('設定を読む場所を変える環境変数の誤検知', () => {
+    run([
+      ['通す', `printenv HOME; ${PUSH}`, 'allow'],
+      ['通す', `env | grep HOME; ${PUSH}`, 'allow'],
+      ['通す', `echo $HOME; ${PUSH}`, 'allow'],
+      ['通す', `cd ~ && ls; ${PUSH}`, 'allow'],
+      ['通す', 'cd ~ && ls', 'allow'],
+      // 欠陥: 決定は GIT_CONFIG_*、HOME、XDG_CONFIG_HOME を「設定した」git push を ask にする。
+      // 実装は道具の後ろの語の HOME=… も設定とみなす（variablesSetBy の !isPrefix(i) の分岐）ため、コミットの本文、echo、grep の検索語に書いただけで
+      // 後ろの push が ask になる。シェルはこれらの語で変数を設定しない
+      ['通す', `git commit -m "HOME=/tmp/h" && ${PUSH}`, 'allow'],
+      ['通す', `git commit -m "GIT_CONFIG_COUNT=1 を足す" && ${PUSH}`, 'allow'],
+      ['通す', `echo HOME=/tmp/h; ${PUSH}`, 'allow'],
+      ['通す', `echo "HOME=$HOME" > /tmp/x; ${PUSH}`, 'allow'],
+      ['通す', `grep -rn XDG_CONFIG_HOME= docs; ${PUSH}`, 'allow'],
+      ['通す', `gh pr create --title x --body "HOME=/tmp/h で試した" && ${PUSH}`, 'allow'],
+      // 欠陥: 設定するのは PATH だけで、HOME などの名前は値の中の展開にしか無い。実装前（3a992037）は allow で、
+      // 今回 GIT_CONFIG_LOCATION を「名前が分からない宣言」の対象に足したため、値に展開を含むだけの export の後の push が ask になった
+      ['通す', `export PATH=$HOME/bin:$PATH; ${PUSH}`, 'allow'],
+    ]);
+  });
+
+  describe('git config -e と --edit', () => {
+    run([
+      ['すり抜け', 'git config --ed', 'ask'],
+      ['すり抜け', 'git config --edi --global', 'ask'],
+      ['すり抜け', 'git config -f ~/.gitconfig --edit', 'ask'],
+      ['すり抜け', 'git config --file=.git/config --edit', 'ask'],
+      ['すり抜け', 'git config --worktree --edit', 'ask'],
+      ['すり抜け', 'git config --no-includes -e', 'ask'],
+      ['すり抜け', 'git config --type=bool -e', 'ask'],
+      ['すり抜け', 'git config --global -ze', 'ask'],
+      ['すり抜け', 'git config -l -e', 'ask'],
+      ['すり抜け', 'git config get -e', 'ask'],
+      ['すり抜け', 'git config "--edit"', 'ask'],
+      ['すり抜け', 'git -C .git config -e', 'ask'],
+      ['すり抜け', 'git --git-dir=.git config -e', 'ask'],
+      ['すり抜け', 'git config edit --file .git/config', 'ask'],
+      // -e と並ぶ書き込みの別経路（既存の remote.<名前>.push の判定）
+      ['すり抜け', 'git config --file .git/config remote.origin.push HEAD:main', 'ask'],
+      ['すり抜け', 'git config set --file .git/config remote.origin.push HEAD:main', 'ask'],
+      ['通す', 'git config --get-regexp remote', 'allow'],
+      ['通す', 'git config --global --get-regexp alias', 'allow'],
+      ['通す', 'git config -l -z', 'allow'],
+      ['通す', 'git config -lz', 'allow'],
+      ['通す', 'git config -z -l', 'allow'],
+      ['通す', 'git config --get --expiry-date gc.reflogExpire', 'allow'],
+      ['通す', 'git config --get core.editor', 'allow'],
+      ['通す', 'git -c core.editor=true config -l', 'allow'],
+      ['通す', 'git config get --show-origin user.name', 'allow'],
+    ]);
+  });
+
+  describe('git の設定ファイルへの書き込み', () => {
+    run([
+      ['すり抜け', 'echo x>>.git/config', 'ask'],
+      ['すり抜け', 'echo x >>~/.gitconfig', 'ask'],
+      ['すり抜け', 'echo x >> $HOME/.gitconfig', 'ask'],
+      ['すり抜け', 'echo x >> .GIT/CONFIG', 'ask'],
+      ['すり抜け', 'echo x >> .git//config', 'ask'],
+      ['すり抜け', 'echo x >> ./.git/./config', 'ask'],
+      ['すり抜け', 'echo x >> "${XDG_CONFIG_HOME:-$HOME/.config}/git/config"', 'ask'],
+      ['すり抜け', 'echo x >> "$XDG_CONFIG_HOME"/git/config', 'ask'],
+      ['すり抜け', `printf '[push]\\n\\tdefault = upstream\\n' >> ~/.gitconfig`, 'ask'],
+      ['すり抜け', 'cat <<< x >> .git/config', 'ask'],
+      ['すり抜け', 'exec > .git/config', 'ask'],
+      ['すり抜け', 'exec 3>> .git/config; echo x >&3', 'ask'],
+      ['すり抜け', 'echo x | sudo tee .git/config', 'ask'],
+      ['すり抜け', `echo x | xargs -I{} sh -c 'echo {} >> .git/config'`, 'ask'],
+      ['すり抜け', 'cp -t .git /tmp/config', 'ask'],
+      ['すり抜け', 'cp /tmp/config ~/.config/git/', 'ask'],
+      ['すり抜け', 'install -D /tmp/x .git/config', 'ask'],
+      ['すり抜け', 'truncate -s 0 .git/config', 'ask'],
+      ['すり抜け', `ex -s +'%s/a/b/' -cwq .git/config`, 'ask'],
+      // cd、pushd の別の形と入れ子
+      ['すり抜け', 'cd; echo x >> .gitconfig', 'ask'],
+      ['すり抜け', 'cd ~ && cp /tmp/x .gitconfig', 'ask'],
+      ['すり抜け', 'cd ~/.config && echo x >> git/config', 'ask'],
+      ['すり抜け', 'cd ~/.config/git && cp /tmp/config .', 'ask'],
+      ['すり抜け', 'cd ~/.config/git && tee config < /tmp/x', 'ask'],
+      ['すり抜け', 'cd $XDG_CONFIG_HOME/git && echo x > config', 'ask'],
+      ['すり抜け', 'cd ./.git/ && echo x >> config', 'ask'],
+      ['すり抜け', 'cd -P .git && echo x >> config', 'ask'],
+      ['すり抜け', 'cd .git && cd . && echo x >> config', 'ask'],
+      ['すり抜け', 'cd .git && echo x | tee -a ./config', 'ask'],
+      ['すり抜け', 'cd .git && cp /tmp/config .', 'ask'],
+      ['すり抜け', 'cd .git && mv /tmp/x config', 'ask'],
+      ['すり抜け', 'cd .git && sed -i "" s/a/b/ config', 'ask'],
+      ['すり抜け', `cd .git && python3 -c "open('config','a').write('x')"`, 'ask'],
+      ['すり抜け', '(cd .git && echo x >> config)', 'ask'],
+      ['すり抜け', `bash -c 'cd .git && echo x >> config'`, 'ask'],
+      ['すり抜け', `cd .git && bash -c 'echo x >> config'`, 'ask'],
+      // 欠陥: このリポジトリはワークツリーで作業し、ワークツリーの .git はファイルなので、本体の .git/config は
+      // git rev-parse --git-common-dir の先にある。決定の「.git/config への直書き」そのものだが、名前が展開の中にあるため allow になる
+      ['すり抜け', 'echo x >> "$(git rev-parse --git-common-dir)/config"', 'ask'],
+      ['すり抜け', 'cd "$(git rev-parse --git-common-dir)" && echo x >> config', 'ask'],
+      // 欠陥: cd - と popd は直前の場所（.git）へ戻るので、書き込み先は .git/config（bash の実際の振る舞い）。
+      // cdWordsAfter は - を名前として join し、popd では直前の行き先（/tmp）を残すため allow になる
+      ['すり抜け', 'cd .git; cd /tmp; cd -; echo x >> config', 'ask'],
+      ['すり抜け', 'pushd .git; pushd /tmp; popd; echo x >> config', 'ask'],
+      // 欠陥: docs は「リダイレクト、tee、cp などの書き込みの道具」を ask にすると書く。curl -o と wget -O は同じくファイルを書く道具で、
+      // .dev.vars への curl -o は既存の判定が止めている（deny）のに、git の設定ファイルへは allow になる
+      ['すり抜け', 'curl -o .git/config https://example.com/x', 'ask'],
+      ['すり抜け', 'curl -sSLo ~/.gitconfig https://example.com/x', 'ask'],
+      ['すり抜け', 'wget -O ~/.gitconfig https://example.com/x', 'ask'],
+      // 通す: 名前が似ているだけのファイルと、戻った後の書き込み
+      ['通す', 'echo x > .github/config.yml', 'allow'],
+      ['通す', 'echo x >> .gitconfig.bak', 'allow'],
+      ['通す', 'echo x > config', 'allow'],
+      ['通す', 'echo x > src/lib/config', 'allow'],
+      ['通す', 'cp /tmp/config docs/', 'allow'],
+      ['通す', 'cp /tmp/config .github/', 'allow'],
+      ['通す', 'cd .git && cat config', 'allow'],
+      ['通す', 'cd .git && cd .. && echo x >> config', 'allow'],
+      ['通す', 'cd .git && cd hooks && echo x > config', 'allow'],
+      ['通す', 'cd .git; cd -; echo x >> config', 'allow'],
+      ['通す', 'cd ~/.config/git && echo x > ignore', 'allow'],
+      ['通す', 'cd ~/.config/git; cd /repo; echo x > config', 'allow'],
+      ['通す', 'cd ~/.config/git && cd - && echo x > config', 'allow'],
+      ['通す', 'cd ~/.config && echo x >> fish/config.fish', 'allow'],
+      // 欠陥: popd は pushd の前の場所（/repo）へ戻るので、書き込み先は /repo/config で git の設定ファイルではない。
+      // cdWordsAfter が popd で直前の行き先（~/.config/git）を残すため ask になる
+      ['通す', 'pushd ~/.config/git && popd && echo x > config', 'allow'],
+    ]);
+  });
+
+  describe('GraphQL の createRef の名前の変数', () => {
+    run([
+      ['すり抜け', `gh api graphql -f query='mutation($n:String!){createRef(input:{repositoryId:"R",name: $n,oid:"abc"}){ref{id}}}' -f n="$P"`, 'ask'],
+      ['すり抜け', `gh api graphql -f query='mutation($n:String!){createRef(input:{repositoryId:"R",name:\n$n,oid:"abc"}){ref{id}}}' -f n="$P"`, 'ask'],
+      ['すり抜け', `gh api graphql -f query='mutation($n:String!){ createRef ( input : { repositoryId : "R" , name : $n , oid : "abc" } ) { ref { id } } }' -f n="$P"`, 'ask'],
+      ['すり抜け', `gh api graphql -f query='mutation($name:String!){createRef(input:{repositoryId:"R",name:$name,oid:"abc"}){ref{id}}}' -f name="$P"`, 'ask'],
+      ['すり抜け', `gh api graphql -f query='mutation($n:String!){createRef(input:{name:$n,repositoryId:"R",oid:"abc"}){ref{id}}}' -f n="$P"`, 'ask'],
+      ['すり抜け', `${CREATE_REF_INPUT} -F i=@input.json`, 'ask'],
+      ['すり抜け', `${CREATE_REF} -fn="$P"`, 'ask'],
+      ['すり抜け', `${CREATE_REF} --raw-field=n="$P"`, 'ask'],
+      ['すり抜け', `${CREATE_REF} -F "n=$P"`, 'ask'],
+      ['すり抜け', `${CREATE_REF} -f "$K=$V"`, 'ask'],
+      ['すり抜け', `${CREATE_REF} -f n=\`cat f\``, 'ask'],
+      ['すり抜け', `${CREATE_REF} -F n=@./name.txt`, 'ask'],
+      ['すり抜け', `gh api graphql -F query=@q.graphql -f n="$P"`, 'ask'],
+      ['すり抜け', `gh api graphql -F query=@- -f n="$P" <<'EOF'\nmutation($n:String!){createRef(input:{repositoryId:"R",name:$n,oid:"abc"}){ref{id}}}\nEOF`, 'ask'],
+      ['すり抜け', `gh api graphql -f query="mutation(\\$n:String!){createRef(input:{repositoryId:\\"R\\",name:\\$n,oid:\\"abc\\"}){ref{id}}}" -f n="$P"`, 'ask'],
+      // 欠陥: GraphQL の文法では $ と変数名は別のトークンで、間の空白とコメント（# から行末）は読み飛ばされる（GraphQL の仕様の Variable と Ignored）。
+      // 実装の正規表現 name\s*:\s*\$(\w+) は $ の直後の名前しか拾わず、$ n と #c の後の $n を変数と読まないので allow になる
+      ['すり抜け', `gh api graphql -f query='mutation($n:String!){createRef(input:{repositoryId:"R",name:$ n,oid:"abc"}){ref{id}}}' -f n="$P"`, 'ask'],
+      ['すり抜け', `gh api graphql -f query='mutation($n:String!){createRef(input:{repositoryId:"R",name:#c\n$n,oid:"abc"}){ref{id}}}' -f n="$P"`, 'ask'],
+      // 欠陥: gh api は key[subkey]=value で入れ子の値を組み（gh api --help）、GraphQL では query 以外のフィールドが変数になる。
+      // input ぜんたいを $i で受け、名前を i[name] に展開かファイルで渡すと、実装はフィールドの名前 i[name] を i と照らせず allow になる
+      ['すり抜け', `${CREATE_REF_INPUT} -F 'i[repositoryId]=R' -f "i[name]=$P" -F 'i[oid]=abc'`, 'ask'],
+      ['すり抜け', `${CREATE_REF_INPUT} -F 'i[repositoryId]=R' -F 'i[name]=@name.txt' -F 'i[oid]=abc'`, 'ask'],
+      // 字面の production は入れ子でも deny のまま
+      ['断る', `${CREATE_REF_INPUT} -f 'i[name]=refs/heads/production' -F 'i[repositoryId]=R' -F 'i[oid]=abc'`, 'deny'],
+      ['通す', `${CREATE_REF} -f n=refs/heads/21-x -f note="$P"`, 'allow'],
+      [
+        '通す',
+        `gh api graphql -f query='mutation($n:String!,$i:String){createRef(input:{repositoryId:"R",name:$n,oid:"abc",clientMutationId:$i}){ref{id}}}' -f n=refs/heads/21-x -f i="$X"`,
+        'allow',
+      ],
+      ['通す', `gh api graphql -f query='query($name:String!){repository(owner:"o",name:$name){id}}' -f name="$R"`, 'allow'],
+      ['通す', `gh api graphql -f query='mutation($input:CreateIssueInput!){createIssue(input:$input){issue{id}}}' -F input=@issue.json`, 'allow'],
+      ['通す', `gh api graphql -f query='mutation($b:String!){addComment(input:{subjectId:"x",body:$b}){clientMutationId}}' -f b="$(cat body.md)"`, 'allow'],
+    ]);
+  });
+
+  describe('refs/ を重ねた git/refs の宛先', () => {
+    run([
+      ['すり抜け', 'gh api -X PATCH repos/{owner}/{repo}/git/refs/refs/heads/main -f sha=abc', 'deny'],
+      ['すり抜け', 'gh api -XPATCH repos/o/r/git/refs/refs/heads/main -f sha=abc', 'deny'],
+      ['すり抜け', 'gh api repos/o/r/git/refs/refs/heads/main -X PATCH -f sha=abc', 'deny'],
+      ['すり抜け', 'gh api -f sha=abc -X PATCH repos/o/r/git/refs/refs/heads/main', 'deny'],
+      ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/refs/heads/main/ -f sha=abc', 'deny'],
+      ['すり抜け', 'gh api -X PATCH "repos/o/r/git/refs/refs/heads/main?x=1" -f sha=abc', 'deny'],
+      ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/refs/heads/main -F sha=@sha.txt', 'deny'],
+      ['すり抜け', 'gh api -X PATCH repos/o/r/git/refs/refs/heads/main --input body.json', 'deny'],
+      ['すり抜け', 'gh api -X PATCH https://api.github.com/repos/o/r/git/refs/refs/heads/main -f sha=abc', 'deny'],
+      ['すり抜け', 'gh api --method=DELETE repos/o/r/git/refs/refs/heads/production', 'deny'],
+      ['すり抜け', `curl -X PATCH -H "Authorization: token $T" https://api.github.com/repos/o/r/git/refs/refs/heads/production -d '{"sha":"abc"}'`, 'deny'],
+      ['すり抜け', 'curl --request DELETE https://api.github.com/repos/o/r/git/refs/refs/tags/v1', 'deny'],
+    ]);
+  });
+
+  describe('「見ない」に決めた経路の固定', () => {
+    run([
+      ['見ない', 'git config branch.21-x.merge refs/heads/main && git push', 'allow'],
+      ['見ない', 'git branch --set-upstream-to origin/main 21-x && git push', 'allow'],
+      ['見ない', 'git switch -C main origin/21-x', 'allow'],
+      ['見ない', 'git fetch origin HEAD:main', 'allow'],
+      ['見ない', 'git update-ref refs/heads/main HEAD && git push', 'allow'],
+      ['見ない', 'git branch -f main HEAD && git push origin 21-x', 'allow'],
+      ['見ない', 'git config --global push.default simple', 'allow'],
+      ['断る', 'git switch -C main && git push', 'deny'],
+      ['断る', 'git checkout -B main origin/21-x && git push origin HEAD', 'deny'],
+    ]);
+  });
+});
