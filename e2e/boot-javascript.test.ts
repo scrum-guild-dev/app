@@ -95,17 +95,12 @@ test('起票の読み込み中に連打して別画面へ移っても、古い�
     await trigger.click();
     await started;
     await expect(trigger).toHaveAttribute('aria-busy', 'true');
-    await expect(page.locator('.toast').filter({ hasText: /^読み込んでいます$/ })).toBeVisible();
-    await expect(
-      page
-        .getByRole('status')
-        .filter({ hasText: /^読み込んでいます$/ })
-        .first(),
-    ).toBeVisible();
+    await expect(page.locator('.toast').filter({ hasText: '読み込んでいます' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: '読み込んでいます' }).first()).toBeVisible();
     await trigger.click();
     await page.locator('.mobile-tabs').getByRole('link', { name: 'バックログ', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'バックログ', exact: true })).toBeVisible();
-    await expect(page.locator('.toast').filter({ hasText: /^読み込んでいます$/ })).toHaveCount(0);
+    await expect(page.locator('.toast').filter({ hasText: '読み込んでいます' })).toHaveCount(0);
     const nextTrigger = page.getByRole('button', { name: '起票', exact: true });
     await expect(nextTrigger).not.toHaveAttribute('aria-busy', 'true');
     await nextTrigger.click();
