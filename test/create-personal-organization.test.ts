@@ -4,7 +4,7 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
 import { createApp } from '../src/server/app.ts';
 import { commonDb, orgDb } from '../src/server/db/index.ts';
-import { verifiedOrganizationForTest } from '../src/server/db/testing.ts';
+import { envWithD1Hooks, verifiedOrganizationForTest } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import {
   createMyOrganization,
@@ -22,7 +22,7 @@ import { PRIVACY_VERSION, TERMS_VERSION } from '../src/lib/legal/versions.ts';
 import { createAccount, createAccountLogin, createOrganization, createSessionWithToken } from './factories.ts';
 import { bearerFor } from './operations/api-token.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
-import { createLoginPerson, createPerson } from './operations/world.ts';
+import { createLoginPerson, createPerson, testEnv } from './operations/world.ts';
 
 const app = createApp(implementedOperations);
 
@@ -129,12 +129,21 @@ describe('組織に入っていない会員が作る', () => {
   test('slug と固定の名前「自分用」を返し、行は personal、1人、1GB、お試しの期限なし、self-service、作った人', async () => {
     const member = await newMember();
     const slug = newSlug();
-    const res = await create(member, slug);
+    const writes: string[] = [];
+    const res = await post(app, createPersonalOrganization, {
+      token: member.token,
+      body: { slug },
+      env: envWithD1Hooks(testEnv, { beforeBatch: (sqls) => void writes.push(...sqls) }),
+    });
+    const inserts = writes.filter((sql) => sql.startsWith('insert into "organizations"'));
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]).not.toMatch(/vocabulary/i);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ slug, name: '自分用' });
 
     const row = await organizationRow(slug);
     expect(row).toMatchObject({
+      vocabulary: 'game',
       name: '自分用',
       kind: 'personal',
       member_limit: 1,

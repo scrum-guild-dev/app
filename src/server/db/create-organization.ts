@@ -7,7 +7,6 @@ import { PERSONAL_ATTACHMENT_QUOTA_BYTES } from '../../shared/organization-kind.
 import { uuidv7 } from '../uuid.ts';
 import { commonDb, orgDb, type OrganizationDb } from './entries.ts';
 import { issueVerifiedOrganization } from './verify-organization.ts';
-import { VOCABULARY_COLUMN_VALUE } from './vocabulary-column.ts';
 
 export type NewOrganization = {
   slug: string;
@@ -48,7 +47,6 @@ export async function insertSelfCreatedOrganization(
             'id',
             'slug',
             'name',
-            'vocabulary',
             'created_by_operator',
             'created_by_account_id',
             'trial_ends_on',
@@ -61,7 +59,6 @@ export async function insertSelfCreatedOrganization(
                 eb.val(organizationId).as('id'),
                 eb.val(input.slug).as('slug'),
                 eb.val(input.name).as('name'),
-                eb.val(VOCABULARY_COLUMN_VALUE).as('vocabulary'),
                 eb.val(SELF_SERVICE_CREATOR).as('created_by_operator'),
                 eb.val(input.accountId).as('created_by_account_id'),
                 eb.val(trialEndsOn).as('trial_ends_on'),
@@ -136,7 +133,6 @@ export async function insertPersonalOrganization(
             'slug',
             'name',
             'kind',
-            'vocabulary',
             'member_limit',
             'attachment_quota_bytes',
             'created_by_operator',
@@ -151,7 +147,6 @@ export async function insertPersonalOrganization(
                 eb.val(input.slug).as('slug'),
                 eb.val(input.name).as('name'),
                 eb.val('personal').as('kind'),
-                eb.val(VOCABULARY_COLUMN_VALUE).as('vocabulary'),
                 eb.val(1).as('member_limit'),
                 eb.val(PERSONAL_ATTACHMENT_QUOTA_BYTES).as('attachment_quota_bytes'),
                 eb.val(SELF_SERVICE_CREATOR).as('created_by_operator'),
@@ -217,8 +212,8 @@ export async function deleteSelfCreatedOrganization(
   ] as const);
 }
 
-// 言葉づかいの列（vocabulary）には VOCABULARY_COLUMN_VALUE を明示して入れる。
-// 人数と添付ファイルの上限、テーマは列の既定の値で作る。
+// 使わない言葉づかいの列（vocabulary）には書き込まない。
+// 人数と添付ファイルの上限は列の既定の値で作る。
 // slug が重なったときは 'slug_taken'（同時に作られて UNIQUE に当たった場合を含む）。それ以外の失敗は投げる
 export async function insertOrganization(
   env: Env,
@@ -234,7 +229,6 @@ export async function insertOrganization(
           id: organizationId,
           slug: input.slug,
           name: input.name,
-          vocabulary: VOCABULARY_COLUMN_VALUE,
           created_by_operator: input.createdByOperator,
           created_at: at,
           updated_at: at,
