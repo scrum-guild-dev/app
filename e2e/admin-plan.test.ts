@@ -14,7 +14,7 @@ test('未契約の組織の管理者には、プランの節に「未契約」�
 }) => {
   await signIn(context, baseURL, 'admin');
   await page.goto('/aoba/admin');
-  const section = page.getByRole('region', { name: 'プラン' });
+  const section = page.getByRole('region', { name: 'プラン', exact: true });
   await expect(section.locator('dd').first()).toHaveText('未契約');
   // seed の組織は列の既定の上限（15 人、30 GB）
   await expect(section).toContainText('15 人');
@@ -46,18 +46,20 @@ test('契約のある組織の管理者には、契約、追加容量の口数�
     },
   }));
   await page.goto('/aoba/admin');
-  const section = page.getByRole('region', { name: 'プラン' });
+  const section = page.getByRole('region', { name: 'プラン', exact: true });
   await expect(section.locator('dd').first()).toHaveText('ビジネス・年払い');
   await expect(section).toContainText('+50 GB × 1 口');
   await expect(section).toContainText('50 人');
   await expect(section).toContainText('150 GB');
   await expect(section).not.toContainText('未契約');
   await expect(section).toContainText('運用者に問い合わせてください。');
+  // 同じ organization 操作を読む容量の節も待ち、差し替え中の応答をテスト終了で切らない
+  await expect(page.getByRole('region', { name: '添付ファイルと Wiki の容量' }).locator('table')).toBeVisible();
 });
 
 test('メンバーには組織の管理の画面もプランの節も出ない', async ({ page, context, baseURL }) => {
   await signIn(context, baseURL, 'member');
   await page.goto('/aoba/admin');
   await expect(page.getByRole('heading', { level: 1, name: '画面が見つかりません' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'プラン' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'プラン', exact: true })).toHaveCount(0);
 });
