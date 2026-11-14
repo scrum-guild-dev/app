@@ -7191,4 +7191,19 @@ describe('#1180: AI レビューの指摘', () => {
       ['通す', `${CREATE_REF} -f n=refs/heads/21-{x,y}`, 'allow'],
     ]);
   });
+
+  describe('性能: createRef のコメントと curl の閉じない {', () => {
+    const LIMIT_MS = 3000;
+    for (const [name, command] of [
+      ['改行の無いコメントの繰り返し', `gh api graphql -f query='mutation{createRef(input:{${'name#'.repeat(20000)}})}'`],
+      ['curl の URL の閉じない { の繰り返し', `curl -o '#1' 'https://example.com/${'{'.repeat(20000)}'`],
+    ]) {
+      test(`${name} は ${LIMIT_MS} ms 以内`, () => {
+        const start = performance.now();
+        decision(command);
+        const elapsed = performance.now() - start;
+        assert.ok(elapsed < LIMIT_MS, `${name}: ${elapsed.toFixed(0)} ms`);
+      });
+    }
+  });
 });

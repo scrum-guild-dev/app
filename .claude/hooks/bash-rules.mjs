@@ -765,6 +765,40 @@ function percentHidesResource(endpoint) {
   return /\/(git|releases|branches|contents|merges?|refs|tags|heads)(?![\w-])/i.test(decoded);
 }
 
+// GraphQL の name: $n と input: $i の組（{ argument, name }）。GraphQL は空白、カンマ、コメント（# から行末）を読み飛ばすので（name:,$n、name,:$n、$ n）、
+// 字句に分けてから並びを見る。正規表現で読み飛ばすと、# の続く入力で読み直しが二乗か指数に増える。文字列の中の # はコメントではない
+function graphqlVariableArguments(text) {
+  const tokens = [];
+  for (let i = 0; i < text.length; ) {
+    const c = text[i];
+    if (/[\s,]/.test(c)) i++;
+    else if (c === '#') {
+      const end = text.indexOf('\n', i);
+      i = end === -1 ? text.length : end;
+    } else if (c === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      tokens.push('"');
+      i = j + 1;
+    } else if (/\w/.test(c)) {
+      let j = i;
+      while (j < text.length && /\w/.test(text[j])) j++;
+      tokens.push(text.slice(i, j));
+      i = j;
+    } else {
+      tokens.push(c);
+      i++;
+    }
+  }
+  const pairs = [];
+  for (let k = 0; k + 3 < tokens.length; k++) {
+    if ((tokens[k] === 'name' || tokens[k] === 'input') && tokens[k + 1] === ':' && tokens[k + 2] === '$' && /^\w+$/.test(tokens[k + 3])) {
+      pairs.push({ argument: tokens[k], name: tokens[k + 3] });
+    }
+  }
+  return pairs;
+}
+
 // GitHub の API でも ref の強制更新は force push と同じに扱う。GET（読むだけ）は通す。
 // words は引数ぜんたい、endpoints はエンドポイントの位置引数（gh api）か URL（curl）。ref の更新かどうかは、コマンドぜんたいの文字列でなく、
 // endpoints だけで見る（Issue のコメントの本文に書いた /git/refs/ や {"force":true} は、ref を動かさない）。
@@ -787,9 +821,7 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
   // createRef の name（か input ぜんたい）を GraphQL の変数で受け、変数の値が展開かファイル（-f n="$P"、-f n=@file）だと、作る ref の名前を字面で読めない。
   // gh は -f の値の @ もファイルとは読まないが、決めたことは -f と -F を分けずに止める。oid など名前以外の変数は読まない
   if (/\bcreateRef\b/.test(text)) {
-    // GraphQL は空白、カンマ、コメント（# から行末）を読み飛ばす（name:,$n、name,:$n、$ n）
-    const skip = '(?:[\\s,]|#[^\\n]*(?:\\n|$))*';
-    const variables = [...text.matchAll(new RegExp(`\\b(name|input)${skip}:${skip}\\$${skip}(\\w+)`, 'g'))].map((m) => ({ argument: m[1], name: m[2] }));
+    const variables = graphqlVariableArguments(text);
     const opaque = fields.some((f) => {
       // 展開が大きすぎて上の braced で見なかった値は、production の名前に展開されうる（gitConfigFileAt と同じく当たる側に倒す）
       if (f.includes('{') && expansionSize(f) > MAX_BRACE_EXPANSION) return true;
@@ -2461,7 +2493,8 @@ const urlFileName = (url) => url.replace(/[?#].*$/, '').split('/').pop();
 // 置き換えの組み合わせが多すぎるときは、#N を * にした名前だけを返す（候補ごとに置き換えず、当たりうる名前に広く照合する）
 function curlGlobNames(file, urls) {
   if (!/#\d+/.test(file)) return [file];
-  const sets = urls.flatMap((url) => [...url.matchAll(/\{([^}]*)\}|\[[^\]]*\]/g)].map((m) => (m[1] === undefined ? ['*'] : m[1].split(','))));
+  // 中身に開きの { と [ を許すと、閉じない { を並べた URL で開始位置ごとに末尾まで読み直して二乗になる
+  const sets = urls.flatMap((url) => [...url.matchAll(/\{([^{}]*)\}|\[[^[\]]*\]/g)].map((m) => (m[1] === undefined ? ['*'] : m[1].split(','))));
   let names = [file];
   for (const [i, alternatives] of sets.entries()) {
     const token = `#${i + 1}`;
