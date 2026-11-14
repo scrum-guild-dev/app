@@ -631,6 +631,13 @@ const PREFIX_FLAGS_WITH_VALUE = new Set([
   '-u', '-g', '-n', '-s', '-k', '-I', '-P', '-L', '-d', '-E', '-C', '-p', '--package', '--chdir', '--unset',
 ]);
 
+// sudo の -n、-s、-k、-E は値を取らない。他の前置きの -n や -s と共用すると実行名を読み飛ばす。
+const SUDO_FLAGS_WITH_VALUE = new Set([
+  '-a', '-C', '-c', '-D', '-g', '-h', '-p', '-R', '-r', '-t', '-T', '-u',
+  '--auth-type', '--bsd-auth-type', '--close-from', '--login-class', '--chdir', '--group', '--host',
+  '--prompt', '--chroot', '--role', '--type', '--command-timeout', '--user', '--other-user',
+]);
+
 export function isAssignment(word) {
   // NAME+=値 と、配列の要素の NAME[添字]=値 も代入
   return /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/.test(word);
@@ -713,7 +720,8 @@ function scanCommand(words) {
         continue;
       }
       const takesValue =
-        (previous === 'sudo' && w === '-E') || (['command', 'time'].includes(previous) && w === '-p') ? false :
+        previous === 'sudo' ? SUDO_FLAGS_WITH_VALUE.has(w) :
+        (['command', 'time'].includes(previous) && w === '-p') ? false :
         (previous === 'exec' && w === '-a') || (previous === 'stdbuf' && ['-o', '-e', '-i'].includes(w)) ? true :
         previous === 'xargs'
           ? takesValueInXargs(w) || (w !== '-p' && PREFIX_FLAGS_WITH_VALUE.has(w))
