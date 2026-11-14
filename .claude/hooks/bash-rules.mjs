@@ -3303,7 +3303,8 @@ function judgeSegment(words, ctx) {
     results.push([ASK, '前置きの道具から git、シェル、インタープリタや名前を判定できない道具を動かすと、作業場所や追加の引数を判定できない。人が確かめる']);
   }
   if (tool === 'git') {
-    if (ctx.env?.GIT_CONFIG_ENV) {
+    // pnpm exec や find -exec からの掛け直しは variablesSetBy を通らないので、前置きの代入も直接見る。
+    if (ctx.env?.GIT_CONFIG_ENV || words.slice(0, ci).some((w) => /^GIT_CONFIG_\w+(\[[^\]]*\])?\+?=/.test(w))) {
       results.push([ASK, 'GIT_CONFIG_* は git の設定を差し替え、守るフックや push の先を変えうる。人が確かめる']);
     }
     // 道具の前の代入と、前の区切りの export などで GIT_DIR か GIT_WORK_TREE を設定した後（ctx.env、judgeBash が積む）は、git が別の作業コピーを見る。
