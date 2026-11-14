@@ -2152,14 +2152,14 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 @media (max-width: 760px), (pointer: coarse) { .slash-item { min-height: 44px; align-items: center; } }
 
 /* ===== 画面の版 =====
- * 全画面の右下に、読み込んだ画面の build の版を小さく出す。トーストと下のタブが下に空ける --space-4 の余白に収め、
+ * 全画面の右下に、読み込んだ画面の build の版を小さく出す。トーストが下に空ける --space-4 の余白に収め（狭い画面の置き方は下のメディアクエリ）、
  * 操作を受けない（pointer-events: none）。重なる部品（上の帯、引き出し、ダイアログ、トースト）より下に置く。
  * 薄さは opacity や --color-faint でなく大きさで出す（axe の文字のコントラスト 4.5:1 を保つため）。
  * 地を塗るのは、下を流れる要素や現代風の地のグラデーションでコントラストが変わらないようにするため。
  * CI の e2e の版は 40 桁の SHA なので、狭い幅ではみ出さないよう省略する。
  * 切るのは横だけにする（overflow-x: clip、overflow-y: visible）。Noto Sans JP の字の上下の幅（約 1.45em）は行の高さより大きく、
  * 縦も切ると下に突き出る字（e2e の版や preview のタグの g、p、y）の下端が欠ける。行の高さを字の幅まで広げると、上端が --space-4 の余白を越える。
- * 下端から 1px、行の高さ 1.2（14.4px）で、箱の上端を --space-4（16px）の余白の内に収める */
+ * 広い画面は下端から 1px、行の高さ 1.2（14.4px）で、箱の上端を --space-4（16px）の余白の内に収める */
 .app-version {
   position: fixed; z-index: 3;
   right: max(var(--space-4), env(safe-area-inset-right, 0px)); bottom: calc(1px + env(safe-area-inset-bottom, 0px));
@@ -2169,9 +2169,13 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 }
 /* カタログの静止の見本は、固定せずに並びの中へ置く */
 .app-version.is-static { position: static; display: inline-block; }
-/* 760px 以下の画面の入れ替え（View Transitions）で、版が本文と一緒に動かないよう入れ替えの外に置く */
+/* 760px 以下の画面の入れ替え（View Transitions）で、版が本文と一緒に動かないよう入れ替えの外に置く。
+ * スマホの下端の角は丸く、ホームバーも重なるので、下端 1px のままでは字が欠ける（viewport-fit=cover でないと safe-area は 0）。
+ * 狭い画面では下の --space-4 の余白の上へ上げ、下のタブがあるときはタブとトーストの間の --space-4 の余白に置く。
+ * 下のタブが無い画面（ログインなど）ではトーストの置き場と重なり、トーストが出ている間は版が隠れる */
 @media (max-width: 760px) {
-  .app-version:not(.is-static) { view-transition-name: app-version; }
+  .app-version:not(.is-static) { view-transition-name: app-version; bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); }
+  html:has(.mobile-navigation) .app-version:not(.is-static) { bottom: calc(var(--space-4) + var(--mobile-bar-height) + 1px + env(safe-area-inset-bottom, 0px)); }
   ::view-transition-group(app-version), ::view-transition-new(app-version) { animation: none; }
   ::view-transition-old(app-version) { display: none; }
 }

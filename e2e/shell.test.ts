@@ -927,6 +927,8 @@ test('組織の画面の右下に、画面の build の版を出し、スクロ�
   await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
   const badge = page.locator('.app-version');
   await expect(badge).toHaveText(`版 ${version}`);
+  // 「版」は読み上げにだけ添え、目には版だけを出す
+  await expect(badge.locator('.visually-hidden')).toHaveText('版');
   // 右下の角に置く（右は 16px の余白、下は 1px の余白）
   const atTop = await versionBadgeInset(page);
   expect(atTop.right).toBeCloseTo(16, 0);
@@ -946,7 +948,9 @@ test('組織の画面の右下に、画面の build の版を出し、スクロ�
   await expect(badge).toHaveCSS('pointer-events', 'none');
 });
 
-test('390px では、版が下のタブと重ならず、長い版は省略して幅に収め、下に突き出る字を切らない', async ({ page }) => {
+test('390px では、版を下のタブのすぐ上に置いて丸い角とホームバーから離し、長い版は省略して幅に収め、下に突き出る字を切らない', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(today);
   const tabs = page.locator('.mobile-tabs');
@@ -956,12 +960,16 @@ test('390px では、版が下のタブと重ならず、長い版は省略し�
   const tabsBox = await tabs.boundingBox();
   const badgeBox = await badge.boundingBox();
   if (!tabsBox || !badgeBox) throw new Error('下のタブか版の位置が取れない');
-  expect(badgeBox.y).toBeGreaterThanOrEqual(tabsBox.y + tabsBox.height);
+  // 下のタブの上端から 1px 上に置き、タブの上のトーストの余白（--space-4）に収める
+  expect(tabsBox.y - (badgeBox.y + badgeBox.height)).toBeCloseTo(1, 0);
+  expect(badgeBox.height).toBeLessThan(16);
+  // 画面の下端（丸い角とホームバーのある帯）から離す
+  expect((await versionBadgeInset(page)).bottom).toBeGreaterThan(16);
 
   // 版の長さは環境で変わる（手元は dev、CI は 40 桁の SHA）。どこでも省略を確かめるため、長い文字に差し替える。
   // overflow-x: clip の箱は scrollWidth を持たないので、文字の幅は Range で測る
   const long = await badge.evaluate((element) => {
-    element.textContent = `版 ${'0123456789abcdef'.repeat(5)}`;
+    element.textContent = '0123456789abcdef'.repeat(5);
     const box = element.getBoundingClientRect();
     const range = document.createRange();
     range.selectNodeContents(element);
@@ -976,9 +984,9 @@ test('390px では、版が下のタブと重ならず、長い版は省略し�
   expect(long.textWidth).toBeGreaterThan(long.right - long.left);
   expect(long.left).toBeGreaterThanOrEqual(0);
   expect(long.right).toBeLessThanOrEqual(390);
-  // 折り返さずに1行のまま（--space-4 の 16px 未満）で、下のタブより下に残る
+  // 折り返さずに1行のまま（--space-4 の 16px 未満）で、下のタブと重ならない
   expect(long.height).toBeLessThan(16);
-  expect(long.top).toBeGreaterThanOrEqual(tabsBox.y + tabsBox.height);
+  expect(long.top + long.height).toBeLessThanOrEqual(tabsBox.y);
   await expect(badge).toHaveCSS('white-space', 'nowrap');
   await expect(badge).toHaveCSS('text-overflow', 'ellipsis');
 
@@ -994,6 +1002,10 @@ test('組織の枠の外（ログインの画面）にも版を出す', async ({
     await page.goto('/login');
     await expect(page.getByRole('heading', { level: 1, name: 'ログイン' })).toBeVisible();
     await expect(page.locator('.app-version')).toHaveText(`版 ${version}`);
+    // 下のタブの無い狭い画面では、丸い角とホームバーから離すため下端から --space-4 上げる
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('.mobile-tabs')).toHaveCount(0);
+    expect((await versionBadgeInset(page)).bottom).toBeCloseTo(16, 0);
   } finally {
     await context.close();
   }
