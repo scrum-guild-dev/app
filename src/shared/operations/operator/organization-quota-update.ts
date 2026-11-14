@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PLAN_LIMITS } from '../../organization-plan.ts';
 import { SLUG_MAX_LENGTH } from '../../organization-slug.ts';
 import { defineOperation } from '../define.ts';
 
@@ -10,15 +11,17 @@ export const ATTACHMENT_QUOTA_MAX_BYTES = 100 * 1024 ** 4; // 100 TB
 
 // 値段の段階（docs/business.md の「値段の考え方」）。画面の選択肢だけが使い、サーバーは段階を知らずに値を受ける
 // （51人以上の組織のために、段階に無い値も入れられるため）
+// 値はプランの標準の値（organization-plan.ts の PLAN_LIMITS）と同じ。小さい組織はチーム、標準はビジネス
 export const quotaTiers = [
-  { id: 'small', member_limit: 15, attachment_quota_bytes: 30 * QUOTA_GIB },
-  { id: 'standard', member_limit: 50, attachment_quota_bytes: 100 * QUOTA_GIB },
+  { id: 'small', ...PLAN_LIMITS.team },
+  { id: 'standard', ...PLAN_LIMITS.business },
 ] as const;
 
 const memberLimit = z.number().int().min(1).max(MEMBER_LIMIT_MAX);
 const attachmentQuotaBytes = z.number().int().min(1).max(ATTACHMENT_QUOTA_MAX_BYTES);
 
-// 組織の人数の上限と添付ファイルの合計の上限を変える。停止中の組織も変えられる。人数を今の人数より小さくしてもよい
+// 組織の人数の上限と添付ファイルの合計の上限を変える。契約のある組織（organization_contracts に行がある）は、上限を契約から決めるので
+// 409 の conflict（reason: plan_managed）で断る。契約は organization-plan-update で変える。停止中の組織も変えられる。人数を今の人数より小さくしてもよい
 // （今いる人は残り、招待だけが止まる）。今の値が送った値と同じなら何も書かず、今の値を返す。
 // expected は画面が見ていた前の値。今の値がそれと違えば（ダイアログを開いた後に別の運用者が変えた）409 の conflict で、
 // 書く文も expected のままであることを条件にする。無い slug は 404。添付ファイルの上限を上げたら
@@ -27,7 +30,7 @@ const attachmentQuotaBytes = z.number().int().min(1).max(ATTACHMENT_QUOTA_MAX_BY
 export const organizationQuotaUpdate = defineOperation({
   name: 'organization-quota-update',
   description:
-    '組織の人数の上限と添付ファイルの合計の上限（バイト）を変える。expected は画面が見ていた前の値で、今の値と違えば 409',
+    '組織の人数の上限と添付ファイルの合計の上限（バイト）を変える。expected は画面が見ていた前の値で、今の値と違えば 409。契約のある組織は 409 の plan_managed',
   mode: 'write',
   permission: 'operator',
   input: z.object({

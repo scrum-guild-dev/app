@@ -619,7 +619,7 @@ test('書体を自分のオリジンから読み込み、外へ通信しない',
 test('覚えたテーマを、body ができる前に当てる', async ({ page }) => {
   const collect = await watchViolations(page);
   await page.addInitScript(() => {
-    localStorage.setItem('sg-theme', 'medieval');
+    localStorage.setItem('sg-theme', 'modern');
     const seen: { theme: string | undefined; bodyExists: boolean }[] = [];
     (window as unknown as { __themeSeen: typeof seen }).__themeSeen = seen;
     new MutationObserver(() => {
@@ -633,7 +633,7 @@ test('覚えたテーマを、body ができる前に当てる', async ({ page }
   const seen = await page.evaluate(
     () => (window as unknown as { __themeSeen: { theme: string | undefined; bodyExists: boolean }[] }).__themeSeen,
   );
-  expect(seen[0]).toEqual({ theme: 'medieval', bodyExists: false });
+  expect(seen[0]).toEqual({ theme: 'modern', bodyExists: false });
   expect(await collect()).toEqual([]);
 });
 
@@ -641,7 +641,7 @@ test('覚えた値が壊れていても、落ちずに描く', async ({ page }) 
   await page.addInitScript(() => localStorage.setItem('sg-theme', 'retro'));
   await page.goto(today);
   await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
-  // 壊れた値は先当てで無視され、組織の値（seed は simple）が当たる
+  // 壊れた値は先当てで無視され、自分のテーマ（seed は選んでいない = simple）が当たる
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'simple');
 });
 
@@ -908,6 +908,107 @@ test('画面の build に埋めた版が API の版と同じ', async ({ request 
   const res = await request.get('/_app/version.json');
   expect(res.status()).toBe(200);
   expect(await res.json()).toEqual({ version });
+});
+
+// 版の箱の、画面の右端と下端からの距離。縦のスクロールバーを除いた幅で測る
+async function versionBadgeInset(page: Page) {
+  return page.locator('.app-version').evaluate((badge) => {
+    const box = badge.getBoundingClientRect();
+    return {
+      right: document.documentElement.clientWidth - box.right,
+      bottom: document.documentElement.clientHeight - box.bottom,
+    };
+  });
+}
+
+test('組織の画面の右下に、画面の build の版を出し、スクロールしても残る', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(today);
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+  const badge = page.locator('.app-version');
+  await expect(badge).toHaveText(`版 ${version}`);
+  // 「版」は読み上げにだけ添え、目には版だけを出す
+  await expect(badge.locator('.visually-hidden')).toHaveText('版');
+  // 右下の角に置く（右は 16px の余白、下は 1px の余白）
+  const atTop = await versionBadgeInset(page);
+  expect(atTop.right).toBeCloseTo(16, 0);
+  expect(atTop.bottom).toBeCloseTo(1, 0);
+  // 画面に固定する。今日やることの seed は画面に収まるので、文書を伸ばしてから末尾まで送る
+  await page.evaluate(() => {
+    const spacer = document.createElement('div');
+    spacer.style.height = '3000px';
+    document.body.append(spacer);
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  const scrolled = await versionBadgeInset(page);
+  expect(scrolled.right).toBeCloseTo(16, 0);
+  expect(scrolled.bottom).toBeCloseTo(1, 0);
+  // 操作を受けない
+  await expect(badge).toHaveCSS('pointer-events', 'none');
+});
+
+test('390px では、版を下のタブのすぐ上に置いて丸い角とホームバーから離し、長い版は省略して幅に収め、下に突き出る字を切らない', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(today);
+  const tabs = page.locator('.mobile-tabs');
+  await expect(tabs).toBeVisible();
+  const badge = page.locator('.app-version');
+  await expect(badge).toHaveText(`版 ${version}`);
+  const tabsBox = await tabs.boundingBox();
+  const badgeBox = await badge.boundingBox();
+  if (!tabsBox || !badgeBox) throw new Error('下のタブか版の位置が取れない');
+  // 下のタブの上端から 1px 上に置き、タブの上のトーストの余白（--space-4）に収める
+  expect(tabsBox.y - (badgeBox.y + badgeBox.height)).toBeCloseTo(1, 0);
+  expect(badgeBox.height).toBeLessThan(16);
+  // 画面の下端（丸い角とホームバーのある帯）から離す
+  expect((await versionBadgeInset(page)).bottom).toBeGreaterThan(16);
+
+  // 版の長さは環境で変わる（手元は dev、CI は 40 桁の SHA）。どこでも省略を確かめるため、長い文字に差し替える。
+  // overflow-x: clip の箱は scrollWidth を持たないので、文字の幅は Range で測る
+  const long = await badge.evaluate((element) => {
+    element.textContent = '0123456789abcdef'.repeat(5);
+    const box = element.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return {
+      left: box.left,
+      right: box.right,
+      top: box.top,
+      height: box.height,
+      textWidth: range.getBoundingClientRect().width,
+    };
+  });
+  expect(long.textWidth).toBeGreaterThan(long.right - long.left);
+  expect(long.left).toBeGreaterThanOrEqual(0);
+  expect(long.right).toBeLessThanOrEqual(390);
+  // 折り返さずに1行のまま（--space-4 の 16px 未満）で、下のタブと重ならない
+  expect(long.height).toBeLessThan(16);
+  expect(long.top + long.height).toBeLessThanOrEqual(tabsBox.y);
+  await expect(badge).toHaveCSS('white-space', 'nowrap');
+  await expect(badge).toHaveCSS('text-overflow', 'ellipsis');
+
+  // 手元の e2e の版（e2e-<時刻>）や preview のタグは、下に突き出る字を含む。字の上下の幅は行の高さより大きいので、縦は切らない
+  await expect(badge).toHaveCSS('overflow-y', 'visible');
+});
+
+test('組織の枠の外（ログインの画面）にも版を出す', async ({ browser, baseURL }) => {
+  // beforeEach のログインを持たない context で、ログインの画面を開く
+  const context = await browser.newContext({ baseURL });
+  try {
+    const page = await context.newPage();
+    await page.goto('/login');
+    await expect(page.getByRole('heading', { level: 1, name: 'ログイン' })).toBeVisible();
+    await expect(page.locator('.app-version')).toHaveText(`版 ${version}`);
+    // 下のタブの無い狭い画面では、丸い角とホームバーから離すため下端から --space-4 上げる
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('.mobile-tabs')).toHaveCount(0);
+    expect((await versionBadgeInset(page)).bottom).toBeCloseTo(16, 0);
+  } finally {
+    await context.close();
+  }
 });
 
 // 本文（.content）は幅の上限を持たない。広い画面でも左のメニューの右から画面の右の端まで広がる

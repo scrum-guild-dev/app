@@ -178,7 +178,7 @@ test('押せる要素も文字を持つ要素も1つも数えなかった組み�
   const check = createLayoutCheck('today', []);
   await check.inThemes(page);
   expect(() => check.finish()).toThrow(
-    /\[today\] 押せる要素を 1 つも数えなかった組み合わせがある: simple_light、medieval、modern/,
+    /\[today\] 押せる要素を 1 つも数えなかった組み合わせがある: simple_light、modern/,
   );
   expect(() => check.finish()).toThrow(/文字を持つ要素を 1 つも数えなかった組み合わせがある: simple_light、/);
 });
@@ -226,7 +226,7 @@ test('画面のテストの入口は、テーマごとに出た違反をまと�
   const bare = createLayoutCheck('today', []);
   await bare.inThemes(page);
   expect(() => bare.finish()).toThrow(
-    /\[today\] 狭い幅（390px）の違反が 3 件ある[\s\S]*- target-44: button\.small（simple_light、medieval、modern）\n {2}見た目の箱は 30×30px/,
+    /\[today\] 狭い幅（390px）の違反が 3 件ある[\s\S]*- target-44: button\.small（simple_light、modern）\n {2}見た目の箱は 30×30px/,
   );
   expect(() => bare.finish()).toThrow(/- overflow: div\.wide（simple_light、/);
   // 違反をすべて除外で外せば通る

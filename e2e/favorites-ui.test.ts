@@ -154,7 +154,6 @@ test('お気に入りの星は全テーマで金色に塗られ、外すと輪�
     ['simple_light', 'dark', 'rgb(153, 112, 0)'],
     ['simple', 'dark', 'rgb(245, 204, 69)'],
     ['simple_dark', 'light', 'rgb(245, 204, 69)'],
-    ['medieval', 'light', 'rgb(145, 107, 0)'],
     ['modern', 'light', 'rgb(245, 204, 69)'],
   ] as const) {
     await page.emulateMedia({ colorScheme: scheme });

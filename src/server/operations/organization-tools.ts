@@ -3,7 +3,7 @@
 // 登録の関数が、組織に入れると確かめた後に、その組織の入口（OrganizationDb）に結んで作る。どの道具も組織の ID を引数に取らず、
 // 組織の行は確かめた組織の ID で、組織の中の表は organization_id で絞る。共通の表と組織の中の表は別の問い合わせで引き、1回の batch() に混ぜない。
 // 道具は権限ごとに分けず、組織の中のすべての操作に渡す。道具の中で入った人（actor）を確かめ、承諾待ちの招待だけの人の操作からは
-// 自分のログインの読み取り（myLogins）のほかの道具を使えず、組織の設定の書き込みは管理者の操作からだけ使える。
+// 自分のログインの読み取り（myLogins）のほかの道具を使えない。
 // 当たらない呼び出しは処理の誤りなので、投げて 500 にする
 import { now } from '../../shared/clock.ts';
 import { reconcileAttachmentQuotaAfterSave } from '../storage/quota-warning.ts';
@@ -24,12 +24,9 @@ import {
   markAttachmentQuotaCheck,
   readOrganizationRow,
   userAvatarsOf,
-  writeOrganizationSettings,
   type OrganizationActor,
   type OrganizationDb,
   type OrganizationRow,
-  type OrganizationSettingsChange,
-  type OrganizationSettingsWrite,
 } from '../db/index.ts';
 
 export type OrganizationTools = {
@@ -42,11 +39,6 @@ export type OrganizationTools = {
   readOrganization(): Promise<OrganizationRow>;
   // 成功後は変更待ちの記録だけを待ち、通知をdeferへ渡す。容量拒否時のmarkOnlyは記録だけ行い、cronへ任せる。
   reconcileAttachmentQuota(options?: { markOnly?: boolean }): Promise<void>;
-  // 自分の組織の言葉づかいと既定のテーマを、停止しておらず、先に読んだ値（from）のままなら書く（渡した項目と updated_at だけ）。
-  // 管理者の操作からだけ呼ぶ。書けたら written、入ってから書くまでに停止されていたら suspended（呼び出し側は 403 にする）、
-  // 別の要求が先に変えていたら conflict（409 にする）。変更の記録（change_logs）は書かない。
-  // 組織の中の表なので、呼び出し側が written のときだけ別の batch() で書く
-  writeOrganizationSettings(change: OrganizationSettingsChange, now: Date): Promise<OrganizationSettingsWrite>;
   // 自分の組織の users の ID ごとのアバターの URL。アカウントに結ばれていない人、ログインしたことの無い人、アバターの無い人は null。
   // 別の組織の ID と、存在しない ID はキーを持たない
   avatarsOf(userIds: readonly string[]): Promise<Map<string, string | null>>;
@@ -134,11 +126,6 @@ export function organizationTools(
             logFailure(error);
           }
         }
-      }),
-    writeOrganizationSettings: (change, now) =>
-      member(() => {
-        if (!actor.isAdmin) throw new Error('管理者でない人の操作から、組織の設定を書いた');
-        return writeOrganizationSettings(env, db, change, now);
       }),
     avatarsOf: (userIds) => member(() => userAvatarsOf(env, db, userIds)),
     myLogins: () => (logins ??= readMyLogins(env, actor.accountId)),

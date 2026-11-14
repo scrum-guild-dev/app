@@ -12,6 +12,7 @@
   import Icon from '../../lib/components/Icon.svelte';
   import LoadFailed from '../../lib/components/LoadFailed.svelte';
   import LogoutButton from '../../lib/components/LogoutButton.svelte';
+  import OrganizationPlanDialog from '../../lib/components/OrganizationPlanDialog.svelte';
   import OrganizationQuotaDialog from '../../lib/components/OrganizationQuotaDialog.svelte';
   import OrganizationSuspendDialog from '../../lib/components/OrganizationSuspendDialog.svelte';
   import ReassignAdminDialog from '../../lib/components/ReassignAdminDialog.svelte';
@@ -19,6 +20,7 @@
   import { formatCount, formatUtcDate, quotaSize } from '../../lib/format.ts';
   import { formatDateTime, formatTrialStopDateTime } from '../../lib/format-datetime.ts';
   import { isUnauthenticated, loginUrl } from '../../lib/login-redirect.ts';
+  import { planLabel } from '../../lib/plan-terms.ts';
   import { showToast } from '../../lib/toast.svelte.ts';
   import { t } from '../../lib/vocabulary.svelte.ts';
   import { organizationResume, type SuspensionKind } from '../../shared/operations/operator/index.ts';
@@ -43,6 +45,9 @@
   // 名前の直後、ほかの印の前に、組織の種類の印（chip。チーム用か自分用）を出す。自分用（kind が personal）の行は、人数 / 上限の列を空（ダッシュ）にし、
   // 「上限に達した」の印と管理者の状態の印を出さず、「管理者を指名」と「人数と容量の上限を変える」を置かない（添付ファイルの上限の値は出す）。
   // 停止、再開、停止の理由の切り替えは自分用の行にも置く
+  // 添付ファイルの上限の列の値の下に、契約の印（chip）を出す。契約があれば「チーム・月払い」の形、無ければ自分用は「パーソナル」、
+  // チーム用は「未契約」。チーム用の行の同じ列に「プランを変える」を置き、契約のダイアログを開く。契約のある行は上限を契約から決めるので、
+  // 「人数と容量の上限を変える」を出さない（サーバーも 409 の plan_managed で断る）。消す予定日を過ぎた解約の組織には「プランを変える」を置かない
   let { data }: PageProps = $props();
   const ids = $props.id();
 
@@ -51,6 +56,10 @@
   let suspendDialog = $state<ReturnType<typeof OrganizationSuspendDialog>>();
   let reassignDialog = $state<ReturnType<typeof ReassignAdminDialog>>();
   let quotaDialog = $state<ReturnType<typeof OrganizationQuotaDialog>>();
+  let planDialog = $state<ReturnType<typeof OrganizationPlanDialog>>();
+  // 契約の変更の対象の組織。ダイアログの結果のトーストに使う
+  let planName = $state('');
+  let planSlug = $state('');
   // 上限の変更の対象の組織の名前。ダイアログの結果のトーストに使う
   let quotaName = $state('');
   let quotaSlug = $state('');
@@ -184,6 +193,33 @@
     quotaDialog?.show(row, trigger);
   }
 
+  // 契約の変更のダイアログの結果。扱いは上限の変更と同じ
+  function planFinished(outcome: 'done' | 'state_changed' | 'purge_due' | 'unavailable' | 'unauthenticated'): void {
+    if (outcome === 'unauthenticated') {
+      window.location.assign(loginUrl(page.url));
+      return;
+    }
+    const name = planName;
+    if (outcome === 'purge_due') {
+      // 開いた後に消す予定日を過ぎた。扱いは管理者の指名し直しと同じ
+      showToast(t('operatorPlanPurgeDue', { name }), 'alert');
+      const slug = planSlug;
+      void invalidateAll().then(() => focusPurgeDue(slug));
+      return;
+    }
+    if (outcome === 'done') showToast(t('operatorPlanDone', { name }), 'check');
+    else if (outcome === 'state_changed') showToast(t('operatorStateChanged', { name }), 'alert');
+    else showToast(t('operatorUnavailable', { name }), 'alert');
+    void reloadAndFlash(outcome === 'done' ? planSlug : undefined);
+  }
+
+  function changePlan(row: Parameters<NonNullable<typeof planDialog>['show']>[0], trigger: HTMLElement): void {
+    if (resumingSlug !== null) return;
+    planName = row.name;
+    planSlug = row.slug;
+    planDialog?.show(row, trigger);
+  }
+
   // 停止している組織の今の停止の理由。消す予定日があれば解約
   const kindOf = (row: Row): SuspensionKind => (row.purge_on === null ? 'temporary' : 'cancellation');
 
@@ -202,6 +238,13 @@
   // 再開を送っている間の読み上げ。領域は常に置き、中の文字だけを替える
   const status = $derived(resumingSlug !== null ? t('operatorResuming') : '');
 </script>
+
+<!-- 契約の印。読み上げでは「プラン: 」を前に添える -->
+{#snippet planChip(organization: (typeof data & { failed: false })['organizations'][number])}
+  <span class="chip"
+    ><span class="visually-hidden">{t('operatorPlanChipPrefix')}</span>{planLabel(organization, t)}</span
+  >
+{/snippet}
 
 <svelte:head>
   <title>{t('pageTitle', { page: t('pageOperator'), app: t('appName') })}</title>
@@ -329,17 +372,32 @@
                   >
                   <td class="is-num" data-label={t('operatorColumnQuota')}>
                     {usageText(organization.attachment_used_bytes)} / {quotaText(organization.attachment_quota_bytes)}
+                    <!-- 上限を決める契約の印 -->
+                    <br />{@render planChip(organization)}
                     <!-- 人数と添付ファイルの上限をまとめて変える。読み上げの名前に、どの組織かを添える。
                          自分用は上限を変える対象にしないので、値だけ出して変更のボタンを置かない -->
                     {#if organization.kind !== 'personal'}
-                      <br /><button
-                        class="link-btn"
-                        type="button"
-                        aria-disabled={resumingSlug !== null}
-                        aria-label={t('operatorQuotaLabel', { name: organization.name })}
-                        onclick={(event) => changeQuota(organization, event.currentTarget)}
-                        >{t('operatorQuotaAction')}</button
-                      >
+                      {#if organization.contract === null}
+                        <br /><button
+                          class="link-btn"
+                          type="button"
+                          aria-disabled={resumingSlug !== null}
+                          aria-label={t('operatorQuotaLabel', { name: organization.name })}
+                          onclick={(event) => changeQuota(organization, event.currentTarget)}
+                          >{t('operatorQuotaAction')}</button
+                        >
+                      {/if}
+                      <!-- 消す予定日を過ぎた解約の組織は、契約を変えられない（サーバーは 409 の purge_due）ので置かない -->
+                      {#if !organization.purge_due}
+                        <br /><button
+                          class="link-btn"
+                          type="button"
+                          aria-disabled={resumingSlug !== null}
+                          aria-label={t('operatorPlanLabel', { name: organization.name })}
+                          onclick={(event) => changePlan(organization, event.currentTarget)}
+                          >{t('operatorPlanAction')}</button
+                        >
+                      {/if}
                     {/if}
                   </td>
                   {#if organization.last_used_at === null}
@@ -431,3 +489,4 @@
 <OrganizationSuspendDialog bind:this={suspendDialog} onfinish={suspendFinished} />
 <ReassignAdminDialog bind:this={reassignDialog} onpurgedue={reassignPurgeDue} />
 <OrganizationQuotaDialog bind:this={quotaDialog} onfinish={quotaFinished} />
+<OrganizationPlanDialog bind:this={planDialog} onfinish={planFinished} />

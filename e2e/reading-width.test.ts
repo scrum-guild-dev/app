@@ -70,8 +70,12 @@ test('節の補足は見出しの行の右端へ離れず、件数のすぐ後�
   const hint = section.locator('.section-hint');
   await expect(count).toHaveText('1 件');
   await expect(hint).toBeVisible();
-  const countBox = (await count.boundingBox())!;
-  const hintBox = (await hint.boundingBox())!;
+  await page.evaluate(() => document.fonts.ready);
+  // 書体の読み込みで幅が変わるので、同じ描画時点の座標をまとめて取る。
+  const { countBox, hintBox } = await section.evaluate((element) => ({
+    countBox: element.querySelector('.section-count')!.getBoundingClientRect().toJSON(),
+    hintBox: element.querySelector('.section-hint')!.getBoundingClientRect().toJSON(),
+  }));
   // 件数と補足の間は見出しの行の間（12px）だけで、同じ行に並ぶ
   expect(hintBox.x - (countBox.x + countBox.width)).toBeLessThanOrEqual(16);
   expect(Math.abs(hintBox.y + hintBox.height - (countBox.y + countBox.height))).toBeLessThanOrEqual(4);

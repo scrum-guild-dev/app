@@ -55,6 +55,34 @@ describe('容量通知のスキーマ', () => {
   });
 });
 
+describe('0027_remove_medieval_theme', () => {
+  // 前の版で書かれた行を作ってから、0027 の SQL を当て直す（テストの D1 には全マイグレーションが当て済み）
+  test('中世風（medieval）を選んでいた行だけを NULL に戻し、ほかのテーマと NULL の行は変えない', async () => {
+    const migration = env.TEST_MIGRATIONS.find((m) => m.name.startsWith('0027_'));
+    expect(migration).toBeDefined();
+    const organization = await createOrganization({ theme: 'modern' });
+    const other = await createOrganization();
+    const medieval = [
+      await createUser(organization, { theme: 'medieval' }),
+      await createUser(other, { theme: 'medieval' }),
+    ];
+    const kept = await Promise.all(
+      (['simple', 'simple_light', 'simple_dark', 'modern', null] as const).map(async (theme) => ({
+        theme,
+        user: await createUser(organization, { theme }),
+      })),
+    );
+    const themeOf = async (userId: string) =>
+      (await env.DB.prepare('SELECT theme FROM users WHERE id = ?').bind(userId).first<{ theme: string | null }>())!
+        .theme;
+
+    await env.DB.batch(migration!.queries.map((query) => env.DB.prepare(query)));
+
+    for (const user of medieval) expect(await themeOf(user.id)).toBeNull();
+    for (const { theme, user } of kept) expect(await themeOf(user.id)).toBe(theme);
+  });
+});
+
 function id(): string {
   return crypto.randomUUID();
 }

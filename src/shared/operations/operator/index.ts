@@ -4,6 +4,7 @@ import type { AnyOperationDefinition } from '../define.ts';
 import { createOrganization } from './create-organization.ts';
 import { listOrganizations } from './list-organizations.ts';
 import { organizationAdminReassign } from './organization-admin-reassign.ts';
+import { organizationPlanUpdate } from './organization-plan-update.ts';
 import { organizationQuotaUpdate } from './organization-quota-update.ts';
 import { organizationResume } from './organization-resume.ts';
 import { organizationSuspend } from './organization-suspend.ts';
@@ -14,6 +15,7 @@ export {
   createOrganization,
   listOrganizations,
   organizationAdminReassign,
+  organizationPlanUpdate,
   organizationQuotaUpdate,
   organizationResume,
   organizationSuspend,
@@ -26,6 +28,7 @@ export {
   type ReassignAdminConflictReason,
   type ReassignAdminProblem,
 } from './organization-admin-reassign.ts';
+export { organizationContract } from './organization-plan-update.ts';
 export { ATTACHMENT_QUOTA_MAX_BYTES, MEMBER_LIMIT_MAX, QUOTA_GIB, quotaTiers } from './organization-quota-update.ts';
 export {
   isPurgeDue,
@@ -54,4 +57,5 @@ export const operatorOperations: readonly AnyOperationDefinition[] = [
   organizationResume,
   organizationAdminReassign,
   organizationQuotaUpdate,
+  organizationPlanUpdate,
 ];

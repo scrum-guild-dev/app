@@ -8,6 +8,7 @@ import {
   storeTheme,
   themeLabelKeys,
   themes,
+  themeOf,
   themeStorageKey,
   type ThemeStorage,
 } from '../src/shared/theme.ts';
@@ -52,6 +53,8 @@ describe('テーマの先当て（static/theme-init.js）', () => {
   test('覚えていない値、壊れた値は当てない', () => {
     assert.equal(runThemeInit(storageWith(null)).theme, undefined);
     assert.equal(runThemeInit(storageWith('retro')).theme, undefined);
+    // 消した中世風を覚えていても当てない（属性なしのシンプル（自動）で描く）
+    assert.equal(runThemeInit(storageWith('medieval')).theme, undefined);
   });
 
   test('localStorage が使えなくても落ちない', () => {
@@ -70,8 +73,18 @@ describe('テーマの先当て（static/theme-init.js）', () => {
 });
 
 describe('テーマの値', () => {
-  test('DB の列挙と同じ5つ', () => {
-    assert.deepEqual([...themes], ['simple', 'simple_light', 'simple_dark', 'medieval', 'modern']);
+  test('選べるのは4つ（中世風は消した）', () => {
+    assert.deepEqual([...themes], ['simple', 'simple_light', 'simple_dark', 'modern']);
+  });
+
+  test('現代風（modern）の名前はネオン', () => {
+    assert.equal(dictionary[themeLabelKeys.modern], 'ネオン');
+  });
+
+  test('users.theme の値を画面のテーマにする。NULL と消した中世風はシンプル（自動）', () => {
+    for (const theme of themes) assert.equal(themeOf(theme), theme);
+    assert.equal(themeOf(null), 'simple');
+    assert.equal(themeOf('medieval'), 'simple');
   });
 
   test('どのテーマにも辞書の名前がある', () => {
@@ -80,8 +93,8 @@ describe('テーマの値', () => {
 
   test('applyTheme は値を当て、null で属性を外す', () => {
     const target: { dataset: { theme?: string } } = { dataset: {} };
-    applyTheme('medieval', target);
-    assert.equal(target.dataset.theme, 'medieval');
+    applyTheme('simple_dark', target);
+    assert.equal(target.dataset.theme, 'simple_dark');
     applyTheme(null, target);
     assert.equal('theme' in target.dataset, false);
   });

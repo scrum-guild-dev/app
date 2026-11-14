@@ -39,6 +39,10 @@ function organizationStatuses(k) {
     !k.personal && k.adminPending && { label: "指名待ち", tone: "warn", icon: "clock" },
   ].filter(Boolean);
 }
+// 契約の印。添付ファイルの上限の列の値の下に出す。自分用はパーソナル、契約の無いチーム用の組織は未契約（本番の operator の planLabel と同じ）
+function planChip(k) {
+  return `<span class="chip"><span class="visually-hidden">プラン: </span>${esc(k.plan || (k.personal ? "パーソナル" : "未契約"))}</span>`;
+}
 function organizationSummary(k) {
   const states = organizationStatuses(k);
   const primary = states[0];
@@ -55,7 +59,7 @@ SQ.mount("operator", () => `
     <tbody>${K.map((k) => `<tr>
       <td class="is-name">${esc(k.name)}${k.selfCreated || k.trialEndsOn || k.suspended || (!k.personal && (!k.admins || k.adminPending || k.adminExpired)) ? `<details class="table-details">${organizationSummary(k)}<div class="table-details-body">${k.selfCreated ? ` <span class="chip">自分で作った${t("organization")}</span>` : ""}${k.trialEndsOn ? ` <span class="chip">${esc(SQ.formatTrialStopDateTime(k.trialEndsOn))} ごろに止まります</span>` : ""}${k.trialExpired ? ` <span class="chip is-danger">${icon("alert")}お試しの期限を過ぎています</span>` : ""}${k.suspended ? ` <span class="chip is-warn">停止 ${esc(k.suspended)}</span>` : ""}${k.purgeOn ? ` <span class="chip is-danger">${esc(k.purgeOn)} に消す</span>` : ""}${k.personal ? "" : `${!k.admins ? ` <span class="chip is-danger">${t("admin")}がいない</span>` : ""}${k.adminPending ? ` <span class="chip is-warn">${icon("clock")}${t("admin")}は指名済み、ログイン待ち</span>` : ""}${k.adminExpired ? ` <span class="chip is-danger">${icon("alert")}${t("admin")}の招待の URL は期限切れ</span>` : ""}`}</div></details>` : `<div><span class="chip">${k.personal ? "自分用" : "チーム用"}</span></div>`}<span class="props-note"><span class="mono">${esc(k.slug)}</span> · 作成 <span class="mono">${esc(k.created)}</span></span></td>
       <td class="is-num" data-label="人数 / 上限">${k.personal ? `<span class="props-note" aria-hidden="true">—</span><span class="visually-hidden">本人1人だけ</span>` : `${k.users}&nbsp;/&nbsp;${k.limit}${k.users >= k.limit ? `<br><span class="chip is-warn">${icon("alert")}上限に達した</span>` : ""}`}</td><td class="is-num" data-label="${t("workspace")}の数">${k.wss}</td><td class="is-num" data-label="${t("task")}の数">${k.tasks.toLocaleString()}</td>
-      <td class="is-num" data-label="添付・Wiki / 上限">${SQ.storageBytes(k.slug === "aoba" ? Math.round(D.storage.used * 1024 ** 3) : k.usedBytes || 0)} / ${SQ.storageBytes(k.quota * 1024 ** 3)}${k.personal ? "" : `<br><button class="link-btn" type="button" data-dialog="changeQuota" aria-label="「${esc(k.name)}」の人数と容量の上限を変える">人数と容量の上限を変える</button>`}</td>
+      <td class="is-num" data-label="添付・Wiki / 上限">${SQ.storageBytes(k.slug === "aoba" ? Math.round(D.storage.used * 1024 ** 3) : k.usedBytes || 0)} / ${SQ.storageBytes(k.quota * 1024 ** 3)}<br>${planChip(k)}${k.personal ? "" : `${k.plan ? "" : `<br><button class="link-btn" type="button" data-dialog="changeQuota" aria-label="「${esc(k.name)}」の人数と容量の上限を変える">人数と容量の上限を変える</button>`}${k.purgeDue ? "" : `<br><button class="link-btn" type="button" data-dialog="changePlan" aria-label="「${esc(k.name)}」のプランを変える">プランを変える</button>`}`}</td>
       ${k.lastUsed ? `<td class="mono" data-label="最後に使われた日時">${esc(k.lastUsed)}</td>` : `<td class="props-note" data-label="最後に使われた日時">まだ使われていない</td>`}      <td class="is-actions"><span class="table-actions is-wrap">
         ${k.purgeDue ? `<span class="props-note">消す予定日を過ぎたので、再開も停止の理由の切り替えも${k.personal ? "" : `${t("admin")}の指名も`}できません</span>` : k.personal ? "" : `<button class="btn is-sm is-quiet" type="button" data-dialog="reassignAdmin">${t("admin")}を指名</button>`}
         ${k.purgeDue ? "" : k.suspended ? `<button class="btn is-sm is-quiet" type="button" data-dialog="changeSuspension">停止の理由を変える</button><button class="btn is-sm is-quiet" type="button" data-toast="再開しました">再開する</button>` :`<button class="btn is-sm is-quiet is-danger" type="button" data-dialog="suspendOrganization">停止する</button>`}

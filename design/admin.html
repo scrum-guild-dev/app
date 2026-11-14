@@ -19,7 +19,7 @@
 <script>
 "use strict";
 // 390px の積んだ行でも、静かな操作の文字を行の本文にそろえる。
-// 組織の管理（管理者）: ユーザー、ワークスペース、添付ファイルの合計、組織の休日、既定のテーマ、配分と積載量の合計、取り込み元の応答、AI の機能、変更の履歴
+// 組織の管理（管理者）: ユーザー、ワークスペース、添付ファイルの合計、組織の休日、配分と積載量の合計、取り込み元の応答、AI の機能、変更の履歴
 const { D, t, icon, esc, pageHead, avatarOf, user, meter } = SQ;
 const A = D.admin;
 // ?workspace-limit は、自分用で利用中3個・終了済み1個の再開が断られた状態。
@@ -110,10 +110,6 @@ SQ.mount("admin", () => `
       ${!A.holidays.length
         ? SQ.emptyState("calendar", "まだ休日がありません", `登録した日は、${t("capacity")}の計算で全員が稼働しない日になります。`)
         : `<ul class="party-list" aria-label="登録した休日">${A.holidays.map(([d, n]) => `<li><span class="mono">${d}</span>${n ? `<span class="party-list-text">${esc(n)}</span>` : ""}<button class="icon-btn is-danger party-list-end" type="button" aria-label="${d} を消す" data-toast="${d}${n ? `（${esc(n)}）` : " "}を消しました">${icon("trash")}</button></li>`).join("")}</ul>`}`)}
-    ${setting("既定のテーマ", `画面の見た目の既定。自分で選んでいないユーザーに効きます。会社で使うならシンプルが無難です。`, `
-      <div class="choice-list" role="radiogroup" aria-label="既定のテーマ">
-        ${SQ.THEMES.map((v, i) => `<label class="choice"><input type="radio" name="kt" ${i === 0 ? "checked" : ""}><div><b>${SQ.THEME_LABEL[v]}</b><span>${SQ.THEME_NOTE[v]}</span></div></label>`).join("")}</div>
-      <div class="form-actions"><button class="btn" type="button" aria-disabled="true">保存する</button></div>`)}
     ${setting("配分の合計", `ユーザーごとの、すべての${t("workspace")}の配分の合計。100% を超えた月は本人にも知らせています。`, !A.allocTotals.length
       ? `<p class="props-note">${t("workspace")}ができて、${t("leader")}が配分を決めると出ます。</p>`
       : `
