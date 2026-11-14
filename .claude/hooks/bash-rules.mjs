@@ -499,6 +499,15 @@ function readConfigArgs(rest) {
 function judgeGitCommand(sub, rest, gitDir, branchOf) {
   if (sub !== undefined && !GIT_COMMANDS.has(sub)) return [ASK, '未知の git のサブコマンドは別名や外部の道具かもしれない。人が確かめる'];
   if (sub === 'send-pack') return [ASK, 'git send-pack は push の先とフックを通常の push と同じように判定できない。人が確かめる'];
+  // Git 自身が実行する本文はシェルの字句として見えない。-- 後ろのパスはフラグに数えない。
+  const optionEnd = rest.indexOf('--');
+  const options = optionEnd === -1 ? rest : sliceWords(rest, 0, optionEnd);
+  const executes =
+    (sub === 'rebase' && options.some((a) => /^-[^-]*x/.test(a) || isOption(a, '--exec', 4))) ||
+    (sub === 'difftool' && options.some((a) => /^-[^-]*x/.test(a) || isOption(a, '--extcmd', 5))) ||
+    (sub === 'bisect' && positionals(options)[0] === 'run') ||
+    (sub === 'submodule' && positionals(options)[0] === 'foreach');
+  if (executes) return [ASK, 'git の rebase --exec、bisect run、submodule foreach、difftool --extcmd は別のコマンドを実行する。本文の動作は人が確かめる'];
   if (['rm', 'mv', 'checkout', 'restore'].includes(sub)) {
     const isProtected = protectedAt(gitDir);
     const root = gitDir && (repoRootOf(gitDir) ?? gitDir);
