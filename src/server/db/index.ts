@@ -72,14 +72,7 @@ export {
   type AdminReassignment,
   type AdminReassignmentResult,
 } from './operator-reassign-admin.ts';
-export {
-  readOrganizationRow,
-  userAvatarsOf,
-  writeOrganizationSettings,
-  type OrganizationRow,
-  type OrganizationSettingsChange,
-  type OrganizationSettingsWrite,
-} from './organization-common.ts';
+export { readOrganizationRow, userAvatarsOf, type OrganizationRow } from './organization-common.ts';
 export {
   // adminStatusesOf と organizationUsageOf は、運用者の道具（operations/operator-tools.ts）だけが import できる（eslint.config.db-entry.js）
   adminStatusesOf,

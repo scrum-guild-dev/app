@@ -83,7 +83,7 @@ test('Google のボタンは GitHub と同じ幅で、ロゴが出る', async ({
 });
 
 // Google のボタンの明暗は、テーマの指定が無い既定とシンプル（自動）だけ OS の明暗に従い、
-// ダークのテーマ（simple_dark、modern）はダーク版、ライトのテーマ（simple_light、medieval）はライト版になる
+// ダークのテーマ（simple_dark、modern）はダーク版、ライトのテーマ（simple_light）はライト版になる
 const googleLight = { background: 'rgb(255, 255, 255)', border: 'rgb(116, 119, 117)', color: 'rgb(31, 31, 31)' };
 const googleDark = { background: 'rgb(19, 19, 20)', border: 'rgb(142, 145, 143)', color: 'rgb(227, 227, 227)' };
 const googleThemes: [theme: string | null, os: 'light' | 'dark', expected: typeof googleLight][] = [
@@ -93,7 +93,6 @@ const googleThemes: [theme: string | null, os: 'light' | 'dark', expected: typeo
   ['simple', 'dark', googleDark],
   ['simple_light', 'dark', googleLight],
   ['simple_dark', 'light', googleDark],
-  ['medieval', 'dark', googleLight],
   ['modern', 'light', googleDark],
 ];
 

@@ -32,7 +32,7 @@ const event = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('organization_resumed') }),
   // 停止の理由の切り替え。purge_on は切り替えた後の値
   z.object({ kind: z.literal('organization_suspension_changed'), purge_on: z.string().nullable() }),
-  // 組織の設定（言葉づかい、既定のテーマ）の変更
+  // 組織の設定（言葉づかい、既定のテーマ）の変更。どちらも今は変えられず、過去の行だけが出る
   z.object({ kind: z.literal('organization_settings_changed') }),
   // 運用者の契約の変更。from は前の契約（未契約なら null）、to は変えた後の契約
   z.object({ kind: z.literal('organization_plan_changed'), from: contractTerms.nullable(), to: contractTerms }),

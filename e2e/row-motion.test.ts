@@ -107,7 +107,7 @@ async function frames(page: Page): Promise<void> {
   );
 }
 
-test('4テーマで引き出しは最初だけ出現し、前後移動とページ全体では動かない。ダイアログも短く出る', async ({
+test('3テーマで引き出しは最初だけ出現し、前後移動とページ全体では動かない。ダイアログも短く出る', async ({
   page,
   context,
   baseURL,
@@ -162,7 +162,7 @@ test('4テーマで引き出しは最初だけ出現し、前後移動とペー�
   ).toBe(true);
 });
 
-test('390px の帯を測り直しても、4テーマで引き出しの最初の出現を失わない', async ({ page, context, baseURL }) => {
+test('390px の帯を測り直しても、3テーマで引き出しの最初の出現を失わない', async ({ page, context, baseURL }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(context, baseURL, 'admin');
   await watchMotion(page);

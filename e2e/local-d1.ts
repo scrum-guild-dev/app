@@ -126,6 +126,16 @@ export async function restoreHinataInvitation(): Promise<void> {
   ]);
 }
 
+// あおば開発の一般のユーザー（ハルカ、seed/sessions.ts の member）の users.theme を seed の状態（選んでいない = NULL）へ戻す。
+// マイプロフィールのテーマの節（e2e/me-settings.test.ts）が本物の API で書いた値を、繰り返しとほかのテストのために残さない。
+// me-theme-update は NULL を取らないので、選んでいない状態へは D1 に直に戻す
+export async function resetAobaMemberTheme(): Promise<void> {
+  await executeLocalD1([
+    `UPDATE users SET theme = NULL WHERE organization_id = '${AOBA_ORGANIZATION_ID}' ` +
+      `AND account_id = '${SEED_SESSIONS.member.accountId}';`,
+  ]);
+}
+
 // パスワードでのログインのレート制限の行（`password:<IP>`、`password48:<…>`、`password-email:<ハッシュ>`）を消す。
 // パスワードのログインの e2e（e2e/password-login.test.ts）が、繰り返し（--repeat-each）で同じメールアドレスと IP の枠
 // （10分に10回、30回）を使い切らないよう、場面ごとに消す。ほかの e2e はパスワードのログインを使わない

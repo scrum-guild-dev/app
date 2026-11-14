@@ -45,7 +45,7 @@ export type OutsideContext<Input> = {
 };
 // 運用者の操作（permission: 'operator'）。登録の関数が運用者を確かめた後に、運用者の道具を渡す
 export type OperatorContext<Input> = OutsideContext<Input> & { operator: OperatorTools };
-// organization は入るときに引いた組織の行（名前、言葉づかい、既定のテーマ）。組織の中の処理は共通の入口を持たず、
+// organization は入るときに引いた組織の行（名前、種類、お試しの期限）。組織の中の処理は共通の入口を持たず、
 // 共通の表とログインの手段には、入った組織に結んだ道具 tools から触れる
 export type OrganizationContext<Input> = {
   db: OrganizationDb;

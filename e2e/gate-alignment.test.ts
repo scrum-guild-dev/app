@@ -18,7 +18,7 @@ for (const path of ['/login', '/signup', '/invite', '/terms']) {
     await page.locator('.brand-name').evaluate((img: HTMLImageElement) => img.decode());
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+      for (const theme of ['simple_light', 'simple_dark', 'modern']) {
         await applyTheme(page, theme);
         const offsets = await page
           .locator('.gate-sheet, .onboarding-content')
@@ -99,7 +99,7 @@ test('390px の管理と運用で静かな操作が積んだ行の左端にそ�
         .filter({ has: page.getByRole('button', { name: /再開する/ }) })
         .first();
       await expect(stopped).toBeVisible();
-      for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+      for (const theme of ['simple_light', 'simple_dark', 'modern']) {
         await applyTheme(page, theme);
         const boxes = await stopped.locator('td.is-actions .btn').evaluateAll((buttons) =>
           buttons.map((button) => {

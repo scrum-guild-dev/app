@@ -219,7 +219,7 @@
           tabindex="-1"
           bind:this={mark}
         >
-          <Icon name="check" /><b>{t('doneStamp')}</b>
+          <Icon name="check" />
         </span>
         {#if onReopen !== undefined}
           {#if parentFinished}

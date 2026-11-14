@@ -371,8 +371,6 @@
                 left={detail.requester.left}
                 decorative
               />{detail.requester.name}{#if detail.requester.left}<span class="props-note">{t('leftMember')}</span>{/if}
-              <!-- 朱の印は飾り。中世風のテーマだけに出る（components.css の .seal） -->
-              <span class="seal" aria-hidden="true">印</span>
             </dd>
           </div>
           <div>

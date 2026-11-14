@@ -336,7 +336,7 @@ export const pointers: Pointers = {
     leader_user_id: target.admin.userId,
   }),
   // 呼んだ人自身の users.theme を書く。入力は組織の中の行を指さない（人は ID でなく呼んだ人で決まる）
-  'me-theme-update': { noReference: { theme: 'medieval' } },
+  'me-theme-update': { noReference: { theme: 'modern' } },
   'organization-holiday-list': { noReference: {} },
   // 日付は組織の中の行を指さない（登録済みなら飛ばすだけで成功する）
   'organization-holiday-add': { noReference: { holidays: [{ holiday_on: '2026-11-03', name: '文化の日' }] } },
@@ -345,11 +345,6 @@ export const pointers: Pointers = {
   'organization-holiday-delete': async (target) => ({
     holiday_on: (await createOrganizationHoliday(target.organization, target.admin.userId!)).holiday_on,
   }),
-  // 組織は URL の slug で決まり、入力は組織の中の行を指さない。from は作ったばかりの組織の値で、to が同じなら書かずに成功する。
-  // 値を変える入力だと、同じ組織に続けて2回成功させる検査（API トークンの Origin の検査と行の分離）の2回目が、from が合わず 409 になる
-  'organization-settings-update': {
-    noReference: { theme: { from: 'simple', to: 'simple' } },
-  },
   // カーソルを渡さなければ最新から読む。組織は URL の slug で決まる
   'organization-history': { noReference: {} },
   // 組織のユーザーの管理。呼ぶたびに対象の組織に別の人を作る（別の組織の対象を渡すと、その組織の人を指して 404）
