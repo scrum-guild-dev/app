@@ -136,6 +136,7 @@ test('管理者の指名し直しのダイアログを開いた状態に axe の
             self_created: false,
             trial_ends_on: null,
             trial_expired: false,
+            contract: null,
             created_at: '2026-10-01T09:30:00.000Z',
             admin_status: 'none',
             seats: { used: 2, limit: 15 },

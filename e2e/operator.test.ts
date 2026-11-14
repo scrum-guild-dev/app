@@ -503,7 +503,8 @@ test.describe('運用者', () => {
     await expect(seats.locator('.chip')).toHaveCount(0);
     // 添付ファイルの上限の値は出し、変更のボタンは置かない
     const quota = solo.locator('td[data-label="添付・Wiki / 上限"]');
-    await expect(quota).toHaveText(/^\s*5\sGB\s*\/\s*1\sGB\s*$/);
+    // 値の下に契約の印（自分用はパーソナル）を出す
+    await expect(quota).toHaveText(/^\s*5\sGB\s*\/\s*1\sGB\s*プラン: パーソナル\s*$/);
     await expect(quota.getByRole('button')).toHaveCount(0);
     await expect(solo.getByRole('button', { name: /人数と容量の上限を変える/ })).toHaveCount(0);
     // 指名のボタンは無く、停止はできる
@@ -1326,7 +1327,10 @@ test.describe('運用者', () => {
       '再開する',
     ]);
     // もう一方の組織は変わらない
-    await expect(page.locator('.table tbody tr', { hasText: 'あおば開発' }).locator('.chip')).toHaveText(['チーム用']);
+    await expect(page.locator('.table tbody tr', { hasText: 'あおば開発' }).locator('.chip')).toHaveText([
+      'チーム用',
+      'プラン: 未契約',
+    ]);
     expect(await collect()).toEqual([]);
   });
 
@@ -1348,13 +1352,14 @@ test.describe('運用者', () => {
     });
     await page.goto('/operator');
     const row = page.locator('.table tbody tr', { hasText: 'ひばり工房' });
-    await expect(row.locator('.chip')).toHaveCount(3);
+    // 前からの3つの印に、契約の印（未契約）を足した4つ
+    await expect(row.locator('.chip')).toHaveCount(4);
     await row.getByRole('button', { name: '「ひばり工房」を再開する' }).click();
 
     await expect(page.getByRole('dialog')).toHaveCount(0);
     expect(sent).toEqual({ slug: 'hibari' });
     await expect(page.getByRole('status').filter({ hasText: '「ひばり工房」を再開しました' })).toBeVisible();
-    await expect(row.locator('.chip')).toHaveText(['チーム用']);
+    await expect(row.locator('.chip')).toHaveText(['チーム用', 'プラン: 未契約']);
     await expect(row.locator('td.is-actions').getByRole('button')).toHaveText(['管理者を指名', '停止する']);
   });
 
@@ -2169,8 +2174,10 @@ test.describe('運用者', () => {
       await expect(dialog).not.toContainText('{');
       await expect(dialog.getByRole('radio', { name: /チーム/ })).toBeChecked();
       await expect(dialog.getByRole('radio', { name: '月払い' })).toBeChecked();
-      await expect(dialog.getByText('15 人・30 GB')).toBeVisible();
-      await expect(dialog.getByText('50 人・100 GB')).toBeVisible();
+      const plans = dialog.getByRole('radiogroup', { name: 'プラン' });
+      await expect(plans.getByText('15 人・30 GB')).toBeVisible();
+      await expect(plans.getByText('50 人・100 GB')).toBeVisible();
+      await expect(dialog).toContainText('変えた後の上限は 15 人・30 GB です。');
       // お試しが終わることを添える
       await expect(dialog).toContainText('お試しはここで終わり、期限で止まらなくなります。');
       // 未契約なら、今と同じ契約は無いので、そのまま送れる
@@ -2311,6 +2318,8 @@ test.describe('運用者', () => {
         await page.setViewportSize({ width, height: 900 });
         await page.goto('/operator');
         const cell = page.locator('.table tbody tr').first().locator('td[data-label="添付・Wiki / 上限"]');
+        // 描画を待ってから2つのボタンを取る
+        await expect(cell.getByRole('button')).toHaveCount(2);
         const [quota, plan] = await cell.getByRole('button').all();
         const quotaBox = (await quota!.boundingBox())!;
         const planBox = (await plan!.boundingBox())!;
