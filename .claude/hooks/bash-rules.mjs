@@ -3376,14 +3376,14 @@ function judgeSegment(words, ctx) {
     const c = args.findIndex((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
     if (c !== -1) {
       // bash/sh は -c の後でもオプションを読み、最初の位置引数を本文にする。
-      // -o/+o と -O/+O の末尾のフラグは、次の語をオプション名として取る。
+      // o/O は語の中の位置によらず、それぞれ次の語をオプション名として取る。
       let at = c + 1;
-      // -co pipefail や -cO extglob は、-c と同じ語の末尾の o/O も次の値を取る。
-      if (/[oO]$/.test(args[c])) at++;
+      // -oc や -coe の o、-coo の2つの o も、-c と同じ語にあって値を取る。
+      at += args[c].match(/[oO]/g)?.length ?? 0;
       for (; at < args.length; at++) {
         if (args[at] === '--') { at++; break; }
         if (!/^[-+][a-zA-Z]+$/.test(args[at])) break;
-        if (/^[-+][a-zA-Z]*[oO]$/.test(args[at])) at++;
+        at += args[at].match(/[oO]/g)?.length ?? 0;
       }
       const body = args[at];
       if (body) results.push(judgeBash(body, nextCtx));
