@@ -89,7 +89,8 @@ for (const failure of ['network', '404'] as const) {
     await expect(page.getByRole('dialog', { name: '起票', exact: true })).not.toBeVisible();
     await expect(trigger).toBeFocused();
     await page.unroute(matchesSheet);
-    const reloaded = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
+    // 同じURLへの再読み込みなので、新しいdocumentのDOM準備を待つ。
+    const reloaded = page.waitForEvent('domcontentloaded');
     await page.getByRole('button', { name: '画面を読み直す', exact: true }).click();
     await reloaded;
     await expect(page.getByRole('heading', { name: '今日やること', exact: true })).toBeVisible();
