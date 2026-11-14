@@ -1100,7 +1100,7 @@
     return `<span class="file-art ${f.type === "video" ? "is-video" : ""}" aria-hidden="true">${icon(f.type === "video" ? "play" : "image")}${f.length ? `<span class="file-art-time">${f.length}</span>` : ""}</span>`;
   }
   function fileThumb(f) {
-    return `<button class="file-thumb" type="button" data-file="${f.id}" aria-label="${esc(f.name)}（${FILE_KIND[f.type]}、${f.size}）を開く">${fileArt(f)}<span class="file-thumb-label"><b>${esc(f.name)}</b><span>${f.size}</span></span></button>`;
+    return `<button class="file-thumb" type="button" data-file="${f.id}" aria-label="${f.length ? `${f.length} ` : ""}${esc(f.name)} ${f.size}（${FILE_KIND[f.type]}）を開く">${fileArt(f)} <span class="file-thumb-label"><b>${esc(f.name)}</b> <span>${f.size}</span></span></button>`;
   }
   // 1行。f.state が uploading なら進み、error なら理由を出す
   function fileRow(f, opts = {}) {
@@ -3323,7 +3323,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     // 入れる組織が1つで招待が無い人は、/ を開くと今の組織へ移るので、一覧へ戻る行を出さない（「組織を作る」の入口は残す）
     const hasList = orgs.length > 1 || invited;
     const current = orgs.find((k) => k.slug === D.organization) || orgs[0];
-    const label = `${orgName(current)}。${t("organization")}を切り替える${invited ? "。届いた招待あり" : ""}`;
+    const label = `${t("organization")}${moving ? t("organizationMoving") : orgName(current)}${invited ? "届いた招待あり" : ""}。${t("organization")}を切り替える`;
     const shown = moving ? t("organizationMoving") : esc(orgName(current));
     return `<div class="org-menu"><button class="org-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${moving ? 'data-moving="true"' : ""} ${live ? "data-org-menu" : ""}><span class="org-menu-label">${t("organization")}</span><b>${shown}</b>${invited ? '<span class="chip">届いた招待あり</span>' : ""}${invited ? '<span class="org-menu-invite" aria-hidden="true"></span>' : ""}${brandSymbol}${icon("chevron")}<span class="nav-tip" aria-hidden="true">${shown}${invited && !moving ? "<small>届いた招待あり</small>" : ""}</span></button><span class="visually-hidden" role="status">${moving ? t("organizationMoving") : ""}</span>
       <ul class="org-menu-list" id="${id}" aria-label="入れる${t("organization")}" ${open ? "" : "hidden"}>${orgs.map((k) => `<li><a href="today.html"${k.slug === current.slug ? ' aria-current="page"' : ""}><span class="org-menu-name">${esc(orgName(k))}</span>${k.slug === current.slug ? icon("check") : ""}</a></li>`).join("")}${hasList ? `<li class="is-aside"><a href="organizations.html"><span class="org-menu-name">${t("organization")}の一覧へ</span>${invited ? '<span class="org-menu-note">招待が届いています</span>' : ""}</a></li>` : ""}<li class="is-aside"><button type="button" ${live ? 'data-dialog="createMyOrganization"' : ""}><span class="org-menu-name">${t("organization")}を作る</span></button></li>${canCreatePersonal ? `<li class="is-aside"><button type="button" ${live ? 'data-dialog="createPersonalOrganization"' : ""}><span class="org-menu-name">${t("createPersonalOrganizationAction")}</span></button></li>` : ""}</ul></div>`;
@@ -3374,8 +3374,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const name = user(D.me).name;
     const badge = admin ? t("admin") : "";
     // 名前、管理者の札、紋章は .me-detail にまとめ、760px 以下ではアバターだけにする
-    const who = `${avatarOf(D.me)}<span class="me-detail">${esc(name)}${admin ? `<span class="chip">${t("admin")}</span>` : ""}${emblem(user(D.me).level, true)}</span>`;
-    const label = t("accountMenuLabel").replace("{name}", badge ? `${name}（${badge}）` : name);
+    const who = `${avatarOf(D.me)} <span class="me-detail">${esc(name)}${admin ? ` <span class="chip">${t("admin")}</span>` : ""} ${emblem(user(D.me).level, true)}</span>`;
+    // 見えている頭文字、名前、管理者の札、レベルの数字を、表示順に名前へ含める。
+    const label = t("accountMenuLabel").replace("{name}", `${[...name][0]} ${name}${badge ? ` ${badge}` : ""} ${user(D.me).level}`);
     const count = invitationCount;
     const items = `<li><a href="${firstHref("me.html")}" ${page && page.current === "me" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageMe")}</span>${count > 0 ? `<span class="account-menu-badge" aria-hidden="true">${t("navInvitationsBadge").replace("{count}", count)}</span><span class="visually-hidden">${t("navInvitationsLabel").replace("{count}", count)}</span>` : ""}</a></li>${admin ? `<li><a href="${firstHref("admin.html")}" ${page && page.current === "admin" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageOrgAdmin")}</span></a></li>` : ""}`;
     return `<div class="account-menu"><button class="account-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-account-menu" : ""}><span class="me">${who}</span>${count > 0 ? '<span class="account-menu-invite" aria-hidden="true"></span>' : ""}${icon("chevron")}</button>
