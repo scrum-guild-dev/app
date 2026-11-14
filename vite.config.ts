@@ -32,6 +32,34 @@ export default defineConfig({
     // 小さい書体のファイルを data: URI にして CSS へ埋め込ませない。CSP の font-src（default-src 'self'）は data: を通さず、止まる
     assetsInlineLimit: 0,
   },
+  environments: {
+    // SvelteKit が fallback の生成にも使う ssr 環境には適用しない。
+    client: {
+      build: {
+        rolldownOptions: {
+          output: {
+            codeSplitting: {
+              groups: [
+                // 画面の entry は分けたまま、初回にも使う実行コード・操作定義・基本部品をまとめる。
+                // 全 node_modules や全 components をまとめると、Wiki や DnD まで初回に届く。
+                { name: 'svelte', test: /node_modules[\\/]svelte[\\/]/ },
+                {
+                  name: 'operations',
+                  test: /src[\\/]shared[\\/]operations[\\/](attachment|column|definition|epic|operator|organization|session|story|task|workspace)[\\/]/,
+                },
+                {
+                  name: 'controls',
+                  // $app/navigation を読む LoadFailed は含めない。Kit の payload と env が
+                  // 同じ束に入ると、init 前に version や base が空の値で固定されてしまう。
+                  test: /src[\\/]lib[\\/]components[\\/](Icon|Avatar|Emblem|AttrChip|DefinitionChip|DueChip|RowMenu|Dialog|EmptyState|Section|PageHead|TodayMarkButton)\.svelte$/,
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  },
   server: {
     port: ports.app,
     // ずれた vite が別のワークツリーの API につながらないよう、ぶつかったら落とす
