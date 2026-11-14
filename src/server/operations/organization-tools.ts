@@ -22,8 +22,10 @@ import { syncConnection, type SyncResult } from '../import/sync.ts';
 import {
   commonDb,
   markAttachmentQuotaCheck,
+  readOrganizationPlanRow,
   readOrganizationRow,
   userAvatarsOf,
+  type OrganizationPlanRow,
   type OrganizationActor,
   type OrganizationDb,
   type OrganizationRow,
@@ -37,6 +39,8 @@ export type OrganizationTools = {
   inviteUrl(claimToken: string): string;
   // 自分の組織の行のうち、入るときに引かない値（人数の上限）
   readOrganization(): Promise<OrganizationRow>;
+  // 自分の組織の契約と、今効いている人数と添付ファイルの上限（組織の管理の画面のプランの節）
+  readOrganizationPlan(): Promise<OrganizationPlanRow>;
   // 成功後は変更待ちの記録だけを待ち、通知をdeferへ渡す。容量拒否時のmarkOnlyは記録だけ行い、cronへ任せる。
   reconcileAttachmentQuota(options?: { markOnly?: boolean }): Promise<void>;
   // 自分の組織の users の ID ごとのアバターの URL。アカウントに結ばれていない人、ログインしたことの無い人、アバターの無い人は null。
@@ -87,6 +91,7 @@ export function organizationTools(
     inviteeResolver: (provider) => member(() => inviteeResolver(provider)),
     inviteUrl: (claimToken) => member(() => `${new URL(env.PUBLIC_ORIGIN).origin}${INVITE_PATH}#${claimToken}`),
     readOrganization: () => member(() => readOrganizationRow(env, db)),
+    readOrganizationPlan: () => member(() => readOrganizationPlanRow(env, db)),
     reconcileAttachmentQuota: (options = {}) =>
       member(async () => {
         const logFailure = (error: unknown) =>

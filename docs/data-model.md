@@ -301,6 +301,7 @@
 | created_at、updated_at | TEXT | NOT NULL | |
 
 - `organization` の応答は、管理者で `trial_ends_on` があるときだけ `trial: { ends_on, days_left }` を返す。`ends_on` は期限の日付、`days_left` は期限の UTC の日付から `now()` の UTC の日付を引いた整数（当日は0、過ぎていれば負の値）。メンバーと期限の無い組織には `trial: null` を返す。期限は共通の入口で組織に入るときに読み、組織の中の表との結合や batch には混ぜない。
+- `organization` の応答は、管理者にだけ `plan: { contract, member_limit, attachment_quota_bytes }` を返す。`contract` は `organization_contracts` の行（`plan`、`billing_interval`、`extra_10gb_units`、`extra_50gb_units`）で、行の無い未契約の組織は null。`member_limit` と `attachment_quota_bytes` は `organizations` の今の上限（契約のある組織はプランから決まった値）。メンバーには `plan: null` を返し、契約の表を読まない。共通の DB で `organizations` に `organization_contracts` を左結合して組織の ID で絞って読み（組織の道具の `readOrganizationPlan`）、組織の中の表との結合や batch には混ぜない（#1190）。
 - `list-organizations` の各行は `trial_ends_on: string | null` と `trial_expired: boolean` を返す。`trial_expired` は期限があり、その日付が `now()` の UTC の日付より前のときだけ真（当日は偽）。停止中も期限があれば返す。
 - 運用者の画面、または会員の画面で作る。会員が作るときは作成者を `created_by_account_id` に記録し、UTC の作成日の30日後を `trial_ends_on` に記録する。会員が作るお試し中の組織は、同じ `created_by_account_id` で `trial_ends_on IS NOT NULL` の行が無い場合だけ INSERT する。最初の管理者の `users` と `change_logs` は組織の DB の別の batch() で入れる。
 - `created_by_account_id` には、外部キーの検査に使う部分索引（`created_by_account_id IS NOT NULL`）を持つ。

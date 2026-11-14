@@ -1688,6 +1688,21 @@ export const dictionary = defineDictionary({
   // 期限を過ぎた組織の印。管理者の画面（days_left が負。「残り -1 日」と出さない）と運用者の一覧が同じ文を使う
   trialExpired: 'お試しの期限を過ぎています',
 
+  // プランの節（組織の管理の画面）。契約の語は運用者の画面と同じ（planTerms、operatorPlanNone）。見るだけで、変えるのは運用者
+  orgPlanTitle: 'プラン',
+  orgPlanDesc: '人数と添付ファイルの上限は、プランと追加容量で決まります。',
+  orgPlanTermsLabel: '契約',
+  orgPlanExtraLabel: '追加容量',
+  // 追加容量の口数。{size} は1口の容量（GB）、{units} は口数
+  orgPlanExtraUnits: '+{size} GB × {units} 口',
+  orgPlanExtraNone: 'なし',
+  orgPlanMemberLimitLabel: '人数の上限',
+  orgPlanMemberLimit: '{count} 人',
+  orgPlanQuotaLabel: '添付ファイルの上限',
+  // 未契約の組織（契約の行が無い）。上限は運用者が組織を作ったときか「人数と容量の上限を変える」で決めた値
+  orgPlanNoneNote: 'まだ契約していません。上限は運用者が決めた値です。',
+  orgPlanContact: 'プラン、支払いの周期、追加容量を変えるときは、運用者に問い合わせてください。',
+
   // ワークスペースを終了する、再開する（組織の管理の画面。API の操作の名前は workspace-close と workspace-reopen のまま）。
   // {workspace} は、辞書の言葉を画面が渡す。{name} はワークスペースの名前
   workspaceActionsHeader: '操作',

@@ -7,6 +7,7 @@
   import DelegateesSetting from '../../../lib/components/admin/DelegateesSetting.svelte';
   import HolidaysSetting from '../../../lib/components/admin/HolidaysSetting.svelte';
   import TrialSetting from '../../../lib/components/admin/TrialSetting.svelte';
+  import PlanSetting from '../../../lib/components/admin/PlanSetting.svelte';
   import HistorySetting from '../../../lib/components/admin/HistorySetting.svelte';
   import StorageSetting from '../../../lib/components/admin/StorageSetting.svelte';
   import { t } from '../../../lib/vocabulary.svelte.ts';
@@ -62,6 +63,7 @@
 
   <div class="settings">
     {#if organization.trial !== null}<TrialSetting trial={organization.trial} />{/if}
+    {#if organization.plan !== null}<PlanSetting plan={organization.plan} kind={organization.organization.kind} />{/if}
     <UsersSetting
       slug={data.slug}
       meId={organization.me.id}

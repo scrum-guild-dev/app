@@ -42,6 +42,39 @@ export async function readOrganizationRow(env: Env, db: OrganizationDb): Promise
   };
 }
 
+// 自分の組織の契約（organization_contracts）と、今効いている人数と添付ファイルの上限。どちらも共通の表で、組織の行に契約の行を左結合する。
+// 契約の行が無い組織（未契約）は契約の列が null
+export type OrganizationPlanRow = {
+  readonly plan: string | null;
+  readonly billing_interval: string | null;
+  readonly extra_10gb_units: number | null;
+  readonly extra_50gb_units: number | null;
+  readonly member_limit: number;
+  readonly attachment_quota_bytes: number;
+};
+
+export async function readOrganizationPlanRow(env: Env, db: OrganizationDb): Promise<OrganizationPlanRow> {
+  const common = commonDb(env);
+  const row = await common.first(
+    common.statement((q) =>
+      q
+        .selectFrom('organizations')
+        .leftJoin('organization_contracts', 'organization_contracts.organization_id', 'organizations.id')
+        .select([
+          'organizations.member_limit',
+          'organizations.attachment_quota_bytes',
+          'organization_contracts.plan',
+          'organization_contracts.billing_interval',
+          'organization_contracts.extra_10gb_units',
+          'organization_contracts.extra_50gb_units',
+        ])
+        .where('organizations.id', '=', db.organizationId),
+    ),
+  );
+  if (row === undefined) throw new Error('入った組織の行が無い');
+  return row;
+}
+
 // 自分の組織の users の ID ごとのアバターの URL。組織の中の表（users）を organization_id で絞ってアカウントとログインの手段と ID を引き、
 // 共通の表（account_logins）を別の問い合わせで引いて、アプリで合わせる。account_logins の行は、users の行に結んだアカウントの
 // ものだけを使う（アカウントに結ばれる前の行は null。手段と ID だけで引くと、管理者が任意の GitHub の人に Scrum Guild の

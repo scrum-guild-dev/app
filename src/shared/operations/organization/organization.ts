@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { organizationKinds } from '../../organization-kind.ts';
+import { organizationContract } from '../operator/organization-plan-update.ts';
 import { themes } from '../../theme.ts';
 import { defineOperation } from '../define.ts';
 
@@ -11,7 +12,7 @@ const theme = z.enum(themes);
 export const organizationInfo = defineOperation({
   name: 'organization',
   description:
-    '組織の名前と、この組織での自分（テーマを含む）、所属するワークスペース、管理者ならお試しの期限と残りの日数を返す。include_storage:true を指定した管理者だけ容量の合計と内訳を取得する。呼ぶと last_seen_at を書く（1時間に1回まで）',
+    '組織の名前と、この組織での自分（テーマを含む）、所属するワークスペース、管理者ならお試しの期限と残りの日数、契約（プラン、支払いの周期、追加容量の口数）と人数と添付ファイルの上限を返す。include_storage:true を指定した管理者だけ容量の合計と内訳を取得する。呼ぶと last_seen_at を書く（1時間に1回まで）',
   mode: 'read',
   permission: 'organization',
   // 管理画面の容量の節だけが明示する。組織の枠では本文と全過去版を走査しない。
@@ -50,6 +51,15 @@ export const organizationInfo = defineOperation({
       })
       .nullable(),
     trial: z.object({ ends_on: z.string(), days_left: z.number().int() }).nullable(),
+    // 管理者にだけ返す契約と、今効いている上限（organizations.member_limit と attachment_quota_bytes）。メンバーには null。
+    // contract は未契約の組織（行が無い）なら null。見るだけで、変えるのは運用者（organization-plan-update）
+    plan: z
+      .object({
+        contract: organizationContract.nullable(),
+        member_limit: z.number().int(),
+        attachment_quota_bytes: z.number().int(),
+      })
+      .nullable(),
     workspaces: z.array(z.object({ id: z.string(), name: z.string(), role: z.enum(['leader', 'member']) })),
   }),
 });
