@@ -1230,6 +1230,46 @@ export const dictionary = defineDictionary({
   // 書かれたか分からない失敗（5xx、通信の切れ）。閉じると一覧を読み直す
   operatorQuotaFailedUnknown:
     '上限を変えられませんでした。変わっていることもあるので、閉じた後の一覧で確かめてからもう一度試してください。',
+  // プラン（organization_contracts）。運用者の画面と組織の変更の履歴で使う。組織の種類の「チーム用」（operatorKindTeam）とは別の語
+  planPersonal: 'パーソナル',
+  planTeam: 'チーム',
+  planBusiness: 'ビジネス',
+  planCustom: '個別',
+  billingMonthly: '月払い',
+  billingYearly: '年払い',
+  // 契約の表示。{plan} はプランの名前、{interval} は支払いの周期
+  planTerms: '{plan}・{interval}',
+  operatorPlanNone: '未契約',
+  // 一覧の契約の印の前に、読み上げだけで添える語
+  operatorPlanChipPrefix: 'プラン: ',
+  operatorPlanAction: 'プランを変える',
+  operatorPlanLabel: '「{name}」のプランを変える',
+  operatorPlanTitle: 'プランを変える',
+  // {terms} は今の契約（planTerms か operatorPlanNone）、{used} は人数、{limit} は人数の上限、{storage} は添付ファイルと Wiki の合計、{quota} は添付ファイルの上限
+  operatorPlanText:
+    '「{name}」のプランを変えます。今は{terms}で、人数 {used} 人（上限 {limit} 人）、添付ファイルと Wiki の合計 {storage}（上限 {quota}）です。',
+  operatorPlanChoices: 'プラン',
+  operatorPlanIntervalChoices: '支払いの周期',
+  operatorPlanUnchangedHint: '今の契約です。別のプランか支払いの周期を選ぶと変えられます。',
+  // {members} は変えた後の人数の上限、{quota} は変えた後の添付ファイルの上限（追加容量を足した値）
+  operatorPlanAfter: '変えた後の上限は {members} 人・{quota} です。',
+  // 未契約の組織で、今の上限より下がるとき。{members} と {quota} は今の上限
+  operatorPlanLimitsLower:
+    '今の上限（{members} 人・{quota}）より下がります。契約を付けると、上限を「人数と容量の上限を変える」で値に戻せなくなります。',
+  operatorPlanNote:
+    '人数と添付ファイルの上限はプランの値になり、「人数と容量の上限を変える」では変えられなくなります。',
+  // {used} は今の人数、{limit} は変えた後の人数の上限
+  operatorPlanSeatsOver:
+    '今の人数（{used} 人）が、変えた後の上限（{limit} 人）を超えます。今いる人はそのまま残り、上限を下回るまで新しい人の招待と管理者への指名だけを止めます。',
+  operatorPlanTrialNote: 'お試しはここで終わり、期限で止まらなくなります。',
+  operatorPlanSuspendedNote:
+    '停止中の{organization}は、契約しても停止したままです。使えるようにするには、続けて再開してください。',
+  operatorPlanHistoryNote: 'プランの変更は{organization}の変更の履歴に、運用者の操作として残ります。',
+  operatorPlanDone: '「{name}」のプランを変えました',
+  operatorPlanPurgeDue: '「{name}」は消す予定日を過ぎたので、プランを変えられません',
+  operatorPlanFailed: 'プランを変えられませんでした。もう一度試してください。',
+  operatorPlanFailedUnknown:
+    'プランを変えられませんでした。変わっていることもあるので、閉じた後の一覧で確かめてからもう一度試してください。',
 
   // 組織の作成のダイアログ
   operatorCreateTitle: '{organization}を作る',
@@ -1813,6 +1853,9 @@ export const dictionary = defineDictionary({
   orgHistorySuspensionChanged: '停止の理由を解約に切り替えました（消す予定日 {date}）',
   orgHistorySuspensionChangedTemporary: '停止の理由を一時的な停止に切り替えました',
   orgHistoryOrganizationSettingsChanged: '{organization}の設定を変更しました',
+  // {from} と {to} は契約（planTerms）
+  orgHistoryPlanChanged: 'プランを{from}から{to}に変更しました',
+  orgHistoryPlanStarted: 'プランを{to}にしました',
   orgHistoryAdminDesignated: '{name}を{admin}に指名しました',
   // Google の招待で指名し、本人がまだログインしていない（名前はメールアドレスなので出さない）
   orgHistoryAdminDesignatedGoogle: 'Google で招待した人を{admin}に指名しました',

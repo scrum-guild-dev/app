@@ -7,6 +7,12 @@ import {
   organizationHistory,
 } from '../../shared/operations/organization/organization-history.ts';
 import type { OutputOf } from '../../shared/operations/define.ts';
+import {
+  billingIntervals,
+  organizationPlans,
+  type BillingInterval,
+  type OrganizationPlan,
+} from '../../shared/organization-plan.ts';
 import { organizationHistoryRowFilter, type OrganizationDb } from '../db/index.ts';
 import { implement } from './implement.ts';
 
@@ -113,6 +119,25 @@ function userEvent(action: string, changes: Changes, row: HistoryRow): HistoryEv
   return { kind: 'other' };
 }
 
+const isPlan = (value: unknown): value is OrganizationPlan =>
+  typeof value === 'string' && (organizationPlans as readonly string[]).includes(value);
+const isInterval = (value: unknown): value is BillingInterval =>
+  typeof value === 'string' && (billingIntervals as readonly string[]).includes(value);
+
+// 運用者の契約の変更（organization-plan-update）。プランと支払いの周期は組で残している。組がそろわない行と、知らない値の行は扱わない
+function planChange(changes: Changes): HistoryEvent | undefined {
+  const plan = pairOf(changes, 'plan');
+  const interval = pairOf(changes, 'billing_interval');
+  if (plan === undefined || interval === undefined) return undefined;
+  const [planFrom, planTo] = plan;
+  const [intervalFrom, intervalTo] = interval;
+  if (!isPlan(planTo) || !isInterval(intervalTo)) return undefined;
+  const to = { plan: planTo, billing_interval: intervalTo };
+  if (planFrom === null && intervalFrom === null) return { kind: 'organization_plan_changed', from: null, to };
+  if (!isPlan(planFrom) || !isInterval(intervalFrom)) return undefined;
+  return { kind: 'organization_plan_changed', from: { plan: planFrom, billing_interval: intervalFrom }, to };
+}
+
 function organizationEvent(action: string, changes: Changes): HistoryEvent {
   switch (action) {
     case 'create':
@@ -124,6 +149,8 @@ function organizationEvent(action: string, changes: Changes): HistoryEvent {
     case 'update': {
       const purgeOn = pairOf(changes, 'purge_on');
       if (purgeOn !== undefined) return { kind: 'organization_suspension_changed', purge_on: textOrNull(purgeOn[1]) };
+      const plan = planChange(changes);
+      if (plan !== undefined) return plan;
       // vocabulary は言葉づかいを選べた頃に残した行の項目
       if ('vocabulary' in changes || 'theme' in changes) return { kind: 'organization_settings_changed' };
       return { kind: 'other' };

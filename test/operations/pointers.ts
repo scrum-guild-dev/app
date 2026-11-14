@@ -505,6 +505,13 @@ export const pointers: Pointers = {
     attachment_quota_bytes: 100 * 1024 ** 3,
     expected: { member_limit: 15, attachment_quota_bytes: 30 * 1024 ** 3 },
   }),
+  // 契約の変更は、呼ぶたびに別の未契約の組織を作る（同じ契約への変更は何も書かないため）
+  'organization-plan-update': async () => ({
+    slug: (await createOrganization()).slug,
+    plan: 'business',
+    billing_interval: 'yearly',
+    expected: null,
+  }),
   // 管理者の指名し直しは、呼ぶたびに別の組織を作り、別の人を指名する（対象の組織の users を消すと、同じ describe の検査が崩れるため）
   'organization-admin-reassign': async () => {
     const user = newGithubUser();

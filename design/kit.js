@@ -2627,6 +2627,32 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
        <p class="field-hint">容量の上限を今の合計より小さくすると、合計が下がるまで新しく添付できません。上限を上げて合計が80%を下回ると、次に80%を超えたときに管理者へまた通知します。</p>
        <p class="field-hint">上限の変更は${t("organization")}の変更の履歴に、運用者の操作として残ります。</p>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" id="d-qs" aria-disabled="true" aria-describedby="d-qu">変える</button>`),
+    // 契約（プランと支払いの周期）の変更（本番の OrganizationPlanDialog）。見本は「くもラボ」（ビジネス・月払い、停止もお試しもしていない）の状態。
+    // 今の契約を選んだ状態で開き、選び直すと変えた後の上限（d-pa）と、今の人数や合計が超えるときの注意を出す。
+    // 未契約の組織の上限が下がる注意（d-pl2）、お試しが終わる注記（d-pt）、停止したままの注記（d-pp）、未契約の組織の注記（d-pn）は、
+    // 本番では組織の状態で出す。見本の「くもラボ」は契約済みで停止もお試しもしていないので、どれも hidden で置く
+    changePlan: () => openDialog("プランを変える",
+      `<p class="wrap-anywhere">「くもラボ」のプランを変えます。今はビジネス・月払いで、人数 38&nbsp;人（上限 50&nbsp;人）、添付ファイルと Wiki の合計 42&nbsp;GB（上限 100&nbsp;GB）です。</p>
+       <div class="field"><span class="field-label" id="d-pl">プラン</span>
+         <div class="choice-list" role="radiogroup" aria-labelledby="d-pl">
+           <label class="choice"><input type="radio" name="d-p" value="team" data-plan-choice><div><b>チーム</b><span>15&nbsp;人・30&nbsp;GB</span></div></label>
+           <label class="choice"><input type="radio" name="d-p" value="business" data-plan-choice checked><div><b>ビジネス</b><span>50&nbsp;人・100&nbsp;GB</span></div></label>
+         </div></div>
+       <div class="field"><span class="field-label" id="d-pil">支払いの周期</span>
+         <div class="choice-list" role="radiogroup" aria-labelledby="d-pil">
+           <label class="choice"><input type="radio" name="d-pi" value="monthly" data-plan-choice checked><div><b>月払い</b></div></label>
+           <label class="choice"><input type="radio" name="d-pi" value="yearly" data-plan-choice><div><b>年払い</b></div></label>
+         </div></div>
+       <p class="field-hint" id="d-pu">今の契約です。別のプランか支払いの周期を選ぶと変えられます。</p>
+       <p class="field-hint" id="d-pa" hidden>変えた後の上限は 50&nbsp;人・100&nbsp;GB です。</p>
+       <div class="callout is-warn" id="d-pl2" hidden>${icon("alert")}<span>今の上限（120&nbsp;人・500&nbsp;GB）より下がります。契約を付けると、上限を「人数と容量の上限を変える」で値に戻せなくなります。</span></div>
+       <div class="callout is-warn" id="d-po" hidden>${icon("alert")}<span>今の人数（38&nbsp;人）が、変えた後の上限（15&nbsp;人）を超えます。今いる人はそのまま残り、上限を下回るまで新しい人の招待と管理者への指名だけを止めます。</span></div>
+       <div class="callout is-warn" id="d-pq" hidden>${icon("alert")}<span>選んだ上限は今の合計より小さいため、合計が下がるまで新しく添付できなくなります。</span></div>
+       <p class="field-hint" id="d-pt" hidden>お試しはここで終わり、期限で止まらなくなります。</p>
+       <p class="field-hint" id="d-pp" hidden>停止中の${t("organization")}は、契約しても停止したままです。使えるようにするには、続けて再開してください。</p>
+       <p class="field-hint" id="d-pn" hidden>人数と添付ファイルの上限はプランの値になり、「人数と容量の上限を変える」では変えられなくなります。</p>
+       <p class="field-hint">プランの変更は${t("organization")}の変更の履歴に、運用者の操作として残ります。</p>`,
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" id="d-ps" aria-disabled="true" aria-describedby="d-pu">変える</button>`),
     suspendOrganization: () => {
       openDialog(`${t("organization")}を停止する`,
       `<p>ひばり工房を停止します。停止すると誰も入れなくなり、取り込みと日をまたぐ処理も止まります。データは残り、再開すれば元どおりに使えます。</p>
@@ -3666,6 +3692,31 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
   };
   document.addEventListener("change", (ev) => { if (ev.target.closest("[data-quota-choice]")) syncQuotaDialog(); });
+
+  // 契約の変更のダイアログ: 見本の今の契約（ビジネス・月払い）を選んでいる間は「変える」を aria-disabled にし、理由（d-pu）を添える。
+  // チームを選ぶと、今の人数（38 人）が上限を超える注意と、今の合計が上限を超える注意を出す（本番の OrganizationPlanDialog と同じ）
+  const syncPlanDialog = () => {
+    const plan = document.querySelector('input[name="d-p"]:checked');
+    const interval = document.querySelector('input[name="d-pi"]:checked');
+    const submit = document.getElementById("d-ps");
+    if (!plan || !interval || !submit) return;
+    const same = plan.value === "business" && interval.value === "monthly";
+    submit.setAttribute("aria-disabled", String(same));
+    document.getElementById("d-pu").hidden = !same;
+    const after = document.getElementById("d-pa");
+    after.hidden = same;
+    after.innerHTML = plan.value === "team" ? "変えた後の上限は 15&nbsp;人・30&nbsp;GB です。" : "変えた後の上限は 50&nbsp;人・100&nbsp;GB です。";
+    document.getElementById("d-po").hidden = plan.value !== "team";
+    document.getElementById("d-pq").hidden = plan.value !== "team";
+    if (same) {
+      submit.removeAttribute("data-close-dialog");
+      submit.removeAttribute("data-toast");
+    } else {
+      submit.setAttribute("data-close-dialog", "");
+      submit.setAttribute("data-toast", "「くもラボ」のプランを変えました");
+    }
+  };
+  document.addEventListener("change", (ev) => { if (ev.target.closest("[data-plan-choice]")) syncPlanDialog(); });
   document.addEventListener("input", (ev) => { if (ev.target.closest("#d-qm, #d-qg")) syncQuotaDialog(); });
 
   // ---- 操作（見本の中だけで動き、保存はしない） ----

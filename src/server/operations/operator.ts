@@ -8,6 +8,7 @@ import {
   resolveGithubUser,
 } from '../../shared/operations/operator/index.ts';
 import type { OrganizationKind } from '../../shared/organization-kind.ts';
+import { contractOf } from './organization-contract.ts';
 import { slugProblem } from '../../shared/organization-slug.ts';
 import type { CreatedOrganization, Statement } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
@@ -34,21 +35,27 @@ export const listOrganizationsOperation = implement(listOrganizations, async ({ 
     db.statement((q) =>
       q
         .selectFrom('organizations')
+        // 契約の表も共通の表なので、組織の一覧と1つの文で読む（共通の表と組織の中の表は結合しない）
+        .leftJoin('organization_contracts', 'organization_contracts.organization_id', 'organizations.id')
         .select([
-          'id',
-          'slug',
-          'name',
-          'kind',
-          'created_by_account_id',
-          'suspended_at',
-          'purge_on',
-          'trial_ends_on',
-          'created_at',
-          'member_limit',
-          'attachment_quota_bytes',
+          'organizations.id',
+          'organizations.slug',
+          'organizations.name',
+          'organizations.kind',
+          'organizations.created_by_account_id',
+          'organizations.suspended_at',
+          'organizations.purge_on',
+          'organizations.trial_ends_on',
+          'organizations.created_at',
+          'organizations.member_limit',
+          'organizations.attachment_quota_bytes',
+          'organization_contracts.plan',
+          'organization_contracts.billing_interval',
+          'organization_contracts.extra_10gb_units',
+          'organization_contracts.extra_50gb_units',
         ])
-        .orderBy('created_at', 'desc')
-        .orderBy('slug'),
+        .orderBy('organizations.created_at', 'desc')
+        .orderBy('organizations.slug'),
     ),
   );
   // 共通の表（organizations）と組織の中の表は別々に読む。集計は組織の ID の束で、組織ごとに数える
@@ -75,6 +82,7 @@ export const listOrganizationsOperation = implement(listOrganizations, async ({ 
       attachment_used_bytes: usage.get(row.id)?.attachmentBytes ?? 0,
       attachment_quota_bytes: row.attachment_quota_bytes,
       last_used_at: usage.get(row.id)?.lastUsedAt ?? null,
+      contract: contractOf(row),
     })),
   };
 });

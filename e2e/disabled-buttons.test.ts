@@ -150,6 +150,7 @@ test('停止の送信中は危険操作と取り消しの文字が3テーマで�
         self_created: false,
         trial_ends_on: null,
         trial_expired: false,
+        contract: null,
       },
     ],
   });
