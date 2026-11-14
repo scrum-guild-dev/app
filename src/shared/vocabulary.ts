@@ -1251,8 +1251,13 @@ export const dictionary = defineDictionary({
   operatorPlanChoices: 'プラン',
   operatorPlanIntervalChoices: '支払いの周期',
   operatorPlanUnchangedHint: '今の契約です。別のプランか支払いの周期を選ぶと変えられます。',
+  // {members} は変えた後の人数の上限、{quota} は変えた後の添付ファイルの上限（追加容量を足した値）
+  operatorPlanAfter: '変えた後の上限は {members} 人・{quota} です。',
+  // 未契約の組織で、今の上限より下がるとき。{members} と {quota} は今の上限
+  operatorPlanLimitsLower:
+    '今の上限（{members} 人・{quota}）より下がります。契約を付けると、上限を「人数と容量の上限を変える」で値に戻せなくなります。',
   operatorPlanNote:
-    '人数と添付ファイルの上限はプランの値になり、「人数と容量の上限を変える」では変えられなくなります。追加容量の口数はそのまま残ります。',
+    '人数と添付ファイルの上限はプランの値になり、「人数と容量の上限を変える」では変えられなくなります。',
   // {used} は今の人数、{limit} は変えた後の人数の上限
   operatorPlanSeatsOver:
     '今の人数（{used} 人）が、変えた後の上限（{limit} 人）を超えます。今いる人はそのまま残り、上限を下回るまで新しい人の招待と管理者への指名だけを止めます。',

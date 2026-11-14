@@ -15,7 +15,7 @@ import {
 } from '../src/shared/operations/operator/index.ts';
 import { organizationHistory } from '../src/shared/operations/organization/organization-history.ts';
 import { contractLimits, PLAN_LIMITS, type BillingInterval, type TeamPlan } from '../src/shared/organization-plan.ts';
-import { createOrganization } from './factories.ts';
+import { createOrganization, createUser } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
 import { createTarget, getOperator, OPERATOR_LOGIN_ID, testEnv, withNewSession } from './operations/world.ts';
 
@@ -186,13 +186,28 @@ describe('契約の変更', () => {
     expect(await organizationRow(organization.id)).toMatchObject(TEAM);
   });
 
-  test('人数が上限を超える組織をチームに下げてもよい（今いる人は残る）', async () => {
-    const target = await createTarget();
-    await insertContract(target.organization.id, { plan: 'business', billing_interval: 'monthly' });
-    // 上限を 1 にしても今いる人を消さないことは上限の変更と同じ。ここでは下げた値が書けることだけを見る
-    const res = await changePlanBy(await operatorToken(), target.slug, { plan: 'team', billing_interval: 'monthly' });
+  test('人数がチームの上限を超える組織もチームに下げられ、今いる人は残り、一覧の人数が上限を超える', async () => {
+    const organization = await createOrganization(BUSINESS);
+    await insertContract(organization.id, { plan: 'business', billing_interval: 'monthly' });
+    // 無効でない管理者は人数に数える。16 人でチームの上限（15 人）を超える
+    for (let index = 0; index < 16; index++) await createUser(organization, { is_admin: 1 });
+    const token = await operatorToken();
+    const res = await changePlanBy(token, organization.slug, { plan: 'team', billing_interval: 'monthly' });
     expect(res.status).toBe(200);
-    expect((await organizationRow(target.organization.id))?.member_limit).toBe(15);
+    expect((await organizationRow(organization.id))?.member_limit).toBe(15);
+    // 今いる人は消さない。新しい招待と管理者への指名が止まるのは、人数の上限の既存の扱い（test/invitation などが確かめる）
+    const db = orgDb(env, verifiedOrganizationForTest(organization.id));
+    const users = await db.rows(
+      db.statement((q) => q.selectFrom('users').select('id').where('organization_id', '=', organization.id)),
+    );
+    expect(users).toHaveLength(16);
+    const listed = (await (await post(app, listOrganizations, { token })).json()) as {
+      organizations: { slug: string; seats: { used: number; limit: number } }[];
+    };
+    expect(listed.organizations.find((entry) => entry.slug === organization.slug)?.seats).toEqual({
+      used: 16,
+      limit: 15,
+    });
   });
 
   test('お試し中の組織を契約にすると、お試しの期限を空にする', async () => {
@@ -347,6 +362,137 @@ describe('契約の変更', () => {
     expect(await changeLogsOf(organization.id)).toEqual([]);
   });
 
+  test('前の契約がプランか支払いの周期の片方だけ違っても 409 で、書かない', async () => {
+    const organization = await createOrganization();
+    await insertContract(organization.id, { plan: 'team', billing_interval: 'yearly' });
+    const token = await operatorToken();
+    for (const expected of [
+      { plan: 'team', billing_interval: 'monthly' },
+      { plan: 'business', billing_interval: 'yearly' },
+    ] as const) {
+      const res = await changePlanBy(
+        token,
+        organization.slug,
+        { plan: 'business', billing_interval: 'monthly' },
+        { expected },
+      );
+      expect(res.status).toBe(409);
+      expect(await errorCodeOf(res)).toBe('conflict');
+    }
+    expect(await contractRow(organization.id)).toMatchObject({
+      plan: 'team',
+      billing_interval: 'yearly',
+      updated_at: AT,
+    });
+    expect(await organizationRow(organization.id)).toMatchObject({ ...TEAM, updated_at: organization.updated_at });
+    expect(await changeLogsOf(organization.id)).toEqual([]);
+  });
+
+  // 読んだ直後に、別の運用者の書き込みを差し込む
+  function racingAfterRead(write: () => Promise<void>) {
+    const state = { armed: true };
+    const env = envWithD1Hooks(testEnv, {
+      afterQuery: async (sql) => {
+        if (!state.armed || !sql.includes('"organization_contracts"') || !sql.includes('"trial_ends_on"')) return;
+        state.armed = false;
+        await write();
+      },
+    });
+    return { env, state };
+  }
+
+  test('契約を読んだ後に別の運用者がプランだけを変えていれば 409 で、先の契約を書き換えない', async () => {
+    const organization = await createOrganization();
+    await insertContract(organization.id, { plan: 'team', billing_interval: 'monthly' });
+    const racing = racingAfterRead(async () => {
+      const db = commonDb(env);
+      await db.batch([
+        db.statement((q) =>
+          q
+            .updateTable('organization_contracts')
+            .set({ plan: 'business' })
+            .where('organization_id', '=', organization.id),
+        ),
+      ]);
+    });
+    const res = await changePlanBy(
+      await operatorToken(),
+      organization.slug,
+      { plan: 'team', billing_interval: 'yearly' },
+      { env: racing.env },
+    );
+    expect(racing.state.armed).toBe(false);
+    expect(res.status).toBe(409);
+    expect(await contractRow(organization.id)).toMatchObject({ plan: 'business', billing_interval: 'monthly' });
+    expect(await changeLogsOf(organization.id)).toEqual([]);
+  });
+
+  test('読んだ後に別の運用者が上限を値で変えていれば 409 で、契約を足さず、その上限を書き換えない', async () => {
+    const organization = await createOrganization({ attachment_quota_bytes: 200 * GIB });
+    const racing = racingAfterRead(async () => {
+      const db = commonDb(env);
+      await db.batch([
+        db.statement((q) =>
+          q
+            .updateTable('organizations')
+            .set({ member_limit: 20, attachment_quota_bytes: 20 * GIB, attachment_quota_warned_at: AT })
+            .where('id', '=', organization.id),
+        ),
+      ]);
+    });
+    const res = await changePlanBy(
+      await operatorToken(),
+      organization.slug,
+      { plan: 'business', billing_interval: 'monthly' },
+      { env: racing.env },
+    );
+    expect(racing.state.armed).toBe(false);
+    expect(res.status).toBe(409);
+    expect(await contractRow(organization.id)).toBeUndefined();
+    expect(await organizationRow(organization.id)).toMatchObject({
+      member_limit: 20,
+      attachment_quota_bytes: 20 * GIB,
+      attachment_quota_warned_at: AT,
+    });
+    expect(await changeLogsOf(organization.id)).toEqual([]);
+  });
+
+  test('読んだ後に別の運用者が追加容量の口数を変えていれば 409 で、契約と上限を書き換えない', async () => {
+    const organization = await createOrganization();
+    await insertContract(organization.id, { plan: 'team', billing_interval: 'monthly' });
+    const racing = racingAfterRead(async () => {
+      const db = commonDb(env);
+      // 口数を変える操作（#1191）と同じく、契約の口数と organizations の容量を一緒に書く
+      await db.batch([
+        db.statement((q) =>
+          q
+            .updateTable('organization_contracts')
+            .set({ extra_10gb_units: 2 })
+            .where('organization_id', '=', organization.id),
+        ),
+        db.statement((q) =>
+          q
+            .updateTable('organizations')
+            .set({ attachment_quota_bytes: 50 * GIB })
+            .where('id', '=', organization.id),
+        ),
+      ]);
+    });
+    const res = await changePlanBy(
+      await operatorToken(),
+      organization.slug,
+      { plan: 'business', billing_interval: 'monthly' },
+      { env: racing.env },
+    );
+    expect(racing.state.armed).toBe(false);
+    expect(res.status).toBe(409);
+    expect(await contractRow(organization.id)).toMatchObject({ plan: 'team', extra_10gb_units: 2 });
+    expect(await organizationRow(organization.id)).toMatchObject({
+      member_limit: 15,
+      attachment_quota_bytes: 50 * GIB,
+    });
+  });
+
   test('未契約と読んだ後に別の運用者が先に契約を付けていれば 409 で、先の契約と上限を書き換えない', async () => {
     const organization = await createOrganization({ trial_ends_on: '2026-12-01' });
     let armed = true;
@@ -441,6 +587,18 @@ describe('契約の変更', () => {
     const lowered = await createOrganization({ ...BUSINESS, attachment_quota_warned_at: AT });
     expect((await changePlanBy(token, lowered.slug, { plan: 'team', billing_interval: 'monthly' })).status).toBe(200);
     expect((await organizationRow(lowered.id))?.attachment_quota_warned_at).toBe(AT);
+
+    // 容量が変わらない契約（未契約の 30 GB からチーム、ビジネスの周期だけの変更）でも触らない
+    const same = await createOrganization({ attachment_quota_warned_at: AT, attachment_quota_warning_pending_at: AT });
+    expect((await changePlanBy(token, same.slug, { plan: 'team', billing_interval: 'monthly' })).status).toBe(200);
+    expect(await organizationRow(same.id)).toMatchObject({
+      attachment_quota_warned_at: AT,
+      attachment_quota_warning_pending_at: AT,
+    });
+    const yearly = await createOrganization({ ...BUSINESS, attachment_quota_warned_at: AT });
+    await insertContract(yearly.id, { plan: 'business', billing_interval: 'monthly' });
+    expect((await changePlanBy(token, yearly.slug, { plan: 'business', billing_interval: 'yearly' })).status).toBe(200);
+    expect((await organizationRow(yearly.id))?.attachment_quota_warned_at).toBe(AT);
   });
 
   test('片方の組織の契約を変えても、もう片方の組織の行、契約、履歴は変わらない', async () => {

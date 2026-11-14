@@ -5,7 +5,7 @@
 import { now } from '../../shared/clock.ts';
 import { isPurgeDue, organizationPlanUpdate, utcDateOf } from '../../shared/operations/operator/index.ts';
 import { contractLimits } from '../../shared/organization-plan.ts';
-import { commonDb, purgeDueInDatabase, purgeNotDue } from '../db/index.ts';
+import { commonDb, purgeDueInDatabase, purgeNotDue, type CommonTables, type ExpressionBuilder } from '../db/index.ts';
 import { ApiError } from '../errors.ts';
 import { implement } from './implement.ts';
 import { logOperatorChange } from './operator-change-log.ts';
@@ -48,9 +48,9 @@ async function readOrganizationWithContract(db: CommonDb, slug: string) {
 //    自分用は 409（プランはパーソナルに固定）。今の契約が送った値と同じなら何も書かずに返す
 // 2. 今の契約が画面の見ていた前の契約（expected。未契約なら null）と違えば 409（確認を開いた後に別の運用者が変えた）
 // 3. 共通の DB に1回の batch() で書く
-//    - 契約: 未契約なら行を足し（同時に足した別の運用者が先なら何も足さない）、契約があれば expected のままであることを条件に書き換える。
-//      どちらも、組織が消す予定日を過ぎた解約の停止でないことを条件にする（読んだ後に日付が変わっても、消している途中に足さない）。
-//      追加容量の口数は変えない
+//    - 契約: 未契約なら行を足し（同時に足した別の運用者が先なら何も足さない）、契約があれば読んだ契約（プラン、支払いの周期、
+//      追加容量の口数）のままであることを条件に書き換える。どちらも、組織が読んだときの上限のままで、消す予定日を過ぎた解約の停止で
+//      ないことを条件にする。追加容量の口数は変えない
 //    - organizations: 人数と添付ファイルの上限を契約から決まる値にし、お試しの期限を空にする（有料のプランにしたらお試しを終える）。
 //      この batch() が書いた契約の行（プラン、支払いの周期、更新日時がこの値）があるときだけ書く。契約が書けずに 409 で返すときに、
 //      上限だけが変わらないようにするため。添付ファイルの上限を上げたら、容量の通知の日時を空に戻す（80% の通知をやり直す）
@@ -90,6 +90,16 @@ export const organizationPlanUpdateOperation = implement(organizationPlanUpdate,
   const raised = limits.attachment_quota_bytes > current.attachment_quota_bytes;
   const stamp = at.toISOString();
   const today = utcDateOf(at);
+  // 契約を書く文の条件。組織が、読んだときの上限のままで、消す予定日を過ぎた解約の停止でないこと。
+  // 読んだ後に別の運用者が上限を値で変えていたら書かない（履歴の前の値と、通知の日時を戻すかの判断を、読んだ値で決めているため）。
+  // 読んだ後に日付が変わっても、消している途中の組織には足さない
+  const organizationAsRead = (eb: ExpressionBuilder<CommonTables, 'organizations'>) =>
+    eb.and([
+      eb('organizations.id', '=', current.id),
+      eb('organizations.member_limit', '=', current.member_limit),
+      eb('organizations.attachment_quota_bytes', '=', current.attachment_quota_bytes),
+      eb.or([eb('organizations.suspended_at', 'is', null), purgeNotDue(today)]),
+    ]);
 
   const [written] = await db.batch([
     contract === null
@@ -117,8 +127,7 @@ export const organizationPlanUpdateOperation = implement(organizationPlanUpdate,
                   eb.val(stamp).as('created_at'),
                   eb.val(stamp).as('updated_at'),
                 ])
-                .where('organizations.id', '=', current.id)
-                .where((w) => w.or([w('organizations.suspended_at', 'is', null), purgeNotDue(today)])),
+                .where(organizationAsRead),
             )
             .onConflict((oc) => oc.column('organization_id').doNothing()),
         )
@@ -129,14 +138,10 @@ export const organizationPlanUpdateOperation = implement(organizationPlanUpdate,
             .where('organization_id', '=', current.id)
             .where('plan', '=', contract.plan)
             .where('billing_interval', '=', contract.billing_interval)
+            .where('extra_10gb_units', '=', contract.extra_10gb_units)
+            .where('extra_50gb_units', '=', contract.extra_50gb_units)
             .where((eb) =>
-              eb.exists(
-                eb
-                  .selectFrom('organizations')
-                  .select('organizations.id')
-                  .where('organizations.id', '=', current.id)
-                  .where((w) => w.or([w('organizations.suspended_at', 'is', null), purgeNotDue(today)])),
-              ),
+              eb.exists(eb.selectFrom('organizations').select('organizations.id').where(organizationAsRead)),
             ),
         ),
     db.statement((q) =>

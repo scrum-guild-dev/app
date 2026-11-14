@@ -2627,8 +2627,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
        <p class="field-hint">容量の上限を今の合計より小さくすると、合計が下がるまで新しく添付できません。上限を上げて合計が80%を下回ると、次に80%を超えたときに管理者へまた通知します。</p>
        <p class="field-hint">上限の変更は${t("organization")}の変更の履歴に、運用者の操作として残ります。</p>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" id="d-qs" aria-disabled="true" aria-describedby="d-qu">変える</button>`),
-    // 契約（プランと支払いの周期）の変更（本番の OrganizationPlanDialog）。今の契約を選んだ状態で開く（未契約ならチーム・月払い）。
-    // 変えた後の人数と容量、今の人数が上限を超えるときの注意、お試しが終わる注意、停止中の注意を出す
+    // 契約（プランと支払いの周期）の変更（本番の OrganizationPlanDialog）。見本は「くもラボ」（ビジネス・月払い、停止もお試しもしていない）の状態。
+    // 今の契約を選んだ状態で開き、選び直すと変えた後の上限（d-pa）と、今の人数や合計が超えるときの注意を出す。
+    // お試しが終わる注記（d-pt）と停止したままの注記（d-pp）、未契約の組織の上限が下がる注意と注記は、本番では組織の状態で出す（見本は hidden）
     changePlan: () => openDialog("プランを変える",
       `<p class="wrap-anywhere">「くもラボ」のプランを変えます。今はビジネス・月払いで、人数 38&nbsp;人（上限 50&nbsp;人）、添付ファイルと Wiki の合計 42&nbsp;GB（上限 100&nbsp;GB）です。</p>
        <div class="field"><span class="field-label" id="d-pl">プラン</span>
@@ -2642,9 +2643,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
            <label class="choice"><input type="radio" name="d-pi" value="yearly" data-plan-choice><div><b>年払い</b></div></label>
          </div></div>
        <p class="field-hint" id="d-pu">今の契約です。別のプランか支払いの周期を選ぶと変えられます。</p>
+       <p class="field-hint" id="d-pa" hidden>変えた後の上限は 50&nbsp;人・100&nbsp;GB です。</p>
        <div class="callout is-warn" id="d-po" hidden>${icon("alert")}<span>今の人数（38&nbsp;人）が、変えた後の上限（15&nbsp;人）を超えます。今いる人はそのまま残り、上限を下回るまで新しい人の招待と管理者への指名だけを止めます。</span></div>
        <div class="callout is-warn" id="d-pq" hidden>${icon("alert")}<span>選んだ上限は今の合計より小さいため、合計が下がるまで新しく添付できなくなります。</span></div>
-       <p class="field-hint">人数と添付ファイルの上限はプランの値になり、「人数と容量の上限を変える」では変えられなくなります。追加容量の口数はそのまま残ります。</p>
+       <p class="field-hint" id="d-pt" hidden>お試しはここで終わり、期限で止まらなくなります。</p>
+       <p class="field-hint" id="d-pp" hidden>停止中の${t("organization")}は、契約しても停止したままです。使えるようにするには、続けて再開してください。</p>
        <p class="field-hint">プランの変更は${t("organization")}の変更の履歴に、運用者の操作として残ります。</p>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" id="d-ps" aria-disabled="true" aria-describedby="d-pu">変える</button>`),
     suspendOrganization: () => {
@@ -3697,6 +3700,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const same = plan.value === "business" && interval.value === "monthly";
     submit.setAttribute("aria-disabled", String(same));
     document.getElementById("d-pu").hidden = !same;
+    const after = document.getElementById("d-pa");
+    after.hidden = same;
+    after.innerHTML = plan.value === "team" ? "変えた後の上限は 15&nbsp;人・30&nbsp;GB です。" : "変えた後の上限は 50&nbsp;人・100&nbsp;GB です。";
     document.getElementById("d-po").hidden = plan.value !== "team";
     document.getElementById("d-pq").hidden = plan.value !== "team";
     if (same) {

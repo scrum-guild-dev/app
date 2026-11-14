@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { PLAN_LIMITS } from '../../organization-plan.ts';
 import { SLUG_MAX_LENGTH } from '../../organization-slug.ts';
-import { conflictReasonOf } from '../conflict-reason.ts';
 import { defineOperation } from '../define.ts';
 
 // 添付ファイルの上限の単位。1 GB = 1024³ バイト（organizations.attachment_quota_bytes の既定 32212254720 が 30 GB）
@@ -17,12 +16,6 @@ export const quotaTiers = [
   { id: 'small', ...PLAN_LIMITS.team },
   { id: 'standard', ...PLAN_LIMITS.business },
 ] as const;
-
-// 409 の conflict の理由。plan_managed は契約のある組織（上限は契約から決まる）
-export const quotaUpdateConflictReasons = ['plan_managed'] as const;
-export function quotaUpdateConflictReasonOf(details: unknown): (typeof quotaUpdateConflictReasons)[number] | undefined {
-  return conflictReasonOf(details, quotaUpdateConflictReasons);
-}
 
 const memberLimit = z.number().int().min(1).max(MEMBER_LIMIT_MAX);
 const attachmentQuotaBytes = z.number().int().min(1).max(ATTACHMENT_QUOTA_MAX_BYTES);

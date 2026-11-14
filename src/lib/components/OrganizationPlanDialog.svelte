@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { organizationPlanUpdate } from '../../shared/operations/operator/index.ts';
+  import type { z } from 'zod';
+  import { organizationPlanUpdate, type organizationContract } from '../../shared/operations/operator/index.ts';
   import {
     billingIntervals,
     contractLimits,
@@ -22,18 +23,15 @@
   // 今の契約を選んだ状態で開く。未契約なら、今の人数の上限がビジネスの値以上ならビジネス、それ以外はチームを、月払いで選ぶ。
   // 今と同じ契約のままでは「変える」を押しても無視する（サーバーは何も書かずに今の値を返す）。
   // 開いたときの契約（未契約なら null）を expected に添えて送り、開いた後に別の運用者が変えていればサーバーが 409 で断る。
-  // 変えた後の上限は契約から決まる（追加容量の口数は残す）。今の人数が上限を超えるとき、今の合計が容量を超えるときは注意を出す。
-  // お試し中の組織にはお試しが終わること、停止中の組織には停止したままであることを添える。
+  // 変えた後の上限は契約から決まる（追加容量の口数は残す）。変えた後の上限を出し、今の人数が上限を超えるとき、今の合計が容量を超えるときは
+  // 注意を出す。未契約の組織の上限（51人以上の個別の値など）より下がるときは、契約を付けると値で決め直せなくなることも注意する。
+  // 契約を変えるときだけ、お試し中の組織にはお試しが終わることを添える。停止中の組織には停止したままであることを添える。
+  // 上限を値で変えられなくなる注記は、未契約の組織にだけ出す（契約のある組織は、もう値で変えられない）。
   // 書かれたか分からない失敗（5xx、通信の切れ）は、変わっていることもあると伝え、閉じたときに一覧を読み直す。
   // 開いた後に消す予定日を過ぎた（409 の purge_due）ときは、閉じて呼び出し側に渡す。
   // 送っている間の扱いと、結果の渡し方（onfinish、generation）は OrganizationQuotaDialog と同じ
   type Outcome = 'done' | 'state_changed' | 'purge_due' | 'unavailable' | 'unauthenticated';
-  type Contract = {
-    plan: OrganizationPlan;
-    billing_interval: BillingInterval;
-    extra_10gb_units: number;
-    extra_50gb_units: number;
-  };
+  type Contract = z.infer<typeof organizationContract>;
   type Target = {
     slug: string;
     name: string;
@@ -243,6 +241,20 @@
       </div>
       {#if unchanged}
         <span class="field-hint" id={unchangedHintId}>{t('operatorPlanUnchangedHint')}</span>
+      {:else}
+        <p class="field-hint">
+          {t('operatorPlanAfter', { members: next.member_limit, quota: sizeText(next.attachment_quota_bytes) })}
+        </p>
+      {/if}
+      {#if target !== null && target.contract === null && (next.member_limit < target.member_limit || next.attachment_quota_bytes < target.attachment_quota_bytes)}
+        <div class="callout is-warn">
+          <Icon name="alert" /><span
+            >{t('operatorPlanLimitsLower', {
+              members: target.member_limit,
+              quota: sizeText(target.attachment_quota_bytes),
+            })}</span
+          >
+        </div>
       {/if}
       {#if target !== null && !unchanged && target.used > next.member_limit}
         <div class="callout is-warn">
@@ -253,13 +265,15 @@
       {#if target !== null && !unchanged && next.attachment_quota_bytes < target.attachment_used_bytes}
         <div class="callout is-warn"><Icon name="alert" /><span>{t('operatorStorageBelowUsage')}</span></div>
       {/if}
-      {#if target?.trial}
+      {#if target?.trial && !unchanged}
         <p class="field-hint">{t('operatorPlanTrialNote')}</p>
       {/if}
       {#if target?.suspended}
         <p class="field-hint">{t('operatorPlanSuspendedNote', { organization: t('organization') })}</p>
       {/if}
-      <p class="field-hint">{t('operatorPlanNote')}</p>
+      {#if target?.contract === null}
+        <p class="field-hint">{t('operatorPlanNote')}</p>
+      {/if}
       <p class="field-hint">{t('operatorPlanHistoryNote', { organization: t('organization') })}</p>
     </div>
     {#if submitError !== null}

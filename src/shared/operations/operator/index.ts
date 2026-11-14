@@ -28,19 +28,8 @@ export {
   type ReassignAdminConflictReason,
   type ReassignAdminProblem,
 } from './organization-admin-reassign.ts';
-export {
-  organizationContract,
-  planUpdateConflictReasonOf,
-  planUpdateConflictReasons,
-  type PlanUpdateConflictReason,
-} from './organization-plan-update.ts';
-export {
-  ATTACHMENT_QUOTA_MAX_BYTES,
-  MEMBER_LIMIT_MAX,
-  QUOTA_GIB,
-  quotaTiers,
-  quotaUpdateConflictReasonOf,
-} from './organization-quota-update.ts';
+export { organizationContract } from './organization-plan-update.ts';
+export { ATTACHMENT_QUOTA_MAX_BYTES, MEMBER_LIMIT_MAX, QUOTA_GIB, quotaTiers } from './organization-quota-update.ts';
 export {
   isPurgeDue,
   PURGE_AFTER_DAYS,

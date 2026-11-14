@@ -1704,8 +1704,9 @@ dialog.dialog::backdrop { background: none; }
   .drawer .btn.is-sm::after, .drawer .link-btn::after, .drawer .edit-trigger::after {
     content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
   }
-  /* 表のセルの中の文字のボタン（運用の組織の一覧の「人数と容量の上限を変える」）も同じ。上下は押せない値の文字なので重ならない */
-  .table .link-btn { position: relative; }
+  /* 表のセルの中の文字のボタン（運用の組織の一覧の「人数と容量の上限を変える」「プランを変える」）も同じ。同じセルに縦に2つ並ぶので、
+     広げた範囲が上下で重ならないよう、見た目ごと 44px の高さにする（幅は ::after で広げる） */
+  .table .link-btn { position: relative; display: inline-flex; align-items: center; min-height: 44px; }
   .table .link-btn::after {
     content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
   }

@@ -2290,6 +2290,50 @@ test.describe('運用者', () => {
       await expect(aoba.locator('td.is-actions .props-note')).toBeFocused();
     });
 
+    for (const width of [390, 320]) {
+      test(`${width}px の幅でも、縦に並ぶ文字のボタンの押せる範囲が重ならず、注意の出たダイアログが4テーマで読めてはみ出さない`, async ({
+        page,
+      }) => {
+        const long = '区切りのない長い名前の組織'.repeat(4);
+        await mockList(page, [
+          organization({
+            name: long,
+            seats: { used: 60, limit: 120 },
+            attachment_quota_bytes: 500 * GIB,
+            attachment_used_bytes: 300 * GIB,
+            trial_ends_on: '2026-12-01',
+            suspended_at: '2026-10-10T00:00:00.000Z',
+          }),
+        ]);
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto('/operator');
+        const cell = page.locator('.table tbody tr').first().locator('td[data-label="添付・Wiki / 上限"]');
+        const [quota, plan] = await cell.getByRole('button').all();
+        const quotaBox = (await quota!.boundingBox())!;
+        const planBox = (await plan!.boundingBox())!;
+        // 見た目ごと 44px の高さで、上下に重ならない
+        expect(quotaBox.height).toBeGreaterThanOrEqual(44);
+        expect(planBox.height).toBeGreaterThanOrEqual(44);
+        expect(quotaBox.y + quotaBox.height).toBeLessThanOrEqual(planBox.y + 0.5);
+        expect(await findOverflowViolations(page)).toEqual([]);
+
+        await plan!.click();
+        const dialog = page.getByRole('dialog', { name: 'プランを変える' });
+        // 未契約で人数の上限が 50 人以上なので、ビジネスを選んで開く。今の上限（120 人・500 GB）より下がる注意を出す
+        await expect(dialog.getByRole('radio', { name: /ビジネス/ })).toBeChecked();
+        await expect(dialog).toContainText('変えた後の上限は 50 人・100 GB です。');
+        await expect(dialog.locator('.callout.is-warn')).toHaveText([
+          /今の上限（120 人・500 GB）より下がります。/,
+          /今の人数（60 人）が、変えた後の上限（50 人）を超えます。/,
+          /選んだ上限は今の合計より小さい/,
+        ]);
+        await expect(dialog).toContainText('お試しはここで終わり');
+        await expect(dialog).toContainText('契約しても停止したままです');
+        expect(await findOverflowViolations(page)).toEqual([]);
+        await expectNoA11yViolationsInThemes(page, 'operator-reassign', []);
+      });
+    }
+
     test('通信や 5xx の失敗は、ダイアログを開いたまま中に理由を出す', async ({ page }) => {
       await mockList(page, [organization({})]);
       await failOperation(page, organizationPlanUpdate, 500, 'internal');
