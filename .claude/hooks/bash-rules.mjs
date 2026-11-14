@@ -55,6 +55,43 @@ const NON_EXECUTING = new Set([
 ]);
 // 引数を実行しない道具か。Homebrew の g 付きの名前（gls、gecho）は、GNU_PREFIXED にあるものだけ g を外して引く
 const isNonExecuting = (tool) => NON_EXECUTING.has(GNU_PREFIXED.has(tool) ? tool.slice(1) : tool);
+// 未知の前置きの後ろにある実行名を見る判定から外す道具。ほかの判定（秘密や書き込み）は引き続き掛ける。
+const PREFIX_ARGUMENT_ONLY = new Set(['for', 'select', 'sleep', 'kill', 'exit', 'pgrep']);
+const PREFIX_JUDGED_SEPARATELY = new Set(['find', 'gfind', 'curl', 'wget', 'http', 'https', 'eval', 'source', '.', 'case', 'esac']);
+
+// tar の普通のアーカイブ対象は実行名ではない。コマンドを渡すオプションがあるときは前置きとして見る。
+function tarHasCommandOption(args) {
+  const end = args.indexOf('--');
+  const options = end === -1 ? args : sliceWords(args, 0, end);
+  const commandOptions = ['checkpoint-action', 'to-command', 'use-compress-program', 'rsh-command', 'info-script', 'new-volume-script'];
+  return options.some((a, i) => {
+    const long = /^--([^=]+)(=|$)/.exec(a);
+    if (long && commandOptions.some((name) => abbreviates(long[1], name))) return true;
+    // オプション名が実行時に決まる語は、コマンドを指定するものにもなりうる。
+    // src/* のように固定のパスで始まる対象はフラグにならない。
+    const head = shapeAt(options, i).split('=')[0];
+    const dynamicFlag = head.includes(DYNAMIC) && (head.startsWith(DYNAMIC) || head.startsWith('-'));
+    const globFlag = expandsAt(options, i) && /^[-*?\[{]/.test(head);
+    return dynamicFlag || globFlag || /^-[^-]*[IF]/.test(a) || (i === 0 && /^[a-zA-Z]+$/.test(a) && /[IF]/.test(a));
+  });
+}
+
+function unknownPrefixNeedsReview(words, ci, args, manager, ctx) {
+  const tool = baseName(words[ci]);
+  if (isNonExecuting(tool) || SHELLS.has(tool) || INTERPRETERS.has(tool) || manager ||
+      PREFIX_ARGUMENT_ONLY.has(tool) || PREFIX_JUDGED_SEPARATELY.has(tool) || ENV_DECLARERS.has(tool) ||
+      isWrangler(words[ci]) || isCfWrangler(words[ci])) return false;
+  if (['tar', 'gtar'].includes(tool)) return tarHasCommandOption(args);
+  // パッケージの暗黙のコマンド（pnpm nosuch $X）の末尾は通常の引数とし、後続引数がある動的な語は見る。
+  return words.some((w, i) => {
+    if (i <= ci) return false;
+    const name = baseName(w);
+    const executable = name === 'git' || SHELLS.has(name) || INTERPRETERS.has(name);
+    const dynamic = (!ctx.implicitPackageCommand || i + 1 < words.length) && isUnresolved(words, i);
+    return executable || dynamic;
+  });
+}
+
 // 依存の情報を見るだけのサブコマンド（npm view wrangler versions など）
 const PACKAGE_INFO = new Set([
   'view', 'info', 'show', 'why', 'list', 'ls', 'outdated', 'search', 'home', 'repo', 'docs', 'bugs', 'audit',
@@ -499,6 +536,15 @@ function readConfigArgs(rest) {
 function judgeGitCommand(sub, rest, gitDir, branchOf) {
   if (sub !== undefined && !GIT_COMMANDS.has(sub)) return [ASK, '未知の git のサブコマンドは別名や外部の道具かもしれない。人が確かめる'];
   if (sub === 'send-pack') return [ASK, 'git send-pack は push の先とフックを通常の push と同じように判定できない。人が確かめる'];
+  // Git 自身が実行する本文はシェルの字句として見えない。-- 後ろのパスはフラグに数えない。
+  const optionEnd = rest.indexOf('--');
+  const options = optionEnd === -1 ? rest : sliceWords(rest, 0, optionEnd);
+  const executes =
+    (sub === 'rebase' && options.some((a) => /^-[^-]*x/.test(a) || isOption(a, '--exec', 4))) ||
+    (sub === 'difftool' && options.some((a) => /^-[^-]*x/.test(a) || isOption(a, '--extcmd', 5))) ||
+    (sub === 'bisect' && positionals(options)[0] === 'run') ||
+    (sub === 'submodule' && positionals(options)[0] === 'foreach');
+  if (executes) return [ASK, 'git の rebase --exec、bisect run、submodule foreach、difftool --extcmd は別のコマンドを実行する。本文の動作は人が確かめる'];
   if (['rm', 'mv', 'checkout', 'restore'].includes(sub)) {
     const isProtected = protectedAt(gitDir);
     const root = gitDir && (repoRootOf(gitDir) ?? gitDir);
@@ -1762,7 +1808,7 @@ function judgeName(spec, args, prefix, ctx, reading, builtins = true) {
     if (builtins && spec.unknownAsks) return [...results, [ASK, NPM_UNKNOWN_REASON]];
     // pnpm と bun は、スクリプトに無い名前を PATH のコマンドとして動かす（pnpm bash -c '…'、bun run git push）。
     // 場所が分からなければスクリプトかどうかも分からないので、確認を挟んだうえで経由先としても見る
-    const via = spec.runsMissing && !isScript && !runner ? judgeVia(prefix, args, at, reading, ctx) : [];
+    const via = spec.runsMissing && !isScript && !runner ? judgeVia(prefix, args, at, reading, { ...ctx, implicitPackageCommand: true }) : [];
     return [...results, ...via, ...judgeScripts([name], rest, reading, ctx)];
   }
   if (isScript) results.push(...judgeScripts([name], rest, reading, ctx));
@@ -3296,12 +3342,12 @@ function judgeSegment(words, ctx) {
   }
 
   if (INTERPRETERS.has(tool)) results.push(judgeInterpreterBody(tool, args));
-  // 未知の前置きの後ろにも git があれば確認する。引数だけを表示・検索する道具は除く。
-  if (tool !== 'git' && !isNonExecuting(tool) && !['find', 'gfind'].includes(tool) && !manager && words.some((w, i) => i > ci && baseName(w) === 'git')) {
-    results.push([ASK, '前置きの道具から git を動かすと、作業場所や追加の引数を判定できない。人が確かめる']);
+  if (unknownPrefixNeedsReview(words, ci, args, manager, ctx)) {
+    results.push([ASK, '前置きの道具から git、シェル、インタープリタや名前を判定できない道具を動かすと、作業場所や追加の引数を判定できない。人が確かめる']);
   }
   if (tool === 'git') {
-    if (ctx.env?.GIT_CONFIG_ENV) {
+    // pnpm exec や find -exec からの掛け直しは variablesSetBy を通らないので、前置きの代入も直接見る。
+    if (ctx.env?.GIT_CONFIG_ENV || words.slice(0, ci).some((w) => /^GIT_CONFIG_\w+(\[[^\]]*\])?\+?=/.test(w))) {
       results.push([ASK, 'GIT_CONFIG_* は git の設定を差し替え、守るフックや push の先を変えうる。人が確かめる']);
     }
     // 道具の前の代入と、前の区切りの export などで GIT_DIR か GIT_WORK_TREE を設定した後（ctx.env、judgeBash が積む）は、git が別の作業コピーを見る。
@@ -3326,7 +3372,17 @@ function judgeSegment(words, ctx) {
     // bash -c "..."、bash -lc "..."、bash <<< "..."、bash <<EOF の中身も同じ規則で見る
     const c = args.findIndex((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
     if (c !== -1) {
-      const body = args[c + 1] === '--' ? args[c + 2] : args[c + 1];
+      // bash/sh は -c の後でもオプションを読み、最初の位置引数を本文にする。
+      // -o/+o と -O/+O の末尾のフラグは、次の語をオプション名として取る。
+      let at = c + 1;
+      // -co pipefail や -cO extglob は、-c と同じ語の末尾の o/O も次の値を取る。
+      if (/[oO]$/.test(args[c])) at++;
+      for (; at < args.length; at++) {
+        if (args[at] === '--') { at++; break; }
+        if (!/^[-+][a-zA-Z]+$/.test(args[at])) break;
+        if (/^[-+][a-zA-Z]*[oO]$/.test(args[at])) at++;
+      }
+      const body = args[at];
       if (body) results.push(judgeBash(body, nextCtx));
     }
     if (tool === 'fish') for (const body of fishCommands(args)) results.push(judgeBash(body, nextCtx));
@@ -3412,6 +3468,10 @@ function variablesSetBy(words, ci) {
     const declaresUnknown = ENV_DECLARERS.has(tool) && words.some((_, i) => i > ci && isUnresolved(words, i));
     if (declaresUnknown || IN_SHELL_RUNNERS.has(tool)) for (const name of [...LOCATION_VARIABLES, NPM_CALL_VARIABLE]) after.add(name);
     if (IN_SHELL_RUNNERS.has(tool)) after.add(GIT_CONFIG_LOCATION);
+    // 不透明な本文と、設定する名前が展開で決まる宣言は GIT_CONFIG_* も変更できる。
+    // export PATH=$HOME/bin のように値だけが展開される宣言では名前は既知なので印を付けない。
+    const declaresUnknownConfig = ENV_DECLARERS.has(tool) && words.some((w, i) => i > ci && isUnresolved(words, i) && hasExpansion(w.split('=')[0]));
+    if (declaresUnknownConfig || IN_SHELL_RUNNERS.has(tool)) after.add('GIT_CONFIG_ENV');
   }
   return { once, after };
 }

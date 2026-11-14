@@ -631,6 +631,13 @@ const PREFIX_FLAGS_WITH_VALUE = new Set([
   '-u', '-g', '-n', '-s', '-k', '-I', '-P', '-L', '-d', '-E', '-C', '-p', '--package', '--chdir', '--unset',
 ]);
 
+// sudo の -n、-s、-k、-E は値を取らない。他の前置きの -n や -s と共用すると実行名を読み飛ばす。
+const SUDO_FLAGS_WITH_VALUE = new Set([
+  '-C', '-c', '-D', '-g', '-h', '-p', '-R', '-r', '-t', '-T', '-u',
+  '--auth-type', '--bsd-auth-type', '--close-from', '--login-class', '--chdir', '--group', '--host',
+  '--prompt', '--chroot', '--role', '--type', '--command-timeout', '--user', '--other-user',
+]);
+
 export function isAssignment(word) {
   // NAME+=値 と、配列の要素の NAME[添字]=値 も代入
   return /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/.test(word);
@@ -655,7 +662,7 @@ export function abbreviates(name, full) {
 
 // xargs だけが値を取るフラグ（-a と --arg-file は引数を読むファイル、--delimiter は区切り、--process-slot-var は環境変数の名前、
 // -J、-R、-S は BSD の置換と行数と置換の長さ）。
-// sudo -a のように他の前置きでは値を取らないので、直前の前置きが xargs のときだけ効かせる。
+// sudo -a は既存の保守的な解釈を残し、実行名を読み飛ばさない。値として飛ばすのは直前が xargs のときだけ。
 // GNU の getopt は長いオプションを一意な省略形でも受け付ける（--arg、--delim、--process）。-afile や --arg-file=file の連結の形は1語で済む。
 // 逆に -p は、npx -p と sudo -p では値を取るが、xargs では値を取らない確認のフラグなので、xargs の後ろでは値として飛ばさない
 const XARGS_FLAGS_WITH_VALUE = new Set(['-a', '-J', '-R', '-S']);
@@ -713,7 +720,8 @@ function scanCommand(words) {
         continue;
       }
       const takesValue =
-        (previous === 'sudo' && w === '-E') || (['command', 'time'].includes(previous) && w === '-p') ? false :
+        previous === 'sudo' ? SUDO_FLAGS_WITH_VALUE.has(w) :
+        (['command', 'time'].includes(previous) && w === '-p') ? false :
         (previous === 'exec' && w === '-a') || (previous === 'stdbuf' && ['-o', '-e', '-i'].includes(w)) ? true :
         previous === 'xargs'
           ? takesValueInXargs(w) || (w !== '-p' && PREFIX_FLAGS_WITH_VALUE.has(w))
