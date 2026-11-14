@@ -1762,7 +1762,7 @@ function judgeName(spec, args, prefix, ctx, reading, builtins = true) {
     if (builtins && spec.unknownAsks) return [...results, [ASK, NPM_UNKNOWN_REASON]];
     // pnpm と bun は、スクリプトに無い名前を PATH のコマンドとして動かす（pnpm bash -c '…'、bun run git push）。
     // 場所が分からなければスクリプトかどうかも分からないので、確認を挟んだうえで経由先としても見る
-    const via = spec.runsMissing && !isScript && !runner ? judgeVia(prefix, args, at, reading, ctx) : [];
+    const via = spec.runsMissing && !isScript && !runner ? judgeVia(prefix, args, at, reading, { ...ctx, implicitPackageCommand: true }) : [];
     return [...results, ...via, ...judgeScripts([name], rest, reading, ctx)];
   }
   if (isScript) results.push(...judgeScripts([name], rest, reading, ctx));
@@ -3298,8 +3298,9 @@ function judgeSegment(words, ctx) {
   if (INTERPRETERS.has(tool)) results.push(judgeInterpreterBody(tool, args));
   // 未知の前置きの後ろに git、シェル、インタープリタや実行時に決まる語があれば確認する。
   // 読むだけの道具と、本文や経由先を別に判定する既知の道具は除く。
-  if (!isNonExecuting(tool) && !SHELLS.has(tool) && !INTERPRETERS.has(tool) && !['find', 'gfind'].includes(tool) && !manager &&
-      words.some((w, i) => i > ci && (baseName(w) === 'git' || SHELLS.has(baseName(w)) || INTERPRETERS.has(baseName(w)) || isUnresolved(words, i)))) {
+  // パッケージの暗黙のコマンド（pnpm nosuch $X）の通常引数は実行名と決め付けず、字面の実行名だけを見る。
+  if (!isNonExecuting(tool) && !SHELLS.has(tool) && !INTERPRETERS.has(tool) && !['find', 'gfind', 'curl', 'wget', 'http', 'https', 'eval', 'source', '.', 'case', 'esac'].includes(tool) && !ENV_DECLARERS.has(tool) && !isWrangler(words[ci]) && !isCfWrangler(words[ci]) && !manager &&
+      words.some((w, i) => i > ci && (baseName(w) === 'git' || SHELLS.has(baseName(w)) || INTERPRETERS.has(baseName(w)) || (!ctx.implicitPackageCommand && isUnresolved(words, i))))) {
     results.push([ASK, '前置きの道具から git、シェル、インタープリタや名前を判定できない道具を動かすと、作業場所や追加の引数を判定できない。人が確かめる']);
   }
   if (tool === 'git') {
