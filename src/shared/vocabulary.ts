@@ -478,6 +478,8 @@ export const dictionary = defineDictionary({
   // 読み直しに失敗したときの、もう一度試すボタンの横の知らせ
   retryFailed: 'まだ読み込めませんでした',
   loading: '読み込んでいます',
+  invitationCountLoading: '招待の件数を読み込んでいます',
+  invitationCountFailed: '招待の件数を読み込めませんでした。',
 
   // メニューの項目と見出し。ワークスペースの外の画面は organization
   pageToday: '今日やること',

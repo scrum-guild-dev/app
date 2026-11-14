@@ -175,7 +175,7 @@ h1, h2, h3 { text-wrap: balance; }
 }
 :is(.org-menu-list, .ws-menu-list) button, .account-menu-list button { width: 100%; border: 0; background: none; text-align: left; }
 :is(.org-menu-list, .ws-menu-list) a:hover, :is(.org-menu-list, .ws-menu-list) button:hover, .account-menu-list a:hover, .account-menu-list button:hover:not([aria-disabled="true"]) { background: var(--color-rule); }
-.account-menu-list button[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.account-menu-list button[aria-disabled="true"]:not(.btn) { opacity: 0.45; cursor: not-allowed; }
 :is(.org-menu-list, .ws-menu-list) a[aria-current="page"], .account-menu-list a[aria-current="page"] { background: var(--color-sunken); font-weight: 700; box-shadow: 0 0 0 1px var(--color-line); }
 :is(.org-menu-list, .ws-menu-list) a .ico { margin-left: auto; color: var(--color-accent); }
 .org-menu-name { min-width: 0; overflow-wrap: anywhere; }

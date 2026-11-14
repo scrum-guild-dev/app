@@ -153,21 +153,38 @@ try {
   );
   console.log('| load | 操作（主/従） | p50 ms | p95 ms |');
   console.log('| --- | --- | ---: | ---: |');
-  for (const screen of screens) {
+  for (const screen of screens.filter(
+    (screen) => !process.argv.includes('--layout-only') || screen.route.startsWith('/[slug]/+layout'),
+  )) {
     if (!screen.operations.length) {
       console.log(`| ${screen.route} | 操作なし | — | — |`);
       continue;
     }
-    const operations = [...screen.operations, ...(screen.after ?? [])];
     for (const reverse of [false, true]) {
       const label = reverse ? '逆順' : '正順';
+      const before = screen.deferSecondary && process.argv.includes('--layout-before');
+      const initial = before
+        ? [
+            ...screen.operations.filter((op) => op.name !== 'token-notice').slice(0, 2),
+            ...screen.operations.filter((op) => op.name === 'token-notice'),
+            ...screen.operations.filter((op) => op.name !== 'token-notice').slice(2),
+          ]
+        : screen.operations;
       const read = () =>
-        readTrial(screen.operations, screen.after ?? [], reverse, (op) => call(op, screen.operator ?? false));
+        readTrial(
+          initial,
+          screen.after ?? [],
+          reverse,
+          (op) => call(op, screen.operator ?? false),
+          undefined,
+          (op) => !screen.deferSecondary || before || !op.secondary,
+        );
+      const measuredOperations = [...initial, ...(screen.after ?? [])];
       await read();
       await read();
       const samples = [];
       for (let i = 0; i < runs; i++) samples.push(await read());
-      for (const [index, op] of operations.entries()) {
+      for (const [index, op] of measuredOperations.entries()) {
         const values = samples.map((sample) => sample[index]!.ms);
         console.log(
           `| ${screen.route} | ${label}: ${op.name}（${op.secondary ? '従' : '主'}） | ${percentile(values, 0.5).toFixed(2)} | ${percentile(values, 0.95).toFixed(2)} |`,
@@ -177,6 +194,12 @@ try {
         trialTiming(sample.map((o) => ({ ms: o.completedMs, secondary: o.secondary }))),
       );
       const result = comparison(trials);
+      if (screen.deferSecondary) {
+        const values = trials.map((t) => (before ? t.total : t.primary));
+        console.log(
+          `| ${screen.route} | ${label}: 枠を返せる時点（${before ? '変更前' : '変更後'}） | ${percentile(values, 0.5).toFixed(2)} | ${percentile(values, 0.95).toFixed(2)} |`,
+        );
+      }
       console.log(
         `| ${screen.route} | ${label}: 合計（各試行の最終完了） | ${percentile(
           trials.map((t) => t.total),

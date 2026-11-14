@@ -70,3 +70,44 @@ test('出力スキーマが不正なら応答時間が揃っていても試行�
     /応答の形が不正/,
   );
 });
+
+for (const reverse of [false, true]) {
+  test(`従を待たない組織枠は主の完了で件数を開始し、出力検査は通知も待つ（逆順=${reverse}）`, async () => {
+    const calls: string[] = [];
+    const pending = new Map<string, (value: ReadResponse) => void>();
+    const validated: string[] = [];
+    const trial = readTrial(
+      ['main', 'notice'],
+      ['count'],
+      reverse,
+      (name) => {
+        calls.push(name);
+        return new Promise<ReadResponse>((resolve) => pending.set(name, resolve));
+      },
+      () => 0,
+      (name) => name === 'main',
+    );
+    const finish = (name: string, finishedAt: number) =>
+      pending.get(name)!({
+        ms: finishedAt,
+        finishedAt,
+        secondary: name !== 'main',
+        body: name,
+        validate: () => {
+          validated.push(name);
+        },
+      });
+    finish('main', 10);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(calls.at(-1), 'count');
+    finish('count', 20);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(validated, []);
+    finish('notice', 30);
+    assert.deepEqual(
+      (await trial).map((timing) => timing.completedMs),
+      [10, 30, 20],
+    );
+    assert.deepEqual(validated, ['main', 'notice', 'count']);
+  });
+}
