@@ -84,8 +84,9 @@ test.describe('管理者（あおば開発のミナト）', () => {
       }),
     );
     expect(names).toEqual(['ソラ', 'ツバサ', 'ハルカ', 'ミナト', 'ユイ']);
-    // ユーザーの節は、ワークスペースの節より前に並ぶ
-    await expect(page.locator('.settings > .setting .setting-title').first()).toHaveText('ユーザー');
+    // ユーザーの節は、プランの節の次で、ワークスペースの節より前に並ぶ（seed の組織にお試しの期限は無い）
+    await expect(page.locator('.settings > .setting .setting-title').nth(0)).toHaveText('プラン');
+    await expect(page.locator('.settings > .setting .setting-title').nth(1)).toHaveText('ユーザー');
 
     const me = rowOf(page, 'ミナト');
     await expect(me.getByRole('checkbox', { name: 'ミナトを管理者にする' })).toBeChecked();

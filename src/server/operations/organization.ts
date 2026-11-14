@@ -6,6 +6,7 @@ import { ApiError } from '../errors.ts';
 import { readOrganizationStorageUsage } from '../db/index.ts';
 import { amountOf, userExperienceTotalStatement } from './experience.ts';
 import { implement } from './implement.ts';
+import { contractOf } from './organization-contract.ts';
 
 // users.last_seen_at を書き直す間隔。組織の枠を開くたびに書かないための上限
 const LAST_SEEN_INTERVAL_MS = 60 * 60 * 1000;
@@ -81,8 +82,20 @@ export const organizationInfoOperation = implement(
           }
         : null;
 
+    // 契約は、管理画面のプランの節が明示した管理者の呼び出しでだけ読む。組織の枠とメンバーの呼び出しでは契約の表を引かない
+    const planRow = actor.isAdmin && input.include_plan === true ? await tools.readOrganizationPlan() : null;
+    const plan =
+      planRow === null
+        ? null
+        : {
+            contract: contractOf(planRow),
+            member_limit: planRow.member_limit,
+            attachment_quota_bytes: planRow.attachment_quota_bytes,
+          };
+
     return {
       storage,
+      plan,
       organization: {
         name: organization.name,
         kind: organization.kind,

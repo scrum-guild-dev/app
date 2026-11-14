@@ -892,6 +892,23 @@ export const dictionary = defineDictionary({
   epicPartyGone: '{epic}が見つからないか、{workspace}に所属していないため、{party}を変えられません',
   epicPartyFailed: '{party}を更新できませんでした。もう一度試してください',
   // エピックの完了と取り消し。操作は作成者とリーダーだけに出す。完了にできない理由は、押せない操作の横に出す
+  epicCancelPanel: '{epic}の中止',
+  epicCancel: '{epic}を中止する',
+  epicUncancel: '中止を取り消す',
+  epicCancelSubmit: '中止する',
+  epicCancelNote: '中止すると、{reward}は入りません。すでに確定した経験値は残ります。',
+  epicUncancelNote: '中止を取り消すと、受注や割り振り、完了の操作を再開できます。',
+  epicCancelConfirm:
+    'この{epic}を中止しますか。{reward}は入りませんが、すでに確定した経験値は残ります。中止は後で取り消せます。',
+  epicCancelUpdating: '中止の状態を更新しています',
+  epicCanceledToast: '{epic}を中止しました',
+  epicUncanceledToast: '{epic}の中止を取り消しました',
+  epicCancelForbidden: '中止と取り消しができるのは、{requester}と{leader}だけです',
+  epicCancelFinished: '完了した{epic}は中止できません。最新の内容を表示しています',
+  epicCancelConflict: 'ほかの画面で状態が変わりました。最新の内容を表示しています',
+  epicCancelGone: '{epic}が見つからないか、{workspace}に所属していないため、中止も取り消しもできません',
+  epicCancelFailed: '中止できませんでした。もう一度試してください',
+  epicUncancelFailed: '中止を取り消せませんでした。もう一度試してください',
   epicClearPanel: '{epic}の{done}',
   epicClearNoteOpen: '未完了の{story}が {count} 件残っているあいだは、{done}にできません。',
   epicClearNoteEmpty: '{story}が1件も無い{epic}は、{done}にできません。{story}を足して、すべて{done}にすると押せます。',
@@ -1687,6 +1704,26 @@ export const dictionary = defineDictionary({
   orgTrialLastDay: '今日までです',
   // 期限を過ぎた組織の印。管理者の画面（days_left が負。「残り -1 日」と出さない）と運用者の一覧が同じ文を使う
   trialExpired: 'お試しの期限を過ぎています',
+
+  // プランの節（組織の管理の画面）。契約の語は運用者の画面と同じ（planTerms、operatorPlanNone）。見るだけで、変えるのは運用者
+  orgPlanTitle: 'プラン',
+  orgPlanDesc: '今の契約と、人数と容量の上限です。',
+  orgPlanLoadFailed: 'プランを読み込めませんでした',
+  orgPlanRefreshFailed: 'プランを更新できませんでした。表示は前に読み込んだ値です。もう一度試してください。',
+  orgPlanTermsLabel: '契約',
+  orgPlanExtraLabel: '追加容量',
+  // 追加容量の口数。{size} は1口の容量（GB）、{units} は口数
+  orgPlanExtraUnits: '+{size} GB × {units} 口',
+  orgPlanExtraNone: 'なし',
+  orgPlanMemberLimitLabel: '人数の上限',
+  orgPlanMemberLimit: '{count} 人',
+  orgPlanQuotaLabel: '容量の上限',
+  // 未契約の組織（契約の行が無い）。上限は運用者が組織を作ったときか「人数と容量の上限を変える」で決めた値
+  orgPlanNoneNote: 'まだ契約していません。上限は運用者が決めた値です。',
+  orgPlanContact: 'プラン、支払いの周期、追加容量を変えるときは、運用者に問い合わせてください。',
+  // 自分用の組織。プランはパーソナルに固定で、運用者も変えない（organization-plan-update は 409）。追加容量だけは足せる（docs/business.md の「追加容量」）
+  orgPlanPersonalNote: '自分用の{organization}は、人数が本人1人のパーソナルに決まっています。',
+  orgPlanContactPersonal: '容量を足すときは、運用者に問い合わせてください。',
 
   // ワークスペースを終了する、再開する（組織の管理の画面。API の操作の名前は workspace-close と workspace-reopen のまま）。
   // {workspace} は、辞書の言葉を画面が渡す。{name} はワークスペースの名前
