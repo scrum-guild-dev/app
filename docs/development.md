@@ -437,6 +437,8 @@ vite の転送先も同じ値から作るので、画面は自分のワークツ
 
 ### URL を直接開く最初の読み込みを測る
 
+JavaScriptの本数の削減、チャンクの分け方と起票シートの遅延読み込みの比較は [初回表示のJavaScript](boot-javascript-results.md) に記録する。
+
 `pnpm bench:boot`（`scripts/boot-bench.ts`）で、本番の build を作り、公開 seed の管理者で `/aoba` を直接開く。API の待ちだけを測る `bench:loading` とは別の計測。Chromium が必要（初回は `pnpm exec playwright install chromium`）。Node と pnpm は指定版を使い、他の build・テスト・計測と同時に走らせない。
 
 既定は Fast 3G と Slow 3G を各2回。`pnpm bench:boot --runs 3 --network both --path /aoba --port 9744 --output /tmp/boot.json` のように変えられる。回線は `fast`、`slow`、`both`。パスは公開 seed の管理者が開ける、見出し h1 のある画面を指定する。`/aoba` は「今日やること」を確認し、他のパスでは `--heading 今日やること` のように目的の h1 の文字も指定する。HTTP 200 の SPA エラー画面を成功に混ぜないため、見出しが一致しない試行は失敗にする。指定ポート、+1（Worker）、+2（デバッガー）を使う。
