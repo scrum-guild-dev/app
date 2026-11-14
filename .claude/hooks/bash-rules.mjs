@@ -3326,7 +3326,15 @@ function judgeSegment(words, ctx) {
     // bash -c "..."、bash -lc "..."、bash <<< "..."、bash <<EOF の中身も同じ規則で見る
     const c = args.findIndex((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
     if (c !== -1) {
-      const body = args[c + 1] === '--' ? args[c + 2] : args[c + 1];
+      // bash/sh は -c の後でもオプションを読み、最初の位置引数を本文にする。
+      // -o/+o と -O/+O の末尾のフラグは、次の語をオプション名として取る。
+      let at = c + 1;
+      for (; at < args.length; at++) {
+        if (args[at] === '--') { at++; break; }
+        if (!/^[-+][a-zA-Z]+$/.test(args[at])) break;
+        if (/^[-+][a-zA-Z]*[oO]$/.test(args[at])) at++;
+      }
+      const body = args[at];
       if (body) results.push(judgeBash(body, nextCtx));
     }
     if (tool === 'fish') for (const body of fishCommands(args)) results.push(judgeBash(body, nextCtx));
