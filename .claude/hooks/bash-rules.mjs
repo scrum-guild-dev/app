@@ -2685,6 +2685,8 @@ function shellCommandBody(tool, args) {
       (expandsAt(args, i) && /^[*?\[{]/.test(shape)));
     if (dynamicOption || /^[-+]/.test(a)) return { uncertain: true };
     if (command) return { body: a };
+    // 未引用の展開は、nullglob などで消えたり別の argv に分かれたりするので位置を確定しない。
+    if (expandsAt(args, i)) return { uncertain: true };
     // 確定したスクリプトファイルより後ろは、そのスクリプトへ渡す引数。-c を再解釈しない。
     return {};
   }
