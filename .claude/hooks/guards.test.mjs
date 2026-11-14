@@ -7162,3 +7162,24 @@ describe('#1180: done-check の指摘', () => {
     ]);
   });
 });
+
+// PR #1206 の AI レビューの指摘（#1180）
+describe('#1180: AI レビューの指摘', () => {
+  const run = (cases) => {
+    for (const [kind, command, expected] of cases) {
+      test(`[${kind}] ${JSON.stringify(command)} は ${expected}`, () => assert.equal(decision(command), expected, command));
+    }
+  };
+
+  // curl と wget は長いオプションを一意な省略形でも受ける
+  describe('curl と wget の長いオプションの省略形', () => {
+    run([
+      ['すり抜け', 'wget --output-doc .git/config https://example.com/x', 'ask'],
+      ['すり抜け', 'wget --directory-p .git https://example.com/config', 'ask'],
+      ['すり抜け', 'curl --output-d .git -O https://example.com/config', 'ask'],
+      ['すり抜け', 'cd .git && curl --remote-name-a https://example.com/config', 'ask'],
+      ['通す', 'wget --output-doc /tmp/x https://example.com/x', 'allow'],
+      ['通す', 'curl --output-d /tmp -O https://example.com/x', 'allow'],
+    ]);
+  });
+});

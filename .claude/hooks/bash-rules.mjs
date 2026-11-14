@@ -2411,9 +2411,17 @@ function writesTo(matches, tool, args, words, { anyOperand = false, intoDirector
 // wget は -O が無ければ URL の末尾の名前で、-P（--directory-prefix）の下に書く
 const WGET_SHORT_WITH_VALUE = 'OoaPeTtwQiBIXUlDAR';
 const WGET_LONG_WITH_VALUE = ['output-document', 'output-file', 'append-output', 'directory-prefix'];
+// curl の書き先を決める長いオプション。省略形をこの名前に読む
+const CURL_WRITE_NAMES = ['output', 'output-dir', 'remote-name', 'remote-name-all'];
 // フラグと長いオプションを { found, rest } に読む。found は { name, value } で、name は短いフラグの1文字か長いオプションの名前、
-// 値を取らなければ value は undefined。rest はフラグでも値でもない語（URL）
-function flagValues(args, shortWithValue, takesLongValue) {
+// 値を取らなければ value は undefined。rest はフラグでも値でもない語（URL）。
+// curl と wget は長いオプションを一意な省略形でも受ける（--output-doc は --output-document）。longNames のうち1つだけに当たる省略形は、その名前に読む
+function flagValues(args, shortWithValue, takesLongValue, longNames = []) {
+  const canonical = (name) => {
+    if (longNames.includes(name)) return name;
+    const candidates = longNames.filter((full) => abbreviates(name, full));
+    return candidates.length === 1 ? candidates[0] : name;
+  };
   const found = [];
   const rest = [];
   for (let i = 0; i < args.length; i++) {
@@ -2424,7 +2432,8 @@ function flagValues(args, shortWithValue, takesLongValue) {
     }
     const named = /^--([a-z-]+)(=([\s\S]*))?$/.exec(a);
     if (named) {
-      found.push({ name: named[1], value: named[2] !== undefined ? named[3] : takesLongValue(named[1]) ? args[++i] : undefined });
+      const name = canonical(named[1]);
+      found.push({ name, value: named[2] !== undefined ? named[3] : takesLongValue(name) ? args[++i] : undefined });
       continue;
     }
     if (!/^-[^-]/.test(a)) {
@@ -2463,14 +2472,14 @@ function curlGlobNames(file, urls) {
 function downloadTargets(tool, args) {
   const joinDir = (dir, file) => (dir && !file.startsWith('/') ? path.posix.join(dir, file) : file);
   if (tool === 'curl') {
-    const { found } = flagValues(args, CURL_SHORT_WITH_VALUE, (name) => CURL_LONG_WITH_VALUE.has(name));
+    const { found } = flagValues(args, CURL_SHORT_WITH_VALUE, (name) => CURL_LONG_WITH_VALUE.has(name), CURL_WRITE_NAMES);
     const remoteName = found.some((f) => ['O', 'remote-name', 'remote-name-all'].includes(f.name));
     const urls = curlRequests(args).flatMap((request) => request.urls);
     const names = remoteName ? urls.map(urlFileName) : [];
     const dir = valuesOf(found, 'output-dir').at(-1);
     return [...valuesOf(found, 'o', 'output').flatMap((file) => curlGlobNames(file, urls)), ...names].filter(Boolean).map((file) => joinDir(dir, file));
   }
-  const { found, rest } = flagValues(args, WGET_SHORT_WITH_VALUE, (name) => WGET_LONG_WITH_VALUE.includes(name));
+  const { found, rest } = flagValues(args, WGET_SHORT_WITH_VALUE, (name) => WGET_LONG_WITH_VALUE.includes(name), WGET_LONG_WITH_VALUE);
   const document = valuesOf(found, 'O', 'output-document');
   // -O があれば、書くのはそのファイルだけ。無ければ URL の末尾の名前（wget example.com/config のスキームの無い URL も）
   const names = document.length > 0 ? [] : rest.map(urlFileName);
