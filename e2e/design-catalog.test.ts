@@ -452,3 +452,40 @@ test('スマホの見本の浮きメニューから組織作成を開ける（#1
   await create.fill('こもれび工房');
   await expect(create).toHaveValue('こもれび工房');
 });
+
+test('見本のカタログ: エピックは引き出しで開き、読み取り専用と削除権限を示す', async ({ page }) => {
+  const files: Record<string, string> = {
+    'index.html': 'text/html',
+    'tokens.css': 'text/css',
+    'components.css': 'text/css',
+    'icons.js': 'text/javascript',
+    'art.js': 'text/javascript',
+    'sample-data.js': 'text/javascript',
+    'kit.js': 'text/javascript',
+  };
+  await page.route('**/__design-catalog/**', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').pop()!;
+    if (!files[name]) return route.fulfill({ status: 404, body: '' });
+    await route.fulfill({
+      contentType: files[name],
+      body: readFileSync(new URL(`../design/${name}`, import.meta.url)),
+    });
+  });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/__design-catalog/index.html');
+  await expect(
+    page.locator('[data-dialog="createEpic"], [data-dialog="createStory"], [data-dialog="editEpic"]'),
+  ).toHaveCount(0);
+  await page.locator('a[data-epic-can-delete="false"]').click();
+  const drawer = page.locator('aside#drawer');
+  await expect(drawer.getByText('削除できるのは作った人とリーダーです。')).toBeVisible();
+  await expect(drawer.locator('.row-menu-btn')).toHaveCount(0);
+  await drawer.locator('[data-close-drawer]').click();
+  await page.locator('a[data-epic-readonly="true"]').click();
+  await expect(drawer.getByText('終了したワークスペースのエピックは、読み取りだけできます')).toBeVisible();
+  await expect(drawer.locator('input, textarea, select')).toHaveCount(0);
+  await drawer.locator('[data-drawer-mode="center"]').click();
+  await expect(drawer.locator('input, textarea, select')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

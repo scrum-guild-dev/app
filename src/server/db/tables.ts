@@ -73,7 +73,6 @@ export const commonTableColumns = {
     slug: text,
     name: text,
     vocabulary: textDefault,
-    theme: textDefault,
     // migrations/0017_add_organization_kind.sql で足す。'team' か 'personal'（自分用）
     kind: textDefault,
     suspended_at: textOrNull,

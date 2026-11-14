@@ -20,7 +20,13 @@
 "use strict";
 // エピック（レイド）の詳細
 const { D, t, icon, esc, section, emptyState, pageHead, avatarOf, emblem, tier, dueChip, progress, book, storyPts, raidNotice, attachments, filesOf } = SQ;
-const ID = "e1";
+// 引き出しで直した見本も、移動先の画面へ渡す（本番のデータ保存は行わない）。
+try {
+  const preview = JSON.parse(sessionStorage.getItem("sq-design-epic-preview") || "null");
+  if (preview && preview.id === new URLSearchParams(location.search).get("epic")) D.epics[preview.id] = preview.epic;
+} catch { /* 覚えられない環境では既存の見本を使う */ }
+const requestedEpic = new URLSearchParams(location.search).get("epic");
+const ID = requestedEpic && Object.hasOwn(D.epics, requestedEpic) ? requestedEpic : "e1";
 
 SQ.mount("epic", () => {
   const e = D.epics[ID];
@@ -35,15 +41,15 @@ SQ.mount("epic", () => {
     return `<li>${avatarOf(u)}<span class="party-list-text">${esc(x.name)}${x.left ? `<span class="props-note">${t("leftMember")}</span>` : ""}</span>${u === e.requester ? `<span class="role">${t("requester")}</span>` : ""}${emblem(x.level, true)}</li>`;
   }).join("");
   return `
-    ${pageHead(`${t("epic")}・${esc(D.categories[e.cat].name)}`, esc(e.title), [
+    ${pageHead(`${t("epic")}・${e.cat ? esc(D.categories[e.cat].name) : `${t("category")}なし`}`, esc(e.title), [
       ["", "check", `${t("done")}の${t("points")}`, p.done],
       ["", "", `残りの${t("points")}`, p.all - p.done],
       ["", "users", t("party"), e.party.length],
-    ], `<a class="btn is-sm is-quiet" href="backlog.html">${t("backlog")}へ戻る</a><button class="btn" type="button" data-dialog="editEpic">${icon("pen")}${t("epic")}を直す</button>`)}
+    ], `<a class="btn is-sm is-quiet" href="backlog.html">${t("backlog")}へ戻る</a><a class="btn" href="?epic=${encodeURIComponent(ID)}&epic_id=${encodeURIComponent(ID)}" data-epic-id="${ID}">${icon("pen")}${t("epic")}を直す</a>`)}
     <div class="layout-aside">
       <div class="layout-main">
         <section class="section">
-          <div class="raid-body">${e.body.map((b) => `<p>${esc(b)}</p>`).join("")}
+          <div class="raid-body">${(e.body || []).map((b) => `<p>${esc(b)}</p>`).join("")}
             ${e.link ? `<div><span class="source-key is-wrap">${icon("link")} ${esc(e.link)}</span> <a class="btn is-sm" href="#" aria-label="リンクを新しいタブで開く">開く</a></div>` : ""}</div>
           <div class="field"><span class="field-label">${icon("clip")} 添付ファイル ${filesOf(ID).length || ""}</span>${attachments(ID)}</div>
         </section>
@@ -71,7 +77,7 @@ SQ.mount("epic", () => {
             <div><dt>${t("requester")}</dt><dd>${avatarOf(e.requester)}${esc(SQ.user(e.requester).name)}</dd></div>
             <div><dt>${t("reward")}</dt><dd>${tier(e.tier)}</dd></div>
             <div><dt>${t("due")}</dt><dd>${dueChip(e.due)}</dd></div>
-            <div><dt>${t("category")}</dt><dd>${esc(D.categories[e.cat].name)}</dd></div>
+            <div><dt>${t("category")}</dt><dd>${e.cat ? esc(D.categories[e.cat].name) : `${t("category")}なし`}</dd></div>
           </dl>
           <p class="panel-note">${t("reward")}は、クリアした時点の${t("party")}全員に同じ額が入ります。</p>
         </section>

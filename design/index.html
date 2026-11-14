@@ -546,10 +546,8 @@ const SECTIONS = [
       <button class="btn" type="button" data-dialog="createTask">${t("create")}</button>
       <button class="btn" type="button" data-dialog="moveTask">親を移す</button>
       <button class="btn" type="button" data-dialog="moveStory">${t("story")}の親を移す</button>
-      <button class="btn" type="button" data-dialog="createEpic">${t("epic")}を作る</button>
-      <button class="btn" type="button" data-dialog="editEpic">${t("epic")}を直す</button>
-      <button class="btn" type="button" data-dialog="viewEpic">${t("epic")}（終了した${t("workspace")}）</button>
-      <button class="btn" type="button" data-dialog="createStory">${t("story")}を作る</button>
+      <a class="btn" href="?epic_id=e1" data-epic-id="e1">${t("epic")}を直す</a>
+      <a class="btn" href="?epic_id=e1" data-epic-id="e1" data-epic-readonly="true">${t("epic")}（終了した${t("workspace")}）</a>
       <a class="btn" href="?story=s4" data-story="s4">${t("story")}を直す（引き出し）</a>
       <a class="btn" href="?story=s4" data-story="s4" data-story-can-delete="false">${t("story")}を直す（引き出し。削除できない人）</a>
       <button class="btn" type="button" data-dialog="editRecord">完了の記録を直す</button>
@@ -559,7 +557,7 @@ const SECTIONS = [
       <button class="btn is-danger" type="button" data-dialog="deleteStoryLeaderOnly">${t("story")}を削除する（まとめて削除できない）</button>
       <button class="btn is-danger" type="button" data-dialog="deleteEpicCleared">${t("epic")}を削除する（${t("done")}済みで、配下を残せない）</button>
       <button class="btn is-danger" type="button" data-dialog="deleteEpicClearedLeaderOnly">${t("epic")}を削除する（${t("done")}済みで、まとめて削除できない）</button>
-      <button class="btn" type="button" data-dialog="editEpicNotOwner">${t("epic")}を直す（削除できない人）</button>
+      <a class="btn" href="?epic_id=e1" data-epic-id="e1" data-epic-can-delete="false">${t("epic")}を直す（削除できない人）</a>
       <button class="btn" type="button" data-dialog="discardDraft">書きかけを捨てるか確かめる（引き出し）</button>
       <button class="btn" type="button" data-dialog="shortcutHelp">ショートカットの一覧（? でも開く）</button>
     </div>

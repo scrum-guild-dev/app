@@ -525,7 +525,7 @@
   // 区分の選択欄（本番のエピック、ストーリー、起票のダイアログと、引き出し）。先頭が「区分なし」
   function categorySelect(id, current, readOnly) {
     if (readOnly) return `<span>${current ? esc(D.categories[current].name) : `${t("category")}なし`}</span>`;
-    return `<select class="select" id="${id}"><option>${t("category")}なし</option>${Object.entries(D.categories).map(([cid, c]) => `<option ${cid === current ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`;
+    return `<select class="select" id="${id}"><option value="">${t("category")}なし</option>${Object.entries(D.categories).map(([cid, c]) => `<option value="${cid}" ${cid === current ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`;
   }
   function repoPicker(name, current, opts = {}) {
     const ids = Object.keys(D.repositories);
@@ -963,8 +963,8 @@
       <div class="tree-row is-epic${opts.order ? " has-grip" : ""}${mark.state === "is-dropped" ? " is-dropped" : ""}"${into ? dropAttr(mark) : ""}>
         ${opts.order ? gripCell(false) : ""}${treeCaret(`tree-${key}`, e.title)}
         <span class="kind is-epic" title="${t("epic")}">${icon("flag")}</span>
-        <span class="tree-title"><a class="tree-link" href="epic.html">${esc(e.title)}</a> ${categoryTag(e.cat)} ${state} ${dueChip(e.due, { done: finished })}</span>
-        <span class="tree-end"><span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span>${epicOrder ? rowMenu(e.title, [...orderItems({ first: epicOrder.first, last: epicOrder.last }), { attr: `data-dialog="deleteEpic" data-tree-delete-id="${eid}"`, label: `この${t("epic")}を削除`, icon: "trash", danger: true }]) : ""}</span>
+        <span class="tree-title"><a class="tree-link" href="?epic_id=${encodeURIComponent(eid)}" data-epic-id="${eid}">${esc(e.title)}</a> ${categoryTag(e.cat)} ${state} ${dueChip(e.due, { done: finished })}</span>
+        <span class="tree-end"><span class="tree-ratio" title="完了 / 全体">${t("done")} ${p.done} / ${p.all} pt</span>${epicOrder ? rowMenu(e.title, orderItems({ first: epicOrder.first, last: epicOrder.last })) : ""}</span>
       </div>
       <div class="tree-children" id="tree-${key}">${stories.map((s, i) => treeStory(s, false, {
         key: `${key}-${s}`,
@@ -1268,30 +1268,32 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     // 見本の状態の切り替え（カタログの drawerDemo が使う）。commentsView はコメントの読み込み（loading、failed、reloadFailed）
     // adjacent は前後のタスク（{ prev, next }。順を渡さない画面は null）。undefined なら画面の行から求める（drawerAdjacent）
     commentsView: null, commentViewer: null, commentBlocked: null, adjacent: undefined,
-    // kind は開いているものの種類（task、story）。ストーリーの引き出し（本番の StoryDrawer）は id にストーリーの id を持ち、
+    // kind は開いているものの種類（task、story、epic）。ストーリーの引き出し（本番の StoryDrawer）は id にストーリーの id を持ち、
     // 開き方は横と真ん中だけ。canDelete は削除できる人か（偽なら「⋯」に削除を出さず、理由を本文の下に出す）、
     // parentFinished は親のエピックが完了か中止している（ストーリーの完了と取り消しを押せなくする）見本の状態
     kind: "task", canDelete: true, parentFinished: false, remaining: null };
   const drawerReadOnly = () => drawer.view === "readonly";
   const isStoryDrawer = () => drawer.kind === "story";
-  const drawerNoun = () => (isStoryDrawer() ? t("story") : t("task"));
+  const isEpicDrawer = () => drawer.kind === "epic";
+  const isTreeDrawer = () => isStoryDrawer() || isEpicDrawer();
+  const drawerNoun = () => t(drawer.kind);
   function readDrawerMode() {
     try { const mode = localStorage.getItem("sq-design-task-open-mode"); return ["side", "center", "page", "tab"].includes(mode) ? mode : "side"; }
     catch { return "side"; }
   }
   // ストーリーの引き出しは横と真ん中だけ（ページ全体と新しいタブは、タスクの画面があるタスクの形）
   function shownDrawerMode() {
-    if (isStoryDrawer() && (drawer.mode === "page" || drawer.mode === "tab")) return "side";
+    if (isTreeDrawer() && (drawer.mode === "page" || drawer.mode === "tab")) return "side";
     return drawer.mode === "center" && matchMedia("(max-width: 620px)").matches ? "side" : drawer.mode;
   }
   // 今描いている形。ページ全体の見本（task.html）はページ全体、それ以外は横か真ん中（狭い幅の真ん中は横）
-  function renderedDrawerMode() { return location.pathname.endsWith("/task.html") && !isStoryDrawer() ? "page" : shownDrawerMode() === "center" ? "center" : "side"; }
+  function renderedDrawerMode() { return location.pathname.endsWith("/task.html") && !isTreeDrawer() ? "page" : shownDrawerMode() === "center" ? "center" : "side"; }
   // 開き方は押した時点で実行するボタンの組。select にすると、矢印キーを押すだけで確認なしに遷移してしまう
   function drawerModeButtons() {
     const narrow = matchMedia("(max-width: 620px)").matches, now = renderedDrawerMode();
     // 中身はアイコンだけで、名前は aria-label と title に持つ（前後のボタンと同じ形）
     const buttons = [["side", "横", "panel"], ["center", "真ん中", "centered"], ["page", "ページ全体", "maximize"], ["tab", "新しいタブ", "external"]]
-      .filter(([v]) => (v !== "center" || !narrow) && (!isStoryDrawer() || v === "side" || v === "center"))
+      .filter(([v]) => (v !== "center" || !narrow) && (!isTreeDrawer() || v === "side" || v === "center"))
       .map(([v, label, glyph]) => `<button class="pill" type="button" data-drawer-mode="${v}" aria-label="${label}" title="${label}" aria-pressed="${now === v}">${icon(glyph)}</button>`).join("");
     // 選べる形が1つだけ（ストーリーの狭い幅）なら、切り替えの組ごと出さない（本番の Drawer と同じ）
     return buttons.length < 2 ? "" : `<span class="drawer-mode" role="group" aria-label="開き方">${buttons}</span>`;
@@ -1300,6 +1302,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // 畳んだ枝の中（[hidden]）と、引き出しやアシスタントの中の行は数えない。端では null で、ボタンは aria-disabled。
   // 順に無いとき、ページ全体、画面が順を渡さないときは null を返し、ボタンを出さない。drawer.adjacent は見本の状態の切り替え（カタログの drawerDemo が使う）
   function drawerAdjacent() {
+    if (isEpicDrawer()) return null;
     if (drawer.adjacent !== undefined) return drawer.adjacent;
     if (renderedDrawerMode() === "page") return null;
     // ストーリーの引き出しは、画面に見えているストーリーの題のリンク（data-story）の並びで前後を決める
@@ -1365,7 +1368,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       return;
     }
     if (location.pathname.endsWith("/task.html")) { location.href = `backlog.html?task=${encodeURIComponent(id)}`; return; }
-    const kind = drawer.kind, shown = { canDelete: drawer.canDelete };
+    const kind = drawer.kind, shown = { canDelete: drawer.canDelete, view: drawer.view };
     closeDrawer(true); openDrawer(id, drawer.opener, false, null, kind);
     // 見本の状態（削除できない人）は、開き方を替えても持ち越す
     if (drawer.id === id) { Object.assign(drawer, shown); renderDrawer(); document.querySelector("#drawer [data-close-drawer]")?.focus(); }
@@ -1502,6 +1505,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // 2つのタブの中身は描いたまま隠す（本番は書きかけのコメントを、タブを切り替えても保つ）。左右の矢印キーでタブを移る
   function drawerHtml() {
+    if (isEpicDrawer()) return epicDrawerHtml();
     if (isStoryDrawer()) return storyDrawerHtml();
     const x = task(drawer.id);
     const parent = x.story ? D.stories[x.story] : null;
@@ -1657,6 +1661,21 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       ${storyDoneBarHtml(st, remaining)}
       ${!ro && !drawer.canDelete ? `<div class="form-actions"><span class="field-hint">削除できるのは作った人と${t("leader")}です。</span></div>` : ""}`;
   }
+  // エピックは共通の引き出しで編集する。完了・親の移動・前後の操作は持たない。
+  function epicDrawerHtml() {
+    const e = D.epics[drawer.id], ro = drawerReadOnly();
+    const menu = !ro && drawer.canDelete ? rowMenu(e.title, [{ attr: `data-dialog="deleteEpic" data-tree-delete-id="${drawer.id}"`, label: `この${t("epic")}を削除する`, icon: "trash", danger: true }]) : "";
+    return `<div class="drawer-top"><span class="chip">${icon("flag")}${t("epic")}</span>${menu}
+      <span class="drawer-tools">${drawerModeButtons()}</span><button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></div>
+      ${ro ? `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の${t("epic")}は、読み取りだけできます</span></div>` : ""}
+      ${drawerTitleHtml(e)}
+      <dl class="props"><div><dt>${t("due")}</dt><dd>${storyDueHtml(e)}</dd></div>
+        <div><dt>${ro ? t("category") : `<label for="drawer-cat">${t("category")}</label>`}</dt><dd>${categorySelect("drawer-cat", e.cat || null, ro)}</dd></div>
+        <div><dt>リンク</dt><dd>${drawerLinkHtml(e)}</dd></div></dl>
+      ${drawerBodyHtml(e)}
+      ${!ro && !drawer.canDelete ? `<p class="field-hint">削除できるのは作った人と${t("leader")}です。</p>` : ""}
+      ${location.pathname.endsWith("/epic.html") ? "" : `<a class="btn" data-epic-page="${drawer.id}" href="epic.html?epic=${encodeURIComponent(drawer.id)}">${t("epic")}の画面を開く</a>`}`;
+  }
   // 引き出しの見本の状態。読み込み中と、読めなかったとき（もう一度試す）は、見出しと文だけ
   function drawerStateHtml() {
     const top = `<div class="drawer-top">${isStoryDrawer() ? `<span class="chip">${icon("check")}${t("story")}</span>` : ""}<span class="drawer-tools">${drawerStepButtons()}${drawerModeButtons()}</span><button class="pill drawer-close" type="button" data-close-drawer aria-label="閉じる">${icon("x")}</button></div>
@@ -1672,7 +1691,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!force && drawer.id && drawerHasDraft()) {
       if (drawer.id !== id || drawer.kind !== kind) { askDiscardDraft({ kind: "open", id, opener, before, drawerKind: kind }); return; }
       before?.();
-      if (!isStoryDrawer() && drawer.tab !== "comments") setDrawerTab("comments");
+      if (!isTreeDrawer() && drawer.tab !== "comments") setDrawerTab("comments");
       document.querySelector("#drawer [data-close-drawer]")?.focus();
       return;
     }
@@ -1685,6 +1704,11 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
 
     resetDrawerFor(id, opener, kind);
+    if (kind === "epic") {
+      const url = new URL(location.href); url.searchParams.delete("task"); url.searchParams.delete("story"); url.searchParams.set("epic_id", id); history.replaceState(null, "", url);
+    } else {
+      const url = new URL(location.href); url.searchParams.delete("epic_id"); history.replaceState(null, "", url);
+    }
     renderDrawer();
     document.querySelector("#drawer [data-close-drawer]")?.focus();
   }
@@ -1693,6 +1717,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   // keep は前後へ移るとき。見本の状態（削除できない人）を、移った先にも持ち越す
   function resetDrawerFor(id, opener, kind = "task", keep = false) {
     if (!keep) drawer.canDelete = true;
+    drawer.view = kind === "epic" && opener instanceof HTMLElement && opener.dataset.epicReadonly === "true" ? "readonly" : null;
+    if (kind === "epic" && opener instanceof HTMLElement) drawer.canDelete = opener.dataset.epicCanDelete !== "false";
     drawer.kind = kind; drawer.id = id; drawer.tab = "comments"; drawer.thanked = new Set(); drawer.opener = opener || null; drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     document.getElementById("drawer")?.replaceChildren();
   }
@@ -1704,12 +1730,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (edit) drawer.drafts.commentEdit = edit.value;
   }
   // 書きかけ: 直している途中で、入力が保存した値と違う欄（保存と同じく前後の空白は除いて比べる）
-  const drawerItem = () => (isStoryDrawer() ? D.stories[drawer.id] : task(drawer.id));
+  const drawerItem = () => (isEpicDrawer() ? D.epics[drawer.id] : isStoryDrawer() ? D.stories[drawer.id] : task(drawer.id));
   function drawerHasDraft() {
     const x = drawerItem();
     if (!x) return false;
     captureDrafts();
-    const saved = { title: x.title, link: x.link || "", body: (x.body || []).join("\n"), ...(isStoryDrawer() ? { ac: storyAcText(x) } : { fields: fieldsText(x) }) };
+    const saved = { title: x.title, link: x.link || "", body: (x.body || []).join("\n"), ...(isStoryDrawer() ? { ac: storyAcText(x) } : isEpicDrawer() ? {} : { fields: fieldsText(x) }) };
     // コメントは、新しいコメントの欄に文字があるときと、直している途中で直す前の本文と違うとき
     const editingComment = drawer.commentEditing !== null ? (D.comments[x.id] || [])[drawer.commentEditing] : null;
     if ((drawer.drafts.comment ?? "").trim() !== "") return true;
@@ -1724,10 +1750,17 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       const back = sessionStorage.getItem("sq-design-task-return"); sessionStorage.removeItem("sq-design-task-return");
       location.href = back || "backlog.html"; return;
     }
+    if (isEpicDrawer()) {
+      const url = new URL(location.href); url.searchParams.delete("epic_id"); history.replaceState(null, "", url);
+    }
     drawer.id = null; drawer.errors = {}; drawer.drafts = {}; drawer.commentEditing = null;
     renderDrawer();
-    const back = drawer.opener instanceof HTMLElement ? drawer.opener : drawer.opener && document.querySelector(`[${isStoryDrawer() ? "data-story" : "data-task"}="${drawer.opener}"]`);
-    if (back) back.focus();
+    const back = drawer.opener instanceof HTMLElement ? drawer.opener : drawer.opener && document.querySelector(`[${isEpicDrawer() ? "data-epic-id" : isStoryDrawer() ? "data-story" : "data-task"}="${drawer.opener}"]`);
+    if (back?.isConnected) back.focus();
+    else if (isEpicDrawer()) {
+      const target = drawer.opener instanceof HTMLElement ? document.querySelector(`[data-epic-id="${drawer.opener.dataset.epicId}"]`) : document.querySelector("#content h1");
+      if (target) { target.tabIndex = -1; target.focus(); }
+    }
   }
   // ---- 自動保存。タイトル、リンク、本文、決まった欄 ----
   const fieldsText = (x) => (x.unfilled ? "" : (x.fields ?? (x.story ? D.stories[x.story].ac.slice(0, 2) : ["結果を確かめる手順が書かれている"]).map((a) => `- ${a}`).join("\n")));
@@ -1837,6 +1870,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   });
   // ポイントと期日は、選んだら保存する（保存のボタンは無い）
   document.addEventListener("change", (ev) => {
+    if (ev.target.id === "drawer-cat" && isEpicDrawer() && drawer.id && !drawerReadOnly()) {
+      drawerItem().cat = ev.target.value || null;
+      redrawContent(); toast(`${icon("check")}保存しました`); return;
+    }
     if (ev.target.name === "d-del") { const b = document.querySelector("[data-delete-needs-choice]"); b?.setAttribute("aria-disabled", "false"); b?.removeAttribute("aria-describedby"); }
     const el = ev.target.closest && ev.target.closest("[data-drawer-pts], [data-drawer-due]");
     if (!el || !drawer.id) return;
@@ -2026,10 +2063,14 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     const title = input.value.trim();
     if (!title) return;
     const [kind, key] = input.dataset.draft.split(":");
-    // エピックとストーリーの空の行。見本は木を組み替えず、足したことだけ知らせて、同じ欄に戻る
+    // エピックとストーリーも題だけで作り、同じ空の行へ戻る
     if (kind === "new-epic" || kind === "new-story") {
+      const id = `sample-${++draftSeq}`;
+      if (kind === "new-epic") D.epics[id] = { title, cat: null, body: null, due: null, link: null, party: [], requester: D.me, tier: "small" };
+      else D.stories[id] = { title, epic: key === "root" ? null : key, cat: null, ac: [], body: null, due: null, link: null };
       input.value = "";
-      input.focus();
+      redrawAll();
+      document.getElementById(input.id)?.focus();
       toast(`${icon("check")}${t(kind === "new-epic" ? "epic" : "story")}を足しました: ${esc(title)}`);
       return;
     }
@@ -2214,20 +2255,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("sprint")}を${s ? "保存しました" : "作りました"}">${s ? "保存する" : "作る"}</button>`);
   }
 
-  // ストーリーを作るダイアログ。本番には無い（本番は木の空の行で題だけ作る）、見本だけに残るもの（Issue #895 が残すと決めた。
-  // 外すのは別の Issue）。直すのは引き出し（storyDrawerHtml）なので、ここは作るだけ
-  function storyDialog(title) {
-    openDialog(title,
-      `<label class="field" for="d-st"><span class="field-label">タイトル</span><input class="input" id="d-st" placeholder="どこまで進めば区切りか"></label>
-       <label class="field" for="d-sa"><span class="field-label">${t("ac")}</span><textarea class="textarea" id="d-sa"></textarea></label>
-       <label class="field" for="d-sb"><span class="field-label">本文</span><textarea class="textarea" id="d-sb"></textarea></label>
-       <div class="field"><label class="field-label" for="d-sc">${t("category")}</label>${categorySelect("d-sc", null, false)}</div>
-       <div class="form-row is-start">
-         <label class="field" for="d-sd"><span class="field-label">${t("due")}</span><input class="input" id="d-sd" type="date"></label>
-         <div class="field"><label class="field-label" for="d-sl">リンク</label><input class="input" id="d-sl" type="url" placeholder="https://"></div>
-       </div>`,
-      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${t("story")}を作りました">作る</button>`);
-  }
   // 親の選択欄のストーリーの候補（本番の src/lib/parent-options.ts）。木の順（エピックの下、親のないもの）に並べ、
   // エピックの下の候補があるときだけ、親のエピックごとの optgroup にまとめ、親のないストーリーは「親なしの<ストーリー>」にまとめる
   function storyOptions(sids) {
@@ -2237,21 +2264,13 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (!groups.some((g) => g.eid !== null)) return options(sids);
     return groups.map((g) => `<optgroup label="${g.eid === null ? `親なしの${t("story")}` : esc(D.epics[g.eid].title)}">${options(g.sids)}</optgroup>`).join("");
   }
-  // エピックのダイアログの下の削除の行。削除できない人（作った人でもリーダーでもない）には、ボタンの代わりに削除できる人を出す
-  // （ストーリーは引き出しの「⋯」から削除し、削除できない人には本文の下に同じ理由を出す）
-  function treeDeleteActions(canDelete) {
-    return `<div class="form-actions">${canDelete
-      ? `<button class="btn is-sm is-quiet is-danger" type="button" data-dialog="deleteEpic">${icon("trash")}この${t("epic")}を削除する</button>`
-      : `<span class="field-hint">削除できるのは作った人と${t("leader")}です。</span>`}</div>`;
-  }
   // エピックとストーリーの削除の確認（本番の TreeDeleteDialog）。kind は "epic" か "story"。
   // opts.empty は配下の無い形（選択肢を出さない）、opts.leaderOnly は「まとめて削除する」を選べない形（リーダーでない人で、他の人の作った配下がある）。
   // opts.cleared はクリア済みで配下のあるエピックの形（配下なしの opts.empty とは組み合わせない。見本の e1 は未完了だが、クリア済みのつもりで見る）。
   // 「配下を親なしで残す」は最初から選べず（disabled）、理由を選択肢の下の .field-hint に出す（サーバーは 409 の epic_finished で断るが、確認を開く時点で止める）。
   // 取り消せない「配下もまとめて削除する」は既定で選ばず（どちらも未選択）、選ぶまで「削除する」は aria-disabled で押せない（理由の .field-hint を aria-describedby で結ぶ）。
   // まとめて削除できない人（opts.leaderOnly）は、どちらも選べず、依頼主かリーダーに完了の取り消しを頼む文を出し、「削除する」は押せないまま。
-  // 見本は1枠のダイアログなので、元のエピックのダイアログを置き換えて開く。ストーリーは引き出しの「⋯」から、引き出しの上に開く。
-  // 本番は元のダイアログの上に重ねて開き、開いたときに get を読み直して件数と可否を差し替える
+  // 両方とも引き出しの「⋯」から、引き出しの上に開く。
   function treeDeleteDialog(kind, id, opts = {}) {
     const item = kind === "epic" ? D.epics[id] : D.stories[id];
     const stories = opts.empty ? 0 : kind === "epic" ? Object.keys(D.stories).filter((sid) => D.stories[sid].epic === id).length : 0;
@@ -2278,31 +2297,8 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
        <p class="field-hint">完了の記録と経験値は残ります。</p>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button>${opts.cleared
         ? `<button class="btn is-danger" type="button" aria-disabled="true" aria-describedby="d-del-cleared"${opts.leaderOnly ? "" : " data-delete-needs-choice"}>削除する</button>`
-        : `<button class="btn is-danger" type="button" data-close-dialog${kind === "story" ? ` data-close-story-drawer="${id}"` : ""} data-toast="${t(kind)}を削除しました">削除する</button>`}`);
+        : `<button class="btn is-danger" type="button" data-close-dialog${` data-close-tree-drawer="${kind}:${id}"`} data-toast="${t(kind)}を削除しました">削除する</button>`}`);
     document.querySelector(".dialog-sheet").classList.add("is-danger");
-  }
-  // エピックの作成と変更のダイアログ（本番の EpicDialog）。欄はストーリーのダイアログから受け入れ基準を除いたもの。
-  // 見本のカタログ（「ダイアログと演出」）と、木のエピックの行の題から開く（本番には無く、木の空の行で作り、引き出しで直す）。依頼主、クリア報酬、討伐隊はエピックの画面（#65）で直す。
-  // 直すときは、欄の下に「この<エピック>を削除する」を置く（ストーリーのダイアログと同じ）
-  function epicDialog(title, e, readOnly = false, canDelete = true) {
-    const link = e && e.link ? e.link : "";
-    const ro = readOnly ? " readonly" : "";
-    openDialog(title,
-      `${readOnly ? `<div class="callout is-info">${icon("shield")}<span>終了した${t("workspace")}の${t("epic")}は、読み取りだけできます。</span></div>` : ""}
-       <label class="field" for="d-et"><span class="field-label">タイトル</span><input class="input" id="d-et" placeholder="何を成し遂げるか" value="${e ? esc(e.title) : ""}"${ro}></label>
-       <label class="field" for="d-eb"><span class="field-label">本文</span><textarea class="textarea" id="d-eb"${ro}>${e ? esc((e.body || []).join("\n\n")) : ""}</textarea></label>
-       <div class="field">${readOnly ? `<span class="field-label">${t("category")}</span>` : `<label class="field-label" for="d-ec">${t("category")}</label>`}${categorySelect("d-ec", e ? e.cat : null, readOnly)}</div>
-       <div class="form-row is-start">
-         <label class="field" for="d-ed"><span class="field-label">${t("due")}</span>${readOnly
-           ? `<input class="input" id="d-ed" type="text" readonly value="${e && e.due ? e.due : ""}">`
-           : `<input class="input" id="d-ed" type="date" value="${e && e.due ? e.due : ""}">`}</label>
-         <div class="field"><label class="field-label" for="d-el">リンク</label>
-           <span class="input-row"><input class="input" id="d-el" type="url" placeholder="https://" value="${esc(link)}"${ro}>${link ? `<a class="btn" href="${esc(link)}" target="_blank" rel="noopener noreferrer" aria-label="リンクを新しいタブで開く">開く</a>` : ""}</span></div>
-       </div>
-       ${e && !readOnly ? treeDeleteActions(canDelete) : ""}`,
-      readOnly
-        ? `<button class="btn is-primary" type="button" data-close-dialog>閉じる</button>`
-        : `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${e ? `${t("epic")}を保存しました` : `${t("epic")}を作りました`}">${e ? "保存する" : "作る"}</button>`);
   }
   const DIALOGS = {
     // 先のスプリントに入れる（本番の SprintTaskPicker）。計画の画面の「<バックログ>から入れる」から開く。
@@ -2425,14 +2421,6 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
          <p class="props-note">${esc(D.sprints.sp14.goal)}</p>
          <div class="segmented" role="radiogroup"><label><input type="radio" name="d-goal" checked><span>達成した</span></label><label><input type="radio" name="d-goal"><span>達成していない</span></label></div></div>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" data-close-dialog data-toast="${sprintLabel("sp14")} を終えました">終える</button>`),
-    // ストーリーを作るダイアログは見本だけに残るもの（本番は木の空の行で作る）。見本のカタログ（「ダイアログと演出」）から開く。
-    // 直すのは題のリンクで開く引き出し（storyDrawerHtml。自動保存。削除は引き出しの帯の「⋯」）で、ダイアログは無い
-    createStory: () => storyDialog(`${t("story")}を作る`),
-    createEpic: () => epicDialog(`${t("epic")}を作る`, null),
-    editEpic: () => epicDialog(t("epic"), D.epics.e1),
-    viewEpic: () => epicDialog(t("epic"), D.epics.e1, true),
-    // 作った人でもリーダーでもない人が開いたとき。削除のボタンの代わりに削除できる人を出す
-    editEpicNotOwner: () => epicDialog(t("epic"), D.epics.e1, false, false),
     createTask: () => openDialog(`${t("create")}`,
       `<label class="field" for="d-title"><span class="field-label">タイトル</span><input class="input" id="d-title" placeholder="何をするか"></label>
        <div class="form-row is-start">
@@ -3592,8 +3580,10 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     applyTheme();
     redraw();
     const storyId = new URLSearchParams(location.search).get("story");
-    const openStory = storyId && Object.hasOwn(D.stories, storyId) && !location.pathname.endsWith("/task.html");
+    const openStory = !new URLSearchParams(location.search).get("task") && storyId && Object.hasOwn(D.stories, storyId) && !location.pathname.endsWith("/task.html");
     if (openStory) openDrawer(storyId, null, false, null, "story");
+    const epicId = new URLSearchParams(location.search).get("epic_id");
+    if (!openStory && !new URLSearchParams(location.search).get("task") && epicId && Object.hasOwn(D.epics, epicId)) openDrawer(epicId, null, false, null, "epic");
     const taskId = openStory ? null : new URLSearchParams(location.search).get("task");
     if (taskId) {
       if (location.pathname.endsWith("/task.html")) {
@@ -3891,6 +3881,16 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
       redrawAll(); toast(`${icon("check")}${t("story")}の${t("done")}を${done ? "記録しました" : "取り消しました"}`);
       document.querySelector(done ? "#drawer .hanko" : "#drawer [data-story-done]")?.focus(); return;
     }
+    if ((el = hit("data-epic-page"))) {
+      try { sessionStorage.setItem("sq-design-epic-preview", JSON.stringify({ id: el.dataset.epicPage, epic: D.epics[el.dataset.epicPage] })); } catch { /* 保存できない場合は既存の見本を開く */ }
+      return;
+    }
+    if ((el = hit("data-epic-id"))) {
+      if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button !== 0) return;
+      ev.preventDefault();
+      openDrawer(el.dataset.epicId, el, false, null, "epic");
+      return;
+    }
     // バックログの木のストーリーの題（?story=<ID> のリンク）は、タスクと同じ引き出しをストーリーの形で開く
     // カタログの入口（data-story-can-delete="false"）は、削除できない人の形で開く
     if ((el = hit("data-story"))) {
@@ -4024,7 +4024,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if ((el = hit("data-close-dialog")) || (ev.target.id === "dialog" && !dialogOnlyButtons)) {
       const msg = el && el.dataset.toast; closeDialog(); if (msg) toast(`${icon("check")}${esc(msg)}`);
       // ストーリーの引き出しの「⋯」から削除したら、引き出しも閉じる（本番の deleteFinished）
-      if (el && isStoryDrawer() && drawer.id && el.dataset.closeStoryDrawer === drawer.id) closeDrawer(true);
+      if (el && isTreeDrawer() && drawer.id && el.dataset.closeTreeDrawer === `${drawer.kind}:${drawer.id}`) closeDrawer(true);
       return;
     }
     if ((el = hit("data-toast"))) {

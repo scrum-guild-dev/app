@@ -552,7 +552,7 @@ function watchUserUpdates(
 
 describe('organization', () => {
   test('組織の名前と、この組織での自分と所属するワークスペースを返す。言葉づかいと組織の既定のテーマは返さない', async () => {
-    const organization = await createOrganization({ name: '青葉工房', vocabulary: 'scrum', theme: 'modern' });
+    const organization = await createOrganization({ name: '青葉工房', vocabulary: 'scrum' });
     const person = await createPerson({ organization });
     const owner = await createUser(organization, { is_admin: 1 });
     const second = await createWorkspace(organization, owner.id, { name: 'う開発' });
@@ -600,8 +600,8 @@ describe('organization', () => {
 
   test('管理者の印と自分のテーマは、組織ごとに別の値を返す', async () => {
     const visitor = await createVisitor();
-    const a = await createOrganization({ theme: 'modern' });
-    const b = await createOrganization({ theme: 'simple_dark' });
+    const a = await createOrganization();
+    const b = await createOrganization();
     await visitor.join(a, { is_admin: 1, name: 'ミナト', theme: 'simple_light' });
     const bUser = await visitor.join(b, { name: 'ミナ' });
     const owner = await createUser(b, { is_admin: 1 });
@@ -612,7 +612,7 @@ describe('organization', () => {
     expect(inA.me).toMatchObject({ name: 'ミナト', is_admin: true, theme: 'simple_light' });
     expect(inA.workspaces).toEqual([]);
     const inB = await readOrganization(b.slug, visitor.token);
-    // 自分で選んでいなければ、組織の theme の列（使わない）によらずシンプル（自動）
+    // 自分で選んでいなければシンプル（自動）
     expect(inB.me).toMatchObject({ name: 'ミナ', is_admin: false, theme: 'simple' });
   });
 
