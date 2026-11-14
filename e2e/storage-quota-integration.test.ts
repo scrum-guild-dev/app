@@ -39,15 +39,15 @@ test('全ワークスペースで容量を共有し、80%超過の管理者通�
 
   try {
     await executeLocalD1([
-      `INSERT INTO organizations (id, slug, name, vocabulary, attachment_quota_bytes, created_by_operator, created_at, updated_at) ` +
-        `VALUES ('${organizationId}', '${slug}', '容量確認の工房', 'scrum', 1000, 'github:9000000000000001', '${at}', '${at}')`,
+      `INSERT INTO organizations (id, slug, name, attachment_quota_bytes, created_by_operator, created_at, updated_at) ` +
+        `VALUES ('${organizationId}', '${slug}', '容量確認の工房', 1000, 'github:9000000000000001', '${at}', '${at}')`,
       userInsert(adminId!, 'admin', true),
       userInsert(secondAdminId!, 'otherOrg', true),
       userInsert(memberId!, 'member', false),
       ...[firstWorkspaceId, secondWorkspaceId].map(
         (id, index) =>
-          `INSERT INTO workspaces (id, organization_id, name, timezone, vocabulary, created_by, created_at, updated_at) ` +
-          `VALUES ('${id}', '${organizationId}', '容量確認${index + 1}', 'Asia/Tokyo', 'scrum', '${adminId}', '${at}', '${at}')`,
+          `INSERT INTO workspaces (id, organization_id, name, timezone, created_by, created_at, updated_at) ` +
+          `VALUES ('${id}', '${organizationId}', '容量確認${index + 1}', 'Asia/Tokyo', '${adminId}', '${at}', '${at}')`,
       ),
       ...[firstWorkspaceId, secondWorkspaceId].map(
         (id) =>

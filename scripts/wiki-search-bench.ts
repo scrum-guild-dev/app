@@ -45,8 +45,8 @@ async function call(query: string, org: boolean) {
 let server: ReturnType<typeof spawn> | undefined;
 try {
   run('node', ['scripts/db-seed.ts', '--persist-to', dir]);
-  execute(`INSERT INTO workspaces(id, organization_id, name, timezone, vocabulary, created_by, created_at, updated_at)
-    VALUES ('${workspaceId}', '${orgId}', '検索の測定', 'Asia/Tokyo', 'scrum', '${userId}', '2026-11-03T00:00:00.000Z', '2026-11-03T00:00:00.000Z');`);
+  execute(`INSERT INTO workspaces(id, organization_id, name, timezone, created_by, created_at, updated_at)
+    VALUES ('${workspaceId}', '${orgId}', '検索の測定', 'Asia/Tokyo', '${userId}', '2026-11-03T00:00:00.000Z', '2026-11-03T00:00:00.000Z');`);
   server = spawn(
     'wrangler',
     [

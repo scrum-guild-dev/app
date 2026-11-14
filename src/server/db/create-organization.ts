@@ -212,7 +212,6 @@ export async function deleteSelfCreatedOrganization(
   ] as const);
 }
 
-// 使わない言葉づかいの列（vocabulary）には書き込まない。
 // 人数と添付ファイルの上限は列の既定の値で作る。
 // slug が重なったときは 'slug_taken'（同時に作られて UNIQUE に当たった場合を含む）。それ以外の失敗は投げる
 export async function insertOrganization(

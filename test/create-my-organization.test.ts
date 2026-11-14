@@ -137,7 +137,6 @@ describe('組織の無い会員が作る', () => {
 
     const row = await organizationRow(slug);
     expect(row).toMatchObject({
-      vocabulary: 'game',
       name: '青葉工房',
       created_by_account_id: member.accountId,
       created_by_operator: 'self-service',

@@ -1,6 +1,6 @@
 // 言葉づかいの切り替えを止めた後（#597）の、応答の全体と作成の入力の境界を崩す。
-// DB の vocabulary 列に 'game' が残る組織とワークスペースを作っても、読み取りの応答のどこにも vocabulary が出ないこと、
-// 作成の入力に vocabulary を何の形で送っても 400 / 500 にならず列が既定の 'game' になること、
+// vocabulary 列の無い組織とワークスペースでも、読み取りの応答のどこにも vocabulary が出ないこと、
+// 作成の入力に vocabulary を何の形で送っても 400 / 500 にならず応答に vocabulary が出ないこと、
 // 古い change_logs の vocabulary の行が履歴で今も 1 種類の文として返ることを、操作の一覧を回して確かめる
 import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
@@ -30,7 +30,7 @@ function vocabularyPaths(value: unknown, path = '$'): string[] {
   ]);
 }
 
-describe('JSON の読み取りの応答に vocabulary が出ない（列が game の組織とワークスペース）', () => {
+describe('JSON の読み取りの応答に vocabulary が出ない（vocabulary 列の削除後）', () => {
   // ファイルの本文は利用者のバイトで、API の JSON の項目名の検査には含めない。
   const readOperations = operations.filter(
     (definition) => definition.mode === 'read' && definition.response !== 'binary',
@@ -43,12 +43,10 @@ describe('JSON の読み取りの応答に vocabulary が出ない（列が game
   describe.each<Credential>(['cookie', 'bearer'])('%s で呼ぶ', (credential) => {
     test('JSON を返すすべての読み取りの操作の応答に、vocabulary を含む名前の項目が無い', async () => {
       const target = await createTarget();
-      // ファクトリーの既定は 'game'。読み取りがその列を漏らさないことを見る
-      expect(target.organization.vocabulary).toBe('game');
       const operator = await withNewSession(await getOperator());
-      // 運用者の組織の一覧にも、列が game の組織が載るようにしておく
-      await createOrganization({ vocabulary: 'game' });
-      await createWorkspace(target.organization, target.admin.userId!, { vocabulary: 'game' });
+      // 運用者の組織の一覧にも組織が載るようにしておく
+      await createOrganization();
+      await createWorkspace(target.organization, target.admin.userId!);
 
       const leaks: string[] = [];
       let succeeded = 0;
@@ -89,7 +87,7 @@ describe('ワークスペースの作成の入力の境界', () => {
     ['__proto__ を含むオブジェクト', JSON.parse('{"__proto__":{"vocabulary":"game"}}')],
   ];
 
-  test.each(garbage)('vocabulary に %s を送っても作れ、列は既定の game', async (_label, value) => {
+  test.each(garbage)('vocabulary に %s を送っても作れ、vocabulary を保存しない', async (_label, value) => {
     const target = await createTarget();
     const res = await post(app, workspaceCreate, {
       slug: target.slug,
@@ -104,12 +102,14 @@ describe('ワークスペースの作成の入力の境界', () => {
       db.statement((q) =>
         q
           .selectFrom('workspaces')
-          .select(['vocabulary', 'name'])
+          .selectAll()
           .where('organization_id', '=', target.organization.id)
           .where('name', '=', '保守チーム'),
       ),
     );
-    expect(rows).toEqual([{ vocabulary: 'game', name: '保守チーム' }]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: '保守チーム' });
+    expect(rows[0]).not.toHaveProperty('vocabulary');
   });
 });
 
@@ -118,7 +118,7 @@ describe('運用者の組織の作成の入力の境界', () => {
     ['game', 'game'],
     ['不正な文字列', 'pirate'],
     ['配列', ['game']],
-  ])('vocabulary に %s を足しても作れ、列は既定の game で、応答に vocabulary が無い', async (_label, value) => {
+  ])('vocabulary に %s を足しても作れ、応答に vocabulary が無い', async (_label, value) => {
     const user = githubUser(`vocab-${crypto.randomUUID().slice(0, 8)}`);
     operatorGithub.addUser(user);
     const slug = `vocab-${crypto.randomUUID().slice(0, 8)}`;
@@ -135,10 +135,9 @@ describe('運用者の組織の作成の入力の境界', () => {
     expect(res.status, await res.clone().text()).toBe(200);
     expect(vocabularyPaths(await res.json())).toEqual([]);
     const db = commonDb(env);
-    const row = await db.first(
-      db.statement((q) => q.selectFrom('organizations').select('vocabulary').where('slug', '=', slug)),
-    );
-    expect(row).toEqual({ vocabulary: 'game' });
+    const row = await db.first(db.statement((q) => q.selectFrom('organizations').selectAll().where('slug', '=', slug)));
+    expect(row).toMatchObject({ name: '言葉の確認' });
+    expect(row).not.toHaveProperty('vocabulary');
   });
 });
 

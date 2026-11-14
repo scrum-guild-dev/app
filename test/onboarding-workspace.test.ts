@@ -32,7 +32,7 @@ async function workspaces({ organization }: Team) {
 }
 
 describe('チーム導入のワークスペース準備', () => {
-  test('導入準備の INSERT SELECT も vocabulary を指定せず、既定の game でも初期の名前はスクラムになる', async () => {
+  test('導入準備の INSERT SELECT も vocabulary を指定せず、初期の名前はスクラムになる', async () => {
     const target = await team();
     const writes: string[] = [];
     const response = await prepare(target, envWithD1Hooks(env, { beforeBatch: (sqls) => void writes.push(...sqls) }));
@@ -47,12 +47,13 @@ describe('チーム導入のワークスペース準備', () => {
       db.statement((q) =>
         q
           .selectFrom('workspaces')
-          .select('vocabulary')
+          .selectAll()
           .where('organization_id', '=', target.organization.id)
           .where('id', '=', result.workspace_id),
       ),
     );
-    expect(workspace).toEqual({ vocabulary: 'game' });
+    expect(workspace).toMatchObject({ id: result.workspace_id });
+    expect(workspace).not.toHaveProperty('vocabulary');
     const columns = await db.rows(
       db.statement((q) =>
         q

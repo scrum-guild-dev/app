@@ -143,7 +143,6 @@ describe('組織に入っていない会員が作る', () => {
 
     const row = await organizationRow(slug);
     expect(row).toMatchObject({
-      vocabulary: 'game',
       name: '自分用',
       kind: 'personal',
       member_limit: 1,

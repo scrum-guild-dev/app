@@ -200,7 +200,6 @@ describe('組織の作成', () => {
     expect(organization).toMatchObject({
       slug,
       name: 'さくら開発',
-      vocabulary: 'game',
       suspended_at: null,
       member_limit: 15,
       attachment_quota_bytes: 32212254720,
