@@ -52,7 +52,9 @@ async function open(target: DevOpenTarget): Promise<void> {
   const page = await context.newPage();
   try {
     await page.goto(target.url);
-    await page.bringToFront();
+    await page.bringToFront().catch(() => {
+      console.warn(`タブを前に出せない。「手元の確かめ｜${worktree}」のタブを選んで操作する`);
+    });
   } catch (err) {
     // 読み込みの途中で人がウィンドウを閉じたときは、開けなかったのではなく、終えただけ
     if (disconnected || page.isClosed()) {
