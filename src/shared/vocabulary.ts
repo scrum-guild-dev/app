@@ -480,6 +480,8 @@ export const dictionary = defineDictionary({
   // 読み直しに失敗したときの、もう一度試すボタンの横の知らせ
   retryFailed: 'まだ読み込めませんでした',
   loading: '読み込んでいます',
+  invitationCountLoading: '招待の件数を読み込んでいます',
+  invitationCountFailed: '招待の件数を読み込めませんでした。',
   // 全画面の右下に出す、読み込んだ画面の版（本番は Release のタグ vX.Y.Z）の前に、読み上げにだけ添える名前
   appVersionLabel: '版',
 

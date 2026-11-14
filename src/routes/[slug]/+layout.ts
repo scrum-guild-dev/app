@@ -19,14 +19,14 @@ import type { LayoutLoad } from './$types';
 // 届いた招待の一覧（invitation-list）を読んで invitationInbox に入れる。枠はこれがあれば招待の画面を出す。
 // 読めなかったとき（通信、5xx）は failure をその応答にして、読み込みの失敗を出す。
 // 組織に入れる人で、組織の選択の届いた招待にこの slug があるとき（別のワークスペースから招待が届いた）だけ、同じく invitation-list を読み、
-// 件数を invitationCount に入れる（メニューの「マイプロフィール」の印に出す）。招待が無い人は追加の呼び出しをしない。読めなかったときは 0（印を出さない）。
+// 件数を invitationCount に入れる（メニューの「マイプロフィール」の印に出す）。招待が無い人は追加の呼び出しをしない。件数は Promise で返し、読めなかったときは null（失敗と再試行を出す）。
 // url は 401 と terms_required のときだけ読む（読むと、移るたびにこの load が走り直る）
 export const load: LayoutLoad = async ({ params, fetch, url }) => {
   const favoritesRequestedAt = performance.now();
-  const [organization, accountOrganizations, notice, favorites] = await Promise.all([
+  const notice = callOperation(tokenNotice, {}, { fetcher: fetch }).then((result) => (result.ok ? result.data : null));
+  const [organization, accountOrganizations, favorites] = await Promise.all([
     callOperation(organizationInfo, {}, { slug: params.slug, fetcher: fetch }),
     callOperation(myOrganizations, {}, { fetcher: fetch }),
-    callOperation(tokenNotice, {}, { fetcher: fetch }),
     callOperation(favoriteList, {}, { slug: params.slug, fetcher: fetch }),
   ]);
   if (!organization.ok && organization.error?.code === 'organization_reauth_required') {
@@ -58,21 +58,22 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
     else if (inbox.status !== 404) failure = { status: inbox.status, code: inbox.error?.code ?? null };
   }
 
-  let invitationCount = 0;
+  let invitationCount: Promise<number | null> = Promise.resolve(0);
   if (
     organization.ok &&
     accountOrganizations.ok &&
     accountOrganizations.data.invitations.some((invitation) => invitation.slug === params.slug)
   ) {
-    const list = await callOperation(invitationList, {}, { slug: params.slug, fetcher: fetch });
-    if (list.ok) invitationCount = list.data.invitations.length;
+    invitationCount = callOperation(invitationList, {}, { slug: params.slug, fetcher: fetch }).then((list) =>
+      list.ok ? list.data.invitations.length : null,
+    );
   }
 
   return {
     favoritesRequestedAt,
     favorites: favorites.ok ? favorites.data.favorites : null,
     favoriteMarks: favorites.ok ? favorites.data.marks : [],
-    tokenNotice: notice.ok ? notice.data : null,
+    tokenNotice: notice,
     slug: params.slug,
     organization: organization.ok ? organization.data : null,
     failure,

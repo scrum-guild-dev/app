@@ -4,6 +4,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import AccountMenu from '../../lib/components/AccountMenu.svelte';
+  import { InvitationCount } from '../../lib/invitation-count.svelte.ts';
   import AppShell from '../../lib/components/AppShell.svelte';
   import CreateMyOrganizationDialog from '../../lib/components/CreateMyOrganizationDialog.svelte';
   import CreatePersonalOrganizationDialog from '../../lib/components/CreatePersonalOrganizationDialog.svelte';
@@ -44,6 +45,10 @@
   onMount(() => favorites.watch());
   // 招待の画面。組織に入れず招待だけがある人には、どの経路でも招待の画面を出す（data.invitationInbox）。
   // /<slug>/invitations のページ（page.data に invitationPage がある）は、組織に入れる人にも枠を出さずにページだけを出す
+  const invitations = new InvitationCount(
+    () => data.invitationCount,
+    () => data.slug,
+  );
   const inbox = $derived(organization ? null : data.invitationInbox);
   const invitationPage = $derived(page.data.invitationPage !== undefined && (organization !== null || inbox !== null));
   const notFound = $derived(data.failure?.status === 404 && data.failure.code === 'not_found');
@@ -119,8 +124,29 @@
       isAdmin={organization.me.is_admin}
       level={organization.me.level}
       slug={data.slug}
-      invitationCount={data.invitationCount}
-    />
+      invitationCount={invitations.count ?? 0}
+      invitationState={invitations.loading ? 'loading' : invitations.count === null ? 'failed' : 'ready'}
+    >
+      {#snippet invitationStatus()}
+        {#if invitations.loading || invitations.count === null}
+          <li class="account-menu-status" data-invitation-status>
+            {#if invitations.loading}
+              <span role="status">{t('invitationCountLoading')}</span>
+            {:else}
+              <span role="alert">{t('invitationCountFailed')}</span>
+            {/if}
+            {#if !invitations.loading || invitations.retrying}
+              <button
+                class="btn is-sm"
+                type="button"
+                aria-disabled={invitations.loading}
+                onclick={() => invitations.retry()}>{t(invitations.loading ? 'retrying' : 'retry')}</button
+              >
+            {/if}
+          </li>
+        {/if}
+      {/snippet}
+    </AccountMenu>
   {/snippet}
   {#snippet workspaceSwitcher()}
     {#if navigationWorkspace}
