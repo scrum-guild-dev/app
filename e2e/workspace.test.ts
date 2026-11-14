@@ -77,7 +77,9 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await dialog.getByRole('button', { name: '作る' }).click();
     const created = await createdResponse;
     expect(created.ok()).toBe(true);
-    expect(await created.json()).not.toHaveProperty('vocabulary');
+    const createdBody = (await created.json()) as { workspace_id: string };
+    expect(createdBody).not.toHaveProperty('vocabulary');
+    expect(createdBody.workspace_id).toEqual(expect.any(String));
 
     // 閉じずに、同じダイアログが完了の表示に替わる。作った名前（前後の空白は除く）が読め、移らない。トーストは出さない
     const done = page.getByRole('dialog', { name: 'ワークスペースを作りました' });
@@ -90,7 +92,10 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await expect(page).toHaveURL(/\/aoba\/admin$/);
     await expect(page.locator('.toast')).toHaveCount(0);
     const workspaceResponse = page.waitForResponse(
-      (response) => new URL(response.url()).pathname === operationPath(workspaceInfo, 'aoba'),
+      (response) =>
+        new URL(response.url()).pathname === operationPath(workspaceInfo, 'aoba') &&
+        response.request().method() === 'POST' &&
+        response.request().postDataJSON()?.workspace_id === createdBody.workspace_id,
     );
     await done.getByRole('button', { name: '開く' }).click();
     const workspace = await workspaceResponse;
