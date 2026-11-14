@@ -82,8 +82,8 @@ export const organizationInfoOperation = implement(
           }
         : null;
 
-    // 契約は管理者にだけ読む。メンバーの呼び出しでは共通の表を引かない
-    const planRow = actor.isAdmin ? await tools.readOrganizationPlan() : null;
+    // 契約は、管理画面のプランの節が明示した管理者の呼び出しでだけ読む。組織の枠とメンバーの呼び出しでは契約の表を引かない
+    const planRow = actor.isAdmin && input.include_plan === true ? await tools.readOrganizationPlan() : null;
     const plan =
       planRow === null
         ? null

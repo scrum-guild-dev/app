@@ -12,11 +12,12 @@ const theme = z.enum(themes);
 export const organizationInfo = defineOperation({
   name: 'organization',
   description:
-    '組織の名前と、この組織での自分（テーマを含む）、所属するワークスペース、管理者ならお試しの期限と残りの日数、契約（プラン、支払いの周期、追加容量の口数）と人数と添付ファイルの上限を返す。include_storage:true を指定した管理者だけ容量の合計と内訳を取得する。呼ぶと last_seen_at を書く（1時間に1回まで）',
+    '組織の名前と、この組織での自分（テーマを含む）、所属するワークスペース、管理者ならお試しの期限と残りの日数を返す。include_storage:true を指定した管理者だけ容量の合計と内訳を、include_plan:true を指定した管理者だけ契約（プラン、支払いの周期、追加容量の口数）と人数と添付ファイルの上限を取得する。呼ぶと last_seen_at を書く（1時間に1回まで）',
   mode: 'read',
   permission: 'organization',
   // 管理画面の容量の節だけが明示する。組織の枠では本文と全過去版を走査しない。
-  input: z.object({ include_storage: z.boolean().optional() }),
+  // include_plan は管理画面のプランの節だけが明示する。組織の枠では契約の表を読まない
+  input: z.object({ include_storage: z.boolean().optional(), include_plan: z.boolean().optional() }),
   output: z.object({
     organization: z.object({
       name: z.string(),
@@ -51,7 +52,8 @@ export const organizationInfo = defineOperation({
       })
       .nullable(),
     trial: z.object({ ends_on: z.string(), days_left: z.number().int() }).nullable(),
-    // 管理者にだけ返す契約と、今効いている上限（organizations.member_limit と attachment_quota_bytes）。メンバーには null。
+    // include_plan:true を指定した管理者にだけ返す契約と、今効いている上限（organizations.member_limit と attachment_quota_bytes）。
+    // メンバーと、指定しない呼び出しには null。
     // contract は未契約の組織（行が無い）なら null。見るだけで、変えるのは運用者（organization-plan-update）
     plan: z
       .object({

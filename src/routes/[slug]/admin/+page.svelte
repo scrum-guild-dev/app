@@ -63,7 +63,7 @@
 
   <div class="settings">
     {#if organization.trial !== null}<TrialSetting trial={organization.trial} />{/if}
-    {#if organization.plan !== null}<PlanSetting plan={organization.plan} kind={organization.organization.kind} />{/if}
+    <PlanSetting slug={data.slug} kind={organization.organization.kind} />
     <UsersSetting
       slug={data.slug}
       meId={organization.me.id}

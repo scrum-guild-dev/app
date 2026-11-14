@@ -1,13 +1,13 @@
-// プランの節（PlanSetting.svelte）を svelte/server で HTML にして、契約のある組織、未契約のチーム用、契約の無い自分用の出し分けを確かめる
+// プランの節の中身（PlanDetails.svelte）を svelte/server で HTML にして、契約のある組織、未契約のチーム用、契約の無い自分用の出し分けを確かめる
 import { render } from 'svelte/server';
 import { expect, test } from 'vitest';
-import PlanSetting from './PlanSetting.svelte';
+import PlanDetails from './PlanDetails.svelte';
 
 const GIB = 1024 ** 3;
-type Props = Parameters<typeof render<typeof PlanSetting>>[1] extends { props?: infer P } ? P : never;
+type Props = Parameters<typeof render<typeof PlanDetails>>[1] extends { props?: infer P } ? P : never;
 
 const bodyOf = (props: Props) =>
-  render(PlanSetting, { props })
+  render(PlanDetails, { props })
     .body.replace(/<!--.*?-->/gs, '')
     .replaceAll('\u00a0', ' ');
 

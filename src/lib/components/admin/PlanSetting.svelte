@@ -1,64 +1,38 @@
 <script lang="ts">
   import type { OutputOf } from '../../../shared/operations/define.ts';
-  import type { organizationInfo } from '../../../shared/operations/organization/index.ts';
-  import { formatCount, quotaSize } from '../../format.ts';
-  import { planLabel } from '../../plan-terms.ts';
+  import { organizationInfo } from '../../../shared/operations/organization/index.ts';
+  import { callOperation } from '../../api.ts';
   import { t } from '../../vocabulary.svelte.ts';
-  import Icon from '../Icon.svelte';
   import Setting from '../Setting.svelte';
+  import PlanDetails from './PlanDetails.svelte';
+  import SectionBoundary from './SectionBoundary.svelte';
+  import { SectionLoad } from './section-load.svelte.ts';
 
-  // プランの節（admin.html）。組織の枠が読んだ organization の plan（管理者にだけ返る）を出すだけで、変える操作は持たない。
-  // 変えるのは運用者（docs/requirements.md の「組織と運用者」）なので、問い合わせの案内を出す。自分用はプランが固定なので、容量を足す案内だけにする
+  // プランの節（admin.html）。容量の節と同じく、組織の枠が持つ値を使わず、管理画面へ入るたびと組織が替わるたびに
+  // organization を include_plan:true で読み直す（運用者が契約を変えた後に開き直すと、新しい契約が出る）。
+  // 組織の種類は契約に関わらず変わらないので、枠の値を受け取る
   type Plan = NonNullable<OutputOf<typeof organizationInfo>['plan']>;
-  let { plan, kind }: { plan: Plan; kind: 'team' | 'personal' } = $props();
-
-  const contract = $derived(plan.contract);
-  const extras = $derived(
-    contract === null
-      ? []
-      : [
-          { size: 10, units: contract.extra_10gb_units },
-          { size: 50, units: contract.extra_50gb_units },
-        ].filter((extra) => extra.units > 0),
+  let { slug, kind }: { slug: string; kind: 'team' | 'personal' } = $props();
+  const currentSlug = $derived(slug);
+  let plan = $state<Plan | null>(null);
+  const section = new SectionLoad<Plan>(
+    async () => {
+      const result = await callOperation(organizationInfo, { include_plan: true }, { slug: currentSlug });
+      if (!result.ok) return result;
+      // 枠を読んだ後に管理者の権限を失っていたときも、契約を出さない
+      if (result.data.plan === null) return { ok: false, status: 404, error: null };
+      return { ok: true, data: result.data.plan };
+    },
+    (data) => (plan = data),
   );
-  function sizeText(bytes: number): string {
-    const quota = quotaSize(bytes);
-    return t(quota.unit === 'gb' ? 'operatorQuotaSize' : 'operatorQuotaSizeMb', { size: quota.size });
-  }
+  section.attach(
+    () => currentSlug,
+    () => (plan = null),
+  );
 </script>
 
 <Setting title={t('orgPlanTitle')} description={t('orgPlanDesc')}>
-  <dl class="props">
-    <div>
-      <dt>{t('orgPlanTermsLabel')}</dt>
-      <dd>
-        {#if contract === null && kind === 'team'}<span class="chip">{t('operatorPlanNone')}</span>
-        {:else}{planLabel({ kind, contract }, t)}{/if}
-      </dd>
-    </div>
-    {#if contract !== null}
-      <div>
-        <dt>{t('orgPlanExtraLabel')}</dt>
-        <dd>
-          {#if extras.length === 0}{t('orgPlanExtraNone')}
-          {:else}{extras
-              .map((extra) => t('orgPlanExtraUnits', { size: extra.size, units: formatCount(extra.units) }))
-              .join('、')}{/if}
-        </dd>
-      </div>
-    {/if}
-    <div>
-      <dt>{t('orgPlanMemberLimitLabel')}</dt>
-      <dd>{t('orgPlanMemberLimit', { count: formatCount(plan.member_limit) })}</dd>
-    </div>
-    <div>
-      <dt>{t('orgPlanQuotaLabel')}</dt>
-      <dd>{sizeText(plan.attachment_quota_bytes)}</dd>
-    </div>
-  </dl>
-  {#if kind === 'personal'}<p class="props-note">{t('orgPlanPersonalNote', { organization: t('organization') })}</p>
-  {:else if contract === null}<p class="props-note">{t('orgPlanNoneNote')}</p>{/if}
-  <div class="callout is-info">
-    <Icon name="mail" /><span>{t(kind === 'personal' ? 'orgPlanContactPersonal' : 'orgPlanContact')}</span>
-  </div>
+  <SectionBoundary {section} failedTitle={t('orgPlanLoadFailed')} refreshFailedText={t('orgPlanRefreshFailed')}>
+    {#if plan !== null}<PlanDetails {plan} {kind} />{/if}
+  </SectionBoundary>
 </Setting>

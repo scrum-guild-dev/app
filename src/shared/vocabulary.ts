@@ -1690,7 +1690,9 @@ export const dictionary = defineDictionary({
 
   // プランの節（組織の管理の画面）。契約の語は運用者の画面と同じ（planTerms、operatorPlanNone）。見るだけで、変えるのは運用者
   orgPlanTitle: 'プラン',
-  orgPlanDesc: '今の契約と、人数と添付ファイルの上限です。',
+  orgPlanDesc: '今の契約と、人数と容量の上限です。',
+  orgPlanLoadFailed: 'プランを読み込めませんでした',
+  orgPlanRefreshFailed: 'プランを更新できませんでした。表示は前に読み込んだ値です。もう一度試してください。',
   orgPlanTermsLabel: '契約',
   orgPlanExtraLabel: '追加容量',
   // 追加容量の口数。{size} は1口の容量（GB）、{units} は口数

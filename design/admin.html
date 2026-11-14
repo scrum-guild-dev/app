@@ -35,7 +35,7 @@ const AUDIT = {
 // 本番は TrialSetting.svelte が days_left の 0 と負で同じ出し分けをする
 const TRIAL_STATE = new URLSearchParams(location.search).get("trial");
 // プランの節の状態。既定はお試し中の未契約の組織。?plan=team で契約のある組織にする（有料のプランにするとお試しは終わるので、お試しの節を出さない）。
-// 本番は PlanSetting.svelte が organization の plan で出し分ける
+// 本番は PlanSetting.svelte が organization を include_plan:true で読み、PlanDetails.svelte が plan で出し分ける
 // ?plan=team-plain は追加容量の無い契約（「なし」）。?personal（自分用の組織の見本）は「パーソナル」、1 人、1 GB で、容量を足す案内だけを出す
 const PLAN_PARAM = new URLSearchParams(location.search).get("plan");
 const PLAN_PERSONAL = new URLSearchParams(location.search).has("personal");
@@ -63,7 +63,7 @@ SQ.mount("admin", () => `
         : TRIAL_STATE === "lastday"
           ? `<p class="props-note">今日までです</p>`
           : `<p class="props-note">残り 30 日</p>`}`)}
-    ${setting("プラン", "今の契約と、人数と添付ファイルの上限です。", `
+    ${setting("プラン", "今の契約と、人数と容量の上限です。", `
       <dl class="props">
         <div><dt>契約</dt><dd>${PLAN.terms === null ? `<span class="chip">未契約</span>` : esc(PLAN.terms)}</dd></div>
         ${PLAN_CONTRACTED ? `<div><dt>追加容量</dt><dd>${PLAN.extra}</dd></div>` : ""}
