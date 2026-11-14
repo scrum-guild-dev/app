@@ -2638,6 +2638,54 @@ function interpreterBodyWords(tool, args) {
   return bodies.flatMap((b) => b.split(CODE_SEPARATORS).filter(Boolean));
 }
 
+// -c の位置を値の中から探さず、呼び出しのオプションを先頭から読む。
+const SHELL_LONG_VALUES = new Set(['--rcfile', '--init-file']);
+const SHELL_LONG_SWITCHES = new Set([
+  '--debug', '--debugger', '--dump-po-strings', '--dump-strings', '--help', '--login', '--noediting',
+  '--noprofile', '--norc', '--posix', '--pretty-print', '--restricted', '--verbose', '--version',
+]);
+const SHELL_SHORT_SWITCHES = /^[abefhkmnoptuvxBCEHOPTilrsDc]+$/;
+function shellCommandBody(tool, args) {
+  const commandFlag = (a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a);
+  if (!args.some(commandFlag)) return {};
+  let command = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--') return command ? { body: args[i + 1], uncertain: args[i + 1] === undefined } : {};
+    // bash の起動ファイル名は -coo のような値でもフラグではない。= の連結形では次を飛ばさない。
+    const longName = a.split('=')[0];
+    if (tool === 'bash' && SHELL_LONG_VALUES.has(longName)) {
+      if (expandsAt(args, i) || (!a.includes('=') && expandsAt(args, i + 1))) return { uncertain: true };
+      if (!a.includes('=')) i++;
+      continue;
+    }
+    // fish の初期化本文は fishCommands で別に判定する。
+    if (tool === 'fish' && ['-C', '--init-command', '--command'].includes(longName)) {
+      if (!a.includes('=')) i++;
+      continue;
+    }
+    if (a.startsWith('--')) {
+      if (tool === 'bash' && SHELL_LONG_SWITCHES.has(a)) continue;
+      return { uncertain: true };
+    }
+    if (/^[-+][a-zA-Z]+$/.test(a)) {
+      if (isUnresolved(args, i) || !SHELL_SHORT_SWITCHES.test(a.slice(1))) return { uncertain: true };
+      if (a.slice(1).includes('c')) {
+        if (a.startsWith('+')) return { uncertain: true };
+        command = true;
+      }
+      const values = a.match(/[oO]/g)?.length ?? 0;
+      for (let value = 1; value <= values; value++) if (expandsAt(args, i + value)) return { uncertain: true };
+      i += values;
+      continue;
+    }
+    if (command) return { body: a };
+    // -c より前の位置引数や未知の値取りで、実際の本文を決められない。
+    return { uncertain: true };
+  }
+  return command ? { uncertain: true } : {};
+}
+
 // fish の -c のほかに中身を Bash のコマンドとして読む値（--command、--command=、-C、--init-command、--init-command=）
 function fishCommands(args) {
   const found = [];
@@ -3373,21 +3421,9 @@ function judgeSegment(words, ctx) {
   if (tool === 'eval') results.push(judgeBash(args.join(' '), nextCtx));
   if (SHELLS.has(tool)) {
     // bash -c "..."、bash -lc "..."、bash <<< "..."、bash <<EOF の中身も同じ規則で見る
-    const c = args.findIndex((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
-    if (c !== -1) {
-      // bash/sh は -c の後でもオプションを読み、最初の位置引数を本文にする。
-      // o/O は語の中の位置によらず、それぞれ次の語をオプション名として取る。
-      let at = c + 1;
-      // -oc や -coe の o、-coo の2つの o も、-c と同じ語にあって値を取る。
-      at += args[c].match(/[oO]/g)?.length ?? 0;
-      for (; at < args.length; at++) {
-        if (args[at] === '--') { at++; break; }
-        if (!/^[-+][a-zA-Z]+$/.test(args[at])) break;
-        at += args[at].match(/[oO]/g)?.length ?? 0;
-      }
-      const body = args[at];
-      if (body) results.push(judgeBash(body, nextCtx));
-    }
+    const script = shellCommandBody(tool, args);
+    if (script.uncertain) results.push([ASK, 'シェルの -c の本文の位置をオプションと値から判定できない。人が確かめる']);
+    else if (script.body) results.push(judgeBash(script.body, nextCtx));
     if (tool === 'fish') for (const body of fishCommands(args)) results.push(judgeBash(body, nextCtx));
     for (const body of heredocScripts(args)) results.push(judgeBash(body, nextCtx));
   }
