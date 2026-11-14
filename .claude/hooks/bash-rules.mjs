@@ -55,6 +55,36 @@ const NON_EXECUTING = new Set([
 ]);
 // 引数を実行しない道具か。Homebrew の g 付きの名前（gls、gecho）は、GNU_PREFIXED にあるものだけ g を外して引く
 const isNonExecuting = (tool) => NON_EXECUTING.has(GNU_PREFIXED.has(tool) ? tool.slice(1) : tool);
+// 未知の前置きの後ろにある実行名を見る判定から外す道具。ほかの判定（秘密や書き込み）は引き続き掛ける。
+const PREFIX_ARGUMENT_ONLY = new Set(['for', 'select', 'sleep', 'kill', 'exit', 'pgrep']);
+const PREFIX_JUDGED_SEPARATELY = new Set(['find', 'gfind', 'curl', 'wget', 'http', 'https', 'eval', 'source', '.', 'case', 'esac']);
+
+// tar の普通のアーカイブ対象は実行名ではない。コマンドを渡すオプションがあるときは前置きとして見る。
+function tarHasCommandOption(args) {
+  const end = args.indexOf('--');
+  const options = end === -1 ? args : sliceWords(args, 0, end);
+  return options.some((a, i) =>
+    /^--(checkpoint-action|to-command|use-compress-program|rsh-command|info-script|new-volume-script)(=|$)/.test(a) ||
+    /^-[^-]*[IF]/.test(a) || (i === 0 && /^[a-zA-Z]+$/.test(a) && /[IF]/.test(a)),
+  );
+}
+
+function unknownPrefixNeedsReview(words, ci, args, manager, ctx) {
+  const tool = baseName(words[ci]);
+  if (isNonExecuting(tool) || SHELLS.has(tool) || INTERPRETERS.has(tool) || manager ||
+      PREFIX_ARGUMENT_ONLY.has(tool) || PREFIX_JUDGED_SEPARATELY.has(tool) || ENV_DECLARERS.has(tool) ||
+      isWrangler(words[ci]) || isCfWrangler(words[ci])) return false;
+  if (['tar', 'gtar'].includes(tool)) return tarHasCommandOption(args);
+  // パッケージの暗黙のコマンド（pnpm nosuch $X）の末尾は通常の引数とし、後続引数がある動的な語は見る。
+  return words.some((w, i) => {
+    if (i <= ci) return false;
+    const name = baseName(w);
+    const executable = name === 'git' || SHELLS.has(name) || INTERPRETERS.has(name);
+    const dynamic = (!ctx.implicitPackageCommand || i + 1 < words.length) && isUnresolved(words, i);
+    return executable || dynamic;
+  });
+}
+
 // 依存の情報を見るだけのサブコマンド（npm view wrangler versions など）
 const PACKAGE_INFO = new Set([
   'view', 'info', 'show', 'why', 'list', 'ls', 'outdated', 'search', 'home', 'repo', 'docs', 'bugs', 'audit',
@@ -3305,12 +3335,7 @@ function judgeSegment(words, ctx) {
   }
 
   if (INTERPRETERS.has(tool)) results.push(judgeInterpreterBody(tool, args));
-  // 未知の前置きの後ろに git、シェル、インタープリタや実行時に決まる語があれば確認する。
-  // 読むだけの道具と、本文や経由先を別に判定する既知の道具は除く。
-  // パッケージの暗黙のコマンド（pnpm nosuch $X）の末尾の通常引数は実行名と決め付けない。
-  // 後ろに引数が続く動的な語や字面の実行名は、その経由先でも見る。
-  if (!isNonExecuting(tool) && !SHELLS.has(tool) && !INTERPRETERS.has(tool) && !['find', 'gfind', 'curl', 'wget', 'http', 'https', 'eval', 'source', '.', 'case', 'esac'].includes(tool) && !ENV_DECLARERS.has(tool) && !isWrangler(words[ci]) && !isCfWrangler(words[ci]) && !manager &&
-      words.some((w, i) => i > ci && (baseName(w) === 'git' || SHELLS.has(baseName(w)) || INTERPRETERS.has(baseName(w)) || ((!ctx.implicitPackageCommand || i + 1 < words.length) && isUnresolved(words, i))))) {
+  if (unknownPrefixNeedsReview(words, ci, args, manager, ctx)) {
     results.push([ASK, '前置きの道具から git、シェル、インタープリタや名前を判定できない道具を動かすと、作業場所や追加の引数を判定できない。人が確かめる']);
   }
   if (tool === 'git') {
