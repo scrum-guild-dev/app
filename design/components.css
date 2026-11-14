@@ -169,12 +169,15 @@ h1, h2, h3 { text-wrap: balance; }
   @starting-style { opacity: 0; translate: 0 -4px; }
 }
 
-:is(.org-menu-list, .ws-menu-list) a, :is(.org-menu-list, .ws-menu-list) button, .account-menu-list a, .account-menu-list button {
+:is(.org-menu-list, .ws-menu-list) a, :is(.org-menu-list, .ws-menu-list) button, .account-menu-list a, .account-menu-list button:not(.btn) {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2);
   padding: 7px var(--space-2); border-radius: var(--radius-1); color: var(--color-fg); text-decoration: none;
 }
-:is(.org-menu-list, .ws-menu-list) button, .account-menu-list button { width: 100%; border: 0; background: none; text-align: left; }
-:is(.org-menu-list, .ws-menu-list) a:hover, :is(.org-menu-list, .ws-menu-list) button:hover, .account-menu-list a:hover, .account-menu-list button:hover:not([aria-disabled="true"]) { background: var(--color-rule); }
+:is(.org-menu-list, .ws-menu-list) button, .account-menu-list button:not(.btn) { width: 100%; border: 0; background: none; text-align: left; }
+:is(.org-menu-list, .ws-menu-list) a:hover, :is(.org-menu-list, .ws-menu-list) button:hover, .account-menu-list a:hover, .account-menu-list button:not(.btn):hover:not([aria-disabled="true"]) { background: var(--color-rule); }
+/* 招待件数の読み込み・失敗・再試行。通常の項目と左端をそろえ、ボタンは共通の .btn のまま使う。 */
+.account-menu-status { display: grid; gap: var(--space-2); padding: 7px var(--space-2); color: var(--color-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.account-menu-status .btn { justify-self: start; }
 .account-menu-list button[aria-disabled="true"]:not(.btn) { opacity: 0.45; cursor: not-allowed; }
 :is(.org-menu-list, .ws-menu-list) a[aria-current="page"], .account-menu-list a[aria-current="page"] { background: var(--color-sunken); font-weight: 700; box-shadow: 0 0 0 1px var(--color-line); }
 :is(.org-menu-list, .ws-menu-list) a .ico { margin-left: auto; color: var(--color-accent); }

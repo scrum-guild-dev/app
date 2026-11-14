@@ -362,7 +362,7 @@
     doneToday: "今日の完了", complete: "完了にする", requester: "作成者", party: "参加者", accept: "参加する", leave: "参加をやめる",
     historyCreated: "作成した", historyUpdated: "変更した", reward: "クリア報酬", clear: "エピックを完了にする", create: "起票", leader: "リーダー",
     member: "メンバー", dod: "完成の定義", organization: "組織", admin: "管理者", assistant: "アシスタント",
-    epicPageRequest: "概要", epicPagePartyEmpty: "参加者はまだいません。", accountMenuLabel: "{name}。アカウントのメニュー", pageToday: "今日やること", pageMe: "マイプロフィール", pageOrgAdmin: "組織の管理", navInvitationsBadge: "招待 {count}", navInvitationsLabel: "、届いた招待 {count}件", logout: "ログアウト",
+    epicPageRequest: "概要", epicPagePartyEmpty: "参加者はまだいません。", accountMenuLabel: "{name}。アカウントのメニュー", pageToday: "今日やること", pageMe: "マイプロフィール", pageOrgAdmin: "組織の管理", navInvitationsBadge: "招待 {count}", navInvitationsLabel: "、届いた招待 {count}件", logout: "ログアウト", invitationCountLoading: "招待の件数を読み込んでいます", invitationCountFailed: "招待の件数を読み込めませんでした。",
     logoutMoving: "ログアウトしています", loggedOut: "ログアウトしました。", logoutFailed: "ログアウトできませんでした。時間をおいてもう一度試してください。",
     markdownPlainNote: "整形せずに表示しています", markdownNewTab: "新しいタブで開きます", markdownCodeRegion: "コード",
     termsTitle: "利用規約", privacyTitle: "プライバシーポリシー", retry: "もう一度試す", retrying: "読み込んでいます", retryFailed: "まだ読み込めませんでした",
@@ -3372,7 +3372,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   let accountMenuOpen = false;
   // busy は、ログアウトを押して結果を待っている間（項目を aria-disabled にして文言を替え、読み上げの領域に伝える）。
   // admin は管理者の印を出し、読み上げの名前にも含める
-  function accountMenuHtml({ open = accountMenuOpen, id = "account-menu-list", live = true, busy = false, admin = !!D.organizations.find((org) => org.slug === D.organization)?.admin, invitationCount = (D.receivedInvites || []).length } = {}) {
+  function accountMenuHtml({ invitationState = "ready", open = accountMenuOpen, id = "account-menu-list", live = true, busy = false, admin = !!D.organizations.find((org) => org.slug === D.organization)?.admin, invitationCount = (D.receivedInvites || []).length } = {}) {
     const name = user(D.me).name;
     const badge = admin ? t("admin") : "";
     // 名前、管理者の札、紋章は .me-detail にまとめ、760px 以下ではアバターだけにする
@@ -3380,10 +3380,12 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     // 見えている頭文字、名前、管理者の札、レベルの数字を、表示順に名前へ含める。
     const label = t("accountMenuLabel").replace("{name}", `${[...name][0]} ${name}${badge ? ` ${badge}` : ""} ${user(D.me).level}`);
     const count = invitationCount;
+    const pending = invitationState === "loading" || invitationState === "retrying";
+    const status = invitationState === "ready" ? "" : `<li class="account-menu-status"><span role="${pending ? "status" : "alert"}">${t(pending ? "invitationCountLoading" : "invitationCountFailed")}</span>${invitationState === "loading" ? "" : `<button class="btn is-sm" type="button" ${pending ? 'aria-disabled="true"' : ""} data-toast="${t("invitationCountLoading")}">${t(pending ? "retrying" : "retry")}</button>`}</li>`;
     const items = `<li><a href="${firstHref("me.html")}" ${page && page.current === "me" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageMe")}</span>${count > 0 ? `<span class="account-menu-badge" aria-hidden="true">${t("navInvitationsBadge").replace("{count}", count)}</span><span class="visually-hidden">${t("navInvitationsLabel").replace("{count}", count)}</span>` : ""}</a></li>${admin ? `<li><a href="${firstHref("admin.html")}" ${page && page.current === "admin" ? 'aria-current="page"' : ""} ${live ? "data-account-link" : ""}><span class="org-menu-name">${t("pageOrgAdmin")}</span></a></li>` : ""}`;
     return `<div class="account-menu"><button class="account-menu-button" type="button" aria-expanded="${open}" aria-controls="${id}" aria-label="${esc(label)}" ${live ? "data-account-menu" : ""}><span class="me">${who}</span>${count > 0 ? '<span class="account-menu-invite" aria-hidden="true"></span>' : ""}${icon("chevron")}</button>
       <span class="visually-hidden" role="status">${busy ? t("logoutMoving") : ""}</span>
-      <ul class="account-menu-list" id="${id}" aria-label="${esc(label)}" ${open ? "" : "hidden"}>${items}<li><button type="button" ${busy ? 'aria-disabled="true"' : ""} ${live ? 'data-toast="見本のため、ログアウトしません"' : ""}><span class="org-menu-name">${busy ? t("logoutMoving") : t("logout")}</span></button></li></ul></div>`;
+      <ul class="account-menu-list" id="${id}" aria-label="${esc(label)}" ${open ? "" : "hidden"}>${items}${status}<li><button type="button" ${busy ? 'aria-disabled="true"' : ""} ${live ? 'data-toast="見本のため、ログアウトしません"' : ""}><span class="org-menu-name">${busy ? t("logoutMoving") : t("logout")}</span></button></li></ul></div>`;
   }
   function setAccountMenu(open, focus) {
     accountMenuOpen = open;
