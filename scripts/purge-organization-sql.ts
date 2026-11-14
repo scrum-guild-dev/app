@@ -8,7 +8,7 @@
 //   予定日の当日より前の組織、無い ID では何も消えない
 // - 外部キーの子から順に消し、organizations の行を最後に消す。途中で止まっても、同じ順で流し直せば続きから消える
 // - favorites と Wiki は先頭の専用の文で消し、残りは TABLES の順で消す。Wiki の2表は TABLES に含めず別に件数を照合する
-// - 共通の表のうち消すのは organizations の行だけ。accounts、account_logins、sessions、api_tokens、oauth_states、rate_limits は消さない
+// - 共通の表のうち消すのは organization_contracts（組織の契約）と organizations の行だけ。accounts、account_logins、sessions、api_tokens、oauth_states、rate_limits は消さない
 //   （アカウントはほかの組織でも使う。アカウントをどうするかは #407。セッションと API トークンはアカウントに結ぶ。入れる組織を失った人の
 //   セッションとトークンは、その人の次のリクエストか期限切れで消える）
 // - 共通の表（organizations）を組織の中の表の文から引く。DB を1つにしている今だけの書き方で、組織ごとに DB を分けるときは
@@ -55,6 +55,8 @@ const TABLES: readonly (readonly [table: string, scope: Scope])[] = [
   ['workspace_point_rates', 'workspace'],
   ['workspaces', 'organization'],
   ['users', 'organization'],
+  // 共通の表の組織の契約。organizations を指すので、organizations の行の直前に消す
+  ['organization_contracts', 'organization'],
 ];
 
 function quotedId(organizationId: string): string {

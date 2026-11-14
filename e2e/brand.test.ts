@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { signIn } from './helpers.ts';
 
-const themes = ['simple_light', 'simple_dark', 'medieval', 'modern'];
+const themes = ['simple_light', 'simple_dark', 'modern'];
 
 async function expectHorizontalBrand(page: Page): Promise<void> {
   const art = page.locator('.brand-art');

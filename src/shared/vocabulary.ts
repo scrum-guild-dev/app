@@ -478,6 +478,8 @@ export const dictionary = defineDictionary({
   // 読み直しに失敗したときの、もう一度試すボタンの横の知らせ
   retryFailed: 'まだ読み込めませんでした',
   loading: '読み込んでいます',
+  // 全画面の右下に出す、読み込んだ画面の版（本番は Release のタグ vX.Y.Z）の前に、読み上げにだけ添える名前
+  appVersionLabel: '版',
 
   // メニューの項目と見出し。ワークスペースの外の画面は organization
   pageToday: '今日やること',
@@ -692,8 +694,6 @@ export const dictionary = defineDictionary({
   taskGone: 'この{task}は見つかりません。一覧を読み直します',
   pointsUnsetMark: '未',
   pointsUnsetTitle: '未見積もり',
-  // 完了の印の判子の文字。中世風のテーマだけが見せる
-  doneStamp: '完',
   // 完了の操作の読み上げの名前。同じ名前のボタンが並ぶので、どのタスクかを添える
   taskCompleteLabel: '{complete}: {title}',
   taskCompletedXp: '+{amount} {unit}',
@@ -1247,6 +1247,46 @@ export const dictionary = defineDictionary({
   // 書かれたか分からない失敗（5xx、通信の切れ）。閉じると一覧を読み直す
   operatorQuotaFailedUnknown:
     '上限を変えられませんでした。変わっていることもあるので、閉じた後の一覧で確かめてからもう一度試してください。',
+  // プラン（organization_contracts）。運用者の画面と組織の変更の履歴で使う。組織の種類の「チーム用」（operatorKindTeam）とは別の語
+  planPersonal: 'パーソナル',
+  planTeam: 'チーム',
+  planBusiness: 'ビジネス',
+  planCustom: '個別',
+  billingMonthly: '月払い',
+  billingYearly: '年払い',
+  // 契約の表示。{plan} はプランの名前、{interval} は支払いの周期
+  planTerms: '{plan}・{interval}',
+  operatorPlanNone: '未契約',
+  // 一覧の契約の印の前に、読み上げだけで添える語
+  operatorPlanChipPrefix: 'プラン: ',
+  operatorPlanAction: 'プランを変える',
+  operatorPlanLabel: '「{name}」のプランを変える',
+  operatorPlanTitle: 'プランを変える',
+  // {terms} は今の契約（planTerms か operatorPlanNone）、{used} は人数、{limit} は人数の上限、{storage} は添付ファイルと Wiki の合計、{quota} は添付ファイルの上限
+  operatorPlanText:
+    '「{name}」のプランを変えます。今は{terms}で、人数 {used} 人（上限 {limit} 人）、添付ファイルと Wiki の合計 {storage}（上限 {quota}）です。',
+  operatorPlanChoices: 'プラン',
+  operatorPlanIntervalChoices: '支払いの周期',
+  operatorPlanUnchangedHint: '今の契約です。別のプランか支払いの周期を選ぶと変えられます。',
+  // {members} は変えた後の人数の上限、{quota} は変えた後の添付ファイルの上限（追加容量を足した値）
+  operatorPlanAfter: '変えた後の上限は {members} 人・{quota} です。',
+  // 未契約の組織で、今の上限より下がるとき。{members} と {quota} は今の上限
+  operatorPlanLimitsLower:
+    '今の上限（{members} 人・{quota}）より下がります。契約を付けると、上限を「人数と容量の上限を変える」で値に戻せなくなります。',
+  operatorPlanNote:
+    '人数と添付ファイルの上限はプランの値になり、「人数と容量の上限を変える」では変えられなくなります。',
+  // {used} は今の人数、{limit} は変えた後の人数の上限
+  operatorPlanSeatsOver:
+    '今の人数（{used} 人）が、変えた後の上限（{limit} 人）を超えます。今いる人はそのまま残り、上限を下回るまで新しい人の招待と管理者への指名だけを止めます。',
+  operatorPlanTrialNote: 'お試しはここで終わり、期限で止まらなくなります。',
+  operatorPlanSuspendedNote:
+    '停止中の{organization}は、契約しても停止したままです。使えるようにするには、続けて再開してください。',
+  operatorPlanHistoryNote: 'プランの変更は{organization}の変更の履歴に、運用者の操作として残ります。',
+  operatorPlanDone: '「{name}」のプランを変えました',
+  operatorPlanPurgeDue: '「{name}」は消す予定日を過ぎたので、プランを変えられません',
+  operatorPlanFailed: 'プランを変えられませんでした。もう一度試してください。',
+  operatorPlanFailedUnknown:
+    'プランを変えられませんでした。変わっていることもあるので、閉じた後の一覧で確かめてからもう一度試してください。',
 
   // 組織の作成のダイアログ
   operatorCreateTitle: '{organization}を作る',
@@ -1648,13 +1688,11 @@ export const dictionary = defineDictionary({
   themeSimple: 'シンプル（自動）',
   themeSimpleLight: 'シンプル（ライト）',
   themeSimpleDark: 'シンプル（ダーク）',
-  themeMedieval: '中世風',
-  themeModern: '現代風',
+  themeModern: 'ネオン',
   // テーマの説明。見本の design/kit.js の THEME_NOTE と同じ文（src/shared/theme.ts の themeNoteKeys）
   themeNoteSimple: '業務の道具として落ち着いた見た目。OS のライトとダークに合わせる',
   themeNoteSimpleLight: '業務の道具として落ち着いた見た目。いつも明るい地',
   themeNoteSimpleDark: '業務の道具として落ち着いた見た目。いつも暗い地',
-  themeNoteMedieval: '冒険者ギルドの帳簿。紙と墨、完了に朱の判子',
   themeNoteModern: '近未来の端末のウィンドウ。暗い地に光る枠',
 
   // お試しの期限（組織の管理の画面。期限の日付は運用者の一覧も使う）
@@ -1666,20 +1704,6 @@ export const dictionary = defineDictionary({
   orgTrialLastDay: '今日までです',
   // 期限を過ぎた組織の印。管理者の画面（days_left が負。「残り -1 日」と出さない）と運用者の一覧が同じ文を使う
   trialExpired: 'お試しの期限を過ぎています',
-
-  // 組織の既定のテーマ（組織の管理の画面）
-  orgThemeTitle: '既定のテーマ',
-  orgThemeDesc: '画面の見た目の既定。自分で選んでいないユーザーに効きます。会社で使うならシンプルが無難です。',
-  // 節ごとの「保存する」。選んだ値が今の値と違うときだけ押せる
-  orgSettingsSave: '保存する',
-  orgSettingsSaving: '保存しています',
-  orgThemeChanged: '既定のテーマを「{label}」に変えました',
-  // ほかの管理者が先に同じ項目を変えていた（409）。読み直した値を見てもらう
-  orgSettingsConflict: 'ほかの{admin}が先に変えていました。今の値を読み直したので、確かめてから選び直してください',
-  // 見つからない、または操作できない（404、403。管理者でなくなったなど）。読み直した画面を見てもらう
-  orgSettingsUnavailable: '保存できませんでした。操作できない状態です。画面を読み直しました。',
-  // 通信の失敗と 5xx。選んだ値は残すので、そのまま押し直せる
-  orgSettingsFailed: '保存できませんでした。もう一度「保存する」を押してください。',
 
   // ワークスペースを終了する、再開する（組織の管理の画面。API の操作の名前は workspace-close と workspace-reopen のまま）。
   // {workspace} は、辞書の言葉を画面が渡す。{name} はワークスペースの名前
@@ -1846,6 +1870,9 @@ export const dictionary = defineDictionary({
   orgHistorySuspensionChanged: '停止の理由を解約に切り替えました（消す予定日 {date}）',
   orgHistorySuspensionChangedTemporary: '停止の理由を一時的な停止に切り替えました',
   orgHistoryOrganizationSettingsChanged: '{organization}の設定を変更しました',
+  // {from} と {to} は契約（planTerms）
+  orgHistoryPlanChanged: 'プランを{from}から{to}に変更しました',
+  orgHistoryPlanStarted: 'プランを{to}にしました',
   orgHistoryAdminDesignated: '{name}を{admin}に指名しました',
   // Google の招待で指名し、本人がまだログインしていない（名前はメールアドレスなので出さない）
   orgHistoryAdminDesignatedGoogle: 'Google で招待した人を{admin}に指名しました',
@@ -2414,14 +2441,10 @@ export const dictionary = defineDictionary({
   // 画面は出さない（開発の状況の説明になるため）。積載量の欄が入る（#66）ときに言い方を決め直す
   meOtherSettingsNote:
     '今は経験値、API トークン、テーマ、届いた招待を扱えます。1日の基準、稼働期間、休み、月の基準の上書き、積載量の合計は、これから足します。',
-  // 自分のテーマ（マイプロフィールの節。選んだ瞬間に保存する）。{admin} は管理者、{organization} は組織、{label} はテーマの名前
-  meThemeDesc:
-    '画面の見た目。選ぶとすぐに変わります。自分で選ばなければ、{admin}が決めた{organization}の既定に従います。',
-  meThemeFollow: '{organization}の既定に従う',
-  meThemeFollowNote: '今は{label}',
+  // 自分のテーマ（マイプロフィールの節。選んだ瞬間に保存する）。{label} はテーマの名前
+  meThemeDesc: '画面の見た目。選ぶとすぐに変わります。自分だけに効きます。',
   meThemeSaving: 'テーマを保存しています',
   meThemeChanged: 'テーマを「{label}」に変えました',
-  meThemeFollowed: 'テーマを{organization}の既定に戻しました',
   meThemeFailed: 'テーマを変えられませんでした。もう一度試してください。',
   // マイプロフィールの「届いた招待」（この組織のワークスペースへの招待。別の組織の招待は組織の切り替えから）。文は invitationLine
   meInvitationsFailed: '届いた招待を読み込めませんでした',

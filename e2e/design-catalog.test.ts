@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures.ts';
 
-const THEMES = ['simple_light', 'simple_dark', 'medieval', 'modern'] as const;
+const THEMES = ['simple_light', 'simple_dark', 'modern'] as const;
 
 // 幅ごとに1件にし、テーマはページを開いたまま切り替えて確かめる（カタログを読み直すのは幅ごとに1回。テーマごとに分けると
-// 24 回読み直して e2e で2番目に重いファイルになっていた）。どのテーマで落ちたかは test.step の名前で分かる
+// 18 回読み直して e2e で2番目に重いファイルになっていた）。どのテーマで落ちたかは test.step の名前で分かる
 for (const width of [1280, 1024, 761, 760, 390, 320]) {
-  test(`長い名前のメニューの見本: ${width}px / 4つのテーマ`, async ({ page }) => {
-    // 4テーマの比較と既存幅との再比較は、CIのtraceで合計30秒近く掛かる。各検査の待ちは増やさず、全体に余裕を持たせる。
+  test(`長い名前のメニューの見本: ${width}px / 3つのテーマ`, async ({ page }) => {
+    // 3テーマの比較と既存幅との再比較は、CIのtraceで合計30秒近く掛かる。各検査の待ちは増やさず、全体に余裕を持たせる。
     test.setTimeout(60_000);
     // カタログはアプリの配信対象外なので、共有の見本ファイルをそのまま返す。
     const files: Record<string, string> = {
@@ -290,11 +290,10 @@ test('見本の引き出し: タブを切り替えても、作り直しても、
 const controlEdge: Record<string, string> = {
   simple_light: 'rgb(133, 135, 142)',
   simple_dark: 'rgb(110, 110, 120)',
-  medieval: 'rgb(127, 136, 144)',
   modern: 'rgb(70, 115, 159)',
 };
 // カタログを開くのは1回にし、テーマはページを開いたまま切り替える（テーマごとに開き直さない）。どのテーマで落ちたかは test.step の名前で分かる
-test('操作部品の枠の色: 4つのテーマ', async ({ page }) => {
+test('操作部品の枠の色: 3つのテーマ', async ({ page }) => {
   const files: Record<string, string> = {
     'index.html': 'text/html',
     'tokens.css': 'text/css',

@@ -202,7 +202,7 @@
       {#if menuItems.length > 0}<RowMenu title={task.title} items={menuItems} />{/if}
       {#if done}
         <span class="hanko" role="img" aria-label={t('doneMarkLabel', { title: task.title, done: t('done') })}
-          ><Icon name="check" /><b>{t('doneStamp')}</b></span
+          ><Icon name="check" /></span
         >
         {#if canReopen}
           <button

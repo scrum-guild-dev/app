@@ -9,7 +9,7 @@ import { A11Y_THEMES, applyTheme, expectNoA11yViolationsInThemes, signIn } from 
 import { mockOperation, routeOperation } from './operations.ts';
 
 // axe は無効なボタンの文字をコントラスト検査から外すため、実際の描画色も測る。
-test('押せない同意ボタンは4テーマと狭い幅でも文字が読め、チェック後と区別できる', async ({
+test('押せない同意ボタンは3テーマと狭い幅でも文字が読め、チェック後と区別できる', async ({
   page,
   context,
   baseURL,
@@ -124,7 +124,7 @@ async function buttonColors(button: Locator) {
   });
 }
 
-test('停止の送信中は危険操作と取り消しの文字が4テーマで読め、ホバーでも色を戻さない', async ({
+test('停止の送信中は危険操作と取り消しの文字が3テーマで読め、ホバーでも色を戻さない', async ({
   page,
   context,
   baseURL,
@@ -150,6 +150,7 @@ test('停止の送信中は危険操作と取り消しの文字が4テーマで�
         self_created: false,
         trial_ends_on: null,
         trial_expired: false,
+        contract: null,
       },
     ],
   });

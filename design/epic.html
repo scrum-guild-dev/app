@@ -59,7 +59,7 @@ SQ.mount("epic", () => {
             ${attachments(s, { button: true })}
             ${book(list, { showParent: false, showAssignee: true })}
             <div class="form-actions">${st.doneAt
-              ? `<span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span><span>${t("done")} ${esc(st.doneAt)}</span><button class="link-btn" type="button" data-toast="完了を取り消しました。完了の経験値も取り消します">取り消す</button>`
+              ? `<span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}</span><span>${t("done")} ${esc(st.doneAt)}</span><button class="link-btn" type="button" data-toast="完了を取り消しました。完了の経験値も取り消します">取り消す</button>`
               : `<button class="btn is-sm" type="button" ${openTasks ? "disabled" : ""}>${icon("check")}${t("story")}を${t("complete")}</button>${openTasks ? `<span class="action-note">配下の${t("task")}がすべて${t("done")}すると押せます（残り ${openTasks} 件）</span>` : ""}`}</div>
           </section>`;
         }).join("")}` : emptyState("flag", `${t("story")}はまだありません`))}
@@ -68,7 +68,7 @@ SQ.mount("epic", () => {
         <section class="panel">
           <div class="panel-title"><b>${t("epicPageRequest")}</b></div>
           <dl class="props">
-            <div><dt>${t("requester")}</dt><dd>${avatarOf(e.requester)}${esc(SQ.user(e.requester).name)}<span class="seal" aria-hidden="true">印</span></dd></div>
+            <div><dt>${t("requester")}</dt><dd>${avatarOf(e.requester)}${esc(SQ.user(e.requester).name)}</dd></div>
             <div><dt>${t("reward")}</dt><dd>${tier(e.tier)}</dd></div>
             <div><dt>${t("due")}</dt><dd>${dueChip(e.due)}</dd></div>
             <div><dt>${t("category")}</dt><dd>${esc(D.categories[e.cat].name)}</dd></div>

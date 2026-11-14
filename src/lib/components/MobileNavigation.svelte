@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
   import { resolve } from '$app/paths';
+  import { navigating } from '$app/state';
   import { modalState } from '../toast.svelte.ts';
   import { isWorkspaceId } from '../nav.ts';
   import { t } from '../vocabulary.svelte.ts';
@@ -44,6 +45,14 @@
       : []),
   ] as const);
 
+  // 押したタブへの移動を待つ間（行き先のデータの読み込み中）、選んだ印を先に移す。
+  // aria-current は着いた画面に付けたままにし、見た目だけを先に替える。
+  // 行き先がタブで無い画面なら、着くまで今のタブの印を残す。
+  const selectedHref = $derived.by(() => {
+    const to = navigating.to?.url.pathname;
+    return to && tabs.some((tab) => tab.href === to) ? to : current;
+  });
+
   function close(): void {
     open = false;
     dialog.close();
@@ -79,6 +88,7 @@
         href={tab.href}
         aria-label={t(tab.key)}
         aria-current={current === tab.href ? 'page' : undefined}
+        data-selected={selectedHref === tab.href ? '' : undefined}
       >
         <Icon name={tab.icon} />
       </a>

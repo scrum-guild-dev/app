@@ -1,7 +1,7 @@
 import { now } from '../../shared/clock.ts';
 import { levelOf } from '../../shared/experience.ts';
 import { myOrganizations, organizationInfo } from '../../shared/operations/organization/index.ts';
-import type { Theme } from '../../shared/theme.ts';
+import { themeOf } from '../../shared/theme.ts';
 import { ApiError } from '../errors.ts';
 import { readOrganizationStorageUsage } from '../db/index.ts';
 import { amountOf, userExperienceTotalStatement } from './experience.ts';
@@ -83,19 +83,16 @@ export const organizationInfoOperation = implement(
 
     return {
       storage,
-      // theme の形は出力のスキーマ（z.enum）が検証する
       organization: {
         name: organization.name,
         kind: organization.kind,
-        theme: organization.theme,
         has_workspaces: anyWorkspaceResult.rows.length > 0,
       },
       me: {
         id: user.id,
         name: user.name,
         is_admin: actor.isAdmin,
-        // 列の CHECK が守る値（組織の theme と同じ列挙）
-        theme: user.theme as Theme | null,
+        theme: themeOf(user.theme),
         level: levelOf(amountOf(experienceResult.rows[0]?.total)),
       },
       trial:

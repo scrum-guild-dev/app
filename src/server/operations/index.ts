@@ -50,6 +50,7 @@ import { meThemeUpdateOperation } from './me-theme.ts';
 import { membershipLeaveOperation, membershipRoleUpdateOperation } from './membership.ts';
 import { createOrganizationOperation, listOrganizationsOperation, resolveGithubUserOperation } from './operator.ts';
 import { organizationAdminReassignOperation } from './operator-admin.ts';
+import { organizationPlanUpdateOperation } from './operator-plan.ts';
 import { organizationQuotaUpdateOperation } from './operator-quota.ts';
 import {
   organizationResumeOperation,
@@ -67,7 +68,6 @@ import {
   organizationHolidayDeleteOperation,
   organizationHolidayListOperation,
 } from './organization-holiday.ts';
-import { organizationSettingsUpdateOperation } from './organization-settings.ts';
 import { logoutOperation, meOperation } from './session.ts';
 import { accountProfileSaveOperation, onboardingStatusOperation } from './onboarding.ts';
 import { onboardingWorkspacePrepareOperation } from './onboarding-workspace.ts';
@@ -184,6 +184,7 @@ const listedOperations: readonly ImplementedOperation[] = [
   organizationResumeOperation,
   organizationAdminReassignOperation,
   organizationQuotaUpdateOperation,
+  organizationPlanUpdateOperation,
   myOrganizationsOperation,
   createMyOrganizationOperation,
   createPersonalOrganizationOperation,
@@ -194,7 +195,6 @@ const listedOperations: readonly ImplementedOperation[] = [
   organizationHolidayListOperation,
   organizationHolidayAddOperation,
   organizationHolidayDeleteOperation,
-  organizationSettingsUpdateOperation,
   organizationHistoryOperation,
   userListOperation,
   userAdminUpdateOperation,

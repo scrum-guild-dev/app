@@ -5,7 +5,7 @@
 (function () {
   try {
     var theme = localStorage.getItem('sg-theme');
-    if (['simple', 'simple_light', 'simple_dark', 'medieval', 'modern'].indexOf(theme) !== -1) {
+    if (['simple', 'simple_light', 'simple_dark', 'modern'].indexOf(theme) !== -1) {
       document.documentElement.dataset.theme = theme;
     }
   } catch {
