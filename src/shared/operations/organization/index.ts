@@ -19,7 +19,6 @@ import { myOrganizations } from './my-organizations.ts';
 import { organizationInfo } from './organization.ts';
 import { organizationHistory } from './organization-history.ts';
 import { organizationHolidayAdd, organizationHolidayDelete, organizationHolidayList } from './organization-holiday.ts';
-import { organizationSettingsUpdate } from './organization-settings.ts';
 import { userAdminUpdate, userDisable, userEnable, userList } from './user.ts';
 import { today } from './today.ts';
 
@@ -44,7 +43,6 @@ export {
   organizationHolidayDelete,
   organizationHolidayList,
   organizationInfo,
-  organizationSettingsUpdate,
   userAdminUpdate,
   userDisable,
   userEnable,
@@ -65,7 +63,6 @@ export const organizationOperations: readonly AnyOperationDefinition[] = [
   organizationHolidayList,
   organizationHolidayAdd,
   organizationHolidayDelete,
-  organizationSettingsUpdate,
   organizationHistory,
   userList,
   userAdminUpdate,

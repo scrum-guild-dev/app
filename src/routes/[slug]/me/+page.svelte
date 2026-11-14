@@ -228,11 +228,7 @@
   <div class="layout-main">
     {#if data.organization}
       <div class="settings">
-        <MeThemeSetting
-          {slug}
-          theme={data.organization.me.theme}
-          organizationTheme={data.organization.organization.theme}
-        />
+        <MeThemeSetting {slug} theme={data.organization.me.theme} />
       </div>
     {/if}
   </div>

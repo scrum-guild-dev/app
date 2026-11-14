@@ -3,7 +3,7 @@ import { PRIVACY_VERSION, TERMS_VERSION } from '../src/lib/legal/versions.ts';
 import { findOverflowViolations, findTargetSizeViolations, NARROW_VIEWPORT, watchViolations } from './helpers.ts';
 
 // 利用規約（/terms）とプライバシーポリシー（/privacy）。ログインしていない人が、ログインの画面に移されずに読める（Issue #646）。
-// どのテストも、Cookie の無い（ログインしていない）page で開く。axe は e2e/a11y-screens.test.ts が、4つのテーマで確かめる。
+// どのテストも、Cookie の無い（ログインしていない）page で開く。axe は e2e/a11y-screens.test.ts が、3つのテーマで確かめる。
 // 文面は人が直すので、文の言い回しは固定せず、画面の見出し、短い語、版（src/lib/legal/versions.ts）で確かめる
 
 const pages = [

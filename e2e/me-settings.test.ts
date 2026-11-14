@@ -1,11 +1,13 @@
 // マイプロフィールの画面の「テーマ」の節と「届いた招待」、アカウントのメニューの招待の点と件数（#674）。
 // テーマは、あおば開発の一般のユーザー（ハルカ、seed/sessions.ts の member）の users.theme を本物の API で書く。ほかのファイルが
-// 同じ人でテーマを見ることはないが、書いたテーマはテストの終わりに「組織の既定に従う」へ戻す。
+// 同じ人でテーマを見ることはないが、書いたテーマはテストの終わりに seed の状態（選んでいない）へ手元の D1 から戻す（API に選んでいない状態へ戻す操作は無い）。
+// 組織の既定のテーマは無いので、テーマを選んでいない人のテーマは、くもラボのソウタ（lookMember）と、選んでいるコハル（lookThemed）で確かめる。
 // 招待は seed に、あおば開発の一般のユーザーへ届いたものが無いので、招待の一覧（invitation-list）と組織の選択（my-organizations）の応答を差し替える。
 // サーバーの承諾と辞退の処理は test/invitation-response.test.ts が確かめる
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { signIn, watchViolations } from './helpers.ts';
+import { resetAobaMemberTheme } from './local-d1.ts';
 
 const AOBA_WORKSPACE_ID = '019a0000-0000-7000-8000-000000000401';
 
@@ -17,57 +19,57 @@ test.describe('テーマの節（ハルカ）', () => {
     await signIn(context, baseURL, 'member');
   });
 
-  test('選んだ瞬間に保存して画面に当て、開き直しても続く。「組織の既定に従う」で組織の既定に戻る', async ({ page }) => {
+  test('選択肢は4つのテーマだけで、選んだ瞬間に保存して画面に当て、開き直しても続く', async ({ page }) => {
     const collect = await watchViolations(page);
     await page.goto('/aoba/me');
     const section = themeSection(page);
     await expect(section.getByRole('heading', { level: 2, name: 'テーマ' })).toBeVisible();
-    const radios = section.getByRole('radio');
-    await expect(radios).toHaveCount(6);
-    const follow = section.getByRole('radio', { name: /^組織の既定に従う/ });
-    await expect(follow).toBeChecked();
-    // 組織の既定に従う選択肢の説明には、今の既定のテーマの名前を出す
-    await expect(section.locator('label.choice').first()).toContainText('今は');
-    const organizationTheme = await htmlTheme(page);
+    await expect(section).toContainText('画面の見た目。選ぶとすぐに変わります。自分だけに効きます。');
+    // 組織の既定に従う選択肢は無い。テーマを選んでいない人は、シンプル（自動）
+    await expect(section.getByRole('radio')).toHaveCount(4);
+    await expect(section.getByRole('radio', { name: /^シンプル（自動）/ })).toBeChecked();
+    await expect(section.getByRole('radio', { name: /^シンプル（ライト）/ })).toBeVisible();
+    await expect(section.getByRole('radio', { name: /^シンプル（ダーク）/ })).toBeVisible();
+    await expect(section.getByRole('radio', { name: /^ネオン/ })).toBeVisible();
+    await expect(section.getByRole('radio', { name: /組織の既定に従う/ })).toHaveCount(0);
+    await expect(section.getByRole('radio', { name: /中世風|現代風/ })).toHaveCount(0);
+    await expect.poll(() => htmlTheme(page)).toBe('simple');
 
     try {
       const saved = page.waitForResponse((res) => res.url().endsWith('/api/aoba/me-theme-update') && res.ok());
-      await section.getByRole('radio', { name: /^中世風/ }).check();
+      await section.getByRole('radio', { name: /^ネオン/ }).check();
       // 保存を待たずに、画面へ当たる
-      await expect.poll(() => htmlTheme(page)).toBe('medieval');
-      expect((await saved).request().postDataJSON()).toEqual({ theme: 'medieval' });
-      await expect(page.getByRole('status').filter({ hasText: 'テーマを「中世風」に変えました' })).toBeAttached();
+      await expect.poll(() => htmlTheme(page)).toBe('modern');
+      expect((await saved).request().postDataJSON()).toEqual({ theme: 'modern' });
+      await expect(page.getByRole('status').filter({ hasText: 'テーマを「ネオン」に変えました' })).toBeAttached();
 
       // 開き直しても続く（枠が読んだ自分のテーマ）
       await page.reload();
-      await expect(section.getByRole('radio', { name: /^中世風/ })).toBeChecked();
-      expect(await htmlTheme(page)).toBe('medieval');
+      await expect(section.getByRole('radio', { name: /^ネオン/ })).toBeChecked();
+      expect(await htmlTheme(page)).toBe('modern');
 
       // 別の画面へ移って戻っても、選んだままに見える
       await page.locator('.nav-item', { hasText: '今日やること' }).click();
       await expect(page).toHaveURL(/\/aoba$/);
-      expect(await htmlTheme(page)).toBe('medieval');
+      expect(await htmlTheme(page)).toBe('modern');
       await page.getByRole('button', { name: /アカウントのメニュー$/ }).click();
       await page.locator('.account-menu-list').getByRole('link', { name: 'マイプロフィール', exact: true }).click();
-      await expect(themeSection(page).getByRole('radio', { name: /^中世風/ })).toBeChecked();
+      await expect(themeSection(page).getByRole('radio', { name: /^ネオン/ })).toBeChecked();
 
-      // 「組織の既定に従う」を選ぶと、組織の既定に戻る
-      const reset = page.waitForResponse((res) => res.url().endsWith('/api/aoba/me-theme-update') && res.ok());
+      // ほかのテーマへ替えても保存され、読み直しても残る
+      const changed = page.waitForResponse((res) => res.url().endsWith('/api/aoba/me-theme-update') && res.ok());
       await themeSection(page)
-        .getByRole('radio', { name: /^組織の既定に従う/ })
+        .getByRole('radio', { name: /^シンプル（ダーク）/ })
         .check();
-      expect((await reset).request().postDataJSON()).toEqual({ theme: null });
-      await expect.poll(() => htmlTheme(page)).toBe(organizationTheme);
+      expect((await changed).request().postDataJSON()).toEqual({ theme: 'simple_dark' });
+      await expect.poll(() => htmlTheme(page)).toBe('simple_dark');
       await page.reload();
-      await expect(themeSection(page).getByRole('radio', { name: /^組織の既定に従う/ })).toBeChecked();
-      expect(await htmlTheme(page)).toBe(organizationTheme);
+      await expect(themeSection(page).getByRole('radio', { name: /^シンプル（ダーク）/ })).toBeChecked();
+      expect(await htmlTheme(page)).toBe('simple_dark');
     } finally {
-      // 失敗してもハルカのテーマを残さない
-      await page.goto('/aoba/me');
-      const current = themeSection(page).getByRole('radio', { name: /^組織の既定に従う/ });
-      if (!(await current.isChecked())) await current.check();
-      await expect(current).toBeChecked();
+      // 失敗してもハルカのテーマを残さない（seed は選んでいない状態）
       await page.waitForLoadState('networkidle');
+      await resetAobaMemberTheme();
     }
     expect(await collect()).toEqual([]);
   });
@@ -78,14 +80,14 @@ test.describe('テーマの節（ハルカ）', () => {
     );
     await page.goto('/aoba/me');
     const section = themeSection(page);
-    await expect(section.getByRole('radio', { name: /^組織の既定に従う/ })).toBeChecked();
+    await expect(section.getByRole('radio', { name: /^シンプル（自動）/ })).toBeChecked();
     const before = await htmlTheme(page);
 
     // 失敗で選択がすぐ戻るので、check()（押した後に状態が変わったかを確かめる）でなく click() で押す
-    await section.getByRole('radio', { name: /^現代風/ }).click();
+    await section.getByRole('radio', { name: /^ネオン/ }).click();
     await expect(section.getByRole('alert')).toHaveText('テーマを変えられませんでした。もう一度試してください。');
-    await expect(section.getByRole('radio', { name: /^組織の既定に従う/ })).toBeChecked();
-    await expect(section.getByRole('radio', { name: /^現代風/ })).not.toBeChecked();
+    await expect(section.getByRole('radio', { name: /^シンプル（自動）/ })).toBeChecked();
+    await expect(section.getByRole('radio', { name: /^ネオン/ })).not.toBeChecked();
     expect(await htmlTheme(page)).toBe(before);
 
     // 次に選ぶと理由は消え、通れば保存される
@@ -101,25 +103,55 @@ test.describe('テーマの節（ハルカ）', () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
     await page.route('**/api/aoba/me-theme-update', async (route) => {
-      const body = route.request().postDataJSON() as { theme: string | null };
+      const body = route.request().postDataJSON() as { theme: string };
       sent.push(body);
       if (sent.length === 1) await gate;
       await route.fulfill({ json: { theme: body.theme } });
     });
     await page.goto('/aoba/me');
     const section = themeSection(page);
-    await expect(section.getByRole('radio', { name: /^組織の既定に従う/ })).toBeChecked();
+    await expect(section.getByRole('radio', { name: /^シンプル（自動）/ })).toBeChecked();
 
-    await section.getByRole('radio', { name: /^中世風/ }).check();
+    await section.getByRole('radio', { name: /^シンプル（ダーク）/ }).check();
     await expect.poll(() => sent.length).toBe(1);
-    await section.getByRole('radio', { name: /^現代風/ }).check();
+    await section.getByRole('radio', { name: /^ネオン/ }).check();
     // 1回目が返るまで、2つ目は送らない。選択と画面は先に変わる
     await expect.poll(() => htmlTheme(page)).toBe('modern');
-    expect(sent).toEqual([{ theme: 'medieval' }]);
+    expect(sent).toEqual([{ theme: 'simple_dark' }]);
     release();
 
-    await expect.poll(() => sent).toEqual([{ theme: 'medieval' }, { theme: 'modern' }]);
-    await expect(section.getByRole('radio', { name: /^現代風/ })).toBeChecked();
+    await expect.poll(() => sent).toEqual([{ theme: 'simple_dark' }, { theme: 'modern' }]);
+    await expect(section.getByRole('radio', { name: /^ネオン/ })).toBeChecked();
+  });
+});
+
+// 組織の既定のテーマは無い。テーマは自分で選んだ値だけで、選んでいない人はシンプル（自動）。
+// くもラボのソウタ（lookMember）はテーマを選んでおらず、コハル（lookThemed）は自分でシンプル（ダーク）を選んでいる。どちらも書かない
+test.describe('テーマを選んでいる人と選んでいない人（くもラボ）', () => {
+  test('テーマを選んでいない人はシンプル（自動）で、画面のテーマは simple', async ({ page, context, baseURL }) => {
+    await signIn(context, baseURL, 'lookMember');
+    await page.goto('/kumo/me');
+    const section = themeSection(page);
+    await expect(section.getByRole('radio')).toHaveCount(4);
+    await expect(section.getByRole('radio', { name: /^シンプル（自動）/ })).toBeChecked();
+    await expect.poll(() => htmlTheme(page)).toBe('simple');
+  });
+
+  test('自分でテーマを選んでいる人は、そのテーマで描く', async ({ page, context, baseURL }) => {
+    await signIn(context, baseURL, 'lookThemed');
+    await page.goto('/kumo/me');
+    await expect(themeSection(page).getByRole('radio', { name: /^シンプル（ダーク）/ })).toBeChecked();
+    await expect.poll(() => htmlTheme(page)).toBe('simple_dark');
+  });
+
+  test('組織の管理の画面に「既定のテーマ」の節は無い', async ({ page, context, baseURL }) => {
+    await signIn(context, baseURL, 'lookAdmin');
+    await page.goto('/kumo/admin');
+    await expect(page.locator('.page-eyebrow')).toHaveText('管理者だけが見られます');
+    await expect(page.getByRole('region', { name: '既定のテーマ' })).toHaveCount(0);
+    await expect(page.getByText('既定のテーマ')).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: /^シンプル（自動）/ })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: /言葉づかい/ })).toHaveCount(0);
   });
 });
 
@@ -153,7 +185,7 @@ async function stubInvitations(page: Page, state: { invitations: InboxInvitation
     state.listStatus && state.listStatus !== 200
       ? route.fulfill({ status: state.listStatus, json: { error: { code: 'internal', message: 'x' } } })
       : route.fulfill({
-          json: { organization: { name: 'あおば開発', theme: 'simple' }, invitations: state.invitations },
+          json: { organization: { name: 'あおば開発' }, invitations: state.invitations },
         }),
   );
   await page.route('**/api/my-organizations', async (route) => {

@@ -72,9 +72,9 @@ test('遅い移動の完了で戻り、引き出しでは本文を薄くしな�
 });
 
 // APIの10秒の打ち切りとaxeの所要時間を競合させないよう、配線は上の実遷移、
-// 4テーマの見た目は読み終わった本文に同じ属性を付けた部品の状態で確かめる。
+// 3テーマの見た目は読み終わった本文に同じ属性を付けた部品の状態で確かめる。
 for (const { screen, path, prepare, ready } of a11yScreens.filter((screen) => screen.path.startsWith('/aoba'))) {
-  test(`読み込み中の本文に4テーマでaxeの違反が無い（${screen}）`, async ({ page, context, baseURL }) => {
+  test(`読み込み中の本文に3テーマでaxeの違反が無い（${screen}）`, async ({ page, context, baseURL }) => {
     test.setTimeout(90_000);
     await signIn(context, baseURL, 'admin');
     await prepare?.(page);

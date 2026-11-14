@@ -67,7 +67,6 @@ import {
   organizationHolidayDeleteOperation,
   organizationHolidayListOperation,
 } from './organization-holiday.ts';
-import { organizationSettingsUpdateOperation } from './organization-settings.ts';
 import { logoutOperation, meOperation } from './session.ts';
 import { accountProfileSaveOperation, onboardingStatusOperation } from './onboarding.ts';
 import { onboardingWorkspacePrepareOperation } from './onboarding-workspace.ts';
@@ -193,7 +192,6 @@ const listedOperations: readonly ImplementedOperation[] = [
   organizationHolidayListOperation,
   organizationHolidayAddOperation,
   organizationHolidayDeleteOperation,
-  organizationSettingsUpdateOperation,
   organizationHistoryOperation,
   userListOperation,
   userAdminUpdateOperation,

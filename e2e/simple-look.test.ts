@@ -1,5 +1,5 @@
 // シンプルの見た目と密度（#828）。docs/design.md の「テーマごとの違い」の「角と線」と、「どのテーマにも共通すること」の「密度」。
-// シンプルだけが細い上の色の線、小さな角、枠の無い状態の印になり、見せ場のゲージの角と、中世風と現代風は今の形のまま残ることと、
+// シンプルだけが細い上の色の線、小さな角、枠の無い状態の印になり、見せ場のゲージの角と、ネオンは今の形のまま残ることと、
 // 761px 以上でマウスだけで操作する画面だけ行を詰め、760px 以下と指で押す画面では押せる範囲 44px のための余白を残すことを確かめる。
 // 今日やることの画面は、行と貼り紙を決めるため `today` の応答をテストの中で組む（実行する日にも seed の日付にも依存しない）。
 // バックログの木、メンバーの表、計画のレーンは seed のまま開く
@@ -58,9 +58,7 @@ test.describe('今日やることの画面', () => {
     await prepareToday(page, context, baseURL);
   });
 
-  test('シンプルは上の色の線が細く角が小さく、状態の印に枠を引かない。中世風と現代風は今の形のまま', async ({
-    page,
-  }) => {
+  test('シンプルは上の色の線が細く角が小さく、状態の印に枠を引かない。ネオンは今の形のまま', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/aoba');
     const notice = page.locator('.notice');
@@ -72,8 +70,7 @@ test.describe('今日やることの画面', () => {
     for (const [theme, edge, radius, framed] of [
       ['simple_light', '2px', '4px', false],
       ['simple_dark', '2px', '4px', false],
-      ['medieval', '5px', '2px', true],
-      // 現代風の貼り紙は、テーマの飾りが光る枠の 1px にする
+      // ネオンの貼り紙は、テーマの飾りが光る枠の 1px にする
       ['modern', '1px', '2px', true],
     ] as const) {
       await applyTheme(page, theme);
@@ -89,14 +86,13 @@ test.describe('今日やることの画面', () => {
     }
   });
 
-  test('プロフィールの経験値ゲージは4つの見た目で従来の丸みを保つ', async ({ page }) => {
+  test('プロフィールの経験値ゲージは3つの見た目で従来の丸みを保つ', async ({ page }) => {
     await page.goto('/aoba/me');
     const gauge = page.locator('.gauge');
     await expect(gauge).toHaveCount(1);
     for (const [theme, radius] of [
       ['simple_light', '6px'],
       ['simple_dark', '6px'],
-      ['medieval', '2px'],
       ['modern', '2px'],
     ] as const) {
       await applyTheme(page, theme);
@@ -138,7 +134,7 @@ test.describe('今日やることの画面', () => {
     await expect(entry).toBeVisible();
 
     // 詰めるのは全テーマで同じ
-    for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+    for (const theme of ['simple_light', 'simple_dark', 'modern']) {
       await applyTheme(page, theme);
       await expect(entry, theme).toHaveCSS('padding-top', '8px');
       await expect(entry, theme).toHaveCSS('min-height', '48px');
@@ -206,7 +202,6 @@ test.describe('バックログの木、メンバーの表、計画のレーン',
     for (const [theme, edge] of [
       ['simple_light', '2px'],
       ['simple_dark', '2px'],
-      ['medieval', '5px'],
       ['modern', '5px'],
     ] as const) {
       await applyTheme(page, theme);

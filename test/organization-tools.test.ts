@@ -5,7 +5,6 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
 import { z } from 'zod';
 import { defineOperation } from '../src/shared/operations/define.ts';
-import { themes } from '../src/shared/theme.ts';
 import { createApp } from '../src/server/app.ts';
 import { commonDb } from '../src/server/db/index.ts';
 import { implement } from '../src/server/operations/implement.ts';
@@ -20,7 +19,7 @@ import {
   createWorkspace,
 } from './factories.ts';
 import { post } from './operations/harness.ts';
-import { createPerson, SUSPENDED_AT, suspendAfterEntering, testEnv } from './operations/world.ts';
+import { createPerson } from './operations/world.ts';
 
 const organizationRow = defineOperation({
   name: 'tools-organization-row',
@@ -39,17 +38,6 @@ const workspaceOrganizationRow = defineOperation({
   workspace: true,
   input: z.object({ workspace_id: z.string() }),
   output: z.object({ member_limit: z.number() }),
-});
-
-const writeSettings = defineOperation({
-  name: 'tools-write-settings',
-  description: '自分の組織の言葉づかいと既定のテーマを、読んだ値のままなら書く',
-  mode: 'write',
-  permission: 'admin',
-  input: z.object({
-    theme: z.object({ from: z.enum(themes), to: z.enum(themes) }).optional(),
-  }),
-  output: z.object({ result: z.enum(['written', 'conflict', 'suspended']) }),
 });
 
 const toolNames = defineOperation({
@@ -79,16 +67,6 @@ const resolveGithub = defineOperation({
   output: z.object({ kind: z.string(), login_subject: z.string().nullable() }),
 });
 
-// 道具が入った人を確かめることを見るための操作。権限の検査は通し、道具の中で断られることを確かめる
-const memberWritesSettings = defineOperation({
-  name: 'tools-member-write-settings',
-  description: '管理者でない人の操作から、組織の設定を書こうとする',
-  mode: 'write',
-  permission: 'organization',
-  input: z.object({}),
-  output: z.object({ result: z.enum(['written', 'conflict', 'suspended']) }),
-});
-
 const inviteeReadsOrganization = defineOperation({
   name: 'tools-invitee-organization-row',
   description: '承諾待ちの招待だけの人の操作から、組織の行を読もうとする',
@@ -116,9 +94,6 @@ const app = createApp(
     implement(workspaceOrganizationRow, async ({ tools }) => ({
       member_limit: (await tools.readOrganization()).memberLimit,
     })),
-    implement(writeSettings, async ({ tools, input }) => ({
-      result: await tools.writeOrganizationSettings(input, new Date('2026-10-25T00:00:00.000Z')),
-    })),
     implement(toolNames, async ({ tools }) => ({ has_end_sessions: 'endSessionsIfLoginLost' in tools })),
     implement(avatars, async ({ tools, input }) => ({
       avatars: [...(await tools.avatarsOf(input.user_ids))].map(([user_id, avatar_url]) => ({ user_id, avatar_url })),
@@ -129,12 +104,6 @@ const app = createApp(
       const result = await resolver.resolveInvitee(input.username);
       return { kind: result.kind, login_subject: result.kind === 'found' ? result.invitee.subject : null };
     }),
-    implement(memberWritesSettings, async ({ tools }) => ({
-      result: await tools.writeOrganizationSettings(
-        { theme: { from: 'simple', to: 'medieval' } },
-        new Date('2026-10-25T00:00:00.000Z'),
-      ),
-    })),
     implement(inviteeReadsOrganization, async ({ tools }) => ({
       member_limit: (await tools.readOrganization()).memberLimit,
     })),
@@ -148,11 +117,6 @@ const app = createApp(
   ],
   { fetcher: github.fetcher },
 );
-
-async function organizationRowOf(id: string) {
-  const db = commonDb(env);
-  return db.first(db.statement((q) => q.selectFrom('organizations').selectAll().where('id', '=', id)));
-}
 
 async function ok(res: Response): Promise<unknown> {
   expect(res.status).toBe(200);
@@ -179,95 +143,9 @@ describe('組織の行', () => {
       ),
     ).toEqual({ member_limit: 7 });
   });
-
-  test('設定を書くと入った組織の行だけが変わり、別の組織の行は変わらない', async () => {
-    const own = await createOrganization();
-    const other = await createOrganization();
-    const admin = await createPerson({ organization: own, admin: true });
-    const otherBefore = await organizationRowOf(other.id);
-
-    expect(
-      await ok(
-        await post(app, writeSettings, {
-          slug: own.slug,
-          token: admin.token,
-          body: { theme: { from: 'simple', to: 'medieval' } },
-        }),
-      ),
-    ).toEqual({ result: 'written' });
-    expect(await organizationRowOf(own.id)).toMatchObject({
-      theme: 'medieval',
-      updated_at: '2026-10-25T00:00:00.000Z',
-    });
-    expect(await organizationRowOf(other.id)).toEqual(otherBefore);
-
-    await ok(
-      await post(app, writeSettings, {
-        slug: own.slug,
-        token: admin.token,
-        body: { theme: { from: 'medieval', to: 'modern' } },
-      }),
-    );
-    expect(await organizationRowOf(own.id)).toMatchObject({ theme: 'modern' });
-  });
-
-  test('書く項目が無ければ何も書かず、updated_at も変えない', async () => {
-    const own = await createOrganization();
-    const admin = await createPerson({ organization: own, admin: true });
-    const before = await organizationRowOf(own.id);
-    expect(await ok(await post(app, writeSettings, { slug: own.slug, token: admin.token, body: {} }))).toEqual({
-      result: 'written',
-    });
-    expect(await organizationRowOf(own.id)).toEqual(before);
-  });
-
-  test('読んだ値が今の値と違えば conflict で、行は変わらない', async () => {
-    const own = await createOrganization({ theme: 'modern' });
-    const admin = await createPerson({ organization: own, admin: true });
-    const before = await organizationRowOf(own.id);
-    for (const body of [{ theme: { from: 'simple', to: 'medieval' } }]) {
-      expect(await ok(await post(app, writeSettings, { slug: own.slug, token: admin.token, body }))).toEqual({
-        result: 'conflict',
-      });
-    }
-    expect(await organizationRowOf(own.id)).toEqual(before);
-  });
-
-  test('入ってから書くまでに組織が停止されたら suspended で、読んだ値が古くても conflict より先に返し、行は変わらない', async () => {
-    for (const body of [
-      { theme: { from: 'modern', to: 'simple' } },
-      // 読んだ値が古い（今は modern）。停止を先に伝える
-      { theme: { from: 'medieval', to: 'simple' } },
-    ]) {
-      const own = await createOrganization({ theme: 'modern' });
-      const admin = await createPerson({ organization: own, admin: true });
-      const racing = suspendAfterEntering(testEnv, own.id);
-      const before = await organizationRowOf(own.id);
-      expect(
-        await ok(await post(app, writeSettings, { slug: own.slug, token: admin.token, body, env: racing.env })),
-      ).toEqual({ result: 'suspended' });
-      expect(racing.suspended()).toBe(true);
-      expect(await organizationRowOf(own.id)).toEqual({ ...before, suspended_at: SUSPENDED_AT });
-    }
-  });
 });
 
 describe('道具を使える人', () => {
-  test('管理者でない人の操作から組織の設定を書くと、書かずに 500 になる', async () => {
-    const own = await createOrganization();
-    const admin = await createPerson({ organization: own, admin: true });
-    const workspace = await createWorkspace(own, admin.userId!);
-    const member = await createPerson({
-      organization: own,
-      membership: { workspaceId: workspace.id, role: 'leader' },
-    });
-    const before = await organizationRowOf(own.id);
-
-    const res = await post(app, memberWritesSettings, { slug: own.slug, token: member.token });
-    expect(res.status).toBe(500);
-    expect(await organizationRowOf(own.id)).toEqual(before);
-  });
-
   test('承諾待ちの招待だけの人の操作からは、道具を使えず 500 になる', async () => {
     const own = await createOrganization();
     const owner = await createUser(own, { is_admin: 1 });
