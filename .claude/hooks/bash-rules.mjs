@@ -298,6 +298,8 @@ function judgeWrangler(args) {
 }
 
 const GIT_FLAGS_WITH_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--super-prefix', '--config-env', '--attr-source']);
+// git の組み込みと同梱の道具。未知の名前は設定済みの alias や外部の git-* かもしれない。
+const GIT_COMMANDS = new Set(('add am annotate apply archive backfill bisect blame branch bugreport bundle cat-file check-attr check-ignore check-mailmap check-ref-format checkout checkout-index cherry cherry-pick clean clone column commit commit-graph commit-tree config count-objects credential credential-cache credential-store describe diagnose diff diff-files diff-index diff-pairs diff-tree difftool fast-export fast-import fetch fetch-pack fmt-merge-msg for-each-ref for-each-repo format-patch fsck fsck-objects gc get-tar-commit-id grep hash-object help hook index-pack init init-db interpret-trailers last-modified log ls-files ls-remote ls-tree mailinfo mailsplit maintenance merge merge-base merge-file merge-index merge-ours merge-recursive merge-subtree merge-tree mktag mktree multi-pack-index mv name-rev notes pack-objects pack-redundant pack-refs patch-id prune prune-packed pull push range-diff read-tree rebase receive-pack reflog refs remote repack replace replay repo rerere reset restore rev-list rev-parse revert rm send-pack shortlog show show-branch show-index show-ref sparse-checkout stage stash status stripspace submodule switch symbolic-ref tag unpack-file unpack-objects update-index update-ref update-server-info upload-archive upload-pack var verify-commit verify-pack verify-tag version whatchanged worktree write-tree').split(' '));
 const PUSH_FLAGS_WITH_VALUE = new Set(['-o', '--push-option', '--repo', '--receive-pack', '--exec']);
 // main の上で新しいコミットを作る操作。pull --ff-only と merge --ff-only は main を origin に追いつかせるだけなので通す。
 // --ff-only を打ち消すオプション（--no-ff、--rebase など）と、値の取り違え（-m --abort）では抜けさせない
@@ -495,6 +497,23 @@ function readConfigArgs(rest) {
 }
 
 function judgeGitCommand(sub, rest, gitDir, branchOf) {
+  if (sub !== undefined && !GIT_COMMANDS.has(sub)) return [ASK, '未知の git のサブコマンドは別名や外部の道具かもしれない。人が確かめる'];
+  if (sub === 'send-pack') return [ASK, 'git send-pack は push の先とフックを通常の push と同じように判定できない。人が確かめる'];
+  if (['rm', 'mv', 'checkout', 'restore'].includes(sub)) {
+    const isProtected = protectedAt(gitDir);
+    const root = gitDir && (repoRootOf(gitDir) ?? gitDir);
+    // Git の pathspec は祖先の . でも配下をまとめて書き換え、引用した *.mjs でも / を越えて照合する。
+    // magic、glob、実行時に決まる語とファイルからの入力は、シェルのパスとして中身を推測しない。
+    const indirect = rest.some((a, i) => a.startsWith(':') || GLOB_CHARS.test(a) || isUnresolved(rest, i) || isOption(a, '--pathspec-from-file', 12));
+    const ancestor = rest.some((a) => !a.startsWith('-') && removesRoot(a, gitDir, root ? [root] : []));
+    const writesFiles = sub !== 'checkout' || rest.includes('--') || indirect || ancestor || rest.some(isProtected);
+    if (indirect || ancestor || rest.some(isProtected) || (!gitDir && writesFiles)) {
+      return [ASK, 'git で守る仕組みとマイグレーションを書き換える操作、先を読めない pathspec は人が確かめる'];
+    }
+  }
+  if (sub === 'config' && rest.some((a) => isOption(a, '--remove-section', 5) || isOption(a, '--rename-section', 5) || ['remove-section', 'rename-section'].includes(a))) {
+    return [ASK, 'git config の節の削除と改名は、core.hooksPath などの守る設定を外しうる。人が確かめる'];
+  }
   if (sub === 'add' && rest.some(mentionsSecret)) return [DENY, '.dev.vars と .env は git に入れない'];
   if (COMMITTING.has(sub) && !onlyStops(sub, rest)) {
     if (!gitDir) return [ASK, `git ${sub} をする作業コピーを判定できない（cd ~ や変数の先、GIT_DIR=）`];
@@ -2080,11 +2099,11 @@ const withoutGlobGroup = (word) => word.replace(/(\(…\))+$/, '');
 // APFS は大文字小文字を区別しないので、.Claude/Settings.json も同じファイルを指す（i）
 function isProtectedPath(word) {
   return [word, withoutGlobGroup(word)].some((w) =>
-    /(^|\/)\.claude\/(settings[^/]*\.json$|hooks(\/|$))|(^|\/)\.claude\/?$|(^|\/)\.githooks(\/|$)|(^|\/)migrations(\/|$)/i.test(w),
+    /(^|\/)\.claude\/(settings[^/]*\.json$|hooks(\/|$))|(^|\/)\.claude\/?$|(^|\/)\.githooks(\/|$)|(^|\/)migrations(\/|$)|(^|\/)\.git(\/config)?\/?$/i.test(w),
   );
 }
 // 守る先の候補（リポジトリの根からの相対パス）。glob の語（mv .claude/* /tmp/x、mv .gith* /tmp/x）はこれに照合する
-const PROTECTED_CANDIDATES = ['.claude/settings.json', '.claude/settings.local.json', '.claude/hooks', '.githooks', 'migrations'];
+const PROTECTED_CANDIDATES = ['.claude/settings.json', '.claude/settings.local.json', '.claude/hooks', '.githooks', 'migrations', '.git/config'];
 
 // 語が守る先に当たるか。{a,b} は展開してから（mv .claude/settings.json{,.bak}）、書かれた語、正規化した語、作業場所が分かるときは
 // 作業場所から解決した絶対パス（cd .claude && cp /tmp/settings.json .）で見る（wranglerConfigAt と同じ）。
@@ -2102,15 +2121,20 @@ function protectedAt(dir) {
       if ([w, path.posix.normalize(w), absolute].some((f) => f && isProtectedPath(f))) return true;
       if (!GLOB_CHARS.test(w)) return false;
       const [base, pattern] = root ? [root.toLowerCase(), absolute.toLowerCase()] : ['', w.toLowerCase()];
-      return PROTECTED_CANDIDATES.some((c) => matchesGlob(base ? path.join(base, c) : c, pattern));
+      return PROTECTED_CANDIDATES.some((c) => {
+        const candidate = base ? path.join(base, c) : c;
+        // hooks 以下の任意の名前も守る。候補のディレクトリに当たる glob の後ろは、その中のパス。
+        const parts = pattern.split('/');
+        return parts.some((_, i) => matchesGlob(candidate, parts.slice(0, i + 1).join('/')));
+      });
     });
   };
 }
 // 宛先がディレクトリのコピーで、元が glob（cp /tmp/settings* .claude/）のときに、守る先に置かれうる名前。
 // .githooks/ と migrations/ の下はどの名前でも守る先なので、.claude/ の下の名前だけを並べる。
-// ディレクトリそのものの名前（cp -r /tmp/x/migrations .）は、glob でない元の名前として isProtectedPath が見るので並べない
-// （並べると、cp /tmp/* . の * が migrations に当たって止まる）
-const PROTECTED_NAMES = ['settings.json', 'settings.local.json', 'hooks'];
+// ディレクトリそのものの名前も migr* のような元に照合する。文字を含まない * だけではディレクトリの候補を足さず、
+// cp /tmp/* . の通常のコピーは通す（namesCopiedFrom）
+const PROTECTED_NAMES = ['settings.json', 'settings.local.json', 'hooks', 'config', '.claude', '.githooks', 'migrations'];
 const PROTECTED_DIRECTORY_NAMES = ['.claude', '.githooks', 'migrations'];
 // 宛先が展開で決まるコピー（cp -t "$D" /tmp/settings.json）で、守る先に置かれうる元の名前。.githooks の名前は git のフックの名前
 const GIT_HOOK_NAMES = new Set([
@@ -2195,7 +2219,7 @@ function namesCopiedFrom(src, { names, bareGlob = false }) {
     const name = path.posix.basename(withoutGlobGroup(word));
     if (!GLOB_CHARS.test(name) || (!bareGlob && !/[\w.]/.test(name))) return [name];
     const pattern = name.toLowerCase();
-    return [name, ...names.filter((n) => matchesGlob(n, pattern))];
+    return [name, ...names.filter((n) => (!PROTECTED_DIRECTORY_NAMES.includes(n) || /[\w.]/.test(name)) && matchesGlob(n, pattern))];
   });
 }
 
@@ -2583,6 +2607,7 @@ function judgeInterpreterBody(tool, args) {
   if (words.some((w) => isWrangler(w) || isCfWrangler(w))) {
     return [ASK, 'インタープリタの本文から wrangler を動かすと、本番に触るかを判定できない。人が確かめる'];
   }
+  if (words.some((w) => baseName(w) === 'git')) return [ASK, 'インタープリタの本文から git を動かすと、main や守る先を変えるかを判定できない。人が確かめる'];
   if (words.some(isProtectedPath)) return [ASK, 'インタープリタの本文に守る仕組み（Claude の設定とフック）とマイグレーションの名前がある。書き換えは人が確かめる'];
   return null;
 }
@@ -2660,7 +2685,7 @@ function judgeFileWrites(tool, args, words, dir = null, cdWords = '', namesGitDi
     placeable: placedInProtected,
     destinationHint: PROTECTED_DIRECTORY_HINT,
   };
-  if (writesTo(isProtected, tool, args, words, { intoDirectory: intoProtected }) || movesProtected) {
+  if (writesTo(isProtected, tool, args, words, { intoDirectory: intoProtected }) || movesProtected || (['chmod', 'gchmod'].includes(tool) && positionals(args).some(isProtected))) {
     results.push([ASK, '守る仕組み（Claude の設定とフック）とマイグレーションの書き換えは人が確かめる']);
   }
   const isConfig = wranglerConfigAt(dir);
@@ -2692,7 +2717,17 @@ function removalJudge(ctx) {
   const rootNames = !ctx.dir && ctx.root ? ancestorNames(ctx.root) : null;
   const namesRoot = (w) => rootNames?.has(path.posix.basename(path.posix.normalize(w)).toLowerCase()) === true;
   // {a,b} はシェルが展開してから渡すので、展開した語のどれかで見る（rm -rf {.,build}）。展開が大きすぎる語は当たるものとする（protectedAt と同じ）
-  const hitsRoot = (w) => expansionSize(w) > MAX_BRACE_EXPANSION || expandBraces(w).some((e) => removesRoot(e, ctx.dir, roots) || namesRoot(e));
+  const hitsRoot = (w) => expansionSize(w) > MAX_BRACE_EXPANSION || expandBraces(w).some((e) => {
+    if (removesRoot(e, ctx.dir, roots) || namesRoot(e)) return true;
+    if (!GLOB_CHARS.test(e)) return false;
+    // ../* や /* は、守るディレクトリより上の作業コピーそのものにも当たりうる。
+    const expandedHome = e.startsWith('~/') ? path.join(os.homedir(), e.slice(2)) : e;
+    const pattern = ctx.dir ? path.resolve(ctx.dir, expandedHome) : expandedHome;
+    return roots.some((root) => {
+      for (let d = root; d !== path.dirname(d); d = path.dirname(d)) if (matchesGlob(d.toLowerCase(), pattern.toLowerCase())) return true;
+      return false;
+    }) || /^~?\/\*$/.test(e) || /^(\.\.\/)+\*$/.test(e);
+  });
   return (removed) => {
     if (removed.some((w) => isProtected(w) || isProtected(written(w)))) return [ASK, REMOVES_PROTECTED_REASON];
     if (removed.some(hitsRoot)) return [ASK, REMOVES_ROOT_REASON];
@@ -3159,6 +3194,11 @@ function judgeSegment(words, ctx) {
   results.push(...judgeFileWrites(tool, args, words, ctx.dir, ctx.cdWords, ctx.namesGitDir));
   const removal = judgeRemoval(tool, args, ctx);
   if (removal) results.push(removal);
+  // 再帰 chmod は祖先の . を指定しても配下のフックの実行権限を外しうる。
+  if (['chmod', 'gchmod'].includes(tool) && args.some((a) => /^-[^-]*R/.test(a) || isOption(a, '--recursive', 3))) {
+    const permissions = removalJudge(ctx)(positionals(args));
+    if (permissions) results.push([ASK, '再帰 chmod が守る仕組みを含む先の権限を変える。人が確かめる']);
+  }
   const prefixes = prefixIndexes(words);
   // env -S の文字列は、道具の名前の位置に1語として見えるか、フラグに紛れて道具が見つからない。ci が -1 でも見る
   if (splitsString(words, prefixes, ci)) results.push([ASK, ENV_SPLIT_REASON]);
@@ -3256,7 +3296,14 @@ function judgeSegment(words, ctx) {
   }
 
   if (INTERPRETERS.has(tool)) results.push(judgeInterpreterBody(tool, args));
+  // 未知の前置きの後ろにも git があれば確認する。引数だけを表示・検索する道具は除く。
+  if (tool !== 'git' && !isNonExecuting(tool) && !['find', 'gfind'].includes(tool) && !manager && words.some((w, i) => i > ci && baseName(w) === 'git')) {
+    results.push([ASK, '前置きの道具から git を動かすと、作業場所や追加の引数を判定できない。人が確かめる']);
+  }
   if (tool === 'git') {
+    if (ctx.env?.GIT_CONFIG_ENV) {
+      results.push([ASK, 'GIT_CONFIG_* は git の設定を差し替え、守るフックや push の先を変えうる。人が確かめる']);
+    }
     // 道具の前の代入と、前の区切りの export などで GIT_DIR か GIT_WORK_TREE を設定した後（ctx.env、judgeBash が積む）は、git が別の作業コピーを見る。
     // 道具の前の代入は、経由先に掛け直したとき（pnpm exec env GIT_DIR=x git）にも見えるよう語で見る
     const envMovesGit = words.slice(0, ci).some((w) => /^GIT_(DIR|WORK_TREE)=/.test(w)) || GIT_LOCATION_VARIABLES.some((name) => ctx.env?.[name]);
@@ -3278,7 +3325,10 @@ function judgeSegment(words, ctx) {
   if (SHELLS.has(tool)) {
     // bash -c "..."、bash -lc "..."、bash <<< "..."、bash <<EOF の中身も同じ規則で見る
     const c = args.findIndex((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
-    if (c !== -1 && args[c + 1]) results.push(judgeBash(args[c + 1], nextCtx));
+    if (c !== -1) {
+      const body = args[c + 1] === '--' ? args[c + 2] : args[c + 1];
+      if (body) results.push(judgeBash(body, nextCtx));
+    }
     if (tool === 'fish') for (const body of fishCommands(args)) results.push(judgeBash(body, nextCtx));
     for (const body of heredocScripts(args)) results.push(judgeBash(body, nextCtx));
   }
@@ -3315,6 +3365,7 @@ const SET_IN_COMMAND = '(このコマンドの中で設定)';
 
 // 語に変数の名前があるか。zsh の cdpath は CDPATH と結び付いた配列（cdpath=(x)）
 const VARIABLE_MENTIONS = {
+  GIT_CONFIG_ENV: /(^|[^\w])GIT_CONFIG_[A-Za-z0-9_]+([^\w]|$)/,
   CDPATH: /(^|[^\w])(CDPATH|cdpath)([^\w]|$)/,
   GIT_DIR: /(^|[^\w])GIT_DIR([^\w]|$)/,
   GIT_WORK_TREE: /(^|[^\w])GIT_WORK_TREE([^\w]|$)/,
@@ -3349,8 +3400,9 @@ function variablesSetBy(words, ci) {
   const isPrefix = (i) => ci !== -1 && i < ci && isAssignment(words[i]);
   const mentionedAfter = (pattern) => words.some((w, i) => !isPrefix(i) && pattern.test(w)) || redirectTargets(words).some((t) => pattern.test(t));
   for (const [name, pattern] of Object.entries(VARIABLE_MENTIONS)) {
-    if (words.some((w, i) => isPrefix(i) && w.startsWith(`${name}=`))) once.add(name);
-    if (mentionedAfter(pattern)) after.add(name);
+    if (words.some((w, i) => isPrefix(i) && (name === 'GIT_CONFIG_ENV' ? /^GIT_CONFIG_\w+\+?=/.test(w) : w.startsWith(`${name}=`)))) once.add(name);
+    // GIT_CONFIG_* は実際に設定する形だけを見る。メッセージや echo の中の名前は設定ではない。
+    if (mentionedAfter(pattern) && (name !== 'GIT_CONFIG_ENV' || setsGitConfigLocation(words, ci))) after.add(name);
   }
   if (mentionedAfter(NPM_CALL_MENTION)) after.add(NPM_CALL_VARIABLE);
   if (words.some((w, i) => isPrefix(i) && GIT_CONFIG_ASSIGNMENT.test(w))) once.add(GIT_CONFIG_LOCATION);
@@ -3562,7 +3614,14 @@ function cdTarget(words, ci, env) {
 // findBudget は find の -exec 系で掛け直せる残りの数で、入れ子でも同じものを共有する
 export function judgeBash(command, options) {
   // 根を探した結果は、ひとつのコマンドを判定する間だけ覚える（入れ子の呼び出しは depth が 1 以上）
-  if (!options.depth) rootCache.clear();
+  if (!options.depth) {
+    rootCache.clear();
+    // 起動元の実在の環境変数と、判定中に積む GIT_CONFIG_LOCATION 等の印を分ける。
+    // 文字列を表示しただけで legacy の COUNT の印が付いても、git の設定を変更したとはしない。
+    const env = options.env ?? {};
+    const configured = Object.entries(env).some(([name, value]) => /^GIT_CONFIG_/.test(name) && value !== undefined);
+    options = { ...options, env: { ...env, GIT_CONFIG_ENV: configured ? SET_IN_COMMAND : undefined } };
+  }
   return judgeCommand(command, options);
 }
 
