@@ -98,7 +98,9 @@ test('従が失敗しても主を残し、招待件数と通知を別々に再�
   await page.goto('/aoba');
   await expect(page.locator('#content')).toBeVisible();
   await page.getByRole('button', { name: /アカウントのメニュー/ }).click();
-  await expect(page.getByText('招待の件数を読み込めませんでした。')).toBeVisible();
+  await expect(page.locator('.account-menu-list:visible').getByRole('alert')).toHaveText(
+    '招待の件数を読み込めませんでした。',
+  );
   const retry = page.locator('.account-menu-list:visible').getByRole('button', { name: 'もう一度試す', exact: true });
   await retry.focus();
   await page.keyboard.press('Enter');

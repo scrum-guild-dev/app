@@ -130,9 +130,11 @@
       {#snippet invitationStatus()}
         {#if invitations.loading || invitations.count === null}
           <li class="account-menu-status" data-invitation-status>
-            <span role={invitations.loading ? 'status' : 'alert'}
-              >{t(invitations.loading ? 'invitationCountLoading' : 'invitationCountFailed')}</span
-            >
+            {#if invitations.loading}
+              <span role="status">{t('invitationCountLoading')}</span>
+            {:else}
+              <span role="alert">{t('invitationCountFailed')}</span>
+            {/if}
             {#if !invitations.loading || invitations.retrying}
               <button
                 class="btn is-sm"
