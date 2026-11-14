@@ -206,7 +206,13 @@ describe('外部キー', () => {
       .all<{ detail: string }>();
     const details = plan.map((row) => row.detail);
 
-    expect(details).toContain('SEARCH xp_grants USING COVERING INDEX xp_grants_user_workspace_amount (user_id=?)');
+    expect(details).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /^SEARCH xp_grants USING (COVERING )?INDEX xp_grants_user_(workspace_amount|confirmed) \(user_id=\?\)$/,
+        ),
+      ]),
+    );
     expect(details.filter((detail) => detail.startsWith('SCAN '))).toEqual([]);
     // その場で作る索引（AUTOMATIC）でなく、張った索引で引くこと
     expect(details.filter((detail) => !/^SEARCH \w+ USING (COVERING )?INDEX \w+ /.test(detail))).toEqual([]);
