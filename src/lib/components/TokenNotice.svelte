@@ -7,6 +7,7 @@
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { shouldRefreshTokenNotice } from '../token-notice-navigation.ts';
+  import { TokenNoticeLoading } from '../token-notice-loading.svelte.ts';
   import { tokenNoticeSeen, tokenNotice } from '../../shared/operations/session/token-notice.ts';
   import type { OutputOf } from '../../shared/operations/define.ts';
 
@@ -32,17 +33,9 @@
       active = false;
     };
   });
-  // 速い0件応答では本文を押し下げない。遅い読み込みだけを300ms後に知らせる。
-  let loadingSlow = $state(false);
+  const initialLoading = new TokenNoticeLoading();
   $effect(() => {
-    if (current !== undefined) return;
-    const timer = setTimeout(() => {
-      loadingSlow = true;
-    }, 300);
-    return () => {
-      clearTimeout(timer);
-      loadingSlow = false;
-    };
+    if (current === undefined) return initialLoading.begin();
   });
   let acknowledged = $state<string | null>(null);
   let saving = $state(false);
@@ -157,7 +150,7 @@
 </script>
 
 {#if current === undefined}
-  {#if loadingSlow}<div class="shell-notice" role="status">{t('tokenNoticeLabel')}: {t('loading')}</div>{/if}
+  {#if initialLoading.visible}<div class="shell-notice" role="status">{t('tokenNoticeLabel')}: {t('loading')}</div>{/if}
 {:else if current === null}
   <section class="token-notice" aria-label={t('tokenNoticeLabel')}>
     <div class="token-notice-body"><p role="alert">{t('tokenNoticeLoadFailed')}</p></div>
