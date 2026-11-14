@@ -15,7 +15,6 @@ for (const command of [
   `fish -c 'printf ok' -lc'git push --no-verify origin HEAD:main'`,
   `fish -c 'printf ok' -C'git push --no-verify origin HEAD:main'`,
   `fish -lc 'printf first' -lc 'printf second'`,
-  `fish --command 'printf first' --command 'printf second'`,
   `fish -c 'printf first' -c 'printf second' -c 'printf third'`,
   `fish --com 'printf ok'`,
   `fish --com 'git push --no-verify origin HEAD:main'`,
@@ -34,4 +33,10 @@ test('先頭の本文に明確な拒否があれば、複数本文の確認に�
   const first = `fish -c 'git push origin main'`;
   assert.equal(decision(first), 'deny');
   assert.equal(decision(`${first} -c 'printf ok'`), 'deny');
+});
+
+// 完全な長い option は両方の本文を個別に点検できるので、後ろの危険本文を見落とさないことを確認する。
+test('長い --command の2つ目の本文にも判定を掛ける', () => {
+  const command = `fish --command 'printf first' --command 'git push --no-verify origin HEAD:main'`;
+  assert.notEqual(decision(command), 'allow', command);
 });
