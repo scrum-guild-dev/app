@@ -178,10 +178,15 @@ describe('組織の作成', () => {
     const user = githubUser('minato-aoba');
     github.addUser(user);
     const slug = newSlug();
+    const writes: string[] = [];
     const res = await post(app, create, {
       token: await operatorToken(),
       body: { slug, name: ' さくら開発 ', admin: adminOf(user) },
+      env: envWithD1Hooks(testEnv, { beforeBatch: (sqls) => void writes.push(...sqls) }),
     });
+    const inserts = writes.filter((sql) => sql.startsWith('insert into "organizations"'));
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]).not.toMatch(/vocabulary/i);
     expect(res.status).toBe(200);
     // 応答は組織の表示名、slug、指名した人の GitHub のユーザー名だけ。招待の URL は Google の指名だけ
     expect(await res.json()).toEqual({
@@ -195,7 +200,7 @@ describe('組織の作成', () => {
     expect(organization).toMatchObject({
       slug,
       name: 'さくら開発',
-      vocabulary: 'scrum',
+      vocabulary: 'game',
       theme: 'simple',
       suspended_at: null,
       member_limit: 15,

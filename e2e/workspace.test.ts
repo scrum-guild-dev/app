@@ -1,8 +1,9 @@
 // ワークスペースの作成、組織の管理の画面、ワークスペースの枠。seed のセッション（seed/sessions.ts）の Cookie で開く。
 // あおば開発の管理者はミナト、一般のユーザーはハルカ。ひばり工房のワークスペースの ID は seed/data.sql の値
 import type { Page } from '@playwright/test';
+import { operationPath } from '../src/shared/operations/define.ts';
 import { firstSteps } from '../src/shared/operations/organization/index.ts';
-import { workspaceCreate } from '../src/shared/operations/workspace/index.ts';
+import { workspaceCreate, workspaceInfo } from '../src/shared/operations/workspace/index.ts';
 import type { FirstStep } from '../src/shared/operations/organization/first-steps.ts';
 import { expect, test } from './fixtures.ts';
 import { expectFocusReturned, signIn, watchViolations } from './helpers.ts';
@@ -70,7 +71,13 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await expect(dialog.getByRole('radio')).toHaveCount(0);
     await expect(dialog.getByText('言葉づかい')).toHaveCount(0);
     await dialog.getByLabel('名前').fill('  保守チーム  ');
+    const createdResponse = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === operationPath(workspaceCreate, 'aoba'),
+    );
     await dialog.getByRole('button', { name: '作る' }).click();
+    const created = await createdResponse;
+    expect(created.ok()).toBe(true);
+    expect(await created.json()).not.toHaveProperty('vocabulary');
 
     // 閉じずに、同じダイアログが完了の表示に替わる。作った名前（前後の空白は除く）が読め、移らない。トーストは出さない
     const done = page.getByRole('dialog', { name: 'ワークスペースを作りました' });
@@ -82,7 +89,14 @@ test.describe('管理者（あおば開発のミナト）', () => {
     await expect(done.getByLabel('名前')).toHaveCount(0);
     await expect(page).toHaveURL(/\/aoba\/admin$/);
     await expect(page.locator('.toast')).toHaveCount(0);
+    const workspaceResponse = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === operationPath(workspaceInfo, 'aoba'),
+    );
     await done.getByRole('button', { name: '開く' }).click();
+    const workspace = await workspaceResponse;
+    expect(workspace.ok()).toBe(true);
+    // 新規作成の保存値を画面へ渡さず、スクラムの言葉で表示する。
+    expect(await workspace.json()).not.toHaveProperty('vocabulary');
 
     await expect(page).toHaveURL(/\/aoba\/w\/[0-9a-f-]{36}$/);
     await expect(done).toBeHidden();

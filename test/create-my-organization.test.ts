@@ -4,7 +4,7 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
 import { createApp } from '../src/server/app.ts';
 import { commonDb, orgDb } from '../src/server/db/index.ts';
-import { verifiedOrganizationForTest } from '../src/server/db/testing.ts';
+import { envWithD1Hooks, verifiedOrganizationForTest } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { createOrganization as createByOperator, listOrganizations } from '../src/shared/operations/operator/index.ts';
 import {
@@ -21,7 +21,14 @@ import { PRIVACY_VERSION, TERMS_VERSION } from '../src/lib/legal/versions.ts';
 import { createAccount, createAccountLogin, createOrganization, createSessionWithToken } from './factories.ts';
 import { bearerFor } from './operations/api-token.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
-import { createLoginPerson, createPerson, getOperator, OPERATOR_LOGIN_ID, withNewSession } from './operations/world.ts';
+import {
+  createLoginPerson,
+  createPerson,
+  getOperator,
+  OPERATOR_LOGIN_ID,
+  withNewSession,
+  testEnv,
+} from './operations/world.ts';
 
 const github = createFakeGithub();
 const app = createApp(implementedOperations, { fetcher: github.fetcher });
@@ -115,13 +122,22 @@ describe('組織の無い会員が作る', () => {
     const member = await newMember();
     const slug = newSlug();
     const before = Date.now();
-    const res = await create(member, slug, '青葉工房');
+    const writes: string[] = [];
+    const res = await post(app, createMyOrganization, {
+      token: member.token,
+      body: { slug, name: '青葉工房' },
+      env: envWithD1Hooks(testEnv, { beforeBatch: (sqls) => void writes.push(...sqls) }),
+    });
+    const inserts = writes.filter((sql) => sql.startsWith('insert into "organizations"'));
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]).not.toMatch(/vocabulary/i);
     const after = Date.now();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ slug, name: '青葉工房' });
 
     const row = await organizationRow(slug);
     expect(row).toMatchObject({
+      vocabulary: 'game',
       name: '青葉工房',
       created_by_account_id: member.accountId,
       created_by_operator: 'self-service',

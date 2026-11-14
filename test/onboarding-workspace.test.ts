@@ -32,6 +32,43 @@ async function workspaces({ organization }: Team) {
 }
 
 describe('チーム導入のワークスペース準備', () => {
+  test('導入準備の INSERT SELECT も vocabulary を指定せず、既定の game でも初期の名前はスクラムになる', async () => {
+    const target = await team();
+    const writes: string[] = [];
+    const response = await prepare(target, envWithD1Hooks(env, { beforeBatch: (sqls) => void writes.push(...sqls) }));
+    expect(response.status).toBe(200);
+    const inserts = writes.filter((sql) => sql.startsWith('insert into "workspaces"'));
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]).not.toMatch(/vocabulary/i);
+    const result = (await response.json()) as { workspace_id: string };
+    expect(result).toEqual({ workspace_id: expect.any(String) });
+    const db = orgDb(env, target.organization.verified);
+    const workspace = await db.first(
+      db.statement((q) =>
+        q
+          .selectFrom('workspaces')
+          .select('vocabulary')
+          .where('organization_id', '=', target.organization.id)
+          .where('id', '=', result.workspace_id),
+      ),
+    );
+    expect(workspace).toEqual({ vocabulary: 'game' });
+    const columns = await db.rows(
+      db.statement((q) =>
+        q
+          .selectFrom('board_columns')
+          .select('name')
+          .where('workspace_id', '=', result.workspace_id)
+          .orderBy('position'),
+      ),
+    );
+    expect(columns.map((column) => column.name)).toEqual(['未着手', '作業中', 'レビュー', null]);
+    const fields = await db.rows(
+      db.statement((q) => q.selectFrom('detail_fields').select('name').where('workspace_id', '=', result.workspace_id)),
+    );
+    expect(fields).toEqual([{ name: '受け入れ基準' }]);
+  });
+
   test('2並行要求と再送は同じIDに収束し、ワークスペースと初期行は1組だけになる', async () => {
     const target = await team();
     const responses = await Promise.all([prepare(target), prepare(target)]);

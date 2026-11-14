@@ -284,7 +284,7 @@
 | id | TEXT | PK | |
 | slug | TEXT | NOT NULL、UNIQUE、`CHECK (slug GLOB '[a-z0-9]*' AND slug NOT GLOB '*[^a-z0-9-]*' AND length(slug) BETWEEN 2 AND 40)` | URL の先頭に入れる名前。後から変えない |
 | name | TEXT | NOT NULL | 組織の表示名 |
-| vocabulary | TEXT | NOT NULL、`game` か `scrum`、既定 `game` | 使わない列（言葉づかいは選べず、画面はスクラムの言葉に固定）。API は読まず、返さない。組織を作る文（`insertOrganization`）と seed が `scrum` を入れる（列の既定は、マイグレーションを足すだけにするため `game` のまま）。列の削除は、使わなくなった版を出した後の別の PR で行う |
+| vocabulary | TEXT | NOT NULL、`game` か `scrum`、既定 `game` | 使わない列（言葉づかいは選べず、画面はスクラムの言葉に固定）。API は読まず、返さない。組織を作るすべての文は列を指定せず、既定の `game` に任せる。seed は `scrum` を入れる。書き込みを止めた版を含む Release を本番に出してから、別の PR（#599）で列を削除する |
 | theme | TEXT | NOT NULL、`simple`、`simple_light`、`simple_dark`、`medieval`、`modern` のどれか、既定 `simple` | 組織の既定のテーマ。`simple` は OS の明暗に合わせる。管理者が組織の管理の画面（`organization-settings-update`）で変え、変えると `updated_at` と `change_logs` が動く |
 | kind | TEXT | NOT NULL、`team` か `personal`、既定 `team`（`CHECK (kind IN ('team', 'personal'))`） | 組織の種類。`team` はチーム用、`personal` は会員が自分だけで使う自分用。自分用は人数が本人1人（`member_limit` 1）、添付ファイルが 1GB、`trial_ends_on` が空で、招待と管理者の指名ができない。名前は固定の「自分用」。後から変えない（マイグレーション `0017_add_organization_kind.sql`。既存の行は `team`） |
 | suspended_at | TEXT | | 停止した日時。入っていれば誰も入れず、定期処理も止める |
@@ -434,7 +434,7 @@
 | name | TEXT | NOT NULL | |
 | timezone | TEXT | NOT NULL | IANA のタイムゾーン名。作った人のブラウザの値を既定にする。時差の表記（`+09:00` など）は受けず、`Intl.DateTimeFormat` で作れる名前を `resolvedOptions().timeZone` にそろえて保存する（`asia/tokyo` は `Asia/Tokyo`）。正式名の一覧とは突き合わせない。ブラウザが旧名（`Asia/Calcutta` など）を返すことがあるため |
 | week_start | INTEGER | NOT NULL、0〜6、既定 1 | 週の始まり。0 が日曜 |
-| vocabulary | TEXT | NOT NULL、`game` か `scrum`、既定 `game` | 使わない列（言葉づかいは選べず、画面はスクラムの言葉に固定）。API は読まず、返さない。ワークスペースを作る文が `scrum` を入れる。列の削除は、使わなくなった版を出した後の別の PR で行う |
+| vocabulary | TEXT | NOT NULL、`game` か `scrum`、既定 `game` | 使わない列（言葉づかいは選べず、画面はスクラムの言葉に固定）。API は読まず、返さない。ワークスペースを作る文は列を指定せず、既定の `game` に任せる。書き込みを止めた版を含む Release を本番に出してから、別の PR（#599）で列を削除する |
 | definition_of_done_md | TEXT | 10 万字まで | 完成の定義（Markdown）。空なら `NULL` で、出さない。書くのは `workspace-dod-update`（下の「書き込みの単位」の「完成の定義の変更」）、読むのは `workspace` の操作 |
 | closed_at | TEXT | | 閉じた日時。入っていれば読み取り専用 |
 | created_by | TEXT | NOT NULL、FK users | |
