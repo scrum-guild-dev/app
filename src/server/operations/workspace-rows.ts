@@ -8,7 +8,7 @@ import {
   defaultColumnNames,
   defaultDetailFieldName,
 } from '../../shared/workspace.ts';
-import { VOCABULARY_COLUMN_VALUE, type Insertable, type OrganizationTables } from '../db/index.ts';
+import type { Insertable, OrganizationTables } from '../db/index.ts';
 import { uuidv7 } from '../uuid.ts';
 
 type Row<T extends keyof OrganizationTables> = Insertable<OrganizationTables[T]>;
@@ -76,7 +76,6 @@ export function newWorkspaceRows(params: {
       name,
       timezone,
       week_start: DEFAULT_WEEK_START,
-      vocabulary: VOCABULARY_COLUMN_VALUE,
       created_by: actorUserId,
       ...timestamps,
     },

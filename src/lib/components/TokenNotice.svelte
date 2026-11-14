@@ -7,14 +7,36 @@
   import { showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import { shouldRefreshTokenNotice } from '../token-notice-navigation.ts';
+  import { TokenNoticeLoading } from '../token-notice-loading.svelte.ts';
   import { tokenNoticeSeen, tokenNotice } from '../../shared/operations/session/token-notice.ts';
   import type { OutputOf } from '../../shared/operations/define.ts';
 
   type Notice = OutputOf<typeof tokenNotice>;
-  let { notice, slug }: { notice: Notice | null; slug: string } = $props();
+  type InitialNotice = Notice | null | Promise<Notice | null>;
+  let { notice, slug }: { notice: InitialNotice; slug: string } = $props();
   // 初回と枠の再読込は load の結果を使う。通知だけの再読込は、その初期値に結んで別に持つ。
-  let fetched = $state.raw<{ initial: Notice | null; data: Notice | null } | null>(null);
-  const current = $derived(fetched !== null && fetched.initial === notice ? fetched.data : notice);
+  let fetched = $state.raw<{ initial: InitialNotice; data: Notice | null } | null>(null);
+  let resolved = $state.raw<{ initial: InitialNotice; data: Notice | null } | null>(null);
+  const initialValue = $derived(
+    notice instanceof Promise ? (resolved?.initial === notice ? resolved.data : undefined) : notice,
+  );
+  const current = $derived(fetched !== null && fetched.initial === notice ? fetched.data : initialValue);
+  $effect(() => {
+    const initial = notice;
+    let active = true;
+    if (initial instanceof Promise) {
+      void initial.then((data) => {
+        if (active) resolved = { initial, data };
+      });
+    }
+    return () => {
+      active = false;
+    };
+  });
+  const initialLoading = new TokenNoticeLoading();
+  $effect(() => {
+    if (current === undefined) return initialLoading.begin();
+  });
   let acknowledged = $state<string | null>(null);
   let saving = $state(false);
   let failed = $state(false);
@@ -127,7 +149,9 @@
   }
 </script>
 
-{#if current === null}
+{#if current === undefined}
+  {#if initialLoading.visible}<div class="shell-notice" role="status">{t('tokenNoticeLabel')}: {t('loading')}</div>{/if}
+{:else if current === null}
   <section class="token-notice" aria-label={t('tokenNoticeLabel')}>
     <div class="token-notice-body"><p role="alert">{t('tokenNoticeLoadFailed')}</p></div>
     <div class="token-notice-actions">

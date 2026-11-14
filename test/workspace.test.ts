@@ -12,6 +12,7 @@ import { ID_MAX_LENGTH } from '../src/shared/id.ts';
 import { WORKSPACE_NAME_MAX_LENGTH } from '../src/shared/workspace.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb } from '../src/server/db/index.ts';
+import { envWithD1Hooks } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import {
   createMembership,
@@ -22,7 +23,7 @@ import {
   type OrganizationFixture,
 } from './factories.ts';
 import { errorCodeOf, post } from './operations/harness.ts';
-import { createPerson, createTarget, type Person, type Target } from './operations/world.ts';
+import { createPerson, createTarget, type Person, type Target, testEnv } from './operations/world.ts';
 
 const app = createApp(implementedOperations);
 
@@ -137,7 +138,18 @@ describe('workspace-create', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-25T03:00:00.000Z'));
 
-    const id = await created(await create(target, target.admin.token, { leader_user_id: leader }));
+    const writes: string[] = [];
+    const id = await created(
+      await post(app, workspaceCreate, {
+        slug: target.slug,
+        token: target.admin.token,
+        body: { name: '保守チーム', timezone: 'Asia/Tokyo', leader_user_id: leader },
+        env: envWithD1Hooks(testEnv, { beforeBatch: (sqls) => void writes.push(...sqls) }),
+      }),
+    );
+    const inserts = writes.filter((sql) => sql.startsWith('insert into "workspaces"'));
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]).not.toMatch(/vocabulary/i);
     const { workspace, rates, columns, fields, memberships, logs } = await readCreated(target.organization, id);
 
     expect(workspace).toMatchObject({
@@ -146,7 +158,7 @@ describe('workspace-create', () => {
       name: '保守チーム',
       timezone: 'Asia/Tokyo',
       week_start: 1,
-      vocabulary: 'scrum',
+      vocabulary: 'game',
       definition_of_done_md: null,
       closed_at: null,
       created_by: target.admin.userId,
@@ -210,7 +222,7 @@ describe('workspace-create', () => {
     });
   });
 
-  test('入力に vocabulary を足して送っても捨てられ、DB の vocabulary 列は scrum で、列と決まった欄の名前もスクラムの言葉になる', async () => {
+  test('入力に vocabulary を足して送っても捨てられ、DB の vocabulary 列は既定の game で、列と決まった欄の名前もスクラムの言葉になる', async () => {
     const target = await createTarget();
     const res = await post(app, workspaceCreate, {
       slug: target.slug,
@@ -219,7 +231,7 @@ describe('workspace-create', () => {
     });
     const id = await created(res);
     const { workspace, columns, fields } = await readCreated(target.organization, id);
-    expect(workspace?.vocabulary).toBe('scrum');
+    expect(workspace?.vocabulary).toBe('game');
     expect(columns.map((column) => column.name)).toEqual(['未着手', '作業中', 'レビュー', null]);
     expect(fields.map((field) => field.name)).toEqual(['受け入れ基準']);
   });

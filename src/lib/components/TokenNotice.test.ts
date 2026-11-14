@@ -52,3 +52,11 @@ test('初回の経路で from.url が未初期化でもナビゲーションを�
     callback({ type: 'enter', from: { params: {}, url: null }, to: { url: new URL('http://localhost/aoba') } }),
   ).not.toThrow();
 });
+
+test('初回応答が保留中でも通知の遷移監視を登録し、すぐには読み込みの帯を出さない', () => {
+  afterNavigate.mockClear();
+  const html = render(TokenNotice, { props: { notice: new Promise<null>(() => {}), slug: 'aoba' } }).body;
+  expect(html).not.toContain('読み込んでいます');
+  expect(html).not.toContain('読み込めませんでした');
+  expect(afterNavigate).toHaveBeenCalledTimes(1);
+});

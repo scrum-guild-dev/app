@@ -1,6 +1,6 @@
 // 言葉づかいの切り替えを止めた後（#597）の、応答の全体と作成の入力の境界を崩す。
 // DB の vocabulary 列に 'game' が残る組織とワークスペースを作っても、読み取りの応答のどこにも vocabulary が出ないこと、
-// 作成の入力に vocabulary を何の形で送っても 400 / 500 にならず列が 'scrum' になること、
+// 作成の入力に vocabulary を何の形で送っても 400 / 500 にならず列が既定の 'game' になること、
 // 古い change_logs の vocabulary の行が履歴で今も 1 種類の文として返ることを、操作の一覧を回して確かめる
 import { env } from 'cloudflare:workers';
 import { describe, expect, test } from 'vitest';
@@ -89,7 +89,7 @@ describe('ワークスペースの作成の入力の境界', () => {
     ['__proto__ を含むオブジェクト', JSON.parse('{"__proto__":{"vocabulary":"game"}}')],
   ];
 
-  test.each(garbage)('vocabulary に %s を送っても作れ、列は scrum', async (_label, value) => {
+  test.each(garbage)('vocabulary に %s を送っても作れ、列は既定の game', async (_label, value) => {
     const target = await createTarget();
     const res = await post(app, workspaceCreate, {
       slug: target.slug,
@@ -109,7 +109,7 @@ describe('ワークスペースの作成の入力の境界', () => {
           .where('name', '=', '保守チーム'),
       ),
     );
-    expect(rows).toEqual([{ vocabulary: 'scrum', name: '保守チーム' }]);
+    expect(rows).toEqual([{ vocabulary: 'game', name: '保守チーム' }]);
   });
 });
 
@@ -118,7 +118,7 @@ describe('運用者の組織の作成の入力の境界', () => {
     ['game', 'game'],
     ['不正な文字列', 'pirate'],
     ['配列', ['game']],
-  ])('vocabulary に %s を足しても作れ、列は scrum で、応答に vocabulary が無い', async (_label, value) => {
+  ])('vocabulary に %s を足しても作れ、列は既定の game で、応答に vocabulary が無い', async (_label, value) => {
     const user = githubUser(`vocab-${crypto.randomUUID().slice(0, 8)}`);
     operatorGithub.addUser(user);
     const slug = `vocab-${crypto.randomUUID().slice(0, 8)}`;
@@ -138,7 +138,7 @@ describe('運用者の組織の作成の入力の境界', () => {
     const row = await db.first(
       db.statement((q) => q.selectFrom('organizations').select('vocabulary').where('slug', '=', slug)),
     );
-    expect(row).toEqual({ vocabulary: 'scrum' });
+    expect(row).toEqual({ vocabulary: 'game' });
   });
 });
 

@@ -15,10 +15,17 @@ export async function readTrial<T>(
   reverse: boolean,
   read: (operation: T) => Promise<ReadResponse>,
   now: () => number = () => performance.now(),
+  waitFor: (operation: T) => boolean = () => true,
 ) {
   const started = now();
-  const first = await parallelRead(operations, reverse, read);
-  const following = await parallelRead(after, reverse, read);
+  const blocking: Promise<ReadResponse>[] = [];
+  const firstRead = parallelRead(operations, reverse, (operation) => {
+    const response = read(operation);
+    if (waitFor(operation)) blocking.push(response);
+    return response;
+  });
+  const followingRead = Promise.all(blocking).then(() => parallelRead(after, reverse, read));
+  const [first, following] = await Promise.all([firstRead, followingRead]);
   const responses = [...first, ...following];
   const timings = responses.map(({ ms, finishedAt, secondary }) => ({
     ms,

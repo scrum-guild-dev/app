@@ -8,7 +8,14 @@ const op = (name: string, input: Record<string, unknown> = {}, secondary = false
 });
 const ws = { workspace_id: loadingWorkspace };
 const w = (name: string, secondary = false) => op(name, ws, secondary);
-export type Screen = { route: string; operations: Reading[]; operator?: boolean; note?: string; after?: Reading[] };
+export type Screen = {
+  route: string;
+  operations: Reading[];
+  operator?: boolean;
+  note?: string;
+  after?: Reading[];
+  deferSecondary?: boolean;
+};
 // 通常の管理者の成功経路。条件分岐は行を分ける。レイアウトはページと分けて測る。
 export const screens: Screen[] = [
   { route: '/', operations: [op('my-organizations', {}, false, true)] },
@@ -16,23 +23,25 @@ export const screens: Screen[] = [
   { route: '/operator', operator: true, operations: [op('list-organizations', {}, false, true)] },
   {
     route: '/[slug]/+layout',
+    deferSecondary: true,
     operations: [
+      op('token-notice', {}, true, true),
       op('organization'),
       op('my-organizations', {}, false, true),
-      op('token-notice', {}, true, true),
       op('favorite-list'),
     ],
   },
   {
     route: '/[slug]/+layout（招待あり）',
+    deferSecondary: true,
     operations: [
+      op('token-notice', {}, true, true),
       op('organization'),
       op('my-organizations', {}, false, true),
-      op('token-notice', {}, true, true),
       op('favorite-list'),
     ],
     after: [op('invitation-list', {}, true)],
-    note: '並列群の完了後に招待の件数を読む条件分岐を再現する。',
+    note: '主の群の完了後に招待件数を開始し、通知・件数の完了は枠の表示を待たせない。招待だけの人の一覧は主として待つ別経路。',
   },
   { route: '/[slug]', operations: [op('today'), op('first-steps', {}, true)] },
   { route: '/[slug]/admin', operations: [], note: 'parent() の権限確認だけ。節の部品の読み込みは load 外。' },
