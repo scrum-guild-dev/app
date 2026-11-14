@@ -68,8 +68,11 @@ function tarHasCommandOption(args) {
     const long = /^--([^=]+)(=|$)/.exec(a);
     if (long && commandOptions.some((name) => abbreviates(long[1], name))) return true;
     // オプション名が実行時に決まる語は、コマンドを指定するものにもなりうる。
-    // src/* のように固定のパスで始まる対象はフラグにならない。
-    const head = shapeAt(options, i).split('=')[0];
+    // 固定のパスでも未引用の変数や置換は別 argv に分かれて追加のフラグを渡せる。
+    // 引用した固定のパスと src/* のような glob だけの対象は追加のフラグにならない。
+    const shape = shapeAt(options, i);
+    if (shape.includes(DYNAMIC) && expandsAt(options, i)) return true;
+    const head = shape.split('=')[0];
     const dynamicFlag = head.includes(DYNAMIC) && (head.startsWith(DYNAMIC) || head.startsWith('-'));
     const globFlag = expandsAt(options, i) && /^[-*?\[{]/.test(head);
     return dynamicFlag || globFlag || /^-[^-]*[IF]/.test(a) || (i === 0 && /^[a-zA-Z]+$/.test(a) && /[IF]/.test(a));
