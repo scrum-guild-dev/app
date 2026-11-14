@@ -1,6 +1,6 @@
 // #1149: HTTP の遅れと、workerd・起動元の CPU / I/O / 実行待ちを突き合わせるための一時的な記録。
 // Linux の CI だけで使う。コマンドライン・環境変数・ファイルの内容は記録しない。
-import { mkdir, open, readFile, readdir } from 'node:fs/promises';
+import { mkdir, open, readFile, readdir, readlink } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -43,6 +43,82 @@ async function optionalRead(path: string): Promise<string | null> {
   return readFile(path, 'utf8').catch(() => null);
 }
 
+// /proc/<pid>/syscall は番号と引数のアドレスを返す。生の行・バッファは保存しない。
+// 番号は ABI ごとに違うので、未対応の環境では解釈しない。
+export function parseIoSyscall(text: string, arch = process.arch) {
+  const names: Record<number, string> | undefined =
+    arch === 'x64'
+      ? {
+          0: 'read',
+          1: 'write',
+          17: 'pread64',
+          18: 'pwrite64',
+          19: 'readv',
+          20: 'writev',
+          74: 'fsync',
+          75: 'fdatasync',
+        }
+      : arch === 'arm64'
+        ? {
+            63: 'read',
+            64: 'write',
+            65: 'readv',
+            66: 'writev',
+            67: 'pread64',
+            68: 'pwrite64',
+            82: 'fsync',
+            83: 'fdatasync',
+          }
+        : undefined;
+  if (!names) return { status: 'unsupported-arch' as const };
+  if (text.trim() === 'running') return { status: 'running' as const };
+  const fields = text.trim().split(/\s+/);
+  if (fields[0] === '-1') return { status: 'userspace' as const };
+  if (fields.length !== 9 || !/^\d+$/.test(fields[0])) return { status: 'invalid' as const };
+  const number = Number(fields[0]);
+  const name = names[number];
+  if (!name) return { status: 'other' as const, number };
+  const fd = /^0x[\da-f]+$/i.test(fields[1]) ? Number(fields[1]) : NaN;
+  if (!Number.isSafeInteger(fd) || fd < 0 || fd > 0x7fffffff) return { status: 'invalid' as const };
+  return { status: 'io' as const, number, name, fd };
+}
+
+// 任意のパス・ファイル名を成果物に出さない。既知の D1 状態ファイルだけを識別する。
+export function identifyD1File(path: string) {
+  const match =
+    /\/(?:\.wrangler\/state|dev\/shm\/scrum-guild-wrangler-state)\/(v3\/d1\/miniflare-D1DatabaseObject\/[a-f0-9]{64}\.sqlite(?:-wal|-shm|-journal)?)$/.exec(
+      path,
+    );
+  return match?.[1] ?? null;
+}
+
+export async function sampleIoWait(pid: number, startTicks: number, procRoot = '/proc', readProc = optionalRead) {
+  const base = `${procRoot}/${pid}`;
+  const startedAt = new Date().toISOString();
+  const before = await readProc(`${base}/syscall`);
+  if (before === null) return { startedAt, status: 'unavailable' as const };
+  const syscall = parseIoSyscall(before);
+  if (syscall.status !== 'io') return { startedAt, ...syscall };
+  // fd は再利用されうる。採取の前後で syscall とプロセスの世代が同じか確認する。
+  const target = await readlink(`${base}/fd/${syscall.fd}`).catch(() => null);
+  const after = await readProc(`${base}/syscall`);
+  const stat = await readProc(`${base}/stat`);
+  let sameProcess = false;
+  try {
+    sameProcess = stat !== null && parseProcessStat(stat).startTicks === startTicks;
+  } catch {
+    // 採取中の終了・PID 再利用・壊れた stat は対応を捨てる。
+  }
+  if (before !== after || !sameProcess) return { startedAt, status: 'changed' as const };
+  return {
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    ...syscall,
+    file: target === null ? null : identifyD1File(target),
+    fileStatus: target === null ? 'unavailable' : identifyD1File(target) === null ? 'outside-allowlist' : 'd1',
+  };
+}
+
 export async function sampleProcesses(rootPid: number, procRoot = '/proc') {
   const startedAt = new Date().toISOString();
   const entries = await readdir(procRoot);
@@ -83,6 +159,11 @@ export async function sampleProcesses(rootPid: number, procRoot = '/proc') {
         );
         return {
           ...processes.get(pid)!,
+          // 主スレッドだけ。採取は非原子的なので、同じ syscall に戻った場合の fd 再利用は排除できない。
+          mainThreadIo:
+            processes.get(pid)!.name === 'workerd'
+              ? await sampleIoWait(pid, processes.get(pid)!.startTicks, procRoot)
+              : null,
           // schedstat と wchan は主スレッドだけ。プロセス全体の CPU は上の stat。
           mainThreadSchedstat: schedstat?.trim() ?? null,
           mainThreadWchan: wchan?.trim() ?? null,
