@@ -2651,7 +2651,7 @@ function shellCommandBody(tool, args) {
   let command = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === '--') return command ? { body: args[i + 1], uncertain: args[i + 1] === undefined } : {};
+    if (a === '--' || a === '-') return command ? { body: args[i + 1], uncertain: args[i + 1] === undefined } : {};
     // bash の起動ファイル名は -coo のような値でもフラグではない。= の連結形では次を飛ばさない。
     const longName = a.split('=')[0];
     if (tool === 'bash' && SHELL_LONG_VALUES.has(longName)) {
