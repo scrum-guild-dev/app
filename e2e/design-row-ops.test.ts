@@ -9,6 +9,7 @@ const files: Record<string, string> = {
   'backlog.html': 'text/html',
   'index.html': 'text/html',
   'sprint.html': 'text/html',
+  'epic.html': 'text/html',
   'tokens.css': 'text/css',
   'components.css': 'text/css',
   'icons.js': 'text/javascript',
@@ -521,5 +522,87 @@ test('カタログの横送りの見本で属性と行の操作を選んでも�
   await menu.click();
   await page.getByRole('menuitem', { name: '今日やる', exact: true }).click();
   await expect(menu).toBeFocused();
+  expect(errors).toEqual([]);
+});
+
+test('見本のエピックとストーリー: 題だけで木に作り、引き出しで詳細を書く', async ({ page }) => {
+  const errors = await openSample(page, 'backlog.html');
+  const epicDraft = page.locator('[data-draft="new-epic:root"]');
+  await epicDraft.fill('追加したエピック');
+  await epicDraft.press('Enter');
+  await expect(epicDraft).toBeFocused();
+  await expect(epicDraft).toHaveValue('');
+  const epic = page
+    .locator('.tree-group')
+    .filter({ has: page.locator('a[data-epic-id]', { hasText: '追加したエピック' }) });
+  const id = await epic.locator('a[data-epic-id]').getAttribute('data-epic-id');
+  const epicLink = page.locator(`a[data-epic-id="${id}"]`);
+  const stableEpic = page.locator('.tree-group').filter({ has: epicLink });
+  const storyDraft = epic.locator(`[data-draft="new-story:${id}"]`);
+  await storyDraft.fill('配下に追加したストーリー');
+  await storyDraft.press('Enter');
+  await expect(storyDraft).toBeFocused();
+  await expect(storyDraft).toHaveValue('');
+  await expect(stableEpic.locator('a[data-story]')).toHaveText('配下に追加したストーリー');
+  const rootDraft = page.locator('[data-draft="new-story:root"]');
+  await rootDraft.fill('親なしのストーリー');
+  await rootDraft.press('Enter');
+  await expect(page.locator('a[data-story]', { hasText: '親なしのストーリー' })).toBeVisible();
+  await epicLink.click();
+  await expect(page).toHaveURL(new RegExp(`epic_id=${id}`));
+  const drawer = page.locator('aside#drawer');
+  await expect(drawer.locator('[data-drawer-step]')).toHaveCount(0);
+  await expect(drawer.locator('[data-drawer-mode]')).toHaveCount(2);
+  await expect(drawer.locator('#drawer-edit-ac')).toHaveCount(0);
+  await expect(drawer.locator('#drawer-edit-body')).toHaveValue('');
+  await drawer.locator('#drawer-edit-title').fill('保存したエピック');
+  await drawer.locator('#drawer-edit-body').focus();
+  await expect(epicLink).toHaveText('保存したエピック');
+  await drawer.locator('[data-close-drawer]').click();
+  await expect(page).not.toHaveURL(/epic_id=/);
+  await expect(epicLink).toBeFocused();
+  await stableEpic.locator('a[data-story]').click();
+  await expect(drawer.locator('#drawer-edit-ac')).toHaveValue('');
+  await drawer.locator('#drawer-edit-ac').fill('- 受け入れ基準');
+  await drawer.locator('#drawer-edit-body').focus();
+  await expect(drawer.locator('[data-save-state="ac"]')).toHaveText('保存しました');
+  expect(errors).toEqual([]);
+});
+
+test('見本のエピック: URLから開き、題・期日を保存し、削除確認を引き出しに重ねる', async ({ page }) => {
+  const errors = await openSample(page, 'backlog.html');
+  await page.goto('/__design-catalog/backlog.html?epic_id=e1&keep=1');
+  const drawer = page.locator('aside#drawer');
+  await expect(drawer).toBeVisible();
+  await expect(drawer.locator('.drawer-top .chip')).toHaveText('エピック');
+  await drawer.locator('[data-drawer-due]').fill('2027-01-10');
+  await drawer.locator('#drawer-edit-body').focus();
+  await expect(drawer.locator('[data-drawer-due]')).toHaveValue('2027-01-10');
+  await drawer.locator('.row-menu-btn').click();
+  await drawer.locator('[data-dialog="deleteEpic"]').click();
+  await expect(page.locator('#dialog')).toBeVisible();
+  await expect(drawer).toBeVisible();
+  await page.locator('#dialog .btn.is-danger').click();
+  await expect(drawer).toBeHidden();
+  await expect(page).toHaveURL(/keep=1/);
+  await expect(page).not.toHaveURL(/epic_id=/);
+  expect(errors).toEqual([]);
+});
+
+test('見本のエピック: 選んだエピックの詳細画面に移り、同じ引き出しを開く', async ({ page }) => {
+  const errors = await openSample(page, 'backlog.html');
+  await page.locator('a[data-epic-id="e2"]').click();
+  const drawer = page.locator('aside#drawer');
+  const title = await drawer.locator('#drawer-edit-title').inputValue();
+  await drawer.locator('#drawer-cat').selectOption({ index: 1 });
+  const category = await drawer.locator('#drawer-cat').inputValue();
+  await drawer.locator('[data-drawer-due]').fill('2027-02-10');
+  await drawer.locator('#drawer-edit-body').focus();
+  await expect(drawer.locator('#drawer-cat')).toHaveValue(category);
+  await drawer.locator('[data-epic-page]').click();
+  await expect(page).toHaveURL(/epic.html\?epic=e2/);
+  await expect(page.locator('h1')).toHaveText(title);
+  await page.locator('a[data-epic-id="e2"]').click();
+  await expect(drawer.locator('#drawer-edit-title')).toHaveValue(title);
   expect(errors).toEqual([]);
 });
