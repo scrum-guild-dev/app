@@ -100,7 +100,12 @@ test(
   { skip: !['x64', 'arm64'].includes(process.arch) },
   async () => {
     const before = syscallLine(process.arch === 'arm64' ? 82 : 74);
-    for (const after of [syscallLine(process.arch === 'arm64' ? 83 : 75), null]) {
+    for (const after of [
+      syscallLine(process.arch === 'arm64' ? 83 : 75),
+      syscallLine(process.arch === 'arm64' ? 82 : 74, '0x8'),
+      before.replace('0x123', '0x999'),
+      null,
+    ]) {
       let count = 0;
       const sampled = await sampleIoWait(30, 2200, '/not-a-proc', async (path) => {
         if (path.endsWith('/stat')) return stat(30, 10, 'workerd');
