@@ -1,11 +1,90 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { parseProcessStat, sampleProcesses, startProcessProbe } from './e2e-process-probe.ts';
+import {
+  identifyD1File,
+  parseIoSyscall,
+  parseProcessStat,
+  sampleIoWait,
+  sampleProcesses,
+  startProcessProbe,
+} from './e2e-process-probe.ts';
+
+const syscallLine = (number: number, fd = '0x7') => `${number} ${fd} 0x123 0x456 0x0 0x0 0x0 0x789 0xabc\n`;
+
+test('syscall の ABI を区別し、引数とアドレスを出力しない', () => {
+  for (const [arch, number, name] of [
+    ['x64', 74, 'fsync'],
+    ['x64', 75, 'fdatasync'],
+    ['x64', 18, 'pwrite64'],
+    ['arm64', 82, 'fsync'],
+    ['arm64', 83, 'fdatasync'],
+    ['arm64', 68, 'pwrite64'],
+  ] as const) {
+    assert.deepEqual(parseIoSyscall(syscallLine(number), arch), { status: 'io', number, name, fd: 7 });
+  }
+  assert.deepEqual(parseIoSyscall(syscallLine(74), 'arm64'), { status: 'other', number: 74 });
+  assert.deepEqual(parseIoSyscall(syscallLine(74), 'riscv64'), { status: 'unsupported-arch' });
+  assert.deepEqual(parseIoSyscall('running', 'x64'), { status: 'running' });
+  assert.deepEqual(parseIoSyscall('-1 0x123 0x456', 'x64'), { status: 'userspace' });
+  for (const line of ['秘密', '74 0x7', syscallLine(74, '秘密'), syscallLine(74, '0xffffffffffffffff')]) {
+    assert.deepEqual(parseIoSyscall(line, 'x64'), { status: 'invalid' });
+  }
+});
+
+test('既知の D1 ファイル以外のパスや名前は残さない', () => {
+  const relative = `v3/d1/miniflare-D1DatabaseObject/${'a'.repeat(64)}.sqlite`;
+  for (const root of ['/workspace/app/.wrangler/state', '/dev/shm/scrum-guild-wrangler-state']) {
+    for (const suffix of ['', '-wal', '-shm', '-journal']) {
+      assert.equal(identifyD1File(`${root}/${relative}${suffix}`), relative + suffix);
+    }
+  }
+  for (const path of [
+    '/秘密/.env',
+    '/tmp/秘密.sqlite',
+    `/tmp/${relative}`,
+    `/workspace/.wrangler/state/${relative}/秘密`,
+    '/proc/self/fd/7',
+  ]) {
+    assert.equal(identifyD1File(path), null);
+  }
+});
+
+test('syscall と fd を対応付け、読めない場合と PID が変わった場合を区別する', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'e2e-syscall-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(`${root}/30/fd`, { recursive: true });
+  assert.equal((await sampleIoWait(30, 2200, root)).status, 'unavailable');
+  const relative = `v3/d1/miniflare-D1DatabaseObject/${'b'.repeat(64)}.sqlite-wal`;
+  await writeFile(`${root}/30/syscall`, syscallLine(process.arch === 'arm64' ? 82 : 74));
+  await writeFile(`${root}/30/stat`, stat(30, 10, 'workerd'));
+  await symlink(`/dev/shm/scrum-guild-wrangler-state/${relative}`, `${root}/30/fd/7`);
+  const sampled = await sampleIoWait(30, 2200, root);
+  if (process.arch !== 'x64' && process.arch !== 'arm64') {
+    assert.equal(sampled.status, 'unsupported-arch');
+    return;
+  }
+  assert.equal(sampled.status, 'io');
+  assert.ok('file' in sampled);
+  assert.equal(sampled.file, relative);
+  assert.equal(sampled.fileStatus, 'd1');
+  assert.equal((await sampleIoWait(30, 9999, root)).status, 'changed');
+  await rm(`${root}/30/fd/7`);
+  await symlink('/秘密/.env', `${root}/30/fd/7`);
+  const redacted = await sampleIoWait(30, 2200, root);
+  assert.ok('file' in redacted);
+  assert.equal(redacted.file, null);
+  assert.equal(redacted.fileStatus, 'outside-allowlist');
+  assert.ok(!JSON.stringify(redacted).includes('秘密'));
+  await rm(`${root}/30/fd/7`);
+  const missing = await sampleIoWait(30, 2200, root);
+  assert.ok('file' in missing);
+  assert.equal(missing.fileStatus, 'unavailable');
+});
 
 function stat(pid: number, ppid: number, name: string) {
   const fields = Array.from({ length: 50 }, () => '0');
@@ -75,6 +154,43 @@ test('無効ならファイルにも procfs にも触れない', async () => {
   });
   await probe.stop();
 });
+
+test(
+  '実 procfs の read 待ちを sampleProcesses 経由で採り、生の引数やパスは残さない',
+  { skip: process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch), timeout: 5_000 },
+  async (t) => {
+    const child = spawn(
+      process.execPath,
+      [
+        '-e',
+        "process.title = 'workerd'; process.send('ready', () => { require('node:fs').readSync(0, Buffer.alloc(1), 0, 1, null); });",
+      ],
+      { stdio: ['pipe', 'ignore', 'ignore', 'ipc'] },
+    );
+    t.after(async () => {
+      const exited = once(child, 'exit');
+      child.kill();
+      await exited;
+    });
+    await once(child, 'message');
+    // カーネル/sandbox が syscall を拒む場合も、常に null を返す退行は見逃さない。
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const sample = await sampleProcesses(process.pid);
+      const io = sample.processes.find(({ pid }) => pid === child.pid)?.mainThreadIo;
+      assert.ok(io);
+      if (io.status === 'unavailable') {
+        assert.equal(await readFile(`/proc/${child.pid}/syscall`, 'utf8').catch(() => null), null);
+        return;
+      }
+      if (io.status === 'io' && io.name === 'read' && io.fd === 0) {
+        assert.equal(io.file, null);
+        assert.equal(io.fileStatus, 'outside-allowlist');
+        return;
+      }
+    }
+    assert.fail('子プロセスの read(0) 待ちを採取できなかった');
+  },
+);
 
 test(
   'Linux の実際の procfs で子プロセスの系統と計数値を採取できる',
