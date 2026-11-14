@@ -8,7 +8,7 @@
   let { slug, workspaceId, id }: { slug: string; workspaceId: string; id: string } = $props();
   let Sheet = $state<typeof CreateSheet>();
   let sheet = $state<ReturnType<typeof CreateSheet>>();
-  let loading = $state(false);
+  let loading = false;
   let generation = 0;
   let alive = true;
   let notice: number | undefined;
@@ -75,5 +75,4 @@
   }
 </script>
 
-<span class="visually-hidden" role="status">{loading ? t('loading') : ''}</span>
 {#if Sheet}<Sheet {slug} {workspaceId} {id} bind:this={sheet} />{:else}<span {id} hidden></span>{/if}
