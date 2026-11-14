@@ -90,6 +90,7 @@ import {
   sprintUpdateOperation,
 } from './sprint.ts';
 import { epicCreateOperation, epicGetOperation, epicMoveOperation, epicUpdateOperation } from './epic.ts';
+import { epicCancelOperation, epicUncancelOperation } from './epic-cancel.ts';
 import { epicCompleteOperation, epicReopenOperation } from './epic-clear.ts';
 import { epicDetailOperation } from './epic-detail.ts';
 import { epicPartyAssignOperation, epicPartyJoinOperation, epicPartyLeaveOperation } from './epic-party.ts';
@@ -222,6 +223,8 @@ const listedOperations: readonly ImplementedOperation[] = [
   epicPartyAssignOperation,
   epicRewardUpdateOperation,
   epicRequesterUpdateOperation,
+  epicCancelOperation,
+  epicUncancelOperation,
   epicCompleteOperation,
   epicReopenOperation,
   experienceSummaryOperation,
