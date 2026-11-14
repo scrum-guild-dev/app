@@ -542,7 +542,7 @@
   const stamped = new Set();
   function doneControl(x) {
     return x.doneAt
-      ? `<span class="hanko ${stamped.has(x.id) ? "is-new" : ""}" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span>
+      ? `<span class="hanko ${stamped.has(x.id) ? "is-new" : ""}" role="img" aria-label="${t("done")}">${icon("check")}</span>
          <button class="link-btn" type="button" data-undo="${x.id}" aria-label="${t("done")}を戻す: ${esc(x.title)}" aria-disabled="false">戻す</button>`
       : `<button class="done-btn" type="button" data-done="${x.id}" aria-label="${t("complete")}" title="${t("complete")}">${icon("check")}</button>`;
   }
@@ -853,7 +853,7 @@
   function storyDoneControl(key, st, remaining, blocked) {
     if (st.doneAt) {
       const reason = blocked ? `<span class="tree-note" id="tree-${key}-blocked">${t("done")}か中止した${t("epic")}の下の${t("story")}は取り消せません</span>` : "";
-      return `<span class="hanko" role="img" aria-label="${esc(st.title)}: ${t("done")}">${icon("check")}<b>完</b></span>
+      return `<span class="hanko" role="img" aria-label="${esc(st.title)}: ${t("done")}">${icon("check")}</span>
         ${reason}<button class="btn is-sm is-quiet" type="button" aria-label="${t("done")}を取り消す: ${esc(st.title)}"${blocked ? ` aria-disabled="true" aria-describedby="tree-${key}-blocked"` : ` data-toast="${t("story")}の${t("done")}を取り消しました"`}>取り消す</button>`;
     }
     if (blocked) {
@@ -995,17 +995,17 @@
     const joined = q.party.includes(D.me);
     const pct = p.all ? Math.round((p.done / p.all) * 100) : 0;
     return `<article class="notice is-raid ${cleared ? "is-cleared" : ""}">
-      <span class="notice-label"><span class="orn-medieval">依 頼 書</span><span class="orn-plain">${t("epic")}</span>　·　${esc(D.categories[q.cat].name)}</span>
+      <span class="notice-label">${t("epic")}　·　${esc(D.categories[q.cat].name)}</span>
       <a class="notice-title notice-link" href="epic.html">${esc(q.title)}</a>
       <dl class="notice-facts">
-        <div><dt>${t("requester")}</dt><dd>${avatarOf(q.requester)}${esc(user(q.requester).name)}<span class="seal" aria-hidden="true">印</span></dd></div>
+        <div><dt>${t("requester")}</dt><dd>${avatarOf(q.requester)}${esc(user(q.requester).name)}</dd></div>
         <div><dt>${t("reward")}</dt><dd>${tier(q.tier)}</dd></div>
         <div><dt>${t("due")}</dt><dd>${dueChip(q.due) || "なし"}</dd></div>
         <div><dt>${t("party")}</dt><dd><span class="avatar-stack">${q.party.map((u) => avatarOf(u)).join("")}</span>${q.party.length}人</dd></div>
       </dl>
       <div class="notice-foot">
         ${progress(p.done, p.all)}
-        ${cleared ? `<span class="hanko" role="img" aria-label="完了">${icon("check")}<b>済</b></span>` : `<button class="btn ${joined ? "" : "is-primary"} is-sm" type="button" data-join="${eid}">${joined ? t("leave") : t("accept")}</button>`}
+        ${cleared ? `<span class="hanko" role="img" aria-label="完了">${icon("check")}</span>` : `<button class="btn ${joined ? "" : "is-primary"} is-sm" type="button" data-join="${eid}">${joined ? t("leave") : t("accept")}</button>`}
       </div>
     </article>`;
   }
@@ -1551,7 +1551,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${attachments(x.id)}
       </div>
       <div class="done-bar">
-        ${x.doneAt ? `<span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span><span>${t("done")} ${esc(x.doneAt)}</span><button class="link-btn" type="button" data-undo="${x.id}" aria-label="${t("done")}を戻す: ${esc(x.title)}" aria-disabled="false">戻す</button></span>`
+        ${x.doneAt ? `<span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}</span><span>${t("done")} ${esc(x.doneAt)}</span><button class="link-btn" type="button" data-undo="${x.id}" aria-label="${t("done")}を戻す: ${esc(x.title)}" aria-disabled="false">戻す</button></span>`
           : `<button class="btn is-primary" type="button" data-done="${x.id}">${icon("check")}${t("complete")}</button>`}
         ${D.definitionOfDone.length ? `<div class="done-bar-dod"><h3 class="done-bar-dod-title" id="drawer-dod">${t("dod")}</h3><div class="done-bar-dod-body" tabindex="0" role="region" aria-labelledby="drawer-dod">${dodDoc()}</div></div>` : ""}
       </div>
@@ -1620,7 +1620,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (st.doneAt) {
       const note = blocked && !ro ? `<span class="props-note" id="${ids.blocked}">${t("done")}か中止した${t("epic")}の下の${t("story")}は取り消せません</span>` : "";
       const undo = ro ? "" : `<button class="link-btn" type="button" data-story-reopen aria-label="${t("done")}を取り消す: ${esc(st.title)}"${blocked ? ` aria-disabled="true" aria-describedby="${ids.blocked}"` : ` aria-disabled="false"`}>取り消す</button>`;
-      return `<div class="done-bar"><span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}" tabindex="-1">${icon("check")}<b>完</b></span><span>${t("done")} ${esc(st.doneAt)}</span>${note}${undo}</span></div>`;
+      return `<div class="done-bar"><span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}" tabindex="-1">${icon("check")}</span><span>${t("done")} ${esc(st.doneAt)}</span>${note}${undo}</span></div>`;
     }
     if (ro) return "";
     const note = blocked ? `<span class="props-note" id="${ids.blocked}">${t("done")}か中止した${t("epic")}の下の${t("story")}は${t("done")}にできません</span>`
@@ -4011,7 +4011,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (askAssist(input.value)) input.value = "";
   });
   document.addEventListener("change", (ev) => {
-    if (ev.target.matches("[data-pick-theme]")) setTheme(ev.target.value || null);
+    if (ev.target.matches("[data-pick-theme]")) setTheme(ev.target.value);
     if (ev.target.matches("[data-assist-row]")) {
       const [i, j] = ev.target.dataset.assistRow.split(":").map(Number);
       assist.msgs[i].confirm.rows[j].on = ev.target.checked;
@@ -4196,16 +4196,15 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   const extraRedraws = [];
   function redrawAll() { redraw(); extraRedraws.forEach((fn) => fn()); if (assist.open) renderAssist(); }
 
-  // ---- テーマの切り替え（シンプル（自動）→ シンプル（ライト）→ シンプル（ダーク）→ 中世風 → 現代風） ----
-  // 値は DB の列挙と同じ。null は自分で選んでいない状態で、見本では組織の既定のシンプル（自動）として出す。
-  // 本番では、ユーザーが選んだテーマか組織の既定を data-theme に入れる
-  const THEMES = ["simple", "simple_light", "simple_dark", "medieval", "modern"];
-  const THEME_LABEL = { simple: "シンプル（自動）", simple_light: "シンプル（ライト）", simple_dark: "シンプル（ダーク）", medieval: "中世風", modern: "現代風" };
+  // ---- テーマの切り替え（シンプル（自動）→ シンプル（ライト）→ シンプル（ダーク）→ ネオン） ----
+  // 値は DB の列挙と同じ。null は自分で選んでいない状態で、シンプル（自動）として出す。
+  // 本番では、ユーザーが選んだテーマを data-theme に入れる
+  const THEMES = ["simple", "simple_light", "simple_dark", "modern"];
+  const THEME_LABEL = { simple: "シンプル（自動）", simple_light: "シンプル（ライト）", simple_dark: "シンプル（ダーク）", modern: "ネオン" };
   const THEME_NOTE = {
     simple: "業務の道具として落ち着いた見た目。OS のライトとダークに合わせる",
     simple_light: "業務の道具として落ち着いた見た目。いつも明るい地",
     simple_dark: "業務の道具として落ち着いた見た目。いつも暗い地",
-    medieval: "冒険者ギルドの帳簿。紙と墨、完了に朱の判子",
     modern: "近未来の端末のウィンドウ。暗い地に光る枠",
   };
   let theme = null;
@@ -4215,10 +4214,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (theme) document.documentElement.dataset.theme = theme;
     else delete document.documentElement.dataset.theme;
     document.querySelectorAll("[data-theme-label]").forEach((el) => (el.textContent = `テーマ: ${THEME_LABEL[theme || "simple"]}`));
-    // 「組織の既定に従う」（値が空）の選択肢がない並びでは、選んでいない状態をシンプル（自動）として示す
+    // 選んでいない状態はシンプル（自動）として示す
     document.querySelectorAll("[data-pick-theme]").forEach((el) => {
-      const hasDefault = !!document.querySelector(`[data-pick-theme][name="${el.name}"][value=""]`);
-      el.checked = el.value === (theme || (hasDefault ? "" : "simple"));
+      el.checked = el.value === (theme || "simple");
     });
   }
   function cycleTheme() { setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]); }

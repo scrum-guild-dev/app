@@ -68,7 +68,7 @@ test('招待する場合だけ組織を追加し、個人用URLとチーム用UR
   await expect(page).toHaveURL('/signup');
 });
 
-for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+for (const theme of ['simple_light', 'simple_dark', 'modern']) {
   for (const withTeam of [false, true]) {
     test(`390pxのプロフィールと招待の流れ（${theme}・チーム追加${withTeam ? 'あり' : 'なし'}）`, async ({ page }) => {
       await page.setViewportSize(NARROW_VIEWPORT);

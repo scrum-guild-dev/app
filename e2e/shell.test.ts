@@ -619,7 +619,7 @@ test('書体を自分のオリジンから読み込み、外へ通信しない',
 test('覚えたテーマを、body ができる前に当てる', async ({ page }) => {
   const collect = await watchViolations(page);
   await page.addInitScript(() => {
-    localStorage.setItem('sg-theme', 'medieval');
+    localStorage.setItem('sg-theme', 'modern');
     const seen: { theme: string | undefined; bodyExists: boolean }[] = [];
     (window as unknown as { __themeSeen: typeof seen }).__themeSeen = seen;
     new MutationObserver(() => {
@@ -633,7 +633,7 @@ test('覚えたテーマを、body ができる前に当てる', async ({ page }
   const seen = await page.evaluate(
     () => (window as unknown as { __themeSeen: { theme: string | undefined; bodyExists: boolean }[] }).__themeSeen,
   );
-  expect(seen[0]).toEqual({ theme: 'medieval', bodyExists: false });
+  expect(seen[0]).toEqual({ theme: 'modern', bodyExists: false });
   expect(await collect()).toEqual([]);
 });
 
@@ -641,7 +641,7 @@ test('覚えた値が壊れていても、落ちずに描く', async ({ page }) 
   await page.addInitScript(() => localStorage.setItem('sg-theme', 'retro'));
   await page.goto(today);
   await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
-  // 壊れた値は先当てで無視され、組織の値（seed は simple）が当たる
+  // 壊れた値は先当てで無視され、自分のテーマ（seed は選んでいない = simple）が当たる
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'simple');
 });
 

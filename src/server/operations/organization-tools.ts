@@ -24,12 +24,9 @@ import {
   markAttachmentQuotaCheck,
   readOrganizationRow,
   userAvatarsOf,
-  writeOrganizationSettings,
   type OrganizationActor,
   type OrganizationDb,
   type OrganizationRow,
-  type OrganizationSettingsChange,
-  type OrganizationSettingsWrite,
 } from '../db/index.ts';
 
 export type OrganizationTools = {
@@ -42,11 +39,6 @@ export type OrganizationTools = {
   readOrganization(): Promise<OrganizationRow>;
   // 成功後は変更待ちの記録だけを待ち、通知をdeferへ渡す。容量拒否時のmarkOnlyは記録だけ行い、cronへ任せる。
   reconcileAttachmentQuota(options?: { markOnly?: boolean }): Promise<void>;
-  // 自分の組織の言葉づかいと既定のテーマを、停止しておらず、先に読んだ値（from）のままなら書く（渡した項目と updated_at だけ）。
-  // 管理者の操作からだけ呼ぶ。書けたら written、入ってから書くまでに停止されていたら suspended（呼び出し側は 403 にする）、
-  // 別の要求が先に変えていたら conflict（409 にする）。変更の記録（change_logs）は書かない。
-  // 組織の中の表なので、呼び出し側が written のときだけ別の batch() で書く
-  writeOrganizationSettings(change: OrganizationSettingsChange, now: Date): Promise<OrganizationSettingsWrite>;
   // 自分の組織の users の ID ごとのアバターの URL。アカウントに結ばれていない人、ログインしたことの無い人、アバターの無い人は null。
   // 別の組織の ID と、存在しない ID はキーを持たない
   avatarsOf(userIds: readonly string[]): Promise<Map<string, string | null>>;
@@ -134,11 +126,6 @@ export function organizationTools(
             logFailure(error);
           }
         }
-      }),
-    writeOrganizationSettings: (change, now) =>
-      member(() => {
-        if (!actor.isAdmin) throw new Error('管理者でない人の操作から、組織の設定を書いた');
-        return writeOrganizationSettings(env, db, change, now);
       }),
     avatarsOf: (userIds) => member(() => userAvatarsOf(env, db, userIds)),
     myLogins: () => (logins ??= readMyLogins(env, actor.accountId)),

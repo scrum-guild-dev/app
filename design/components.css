@@ -243,7 +243,7 @@ h1, h2, h3 { text-wrap: balance; }
   }
 
   .app[data-nav-collapsed="true"] { grid-template-columns: var(--binding-width-collapsed) minmax(0, 1fr); }
-  /* 列の罫（中世風は 3px）を引いても、内側に 44px の項目が収まる余白にする */
+  /* 列の罫を引いても、内側に 44px の項目が収まる余白にする */
   .app[data-nav-collapsed="true"] .binding-head {
     justify-content: center; padding-inline: 0;
   }
@@ -276,7 +276,7 @@ h1, h2, h3 { text-wrap: balance; }
   .app[data-nav-collapsed="true"] .org-menu-button { width: 44px; min-height: 44px; justify-content: center; }
   .app[data-nav-collapsed="true"] .nav-item { padding: 0; gap: 0; }
   /* 今のページは、太字が名前と一緒に見えなくなるので、左に縦棒の形の印を足す。強制カラーでも残るよう、背景でなく縁で描く。
-     項目の内側（左端）に置く。列の端に寄せると、罫の太さ（中世風は 3px）で位置が半端になってにじむため */
+     項目の内側（左端）に置く。列の端に寄せると、罫の太さで位置が半端になってにじむため */
   .app[data-nav-collapsed="true"] .nav-item[aria-current="page"]::before {
     content: ""; position: absolute; left: 0; top: var(--space-2); bottom: var(--space-2);
     border-left: 3px solid var(--color-accent); border-radius: var(--radius-1);
@@ -521,7 +521,7 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .btn.is-sm { padding: 3px 10px; font-size: var(--text-xs); }
 /* Google のボタン（Google のブランドの決まり）。ロゴは公式の4色の G で変えない。地と枠と文字は Google のブランドの固定色なので、
    トークンを通さず色を直に書く。明暗はアプリのテーマに合わせる: テーマの指定が無い既定とシンプル（自動）だけ OS の明暗に従い、
-   シンプル（ダーク）と現代風はダーク版、シンプル（ライト）と中世風はライト版。書体と角丸はアプリのもの（Roboto を足さず、
+   シンプル（ダーク）とネオンはダーク版、シンプル（ライト）はライト版。書体と角丸はアプリのもの（Roboto を足さず、
    公式の角丸にもしない。意図的な例外）。ロゴと文字の間は公式の 10px */
 .btn.is-google {
   --google-bg: #fff; --google-line: #747775; --google-fg: #1f1f1f; --google-hover: rgb(31 31 31 / 0.08);
@@ -645,9 +645,8 @@ a.breadcrumb-item:hover { color: var(--color-fg); text-decoration: underline; }
 .chip.is-warn { color: var(--color-warn); background: var(--color-warn-soft); border-color: var(--chip-state-edge); }
 .chip.is-todo { color: var(--color-warn); border-color: currentColor; border-style: dashed; }
 .chip.is-ok { color: var(--color-ok); background: var(--color-ok-soft); border-color: var(--chip-state-edge); }
-/* 完了とクリアの印。完了の印（.hanko）と同じ役の色で、テーマが変える（中世風は朱）。地は色を混ぜず --color-surface のままにする。
-   --color-done を 10% 混ぜた地では、中世風の朱（#c8352b）が 4.37:1 で 4.5:1 に届かないため。混ぜない地での比は、
-   シンプル 5.37、シンプル（ダーク）8.54、中世風 5.06、現代風 11.82 */
+/* 完了とクリアの印。完了の印（.hanko）と同じ役の色で、テーマが変える。地は色を混ぜず --color-surface のままにする。
+   混ぜない地での比は、シンプル 5.37、シンプル（ダーク）8.54、ネオン 11.82 */
 .chip.is-done { color: var(--color-done); background: var(--color-surface); border-color: currentColor; }
 .chip.is-carry { border-style: dashed; }
 /* 区分とリポジトリの名前の印。名前は利用者が付ける（50 字まで）ので、行の幅を超えたら折り返して全文を出す。アイコンは縮めない */
@@ -766,22 +765,17 @@ button.entry-title { text-align: left; background: transparent; border: 0; paddi
 /* 送っている最中。押しても何も起きないが、フォーカスは残す（押せない間は全体を薄くする） */
 .done-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .done-btn[aria-disabled="true"]:hover { border-color: var(--color-line); color: var(--color-faint); border-style: dashed; }
-/* 完了の印。シンプルと現代風はチェック、中世風は朱の判子（末尾のテーマの飾り） */
+/* 完了の印。チェックのアイコンを丸で囲む */
 .hanko {
   display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
   border: 1.5px solid var(--color-done); color: var(--color-done); background: var(--color-ok-soft);
   line-height: 1;
 }
-.hanko > b { display: none; }
 .hanko.is-new { animation: hanko-press var(--duration-stamp) var(--ease-out) 1; }
 @keyframes hanko-press {
   0% { transform: scale(1.8); opacity: 0; }
   60% { transform: scale(0.92); opacity: 1; }
   100% { transform: scale(1); }
-}
-.seal {
-  display: none; place-items: center; width: 20px; height: 20px; border: 1.5px solid var(--color-stamp);
-  color: var(--color-stamp); font-family: var(--font-display); font-weight: var(--weight-display); font-size: 10px; border-radius: var(--radius-1);
 }
 
 /* ===== 貼り紙（スプリントゴール、レイド） ===== */
@@ -1119,7 +1113,7 @@ a.brand { color: inherit; text-decoration: none; }
 /* レーンの中の囲みは幅が狭い（3 列で約 280px）。操作は本文の下の 1 行に置き、本文を広く取る */
 .lane .callout { padding: var(--space-3); }
 .lane .callout-actions { flex-basis: 100%; margin-left: 0; }
-/* 囲みの中のリンクは、本文と同じ色に下線を引く（既定のリンクの青は、ダークと現代風の地で読めない） */
+/* 囲みの中のリンクは、本文と同じ色に下線を引く（既定のリンクの青は、ダークとネオンの地で読めない） */
 .callout a { color: inherit; text-decoration: underline; text-underline-offset: 0.2em; }
 .callout a.btn { text-decoration: none; }
 .callout.is-ok { color: var(--color-ok); background: var(--color-ok-soft); }
@@ -2280,7 +2274,7 @@ button.file-name:hover { text-decoration-color: currentColor; }
 /* ===== AI のアシスタント（パレットと横の欄） =====
  * パレットは上の帯のボタンで開く、画面の上に重ねる入力。続けて話すときは横の欄へ移す。
  * 横の欄は、本文を寄せても潰れない広い画面（1500px 以上）では本文を左へ寄せ、それより狭いと右に重ねる。
- * タスクの詳細の引き出しは横の欄の上に出る。操作の色は押せる所だけに使い、アシスタントの印は形と文字で示す。現代風でも光らせない。
+ * タスクの詳細の引き出しは横の欄の上に出る。操作の色は押せる所だけに使い、アシスタントの印は形と文字で示す。ネオンでも光らせない。
  */
 .kbd {
   font-family: var(--font-mono); font-size: 10px; line-height: 1; padding: 3px 5px; white-space: nowrap;
@@ -2479,36 +2473,9 @@ body.has-assist .toasts { right: calc(400px + var(--space-4)); }
 
 /* ===== テーマの飾り =====
  * テーマの違いは tokens.css の変数で表す。変数で表せない飾りだけをここに置き、この一覧から増やさない。
- * 完了の印、依頼主の印、クリアの演出、現代風の光。
- * 中世風と他とで文字が変わる飾りは .orn-medieval と .orn-plain の両方を書き、片方を隠す。
+ * 完了の印、クリアの演出、ネオンの光。
  */
-.orn-medieval { display: none; }
-:root[data-theme="medieval"] .orn-medieval { display: revert; }
-:root[data-theme="medieval"] .orn-plain { display: none; }
-
-/* 中世風: 朱の判子と印 */
-:root[data-theme="medieval"] .hanko {
-  width: 40px; height: 40px; border-width: 2px; background: none;
-  font-family: var(--font-display); font-weight: 900; font-size: 18px;
-  rotate: -12deg; opacity: 0.88; margin: -3px;
-}
-:root[data-theme="medieval"] .hanko > b { display: inline; }
-:root[data-theme="medieval"] .hanko > .ico { display: none; }
-:root[data-theme="medieval"] .card .hanko { width: 34px; height: 34px; font-size: 15px; }
-:root[data-theme="medieval"] .seal { display: inline-grid; }
-:root[data-theme="medieval"] .celebrate-stamp { width: 120px; height: 120px; border: 4px double var(--color-stamp); background: none; font-size: 26px; rotate: -14deg; }
-
-/* 中世風: 蝋の印章。厚い縁と刻んだ線、面は縁へ向けて深くなる */
-:root[data-theme="medieval"] .emblem {
-  --emblem-rim: color-mix(in srgb, var(--color-xp) 60%, var(--color-fg));
-  --emblem-line: color-mix(in srgb, var(--color-xp) 40%, var(--color-surface));
-  --emblem-face: radial-gradient(circle at 50% 40%, var(--color-xp) 40%, color-mix(in srgb, var(--color-xp) 78%, var(--color-fg)));
-  --emblem-w1: 3px; --emblem-w2: 5px;
-  text-shadow: 0 1px 0 color-mix(in srgb, var(--color-fg) 30%, transparent);
-}
-:root[data-theme="medieval"] .emblem.is-sm { --emblem-w1: 1px; --emblem-w2: 2px; text-shadow: none; }
-
-/* 現代風: 端末のウィンドウの光 */
+/* ネオン: 端末のウィンドウの光 */
 :root[data-theme="modern"] body { --page-background: radial-gradient(1200px 600px at 75% -10%, rgb(76 200 255 / 0.09), transparent 70%) fixed, var(--color-bg); }
 :root[data-theme="modern"] .hanko { background: none; box-shadow: 0 0 10px -3px var(--color-done); }
 /* 要素自身の背景は文字と合う面の色にする（axe は擬似要素の背景を見ず、要素の背景を地として読むため）。縁は ::before（inset 0）が描く */

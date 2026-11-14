@@ -96,13 +96,13 @@ test('除外は、その規則の当たった要素だけを外し、当たら�
   expect(staleExclusions('today', isAxeCheck, used, list)).toEqual([otherRule, missing]);
 });
 
-test('画面のテストの入口は、4つのテーマで出た違反をまとめて落ち、当たらなくなった除外だけでも落ちる', async ({
+test('画面のテストの入口は、3つのテーマで出た違反をまとめて落ち、当たらなくなった除外だけでも落ちる', async ({
   page,
 }) => {
   await page.setContent(BROKEN);
   // 除外が無ければ、2つの違反を出たテーマとともに並べて落ちる
   await expect(expectNoA11yViolationsInThemes(page, 'today', [])).rejects.toThrow(
-    /- button-name: button（simple_light、simple_dark、medieval、modern）/,
+    /- button-name: button（simple_light、simple_dark、modern）/,
   );
   await expect(expectNoA11yViolationsInThemes(page, 'today', [])).rejects.toThrow(/- color-contrast: p（/);
   // 違反をすべて除外で外しても、どれにも当たらない除外が残れば落ちる

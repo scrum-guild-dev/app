@@ -21,14 +21,15 @@ afterEach(() => vi.unstubAllGlobals());
 
 const view = (theme: string) =>
   ({
-    me: { theme: null },
-    organization: { theme },
+    me: { theme },
+    organization: {},
   }) as unknown as Parameters<typeof import('./organization.svelte.ts').applyOrganization>[0];
 
-test('applyOrganization はテーマを当てても、言葉づかいを覚えず、言葉はスクラムの言葉のまま', async () => {
+test('applyOrganization は自分のテーマを当てて覚えても、言葉づかいを覚えず、言葉はスクラムの言葉のまま', async () => {
   const { store, dataset, organization, vocabulary } = await load({});
-  organization.applyOrganization(view('medieval'));
-  expect(dataset.theme).toBe('medieval');
+  organization.applyOrganization(view('modern'));
+  expect(dataset.theme).toBe('modern');
+  expect(store.get('sg-theme')).toBe('modern');
   expect([...store.keys()]).not.toContain('sg-vocabulary');
   expect(vocabulary.t('workspace')).toBe('ワークスペース');
 });
@@ -39,11 +40,4 @@ test('前に覚えていた言葉づかい（sg-vocabulary）が残っていて�
   organization.applyOrganization(view('simple'));
   organization.resetToDefaults();
   expect(vocabulary.t('workspace')).toBe('ワークスペース');
-});
-
-test('applyInvitedOrganization はテーマだけを画面に当て、覚えない', async () => {
-  const { store, dataset, organization } = await load({});
-  organization.applyInvitedOrganization({ theme: 'modern' } as never);
-  expect(dataset.theme).toBe('modern');
-  expect(store.size).toBe(0);
 });

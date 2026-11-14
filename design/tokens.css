@@ -1,11 +1,10 @@
 /*
  * Scrum Guild のデザイントークン
- * テーマは5つ。html の data-theme で選ぶ（なければシンプル（自動））。
+ * テーマは4つ。html の data-theme で選ぶ（なければシンプル（自動））。
  *   simple        シンプル（自動）。OS の明暗に合わせる
  *   simple_light  シンプル（ライト）
  *   simple_dark   シンプル（ダーク）
- *   medieval      中世風。ギルドの帳簿（紙と墨、判子）。ライトだけ
- *   modern        現代風。近未来の端末のウィンドウ（暗い地に光る枠）。ダークだけ
+ *   modern        ネオン。近未来の端末のウィンドウ（暗い地に光る枠）。ダークだけ
  * 色は役割で名前を付ける。部品は素の色の値を直接使わず、ここの変数だけを使う。
  * テーマで変わるのは、色、書体、角、線、影だけ。テーマごとの飾りは components.css の末尾にまとめる。
  */
@@ -47,7 +46,7 @@
   /* ---- 動き ---- */
   --duration-fast: 120ms;
   --duration-stamp: 260ms;
-  --duration-celebrate: 420ms; /* クリアの判子と現代風のウィンドウが出る */
+  --duration-celebrate: 420ms; /* クリアの判子とネオンのウィンドウが出る */
   --duration-flash: 800ms;   /* 落とした行の背景を戻す。変えたら src/lib/drop-flash.svelte.ts の FLASH_MS（印を外すまで）も、これより少し長くそろえる */
   --color-glint: rgb(255 255 255 / 0.75);   /* ゲージの先端の光の線。どのテーマでも白 */
   --duration-gauge: 700ms;   /* 経験値のゲージの確定の塗りが伸びる。見込みの斜線はこの後に --duration-gauge-soon で続く */
@@ -57,7 +56,6 @@
 
   /* ---- 書体（全テーマ共通） ---- */
   --family-gothic: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", sans-serif;
-  --family-mincho: var(--family-gothic);
   --family-mono: var(--family-gothic);
   --family-tech: var(--family-gothic);
   --family-tech-gothic: var(--family-gothic);
@@ -193,53 +191,7 @@
   color-scheme: dark;
 }
 
-/* ===== 中世風。ギルドの帳簿 ===== */
-:root[data-theme="medieval"] {
-  --color-bg: #f3f4f1;          /* 紙 */
-  --color-surface: #fbfbf8;     /* 帳面 */
-  --color-sunken: #e9ebe6;
-  --color-line: #c9cfd3;
-  --color-control-edge: #7f8890;
-  --color-rule: #dfe5e8;
-  --color-fg: #1c2633;          /* 墨 */
-  --color-muted: #5b6672;
-  --color-faint: #8a939c;
-  --color-accent: #1f3a5f;      /* 藍 */
-  --color-on-accent: #ffffff;
-  --color-accent-soft: #e2e8f0;
-  --color-stamp: #c8352b;       /* 朱。完了の判子と依頼主の印だけに使う */
-  --color-done: var(--color-stamp);
-  --color-xp: #8a6418;          /* 金 */
-  --color-favorite: #916b00;  /* お気に入りの塗った星だけ */
-  --color-xp-soft: #f2e8d2;
-  --color-danger: #b42318;
-  --color-danger-soft: #f9e3e1;
-  --color-warn: #9a5208;
-  --color-warn-soft: #f8ead7;
-  --color-ok: #2d6a3a;
-  --color-ok-soft: #e1efe3;
-  --color-gauge: #dde2e4;
-  --color-tier-small: #843210;
-  --color-tier-medium: #59626b;
-  --color-tier-large: #6b6500;
-
-  --font-display: var(--family-mincho);
-  --font-stat: var(--family-tech);
-  --weight-display: 900;
-
-  --radius-1: 2px;              /* 帳簿の角。ほぼ角張らせる */
-  --radius-2: 4px;
-  --radius-show: var(--radius-1);
-  --rule-double: 3px double var(--color-line);
-  --edge-top: 5px;
-  --chip-state-edge: currentColor;
-  --pts-edge: var(--color-accent);
-  --shadow-sheet: 0 1px 0 var(--color-line), 3px 4px 0 -1px var(--color-rule);  /* 貼り出した紙 */
-  --shadow-float: 0 10px 30px -10px rgb(20 30 45 / 0.35);
-  color-scheme: light;
-}
-
-/* ===== 現代風。近未来の端末のウィンドウ ===== */
+/* ===== ネオン。近未来の端末のウィンドウ ===== */
 :root[data-theme="modern"] {
   --color-bg: #060a12;
   --color-surface: #0b1322;

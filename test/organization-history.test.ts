@@ -8,7 +8,6 @@ import {
   ORGANIZATION_HISTORY_PAGE_SIZE,
   organizationHistory,
 } from '../src/shared/operations/organization/organization-history.ts';
-import { organizationSettingsUpdate } from '../src/shared/operations/organization/index.ts';
 import { workspaceClose, workspaceCreate, workspaceReopen } from '../src/shared/operations/workspace/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb } from '../src/server/db/index.ts';
@@ -154,14 +153,16 @@ describe('organization-history', () => {
     }
   });
 
-  test('組織の既定のテーマの変更の操作が書いた行を、組織の設定の変更として返す', async () => {
+  test('消した組織の既定のテーマの変更の操作（organization-settings-update）が書いた過去の行も、組織の設定の変更として返す', async () => {
     const target = await createTarget();
-    const res = await post(app, organizationSettingsUpdate, {
-      slug: target.slug,
-      token: target.admin.token,
-      body: { theme: { from: 'simple', to: 'medieval' } },
+    await log(target.organization, {
+      actor_user_id: target.admin.userId,
+      entity_type: 'organization',
+      entity_id: target.organization.id,
+      action: 'update',
+      changes_json: JSON.stringify({ theme: ['simple', 'medieval'] }),
+      created_at: minutesLater(0),
     });
-    expect(res.status).toBe(200);
 
     const history = await read(target);
     expect(history.entries).toHaveLength(1);

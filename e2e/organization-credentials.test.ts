@@ -38,7 +38,7 @@ test('表示中の操作も、組織の古い認証を断られたら案内へ�
   await page.goto('/aoba/me');
   await failOperation(page, meThemeUpdate, { slug: 'aoba' }, 401, 'organization_reauth_required');
   const theme = page.getByRole('region', { name: 'テーマ', exact: true });
-  await theme.getByRole('radio', { name: '現代風', exact: false }).click();
+  await theme.getByRole('radio', { name: 'ネオン', exact: false }).click();
   await expect(page).toHaveURL(/\/login\?.*error=organization_reauth_required/);
   await expect(page.getByRole('alert')).toHaveText(notice);
 });

@@ -28,7 +28,7 @@ const event = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('organization_resumed') }),
   // 停止の理由の切り替え。purge_on は切り替えた後の値
   z.object({ kind: z.literal('organization_suspension_changed'), purge_on: z.string().nullable() }),
-  // 組織の設定（言葉づかい、既定のテーマ）の変更
+  // 組織の設定（言葉づかい、既定のテーマ）の変更。どちらも今は変えられず、過去の行だけが出る
   z.object({ kind: z.literal('organization_settings_changed') }),
   // 管理者の指名。name が null なのは、Google の招待でまだログインしていない（か、既にいる人にまとめた）指名
   z.object({ kind: z.literal('admin_designated'), name: z.string().nullable() }),
