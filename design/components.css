@@ -2169,9 +2169,12 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 }
 /* カタログの静止の見本は、固定せずに並びの中へ置く */
 .app-version.is-static { position: static; display: inline-block; }
-/* 760px 以下の画面の入れ替え（View Transitions）で、版が本文と一緒に動かないよう入れ替えの外に置く */
+/* 760px 以下の画面の入れ替え（View Transitions）で、版が本文と一緒に動かないよう入れ替えの外に置く。
+ * スマホの下端の角は丸く、ホームバーも重なるので、下端 1px のままでは字が欠ける（viewport-fit=cover でないと safe-area は 0）。
+ * 狭い画面では下の --space-4 の余白の上へ上げ、下のタブがあるときはタブとトーストの間の --space-4 の余白に置く */
 @media (max-width: 760px) {
-  .app-version:not(.is-static) { view-transition-name: app-version; }
+  .app-version:not(.is-static) { view-transition-name: app-version; bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); }
+  html:has(.mobile-navigation) .app-version:not(.is-static) { bottom: calc(var(--space-4) + var(--mobile-bar-height) + 1px + env(safe-area-inset-bottom, 0px)); }
   ::view-transition-group(app-version), ::view-transition-new(app-version) { animation: none; }
   ::view-transition-old(app-version) { display: none; }
 }

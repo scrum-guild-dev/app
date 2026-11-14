@@ -479,7 +479,7 @@ export const dictionary = defineDictionary({
   retryFailed: 'まだ読み込めませんでした',
   loading: '読み込んでいます',
   // 全画面の右下に出す、読み込んだ画面の版（本番は Release のタグ vX.Y.Z）
-  appVersion: '版 {version}',
+  appVersion: '{version}',
 
   // メニューの項目と見出し。ワークスペースの外の画面は organization
   pageToday: '今日やること',
