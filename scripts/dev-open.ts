@@ -1,8 +1,11 @@
 // pnpm dev:open [--preview] [who] [path]: seed のセッション（seed/sessions.ts）の Cookie を置いた、画面の見えるブラウザで手元の画面を開く。
 // e2e の signIn（e2e/helpers.ts）と同じやり方を、人が見るためのコマンドにしたもの。引数と開く先の判定は dev-open-target.ts
 import { chromium, type Browser } from '@playwright/test';
+import { basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { checkDevOpenSession } from './dev-open-session.ts';
 import { resolveDevOpenTarget, type DevOpenTarget } from './dev-open-target.ts';
+import { installDevOpenTitle } from './dev-open-title.ts';
 
 function stop(message: string): never {
   console.error(message);
@@ -37,6 +40,8 @@ async function open(target: DevOpenTarget): Promise<void> {
 
   // Playwright の既定のビューポートは 1280×720 の固定で、窓を広げても画面が追わない。null で窓の大きさに合わせる
   const context = await browser.newContext({ viewport: null });
+  const worktree = basename(fileURLToPath(new URL('..', import.meta.url)));
+  await context.addInitScript(installDevOpenTitle, { origin: target.origin, worktree });
   await context.addCookies([{ name: target.cookieName, value: target.token, url: target.origin, httpOnly: true }]);
   // 開いたページがすべて閉じたら終える（macOS では最後のウィンドウを閉じてもブラウザのプロセスが残ることがある）
   context.on('page', (page) => {
@@ -47,6 +52,9 @@ async function open(target: DevOpenTarget): Promise<void> {
   const page = await context.newPage();
   try {
     await page.goto(target.url);
+    await page.bringToFront().catch(() => {
+      console.warn(`タブを前に出せない。「手元の確かめ｜${worktree}」のタブを選んで操作する`);
+    });
   } catch (err) {
     // 読み込みの途中で人がウィンドウを閉じたときは、開けなかったのではなく、終えただけ
     if (disconnected || page.isClosed()) {
@@ -56,7 +64,9 @@ async function open(target: DevOpenTarget): Promise<void> {
     await browser.close().catch(() => undefined);
     stop(`${target.url} を開けない（${err instanceof Error ? err.message : String(err)}）`);
   }
-  console.log(`${target.who} として ${target.url} を開いた。ブラウザを閉じると終わる`);
+  console.log(
+    `「手元の確かめ｜${worktree}」のタブで ${target.who} として ${target.url} を開いた。ブラウザを閉じると終わる`,
+  );
   await closed;
 }
 
