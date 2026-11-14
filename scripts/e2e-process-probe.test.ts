@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, symlink } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   identifyD1File,
   parseIoSyscall,
@@ -193,12 +194,14 @@ test(
     });
     await once(child, 'message');
     // カーネル/sandbox が syscall を拒む場合も、常に null を返す退行は見逃さない。
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    const deadline = performance.now() + 3_000;
+    while (performance.now() < deadline) {
       const sample = await sampleProcesses(process.pid);
       const io = sample.processes.find(({ pid }) => pid === child.pid)?.mainThreadIo;
       assert.ok(io);
       if (io.status === 'unavailable') {
         assert.equal(await readFile(`/proc/${child.pid}/syscall`, 'utf8').catch(() => null), null);
+        t.skip('この環境では子プロセスの syscall を読めない');
         return;
       }
       if (io.status === 'io' && io.name === 'read' && io.fd === 0) {
@@ -206,6 +209,7 @@ test(
         assert.equal(io.fileStatus, 'outside-allowlist');
         return;
       }
+      await delay(20);
     }
     assert.fail('子プロセスの read(0) 待ちを採取できなかった');
   },
