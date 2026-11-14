@@ -3298,9 +3298,10 @@ function judgeSegment(words, ctx) {
   if (INTERPRETERS.has(tool)) results.push(judgeInterpreterBody(tool, args));
   // 未知の前置きの後ろに git、シェル、インタープリタや実行時に決まる語があれば確認する。
   // 読むだけの道具と、本文や経由先を別に判定する既知の道具は除く。
-  // パッケージの暗黙のコマンド（pnpm nosuch $X）の通常引数は実行名と決め付けず、字面の実行名だけを見る。
+  // パッケージの暗黙のコマンド（pnpm nosuch $X）の末尾の通常引数は実行名と決め付けない。
+  // 後ろに引数が続く動的な語や字面の実行名は、その経由先でも見る。
   if (!isNonExecuting(tool) && !SHELLS.has(tool) && !INTERPRETERS.has(tool) && !['find', 'gfind', 'curl', 'wget', 'http', 'https', 'eval', 'source', '.', 'case', 'esac'].includes(tool) && !ENV_DECLARERS.has(tool) && !isWrangler(words[ci]) && !isCfWrangler(words[ci]) && !manager &&
-      words.some((w, i) => i > ci && (baseName(w) === 'git' || SHELLS.has(baseName(w)) || INTERPRETERS.has(baseName(w)) || (!ctx.implicitPackageCommand && isUnresolved(words, i))))) {
+      words.some((w, i) => i > ci && (baseName(w) === 'git' || SHELLS.has(baseName(w)) || INTERPRETERS.has(baseName(w)) || ((!ctx.implicitPackageCommand || i + 1 < words.length) && isUnresolved(words, i))))) {
     results.push([ASK, '前置きの道具から git、シェル、インタープリタや名前を判定できない道具を動かすと、作業場所や追加の引数を判定できない。人が確かめる']);
   }
   if (tool === 'git') {
