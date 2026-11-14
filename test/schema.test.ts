@@ -177,6 +177,13 @@ function googlePending() {
 }
 
 describe('外部キー', () => {
+  test('経験値の合計用の索引と先頭の列が重なる索引は残っていない', async () => {
+    const { results } = await env.DB.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'xp_grants_user_workspace'`,
+    ).all();
+    expect(results).toEqual([]);
+  });
+
   test('D1 は外部キーを検査する', async () => {
     await expect(insertUser(id()).result).rejects.toThrow(/FOREIGN KEY/);
   });
@@ -199,6 +206,7 @@ describe('外部キー', () => {
       .all<{ detail: string }>();
     const details = plan.map((row) => row.detail);
 
+    expect(details).toContain('SEARCH xp_grants USING COVERING INDEX xp_grants_user_workspace_amount (user_id=?)');
     expect(details.filter((detail) => detail.startsWith('SCAN '))).toEqual([]);
     // その場で作る索引（AUTOMATIC）でなく、張った索引で引くこと
     expect(details.filter((detail) => !/^SEARCH \w+ USING (COVERING )?INDEX \w+ /.test(detail))).toEqual([]);
