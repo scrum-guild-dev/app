@@ -141,11 +141,14 @@ test('起票の読み込み中に連打して別画面へ移っても、古い�
   );
   try {
     await page.goto('/aoba');
+    await page.clock.install();
     const trigger = page.getByRole('button', { name: '起票', exact: true });
     await trigger.click();
     await started;
     await expect(trigger).toHaveAttribute('aria-busy', 'true');
     const loadingToast = page.locator('.toasts:visible .toast').filter({ hasText: '読み込んでいます' });
+    await expect(loadingToast).toBeVisible();
+    await page.clock.runFor(6000);
     await expect(loadingToast).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: '読み込んでいます' }).first()).toBeVisible();
     await trigger.click();

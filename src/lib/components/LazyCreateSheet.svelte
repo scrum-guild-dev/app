@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
   import { beforeNavigate } from '$app/navigation';
-  import { dismissToast, showToast } from '../toast.svelte.ts';
+  import { dismissToast, pauseToast, showToast } from '../toast.svelte.ts';
   import { t } from '../vocabulary.svelte.ts';
   import type CreateSheet from './CreateSheet.svelte';
 
@@ -44,6 +44,8 @@
     trigger.setAttribute('aria-busy', 'true');
     noticeTimer = setTimeout(() => {
       notice = showToast(t('loading'));
+      // 取得中の知らせは、通常の4秒では消さず、完了・移動・破棄でclearNoticeが閉じる。
+      pauseToast(notice);
     }, 300);
     const current = generation;
     try {
