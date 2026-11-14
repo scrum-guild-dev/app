@@ -32,9 +32,8 @@ function oldDatabase() {
 }
 
 function upgrade(db: DatabaseSync) {
-  for (const file of migrationFiles.filter((name) => name > '0030_\uffff')) {
-    db.exec(readFileSync(new URL(file, migrations), 'utf8'));
-  }
+  // 後続のスキーマ変更を、この列削除だけの保持検査に混ぜない。
+  db.exec(readFileSync(new URL('0031_drop_vocabulary.sql', migrations), 'utf8'));
 }
 
 function columns(db: DatabaseSync, table: string) {
