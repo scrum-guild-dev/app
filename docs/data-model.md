@@ -338,7 +338,7 @@
 | disabled_at | TEXT | | 無効にした日時。入っていればこの組織に入れない |
 | credentials_not_before | TEXT | NULL 可、24文字・ミリ秒3桁の UTC ISO 形式の CHECK | この日時以前の認証では、この組織に入れない。初期値は NULL（制限なし）。既存の無効なユーザー（`disabled_at IS NOT NULL`）はマイグレーション実行時刻で補完し、有効な既存行は NULL |
 | last_seen_at | TEXT | | この組織に最後に入った日時。1時間に1回まで書く |
-| theme | TEXT | `simple`、`simple_light`、`simple_dark`、`modern` か NULL（`CHECK` は `medieval` も許すが、アプリは書かない） | 自分で選んだテーマ。NULL はシンプル（自動）で、`organization` の操作は `simple` として返す。マイプロフィールの画面（`me-theme-update`）で変え、変えると `updated_at` が動く。変更の履歴（`change_logs`）には残さない。消した中世風（`medieval`）を選んでいた行は、マイグレーション 0027 で NULL に戻した |
+| theme | TEXT | `simple`、`simple_light`、`simple_dark`、`modern` か NULL（`CHECK` は `medieval` も許すが、アプリは書かない） | 自分で選んだテーマ。NULL はシンプル（自動）で、`organization` の操作は `simple` として返す（組織の既定に従っていた人も、組織の既定を写さずシンプル（自動）になる）。マイプロフィールの画面（`me-theme-update`）で変え、変えると `updated_at` が動く。変更の履歴（`change_logs`）には残さない。消した中世風（`medieval`）を選んでいた行は、マイグレーション 0027 で NULL に戻した |
 | created_at、updated_at | TEXT | NOT NULL | |
 
 - 表の制約: `CHECK ((login_subject IS NULL) = (login_email IS NOT NULL))`、`CHECK ((login_email IS NULL) = (claim_token_hash IS NULL) AND (login_email IS NULL) = (claim_expires_at IS NULL))`、`CHECK (login_email IS NULL OR (login_provider IN ('google', 'password') AND login_email = lower(trim(login_email))))`。

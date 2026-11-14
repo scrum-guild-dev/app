@@ -118,15 +118,17 @@ describe('me-theme-update', () => {
 
   test('変更の履歴（change_logs）に残さず、組織の変更の履歴の画面にも出ない', async () => {
     const target = await createTarget();
+    const readHistory = async () => {
+      const history = await post(app, organizationHistory, { slug: target.slug, token: target.admin.token, body: {} });
+      expect(history.status).toBe(200);
+      return ((await history.json()) as { entries: unknown[] }).entries;
+    };
     const before = await changeLogCount(target.organization);
+    const entriesBefore = await readHistory();
     await update(target, target.member, { theme: 'modern' });
     await update(target, target.member, { theme: 'simple_light' });
     expect(await changeLogCount(target.organization)).toBe(before);
-
-    const history = await post(app, organizationHistory, { slug: target.slug, token: target.admin.token, body: {} });
-    expect(history.status).toBe(200);
-    const body = (await history.json()) as { entries: unknown[] };
-    expect(JSON.stringify(body.entries)).not.toContain('modern');
+    expect(await readHistory()).toEqual(entriesBefore);
   });
 
   test('同じアカウントの別の組織の users の行は変わらない（組織で絞る）', async () => {

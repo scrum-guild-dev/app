@@ -3,7 +3,7 @@
 // 登録の関数が、組織に入れると確かめた後に、その組織の入口（OrganizationDb）に結んで作る。どの道具も組織の ID を引数に取らず、
 // 組織の行は確かめた組織の ID で、組織の中の表は organization_id で絞る。共通の表と組織の中の表は別の問い合わせで引き、1回の batch() に混ぜない。
 // 道具は権限ごとに分けず、組織の中のすべての操作に渡す。道具の中で入った人（actor）を確かめ、承諾待ちの招待だけの人の操作からは
-// 自分のログインの読み取り（myLogins）のほかの道具を使えず、組織の設定の書き込みは管理者の操作からだけ使える。
+// 自分のログインの読み取り（myLogins）のほかの道具を使えない。
 // 当たらない呼び出しは処理の誤りなので、投げて 500 にする
 import { now } from '../../shared/clock.ts';
 import { reconcileAttachmentQuotaAfterSave } from '../storage/quota-warning.ts';

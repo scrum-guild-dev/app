@@ -82,7 +82,7 @@
   --color-accent: #0b57d0;      /* 操作と選択 */
   --color-on-accent: #ffffff;
   --color-accent-soft: #e8effc;
-  --color-stamp: #cf222e;       /* 依頼主の印と通知の数 */
+  --color-stamp: #cf222e;       /* 通知の数と未読の点 */
   --color-done: var(--color-ok);  /* 完了の印とクリア */
   --color-xp: #8a5a00;          /* 経験値とレベルだけに使う */
   --color-favorite: #997000;  /* お気に入りの塗った星だけ */
