@@ -2,6 +2,7 @@ import { createRawSnippet } from 'svelte';
 import { render } from 'svelte/server';
 import { expect, test, vi } from 'vitest';
 import AppShell from './AppShell.svelte';
+import LazyCreateSheet from './LazyCreateSheet.svelte';
 import { navigationLoading } from '../navigation-loading.svelte.ts';
 
 vi.mock('$app/state', () => ({
@@ -122,4 +123,10 @@ test('起票する前はシートも、ほかの画面の本文欄や属性メ�
   expect(body).not.toContain('create-sheet-title');
   expect(body).not.toContain('class="markdown-editor"');
   expect(body).not.toContain('class="row-menu"');
+});
+
+test('起票のコードを読む前も、ボタンのaria-controlsが指すidを描く', () => {
+  const body = render(LazyCreateSheet, { props: { slug: 'aoba', workspaceId: 'w1', id: 'create-target' } }).body;
+  expect(body.match(/id="create-target"/g)).toHaveLength(1);
+  expect(body).not.toContain('<dialog');
 });

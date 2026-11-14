@@ -67,4 +67,4 @@
 </script>
 
 <span class="visually-hidden" role="status">{loading ? t('loading') : ''}</span>
-{#if Sheet}<Sheet {slug} {workspaceId} {id} bind:this={sheet} />{/if}
+{#if Sheet}<Sheet {slug} {workspaceId} {id} bind:this={sheet} />{:else}<span {id} hidden></span>{/if}

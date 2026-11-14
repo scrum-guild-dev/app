@@ -39,6 +39,9 @@ for (const theme of themes) {
     // 開発時の警告を含む build は、本番の本数とは比べない。
     if (!isDevBuild(process.env)) expect(scripts.size).toBeLessThanOrEqual(50);
     const trigger = page.getByRole('button', { name: '起票', exact: true });
+    const controlledId = await trigger.getAttribute('aria-controls');
+    expect(controlledId).toBeTruthy();
+    await expect(page.locator(`[id="${controlledId}"]`)).toHaveCount(1);
     await trigger.click();
     const sheet = page.getByRole('dialog', { name: '起票', exact: true });
     await expect(sheet.getByLabel('タイトル', { exact: true })).toBeFocused();
