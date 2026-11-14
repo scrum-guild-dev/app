@@ -6640,6 +6640,8 @@ describe('#1180: 設定ファイル、環境変数、GraphQL の変数、refs/ �
   });
 });
 
+// 崩す周の「欠陥:」のコメントは、その周で見つけたときの実装の判定（allow など）と、期待が正しい根拠を書いたもの。
+// 今の判定は各テストの期待のとおり
 describe('#1180: 崩す 1 周目', () => {
   const PUSH = 'git push origin 21-x';
   const CREATE_REF = `gh api graphql -f query='mutation($n:String!){createRef(input:{repositoryId:"R",name:$n,oid:"abc"}){ref{id}}}'`;
@@ -7037,23 +7039,24 @@ describe('#1180: done-check の指摘', () => {
     return performance.now() - start;
   };
 
-  describe('置換の中の cd は、置換の中の push と書き込みの判定に効く', () => {
+  // 作業場所は main と同じく区切りを順に読む作りで追う（サブシェル、置換、関数、パイプを分けて追わない。細かい追跡は #1205）。
+  // ここの期待は、その作りで main への push を止めることを確かめる
+  describe('置換の中の cd の後の push を止める', () => {
     run([
       ['すり抜け', 'x=$(cd /main && git push)', 'deny'],
       ['すり抜け', 'echo `cd /main && git push`', 'deny'],
       ['すり抜け', 'cat <(cd /main && git push)', 'deny'],
       ['すり抜け', 'x=$(cd /main; git commit -m x)', 'deny'],
       ['すり抜け', 'x=$(cd /main && echo $(cd /main && git push))', 'deny'],
-      // 置換の中の cd は置換の外へ持ち越さない（置換の外の push は作業場所のまま）
+      // 宛先を書いた push は、宛先の名前で判定する
       ['止めすぎ', 'x=$(cd /main && pwd); git push origin 21-x', 'allow'],
       ['止めすぎ', 'x=$(cd /wt && git push)', 'allow', '/main'],
-      // 置換を含む区切りより前の作業場所から始める
       ['すり抜け', 'cd /main; x=$(git push)', 'deny'],
       ['止めすぎ', 'x=$(git push origin 21-x); cd /main', 'allow'],
     ]);
   });
 
-  describe('関数は、本体の中の cd と checkout で判定し、呼んだ後は本体の効果を当てる', () => {
+  describe('関数の本体の中と呼んだ後の、cd と checkout の後の push を止める', () => {
     run([
       ['すり抜け', 'f() { cd /main; git push; }; f', 'deny'],
       ['すり抜け', 'f() { cd /main; }; f; git push', 'deny'],
@@ -7062,25 +7065,22 @@ describe('#1180: done-check の指摘', () => {
       ['すり抜け', 'f() ( cd /main ); f; git push', 'deny'],
       ['すり抜け', 'f() { cd /main; }; g(){ f; }; g; git push', 'deny'],
       ['すり抜け', 'f() { cd /main; }; eval f; git push', 'ask'],
-      // 条件付きの呼び出しでも、呼んだものとして追う
       ['すり抜け', 'f() { cd /main; }; false && f; git push', 'deny'],
       ['止めすぎ', 'f() { cd /main; }; git push origin 21-x', 'allow'],
-      // 本体を閉じた後の cd は本体ではない
       ['すり抜け', 'f() { true; }; cd /main; git push', 'deny'],
     ]);
   });
 
-  describe('zsh は区切りの最後の語の } も本体の閉じとして読む', () => {
+  describe('zsh の } で閉じる関数の後の、cd と checkout の後の push を止める', () => {
     run([
       ['すり抜け', 'f() { true }; cd /main; git push', 'deny'],
       ['すり抜け', 'f() { true }; git checkout production && git push', 'deny'],
       ['すり抜け', 'f() { g() { true }; }; cd /main; git push', 'deny'],
-      // 閉じが見つからないまま続くものは、本体とみなさず普通の区切りとして追う
       ['すり抜け', 'f() { echo x; cd /main; git push', 'deny'],
     ]);
   });
 
-  describe('パイプの cd は、動いた場所と元の場所の両方を候補にする', () => {
+  describe('パイプの中の cd の後の push を止める', () => {
     run([
       ['すり抜け', 'echo | cd /main; git push', 'deny'],
       ['すり抜け', 'true | cd /main && git push', 'deny'],
