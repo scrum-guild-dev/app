@@ -1,5 +1,5 @@
 <script lang="ts">
-  import CreateSheet from './CreateSheet.svelte';
+  import CreateSheet from './LazyCreateSheet.svelte';
   import { MediaQuery } from 'svelte/reactivity';
   import MobileNavigation from './MobileNavigation.svelte';
   import { navigationLoading } from '../navigation-loading.svelte.ts';
