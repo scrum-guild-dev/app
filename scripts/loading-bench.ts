@@ -1,4 +1,4 @@
-// pnpm bench:loading [--runs 20] [--port 9742]。本番・既存のローカル D1 は使わない。
+// pnpm bench:loading [--runs 20] [--port 9742] [--layout-only] [--layout-before]。本番・既存のローカル D1 は使わない。
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { isBenchHealth, trackServer } from './loading-server.ts';
@@ -215,7 +215,8 @@ try {
     }
     const assessments = [];
     if (screen.operations.some((op) => op.secondary)) assessments.push('並列の従: 判定不能');
-    if (screen.after?.some((op) => op.secondary)) assessments.push('逐次の従: 構造上の候補');
+    if (screen.after?.some((op) => op.secondary))
+      assessments.push(screen.deferSecondary ? '主の表示は従を待たない' : '逐次の従: 構造上の候補');
     console.log(`| ${screen.route} | ${assessments.join(' / ') || '従なし'} | — | — |`);
     if (screen.note) console.log(`\n${screen.route}: ${screen.note}\n`);
   }
