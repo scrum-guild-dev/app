@@ -47,14 +47,23 @@
     }, 300);
     const current = generation;
     try {
-      const component = Sheet ?? (await import('./CreateSheet.svelte')).default;
+      let component = Sheet;
+      if (!component) {
+        try {
+          component = (await import('./CreateSheet.svelte')).default;
+        } catch {
+          if (alive && generation === current) {
+            showToast(t('loadFailedTitle'), 'alert', { label: t('reloadPage'), run: () => location.reload() });
+          }
+          return;
+        }
+      }
       if (!alive || generation !== current || !trigger.isConnected) return;
       Sheet = component;
       await tick();
       if (!alive || generation !== current || !trigger.isConnected) return;
-      await sheet?.show(trigger);
-    } catch {
-      if (alive && generation === current) showToast(t('loadFailedTitle'), 'alert');
+      if (!sheet) throw new Error('起票シートが初期化されていません');
+      await sheet.show(trigger);
     } finally {
       if (generation === current) {
         clearNotice();

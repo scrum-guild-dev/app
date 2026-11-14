@@ -56,22 +56,39 @@ for (const theme of themes) {
   });
 }
 
-test('起票のコードを読み込めなければ失敗を知らせ、フォーカスを奪わない', async ({ page, context, baseURL }) => {
-  if (!baseURL) throw new Error('baseURL が無い');
-  await signIn(context, baseURL, 'admin');
-  await page.setViewportSize({ width: 390, height: 844 });
-  const sheetPath = createSheetPath();
-  await page.route(
-    (url) => url.pathname === sheetPath,
-    (route) => route.abort('failed'),
-  );
-  await page.goto('/aoba');
-  const trigger = page.getByRole('button', { name: '起票', exact: true });
-  await trigger.click();
-  await expect(page.getByRole('status').filter({ hasText: '読み込めませんでした' })).toBeVisible();
-  await expect(page.getByRole('dialog', { name: '起票', exact: true })).not.toBeVisible();
-  await expect(trigger).toBeFocused();
-});
+for (const failure of ['network', '404'] as const) {
+  test(`起票の取得失敗（${failure}）はフォーカスを奪わず、画面を読み直して復旧できる`, async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    if (!baseURL) throw new Error('baseURL が無い');
+    await signIn(context, baseURL, 'admin');
+    await page.setViewportSize({ width: 390, height: 844 });
+    const sheetPath = createSheetPath();
+    const matchesSheet = (url: URL) => url.pathname === sheetPath;
+    await page.route(matchesSheet, (route) =>
+      failure === 'network'
+        ? route.abort('failed')
+        : route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not Found' }),
+    );
+    await page.goto('/aoba');
+    const trigger = page.getByRole('button', { name: '起票', exact: true });
+    await trigger.click();
+    await expect(page.getByRole('status').filter({ hasText: '読み込めませんでした' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: '起票', exact: true })).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    await page.unroute(matchesSheet);
+    const reloaded = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: '画面を読み直す', exact: true }).click();
+    await reloaded;
+    await expect(page.getByRole('heading', { name: '今日やること', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '起票', exact: true }).click();
+    await expect(
+      page.getByRole('dialog', { name: '起票', exact: true }).getByLabel('タイトル', { exact: true }),
+    ).toBeFocused();
+  });
+}
 
 test('起票の読み込み中に連打して別画面へ移っても、古いシートを開かない', async ({ page, context, baseURL }) => {
   if (!baseURL) throw new Error('baseURL が無い');

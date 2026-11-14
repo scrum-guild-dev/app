@@ -474,6 +474,7 @@ export const dictionary = defineDictionary({
   loadFailedTitle: '読み込めませんでした',
   loadFailedText: 'しばらくしてから、もう一度試してください。',
   retry: 'もう一度試す',
+  reloadPage: '画面を読み直す',
   retrying: '読み込んでいます',
   // 読み直しに失敗したときの、もう一度試すボタンの横の知らせ
   retryFailed: 'まだ読み込めませんでした',
