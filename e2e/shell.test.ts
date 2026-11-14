@@ -1000,6 +1000,10 @@ test('組織の枠の外（ログインの画面）にも版を出す', async ({
     await page.goto('/login');
     await expect(page.getByRole('heading', { level: 1, name: 'ログイン' })).toBeVisible();
     await expect(page.locator('.app-version')).toHaveText(version);
+    // 下のタブの無い狭い画面では、丸い角とホームバーから離すため下端から --space-4 上げる
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('.mobile-tabs')).toHaveCount(0);
+    expect((await versionBadgeInset(page)).bottom).toBeCloseTo(16, 0);
   } finally {
     await context.close();
   }
