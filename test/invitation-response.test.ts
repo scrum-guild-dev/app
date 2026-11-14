@@ -141,7 +141,6 @@ describe('invitation-list', () => {
     const { organization, owner, workspace } = await organizationWithOwner({
       name: 'ひばり工房',
       vocabulary: 'scrum',
-      theme: 'modern',
     });
     const closedWorkspace = await createWorkspace(organization, owner.id, {
       name: '旧サイト改修',
@@ -168,7 +167,7 @@ describe('invitation-list', () => {
     const res = await list(organization, invitee);
     expect(res.status).toBe(200);
     const listed = (await res.json()) as { organization: object };
-    // 言葉づかいと、組織の既定のテーマ（使わない列）は返さない
+    // 言葉づかいと、廃止した組織の既定のテーマは返さない
     expect(listed.organization).not.toHaveProperty('vocabulary');
     expect(listed.organization).not.toHaveProperty('theme');
     expect(listed).toEqual({

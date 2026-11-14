@@ -196,7 +196,6 @@ describe('組織の作成', () => {
       slug,
       name: 'さくら開発',
       vocabulary: 'scrum',
-      theme: 'simple',
       suspended_at: null,
       member_limit: 15,
       attachment_quota_bytes: 32212254720,
