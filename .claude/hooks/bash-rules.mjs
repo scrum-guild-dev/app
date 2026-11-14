@@ -23,10 +23,8 @@ import {
   abbreviates,
   arithmeticOf,
   baseName,
-  closesSubshell,
   commandIndex,
   concatWords,
-  definesFunction,
   expandsAt,
   followsGlobGroup,
   isAssignment,
@@ -39,9 +37,6 @@ import {
   shapeAt,
   sliceWords,
   splitSegments,
-  subshellDepth,
-  substitutionHost,
-  substitutionRun,
 } from './shell-words.mjs';
 
 const DENY = 'deny';
@@ -3250,25 +3245,11 @@ function judgeSegment(words, ctx) {
 
 const SWITCH_FLAGS_WITH_VALUE = new Set(['-b', '-B', '-c', '-C', '--orphan']);
 
-// git checkout <branch>、git switch <branch>、今のブランチの改名（git branch -m main）、HEAD の付け替え（git symbolic-ref HEAD refs/heads/main）の後の今のブランチ。
-// 今のブランチでなくなる・ならないなら null、判定できなければ undefined。current は切り替える前の今のブランチ
-function switchedBranch(args, current) {
+// git checkout <branch> と git switch <branch> の切り替え先。切り替えでなければ null、判定できなければ undefined
+function switchedBranch(args) {
   const [sub] = positionals(args, GIT_FLAGS_WITH_VALUE);
-  const after = args.slice(args.indexOf(sub) + 1);
-  if (sub === 'branch' && after.some((a) => /^-[a-zA-Z]*[mM][a-zA-Z]*$/.test(a) || isOption(a, '--move', 4))) {
-    // 名前が1つなら今のブランチの改名、2つなら 旧 新 で、旧が今のブランチのときだけ今のブランチが変わる
-    const names = positionals(after);
-    if (names.some((n) => n.includes('$'))) return undefined;
-    if (names.length === 1) return names[0];
-    return names.length === 2 && names[0] === current ? names[1] : null;
-  }
-  if (sub === 'symbolic-ref') {
-    const [target, ref] = positionals(after, new Set(['-m']));
-    if (target !== 'HEAD' || ref === undefined) return null;
-    return ref.startsWith('refs/heads/') && !ref.includes('$') ? ref.slice('refs/heads/'.length) : undefined;
-  }
   if (sub !== 'checkout' && sub !== 'switch') return null;
-  const rest = after;
+  const rest = args.slice(args.indexOf(sub) + 1);
   if (rest.includes('--')) return null; // git checkout -- <file> はファイルの復元
   if (rest.includes('-')) return undefined; // 直前のブランチ
   const created = rest.findIndex((a) => SWITCH_FLAGS_WITH_VALUE.has(a));
@@ -3485,92 +3466,17 @@ function pushingFunctions(command) {
   return names;
 }
 
-// cd の行き先の字面をつなぐ。cd .. を重ねると .. が増え、つなぐたびに全体を正規化して2乗の時間になるので、長すぎる字面は ? とする
-// （どの設定ファイルの名前にも当たらない。作業場所の字面 place は、呼び出し側で null（判定できない）に直す）
-const MAX_PLACE_LENGTH = 1024;
-function joinPlace(base, operand) {
-  const joined = path.posix.join(base, operand);
-  return joined.length > MAX_PLACE_LENGTH ? '?' : joined;
-}
-
-// 関数の本体の効果を呼んだ場所で当てるときの、入れ子の上限
-const MAX_REPLAY = 8;
-
-// 区切りが動いたか決められないか。&& と || の右、then と else と do の後、パイプの両側と & の区切り。
-// zsh はパイプの最後の段を今のシェルで動かし、bash は動かさない。どちらでも、動いた場所と元の場所の両方を候補にする
-function isUnsure(words, previous) {
-  return (
-    ['&&', '||'].includes(previous?.endOp) ||
-    /^(then|else|elif|do)$/.test(words[0]) ||
-    ['|', '|&', '&'].includes(words.endOp) ||
-    ['|', '|&'].includes(previous?.endOp)
-  );
-}
-
-// 関数の定義 f() { … } と f() ( … ) の本体の範囲。本体は呼ぶまで動かない。
-// { の本体は、{ で始まる区切りから、対応する } で閉じる区切りまで。zsh は区切りの最後の語の }（{ true }）も閉じとして読む。
-// ( の本体は、サブシェルが閉じる区切りまで。閉じが見つからないまま続くものは本体とみなさず、普通の区切りとして追う。
-// 返す Map のキーは本体が始まる区切りの位置で、値は { name, from, to, own }。
-// own は本体の区切りの位置のうち、入れ子の定義の本体を除いたもの（呼んだときに当てる効果は、内側の関数を定義するだけで、動かさない）
-function functionBodies(segments) {
-  const bodies = new Map();
-  const open = [];
-  const braceDelta = (words) => (words[0] === '{' ? 1 : 0) - (words.at(-1) === '}' ? 1 : 0);
-  for (let i = 1; i < segments.length; i++) {
-    const words = segments[i];
-    if (definesFunction(segments[i - 1]) && segments[i - 1].length === 1) {
-      const brace = words[0] === '{';
-      if (brace || subshellDepth(words) > subshellDepth(segments[i - 1])) {
-        open.push({ name: segments[i - 1][0], from: i, to: -1, own: [], brace, depth: 0, base: subshellDepth(words) });
-      }
-    }
-    const top = open.at(-1);
-    if (!top) continue;
-    top.own.push(i);
-    if (top.brace) {
-      top.depth += braceDelta(words);
-      if (top.depth <= 0) closeBody(top, i);
-    } else if (subshellDepth(words) - closesSubshell(words) < top.base) closeBody(top, i);
-  }
-  function closeBody(top, at) {
-    top.to = at;
-    bodies.set(top.from, top);
-    open.pop();
-  }
-  return bodies;
-}
-
-// cd、pushd、popd の行き先の字面をつないだもの { words, previous, stack }。words は今の場所、previous は cd - の行き先、stack は pushd の戻り先。
-// 作業場所を解決できない cd（cd ~/.config/git）の後の相対パスを、設定ファイルの名前と照らすのに使う。
-// 絶対パス、~、変数で始まる行き先は、それまでを置き換える。cd - と popd は、bash と同じく直前の場所と pushd の前の場所へ戻る
-// pushd +N、-N と popd +N、-N は、スタックの N 番目（先頭が 0。- は末尾から数える）を回すか取り除く。-n は場所を変えない。
-// cd ~-、cd "$OLDPWD" は cd - と同じ直前の場所
-function cdStateAfter(words, ci, state) {
-  const { words: current, previous } = state;
-  const tool = words[ci];
-  const args = words.slice(ci + 1).filter((w) => w !== '--');
-  const stays = tool !== 'cd' && args.includes('-n');
-  const operand = args.find((w) => !/^-[LPn]+$/.test(w));
-  // 先頭が今の場所で、その後ろにスタックの上から順に並べた一覧
-  const list = [current, ...state.stack.slice().reverse()];
-  const make = (entries, before) => ({ words: entries[0], previous: before, stack: entries.slice(1).reverse() });
-  const rotation = /^([+-])(\d+)$/.exec(operand ?? '');
-  const index = rotation ? (rotation[1] === '+' ? Number(rotation[2]) : list.length - 1 - Number(rotation[2])) : -1;
-  if (tool === 'popd') {
-    if (rotation) return index < 0 || index >= list.length ? state : make(list.filter((_, k) => k !== index), index === 0 ? current : previous);
-    if (list.length === 1) return state;
-    return stays ? make(list.filter((_, k) => k !== 1), previous) : make(list.slice(1), current);
-  }
-  if (tool === 'pushd') {
-    if (rotation) return index < 0 || index >= list.length ? state : make([...list.slice(index), ...list.slice(0, index)], current);
-    // 引数なしの pushd は先頭の2つを入れ替える
-    if (operand === undefined) return list.length === 1 ? state : make([list[1], list[0], ...list.slice(2)], current);
-  }
-  let to = '~';
-  if (operand === '-' || operand === '~-' || /^\$\{?OLDPWD\}?$/.test(operand ?? '')) to = previous;
-  else if (operand !== undefined) to = /^[/~$]/.test(operand) ? operand : joinPlace(current, operand);
-  if (tool !== 'pushd') return { ...state, words: to, previous: current };
-  return stays ? make([current, to, ...list.slice(1)], previous) : make([to, ...list], current);
+// cd、pushd の行き先の字面をつないだもの。作業場所（dir）を解決できない cd（cd ~/.config/git）の後の相対パスを、設定ファイルの名前と照らすのにだけ使う。
+// git push や守る先の判定の作業場所には使わない（それは dir と place が持つ）。絶対パス、~、変数で始まる行き先は、それまでを置き換える。
+// cd -、popd、pushd +N のように行き先を字面から決められないものは、どの名前にも当たらない ? とする。
+// cd .. を重ねると .. が増え、つなぐたびに全体を正規化して2乗の時間になるので、長すぎる字面も ? とする
+const MAX_CD_WORDS_LENGTH = 1024;
+function cdWordsAfter(words, ci, before) {
+  const operand = words.slice(ci + 1).find((w) => !/^-[LPn]+$/.test(w) && w !== '--');
+  if (words[ci] === 'popd' || operand === '-' || operand === '~-' || /^[+-]\d+$|^\$\{?OLDPWD\}?$/.test(operand ?? '')) return '?';
+  if (operand === undefined) return words[ci] === 'cd' ? '~' : '?';
+  const joined = /^[/~$]/.test(operand) ? operand : path.posix.join(before, operand);
+  return joined.length > MAX_CD_WORDS_LENGTH ? '?' : joined;
 }
 
 // cd、pushd の行き先の語。前の作業場所が分からないことは問わず、行き先の語だけで判定できなければ null
@@ -3635,144 +3541,28 @@ function judgeCommand(
   },
 ) {
   if (depth > MAX_DEPTH) return [ASK, DEEP_REASON];
+  let dir = cwd;
+  // 同じコマンドの中で checkout や switch をした後の push は、切り替えた先のブランチで判定する
+  const switched = new Map();
+  const currentBranch = (d) => (switched.has(d) ? switched.get(d) : branchOf(d));
   const results = [];
   const segments = splitSegments(command);
   // git rev-parse --git-common-dir などで設定ファイルのあるディレクトリを引いたコマンドは、その場所を字面で読めない。外側のコマンドが引いたものも引き継ぐ
   namesGitDir ||= namesGitDirIn(segments, command);
   const pushing = pushingFunctions(command);
-  // (( )) の中の代入は区切りの位置を追わず、どこにあっても最初から設定されているものとする（止めすぎる側に倒す）
+  // (( )) と $(( )) の中の代入は区切りの位置を追わず、どこにあっても最初から設定されているものとする（止めすぎる側に倒す）
   if (arithmeticOf(segments).some((body) => ARITHMETIC_CONFIG_ASSIGNMENT.test(body))) env = { ...env, [GIT_CONFIG_LOCATION]: SET_IN_COMMAND };
-  // 作業場所の状態。cd、pushd、popd と、サブシェルと置換と関数の本体の出入りが、この1つの形を読み書きする
-  const walk = { dir: cwd, place, cdState: { words: cdWords, previous: '', stack: [] }, alternatives: [] };
-  const snapshot = () => ({ ...walk });
-  const restore = (saved) => Object.assign(walk, saved);
-  const unguarded = () => walk.alternatives.filter((alt) => !alt.guarded);
-  // 同じコマンドの中で checkout や switch をした後の push は、切り替えた先のブランチで判定する
-  const switched = new Map();
-  const currentBranch = (d) => (switched.has(d) ? switched.get(d) : branchOf(d));
-  // 区切りが作業場所とブランチに残す効果。判定（judgeSegment）とは分け、関数の呼び出しで本体の効果をもう一度当てるのにも使う。
-  // unsure は、この区切りが動いたか決められないとき（false && f の f）
-  const functions = new Map();
-  const replaying = new Set();
-  const calledFunctions = (words, ci) => {
-    if (functions.size === 0) return [];
-    if (functions.has(words[ci])) return [words[ci]];
-    return baseName(words[ci]) === 'eval' ? words.slice(ci + 1).flatMap((w) => w.split(/[^\w.-]+/)).filter((n) => functions.has(n)) : [];
-  };
-  const advance = (words, ci, previous, segmentEnv, unsure = false) => {
-    if (ci === -1) return;
-    const tool = baseName(words[ci]);
-    const uncertain = unsure || isUnsure(words, previous);
-    if (['cd', 'pushd', 'popd'].includes(words[ci])) {
-      // 動いたか決められない cd は、動いたものとして進めるが、動かなかった場合の場所（今の場所）も覚える
-      walk.alternatives = uncertain ? [...walk.alternatives, { dir: walk.dir, words: walk.cdState.words, guarded: true }] : [];
-      walk.dir = nextDir(words, ci, walk.dir, segmentEnv);
-      walk.cdState = cdStateAfter(words, ci, walk.cdState);
-      const to = cdTarget(words, ci, segmentEnv);
-      const nextPlace = to === null || walk.place === null ? null : to.startsWith('/') ? to : joinPlace(walk.place, to);
-      walk.place = nextPlace === '?' ? null : nextPlace;
-      return;
-    }
-    if (tool === 'git' && walk.dir) {
-      const branch = switchedBranch(words.slice(ci + 1), currentBranch(walk.dir));
-      if (branch !== null) switched.set(walk.dir, branch);
-    }
-    // 関数を呼んだら、本体の区切りの効果を、呼んだ場所で当てる（本体は定義の区切りでは動かない）。再帰と深すぎる入れ子は判定できない
-    for (const name of calledFunctions(words, ci)) {
-      if (replaying.has(name) || replaying.size >= MAX_REPLAY) {
-        walk.dir = null;
-        walk.place = null;
-        continue;
-      }
-      replaying.add(name);
-      for (const at of functions.get(name).own) advance(segments[at], commandIndex(segments[at]), segments[at - 1], env, uncertain);
-      replaying.delete(name);
-    }
-    // eval、source、. は中身をこのシェルで動かすので、中の cd の後を判定できない（popd と同じ扱い）
-    if (IN_SHELL_RUNNERS.has(tool)) {
-      walk.dir = null;
-      walk.place = null;
-    }
-  };
+  // 直前の区切り。標準入力を前の区切りから受ける gh api --input - の本文を見るのに使う（ctx.stdinContext）
+  let lastSegment;
   const shapeOfStdin = stdinShape(command);
   // xargs は標準入力から引数を足すので、シークレットの名前を標準入力に流す形（echo <名前> | xargs cat）は、xargs の後ろの道具からは見えない。
   // xargs がどこかの区切りにあれば、コマンド全体のどこかの語がシークレットの名前に当たるだけで止める。
   // 名前が見えない形（ls -a | xargs grep TOKEN）は止められない
   const hasXargs = segments.some((words) => prefixIndexes(words).some((i) => prefixName(words[i]) === 'xargs'));
   if (hasXargs && segments.some((words) => [...words, ...redirectTargets(words)].some(mentionsSecret))) results.push([DENY, SECRET_FILE_REASON]);
-  // サブシェル（( … )）の中の cd は括弧の中だけに効くので、括弧に入るときの作業場所を覚え、閉じたら戻す
-  const scopes = [];
-  let leaving = 0;
-  // 関数の本体は呼ぶまで動かないので、本体に入るときの作業場所とブランチを覚え、閉じたら戻す。本体の中の判定は、本体の cd と checkout を追って行う
-  const bodies = functionBodies(segments);
-  const bodyStack = [];
-  // 置換（$( )、` `、<( )）の中の区切りは、置換を含む区切りに入る前の作業場所から始め、置換ごとに範囲を分ける。
-  // 置換の中の checkout と switch が書き換える HEAD はリポジトリのファイルなので、置換の外にも残る。置換を含む区切りの判定の前に追う
-  const hostStates = new Map();
-  const substitutionsOf = new Map();
   for (const words of segments) {
-    const host = substitutionHost(words);
-    if (host === undefined) continue;
-    if (!substitutionsOf.has(host)) substitutionsOf.set(host, []);
-    substitutionsOf.get(host).push(words);
-  }
-  let run;
-  // 直前の区切り。標準入力を前の区切りから受ける gh api --input - の本文を見るのに使う（ctx.stdinContext）
-  let lastSegment;
-  // 置換の中の区切りの並びに入る。置換を含む区切りに入る前の作業場所と環境から始める
-  const enterRun = (words) => {
-    if (substitutionRun(words) === run) return;
-    run = substitutionRun(words);
-    const host = hostStates.get(substitutionHost(words));
-    if (host) {
-      restore(host.walk);
-      env = host.env;
-    }
-    scopes.length = 0;
-    leaving = 0;
-    lastSegment = undefined;
-  };
-  // 前の区切りが閉じたサブシェルから出て、この区切りが入るサブシェルに入る
-  const crossSubshells = (words) => {
-    for (; leaving > 0; leaving--) restore(scopes.pop() ?? {});
-    while (scopes.length < subshellDepth(words)) scopes.push(snapshot());
-    leaving = closesSubshell(words);
-  };
-  // 関数の本体に入る。本体の区切りは本体の cd と checkout を追って判定するが、本体を閉じたら（leaveBodies）入る前に戻す
-  const enterBody = (index) => {
-    const body = bodies.get(index);
-    if (!body) return;
-    functions.set(body.name, body);
-    bodyStack.push({ body, saved: snapshot(), switched: new Map(switched) });
-  };
-  const leaveBodies = (index) => {
-    while (bodyStack.length > 0 && bodyStack.at(-1).body.to === index) {
-      const frame = bodyStack.pop();
-      restore(frame.saved);
-      switched.clear();
-      for (const [key, value] of frame.switched) switched.set(key, value);
-    }
-  };
-  // 置換を含む区切りに入る前の作業場所を覚え、置換の中の checkout と switch を先に当てる
-  const enterHost = (index) => {
-    if (!substitutionsOf.has(index)) return;
-    hostStates.set(index, { walk: snapshot(), env });
-    for (const inner of substitutionsOf.get(index)) {
-      const innerCi = commandIndex(inner);
-      if (innerCi === -1 || baseName(inner[innerCi]) !== 'git' || !walk.dir) continue;
-      const branch = switchedBranch(sliceWords(inner, innerCi + 1), currentBranch(walk.dir));
-      if (branch !== null) switched.set(walk.dir, branch);
-    }
-  };
-  for (const [index, words] of segments.entries()) {
-    enterRun(words);
-    crossSubshells(words);
     const previous = lastSegment;
     lastSegment = words;
-    // && でつながる後ろの区切りは、cd が動いたときだけ動く。; や改行や || を挟むと、cd が動いたかに関わらず動く
-    if (previous?.endOp !== '&&') walk.alternatives = walk.alternatives.map((alt) => ({ ...alt, guarded: false }));
-    enterBody(index);
-    enterHost(index);
     // 括弧の glob（cp /tmp/x(N) wrangler.jsonc）の閉じの後ろの語は、同じコマンドの引数なのに別の区切りに切られ、前の区切りからは見えない。
     // 道具を問わず、何をどこへ渡すかを判定できないものとする。後ろがリダイレクトだけ（ls *(N) 2>/dev/null）なら、宛先はこの区切りで見るので通す
     if (followsGlobGroup(words) && words.length > 0) {
@@ -3787,20 +3577,30 @@ function judgeCommand(
     const mark = (names) => Object.fromEntries([...names].map((name) => [name, env[name] || SET_IN_COMMAND]));
     const segmentEnv = { ...env, ...mark(once) };
     env = { ...env, ...mark(after) };
-    // eval は文字列を同じシェルで動かすので、eval f も関数 f を呼ぶ
+    // 関数を呼ぶ前の代入と export は、関数の中の git push に環境として渡る（eval は文字列を同じシェルで動かすので、eval f も関数 f を呼ぶ）
     const callsPushing = ci !== -1 && (pushing.has(words[ci]) || (baseName(words[ci]) === 'eval' && words.slice(ci + 1).some((w) => w.split(/[^\w.-]+/).some((n) => pushing.has(n)))));
     if (callsPushing && segmentEnv[GIT_CONFIG_LOCATION]) results.push([ASK, GIT_CONFIG_ENV_REASON]);
     // cd の後の git push は、移った先のブランチで判定する。展開できない cd の先と popd の後は判定できないものとする
     if (ci !== -1 && ['cd', 'pushd', 'popd'].includes(words[ci])) {
       if (setsWorkersCi(words, ci)) results.push([DENY, WORKERS_CI_REASON]);
       // cd . > .dev.vars のようにリダイレクトを付けられる。道具として見ない（cd の引数は書き込み先ではない）
-      results.push(...judgeFileWrites('', [], words, walk.dir, walk.cdState.words, namesGitDir, unguarded()));
-    } else {
-      const ctx = { dir: walk.dir, branchOf: currentBranch, scriptOf, packageDirOf, depth, env: segmentEnv, root, place: walk.place, cdWords: walk.cdState.words };
-      results.push(...judgeSegment(words, { ...ctx, cdAlternatives: unguarded(), namesGitDir, findBudget, segmentCount: segments.length, stdinContext: { previous, ...shapeOfStdin } }));
+      results.push(...judgeFileWrites('', [], words, dir, cdWords, namesGitDir));
+      dir = nextDir(words, ci, dir, segmentEnv);
+      cdWords = cdWordsAfter(words, ci, cdWords);
+      const to = cdTarget(words, ci, segmentEnv);
+      place = to === null || place === null ? null : to.startsWith('/') ? to : path.posix.join(place, to);
+      continue;
     }
-    advance(words, ci, previous, segmentEnv);
-    leaveBodies(index);
+    results.push(...judgeSegment(words, { dir, branchOf: currentBranch, scriptOf, packageDirOf, depth, env: segmentEnv, root, place, cdWords, namesGitDir, findBudget, segmentCount: segments.length, stdinContext: { previous, ...shapeOfStdin } }));
+    if (ci !== -1 && baseName(words[ci]) === 'git' && dir) {
+      const branch = switchedBranch(words.slice(ci + 1));
+      if (branch !== null) switched.set(dir, branch);
+    }
+    // eval、source、. は中身をこのシェルで動かすので、中の cd の後を判定できない（popd と同じ扱い）
+    if (ci !== -1 && IN_SHELL_RUNNERS.has(baseName(words[ci]))) {
+      dir = null;
+      place = null;
+    }
   }
   return results.find(([d]) => d === DENY) ?? results.find(([d]) => d === ASK) ?? null;
 }

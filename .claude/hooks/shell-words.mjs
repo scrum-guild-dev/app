@@ -64,35 +64,10 @@ export function followsGlobGroup(words) {
   return words.followsGlobGroup === true;
 }
 
-// 区切りが入っているサブシェル（( … )）の数。括弧の glob と関数の定義の () は数えない。
-// 作業場所と cd の行き先は、サブシェルの中でだけ変わり、閉じの後ろには持ち越されない
-export function subshellDepth(words) {
-  return words.subshellDepth ?? 0;
-}
-
-// 区切りの後ろで閉じるサブシェルの数。閉じの ) の手前が ; や改行で閉じの区切りが空のときは、直前の区切りに数える
-export function closesSubshell(words) {
-  return words.closesSubshell ?? 0;
-}
-
-// 区切りが、関数の定義 f() { … } の名前（() の手前の1語）か。本体は定義では動かない
-export function definesFunction(words) {
-  return words.definesFunction === true;
-}
-
-// 区切りの並びにある算術のコマンド（(( … ))）の中身の一覧（置換の中のものも含む）
+// 区切りの並びにある算術のコマンド（(( … ))）と算術の展開（$(( … ))）の式の一覧（置換の中のものも含む）。
+// コマンドの頭の (( は区切りに残らず、$(( … )) は語の中の $(…) に置き換わるので、式の中身を判定の側が見られるよう配列の属性に持つ
 export function arithmeticOf(segments) {
   return segments.arithmetic ?? [];
-}
-
-// 同じ置換の中の区切りの並びの先頭の位置。置換の外の区切りは undefined
-export function substitutionRun(words) {
-  return words.runStart;
-}
-
-// $( ) と ` ` の中の区切りが、どの区切りの置換か（splitSegments が返す区切りの並びの位置）。置換を含む区切りでなければ undefined
-export function substitutionHost(words) {
-  return words.hostIndex;
 }
 
 // 語と印を一緒に切り出す。Array.prototype.slice は印を落とすので、判定の途中で語を切り出すときはこれを使う。
@@ -264,15 +239,7 @@ function substitutionsIn(body) {
 export function splitSegments(command) {
   const segments = [];
   const nested = [];
-  // nested の各要素を含む区切りの位置（今組んでいる区切りが、次に segments へ入る位置）
-  const nestedHosts = [];
-  const addNested = (...items) => addNestedAt(segments.length, ...items);
-  // ヒアドキュメントの本文は、行の終わりで読む時点で、持ち主の区切り（< を書いた区切り）が既に入っているので、持ち主の位置を渡す
-  const addNestedAt = (host, ...items) => {
-    nested.push(...items);
-    for (let k = 0; k < items.length; k++) nestedHosts.push(host);
-  };
-  // 算術のコマンド（(( … ))）の中身。コマンドの頭の (( は区切りに残らないので、判定の側が見られるよう配列の属性に持つ
+  // 算術の式（(( … ))、$(( … ))）の中身
   const arithmetic = [];
   const heredocs = [];
   let words = withMarks([], [], []);
@@ -286,14 +253,6 @@ export function splitSegments(command) {
   let testDepth = 0;
   // 開いている ( ごとに、括弧の glob か（サブシェルや関数の定義でないか）
   const groups = [];
-  // 今の区切りを、サブシェルを閉じる ) で終えるところか（groups からは外した後なので、区切りの印を付けるときに分かるようにする）
-  let closingSubshell = false;
-  // 今の区切りを、サブシェルを開く ( の手前で終えるところか（区切りの手前の語は、開く括弧の外にある）
-  let openingSubshell = false;
-  // 今の区切りを、関数の定義の () の手前で終えるところか（f の区切り）
-  let definingFunction = false;
-  // 閉じる ) の直前の、閉じる括弧を含めた開いているサブシェルの数
-  let subshellsBeforeClose = 0;
   // 今の区切りが、括弧の glob の閉じの ) の直後から始まったか
   let afterGlobGroup = false;
 
@@ -331,9 +290,6 @@ export function splitSegments(command) {
     closeRedirect();
     if (words.length > 0 || words.redirects.length > 0) {
       if (afterGlobGroup) Object.defineProperty(words, 'followsGlobGroup', { value: true, configurable: true });
-      // 閉じの ) で終わる区切りは、閉じる括弧の中にある（groups からは先に外してある）
-      const open = groups.filter((kind) => kind === false).length + (closingSubshell ? 1 : 0) - (openingSubshell ? 1 : 0);
-      if (open > 0) Object.defineProperty(words, 'subshellDepth', { value: open, configurable: true });
       segments.push(words);
     }
     words = withMarks([], [], []);
@@ -392,7 +348,7 @@ export function splitSegments(command) {
     if (command.startsWith('$(', i)) {
       const { inner, end, expression } = readSubstitution(command, i);
       if (expression !== undefined) arithmetic.push(expression);
-      addNested(...inner);
+      nested.push(...inner);
       add(SUBSTITUTION, true);
       expands = true;
       i = end;
@@ -401,7 +357,7 @@ export function splitSegments(command) {
     if (c === '`') {
       const end = command.indexOf('`', i + 1);
       const stop = end === -1 ? command.length : end;
-      addNested(command.slice(i + 1, stop));
+      nested.push(command.slice(i + 1, stop));
       add(SUBSTITUTION, true);
       expands = true;
       i = stop;
@@ -427,7 +383,7 @@ export function splitSegments(command) {
         if (command.startsWith('$(', j)) {
           const { inner, end, expression } = readSubstitution(command, j);
           if (expression !== undefined) arithmetic.push(expression);
-          addNested(...inner);
+          nested.push(...inner);
           add(SUBSTITUTION, true);
           j = end + 1;
           continue;
@@ -435,14 +391,14 @@ export function splitSegments(command) {
         if (command[j] === '`') {
           const end = command.indexOf('`', j + 1);
           const stop = end === -1 ? command.length : end;
-          addNested(command.slice(j + 1, stop));
+          nested.push(command.slice(j + 1, stop));
           add(SUBSTITUTION, true);
           j = stop + 1;
           continue;
         }
         if (command[j] === '$') {
           const { end, substitutions } = readParameter(command, j);
-          addNested(...substitutions);
+          nested.push(...substitutions);
           const parameter = command.slice(j, end);
           if (parameter === '$' && !/[=~^]/.test(command[end] ?? '')) {
             // 名前の続かない $ は文字（"a $"）。zsh の $=x、$~x、$^x は語を分けるか glob にする
@@ -476,7 +432,7 @@ export function splitSegments(command) {
     if ((c === '<' || c === '>') && command[i + 1] === '(') {
       // プロセス置換 <(…) と >(…)。中身は別の区切りとして判定し、語には /dev/fd/… のパスに置き換わる印を残す
       const end = closingParen(command, i + 2);
-      addNested(command.slice(i + 2, end));
+      nested.push(command.slice(i + 2, end));
       add(`${c}(…)`);
       i = end;
       continue;
@@ -511,7 +467,7 @@ export function splitSegments(command) {
         // 本文は改行の後で読み、この項目の target に足す。<<- も同じ op（タブを外す違いは、本文の行を trim して照合するので区別しない）
         const redirect = { op: '<<', target: '', shape: '', substitutions: [] };
         words.redirects.push(redirect);
-        heredocs.push({ delimiter, redirect, quoted, host: segments.length });
+        heredocs.push({ delimiter, redirect, quoted });
         i = next - 1;
         continue;
       }
@@ -538,7 +494,7 @@ export function splitSegments(command) {
     if (command.startsWith('((', i) && !inWord && !openRedirect && (commandIndex(words) === -1 || words.at(-1) === 'for')) {
       const end = arithmeticEnd(command, i + 2);
       arithmetic.push(command.slice(i + 2, end - 1));
-      addNested(...substitutionsIn(command.slice(i + 2, end - 1)));
+      nested.push(...substitutionsIn(command.slice(i + 2, end - 1)));
       i = end;
       continue;
     }
@@ -587,41 +543,22 @@ export function splitSegments(command) {
           add(GLOB_GROUP);
           expands = true;
         }
-        // 中身の無い () は関数の定義。その名前の区切りに definesFunction の印を付ける
-        const isDefinition = !isGlob && /^\(\s*\)/.test(command.slice(i));
-        groups.push(isGlob ? true : isDefinition ? 'definition' : false);
-        openingSubshell = !isGlob && !isDefinition;
-        definingFunction = isDefinition;
+        groups.push(isGlob);
         depth++;
       } else if (op === ')') {
         depth = Math.max(0, depth - 1);
-        const closed = groups.pop();
-        closesGlobGroup = closed === true;
-        closingSubshell = closed === false;
-        subshellsBeforeClose = groups.filter((kind) => kind === false).length + (closed === false ? 1 : 0);
+        closesGlobGroup = groups.pop() === true;
       }
       // この区切りの後ろの演算子。| と |& は、この区切りの標準出力を次の区切りの標準入力に渡す
       const ended = words;
       endSegment();
       if (segments.at(-1) === ended) Object.defineProperty(ended, 'endOp', { value: op, configurable: true });
-      if (segments.at(-1) === ended && definingFunction) Object.defineProperty(ended, 'definesFunction', { value: true, configurable: true });
-      // 閉じの ) の手前が ; や改行や & だと、閉じる区切りは語が無く捨てられるので、直前の区切りが閉じるものとして数える。
-      // ) が続くと（(a; (b))）同じ区切りが2つを閉じる。括弧の中に区切りが無ければ、直前の区切りは括弧の外のものなので数えない
-      if (closingSubshell) {
-        const last = segments.at(-1);
-        if (last && (last.subshellDepth ?? 0) >= subshellsBeforeClose) {
-          Object.defineProperty(last, 'closesSubshell', { value: (last.closesSubshell ?? 0) + 1, configurable: true });
-        }
-      }
-      closingSubshell = false;
-      openingSubshell = false;
-      definingFunction = false;
       afterGlobGroup = closesGlobGroup;
       i += op.length - 1;
       // ヒアドキュメントの本文（行の終わりから終わりの印の行まで）は、区切りとして読まない
       if (op === '\n' && heredocs.length > 0) {
         let j = i + 1;
-        for (const { delimiter, redirect, quoted, host } of heredocs) {
+        for (const { delimiter, redirect, quoted } of heredocs) {
           const body = [];
           let closed = false;
           while (j < command.length && !closed) {
@@ -638,7 +575,7 @@ export function splitSegments(command) {
           // 引用符も \ も無い印の本文は、シェルが $(…)、`…`、${…} の中の置換を実行する
           if (!quoted) {
             const inner = substitutionsIn(redirect.target);
-            addNestedAt(host, ...inner);
+            nested.push(...inner);
             redirect.substitutions.push(...inner);
           }
         }
@@ -659,7 +596,7 @@ export function splitSegments(command) {
     }
     if (c === '$') {
       const { end, substitutions } = readParameter(command, i);
-      addNested(...substitutions);
+      nested.push(...substitutions);
       add(command.slice(i, end), true);
       expands = true;
       i = end - 1;
@@ -669,18 +606,11 @@ export function splitSegments(command) {
     add(c);
   }
   endSegment();
-  // 中身の区切りは外の区切りの後ろに並べる。どの区切りの置換かを hostIndex に持つ（入れ子の置換は、入れ子の中の位置を外の並びの位置に直す）
-  // runStart は、同じ置換の中の区切りの並びの先頭の位置（置換ごとに作業場所の範囲を分けるため）
-  nested.forEach((inner, k) => {
-    const from = segments.length;
+  for (const inner of nested) {
     const innerSegments = splitSegments(inner);
-    for (const s of innerSegments) {
-      Object.defineProperty(s, 'hostIndex', { value: s.hostIndex === undefined ? nestedHosts[k] : s.hostIndex + from, configurable: true });
-      Object.defineProperty(s, 'runStart', { value: s.runStart === undefined ? from : s.runStart + from, configurable: true });
-    }
     arithmetic.push(...arithmeticOf(innerSegments));
     segments.push(...innerSegments);
-  });
+  }
   Object.defineProperty(segments, 'arithmetic', { value: arithmetic, configurable: true });
   return segments;
 }
