@@ -725,6 +725,83 @@ test('一覧が広いまま指で押す画面（タブレットの横置き）�
   await context.close();
 });
 
+test('引き出しの保存と終了で読み直した木が、空の行で作ったタスクより遅れて届いても、タスクは画面に残る', async ({
+  page,
+}) => {
+  await createWorkspace(page, '遅れた読み直しワークスペース');
+  await addStory(page, '読み直しの前のストーリー');
+
+  // 空の行から送るが、まだサーバーには作らない。引き出しを閉じる移動が木の応答を待つ場合も、
+  // 作成を先に始めておけば、古い木を取得した後に作成の応答だけを先に返せる。
+  const creating = Promise.withResolvers<void>();
+  const create = Promise.withResolvers<void>();
+  const created = Promise.withResolvers<void>();
+  await page.route('**/api/aoba/task-create', async (route) => {
+    creating.resolve();
+    await create.promise;
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    await route.fulfill({ response });
+    created.resolve();
+  });
+  const draft = page.locator('.tree > .draft-row').getByRole('textbox', { name: 'タスクを足す', exact: true });
+  await draft.fill('遅れた木にも消されないタスク');
+  await draft.press('Enter');
+  await creating.promise;
+
+  await page.getByRole('link', { name: '読み直しの前のストーリー', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: '読み直しの前のストーリー', exact: true });
+  await expect(drawer).toBeVisible();
+
+  // 保存から閉じる移動までの読み直しをすべて止める。最初の1件だけ止めると、
+  // 閉じる移動の読み直しが先に届き、競合を再現できない。
+  const reloading = Promise.withResolvers<void>();
+  const closingReload = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let reads = 0;
+  await page.route('**/api/aoba/backlog-tree', async (route) => {
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    reads += 1;
+    reloading.resolve();
+    if (reads >= 2) closingReload.resolve();
+    await release.promise;
+    await route.fulfill({ response });
+  });
+
+  try {
+    await drawer.getByRole('heading', { level: 2 }).getByRole('button').click();
+    const input = drawer.getByRole('textbox', { name: 'タイトル' });
+    await input.fill('読み直した後のストーリー');
+    const saved = waitForResponses(page, '/story-update');
+    await input.press('Enter');
+    await saved;
+    await reloading.promise;
+    const renamed = page.getByRole('dialog', { name: '読み直した後のストーリー', exact: true });
+    await expect(renamed).toBeVisible();
+    await page.keyboard.press('Escape');
+    const closed = page.waitForURL((url) => !url.searchParams.has('story'));
+    // 閉じるだけで木を読まない場合は移動の完了、読む場合は古い木の取得まで待つ。
+    await Promise.race([closed, closingReload.promise]);
+
+    create.resolve();
+    await created.promise;
+    // 応答を受け取るだけでなく、画面が追加したことを確認してから古い木を返す。
+    // 引き出しがまだ開いている場合もあるので、ここでは表示ではなく DOM への追加を見る。
+    await expect(taskRow(page, '遅れた木にも消されないタスク')).toBeAttached();
+    release.resolve();
+    await closed;
+    await expect(renamed).toBeHidden();
+    await waitForSettled(page);
+    await expect(storyRow(page, '読み直した後のストーリー')).toBeVisible();
+    await expect(rootTitles(page)).toHaveText(['遅れた木にも消されないタスク']);
+  } finally {
+    create.resolve();
+    release.resolve();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
 test('作って完了にしたタスクは、その後の読み直しで未完了の行として戻らない', async ({ page }) => {
   await createWorkspace(page, '完了後の読み直しワークスペース');
   await addTaskRow(page, '完了して消える依頼');
