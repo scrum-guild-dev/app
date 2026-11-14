@@ -80,6 +80,16 @@ export function definesFunction(words) {
   return words.definesFunction === true;
 }
 
+// 区切りの並びにある算術のコマンド（(( … ))）の中身の一覧（置換の中のものも含む）
+export function arithmeticOf(segments) {
+  return segments.arithmetic ?? [];
+}
+
+// 同じ置換の中の区切りの並びの先頭の位置。置換の外の区切りは undefined
+export function substitutionRun(words) {
+  return words.runStart;
+}
+
 // $( ) と ` ` の中の区切りが、どの区切りの置換か（splitSegments が返す区切りの並びの位置）。置換を含む区切りでなければ undefined
 export function substitutionHost(words) {
   return words.hostIndex;
@@ -220,7 +230,7 @@ function arithmeticEnd(text, start) {
 function readSubstitution(text, j) {
   if (text[j + 2] === '(') {
     const end = arithmeticEnd(text, j + 3);
-    return { inner: substitutionsIn(text.slice(j + 3, end - 1)), end };
+    return { inner: substitutionsIn(text.slice(j + 3, end - 1)), end, expression: text.slice(j + 3, end - 1) };
   }
   const end = closingParen(text, j + 2);
   return { inner: [text.slice(j + 2, end)], end };
@@ -256,10 +266,14 @@ export function splitSegments(command) {
   const nested = [];
   // nested の各要素を含む区切りの位置（今組んでいる区切りが、次に segments へ入る位置）
   const nestedHosts = [];
-  const addNested = (...items) => {
+  const addNested = (...items) => addNestedAt(segments.length, ...items);
+  // ヒアドキュメントの本文は、行の終わりで読む時点で、持ち主の区切り（< を書いた区切り）が既に入っているので、持ち主の位置を渡す
+  const addNestedAt = (host, ...items) => {
     nested.push(...items);
-    for (let k = 0; k < items.length; k++) nestedHosts.push(segments.length);
+    for (let k = 0; k < items.length; k++) nestedHosts.push(host);
   };
+  // 算術のコマンド（(( … ))）の中身。コマンドの頭の (( は区切りに残らないので、判定の側が見られるよう配列の属性に持つ
+  const arithmetic = [];
   const heredocs = [];
   let words = withMarks([], [], []);
   let word = '';
@@ -376,7 +390,8 @@ export function splitSegments(command) {
       continue;
     }
     if (command.startsWith('$(', i)) {
-      const { inner, end } = readSubstitution(command, i);
+      const { inner, end, expression } = readSubstitution(command, i);
+      if (expression !== undefined) arithmetic.push(expression);
       addNested(...inner);
       add(SUBSTITUTION, true);
       expands = true;
@@ -410,7 +425,8 @@ export function splitSegments(command) {
           continue;
         }
         if (command.startsWith('$(', j)) {
-          const { inner, end } = readSubstitution(command, j);
+          const { inner, end, expression } = readSubstitution(command, j);
+          if (expression !== undefined) arithmetic.push(expression);
           addNested(...inner);
           add(SUBSTITUTION, true);
           j = end + 1;
@@ -495,7 +511,7 @@ export function splitSegments(command) {
         // 本文は改行の後で読み、この項目の target に足す。<<- も同じ op（タブを外す違いは、本文の行を trim して照合するので区別しない）
         const redirect = { op: '<<', target: '', shape: '', substitutions: [] };
         words.redirects.push(redirect);
-        heredocs.push({ delimiter, redirect, quoted });
+        heredocs.push({ delimiter, redirect, quoted, host: segments.length });
         i = next - 1;
         continue;
       }
@@ -521,6 +537,7 @@ export function splitSegments(command) {
     // 中の置換は実行されるので、別の区切りとして取り出す
     if (command.startsWith('((', i) && !inWord && !openRedirect && (commandIndex(words) === -1 || words.at(-1) === 'for')) {
       const end = arithmeticEnd(command, i + 2);
+      arithmetic.push(command.slice(i + 2, end - 1));
       addNested(...substitutionsIn(command.slice(i + 2, end - 1)));
       i = end;
       continue;
@@ -604,7 +621,7 @@ export function splitSegments(command) {
       // ヒアドキュメントの本文（行の終わりから終わりの印の行まで）は、区切りとして読まない
       if (op === '\n' && heredocs.length > 0) {
         let j = i + 1;
-        for (const { delimiter, redirect, quoted } of heredocs) {
+        for (const { delimiter, redirect, quoted, host } of heredocs) {
           const body = [];
           let closed = false;
           while (j < command.length && !closed) {
@@ -621,7 +638,7 @@ export function splitSegments(command) {
           // 引用符も \ も無い印の本文は、シェルが $(…)、`…`、${…} の中の置換を実行する
           if (!quoted) {
             const inner = substitutionsIn(redirect.target);
-            addNested(...inner);
+            addNestedAt(host, ...inner);
             redirect.substitutions.push(...inner);
           }
         }
@@ -653,14 +670,18 @@ export function splitSegments(command) {
   }
   endSegment();
   // 中身の区切りは外の区切りの後ろに並べる。どの区切りの置換かを hostIndex に持つ（入れ子の置換は、入れ子の中の位置を外の並びの位置に直す）
+  // runStart は、同じ置換の中の区切りの並びの先頭の位置（置換ごとに作業場所の範囲を分けるため）
   nested.forEach((inner, k) => {
     const from = segments.length;
     const innerSegments = splitSegments(inner);
     for (const s of innerSegments) {
       Object.defineProperty(s, 'hostIndex', { value: s.hostIndex === undefined ? nestedHosts[k] : s.hostIndex + from, configurable: true });
+      Object.defineProperty(s, 'runStart', { value: s.runStart === undefined ? from : s.runStart + from, configurable: true });
     }
+    arithmetic.push(...arithmeticOf(innerSegments));
     segments.push(...innerSegments);
   });
+  Object.defineProperty(segments, 'arithmetic', { value: arithmetic, configurable: true });
   return segments;
 }
 

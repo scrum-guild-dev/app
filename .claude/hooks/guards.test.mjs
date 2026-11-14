@@ -7086,3 +7086,161 @@ describe('#1180: 崩す 3 周目', () => {
     ]);
   });
 });
+
+describe('#1180: done-check の指摘', () => {
+  // /main の下は main のブランチ、ほかは作業ブランチ。cwd を変えて同じ命令を判定する
+  const branchOf = (dir) => (dir?.startsWith('/main') ? 'main' : '1180-work');
+  const judge = (command, cwd = '/repo') => judgeBash(command, { cwd, branchOf, scriptOf: () => undefined })?.[0] ?? 'allow';
+  const run = (cases) => {
+    for (const [kind, command, expected, cwd] of cases) {
+      test(`[${kind}] ${JSON.stringify(command)}${cwd ? ` (cwd ${cwd})` : ''} は ${expected}`, () => assert.equal(judge(command, cwd), expected, command));
+    }
+  };
+  const PUSH = 'git push origin 21-x';
+  const timeOf = (command) => {
+    const start = performance.now();
+    judge(command);
+    return performance.now() - start;
+  };
+
+  describe('置換の中の cd は、置換の中の push と書き込みの判定に効く', () => {
+    run([
+      ['すり抜け', 'x=$(cd /main && git push)', 'deny'],
+      ['すり抜け', 'echo `cd /main && git push`', 'deny'],
+      ['すり抜け', 'cat <(cd /main && git push)', 'deny'],
+      ['すり抜け', 'x=$(cd /main; git commit -m x)', 'deny'],
+      ['すり抜け', 'x=$(cd /main && echo $(cd /main && git push))', 'deny'],
+      // 置換の中の cd は置換の外へ持ち越さない（置換の外の push は作業場所のまま）
+      ['止めすぎ', 'x=$(cd /main && pwd); git push origin 21-x', 'allow'],
+      ['止めすぎ', 'x=$(cd /wt && git push)', 'allow', '/main'],
+      // 置換を含む区切りより前の作業場所から始める
+      ['すり抜け', 'cd /main; x=$(git push)', 'deny'],
+      ['止めすぎ', 'x=$(git push origin 21-x); cd /main', 'allow'],
+    ]);
+  });
+
+  describe('関数は、本体の中の cd と checkout で判定し、呼んだ後は本体の効果を当てる', () => {
+    run([
+      ['すり抜け', 'f() { cd /main; git push; }; f', 'deny'],
+      ['すり抜け', 'f() { cd /main; }; f; git push', 'deny'],
+      ['すり抜け', 'f() { git checkout main; }; f; git push', 'deny'],
+      ['すり抜け', 'f() { git switch production; }; f && git push', 'deny'],
+      ['すり抜け', 'f() ( cd /main ); f; git push', 'deny'],
+      ['すり抜け', 'f() { cd /main; }; g(){ f; }; g; git push', 'deny'],
+      ['すり抜け', 'f() { cd /main; }; eval f; git push', 'ask'],
+      ['すり抜け', 'f() { git branch -m main; }; f; git push origin HEAD', 'deny'],
+      ['すり抜け', 'f() { git symbolic-ref HEAD refs/heads/main; }; f; git push origin HEAD', 'deny'],
+      // 条件付きの呼び出しでも、呼んだものとして追う
+      ['すり抜け', 'f() { cd /main; }; false && f; git push', 'deny'],
+      // 定義しただけでは動かない
+      ['すり抜け', 'cd .git; f() { cd /; }; echo x > config', 'ask'],
+      ['止めすぎ', 'f() { cd /main; }; git push origin 21-x', 'allow'],
+      ['止めすぎ', 'f() { git checkout main; }; git push origin HEAD', 'allow'],
+      // 本体を閉じた後の cd は本体ではない
+      ['すり抜け', 'f() { true; }; cd /main; git push', 'deny'],
+    ]);
+  });
+
+  describe('zsh は区切りの最後の語の } も本体の閉じとして読む', () => {
+    run([
+      ['すり抜け', 'f() { true }; cd /main; git push', 'deny'],
+      ['すり抜け', 'f() { true }; git checkout production && git push', 'deny'],
+      ['すり抜け', 'f() { g() { true }; }; cd /main; git push', 'deny'],
+      // 閉じが見つからないまま続くものは、本体とみなさず普通の区切りとして追う
+      ['すり抜け', 'f() { echo x; cd /main; git push', 'deny'],
+    ]);
+  });
+
+  describe('パイプの cd は、動いた場所と元の場所の両方を候補にする', () => {
+    run([
+      ['すり抜け', 'echo | cd /main; git push', 'deny'],
+      ['すり抜け', 'true | cd /main && git push', 'deny'],
+      ['すり抜け', 'cd /main | cat; git push', 'deny'],
+      ['すり抜け', 'echo x | (cd /main && git push)', 'deny'],
+      ['すり抜け', 'echo x | { cd /main; git push; }', 'deny'],
+      ['すり抜け', 'yes | head -1 | (cd /main && git push)', 'deny'],
+      ['すり抜け', 'echo y |& (cd /main; git push)', 'deny'],
+      ['すり抜け', 'cd .git; echo | cd /tmp; echo x >> config', 'ask'],
+      ['止めすぎ', 'echo x | (cd /wt && git push)', 'allow', '/main'],
+    ]);
+  });
+
+  describe('複合文の先頭の単独代入', () => {
+    run([
+      ['すり抜け', `{ HOME=/tmp/x; ${PUSH}; }`, 'ask'],
+      ['すり抜け', `if true; then HOME=/tmp/x; ${PUSH}; fi`, 'ask'],
+      ['すり抜け', `for i in 1; do HOME=/tmp/x; ${PUSH}; done`, 'ask'],
+      ['すり抜け', `{ GIT_CONFIG_GLOBAL=/x; ${PUSH}; }`, 'ask'],
+      ['すり抜け', `true && { HOME=/x; ${PUSH}; }`, 'ask'],
+      ['すり抜け', `f() { HOME=/x; ${PUSH}; }; f`, 'ask'],
+      ['すり抜け', `{ HOME=/x ; } ; ${PUSH}`, 'ask'],
+      ['すり抜け', `if true; then :; else HOME=/x; fi; ${PUSH}`, 'ask'],
+      ['すり抜け', `! HOME=/x; ${PUSH}`, 'ask'],
+      ['通す', `{ ls; }; ${PUSH}`, 'allow'],
+    ]);
+  });
+
+  describe('createRef の名前のブレース展開', () => {
+    const CREATE_REF = `gh api graphql -f query='mutation($n:String!){createRef(input:{repositoryId:"R",name:$n,oid:"abc"}){ref{id}}}'`;
+    run([
+      ['すり抜け', `${CREATE_REF} --raw-field=n=refs/heads/{x,pro}duction`, 'deny'],
+      ['すり抜け', `${CREATE_REF} -f n=refs/tags/v{1,2}`, 'deny'],
+      ['通す', `${CREATE_REF} -f n=refs/heads/21-{x,y}`, 'allow'],
+    ]);
+  });
+
+  describe('ヒアドキュメントの本文の置換は、そのコマンドを含む区切りの置換として追う', () => {
+    run([
+      ['すり抜け', 'cd /repo; git push <<EOF\n$(git checkout main)\nEOF', 'deny'],
+      ['すり抜け', 'git push <<EOF\n$(git checkout main)\nEOF', 'deny'],
+      ['通す', 'git push origin 21-x <<EOF\n$(git checkout main)\nEOF', 'allow'],
+      ['通す', 'git push origin HEAD <<EOF\nx\nEOF\ngit checkout main', 'allow'],
+    ]);
+  });
+
+  describe('性能は入力の長さに対して線形', () => {
+    const LIMIT_MS = 3000;
+    for (const [name, command] of [
+      ['閉じの無い (( の繰り返し', '(('.repeat(20000)],
+      ['rev-parse の繰り返し', 'git rev-parse '.repeat(20000)],
+      ['置換の繰り返し', Array.from({ length: 20000 }, () => 'echo $(ls)').join('; ')],
+      ['1つの区切りの置換の繰り返し', `echo ${'$(ls) '.repeat(20000)}`],
+      ['入れ子の関数の定義', `${'f(){ '.repeat(20000)}git push; ${'}'.repeat(20000)}`],
+      ['git の繰り返し', 'git '.repeat(20000)],
+      ['cd .. の繰り返し', Array.from({ length: 20000 }, () => 'cd ..').join('; ')],
+    ]) {
+      test(`${name} は ${LIMIT_MS} ms 以内`, () => {
+        const elapsed = timeOf(command);
+        assert.ok(elapsed < LIMIT_MS, `${name}: ${elapsed.toFixed(0)} ms`);
+      });
+    }
+    // 閉じの無い (( の繰り返しは、コマンドの字面ではなく算術の区切りだけを見る
+    run([['通す', `git commit -m "feat: ((" -m "export HOME=/x" && ${PUSH}`, 'allow']]);
+  });
+
+  describe('小さい穴', () => {
+    run([
+      ['すり抜け', 'echo x >> .git/config.worktree', 'ask'],
+      ['すり抜け', 'vi .git/config', 'ask'],
+      ['すり抜け', 'vim ~/.gitconfig', 'ask'],
+      ['すり抜け', 'nvim .git/config', 'ask'],
+      ['すり抜け', 'nano .git/config', 'ask'],
+      ['すり抜け', 'emacs ~/.gitconfig', 'ask'],
+      ['すり抜け', `print -v HOME x; ${PUSH}`, 'ask'],
+      ['すり抜け', `: \${HOME::=/tmp}; ${PUSH}`, 'ask'],
+      ['すり抜け', `read HOME?prompt; ${PUSH}`, 'ask'],
+      ['すり抜け', `integer HOME=5; ${PUSH}`, 'ask'],
+      ['すり抜け', `float HOME=5; ${PUSH}`, 'ask'],
+      ['すり抜け', `private HOME=x; ${PUSH}`, 'ask'],
+      ['すり抜け', `printf -v "$H" x; ${PUSH}`, 'ask'],
+      ['すり抜け', `read "$V"; ${PUSH}`, 'ask'],
+      ['すり抜け', `x=$((HOME=5)); ${PUSH}`, 'ask'],
+      ['すり抜け', `((HOME=5)); ${PUSH}`, 'ask'],
+      ['すり抜け', 'cd .git; wget example.com/config', 'ask'],
+      ['通す', `read -p msg ans; ${PUSH}`, 'allow'],
+      ['通す', 'wget -P docs example.com/config', 'allow'],
+      ['通す', 'vim docs/x.md', 'allow'],
+      ['通す', `x=$((1+2)); ${PUSH}`, 'allow'],
+    ]);
+  });
+});
