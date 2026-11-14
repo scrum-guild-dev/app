@@ -2646,8 +2646,6 @@ const SHELL_LONG_SWITCHES = new Set([
 ]);
 const SHELL_SHORT_SWITCHES = /^[abefhkmnoptuvxBCEHOPTilrsDc]+$/;
 function shellCommandBody(tool, args) {
-  const commandFlag = (a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a);
-  if (!args.some(commandFlag)) return {};
   let command = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -2681,9 +2679,14 @@ function shellCommandBody(tool, args) {
       i += values;
       continue;
     }
+    // -c が字面になくても、先頭の動的な語は -c などの実行オプションになりうる。
+    const shape = shapeAt(args, i);
+    const dynamicOption = isUnresolved(args, i) && (shape.startsWith(DYNAMIC) || /^[-+]/.test(shape) ||
+      (expandsAt(args, i) && /^[*?\[{]/.test(shape)));
+    if (dynamicOption || /^[-+]/.test(a)) return { uncertain: true };
     if (command) return { body: a };
-    // -c より前の位置引数や未知の値取りで、実際の本文を決められない。
-    return { uncertain: true };
+    // 確定したスクリプトファイルより後ろは、そのスクリプトへ渡す引数。-c を再解釈しない。
+    return {};
   }
   return command ? { uncertain: true } : {};
 }
