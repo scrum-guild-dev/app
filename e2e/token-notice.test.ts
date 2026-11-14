@@ -334,7 +334,7 @@ for (const newIssue of [false, true]) {
       page,
       invitationList,
       { slug: 'aoba' },
-      { organization: { name: 'あおば開発', theme: 'simple' }, invitations: [] },
+      { organization: { name: 'あおば開発' }, invitations: [] },
     );
     await page.goto('/aoba/me');
     const notice = page.getByRole('region', { name: label });

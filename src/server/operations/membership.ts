@@ -13,6 +13,7 @@ import {
 import { ApiError } from '../errors.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
+import { removeDepartedPartyMemberStatements } from './membership-party.ts';
 import { actorUserIdOf, changeLogColumns, openWorkspace, throwIfClosed } from './write-guards.ts';
 import { createdOn } from './workspace.ts';
 
@@ -148,7 +149,7 @@ export const membershipRoleUpdateOperation = implement(
 // タスクの2文は「この要求で所属が終わった（その所属の行の left_at がこの要求の時刻）」を条件にし、履歴を UPDATE より先に置く
 // （区分の削除の、振っていた行を戻す書き方と同じ。件数によらず文の数は決まっている）。
 // 完了したタスク、完了の記録（completions）、経験値（xp_grants）は変えない。
-// 討伐隊（epic_party_members）と接続（connections）は、表を足す Issue で、この batch に文を足す
+// 討伐隊の履歴と削除も同じ batch に入れる。接続（connections）は #67 で足す
 export const membershipLeaveOperation = implement(membershipLeave, async ({ db, actor, workspace, input }) => {
   const actorUserId = actorUserIdOf(actor);
   const organizationId = db.organizationId;
@@ -181,6 +182,7 @@ export const membershipLeaveOperation = implement(membershipLeave, async ({ db, 
   // 離脱日はワークスペースのタイムゾーンの今日
   const leftOn = createdOn(timezone, leftAt, membershipLeave.name);
   const membershipId = current.id;
+  const departureLogId = uuidv7(at);
   // この要求で終わった所属の行。後ろの文はこれがあることを条件にする
   const endedHere = (from: From) =>
     from
@@ -219,7 +221,7 @@ export const membershipLeaveOperation = implement(membershipLeave, async ({ db, 
             .selectFrom('memberships as lm')
             .innerJoin('users as lu', 'lu.id', 'lm.user_id')
             .select((eb) => [
-              eb.val(uuidv7(at)).as('id'),
+              eb.val(departureLogId).as('id'),
               eb.val(organizationId).as('organization_id'),
               eb.val(workspaceId).as('workspace_id'),
               eb.val(actorUserId).as('actor_user_id'),
@@ -309,6 +311,13 @@ export const membershipLeaveOperation = implement(membershipLeave, async ({ db, 
           ]),
         ),
     ),
+    ...removeDepartedPartyMemberStatements(db, {
+      userId,
+      actorUserId,
+      workspaceId,
+      successLogId: departureLogId,
+      at,
+    }),
     ...(removingOther
       ? [
           db.statement((q) =>

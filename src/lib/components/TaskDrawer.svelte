@@ -1982,7 +1982,7 @@
           <span class="done-bar-done">
             <!-- tabindex="-1" は、完了にした後にフォーカスを置くため（キーボードの Tab 順には入らない） -->
             <span class="hanko" role="img" aria-label={t('done')} tabindex="-1" bind:this={doneMark}
-              ><Icon name="check" /><b>{t('doneStamp')}</b></span
+              ><Icon name="check" /></span
             >
             <time datetime={task.completed_at}
               >{t('taskCompletedAt', { done: t('done'), at: formatDateTime(task.completed_at) })}</time

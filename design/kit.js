@@ -542,7 +542,7 @@
   const stamped = new Set();
   function doneControl(x) {
     return x.doneAt
-      ? `<span class="hanko ${stamped.has(x.id) ? "is-new" : ""}" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span>
+      ? `<span class="hanko ${stamped.has(x.id) ? "is-new" : ""}" role="img" aria-label="${t("done")}">${icon("check")}</span>
          <button class="link-btn" type="button" data-undo="${x.id}" aria-label="${t("done")}を戻す: ${esc(x.title)}" aria-disabled="false">戻す</button>`
       : `<button class="done-btn" type="button" data-done="${x.id}" aria-label="${t("complete")}" title="${t("complete")}">${icon("check")}</button>`;
   }
@@ -853,7 +853,7 @@
   function storyDoneControl(key, st, remaining, blocked) {
     if (st.doneAt) {
       const reason = blocked ? `<span class="tree-note" id="tree-${key}-blocked">${t("done")}か中止した${t("epic")}の下の${t("story")}は取り消せません</span>` : "";
-      return `<span class="hanko" role="img" aria-label="${esc(st.title)}: ${t("done")}">${icon("check")}<b>完</b></span>
+      return `<span class="hanko" role="img" aria-label="${esc(st.title)}: ${t("done")}">${icon("check")}</span>
         ${reason}<button class="btn is-sm is-quiet" type="button" aria-label="${t("done")}を取り消す: ${esc(st.title)}"${blocked ? ` aria-disabled="true" aria-describedby="tree-${key}-blocked"` : ` data-toast="${t("story")}の${t("done")}を取り消しました"`}>取り消す</button>`;
     }
     if (blocked) {
@@ -995,17 +995,17 @@
     const joined = q.party.includes(D.me);
     const pct = p.all ? Math.round((p.done / p.all) * 100) : 0;
     return `<article class="notice is-raid ${cleared ? "is-cleared" : ""}">
-      <span class="notice-label"><span class="orn-medieval">依 頼 書</span><span class="orn-plain">${t("epic")}</span>　·　${esc(D.categories[q.cat].name)}</span>
+      <span class="notice-label">${t("epic")}　·　${esc(D.categories[q.cat].name)}</span>
       <a class="notice-title notice-link" href="epic.html">${esc(q.title)}</a>
       <dl class="notice-facts">
-        <div><dt>${t("requester")}</dt><dd>${avatarOf(q.requester)}${esc(user(q.requester).name)}<span class="seal" aria-hidden="true">印</span></dd></div>
+        <div><dt>${t("requester")}</dt><dd>${avatarOf(q.requester)}${esc(user(q.requester).name)}</dd></div>
         <div><dt>${t("reward")}</dt><dd>${tier(q.tier)}</dd></div>
         <div><dt>${t("due")}</dt><dd>${dueChip(q.due) || "なし"}</dd></div>
         <div><dt>${t("party")}</dt><dd><span class="avatar-stack">${q.party.map((u) => avatarOf(u)).join("")}</span>${q.party.length}人</dd></div>
       </dl>
       <div class="notice-foot">
         ${progress(p.done, p.all)}
-        ${cleared ? `<span class="hanko" role="img" aria-label="完了">${icon("check")}<b>済</b></span>` : `<button class="btn ${joined ? "" : "is-primary"} is-sm" type="button" data-join="${eid}">${joined ? t("leave") : t("accept")}</button>`}
+        ${cleared ? `<span class="hanko" role="img" aria-label="完了">${icon("check")}</span>` : `<button class="btn ${joined ? "" : "is-primary"} is-sm" type="button" data-join="${eid}">${joined ? t("leave") : t("accept")}</button>`}
       </div>
     </article>`;
   }
@@ -1551,7 +1551,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
         ${attachments(x.id)}
       </div>
       <div class="done-bar">
-        ${x.doneAt ? `<span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}<b>完</b></span><span>${t("done")} ${esc(x.doneAt)}</span><button class="link-btn" type="button" data-undo="${x.id}" aria-label="${t("done")}を戻す: ${esc(x.title)}" aria-disabled="false">戻す</button></span>`
+        ${x.doneAt ? `<span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}">${icon("check")}</span><span>${t("done")} ${esc(x.doneAt)}</span><button class="link-btn" type="button" data-undo="${x.id}" aria-label="${t("done")}を戻す: ${esc(x.title)}" aria-disabled="false">戻す</button></span>`
           : `<button class="btn is-primary" type="button" data-done="${x.id}">${icon("check")}${t("complete")}</button>`}
         ${D.definitionOfDone.length ? `<div class="done-bar-dod"><h3 class="done-bar-dod-title" id="drawer-dod">${t("dod")}</h3><div class="done-bar-dod-body" tabindex="0" role="region" aria-labelledby="drawer-dod">${dodDoc()}</div></div>` : ""}
       </div>
@@ -1620,7 +1620,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (st.doneAt) {
       const note = blocked && !ro ? `<span class="props-note" id="${ids.blocked}">${t("done")}か中止した${t("epic")}の下の${t("story")}は取り消せません</span>` : "";
       const undo = ro ? "" : `<button class="link-btn" type="button" data-story-reopen aria-label="${t("done")}を取り消す: ${esc(st.title)}"${blocked ? ` aria-disabled="true" aria-describedby="${ids.blocked}"` : ` aria-disabled="false"`}>取り消す</button>`;
-      return `<div class="done-bar"><span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}" tabindex="-1">${icon("check")}<b>完</b></span><span>${t("done")} ${esc(st.doneAt)}</span>${note}${undo}</span></div>`;
+      return `<div class="done-bar"><span class="done-bar-done"><span class="hanko" role="img" aria-label="${t("done")}" tabindex="-1">${icon("check")}</span><span>${t("done")} ${esc(st.doneAt)}</span>${note}${undo}</span></div>`;
     }
     if (ro) return "";
     const note = blocked ? `<span class="props-note" id="${ids.blocked}">${t("done")}か中止した${t("epic")}の下の${t("story")}は${t("done")}にできません</span>`
@@ -2627,6 +2627,32 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
        <p class="field-hint">容量の上限を今の合計より小さくすると、合計が下がるまで新しく添付できません。上限を上げて合計が80%を下回ると、次に80%を超えたときに管理者へまた通知します。</p>
        <p class="field-hint">上限の変更は${t("organization")}の変更の履歴に、運用者の操作として残ります。</p>`,
       `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" id="d-qs" aria-disabled="true" aria-describedby="d-qu">変える</button>`),
+    // 契約（プランと支払いの周期）の変更（本番の OrganizationPlanDialog）。見本は「くもラボ」（ビジネス・月払い、停止もお試しもしていない）の状態。
+    // 今の契約を選んだ状態で開き、選び直すと変えた後の上限（d-pa）と、今の人数や合計が超えるときの注意を出す。
+    // 未契約の組織の上限が下がる注意（d-pl2）、お試しが終わる注記（d-pt）、停止したままの注記（d-pp）、未契約の組織の注記（d-pn）は、
+    // 本番では組織の状態で出す。見本の「くもラボ」は契約済みで停止もお試しもしていないので、どれも hidden で置く
+    changePlan: () => openDialog("プランを変える",
+      `<p class="wrap-anywhere">「くもラボ」のプランを変えます。今はビジネス・月払いで、人数 38&nbsp;人（上限 50&nbsp;人）、添付ファイルと Wiki の合計 42&nbsp;GB（上限 100&nbsp;GB）です。</p>
+       <div class="field"><span class="field-label" id="d-pl">プラン</span>
+         <div class="choice-list" role="radiogroup" aria-labelledby="d-pl">
+           <label class="choice"><input type="radio" name="d-p" value="team" data-plan-choice><div><b>チーム</b><span>15&nbsp;人・30&nbsp;GB</span></div></label>
+           <label class="choice"><input type="radio" name="d-p" value="business" data-plan-choice checked><div><b>ビジネス</b><span>50&nbsp;人・100&nbsp;GB</span></div></label>
+         </div></div>
+       <div class="field"><span class="field-label" id="d-pil">支払いの周期</span>
+         <div class="choice-list" role="radiogroup" aria-labelledby="d-pil">
+           <label class="choice"><input type="radio" name="d-pi" value="monthly" data-plan-choice checked><div><b>月払い</b></div></label>
+           <label class="choice"><input type="radio" name="d-pi" value="yearly" data-plan-choice><div><b>年払い</b></div></label>
+         </div></div>
+       <p class="field-hint" id="d-pu">今の契約です。別のプランか支払いの周期を選ぶと変えられます。</p>
+       <p class="field-hint" id="d-pa" hidden>変えた後の上限は 50&nbsp;人・100&nbsp;GB です。</p>
+       <div class="callout is-warn" id="d-pl2" hidden>${icon("alert")}<span>今の上限（120&nbsp;人・500&nbsp;GB）より下がります。契約を付けると、上限を「人数と容量の上限を変える」で値に戻せなくなります。</span></div>
+       <div class="callout is-warn" id="d-po" hidden>${icon("alert")}<span>今の人数（38&nbsp;人）が、変えた後の上限（15&nbsp;人）を超えます。今いる人はそのまま残り、上限を下回るまで新しい人の招待と管理者への指名だけを止めます。</span></div>
+       <div class="callout is-warn" id="d-pq" hidden>${icon("alert")}<span>選んだ上限は今の合計より小さいため、合計が下がるまで新しく添付できなくなります。</span></div>
+       <p class="field-hint" id="d-pt" hidden>お試しはここで終わり、期限で止まらなくなります。</p>
+       <p class="field-hint" id="d-pp" hidden>停止中の${t("organization")}は、契約しても停止したままです。使えるようにするには、続けて再開してください。</p>
+       <p class="field-hint" id="d-pn" hidden>人数と添付ファイルの上限はプランの値になり、「人数と容量の上限を変える」では変えられなくなります。</p>
+       <p class="field-hint">プランの変更は${t("organization")}の変更の履歴に、運用者の操作として残ります。</p>`,
+      `<button class="btn is-quiet" type="button" data-close-dialog>やめる</button><button class="btn is-primary" type="button" id="d-ps" aria-disabled="true" aria-describedby="d-pu">変える</button>`),
     suspendOrganization: () => {
       openDialog(`${t("organization")}を停止する`,
       `<p>ひばり工房を停止します。停止すると誰も入れなくなり、取り込みと日をまたぐ処理も止まります。データは残り、再開すれば元どおりに使えます。</p>
@@ -3255,7 +3281,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   function mobileTabsHtml(current, { live = true } = {}) {
     const tabs = [["today", "sun", "pageToday", "today.html"], ["favorites", "star", "favorites", "favorites.html"],
       ...(Object.keys(D.workspaces).length ? [["backlog", "board", "backlog", `backlog.html?workspace=${encodeURIComponent(D.workspace)}`]] : [])];
-    return `<div class="mobile-navigation"><nav class="mobile-tabs" aria-label="${t("mobileTabs")}">${tabs.map(([id, ic, key, href]) => `<a class="mobile-tab" href="${firstHref(href)}" aria-label="${t(key)}" ${current === id ? 'aria-current="page"' : ""}>${icon(ic)}</a>`).join("")}<button class="mobile-tab" type="button" aria-label="${t("mobileMenu")}" aria-haspopup="dialog" aria-expanded="false" ${live ? 'data-mobile-menu-open aria-controls="mobile-menu"' : ""}><span class="mobile-menu-arrows" aria-hidden="true">${icon("chevron")}${icon("chevron")}</span></button></nav><div class="mobile-create-slot">${Object.keys(D.workspaces).length > 0 ? `<button class="mobile-create" type="button" aria-label="${t("createSheet")}" data-create-sheet-open>${icon("plus")}</button>` : ""}</div></div>`;
+    return `<div class="mobile-navigation"><nav class="mobile-tabs" aria-label="${t("mobileTabs")}">${tabs.map(([id, ic, key, href]) => `<a class="mobile-tab" href="${firstHref(href)}" aria-label="${t(key)}" ${current === id ? 'aria-current="page" data-selected' : ""}>${icon(ic)}</a>`).join("")}<button class="mobile-tab" type="button" aria-label="${t("mobileMenu")}" aria-haspopup="dialog" aria-expanded="false" ${live ? 'data-mobile-menu-open aria-controls="mobile-menu"' : ""}><span class="mobile-menu-arrows" aria-hidden="true">${icon("chevron")}${icon("chevron")}</span></button></nav><div class="mobile-create-slot">${Object.keys(D.workspaces).length > 0 ? `<button class="mobile-create" type="button" aria-label="${t("createSheet")}" data-create-sheet-open>${icon("plus")}</button>` : ""}</div></div>`;
   }
   // 中身を複製せず、狭い幅では同じ組織切り替えと nav をダイアログに移す。
   // 広い幅に戻すときは、組織切り替えを角のマスの開閉のボタンの前へ、nav を左のメニューへ戻す（本番の AppShell と同じ位置）
@@ -3666,6 +3692,31 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     }
   };
   document.addEventListener("change", (ev) => { if (ev.target.closest("[data-quota-choice]")) syncQuotaDialog(); });
+
+  // 契約の変更のダイアログ: 見本の今の契約（ビジネス・月払い）を選んでいる間は「変える」を aria-disabled にし、理由（d-pu）を添える。
+  // チームを選ぶと、今の人数（38 人）が上限を超える注意と、今の合計が上限を超える注意を出す（本番の OrganizationPlanDialog と同じ）
+  const syncPlanDialog = () => {
+    const plan = document.querySelector('input[name="d-p"]:checked');
+    const interval = document.querySelector('input[name="d-pi"]:checked');
+    const submit = document.getElementById("d-ps");
+    if (!plan || !interval || !submit) return;
+    const same = plan.value === "business" && interval.value === "monthly";
+    submit.setAttribute("aria-disabled", String(same));
+    document.getElementById("d-pu").hidden = !same;
+    const after = document.getElementById("d-pa");
+    after.hidden = same;
+    after.innerHTML = plan.value === "team" ? "変えた後の上限は 15&nbsp;人・30&nbsp;GB です。" : "変えた後の上限は 50&nbsp;人・100&nbsp;GB です。";
+    document.getElementById("d-po").hidden = plan.value !== "team";
+    document.getElementById("d-pq").hidden = plan.value !== "team";
+    if (same) {
+      submit.removeAttribute("data-close-dialog");
+      submit.removeAttribute("data-toast");
+    } else {
+      submit.setAttribute("data-close-dialog", "");
+      submit.setAttribute("data-toast", "「くもラボ」のプランを変えました");
+    }
+  };
+  document.addEventListener("change", (ev) => { if (ev.target.closest("[data-plan-choice]")) syncPlanDialog(); });
   document.addEventListener("input", (ev) => { if (ev.target.closest("#d-qm, #d-qg")) syncQuotaDialog(); });
 
   // ---- 操作（見本の中だけで動き、保存はしない） ----
@@ -4011,7 +4062,7 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (askAssist(input.value)) input.value = "";
   });
   document.addEventListener("change", (ev) => {
-    if (ev.target.matches("[data-pick-theme]")) setTheme(ev.target.value || null);
+    if (ev.target.matches("[data-pick-theme]")) setTheme(ev.target.value);
     if (ev.target.matches("[data-assist-row]")) {
       const [i, j] = ev.target.dataset.assistRow.split(":").map(Number);
       assist.msgs[i].confirm.rows[j].on = ev.target.checked;
@@ -4196,16 +4247,15 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
   const extraRedraws = [];
   function redrawAll() { redraw(); extraRedraws.forEach((fn) => fn()); if (assist.open) renderAssist(); }
 
-  // ---- テーマの切り替え（シンプル（自動）→ シンプル（ライト）→ シンプル（ダーク）→ 中世風 → 現代風） ----
-  // 値は DB の列挙と同じ。null は自分で選んでいない状態で、見本では組織の既定のシンプル（自動）として出す。
-  // 本番では、ユーザーが選んだテーマか組織の既定を data-theme に入れる
-  const THEMES = ["simple", "simple_light", "simple_dark", "medieval", "modern"];
-  const THEME_LABEL = { simple: "シンプル（自動）", simple_light: "シンプル（ライト）", simple_dark: "シンプル（ダーク）", medieval: "中世風", modern: "現代風" };
+  // ---- テーマの切り替え（シンプル（自動）→ シンプル（ライト）→ シンプル（ダーク）→ ネオン） ----
+  // 値は DB の列挙と同じ。null は自分で選んでいない状態で、シンプル（自動）として出す。
+  // 本番では、ユーザーが選んだテーマを data-theme に入れる
+  const THEMES = ["simple", "simple_light", "simple_dark", "modern"];
+  const THEME_LABEL = { simple: "シンプル（自動）", simple_light: "シンプル（ライト）", simple_dark: "シンプル（ダーク）", modern: "ネオン" };
   const THEME_NOTE = {
     simple: "業務の道具として落ち着いた見た目。OS のライトとダークに合わせる",
     simple_light: "業務の道具として落ち着いた見た目。いつも明るい地",
     simple_dark: "業務の道具として落ち着いた見た目。いつも暗い地",
-    medieval: "冒険者ギルドの帳簿。紙と墨、完了に朱の判子",
     modern: "近未来の端末のウィンドウ。暗い地に光る枠",
   };
   let theme = null;
@@ -4215,10 +4265,9 @@ const looooooooooooooooooooooooooooooooooongLine = "コードの長い1行は、
     if (theme) document.documentElement.dataset.theme = theme;
     else delete document.documentElement.dataset.theme;
     document.querySelectorAll("[data-theme-label]").forEach((el) => (el.textContent = `テーマ: ${THEME_LABEL[theme || "simple"]}`));
-    // 「組織の既定に従う」（値が空）の選択肢がない並びでは、選んでいない状態をシンプル（自動）として示す
+    // 選んでいない状態はシンプル（自動）として示す
     document.querySelectorAll("[data-pick-theme]").forEach((el) => {
-      const hasDefault = !!document.querySelector(`[data-pick-theme][name="${el.name}"][value=""]`);
-      el.checked = el.value === (theme || (hasDefault ? "" : "simple"));
+      el.checked = el.value === (theme || "simple");
     });
   }
   function cycleTheme() { setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]); }

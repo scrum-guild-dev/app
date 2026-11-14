@@ -1,7 +1,7 @@
 // 解約した組織のデータを消す SQL（scripts/purge-organization-sql.ts、docs/operations.md の「解約した組織のデータを消す」）を、
 // 人が1文ずつ `wrangler d1 execute --command` で流すのと同じく、テストの D1 に1文ずつ順に流して確かめる
 import { env } from 'cloudflare:workers';
-import { orgDb, insertWikiPage } from '../src/server/db/index.ts';
+import { commonDb, orgDb, insertWikiPage } from '../src/server/db/index.ts';
 import { describe, expect, test } from 'vitest';
 import { purgeOrganizationCountSql, purgeOrganizationSql } from '../scripts/purge-organization-sql.ts';
 import {
@@ -147,6 +147,21 @@ async function fillOrganization(organization: Awaited<ReturnType<typeof createOr
   });
   await createChangeLog(organization);
   await createOrganizationHoliday(organization, admin.id);
+  // 組織の契約（共通の表）。organizations を指すので、organizations の行より先に消える
+  const common = commonDb(env);
+  await common.batch([
+    common.statement((q) =>
+      q.insertInto('organization_contracts').values({
+        organization_id: organization.id,
+        plan: 'team',
+        billing_interval: 'monthly',
+        extra_10gb_units: 1,
+        extra_50gb_units: 0,
+        created_at: AT,
+        updated_at: AT,
+      }),
+    ),
+  ]);
   const wikiDb = orgDb(env, organization.verified);
   await wikiDb.batch([
     wikiDb.statement((q) =>

@@ -3,17 +3,22 @@
 // scripts/ と Worker の型の検査からも読むので、Node の型の除去で動く書き方に留め（enum を使わない）、DOM の型に頼らない。
 import type { DictionaryKey } from './vocabulary.ts';
 
-// DB の列挙（users.theme、organizations.theme）と同じ値。属性がなければシンプル（自動）
-export const themes = ['simple', 'simple_light', 'simple_dark', 'medieval', 'modern'] as const;
+// 自分で選べるテーマ（users.theme）。属性がなければシンプル（自動）。modern の名前はネオン（値は前の名前のまま）。
+// DB の CHECK はほかに medieval（消した中世風）も許すが、アプリは書かない（0027 のマイグレーションが NULL に戻した）
+export const themes = ['simple', 'simple_light', 'simple_dark', 'modern'] as const;
 export type Theme = (typeof themes)[number];
 
-// テーマを選ぶ画面（組織の管理の既定のテーマ）が使う、テーマごとの辞書のキー。全テーマに辞書の名前があることを
+// users.theme の値を、画面に返すテーマにする。選んでいない（NULL）と、アプリが書かない値（消した medieval）は simple
+export function themeOf(value: string | null): Theme {
+  return themes.find((theme) => theme === value) ?? 'simple';
+}
+
+// テーマを選ぶ画面（マイプロフィールのテーマ）が使う、テーマごとの辞書のキー。全テーマに辞書の名前があることを
 // scripts/theme.test.ts が確かめる（テーマを足したとき、辞書の名前の足し忘れを止める）
 export const themeLabelKeys: Record<Theme, DictionaryKey> = {
   simple: 'themeSimple',
   simple_light: 'themeSimpleLight',
   simple_dark: 'themeSimpleDark',
-  medieval: 'themeMedieval',
   modern: 'themeModern',
 };
 
@@ -22,7 +27,6 @@ export const themeNoteKeys: Record<Theme, DictionaryKey> = {
   simple: 'themeNoteSimple',
   simple_light: 'themeNoteSimpleLight',
   simple_dark: 'themeNoteSimpleDark',
-  medieval: 'themeNoteMedieval',
   modern: 'themeNoteModern',
 };
 

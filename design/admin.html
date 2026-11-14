@@ -19,7 +19,7 @@
 <script>
 "use strict";
 // 390px の積んだ行でも、静かな操作の文字を行の本文にそろえる。
-// 組織の管理（管理者）: ユーザー、ワークスペース、添付ファイルの合計、組織の休日、既定のテーマ、配分と積載量の合計、取り込み元の応答、AI の機能、変更の履歴
+// 組織の管理（管理者）: お試し、プラン、ユーザー、ワークスペース、添付ファイルの合計、組織の休日、配分と積載量の合計、取り込み元の応答、AI の機能、変更の履歴
 const { D, t, icon, esc, pageHead, avatarOf, user, meter } = SQ;
 const A = D.admin;
 // ?workspace-limit は、自分用で利用中3個・終了済み1個の再開が断られた状態。
@@ -34,6 +34,17 @@ const AUDIT = {
 // お試しの節の状態。?trial=lastday（期限の当日）か ?trial=expired（期限を過ぎて、定期処理が止めるまでの間）で切り替える。
 // 本番は TrialSetting.svelte が days_left の 0 と負で同じ出し分けをする
 const TRIAL_STATE = new URLSearchParams(location.search).get("trial");
+// プランの節の状態。既定はお試し中の未契約の組織。?plan=team で契約のある組織にする（有料のプランにするとお試しは終わるので、お試しの節を出さない）。
+// 本番は PlanSetting.svelte が organization を include_plan:true で読み、PlanDetails.svelte が plan で出し分ける
+// ?plan=team-plain は追加容量の無い契約（「なし」）。?personal（自分用の組織の見本）は「パーソナル」、1 人、1 GB で、容量を足す案内だけを出す
+const PLAN_PARAM = new URLSearchParams(location.search).get("plan");
+const PLAN_PERSONAL = new URLSearchParams(location.search).has("personal");
+const PLAN_CONTRACTED = PLAN_PARAM === "team" || PLAN_PARAM === "team-plain";
+const PLAN = PLAN_PERSONAL
+  ? { terms: "パーソナル", extra: null, members: 1, quota: "1&nbsp;GB" }
+  : PLAN_CONTRACTED
+    ? { terms: "チーム・月払い", extra: PLAN_PARAM === "team" ? "+10&nbsp;GB&nbsp;×&nbsp;2&nbsp;口" : "なし", members: 15, quota: PLAN_PARAM === "team" ? "50&nbsp;GB" : "30&nbsp;GB" }
+    : { terms: null, extra: null, members: 15, quota: "30&nbsp;GB" };
 function setting(title, desc, body) {
   return `<section class="setting"><div class="setting-head"><h2 class="setting-title">${title}</h2><p class="setting-desc">${desc}</p></div><div class="setting-body">${body}</div></section>`;
 }
@@ -45,13 +56,22 @@ SQ.mount("admin", () => `
     ["", "", `進行中の${t("workspace")}`, A.workspaces.filter((w) => !w.closed).length],
   ], `<button class="btn is-primary" type="button" data-dialog="createWorkspace">${icon("plus")}${t("workspace")}を作る</button>`)}
   <div class="settings">
-    ${setting("お試し", "継続して使うには、運用者に問い合わせてください。", `
+    ${PLAN_CONTRACTED || PLAN_PERSONAL ? "" : setting("お試し", "継続して使うには、運用者に問い合わせてください。", `
       <p class="mono">${esc(SQ.formatTrialStopDateTime("2026-11-19"))} ごろに止まります</p>
       ${TRIAL_STATE === "expired"
         ? `<p><span class="chip is-danger">${icon("alert")}お試しの期限を過ぎています</span></p>`
         : TRIAL_STATE === "lastday"
           ? `<p class="props-note">今日までです</p>`
           : `<p class="props-note">残り 30 日</p>`}`)}
+    ${setting("プラン", "今の契約と、人数と容量の上限です。", `
+      <dl class="props">
+        <div><dt>契約</dt><dd>${PLAN.terms === null ? `<span class="chip">未契約</span>` : esc(PLAN.terms)}</dd></div>
+        ${PLAN_CONTRACTED ? `<div><dt>追加容量</dt><dd>${PLAN.extra}</dd></div>` : ""}
+        <div><dt>人数の上限</dt><dd>${PLAN.members}&nbsp;人</dd></div>
+        <div><dt>容量の上限</dt><dd>${PLAN.quota}</dd></div>
+      </dl>
+      ${PLAN_PERSONAL ? `<p class="props-note">自分用の${t("organization")}は、人数が本人1人のパーソナルに決まっています。</p>` : PLAN.terms === null ? `<p class="props-note">まだ契約していません。上限は運用者が決めた値です。</p>` : ""}
+      <div class="callout is-info">${icon("mail")}<span>${PLAN_PERSONAL ? "容量を足すときは、運用者に問い合わせてください。" : "プラン、支払いの周期、追加容量を変えるときは、運用者に問い合わせてください。"}</span></div>`)}
     ${setting("ユーザー", `${t("admin")}は他のユーザーを${t("admin")}に指名でき、解除もできます。最後の${t("admin")}は解除できません。無効にした人は${t("organization")}に入れず、すべての${t("workspace")}から外れます。名前、完了の記録、経験値は残ります。`, `
       <div class="table-wrap"><table class="table is-stacked" aria-label="${t("organization")}のユーザーの一覧"><thead><tr><th class="is-name">名前</th><th>${t("admin")}</th><th class="is-num">所属</th><th>最後に入った日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
         <tbody>${A.users.map((r) => {
@@ -110,10 +130,6 @@ SQ.mount("admin", () => `
       ${!A.holidays.length
         ? SQ.emptyState("calendar", "まだ休日がありません", `登録した日は、${t("capacity")}の計算で全員が稼働しない日になります。`)
         : `<ul class="party-list" aria-label="登録した休日">${A.holidays.map(([d, n]) => `<li><span class="mono">${d}</span>${n ? `<span class="party-list-text">${esc(n)}</span>` : ""}<button class="icon-btn is-danger party-list-end" type="button" aria-label="${d} を消す" data-toast="${d}${n ? `（${esc(n)}）` : " "}を消しました">${icon("trash")}</button></li>`).join("")}</ul>`}`)}
-    ${setting("既定のテーマ", `画面の見た目の既定。自分で選んでいないユーザーに効きます。会社で使うならシンプルが無難です。`, `
-      <div class="choice-list" role="radiogroup" aria-label="既定のテーマ">
-        ${SQ.THEMES.map((v, i) => `<label class="choice"><input type="radio" name="kt" ${i === 0 ? "checked" : ""}><div><b>${SQ.THEME_LABEL[v]}</b><span>${SQ.THEME_NOTE[v]}</span></div></label>`).join("")}</div>
-      <div class="form-actions"><button class="btn" type="button" aria-disabled="true">保存する</button></div>`)}
     ${setting("配分の合計", `ユーザーごとの、すべての${t("workspace")}の配分の合計。100% を超えた月は本人にも知らせています。`, !A.allocTotals.length
       ? `<p class="props-note">${t("workspace")}ができて、${t("leader")}が配分を決めると出ます。</p>`
       : `
