@@ -2583,8 +2583,7 @@ const namesGitDirIn = (segments, command) =>
 // 作業場所を解決できない cd の行き先の字面（cd ~/.config/git; … > config の ~/.config/git）をつないだ語でも設定ファイルに当たるかを見る。
 // namesGitDir（設定ファイルのあるディレクトリを引いたコマンド）では、置換や変数で場所が決まる config（"$(git rev-parse --git-common-dir)/config"、
 // そこへ cd した後の config）も設定ファイルとみなす。
-// alternatives は、動いたか決められない cd（false && cd /）の前の作業場所 { dir, words } で、動かなかった場合の場所でも見る
-function gitConfigFileAt(dir, cdWords, namesGitDir, alternatives = []) {
+function gitConfigFileAt(dir, cdWords, namesGitDir) {
   const hitsOne = (w) => GIT_CONFIG_FILE.test(w) || GIT_CONFIG_FILE.test(withoutGlobGroup(w)) || (GLOB_CHARS.test(w) && globHitsGitConfig(w));
   // {a,b} はシェルが展開してから渡す（.git/{config,x}）。展開が大きすぎる語は当たるものとする（protectedAt と同じ）
   const hits = (w) => expansionSize(w) > MAX_BRACE_EXPANSION || expandBraces(w).some(hitsOne);
@@ -2594,14 +2593,13 @@ function gitConfigFileAt(dir, cdWords, namesGitDir, alternatives = []) {
     hits(path.posix.normalize(word)) ||
     Boolean(dir && hits(path.resolve(dir, word))) ||
     Boolean(cdWords && hits(path.posix.join(cdWords, word))) ||
-    alternatives.some((alt) => Boolean(alt.dir && hits(path.resolve(alt.dir, word))) || Boolean(alt.words && hits(path.posix.join(alt.words, word)))) ||
     viaGitDir(word);
 }
 
 // 道具の無い区切り（> f、exec > f）と cd、pushd のリダイレクトも見るので、tool を空、args を空にして呼べる。
 // dir は作業場所（分からなければ null）。wrangler の設定は相対パスを dir から解決しても見る。
 // cdWords は、これまでの cd の行き先の字面（~/.config/git）をつないだもの。namesGitDir は gitConfigFileAt を参照
-function judgeFileWrites(tool, args, words, dir = null, cdWords = '', namesGitDir = false, alternatives = []) {
+function judgeFileWrites(tool, args, words, dir = null, cdWords = '', namesGitDir = false) {
   const results = [];
   if (judgeSecretAccess(tool, args, words) || writesTo(mentionsSecret, tool, args, words, { anyOperand: true })) {
     results.push([DENY, SECRET_FILE_REASON]);
@@ -2625,7 +2623,7 @@ function judgeFileWrites(tool, args, words, dir = null, cdWords = '', namesGitDi
   if (writesTo(isConfig, tool, args, words, { intoDirectory: { dir, names: WRANGLER_CONFIG_NAMES, anyInstallOperand: true } }) || interpreterWords(tool, args).some(isConfig)) {
     results.push([ASK, 'wrangler の設定（wrangler.jsonc、.wrangler/deploy/config.json）に remote の binding を入れると、wrangler dev が本番の D1 と R2 に届く。書き換えは人が確かめる']);
   }
-  const isGitConfig = gitConfigFileAt(dir, cdWords, namesGitDir, alternatives);
+  const isGitConfig = gitConfigFileAt(dir, cdWords, namesGitDir);
   if (writesTo(isGitConfig, tool, args, words, { intoDirectory: { dir, names: GIT_CONFIG_NAMES, anywhere: true } }) || interpreterWords(tool, args).some((w) => expansionSize(w) <= MAX_BRACE_EXPANSION && isGitConfig(w))) {
     results.push([ASK, GIT_CONFIG_FILE_REASON]);
   }
@@ -3114,7 +3112,7 @@ function judgeSegment(words, ctx) {
   if (ci !== -1) {
     ctx = { ...ctx, ...dirAfterEnv(words, ci, ctx.dir, ctx.envFrom ?? 0, ctx.place) };
   }
-  results.push(...judgeFileWrites(tool, args, words, ctx.dir, ctx.cdWords, ctx.namesGitDir, ctx.cdAlternatives));
+  results.push(...judgeFileWrites(tool, args, words, ctx.dir, ctx.cdWords, ctx.namesGitDir));
   const removal = judgeRemoval(tool, args, ctx);
   if (removal) results.push(removal);
   const prefixes = prefixIndexes(words);
