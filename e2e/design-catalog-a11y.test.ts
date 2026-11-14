@@ -4,6 +4,9 @@ import { expect, test } from './fixtures.ts';
 import { A11Y_THEMES, applyTheme, findA11yViolations, formatA11yViolations } from './helpers.ts';
 
 // アプリの配信対象外の見本を、既存の design-catalog.test.ts と同じ方法で開く。seed の認証は使わない。
+// 大きなカタログの axe 検査と trace の記録に余裕を持たせる。各 assertion の待ちは延ばさない。
+test.setTimeout(60_000);
+
 test.beforeEach(async ({ page }) => {
   const files: Record<string, string> = {
     'index.html': 'text/html',
@@ -68,6 +71,7 @@ test('壊したカタログの無名ボタンと低コントラスト文字で�
     main.prepend(broken);
   });
   // 別の既存違反による失敗では足りず、仕込んだ2つを検査の入口が報告することを確かめる。
-  await expect(expectAccessibleCatalog(page)).rejects.toThrow(/- button-name: #broken-button/);
-  await expect(expectAccessibleCatalog(page)).rejects.toThrow(/- color-contrast: #broken-contrast/);
+  const checked = expectAccessibleCatalog(page);
+  await expect(checked).rejects.toThrow(/- button-name: #broken-button/);
+  await expect(checked).rejects.toThrow(/- color-contrast: #broken-contrast/);
 });
