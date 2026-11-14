@@ -55,6 +55,45 @@ describe('容量通知のスキーマ', () => {
   });
 });
 
+describe('0029_drop_organization_theme', () => {
+  test('組織のテーマの列を持たず、ユーザーのテーマと組織の言葉づかいの列は残す', async () => {
+    const organizationColumns = await env.DB.prepare('PRAGMA table_info(organizations)').all<{ name: string }>();
+    const userColumns = await env.DB.prepare('PRAGMA table_info(users)').all<{ name: string }>();
+
+    expect(organizationColumns.results.map((column) => column.name)).not.toContain('theme');
+    expect(organizationColumns.results.map((column) => column.name)).toContain('vocabulary');
+    expect(userColumns.results.map((column) => column.name)).toContain('theme');
+  });
+});
+
+describe('0027_remove_medieval_theme', () => {
+  // 前の版で書かれた行を作ってから、0027 の SQL を当て直す（テストの D1 には全マイグレーションが当て済み）
+  test('中世風（medieval）を選んでいた行だけを NULL に戻し、ほかのテーマと NULL の行は変えない', async () => {
+    const migration = env.TEST_MIGRATIONS.find((m) => m.name.startsWith('0027_'));
+    expect(migration).toBeDefined();
+    const organization = await createOrganization();
+    const other = await createOrganization();
+    const medieval = [
+      await createUser(organization, { theme: 'medieval' }),
+      await createUser(other, { theme: 'medieval' }),
+    ];
+    const kept = await Promise.all(
+      (['simple', 'simple_light', 'simple_dark', 'modern', null] as const).map(async (theme) => ({
+        theme,
+        user: await createUser(organization, { theme }),
+      })),
+    );
+    const themeOf = async (userId: string) =>
+      (await env.DB.prepare('SELECT theme FROM users WHERE id = ?').bind(userId).first<{ theme: string | null }>())!
+        .theme;
+
+    await env.DB.batch(migration!.queries.map((query) => env.DB.prepare(query)));
+
+    for (const user of medieval) expect(await themeOf(user.id)).toBeNull();
+    for (const { theme, user } of kept) expect(await themeOf(user.id)).toBe(theme);
+  });
+});
+
 function id(): string {
   return crypto.randomUUID();
 }
@@ -138,6 +177,13 @@ function googlePending() {
 }
 
 describe('外部キー', () => {
+  test('0030 で削除した xp_grants_user_workspace は残っていない', async () => {
+    const { results } = await env.DB.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'xp_grants_user_workspace'`,
+    ).all();
+    expect(results).toEqual([]);
+  });
+
   test('D1 は外部キーを検査する', async () => {
     await expect(insertUser(id()).result).rejects.toThrow(/FOREIGN KEY/);
   });
@@ -160,6 +206,13 @@ describe('外部キー', () => {
       .all<{ detail: string }>();
     const details = plan.map((row) => row.detail);
 
+    expect(details).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /^SEARCH xp_grants USING (COVERING )?INDEX xp_grants_user_(workspace_amount|confirmed) \(user_id=\?\)$/,
+        ),
+      ]),
+    );
     expect(details.filter((detail) => detail.startsWith('SCAN '))).toEqual([]);
     // その場で作る索引（AUTOMATIC）でなく、張った索引で引くこと
     expect(details.filter((detail) => !/^SEARCH \w+ USING (COVERING )?INDEX \w+ /.test(detail))).toEqual([]);

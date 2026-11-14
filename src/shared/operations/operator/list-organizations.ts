@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { organizationKinds } from '../../organization-kind.ts';
 import { defineOperation } from '../define.ts';
+import { organizationContract } from './organization-plan-update.ts';
 
 // 組織の管理者の状態。運用者が組織の中を見ずに、管理者のいない組織と、指名した人のログイン待ちの組織を見分けるのに使う。
 //   none: 無効でない管理者の行が無い
@@ -49,6 +50,9 @@ export const listOrganizations = defineOperation({
         attachment_quota_bytes: z.number().int(),
         // 組織の人（無効にした人も含む）が最後に使った日時（users.last_seen_at の最大）。だれも使っていなければ null
         last_used_at: z.string().nullable(),
+        // 組織の契約（organization_contracts の行）。行が無い組織（お試し中、運用者が作って契約を付けていない組織、
+        // 追加容量の無い自分用）は null。契約のある組織の上限は契約から決まり、organization-quota-update では変えられない
+        contract: organizationContract.nullable(),
       }),
     ),
   }),

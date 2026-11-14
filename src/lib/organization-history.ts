@@ -3,6 +3,7 @@
 import type { OutputOf } from '../shared/operations/define.ts';
 import type { organizationHistory } from '../shared/operations/organization/organization-history.ts';
 import type { DictionaryKey, TemplateParams } from '../shared/vocabulary.ts';
+import { planTermsText } from './plan-terms.ts';
 
 export type HistoryEntry = OutputOf<typeof organizationHistory>['entries'][number];
 
@@ -44,6 +45,13 @@ export function historyEventText(event: HistoryEntry['event'], translate: Transl
         : translate('orgHistorySuspensionChanged', { ...words, date: event.purge_on });
     case 'organization_settings_changed':
       return translate('orgHistoryOrganizationSettingsChanged', words);
+    case 'organization_plan_changed':
+      return event.from === null
+        ? translate('orgHistoryPlanStarted', { to: planTermsText(event.to, translate) })
+        : translate('orgHistoryPlanChanged', {
+            from: planTermsText(event.from, translate),
+            to: planTermsText(event.to, translate),
+          });
     case 'admin_designated':
       return event.name === null
         ? translate('orgHistoryAdminDesignatedGoogle', words)

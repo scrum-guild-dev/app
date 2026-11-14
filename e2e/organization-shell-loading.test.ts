@@ -14,7 +14,7 @@ const invitation = {
   invited_by_name: 'ユイ',
   invited_on: '2026-10-19',
 };
-const inbox = { organization: { name: 'あおば開発', theme: 'simple' as const }, invitations: [invitation] };
+const inbox = { organization: { name: 'あおば開発' }, invitations: [invitation] };
 const noticeLabel = 'API トークンの発行の知らせ';
 
 function gate() {

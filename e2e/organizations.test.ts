@@ -54,18 +54,8 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     expect(await collect()).toEqual([]);
   });
 
-  test('組織の既定のテーマを当て、localStorage にも覚える', async ({ page }) => {
+  test('自分のテーマを当て、localStorage にも覚える', async ({ page }) => {
     await patchOrganization(page, 'aoba', (body) => {
-      body.organization.theme = 'medieval';
-    });
-    await page.goto('/aoba');
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'medieval');
-    expect(await page.evaluate(() => localStorage.getItem('sg-theme'))).toBe('medieval');
-  });
-
-  test('自分のテーマがあれば、組織の既定より優先する', async ({ page }) => {
-    await patchOrganization(page, 'aoba', (body) => {
-      body.organization.theme = 'medieval';
       body.me.theme = 'modern';
     });
     await page.goto('/aoba');
@@ -245,11 +235,11 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
 
   test('組織の外の画面は、テーマを既定に戻し、覚えたテーマも消す', async ({ page }) => {
     await patchOrganization(page, 'aoba', (body) => {
-      body.organization.theme = 'medieval';
+      body.me.theme = 'modern';
     });
     await page.goto('/aoba');
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'medieval');
-    expect(await page.evaluate(() => localStorage.getItem('sg-theme'))).toBe('medieval');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'modern');
+    expect(await page.evaluate(() => localStorage.getItem('sg-theme'))).toBe('modern');
 
     // 見つからない画面（組織の外）。文書ごと読み直すので、確かめるのはテーマの属性と localStorage
     await page.goto('/hibari');
@@ -280,15 +270,15 @@ test.describe('組織が1つの人（あおば開発のハルカ）', () => {
     expect(seen).not.toContain('ギルドマスター');
   });
 
-  test('組織の外から組織へ移る間は読み込み中を出し、移ったら組織の値を当てる', async ({ page }) => {
+  test('組織の外から組織へ移る間は読み込み中を出し、移ったら自分のテーマを当てる', async ({ page }) => {
     await mockOperation(page, myOrganizations, AOBA_WITH_INVITATION);
     await page.goto('/');
-    // 遅らせてから、組織の既定のテーマを書き換えて返す。同じ URL に route を2つ張ると、後に張った方が本物へ流して
+    // 遅らせてから、自分のテーマを書き換えて返す。同じ URL に route を2つ張ると、後に張った方が本物へ流して
     // 先の書き換えが効かないので、1つの route で待ちと書き換えをする
     await routeOperation(page, organizationInfo, AOBA, async (call) => {
       await new Promise((resolve) => setTimeout(resolve, 1200));
       const output = await call.fetch();
-      await call.fulfill({ ...output, organization: { ...output.organization, theme: 'modern' } });
+      await call.fulfill({ ...output, me: { ...output.me, theme: 'modern' } });
     });
     await page.getByRole('link', { name: /あおば開発/ }).click();
     // 少し遅れて、見出しと題名を持つ読み込み中の表示を出す。読み上げの領域は常に置いてあり、文字だけが替わる
@@ -365,19 +355,19 @@ test.describe('組織が2つの人（あおば開発の管理者でひばり工�
     expect(await collect()).toEqual([]);
   });
 
-  test('組織を切り替えると、名前、管理者の印、テーマがその組織の値に替わる', async ({ page }) => {
+  test('組織を切り替えると、名前、管理者の印、自分のテーマがその組織の値に替わる', async ({ page }) => {
     await patchOrganization(page, 'aoba', (body) => {
-      body.organization.theme = 'medieval';
+      body.me.theme = 'simple_dark';
       body.me.name = 'ミナト（あおば）';
     });
     await patchOrganization(page, 'hibari', (body) => {
-      body.organization.theme = 'modern';
+      body.me.theme = 'modern';
       body.me.name = 'ミナト（ひばり）';
     });
     await page.goto('/aoba');
     await expect(page.locator('.me')).toContainText('ミナト（あおば）');
     await expect(page.locator('.me .chip')).toHaveText('管理者');
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'medieval');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'simple_dark');
 
     // 閉じているときは、今の組織の名前だけを出す。開くと各組織へのリンクと、最後に一覧へ戻るリンク
     await expect(menuButton(page)).toHaveAttribute('aria-expanded', 'false');
@@ -661,7 +651,7 @@ test.describe('ログインしていない人と、組織が無い人', () => {
     await expect(page.locator('a.choice')).toHaveText([/あおば開発/, /つばめ商会/]);
     await expect(page.getByRole('heading', { level: 2, name: '届いた招待' })).toBeVisible();
     await expect(page.getByRole('link', { name: /つばめ商会/ })).toHaveAttribute('href', '/tsubame/invitations');
-    // 届いた招待の行は記録の面（.panel）ではない。.panel は現代風で光るため
+    // 届いた招待の行は記録の面（.panel）ではない。.panel はネオンで光るため
     await expect(page.locator('.panel')).toHaveCount(0);
   });
 
@@ -700,7 +690,7 @@ test.describe('ログインしていない人と、組織が無い人', () => {
 
   test('組織の選択の画面は、テーマを既定に戻す', async ({ page, context, baseURL }) => {
     await signIn(context, baseURL, 'admin');
-    await page.addInitScript(() => localStorage.setItem('sg-theme', 'medieval'));
+    await page.addInitScript(() => localStorage.setItem('sg-theme', 'modern'));
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1, name: '組織を選ぶ' })).toBeVisible();
     await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.*/);

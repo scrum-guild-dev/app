@@ -74,7 +74,12 @@
     trigger = opener;
     open = true;
     await tick();
-    dialog.showModal();
+    try {
+      dialog.showModal();
+    } catch (error) {
+      open = false;
+      throw error;
+    }
     titleInput?.focus();
     void loadChoices();
   }

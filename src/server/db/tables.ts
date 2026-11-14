@@ -73,7 +73,6 @@ export const commonTableColumns = {
     slug: text,
     name: text,
     vocabulary: textDefault,
-    theme: textDefault,
     // migrations/0017_add_organization_kind.sql で足す。'team' か 'personal'（自分用）
     kind: textDefault,
     suspended_at: textOrNull,
@@ -89,6 +88,16 @@ export const commonTableColumns = {
     // migrations/0014_add_organization_trial.sql で足す。運用者が作る組織は両方 NULL
     created_by_account_id: textOrNull,
     trial_ends_on: textOrNull,
+    created_at: text,
+    updated_at: text,
+  },
+  // migrations/0028_add_organization_contracts.sql で足した。組織と1対1の契約。行が無い組織は未契約
+  organization_contracts: {
+    organization_id: text,
+    plan: text,
+    billing_interval: text,
+    extra_10gb_units: integerDefault,
+    extra_50gb_units: integerDefault,
     created_at: text,
     updated_at: text,
   },

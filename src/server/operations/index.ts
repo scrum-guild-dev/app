@@ -50,6 +50,7 @@ import { meThemeUpdateOperation } from './me-theme.ts';
 import { membershipLeaveOperation, membershipRoleUpdateOperation } from './membership.ts';
 import { createOrganizationOperation, listOrganizationsOperation, resolveGithubUserOperation } from './operator.ts';
 import { organizationAdminReassignOperation } from './operator-admin.ts';
+import { organizationPlanUpdateOperation } from './operator-plan.ts';
 import { organizationQuotaUpdateOperation } from './operator-quota.ts';
 import {
   organizationResumeOperation,
@@ -67,7 +68,6 @@ import {
   organizationHolidayDeleteOperation,
   organizationHolidayListOperation,
 } from './organization-holiday.ts';
-import { organizationSettingsUpdateOperation } from './organization-settings.ts';
 import { logoutOperation, meOperation } from './session.ts';
 import { accountProfileSaveOperation, onboardingStatusOperation } from './onboarding.ts';
 import { onboardingWorkspacePrepareOperation } from './onboarding-workspace.ts';
@@ -90,6 +90,7 @@ import {
   sprintUpdateOperation,
 } from './sprint.ts';
 import { epicCreateOperation, epicGetOperation, epicMoveOperation, epicUpdateOperation } from './epic.ts';
+import { epicCancelOperation, epicUncancelOperation } from './epic-cancel.ts';
 import { epicCompleteOperation, epicReopenOperation } from './epic-clear.ts';
 import { epicDetailOperation } from './epic-detail.ts';
 import { epicPartyAssignOperation, epicPartyJoinOperation, epicPartyLeaveOperation } from './epic-party.ts';
@@ -183,6 +184,7 @@ const listedOperations: readonly ImplementedOperation[] = [
   organizationResumeOperation,
   organizationAdminReassignOperation,
   organizationQuotaUpdateOperation,
+  organizationPlanUpdateOperation,
   myOrganizationsOperation,
   createMyOrganizationOperation,
   createPersonalOrganizationOperation,
@@ -193,7 +195,6 @@ const listedOperations: readonly ImplementedOperation[] = [
   organizationHolidayListOperation,
   organizationHolidayAddOperation,
   organizationHolidayDeleteOperation,
-  organizationSettingsUpdateOperation,
   organizationHistoryOperation,
   userListOperation,
   userAdminUpdateOperation,
@@ -222,6 +223,8 @@ const listedOperations: readonly ImplementedOperation[] = [
   epicPartyAssignOperation,
   epicRewardUpdateOperation,
   epicRequesterUpdateOperation,
+  epicCancelOperation,
+  epicUncancelOperation,
   epicCompleteOperation,
   epicReopenOperation,
   experienceSummaryOperation,

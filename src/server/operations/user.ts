@@ -21,6 +21,7 @@ import {
 import { ApiError } from '../errors.ts';
 import { uuidv7 } from '../uuid.ts';
 import { implement } from './implement.ts';
+import { removeDepartedPartyMemberStatements } from './membership-party.ts';
 import { readSeats } from './invitation.ts';
 import type { OrganizationTools } from './organization-tools.ts';
 import { createdOn } from './workspace.ts';
@@ -95,7 +96,7 @@ function stateOf(row: { id: string; is_admin: number; disabled_at: string | null
 // ユーザーの変更の記録（entity_type: user、action: update、workspace_id は空）。直前の文が行を変えたときだけ入れる
 function userChangeLog(
   db: OrganizationDb,
-  log: { actorUserId: string; userId: string; changes: Record<string, unknown>; at: Date },
+  log: { actorUserId: string; userId: string; changes: Record<string, unknown>; at: Date; id?: string },
 ) {
   return db.statement((q) =>
     q
@@ -104,7 +105,7 @@ function userChangeLog(
       .expression(
         q
           .selectNoFrom((eb) => [
-            eb.val(uuidv7(log.at)).as('id'),
+            eb.val(log.id ?? uuidv7(log.at)).as('id'),
             eb.val(db.organizationId).as('organization_id'),
             eb.val<string | null>(null).as('workspace_id'),
             eb.val(log.actorUserId).as('actor_user_id'),
@@ -314,8 +315,7 @@ export const userAdminUpdateOperation = implement(
 // 8. memberships（left_on はワークスペースのタイムゾーンの今日、left_at）
 // 3〜8 は閉じたワークスペースも含めたすべてのワークスペースに当て、「この要求で無効になった（disabled_at がこの要求の時刻）」を条件にする。
 // 記録はどれも、変える文より前に置く（変えた後では対象の行を選べない）。行の ID は SQL の中で作るので、件数によらず文の数は決まっている。
-// 完了したタスク、完了の記録、経験値は変えない。討伐隊（epic_party_members）と接続（connections）は、表を足す Issue（#267、#67）で
-// この batch に文を足す
+// 完了したタスク、完了の記録、経験値は変えない。討伐隊の履歴と削除も同じ batch に入れる。接続は #67 で足す
 export const userDisableOperation = implement(userDisable, async ({ db, actor, input }) => {
   const actorUserId = actorUserIdOf(actor);
   const organizationId = db.organizationId;
@@ -328,6 +328,7 @@ export const userDisableOperation = implement(userDisable, async ({ db, actor, i
 
   const at = now();
   const stamp = at.toISOString();
+  const disableLogId = uuidv7(at);
 
   // 離脱日はワークスペースのタイムゾーンの今日。SQLite はタイムゾーンを扱えないので、今の所属のワークスペースのタイムゾーンを先に読み、
   // ワークスペースの ID ごとの日付を1つの JSON の値で文に渡す（文の数も束縛の数も、所属の数で増えない）。
@@ -390,7 +391,7 @@ export const userDisableOperation = implement(userDisable, async ({ db, actor, i
         ),
     ),
     // 2
-    userChangeLog(db, { actorUserId, userId, changes, at }),
+    userChangeLog(db, { actorUserId, userId, changes, at, id: disableLogId }),
     // 3, 4. 招待の取り消しの記録と invitations
     ...revokeInvitationStatements(db, { userId, login: current, actorUserId, at, disabling: true }),
     // 5. 所属の終わり。離脱（membership-leave）と同じ {"user": [{"id", "name"}, null], "role": [前のロール, null]}
@@ -516,6 +517,7 @@ export const userDisableOperation = implement(userDisable, async ({ db, actor, i
           ]),
         ),
     ),
+    ...removeDepartedPartyMemberStatements(db, { userId, actorUserId, successLogId: disableLogId, at }),
   ]);
 
   if ((results[0]?.changes ?? 0) === 0) {

@@ -64,6 +64,12 @@ export function followsGlobGroup(words) {
   return words.followsGlobGroup === true;
 }
 
+// 区切りの並びにある算術のコマンド（(( … ))）と算術の展開（$(( … ))）の式の一覧（置換の中のものも含む）。
+// コマンドの頭の (( は区切りに残らず、$(( … )) は語の中の $(…) に置き換わるので、式の中身を判定の側が見られるよう配列の属性に持つ
+export function arithmeticOf(segments) {
+  return segments.arithmetic ?? [];
+}
+
 // 語と印を一緒に切り出す。Array.prototype.slice は印を落とすので、判定の途中で語を切り出すときはこれを使う。
 // リダイレクトは語の位置を持たず区切りぜんたいに掛かるので、切り出しても全部を運ぶ
 export function sliceWords(words, start, end) {
@@ -199,7 +205,7 @@ function arithmeticEnd(text, start) {
 function readSubstitution(text, j) {
   if (text[j + 2] === '(') {
     const end = arithmeticEnd(text, j + 3);
-    return { inner: substitutionsIn(text.slice(j + 3, end - 1)), end };
+    return { inner: substitutionsIn(text.slice(j + 3, end - 1)), end, expression: text.slice(j + 3, end - 1) };
   }
   const end = closingParen(text, j + 2);
   return { inner: [text.slice(j + 2, end)], end };
@@ -233,6 +239,8 @@ function substitutionsIn(body) {
 export function splitSegments(command) {
   const segments = [];
   const nested = [];
+  // 算術の式（(( … ))、$(( … ))）の中身
+  const arithmetic = [];
   const heredocs = [];
   let words = withMarks([], [], []);
   let word = '';
@@ -338,7 +346,8 @@ export function splitSegments(command) {
       continue;
     }
     if (command.startsWith('$(', i)) {
-      const { inner, end } = readSubstitution(command, i);
+      const { inner, end, expression } = readSubstitution(command, i);
+      if (expression !== undefined) arithmetic.push(expression);
       nested.push(...inner);
       add(SUBSTITUTION, true);
       expands = true;
@@ -372,7 +381,8 @@ export function splitSegments(command) {
           continue;
         }
         if (command.startsWith('$(', j)) {
-          const { inner, end } = readSubstitution(command, j);
+          const { inner, end, expression } = readSubstitution(command, j);
+          if (expression !== undefined) arithmetic.push(expression);
           nested.push(...inner);
           add(SUBSTITUTION, true);
           j = end + 1;
@@ -483,6 +493,7 @@ export function splitSegments(command) {
     // 中の置換は実行されるので、別の区切りとして取り出す
     if (command.startsWith('((', i) && !inWord && !openRedirect && (commandIndex(words) === -1 || words.at(-1) === 'for')) {
       const end = arithmeticEnd(command, i + 2);
+      arithmetic.push(command.slice(i + 2, end - 1));
       nested.push(...substitutionsIn(command.slice(i + 2, end - 1)));
       i = end;
       continue;
@@ -595,7 +606,12 @@ export function splitSegments(command) {
     add(c);
   }
   endSegment();
-  for (const inner of nested) segments.push(...splitSegments(inner));
+  for (const inner of nested) {
+    const innerSegments = splitSegments(inner);
+    arithmetic.push(...arithmeticOf(innerSegments));
+    segments.push(...innerSegments);
+  }
+  Object.defineProperty(segments, 'arithmetic', { value: arithmetic, configurable: true });
   return segments;
 }
 
@@ -697,6 +713,8 @@ function scanCommand(words) {
         continue;
       }
       const takesValue =
+        (previous === 'sudo' && w === '-E') || (['command', 'time'].includes(previous) && w === '-p') ? false :
+        (previous === 'exec' && w === '-a') || (previous === 'stdbuf' && ['-o', '-e', '-i'].includes(w)) ? true :
         previous === 'xargs'
           ? takesValueInXargs(w) || (w !== '-p' && PREFIX_FLAGS_WITH_VALUE.has(w))
           : PREFIX_FLAGS_WITH_VALUE.has(w) || (previous === 'env' && takesValueInEnv(w)) || (previous === 'arch' && ARCH_FLAGS_WITH_VALUE.has(w));

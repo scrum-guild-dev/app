@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures.ts';
 import { applyTheme, signIn, watchViolations } from './helpers.ts';
 
-test('4テーマで日本語と数字の全ての太さを自前の書体で描く（#1069）', async ({ page, context, baseURL }) => {
+test('3テーマで日本語と数字の全ての太さを自前の書体で描く（#1069）', async ({ page, context, baseURL }) => {
   const violations = await watchViolations(page);
   const fontUrls: string[] = [];
   page.on('request', (request) => {
@@ -13,10 +13,10 @@ test('4テーマで日本語と数字の全ての太さを自前の書体で描�
   // 今日の一覧は空になりうる。数値の検査はseedのストーリー集計があるバックログで行う。
   await page.goto('/aoba/w/019a0000-0000-7000-8000-000000000401');
   await expect(page.getByText('ポイント付与のバッチを作る', { exact: true }).first()).toBeVisible();
-  for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+  for (const theme of ['simple_light', 'simple_dark', 'modern']) {
     await applyTheme(page, theme);
     for (const [selector, weight] of [
-      ['h1', theme === 'medieval' ? '900' : '700'],
+      ['h1', '700'],
       ['body', '400'],
       ['.tree-ratio', '400'],
     ]) {

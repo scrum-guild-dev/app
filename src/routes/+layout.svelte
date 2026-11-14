@@ -6,6 +6,7 @@
   import { prefersReducedMotion } from '../lib/reduced-motion.ts';
   import { navigationLoading, navigationLoadingKind } from '../lib/navigation-loading.svelte.ts';
   import { navigating } from '$app/state';
+  import { version } from '$app/env';
   import ArtSprite from '../lib/components/ArtSprite.svelte';
   import IconSprite from '../lib/components/IconSprite.svelte';
   import LoadingSheet from '../lib/components/LoadingSheet.svelte';
@@ -104,4 +105,8 @@
 {:else}
   {@render children()}
 {/if}
+<!-- 本番に出ている版を画面で確かめるため、全画面の右下に出す。出すのはこのタブが読み込んだ画面の build の版で、
+     API の版（/api/health）とずれたときは版のずれの案内が受け持つ -->
+<!-- 要素の末尾の空白はコンパイラが除くため、読み上げの区切りを文字列に含める -->
+<p class="app-version"><span class="visually-hidden">{`${t('appVersionLabel')} `}</span>{version}</p>
 <ToastRegion />

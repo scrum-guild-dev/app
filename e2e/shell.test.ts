@@ -172,6 +172,128 @@ test('760px 以下では、畳んだままでも下のタブバーと浮きメ�
   await expect(page.locator('.nav-item-label').first()).toHaveCSS('opacity', '1');
 });
 
+test('760px 以下では、押したタブの読み込みを待つ間も先に選んだ印を移す', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto(`${today}/favorites`);
+  const tabs = page.locator('.mobile-tabs');
+  const todayTab = tabs.getByRole('link', { name: '今日やること', exact: true });
+  const favoritesTab = tabs.getByRole('link', { name: 'お気に入り', exact: true });
+  await expect(favoritesTab).toHaveAttribute('aria-current', 'page');
+
+  // 今日やることの読み込み（today と firstSteps の操作）を止めておき、待っている間の見た目を確かめる
+  const release = await holdOperations(page, /\/api\/aoba\/(today|first-steps)(\?|$)/);
+  await todayTab.click();
+  await expect(todayTab).toHaveAttribute('data-selected', '');
+  await expect(favoritesTab).not.toHaveAttribute('data-selected');
+  // 読み上げの現在地は、着くまで元の画面に残す
+  await expect(favoritesTab).toHaveAttribute('aria-current', 'page');
+  await expect(todayTab).not.toHaveAttribute('aria-current');
+  const selectedBorder = await selectedTabBorder(page);
+  await expect(todayTab).toHaveCSS('border-top-color', selectedBorder);
+  await expect(favoritesTab).not.toHaveCSS('border-top-color', selectedBorder);
+
+  release();
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+  await expect(todayTab).toHaveAttribute('aria-current', 'page');
+  await expect(todayTab).toHaveAttribute('data-selected', '');
+  await expect(favoritesTab).not.toHaveAttribute('data-selected');
+});
+
+test('760px 以下でタブで無い画面へ移る間は、今のタブの印を残す', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto(`${today}/favorites`);
+  const tabs = page.locator('.mobile-tabs');
+  const favoritesTab = tabs.getByRole('link', { name: 'お気に入り', exact: true });
+  await expect(favoritesTab).toHaveAttribute('data-selected', '');
+
+  // 組織の Wiki（タブに無い画面）の読み込みを止め、浮きメニューから移る
+  const release = await holdOperations(page, /\/api\/aoba\/org-wiki-tree(\?|$)/);
+  await page.getByRole('button', { name: 'すべてのメニュー', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('link', { name: /の Wiki$/ })
+    .click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(favoritesTab).toHaveAttribute('data-selected', '');
+  await expect(favoritesTab).toHaveAttribute('aria-current', 'page');
+  await expect(tabs.locator('[data-selected]')).toHaveCount(1);
+
+  release();
+  await expect(page).toHaveURL(/\/aoba\/wiki$/);
+  await expect(tabs.locator('[data-selected]')).toHaveCount(0);
+});
+
+test.describe('画面の入れ替え（View Transitions）', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as Window & { fadeCount?: number };
+      w.fadeCount = 0;
+      const original = document.startViewTransition?.bind(document);
+      if (!original) return;
+      document.startViewTransition = ((update: () => Promise<void>) => {
+        w.fadeCount! += 1;
+        return original(update);
+      }) as unknown as typeof document.startViewTransition;
+    });
+  });
+  const fadeCount = (page: Page) => page.evaluate(() => (window as Window & { fadeCount?: number }).fadeCount);
+
+  test('760px 以下のタブの移動で入れ替え、戻るでは入れ替えない', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 700 });
+    await page.goto(`${today}/favorites`);
+    expect(await page.evaluate(() => typeof document.startViewTransition)).toBe('function');
+    await page.locator('.mobile-tabs').getByRole('link', { name: '今日やること', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+    await expect.poll(() => fadeCount(page)).toBe(1);
+
+    await page.goBack();
+    await expect(page.getByRole('heading', { level: 1, name: 'お気に入り' })).toBeVisible();
+    expect(await fadeCount(page)).toBe(1);
+  });
+
+  test('動きを減らす設定では入れ替えない', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 700 });
+    await page.goto(`${today}/favorites`);
+    await page.locator('.mobile-tabs').getByRole('link', { name: '今日やること', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+    expect(await fadeCount(page)).toBe(0);
+  });
+
+  test('761px 以上では入れ替えない', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`${today}/favorites`);
+    await page.locator(`#app-nav a[href="${today}"]`).click();
+    await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+    expect(await fadeCount(page)).toBe(0);
+  });
+});
+
+// 行き先の操作の応答を止めておき、返す関数で流す。流した後に来た呼び出しもそのまま通す。
+// 流した直後に unroute すると、止めていた呼び出しが既に処理済みになり route が投げるので、テストの終わりまで外さない
+async function holdOperations(page: Page, pattern: RegExp): Promise<() => void> {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route(pattern, async (route) => {
+    await gate;
+    await route.fallback();
+  });
+  return release;
+}
+
+// 選んだタブの縁の色（--color-line）。待つ間の行き先のタブが、現在地と同じ見た目になることを確かめる
+async function selectedTabBorder(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const probe = document.createElement('a');
+    probe.className = 'mobile-tab';
+    probe.dataset.selected = '';
+    document.body.append(probe);
+    const color = getComputedStyle(probe).borderTopColor;
+    probe.remove();
+    return color;
+  });
+}
+
 test.describe('ホバーのできない端末（1024px の指のタブレット）', () => {
   test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true, isMobile: true });
 
@@ -497,7 +619,7 @@ test('書体を自分のオリジンから読み込み、外へ通信しない',
 test('覚えたテーマを、body ができる前に当てる', async ({ page }) => {
   const collect = await watchViolations(page);
   await page.addInitScript(() => {
-    localStorage.setItem('sg-theme', 'medieval');
+    localStorage.setItem('sg-theme', 'modern');
     const seen: { theme: string | undefined; bodyExists: boolean }[] = [];
     (window as unknown as { __themeSeen: typeof seen }).__themeSeen = seen;
     new MutationObserver(() => {
@@ -511,7 +633,7 @@ test('覚えたテーマを、body ができる前に当てる', async ({ page }
   const seen = await page.evaluate(
     () => (window as unknown as { __themeSeen: { theme: string | undefined; bodyExists: boolean }[] }).__themeSeen,
   );
-  expect(seen[0]).toEqual({ theme: 'medieval', bodyExists: false });
+  expect(seen[0]).toEqual({ theme: 'modern', bodyExists: false });
   expect(await collect()).toEqual([]);
 });
 
@@ -519,7 +641,7 @@ test('覚えた値が壊れていても、落ちずに描く', async ({ page }) 
   await page.addInitScript(() => localStorage.setItem('sg-theme', 'retro'));
   await page.goto(today);
   await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
-  // 壊れた値は先当てで無視され、組織の値（seed は simple）が当たる
+  // 壊れた値は先当てで無視され、自分のテーマ（seed は選んでいない = simple）が当たる
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'simple');
 });
 
@@ -786,6 +908,109 @@ test('画面の build に埋めた版が API の版と同じ', async ({ request 
   const res = await request.get('/_app/version.json');
   expect(res.status()).toBe(200);
   expect(await res.json()).toEqual({ version });
+});
+
+// 版の箱の、画面の右端と下端からの距離。縦のスクロールバーを除いた幅で測る
+async function versionBadgeInset(page: Page) {
+  return page.locator('.app-version').evaluate((badge) => {
+    const box = badge.getBoundingClientRect();
+    return {
+      right: document.documentElement.clientWidth - box.right,
+      bottom: document.documentElement.clientHeight - box.bottom,
+    };
+  });
+}
+
+test('組織の画面の右下に、画面の build の版を出し、スクロールしても残る', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(today);
+  await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
+  const badge = page.locator('.app-version');
+  await expect(badge).toHaveText(`版 ${version}`);
+  // 空白の正規化に頼らず、読み上げ用のラベルと版の間の区切りも確かめる
+  await expect(badge).toHaveJSProperty('textContent', `版 ${version}`);
+  // 「版」は読み上げにだけ添え、目には版だけを出す
+  await expect(badge.locator('.visually-hidden')).toHaveText('版');
+  // 右下の角に置く（右は 16px の余白、下は 1px の余白）
+  const atTop = await versionBadgeInset(page);
+  expect(atTop.right).toBeCloseTo(16, 0);
+  expect(atTop.bottom).toBeCloseTo(1, 0);
+  // 画面に固定する。今日やることの seed は画面に収まるので、文書を伸ばしてから末尾まで送る
+  await page.evaluate(() => {
+    const spacer = document.createElement('div');
+    spacer.style.height = '3000px';
+    document.body.append(spacer);
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  const scrolled = await versionBadgeInset(page);
+  expect(scrolled.right).toBeCloseTo(16, 0);
+  expect(scrolled.bottom).toBeCloseTo(1, 0);
+  // 操作を受けない
+  await expect(badge).toHaveCSS('pointer-events', 'none');
+});
+
+test('390px では、版を下のタブのすぐ上に置いて丸い角とホームバーから離し、長い版は省略して幅に収め、下に突き出る字を切らない', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(today);
+  const tabs = page.locator('.mobile-tabs');
+  await expect(tabs).toBeVisible();
+  const badge = page.locator('.app-version');
+  await expect(badge).toHaveText(`版 ${version}`);
+  const tabsBox = await tabs.boundingBox();
+  const badgeBox = await badge.boundingBox();
+  if (!tabsBox || !badgeBox) throw new Error('下のタブか版の位置が取れない');
+  // 下のタブの上端から 1px 上に置き、タブの上のトーストの余白（--space-4）に収める
+  expect(tabsBox.y - (badgeBox.y + badgeBox.height)).toBeCloseTo(1, 0);
+  expect(badgeBox.height).toBeLessThan(16);
+  // 画面の下端（丸い角とホームバーのある帯）から離す
+  expect((await versionBadgeInset(page)).bottom).toBeGreaterThan(16);
+
+  // 版の長さは環境で変わる（手元は dev、CI は 40 桁の SHA）。どこでも省略を確かめるため、長い文字に差し替える。
+  // overflow-x: clip の箱は scrollWidth を持たないので、文字の幅は Range で測る
+  const long = await badge.evaluate((element) => {
+    element.textContent = '0123456789abcdef'.repeat(5);
+    const box = element.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return {
+      left: box.left,
+      right: box.right,
+      top: box.top,
+      height: box.height,
+      textWidth: range.getBoundingClientRect().width,
+    };
+  });
+  expect(long.textWidth).toBeGreaterThan(long.right - long.left);
+  expect(long.left).toBeGreaterThanOrEqual(0);
+  expect(long.right).toBeLessThanOrEqual(390);
+  // 折り返さずに1行のまま（--space-4 の 16px 未満）で、下のタブと重ならない
+  expect(long.height).toBeLessThan(16);
+  expect(long.top + long.height).toBeLessThanOrEqual(tabsBox.y);
+  await expect(badge).toHaveCSS('white-space', 'nowrap');
+  await expect(badge).toHaveCSS('text-overflow', 'ellipsis');
+
+  // 手元の e2e の版（e2e-<時刻>）や preview のタグは、下に突き出る字を含む。字の上下の幅は行の高さより大きいので、縦は切らない
+  await expect(badge).toHaveCSS('overflow-y', 'visible');
+});
+
+test('組織の枠の外（ログインの画面）にも版を出す', async ({ browser, baseURL }) => {
+  // beforeEach のログインを持たない context で、ログインの画面を開く
+  const context = await browser.newContext({ baseURL });
+  try {
+    const page = await context.newPage();
+    await page.goto('/login');
+    await expect(page.getByRole('heading', { level: 1, name: 'ログイン' })).toBeVisible();
+    await expect(page.locator('.app-version')).toHaveText(`版 ${version}`);
+    // 下のタブの無い狭い画面では、丸い角とホームバーから離すため下端から --space-4 上げる
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('.mobile-tabs')).toHaveCount(0);
+    expect((await versionBadgeInset(page)).bottom).toBeCloseTo(16, 0);
+  } finally {
+    await context.close();
+  }
 });
 
 // 本文（.content）は幅の上限を持たない。広い画面でも左のメニューの右から画面の右の端まで広がる

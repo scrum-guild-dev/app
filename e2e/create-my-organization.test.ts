@@ -394,7 +394,7 @@ test('プロフィール保存に失敗しても入力を保持し、自分用�
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('チームメイトを招待');
 });
 
-test('利用開始の保存する画面は390px・4テーマで表示と操作対象に問題がない', async ({ context, baseURL, page }) => {
+test('利用開始の保存する画面は390px・3テーマで表示と操作対象に問題がない', async ({ context, baseURL, page }) => {
   test.setTimeout(90_000);
   await signIn(context, baseURL, 'createOrg');
   await page.setViewportSize(NARROW_VIEWPORT);
@@ -420,7 +420,7 @@ test('利用開始の保存する画面は390px・4テーマで表示と操作�
       ).toBeGreaterThan(130);
     }
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+    for (const theme of ['simple_light', 'simple_dark', 'modern']) {
       await applyTheme(page, theme);
       expect(await findOverflowViolations(page)).toEqual([]);
       expect(await findTargetSizeViolations(page)).toEqual([]);

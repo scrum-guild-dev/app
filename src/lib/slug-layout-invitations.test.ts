@@ -19,8 +19,8 @@ const listPath = operationPath(invitationList, 'aoba');
 const organization: Reply = {
   status: 200,
   body: {
-    organization: { name: 'あおば開発', theme: 'simple', has_workspaces: true },
-    me: { id: 'u1', name: 'ミナト', is_admin: false, theme: null, level: 1 },
+    organization: { name: 'あおば開発', has_workspaces: true },
+    me: { id: 'u1', name: 'ミナト', is_admin: false, theme: 'simple', level: 1 },
     workspaces: [],
   },
 };
@@ -69,7 +69,7 @@ test('この組織に招待が届いていれば、invitation-list の件数を 
     [listPath]: {
       status: 200,
       body: {
-        organization: { name: 'あおば開発', theme: 'simple' },
+        organization: { name: 'あおば開発' },
         invitations: [invitationItem('a'), invitationItem('b')],
       },
     },
@@ -167,7 +167,7 @@ test('招待だけの人は招待一覧を主として待ち、件数を別に�
   });
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(loaded).toBe(false);
-  const inbox = { organization: { name: 'あおば開発', theme: 'simple' }, invitations: [invitationItem('a')] };
+  const inbox = { organization: { name: 'あおば開発' }, invitations: [invitationItem('a')] };
   invitations.resolve(inbox);
   const { data, calls } = await pending;
   expect(data).toMatchObject({ organization: null, invitationInbox: inbox });
