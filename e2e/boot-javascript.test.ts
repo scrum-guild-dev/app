@@ -53,6 +53,8 @@ for (const { theme, width } of [
     await trigger.click();
     const sheet = page.getByRole('dialog', { name: '起票', exact: true });
     await expect(sheet.getByLabel('タイトル', { exact: true })).toBeFocused();
+    await expect(page.locator(`[id="${controlledId}"]`)).toHaveCount(1);
+    await expect(page.locator(`dialog[id="${controlledId}"]`)).toBeVisible();
     expect(scripts.has(sheetPath)).toBe(true);
     await sheet.getByLabel('本文', { exact: true }).fill('遅延読み込み後も本文を編集できる');
     await sheet.getByLabel('本文', { exact: true }).fill('');
