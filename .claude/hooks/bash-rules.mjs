@@ -3423,6 +3423,10 @@ function variablesSetBy(words, ci) {
     const declaresUnknown = ENV_DECLARERS.has(tool) && words.some((_, i) => i > ci && isUnresolved(words, i));
     if (declaresUnknown || IN_SHELL_RUNNERS.has(tool)) for (const name of [...LOCATION_VARIABLES, NPM_CALL_VARIABLE]) after.add(name);
     if (IN_SHELL_RUNNERS.has(tool)) after.add(GIT_CONFIG_LOCATION);
+    // 不透明な本文と、設定する名前が展開で決まる宣言は GIT_CONFIG_* も変更できる。
+    // export PATH=$HOME/bin のように値だけが展開される宣言では名前は既知なので印を付けない。
+    const declaresUnknownConfig = ENV_DECLARERS.has(tool) && words.some((w, i) => i > ci && isUnresolved(words, i) && hasExpansion(w.split('=')[0]));
+    if (declaresUnknownConfig || IN_SHELL_RUNNERS.has(tool)) after.add('GIT_CONFIG_ENV');
   }
   return { once, after };
 }
