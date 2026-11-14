@@ -2688,9 +2688,12 @@ function shellCommandBody(tool, args) {
       // fish は -c を複数回実行する。-- より後ろは本文へ渡す argv なので数えない。
       // 本文が複数あるときは先頭だけの解析で通さず、人が全体を確かめる。
       if (tool === 'fish') {
-        const end = args.indexOf('--', i + 1);
-        const rest = sliceWords(args, i + 1, end === -1 ? undefined : end);
-        if (rest.some((word) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(word))) return { uncertain: true };
+        for (let tail = i + 1; tail < args.length; tail++) {
+          // 展開は終端自体を変えうる。値取りがあるフラグも、後続の -- を値として取るので先に確認する。
+          if (isUnresolved(args, tail) || expandsAt(args, tail)) return { body: a, uncertain: true };
+          if (args[tail] === '--') break;
+          if (/^[-+]/.test(args[tail])) return { body: a, uncertain: true };
+        }
       }
       return { body: a };
     }
@@ -3439,7 +3442,7 @@ function judgeSegment(words, ctx) {
     // bash -c "..."、bash -lc "..."、bash <<< "..."、bash <<EOF の中身も同じ規則で見る
     const script = shellCommandBody(tool, args);
     if (script.uncertain) results.push([ASK, 'シェルの -c の本文の位置をオプションと値から判定できない。人が確かめる']);
-    else if (script.body) results.push(judgeBash(script.body, nextCtx));
+    if (script.body) results.push(judgeBash(script.body, nextCtx));
     if (tool === 'fish') for (const body of fishCommands(args)) results.push(judgeBash(body, nextCtx));
     for (const body of heredocScripts(args)) results.push(judgeBash(body, nextCtx));
   }
