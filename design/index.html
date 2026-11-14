@@ -634,7 +634,7 @@ const SECTIONS = [
         </nav>
       </div><p>架空の組織名を含む項目を現在のページとして表示。前後の短い項目と、アイコン・文字の配置を比べる。</p>
     </div>`).join("")}
-    <div class="doc-box"><pre><code>${esc(`<nav class="nav">
+    <div class="doc-box"><pre tabindex="0" role="region" aria-label="コードの見本"><code>${esc(`<nav class="nav">
   <a class="nav-item is-wrapping" href="wiki.html?scope=organization" aria-current="page">
     <!-- icon("file") の SVG -->
     <span class="nav-item-label">こもれび工房の Wiki</span>
@@ -651,7 +651,7 @@ const SECTIONS = [
       <div class="app cat-nav-frame" style="min-height:200px"><aside class="binding"><div class="binding-inner"><div class="binding-head"><a class="brand" href="#frame-cross">${SQ.brandSymbol}<span class="visually-hidden">Scrum Guild</span></a>${SQ.orgMenuHtml({ open: false, id: "cat-cross-org", live: false, invited: false })}<button class="nav-toggle" type="button" aria-expanded="true" aria-controls="cat-cross-nav" aria-label="${t("menuCollapse")}">${icon("panel")}</button></div><div class="binding-body"><nav class="nav" id="cat-cross-nav"><a class="nav-item" href="#frame-cross">${icon("sun")}<span class="nav-item-label">${t("pageToday")}</span></a><a class="nav-item" href="#frame-cross" aria-current="page">${icon("board")}<span class="nav-item-label">${t("backlog")}</span></a></nav></div></div></aside><div class="sheet"><div class="topbar">${SQ.breadcrumbHtml([{ label: "あおば開発", href: "#frame-cross" }, { label: "ふくろう班", href: "#frame-cross" }, { label: t("backlog"), current: true }])}</div><div class="content"><p>角で罫が十字に交わる。</p></div></div></div></div>
     <div class="field"><span class="field-label">組織の画面（ワークスペースを出さない）と、長い名前</span>
       <div class="app cat-nav-frame" style="min-height:120px"><div class="sheet" style="grid-column:1 / -1"><div class="topbar" style="max-width:360px">${SQ.breadcrumbHtml([{ label: "こもれび工房の空想都市と星空観測の道具をつくる共同研究開発チーム", href: "#frame-cross" }, { label: t("pageToday"), current: true }])}</div></div></div></div></div>
-    <div class="doc-box"><pre><code>${esc(`<nav class="breadcrumb" aria-label="パンくず"><ol>
+    <div class="doc-box"><pre tabindex="0" role="region" aria-label="コードの見本"><code>${esc(`<nav class="breadcrumb" aria-label="パンくず"><ol>
   <li><a class="breadcrumb-item" href="today.html">あおば開発</a></li>
   <li><span class="breadcrumb-sep" aria-hidden="true">›</span><a class="breadcrumb-item" href="backlog.html">ふくろう班</a></li>
   <li><span class="breadcrumb-sep" aria-hidden="true">›</span><span class="breadcrumb-item" aria-current="page">バックログ</span></li>
@@ -717,7 +717,7 @@ const SECTIONS = [
           <div class="form-actions" role="group" aria-label="関連するページ"><a class="btn is-sm" href="#">プライバシーポリシー</a><button class="btn is-sm is-quiet" type="button">前の画面に戻る</button></div>
         </section>
       </div>
-      <div class="doc-box" style="width:100%"><pre><code>${esc('<div class="loading-overlay">LoadingSheet の中身</div>')}</code></pre></div>
+      <div class="doc-box" style="width:100%"><pre tabindex="0" role="region" aria-label="コードの見本"><code>${esc('<div class="loading-overlay">LoadingSheet の中身</div>')}</code></pre></div>
       <section class="gate-sheet" style="margin-top:var(--space-6); width:min(440px,100%)">
         <div class="gate-brand">${SQ.brandMark}<span class="visually-hidden">Scrum Guild</span></div>
         <h1 class="visually-hidden">読み込んでいます</h1>
