@@ -9,6 +9,8 @@
 // 守る先とリポジトリの根とその祖先の削除と移動（rm、rmdir、mv、find -delete）、git clean の -x と -X では人の確認を挟む。
 // e2e を走らせるコマンドは、フック自身の環境がクラウドを示すときだけ許可する。
 // gh pr merge は、<番号>-… の作業ブランチの中で打つ --squash --match-head-commit <40桁の SHA> の固定の形だけを判定せず（.claude/settings.json の許可ルールに任せる）、ほかの形は deny にする。非対話の実行は確認に回す。
+// git の設定の場所を変える環境変数（GIT_CONFIG_*、HOME、XDG_CONFIG_HOME）を付けた git push、git config -e、git の設定ファイルへの書き込み、
+// 名前を展開かファイルの変数で渡す GraphQL の createRef は確認に回す。
 // find の -exec 系は {} を起点に置き換えて同じ規則に掛け直す（docs/development.md の「Claude の設定とフック」）。
 // permissions.deny の前方一致では npx wrangler や pnpm exec wrangler の言い換えを取りこぼすので、語に分けて判定する。
 // 踏み線であって守りの本体ではない。変数の中身と、パイプで sh に流す中身は見えない。
@@ -20,8 +22,10 @@ import {
   GLOB_GROUP,
   abbreviates,
   baseName,
+  closesSubshell,
   commandIndex,
   concatWords,
+  definesFunction,
   expandsAt,
   followsGlobGroup,
   isAssignment,
@@ -34,6 +38,8 @@ import {
   shapeAt,
   sliceWords,
   splitSegments,
+  subshellDepth,
+  substitutionHost,
 } from './shell-words.mjs';
 
 const DENY = 'deny';
@@ -397,8 +403,9 @@ function gitDirAt(dir, target, args, at) {
   return /^~/.test(target) || isUnresolved(args, at) ? null : dir && path.resolve(dir, target);
 }
 
-// dir が null のときは、作業場所を判定できない（cd ~、cd $X、GIT_DIR=）
-function judgeGit(args, dir, branchOf) {
+// dir が null のときは、作業場所を判定できない（cd ~、cd $X、GIT_DIR=）。
+// configMoved は、設定を読む場所を変える環境変数（GIT_CONFIG_*、HOME、XDG_CONFIG_HOME）をこの git に設定したか
+function judgeGit(args, dir, branchOf, configMoved = false) {
   let i = 0;
   let gitDir = dir;
   while (i < args.length && args[i].startsWith('-')) {
@@ -447,6 +454,8 @@ function judgeGit(args, dir, branchOf) {
   if (args.slice(0, i).some(touchesHooksPath) || (sub === 'config' && !readsConfig && rest.some(touchesHooksPath))) {
     if (verdict?.[0] !== DENY) return [ASK, 'core.hooksPath を変えると main を守る git のフック（.githooks/）が外れる。人が確かめる'];
   }
+  // 読む設定ファイルを環境変数で差し替えると、-c で渡した設定と同じく remote.<名前>.push などで先が変わる。並べて書いた main などの DENY は上で先に返す
+  if (sub === 'push' && configMoved) return [ASK, GIT_CONFIG_ENV_REASON];
   return verdict;
 }
 
@@ -454,6 +463,10 @@ function judgeGit(args, dir, branchOf) {
 const CONFIG_FLAGS_WITH_VALUE = new Set(['-f', '--file', '--blob', '--type', '--default', '--value', '--comment']);
 const CONFIG_READ_FLAG = /^--(get|get-all|get-regexp|get-urlmatch|get-color|get-colorbool|list)$|^-l$/;
 const CONFIG_REMOVE_FLAG = /^--(unset|unset-all|remove-section|rename-section)$/;
+// -e と、-l などとまとめた短い形。--edit の一意な省略形は isOption で見る
+const CONFIG_EDIT_FLAG = /^-[lz]*e[lz]*$/;
+const CONFIG_EDIT_REASON =
+  'git config -e（--edit、edit）はエディタで設定ファイルを書き換える。remote.<名前>.push や push.default の書き込みを字面で判定できない。人が確かめる';
 
 // git config の引数を、読み取り（reads）か、消す操作（removes）か、書く名前（key）と値（value）に読む。値を取るオプションの値は位置引数に数えない。
 // 位置引数の先頭の get、list、unset は新しい形のサブコマンドで、set は次の2語が名前と値。旧い形は位置引数の1つ目が名前、2つ目が値で、
@@ -462,6 +475,7 @@ function readConfigArgs(rest) {
   const positionals = [];
   let reads = false;
   let removes = false;
+  let edits = false;
   for (let k = 0; k < rest.length; k++) {
     const a = rest[k];
     if (a === '--') {
@@ -471,13 +485,16 @@ function readConfigArgs(rest) {
     if (!/^--?[a-z]/i.test(a)) positionals.push(a);
     else if (CONFIG_READ_FLAG.test(a)) reads = true;
     else if (CONFIG_REMOVE_FLAG.test(a)) removes = true;
+    else if (CONFIG_EDIT_FLAG.test(a) || isOption(a, '--edit', 4)) edits = true;
     else if (CONFIG_FLAGS_WITH_VALUE.has(a)) k++;
   }
   const [first] = positionals;
-  if (['get', 'list'].includes(first)) return { reads: true, removes: false };
-  if (['unset', 'remove-section', 'rename-section'].includes(first)) return { reads: false, removes: true };
+  if (['get', 'list'].includes(first)) return { reads: true, removes: false, edits };
+  if (['unset', 'remove-section', 'rename-section'].includes(first)) return { reads: false, removes: true, edits };
+  // git 2.46 からのサブコマンドの形（git config edit）。名前に . を含まない語は設定の名前ではないので、旧い形と取り違えない
+  if (first === 'edit') return { reads: false, removes: false, edits: true };
   const [key, value] = first === 'set' ? positionals.slice(1) : positionals;
-  return { reads, removes, key, value };
+  return { reads, removes, edits, key, value };
 }
 
 function judgeGitCommand(sub, rest, gitDir, branchOf) {
@@ -495,7 +512,8 @@ function judgeGitCommand(sub, rest, gitDir, branchOf) {
   if (sub === 'clean' && cleansIgnored(rest)) return [ASK, CLEAN_IGNORED_REASON];
   // 設定に残すと、後の引数の無い git push が v* のタグや別の先も push する。読むだけの形は通す
   if (sub === 'config') {
-    const { reads, removes, key, value } = readConfigArgs(rest);
+    const { reads, removes, edits, key, value } = readConfigArgs(rest);
+    if (edits) return [ASK, CONFIG_EDIT_REASON];
     if (!reads && !removes && key !== undefined && value !== undefined) {
       // git config "$K" true のように名前が展開で決まると、どの設定を書くかを字面で読めない
       if (hasExpansion(key)) return [ASK, 'git config の名前を変数、$(...) で渡すと、push の先や v* のタグの push を変えるかを判定できない。人が確かめる'];
@@ -703,9 +721,11 @@ function forceOf({ fields, bodies, unreadable }) {
 // graphql の宛先の字面（glob や #、大文字は別の判定が拾うので、graphql を含む語を広く数える）
 const isGraphqlEndpoint = (endpoint) => /graphql/i.test(endpoint);
 // main の後ろに続く語（-fix、.json、/x）は別のブランチ。末尾の / だけは main と同じ ref に読まれうるので止める
-const MAIN_REF = /\/git\/refs\/heads\/main(?![\w.-]|\/[^\s?#])/;
-const PRODUCTION_REF = /\/git\/refs\/heads\/production(?![\w.-]|\/[^\s?#])/;
-const RELEASE_TAG_REF = /\/git\/refs\/tags\/v/;
+// git/refs/ の後ろの refs/ は何重に重ねても、重ねない形と同じ ref に読む（git/refs/refs/heads/main）。
+// GitHub が受けるかは確かめていないので、書き込みが通る側に倒れないよう止める
+const MAIN_REF = /\/git\/refs\/(?:refs\/)*heads\/main(?![\w.-]|\/[^\s?#])/;
+const PRODUCTION_REF = /\/git\/refs\/(?:refs\/)*heads\/production(?![\w.-]|\/[^\s?#])/;
+const RELEASE_TAG_REF = /\/git\/refs\/(?:refs\/)*tags\/v/;
 // repos/<owner>/<repo>/releases の宛先（URL の形も）。リポジトリや組織の名前が releases のもの（repos/o/releases/issues）は当てない
 // repositories/<数値の ID>/releases も同じ資源
 const RELEASES_PATH = /(?:^|[\s/])(?:repos\/[^/\s]+\/[^/\s]+|repositories\/[^/\s]+)\/releases(?![\w-])/;
@@ -765,6 +785,22 @@ function judgeGitHubWrite(words, method, { endpoints = [], fields = [], bodies =
   if (/\b(createRef|deleteRef)\b/.test(text) && /refs\/tags\/v/.test(text)) return [DENY, RELEASE_TAG_REASON];
   // deleteRef は ref をノードの ID（refId）で受けるので、名前が字面に無ければ何を消すかを判定できない
   if (/\bdeleteRef\b/.test(text)) return [ASK, 'deleteRef は refId で ref を受け、main、production、v* のタグを消すかを判定できない。人が確かめる'];
+  // createRef の name（か input ぜんたい）を GraphQL の変数で受け、変数の値が展開かファイル（-f n="$P"、-f n=@file）だと、作る ref の名前を字面で読めない。
+  // gh は -f の値の @ もファイルとは読まないが、決めたことは -f と -F を分けずに止める。oid など名前以外の変数は読まない
+  if (/\bcreateRef\b/.test(text)) {
+    // GraphQL は空白、カンマ、コメント（# から行末）を読み飛ばす（name:,$n、name,:$n、$ n）
+    const skip = '(?:[\\s,]|#[^\\n]*(?:\\n|$))*';
+    const variables = [...text.matchAll(new RegExp(`\\b(name|input)${skip}:${skip}\\$${skip}(\\w+)`, 'g'))].map((m) => ({ argument: m[1], name: m[2] }));
+    const opaque = fields.some((f) => {
+      const eq = f.indexOf('=');
+      const value = eq === -1 ? '' : f.slice(eq + 1);
+      if (!hasExpansion(value) && !value.startsWith('@')) return false;
+      // gh api は key[subkey]=value で入れ子の値を組む。input ぜんたいを変数で受けるときは、その中の name が名前
+      const key = /^([^[=]*)(?:\[([^\]]*)\])?/.exec(eq === -1 ? f : f.slice(0, eq));
+      return variables.some(({ argument, name }) => key[1] === name && (key[2] === undefined || (argument === 'input' && key[2] === 'name')));
+    });
+    if (opaque) return [ASK, 'createRef の name を変数で渡し、その値が展開かファイルだと、production や v* のタグを作るかを判定できない。名前は引数の字面で渡す。人が確かめる'];
+  }
   // mergeBranch と createCommitOnBranch は、PR も push も通さずにブランチへコミットを足す（main と production を含む）
   if (/\b(mergeBranch|createCommitOnBranch)\b/.test(text)) return [DENY, 'mergeBranch と createCommitOnBranch はブランチへ直にコミットを足す。作業ブランチで git を使い、PR を通す'];
   // gh pr update-branch --rebase の中身。updateMethod を付けないか MERGE なら merge のコミットを足す通常の更新
@@ -1056,7 +1092,7 @@ const CURL_SHORT_WITH_VALUE = 'XdHFTouAebcwmrxyYzKECDPQtU';
 const CURL_LONG_WITH_VALUE = new Set(
   (
     'request data data-raw data-binary data-ascii data-urlencode json upload-file form form-string header user-agent referer user proxy proxy-user cookie cookie-jar ' +
-    'output write-out max-time connect-timeout retry retry-delay retry-max-time resolve connect-to cacert capath cert key config dump-header range time-cond limit-rate ' +
+    'output output-dir write-out max-time connect-timeout retry retry-delay retry-max-time resolve connect-to cacert capath cert key config dump-header range time-cond limit-rate ' +
     'oauth2-bearer url url-query request-target interface local-port proxy-header quote telnet-option trace trace-ascii variable'
   ).split(' '),
 );
@@ -2341,6 +2377,7 @@ function writesTo(matches, tool, args, words, { anyOperand = false, intoDirector
     return intoDirectory !== null && copiesIntoDirectory(matches, pos, intoDirectory);
   }
   if (tool === 'dd') return args.some((a) => a.startsWith('of=') && matches(a.slice('of='.length)));
+  if (tool === 'curl' || tool === 'wget') return downloadTargets(tool, args).some(matches);
   if (tool === 'tar') {
     // -f のアーカイブに書くのは作る、足す、更新する、つなぐ、消す（c、r、u、A、--delete）とき、-C の先に書くのは展開（x）だけ。
     // 一覧（t）と比べる（d）は読むだけ。動作を判定できないときは両方を書き込み先とみなす
@@ -2366,6 +2403,71 @@ function writesTo(matches, tool, args, words, { anyOperand = false, intoDirector
     );
   }
   return false;
+}
+
+// curl と wget が書くファイル。curl は -o（--output）、wget は -O（--output-document）と、ログを書く -o、-a（--output-file、--append-output）。
+// 値を取る短いフラグをまとめた形（curl -sSLo x、wget -qO x）は、最初に出る値を取るフラグ以降が値（語の最後なら次の語）。
+// ファイルの名前を指定しない書き方も書く。curl -O（--remote-name）は URL の末尾の名前で、--output-dir の下（無ければ作業場所）に書く。
+// wget は -O が無ければ URL の末尾の名前で、-P（--directory-prefix）の下に書く
+const WGET_SHORT_WITH_VALUE = 'OoaPeTtwQiBIXUlDAR';
+const WGET_LONG_WITH_VALUE = ['output-document', 'output-file', 'append-output', 'directory-prefix'];
+// フラグと長いオプションを { name, value } に読む。name は短いフラグの1文字か長いオプションの名前で、値を取らなければ value は undefined
+function flagValues(args, shortWithValue, takesLongValue) {
+  const found = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--') break;
+    const named = /^--([a-z-]+)(=([\s\S]*))?$/.exec(a);
+    if (named) {
+      found.push({ name: named[1], value: named[2] !== undefined ? named[3] : takesLongValue(named[1]) ? args[++i] : undefined });
+      continue;
+    }
+    if (!/^-[^-]/.test(a)) continue;
+    for (let k = 1; k < a.length; k++) {
+      if (!shortWithValue.includes(a[k])) {
+        found.push({ name: a[k], value: undefined });
+        continue;
+      }
+      found.push({ name: a[k], value: k + 1 < a.length ? a.slice(k + 1) : args[++i] });
+      break;
+    }
+  }
+  return found;
+}
+const urlFileName = (url) => url.replace(/[?#].*$/, '').split('/').pop();
+
+// curl は -o の名前の #N を、URL の N 番目の glob（{a,b}、[1-3]）の当たりに置き換える。{ } の中の候補を並べ、[ ] は何に当たるか分からないので * とする。
+// 置き換えの組み合わせが多すぎるときは、#N を * にした名前だけを返す（候補ごとに置き換えず、当たりうる名前に広く照合する）
+function curlGlobNames(file, urls) {
+  if (!/#\d+/.test(file)) return [file];
+  const sets = urls.flatMap((url) => [...url.matchAll(/\{([^}]*)\}|\[[^\]]*\]/g)].map((m) => (m[1] === undefined ? ['*'] : m[1].split(','))));
+  let names = [file];
+  for (const [i, alternatives] of sets.entries()) {
+    const token = `#${i + 1}`;
+    if (!file.includes(token)) continue;
+    names = names.flatMap((name) => alternatives.map((alternative) => name.replaceAll(token, alternative)));
+    if (names.length > MAX_BRACE_EXPANSION) return [file.replaceAll(/#\d+/g, '*')];
+  }
+  return names;
+}
+function downloadTargets(tool, args) {
+  const joinDir = (dir, file) => (dir && !file.startsWith('/') ? path.posix.join(dir, file) : file);
+  if (tool === 'curl') {
+    const found = flagValues(args, CURL_SHORT_WITH_VALUE, (name) => CURL_LONG_WITH_VALUE.has(name));
+    const valueOf = (...names) => found.filter((f) => names.includes(f.name) && f.value !== undefined).map((f) => f.value);
+    const remoteName = found.some((f) => ['O', 'remote-name', 'remote-name-all'].includes(f.name));
+    const urls = curlRequests(args).flatMap((request) => request.urls);
+    const names = remoteName ? urls.map(urlFileName) : [];
+    const dir = valueOf('output-dir').at(-1);
+    return [...valueOf('o', 'output').flatMap((file) => curlGlobNames(file, urls)), ...names].filter(Boolean).map((file) => joinDir(dir, file));
+  }
+  const found = flagValues(args, WGET_SHORT_WITH_VALUE, (name) => WGET_LONG_WITH_VALUE.includes(name));
+  const valueOf = (...names) => found.filter((f) => names.includes(f.name) && f.value !== undefined).map((f) => f.value);
+  const document = valueOf('O', 'output-document');
+  // -O があれば、書くのはそのファイルだけ。無ければ URL の末尾の名前
+  const names = document.length > 0 ? [] : args.filter((a) => /^[a-z][a-z0-9+.-]*:\/\//i.test(a)).map(urlFileName);
+  const prefix = valueOf('P', 'directory-prefix').at(-1);
+  return [...document, ...valueOf('o', 'output-file', 'a', 'append-output'), ...names.filter(Boolean).map((file) => joinDir(prefix, file))];
 }
 
 // 宛先が展開で決まるコピーで、元が守りたい先に置かれうるか。into.placeable があれば元の名前をそれで（守る先の名前、git のフックの名前、*.sql）、
@@ -2433,9 +2535,62 @@ function judgeInterpreterBody(tool, args) {
   return null;
 }
 
+// git の設定ファイル。書き込むと remote.<名前>.push、push.default、alias.*、include.path を足せ、-c や git config の判定を通らずに push の先が変わる。
+// 名前で見る（引用符の中の ~ は展開されず ./~/.gitconfig になるが、同じ名前の別の場所のファイルも止める）。
+// $XDG_CONFIG_HOME/git/config は XDG_CONFIG_HOME の既定が ~/.config なので .config/git/config と同じファイル。
+// $(prefix)/etc/gitconfig は system の設定（Homebrew の git なら /opt/homebrew/etc/gitconfig）で、名前 etc/gitconfig で見る。
+// APFS は大文字小文字を区別しないので、.Git/Config も同じファイルを指す（i）
+const GIT_CONFIG_FILE = /(^|\/)(\.git\/config|\.gitconfig|\.config\/git\/config|etc\/gitconfig|\$\{?XDG_CONFIG_HOME\}?\/git\/config)$/i;
+// glob の語を照合する設定ファイルの名前（末尾の位置から）。XDG_CONFIG_HOME の変数は展開を含むので glob では見ない
+const GIT_CONFIG_PATHS = [['.git', 'config'], ['.gitconfig'], ['.config', 'git', 'config'], ['etc', 'gitconfig']];
+// 宛先がディレクトリのコピー（cp /tmp/config .git/、cp /tmp/.gitconfig ~/）が、元の名前で置く設定ファイルの名前
+const GIT_CONFIG_NAMES = ['config', '.gitconfig', 'gitconfig'];
+
+// glob の語（.git/conf*、conf[i]g）が設定ファイルの名前に当たるか。bash と zsh はリダイレクトの先と引数の glob を展開し、1つに決まればそのファイルへ書く。
+// * ? [ で始まる名前は、シェルの glob と同じく . で始まる名前に当たらない
+function globHitsGitConfig(word) {
+  const segments = word.split('/');
+  return GIT_CONFIG_PATHS.some((names) => {
+    if (segments.length < names.length) return false;
+    const tail = segments.slice(-names.length);
+    return names.every((name, k) => {
+      const pattern = tail[k].toLowerCase();
+      if (!GLOB_CHARS.test(pattern)) return pattern === name;
+      return !(name.startsWith('.') && /^[*?[]/.test(pattern)) && matchesGlob(name, pattern);
+    });
+  });
+}
+const GIT_CONFIG_FILE_REASON =
+  'git の設定ファイル（.git/config、.gitconfig、.config/git/config）への書き込みは、remote.<名前>.push や push.default を足して push の先を変えうる。書き込みは人が確かめる';
+
+// 設定ファイルのあるディレクトリを引くコマンド（git rev-parse --git-common-dir、--git-dir、--absolute-git-dir、--git-path）。
+// ワークツリーの .git はファイルなので、主リポジトリの .git/config へ書くには、この形で場所を引く
+// ワークツリーの .git は gitdir: <本体>/.git/worktrees/<名前> の1行のファイルで、その ../../config も本体の設定ファイル
+const GIT_DIR_QUERY = /\brev-parse\b[^\n;&|]*--(git-common-dir|git-dir|absolute-git-dir|git-path)\b|\bgitdir:/;
+
+// 書かれた語のほかに、正規化した語、作業場所から解決した絶対パス（cd .git && … >> config）、
+// 作業場所を解決できない cd の行き先の字面（cd ~/.config/git; … > config の ~/.config/git）をつないだ語でも設定ファイルに当たるかを見る。
+// namesGitDir（設定ファイルのあるディレクトリを引いたコマンド）では、置換や変数で場所が決まる config（"$(git rev-parse --git-common-dir)/config"、
+// そこへ cd した後の config）も設定ファイルとみなす。
+// alternatives は、動いたか決められない cd（false && cd /）の前の作業場所 { dir, words } で、動かなかった場合の場所でも見る
+function gitConfigFileAt(dir, cdWords, namesGitDir, alternatives = []) {
+  const hitsOne = (w) => GIT_CONFIG_FILE.test(w) || GIT_CONFIG_FILE.test(withoutGlobGroup(w)) || (GLOB_CHARS.test(w) && globHitsGitConfig(w));
+  // {a,b} はシェルが展開してから渡す（.git/{config,x}）。展開が大きすぎる語は当たるものとする（protectedAt と同じ）
+  const hits = (w) => expansionSize(w) > MAX_BRACE_EXPANSION || expandBraces(w).some(hitsOne);
+  const viaGitDir = (w) => namesGitDir && /(^|\/)config$/i.test(w) && (/[$`]/.test(w) || /[$`]/.test(cdWords));
+  return (word) =>
+    hits(word) ||
+    hits(path.posix.normalize(word)) ||
+    Boolean(dir && hits(path.resolve(dir, word))) ||
+    Boolean(cdWords && hits(path.posix.join(cdWords, word))) ||
+    alternatives.some((alt) => Boolean(alt.dir && hits(path.resolve(alt.dir, word))) || Boolean(alt.words && hits(path.posix.join(alt.words, word)))) ||
+    viaGitDir(word);
+}
+
 // 道具の無い区切り（> f、exec > f）と cd、pushd のリダイレクトも見るので、tool を空、args を空にして呼べる。
-// dir は作業場所（分からなければ null）。wrangler の設定は相対パスを dir から解決しても見る
-function judgeFileWrites(tool, args, words, dir = null) {
+// dir は作業場所（分からなければ null）。wrangler の設定は相対パスを dir から解決しても見る。
+// cdWords は、これまでの cd の行き先の字面（~/.config/git）をつないだもの。namesGitDir は gitConfigFileAt を参照
+function judgeFileWrites(tool, args, words, dir = null, cdWords = '', namesGitDir = false, alternatives = []) {
   const results = [];
   if (judgeSecretAccess(tool, args, words) || writesTo(mentionsSecret, tool, args, words, { anyOperand: true })) {
     results.push([DENY, SECRET_FILE_REASON]);
@@ -2458,6 +2613,10 @@ function judgeFileWrites(tool, args, words, dir = null) {
   const isConfig = wranglerConfigAt(dir);
   if (writesTo(isConfig, tool, args, words, { intoDirectory: { dir, names: WRANGLER_CONFIG_NAMES, anyInstallOperand: true } }) || interpreterWords(tool, args).some(isConfig)) {
     results.push([ASK, 'wrangler の設定（wrangler.jsonc、.wrangler/deploy/config.json）に remote の binding を入れると、wrangler dev が本番の D1 と R2 に届く。書き換えは人が確かめる']);
+  }
+  const isGitConfig = gitConfigFileAt(dir, cdWords, namesGitDir, alternatives);
+  if (writesTo(isGitConfig, tool, args, words, { intoDirectory: { dir, names: GIT_CONFIG_NAMES, anywhere: true } }) || interpreterWords(tool, args).some((w) => expansionSize(w) <= MAX_BRACE_EXPANSION && isGitConfig(w))) {
+    results.push([ASK, GIT_CONFIG_FILE_REASON]);
   }
   return results;
 }
@@ -2944,7 +3103,7 @@ function judgeSegment(words, ctx) {
   if (ci !== -1) {
     ctx = { ...ctx, ...dirAfterEnv(words, ci, ctx.dir, ctx.envFrom ?? 0, ctx.place) };
   }
-  results.push(...judgeFileWrites(tool, args, words, ctx.dir));
+  results.push(...judgeFileWrites(tool, args, words, ctx.dir, ctx.cdWords, ctx.namesGitDir, ctx.cdAlternatives));
   const removal = judgeRemoval(tool, args, ctx);
   if (removal) results.push(removal);
   const prefixes = prefixIndexes(words);
@@ -3048,7 +3207,10 @@ function judgeSegment(words, ctx) {
     // 道具の前の代入と、前の区切りの export などで GIT_DIR か GIT_WORK_TREE を設定した後（ctx.env、judgeBash が積む）は、git が別の作業コピーを見る。
     // 道具の前の代入は、経由先に掛け直したとき（pnpm exec env GIT_DIR=x git）にも見えるよう語で見る
     const envMovesGit = words.slice(0, ci).some((w) => /^GIT_(DIR|WORK_TREE)=/.test(w)) || GIT_LOCATION_VARIABLES.some((name) => ctx.env?.[name]);
-    results.push(judgeGit(args, envMovesGit ? null : ctx.dir, ctx.branchOf));
+    // 設定を読む場所を変える変数（GIT_CONFIG_*、HOME、XDG_CONFIG_HOME）も同じく、道具の前の代入は語で、前の区切りの設定は ctx.env で見る。
+    // 起動元の HOME は常に設定されているので、起動元の環境は見ない
+    const envMovesConfig = words.slice(0, ci).some((w) => GIT_CONFIG_ASSIGNMENT.test(w)) || Boolean(ctx.env?.[GIT_CONFIG_LOCATION]);
+    results.push(judgeGit(args, envMovesGit ? null : ctx.dir, ctx.branchOf, envMovesConfig));
   }
   if (tool === 'gh') {
     // gh の宛先と現在のブランチは、GH_REPO、GH_HOST、GIT_DIR、GIT_WORK_TREE、GIT_CONFIG_* で替わる。道具の前の代入、前の区切りの export、起動元の環境（guard-bash.mjs が渡す）で見る。
@@ -3072,11 +3234,25 @@ function judgeSegment(words, ctx) {
 
 const SWITCH_FLAGS_WITH_VALUE = new Set(['-b', '-B', '-c', '-C', '--orphan']);
 
-// git checkout <branch> と git switch <branch> の切り替え先。切り替えでなければ null、判定できなければ undefined
-function switchedBranch(args) {
+// git checkout <branch>、git switch <branch>、今のブランチの改名（git branch -m main）、HEAD の付け替え（git symbolic-ref HEAD refs/heads/main）の後の今のブランチ。
+// 今のブランチでなくなる・ならないなら null、判定できなければ undefined。current は切り替える前の今のブランチ
+function switchedBranch(args, current) {
   const [sub] = positionals(args, GIT_FLAGS_WITH_VALUE);
+  const after = args.slice(args.indexOf(sub) + 1);
+  if (sub === 'branch' && after.some((a) => /^-[a-zA-Z]*[mM][a-zA-Z]*$/.test(a) || isOption(a, '--move', 4))) {
+    // 名前が1つなら今のブランチの改名、2つなら 旧 新 で、旧が今のブランチのときだけ今のブランチが変わる
+    const names = positionals(after);
+    if (names.some((n) => n.includes('$'))) return undefined;
+    if (names.length === 1) return names[0];
+    return names.length === 2 && names[0] === current ? names[1] : null;
+  }
+  if (sub === 'symbolic-ref') {
+    const [target, ref] = positionals(after, new Set(['-m']));
+    if (target !== 'HEAD' || ref === undefined) return null;
+    return ref.startsWith('refs/heads/') && !ref.includes('$') ? ref.slice('refs/heads/'.length) : undefined;
+  }
   if (sub !== 'checkout' && sub !== 'switch') return null;
-  const rest = args.slice(args.indexOf(sub) + 1);
+  const rest = after;
   if (rest.includes('--')) return null; // git checkout -- <file> はファイルの復元
   if (rest.includes('-')) return undefined; // 直前のブランチ
   const created = rest.findIndex((a) => SWITCH_FLAGS_WITH_VALUE.has(a));
@@ -3108,6 +3284,16 @@ const VARIABLE_MENTIONS = {
   GIT_CONFIG_COUNT: /(^|[^\w])GIT_CONFIG_COUNT([^\w]|$)/,
   GIT_CONFIG_PARAMETERS: /(^|[^\w])GIT_CONFIG_PARAMETERS([^\w]|$)/,
 };
+// git が設定ファイルを読む場所を変える変数の代入（GIT_CONFIG_*、GIT_CONFIG_PARAMETERS、HOME、XDG_CONFIG_HOME）。
+// GIT_CONFIG_KEY_<n> と GIT_CONFIG_VALUE_<n> は番号を問わない。GIT_CONFIG_NOSYSTEM は system の設定を読まなくするだけだが、まとめて見る。
+// GIT_CONFIG_LOCATION は実在の変数ではなく、このどれかを設定したことを ctx.env に持つ印
+// HOME[0]=x も、bash ではスカラーの HOME の値を書き換える
+const GIT_CONFIG_ASSIGNMENT = /^(GIT_CONFIG(_\w+)?|HOME|XDG_CONFIG_HOME)(\[[^\]]*\])?\+?=/;
+// 算術の式の代入（((HOME=5))、$((HOME+=1))）。(( )) の区切りは語に残らないので、コマンドの字面で見る
+const ARITHMETIC_CONFIG_ASSIGNMENT = /\(\([^)]*\b(GIT_CONFIG\w*|HOME|XDG_CONFIG_HOME)(\[[^\]]*\])?\s*(?:[-+*/%&|^]|<<|>>)?=(?!=)/;
+const GIT_CONFIG_LOCATION = 'GIT_CONFIG_LOCATION';
+const GIT_CONFIG_ENV_REASON =
+  'GIT_CONFIG_*、HOME、XDG_CONFIG_HOME を設定した git push は、読む設定ファイルが変わり、remote.<名前>.push や push.default で main、production、v* のタグへ届くかを判定できない。人が確かめる';
 // 中身をこのシェルで動かす道具。中で cd、export をしても見えないので、後ろの作業場所と GIT_DIR を判定できないものとする
 const IN_SHELL_RUNNERS = new Set(['eval', 'source', '.']);
 
@@ -3127,12 +3313,48 @@ function variablesSetBy(words, ci) {
     if (mentionedAfter(pattern)) after.add(name);
   }
   if (mentionedAfter(NPM_CALL_MENTION)) after.add(NPM_CALL_VARIABLE);
+  if (words.some((w, i) => isPrefix(i) && GIT_CONFIG_ASSIGNMENT.test(w))) once.add(GIT_CONFIG_LOCATION);
+  if (setsGitConfigLocation(words, ci)) after.add(GIT_CONFIG_LOCATION);
   if (ci !== -1) {
     const tool = baseName(words[ci]);
     const declaresUnknown = ENV_DECLARERS.has(tool) && words.some((_, i) => i > ci && isUnresolved(words, i));
     if (declaresUnknown || IN_SHELL_RUNNERS.has(tool)) for (const name of [...LOCATION_VARIABLES, NPM_CALL_VARIABLE]) after.add(name);
+    if (IN_SHELL_RUNNERS.has(tool)) after.add(GIT_CONFIG_LOCATION);
   }
   return { once, after };
+}
+
+// 値が変数に入る組み込みの道具（read、for など）の変数の名前の位置。printf -v は -v の次の語
+const VARIABLE_TAKERS = new Set(['read', 'mapfile', 'readarray', 'getopts', 'for', 'select']);
+const ASSIGNING_BUILTINS = new Set([...ENV_DECLARERS, 'let']);
+const GIT_CONFIG_NAME = /^(GIT_CONFIG(_\w+)?|HOME|XDG_CONFIG_HOME)$/;
+
+// この区切りが、git の設定を読む場所を変える変数（GIT_CONFIG_*、HOME、XDG_CONFIG_HOME）を、後ろの区切りに効く形で設定するか。
+// HOME は起動元で export 済みなので、export を付けない代入でも子の git に渡る。シェルが変数を設定するのは、
+// 単独の代入（HOME=x）、export、declare などの宣言の引数、read、for、printf -v の変数、: ${HOME:=x} だけ。
+// git commit -m "HOME=x" や echo HOME=x のような引数の語は、シェルが設定しないので見ない（名前だけの分からない宣言は export $X と export $(…)）。
+// 値の展開だけを含む宣言（export PATH=$HOME/bin:$PATH）は、設定する名前が PATH と読めるので設定に数えない
+function setsGitConfigLocation(words, ci) {
+  if (ci === -1) return words.length > 0 && words.every((w) => isAssignment(w)) && words.some((w) => GIT_CONFIG_ASSIGNMENT.test(w));
+  if (words.some((w, i) => i >= ci && /\$\{(GIT_CONFIG\w*|HOME|XDG_CONFIG_HOME):?=/.test(w))) return true;
+  const tool = baseName(words[ci]);
+  const args = sliceWords(words, ci + 1);
+  if (ASSIGNING_BUILTINS.has(tool)) {
+    // declare -n R=HOME は R を HOME の別名にし、後の R=x が HOME を設定する。別名の先が分かるだけで、後の代入は追わず宣言の時点で設定とみなす
+    const namesRef = args.some((w) => /^-[a-zA-Z]*n/.test(w)) && args.some((w) => /^\w+=(GIT_CONFIG\w*|HOME|XDG_CONFIG_HOME)$/.test(w));
+    return (
+      namesRef ||
+      args.some((w) => GIT_CONFIG_ASSIGNMENT.test(w)) ||
+      args.some((w, k) => {
+        if (!isUnresolved(args, k)) return false;
+        const eq = w.indexOf('=');
+        return hasExpansion(eq === -1 ? w : w.slice(0, eq));
+      })
+    );
+  }
+  if (VARIABLE_TAKERS.has(tool)) return args.some((w) => GIT_CONFIG_NAME.test(w));
+  if (tool === 'printf') return args.some((w, k) => w === '-v' && GIT_CONFIG_NAME.test(args[k + 1] ?? ''));
+  return false;
 }
 
 // cd、pushd、popd の後の作業場所。判定できなければ null。env は区切りに効く環境変数（CDPATH）
@@ -3141,6 +3363,78 @@ function nextDir(words, ci, dir, env) {
   // 絶対パスの行き先は、前の作業場所が判定できなくても（cd sr? && cd /abs）解決し直せる
   if (to === null || (!to.startsWith('/') && !dir)) return null;
   return path.resolve(dir ?? '/', to);
+}
+
+// 関数の定義（f() { … }、function f { … }）。bash は . を含む名前（my.push）も許す。eval の文字列の中の定義も拾うよう、引用符の直後も見る
+const FUNCTION_DEFINITION = /(?:^|[\s;&|('"])(?:function\s+([A-Za-z_][\w.-]*)|([A-Za-z_][\w.-]*)\s*\(\s*\))/g;
+
+// 本体の中に git push を含む関数の名前と、そのような関数を（間接にも）呼ぶ関数の名前。
+// 本体は { … } か ( … ) の対応する閉じまでを字面で切る（粗い判定。git のグローバルオプションの後ろの push も当たる）。
+// 関数の呼び出しの前の代入と、呼ぶ前の export は関数の中の git に環境として渡り、その関数が呼ぶ関数にも渡るが、
+// 本体は定義の区切りで判定済みで、その時点の環境しか見ていない
+function pushingFunctions(command) {
+  const names = new Set();
+  const bodies = new Map();
+  for (const m of command.matchAll(FUNCTION_DEFINITION)) {
+    const after = command.slice(m.index + m[0].length).replace(/^\s*(\(\s*\)\s*)?/, '');
+    const open = after[0];
+    const close = open === '{' ? '}' : open === '(' ? ')' : null;
+    let end = after.length;
+    for (let i = 0, depth = 0; close && i < after.length; i++) {
+      if (after[i] === open) depth++;
+      else if (after[i] === close && --depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+    const body = after.slice(0, end);
+    bodies.set(m[1] ?? m[2], body);
+    if (/\bgit\b[^;&|\n]*\bpush\b/.test(body)) names.add(m[1] ?? m[2]);
+  }
+  // push する関数を呼ぶ関数も、環境を受けて push する（g(){ f; }）。増えなくなるまで足す
+  for (let grown = true; grown; ) {
+    grown = false;
+    for (const [name, body] of bodies) {
+      if (!names.has(name) && body.split(/[^\w.-]+/).some((word) => names.has(word))) {
+        names.add(name);
+        grown = true;
+      }
+    }
+  }
+  return names;
+}
+
+// cd、pushd、popd の行き先の字面をつないだもの { words, previous, stack }。words は今の場所、previous は cd - の行き先、stack は pushd の戻り先。
+// 作業場所を解決できない cd（cd ~/.config/git）の後の相対パスを、設定ファイルの名前と照らすのに使う。
+// 絶対パス、~、変数で始まる行き先は、それまでを置き換える。cd - と popd は、bash と同じく直前の場所と pushd の前の場所へ戻る
+// pushd +N、-N と popd +N、-N は、スタックの N 番目（先頭が 0。- は末尾から数える）を回すか取り除く。-n は場所を変えない。
+// cd ~-、cd "$OLDPWD" は cd - と同じ直前の場所
+function cdStateAfter(words, ci, state) {
+  const { words: current, previous } = state;
+  const tool = words[ci];
+  const args = words.slice(ci + 1).filter((w) => w !== '--');
+  const stays = tool !== 'cd' && args.includes('-n');
+  const operand = args.find((w) => !/^-[LPn]+$/.test(w));
+  // 先頭が今の場所で、その後ろにスタックの上から順に並べた一覧
+  const list = [current, ...state.stack.slice().reverse()];
+  const make = (entries, before) => ({ words: entries[0], previous: before, stack: entries.slice(1).reverse() });
+  const rotation = /^([+-])(\d+)$/.exec(operand ?? '');
+  const index = rotation ? (rotation[1] === '+' ? Number(rotation[2]) : list.length - 1 - Number(rotation[2])) : -1;
+  if (tool === 'popd') {
+    if (rotation) return index < 0 || index >= list.length ? state : make(list.filter((_, k) => k !== index), index === 0 ? current : previous);
+    if (list.length === 1) return state;
+    return stays ? make(list.filter((_, k) => k !== 1), previous) : make(list.slice(1), current);
+  }
+  if (tool === 'pushd') {
+    if (rotation) return index < 0 || index >= list.length ? state : make([...list.slice(index), ...list.slice(0, index)], current);
+    // 引数なしの pushd は先頭の2つを入れ替える
+    if (operand === undefined) return list.length === 1 ? state : make([list[1], list[0], ...list.slice(2)], current);
+  }
+  let to = '~';
+  if (operand === '-' || operand === '~-' || /^\$\{?OLDPWD\}?$/.test(operand ?? '')) to = previous;
+  else if (operand !== undefined) to = /^[/~$]/.test(operand) ? operand : path.posix.join(current, operand);
+  if (tool !== 'pushd') return { ...state, words: to, previous: current };
+  return stays ? make([current, to, ...list.slice(1)], previous) : make([to, ...list], current);
 }
 
 // cd、pushd の行き先の語。前の作業場所が分からないことは問わず、行き先の語だけで判定できなければ null
@@ -3199,11 +3493,19 @@ function judgeCommand(
     env = {},
     root = cwd ? repoRootOf(cwd) : null,
     place = '',
+    cdWords = '',
+    namesGitDir = false,
     findBudget = { left: MAX_FIND_COMMANDS, weight: MAX_FIND_WEIGHT },
   },
 ) {
   if (depth > MAX_DEPTH) return [ASK, DEEP_REASON];
   let dir = cwd;
+  let cdState = { words: cdWords, previous: '', stack: [] };
+  // git rev-parse --git-common-dir などで設定ファイルのあるディレクトリを引いたコマンドは、その場所を字面で読めない。外側のコマンドが引いたものも引き継ぐ
+  namesGitDir ||= GIT_DIR_QUERY.test(command);
+  const pushing = pushingFunctions(command);
+  // (( )) の中の代入は区切りの語に残らないので、どこにあっても最初から設定されているものとする（止めすぎる側に倒す）
+  if (ARITHMETIC_CONFIG_ASSIGNMENT.test(command)) env = { ...env, [GIT_CONFIG_LOCATION]: SET_IN_COMMAND };
   // 同じコマンドの中で checkout や switch をした後の push は、切り替えた先のブランチで判定する
   const switched = new Map();
   const currentBranch = (d) => (switched.has(d) ? switched.get(d) : branchOf(d));
@@ -3217,9 +3519,40 @@ function judgeCommand(
   // 名前が見えない形（ls -a | xargs grep TOKEN）は止められない
   const hasXargs = segments.some((words) => prefixIndexes(words).some((i) => prefixName(words[i]) === 'xargs'));
   if (hasXargs && segments.some((words) => [...words, ...redirectTargets(words)].some(mentionsSecret))) results.push([DENY, SECRET_FILE_REASON]);
-  for (const words of segments) {
+  // サブシェル（( … )）の中の cd は括弧の中だけに効くので、括弧に入るときの作業場所と cd の行き先を覚え、閉じたら戻す
+  const scopes = [];
+  const hasSubstitutions = segments.some((words) => substitutionHost(words) !== undefined);
+  let leaving = 0;
+  // 動いたか決められない cd（false && cd /）の前の作業場所。確かな cd の後は空に戻す
+  let alternatives = [];
+  // 関数の定義 f() { … } の本体は、呼ぶまで動かない。bodyDepth は本体の { の深さ、definingFunction は直前の区切りが関数の名前だったか
+  let bodyDepth = 0;
+  let definingFunction = false;
+  for (const [index, words] of segments.entries()) {
+    for (; leaving > 0; leaving--) ({ dir, place, cdState, cdWords, alternatives } = scopes.pop() ?? { dir, place, cdState, cdWords, alternatives });
+    while (scopes.length < subshellDepth(words)) scopes.push({ dir, place, cdState, cdWords, alternatives });
+    leaving = closesSubshell(words);
     const previous = lastSegment;
     lastSegment = words;
+    // && でつながる後ろの区切りは、cd が動いたときだけ動く。; や改行や || を挟むと、cd が動いたかに関わらず動く
+    if (previous?.endOp !== '&&') alternatives = alternatives.map((alt) => ({ ...alt, guarded: false }));
+    // 本体の中の cd、eval、checkout は、定義では動かないので作業場所とブランチを変えない（本体の判定は他の区切りと同じにする）
+    let inBody = bodyDepth > 0;
+    if (inBody) bodyDepth += words[0] === '{' ? 1 : words[0] === '}' ? -1 : 0;
+    else if (definingFunction && words[0] === '{') {
+      bodyDepth = 1;
+      inBody = true;
+    }
+    definingFunction = definesFunction(words);
+    // $( ) の中の checkout と switch が書き換える HEAD はリポジトリのファイルなので、置換の外にも残る。置換を含む区切りの判定の前に追う
+    if (hasSubstitutions && !inBody) {
+      for (const inner of segments) {
+        const innerCi = substitutionHost(inner) === index ? commandIndex(inner) : -1;
+        if (innerCi === -1 || baseName(inner[innerCi]) !== 'git' || !dir) continue;
+        const branch = switchedBranch(sliceWords(inner, innerCi + 1), currentBranch(dir));
+        if (branch !== null) switched.set(dir, branch);
+      }
+    }
     // 括弧の glob（cp /tmp/x(N) wrangler.jsonc）の閉じの後ろの語は、同じコマンドの引数なのに別の区切りに切られ、前の区切りからは見えない。
     // 道具を問わず、何をどこへ渡すかを判定できないものとする。後ろがリダイレクトだけ（ls *(N) 2>/dev/null）なら、宛先はこの区切りで見るので通す
     if (followsGlobGroup(words) && words.length > 0) {
@@ -3234,23 +3567,34 @@ function judgeCommand(
     const mark = (names) => Object.fromEntries([...names].map((name) => [name, env[name] || SET_IN_COMMAND]));
     const segmentEnv = { ...env, ...mark(once) };
     env = { ...env, ...mark(after) };
+    // eval は文字列を同じシェルで動かすので、eval f も関数 f を呼ぶ
+    const callsPushing = ci !== -1 && (pushing.has(words[ci]) || (baseName(words[ci]) === 'eval' && words.slice(ci + 1).some((w) => w.split(/[^\w.-]+/).some((n) => pushing.has(n)))));
+    if (callsPushing && segmentEnv[GIT_CONFIG_LOCATION]) results.push([ASK, GIT_CONFIG_ENV_REASON]);
     // cd の後の git push は、移った先のブランチで判定する。展開できない cd の先と popd の後は判定できないものとする
     if (ci !== -1 && ['cd', 'pushd', 'popd'].includes(words[ci])) {
       if (setsWorkersCi(words, ci)) results.push([DENY, WORKERS_CI_REASON]);
       // cd . > .dev.vars のようにリダイレクトを付けられる。道具として見ない（cd の引数は書き込み先ではない）
-      results.push(...judgeFileWrites('', [], words, dir));
+      results.push(...judgeFileWrites('', [], words, dir, cdWords, namesGitDir, alternatives.filter((alt) => !alt.guarded)));
+      // パイプの両側と & の cd はサブシェルで動き、置換の中の cd は置換の中だけに効くので、外の作業場所は変わらない
+      const inSubshell = ['|', '|&', '&'].includes(words.endOp) || ['|', '|&'].includes(previous?.endOp) || substitutionHost(words) !== undefined;
+      if (inBody || inSubshell) continue;
+      // && と || の右と、then、else、do の後の cd は、動いたか決められない。動いたものとして進めるが、動かなかった場合の場所（今の場所）も覚える
+      const conditional = ['&&', '||'].includes(previous?.endOp) || /^(then|else|elif|do)$/.test(words[0]);
+      alternatives = conditional ? [...alternatives, { dir, words: cdWords, guarded: true }] : [];
       dir = nextDir(words, ci, dir, segmentEnv);
+      cdState = cdStateAfter(words, ci, cdState);
+      cdWords = cdState.words;
       const to = cdTarget(words, ci, segmentEnv);
       place = to === null || place === null ? null : to.startsWith('/') ? to : path.posix.join(place, to);
       continue;
     }
-    results.push(...judgeSegment(words, { dir, branchOf: currentBranch, scriptOf, packageDirOf, depth, env: segmentEnv, root, place, findBudget, segmentCount: segments.length, stdinContext: { previous, ...shapeOfStdin } }));
-    if (ci !== -1 && baseName(words[ci]) === 'git' && dir) {
-      const branch = switchedBranch(words.slice(ci + 1));
+    results.push(...judgeSegment(words, { dir, branchOf: currentBranch, scriptOf, packageDirOf, depth, env: segmentEnv, root, place, cdWords, cdAlternatives: alternatives.filter((alt) => !alt.guarded), namesGitDir, findBudget, segmentCount: segments.length, stdinContext: { previous, ...shapeOfStdin } }));
+    if (ci !== -1 && baseName(words[ci]) === 'git' && dir && !inBody) {
+      const branch = switchedBranch(words.slice(ci + 1), currentBranch(dir));
       if (branch !== null) switched.set(dir, branch);
     }
     // eval、source、. は中身をこのシェルで動かすので、中の cd の後を判定できない（popd と同じ扱い）
-    if (ci !== -1 && IN_SHELL_RUNNERS.has(baseName(words[ci]))) {
+    if (ci !== -1 && IN_SHELL_RUNNERS.has(baseName(words[ci])) && !inBody) {
       dir = null;
       place = null;
     }
