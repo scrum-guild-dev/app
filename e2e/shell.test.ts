@@ -926,7 +926,9 @@ test('組織の画面の右下に、画面の build の版を出し、スクロ�
   await page.goto(today);
   await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
   const badge = page.locator('.app-version');
-  await expect(badge).toHaveText(version);
+  await expect(badge).toHaveText(`版 ${version}`);
+  // 「版」は読み上げにだけ添え、目には版だけを出す
+  await expect(badge.locator('.visually-hidden')).toHaveText('版');
   // 右下の角に置く（右は 16px の余白、下は 1px の余白）
   const atTop = await versionBadgeInset(page);
   expect(atTop.right).toBeCloseTo(16, 0);
@@ -954,7 +956,7 @@ test('390px では、版を下のタブのすぐ上に置いて丸い角とホ�
   const tabs = page.locator('.mobile-tabs');
   await expect(tabs).toBeVisible();
   const badge = page.locator('.app-version');
-  await expect(badge).toHaveText(version);
+  await expect(badge).toHaveText(`版 ${version}`);
   const tabsBox = await tabs.boundingBox();
   const badgeBox = await badge.boundingBox();
   if (!tabsBox || !badgeBox) throw new Error('下のタブか版の位置が取れない');
@@ -999,7 +1001,7 @@ test('組織の枠の外（ログインの画面）にも版を出す', async ({
     const page = await context.newPage();
     await page.goto('/login');
     await expect(page.getByRole('heading', { level: 1, name: 'ログイン' })).toBeVisible();
-    await expect(page.locator('.app-version')).toHaveText(version);
+    await expect(page.locator('.app-version')).toHaveText(`版 ${version}`);
     // 下のタブの無い狭い画面では、丸い角とホームバーから離すため下端から --space-4 上げる
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator('.mobile-tabs')).toHaveCount(0);

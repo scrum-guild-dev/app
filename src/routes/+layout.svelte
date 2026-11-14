@@ -107,5 +107,5 @@
 {/if}
 <!-- 本番に出ている版を画面で確かめるため、全画面の右下に出す。出すのはこのタブが読み込んだ画面の build の版で、
      API の版（/api/health）とずれたときは版のずれの案内が受け持つ -->
-<p class="app-version">{t('appVersion', { version })}</p>
+<p class="app-version"><span class="visually-hidden">{t('appVersionLabel')} </span>{version}</p>
 <ToastRegion />
