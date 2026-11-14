@@ -593,6 +593,8 @@ describe('組織の一覧', () => {
       self_created: false,
       trial_ends_on: null,
       trial_expired: false,
+      // 未契約
+      contract: null,
     });
   });
 
@@ -840,6 +842,7 @@ describe('組織ごとの集計', () => {
       'admin_status',
       'attachment_quota_bytes',
       'attachment_used_bytes',
+      'contract',
       'created_at',
       'kind',
       'last_used_at',

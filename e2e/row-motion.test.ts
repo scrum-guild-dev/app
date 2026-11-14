@@ -353,6 +353,7 @@ test('運用の再開に成功して読み直した行だけが光り、失敗�
     self_created: false,
     trial_ends_on: null,
     trial_expired: false,
+    contract: null,
   };
   await routeOperation(page, listOrganizations, (call) => call.fulfill({ organizations: [organization] }));
   await routeOperation(page, organizationResume, (call) => {
@@ -402,6 +403,7 @@ function motionOrganization(): ListedOrganization {
     self_created: false,
     trial_ends_on: null,
     trial_expired: false,
+    contract: null,
   };
 }
 

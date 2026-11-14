@@ -75,6 +75,7 @@ test('390px の管理と運用で静かな操作が積んだ行の左端にそ�
             self_created: false,
             trial_ends_on: null,
             trial_expired: false,
+            contract: null,
           },
         ],
       });

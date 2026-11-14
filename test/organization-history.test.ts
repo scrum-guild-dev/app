@@ -386,6 +386,28 @@ describe('organization-history', () => {
         { actor_user_id: target.admin.userId, changes_json: JSON.stringify({ vocabulary: ['game', 'scrum'] }) },
         { kind: 'organization_settings_changed' },
       ],
+      // 運用者の契約の変更。プランと支払いの周期は組で残す
+      [
+        operatorLog('update', {
+          plan: [null, 'team'],
+          billing_interval: [null, 'monthly'],
+          member_limit: [30, 15],
+          trial_ends_on: ['2030-01-31', null],
+        }),
+        { kind: 'organization_plan_changed', from: null, to: { plan: 'team', billing_interval: 'monthly' } },
+      ],
+      [
+        operatorLog('update', { plan: ['team', 'business'], billing_interval: ['monthly', 'yearly'] }),
+        {
+          kind: 'organization_plan_changed',
+          from: { plan: 'team', billing_interval: 'monthly' },
+          to: { plan: 'business', billing_interval: 'yearly' },
+        },
+      ],
+      // 組がそろわない、知らない値、前の片方だけが空の行は other
+      [operatorLog('update', { plan: ['team', 'business'] }), { kind: 'other' }],
+      [operatorLog('update', { plan: [null, 'premium'], billing_interval: [null, 'monthly'] }), { kind: 'other' }],
+      [operatorLog('update', { plan: [null, 'team'], billing_interval: ['monthly', 'yearly'] }), { kind: 'other' }],
       [userLog({ is_admin: [0, 1] }), { kind: 'admin_designated', name: '汐見 アオイ' }],
       [userLog({ is_admin: [1, 0] }), { kind: 'admin_revoked', name: '汐見 アオイ' }],
       [userLog({ disabled_at: [null, minutesLater(0)] }), { kind: 'user_disabled', name: '汐見 アオイ' }],
