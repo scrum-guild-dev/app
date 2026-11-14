@@ -2669,6 +2669,8 @@ function shellCommandBody(tool, args) {
       return { uncertain: true };
     }
     if (/^[-+][a-zA-Z]+$/.test(a)) {
+      // fish の -Cfoo 等は初期化本文を連結した値。Bash の o/O の個数で次の語を飛ばさない。
+      if (tool === 'fish' && !/^[ciln]+$/.test(a.slice(1))) return { uncertain: true };
       if (isUnresolved(args, i) || !SHELL_SHORT_SWITCHES.test(a.slice(1))) return { uncertain: true };
       if (a.slice(1).includes('c')) {
         if (a.startsWith('+')) return { uncertain: true };
