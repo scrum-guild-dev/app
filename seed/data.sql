@@ -20,9 +20,9 @@ INSERT INTO account_logins (login_provider, login_subject, account_id, login_nam
   ('github', '9000000000000001', '019a0000-0000-7000-8000-000000000104', 'operator--seed', '運用者', NULL, '2026-10-01T00:00:00.000Z', '2026-10-20T00:00:00.000Z'),
   ('github', '9000000000000108', '019a0000-0000-7000-8000-000000000108', 'hinata--seed', 'ヒナタ', NULL, '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
 
-INSERT INTO organizations (id, slug, name, vocabulary, created_by_operator, created_at, updated_at) VALUES
-  ('019a0000-0000-7000-8000-000000000201', 'aoba', 'あおば開発', 'scrum', 'github:9000000000000001', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
-  ('019a0000-0000-7000-8000-000000000202', 'hibari', 'ひばり工房', 'scrum', 'github:9000000000000001', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
+INSERT INTO organizations (id, slug, name, created_by_operator, created_at, updated_at) VALUES
+  ('019a0000-0000-7000-8000-000000000201', 'aoba', 'あおば開発', 'github:9000000000000001', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
+  ('019a0000-0000-7000-8000-000000000202', 'hibari', 'ひばり工房', 'github:9000000000000001', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
 
 -- あおば開発のユーザー、ワークスペース、所属を変えたら、e2e の mockSeedAdminLists（e2e/helpers.ts）の固定の値も直す
 INSERT INTO users (id, organization_id, account_id, login_provider, login_subject, name, is_admin, created_at, updated_at) VALUES
@@ -74,12 +74,12 @@ INSERT INTO organization_holidays (organization_id, holiday_on, name, created_by
   ('019a0000-0000-7000-8000-000000000201', '2026-12-29', NULL, '019a0000-0000-7000-8000-000000000301', '2026-10-01T00:00:00.000Z'),
   ('019a0000-0000-7000-8000-000000000202', '2026-11-03', '文化の日', '019a0000-0000-7000-8000-000000000303', '2026-10-01T00:00:00.000Z');
 
--- ワークスペースの言葉づかいの列は、どれも 'scrum'。デザイン相談室（ひばり工房）は、
+-- デザイン相談室（ひばり工房）は、
 -- 招待だけが届いた人（ヒナタ）を招待している先で、e2e の承諾がヒナタを所属させる（リーダーはリンだけ）
-INSERT INTO workspaces (id, organization_id, name, timezone, vocabulary, created_by, created_at, updated_at) VALUES
-  ('019a0000-0000-7000-8000-000000000401', '019a0000-0000-7000-8000-000000000201', '受託開発チーム', 'Asia/Tokyo', 'scrum', '019a0000-0000-7000-8000-000000000301', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
-  ('019a0000-0000-7000-8000-000000000402', '019a0000-0000-7000-8000-000000000202', '社内ツール', 'Asia/Tokyo', 'scrum', '019a0000-0000-7000-8000-000000000303', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
-  ('019a0000-0000-7000-8000-000000000404', '019a0000-0000-7000-8000-000000000202', 'デザイン相談室', 'Asia/Tokyo', 'scrum', '019a0000-0000-7000-8000-000000000303', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
+INSERT INTO workspaces (id, organization_id, name, timezone, created_by, created_at, updated_at) VALUES
+  ('019a0000-0000-7000-8000-000000000401', '019a0000-0000-7000-8000-000000000201', '受託開発チーム', 'Asia/Tokyo', '019a0000-0000-7000-8000-000000000301', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
+  ('019a0000-0000-7000-8000-000000000402', '019a0000-0000-7000-8000-000000000202', '社内ツール', 'Asia/Tokyo', '019a0000-0000-7000-8000-000000000303', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
+  ('019a0000-0000-7000-8000-000000000404', '019a0000-0000-7000-8000-000000000202', 'デザイン相談室', 'Asia/Tokyo', '019a0000-0000-7000-8000-000000000303', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
 
 INSERT INTO workspace_point_rates (workspace_id, effective_month, hours_per_point, created_at) VALUES
   ('019a0000-0000-7000-8000-000000000401', '2026-10', 4, '2026-10-01T00:00:00.000Z'),
@@ -363,16 +363,16 @@ INSERT INTO account_consents (account_id, terms_version, privacy_version, consen
   ('019a0000-0000-7000-8000-000000000110', '2026-11-02', '2026-11-08', '2026-10-20T00:00:00.000Z'),
   ('019a0000-0000-7000-8000-000000000112', '2026-11-02', '2026-11-08', '2026-10-20T00:00:00.000Z');
 
-INSERT INTO organizations (id, slug, name, vocabulary, created_by_operator, created_at, updated_at) VALUES
-  ('019a0000-0000-7000-8000-000000000203', 'kumo', 'くもラボ', 'scrum', 'github:9000000000000001', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
+INSERT INTO organizations (id, slug, name, created_by_operator, created_at, updated_at) VALUES
+  ('019a0000-0000-7000-8000-000000000203', 'kumo', 'くもラボ', 'github:9000000000000001', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
 
 INSERT INTO users (id, organization_id, account_id, login_provider, login_subject, name, is_admin, theme, created_at, updated_at) VALUES
   ('019a0000-0000-7000-8000-000000000305', '019a0000-0000-7000-8000-000000000203', '019a0000-0000-7000-8000-000000000105', 'github', '9000000000000105', 'カイ', 1, NULL, '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
   ('019a0000-0000-7000-8000-000000000306', '019a0000-0000-7000-8000-000000000203', '019a0000-0000-7000-8000-000000000106', 'github', '9000000000000106', 'ソウタ', 0, NULL, '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
   ('019a0000-0000-7000-8000-000000000307', '019a0000-0000-7000-8000-000000000203', '019a0000-0000-7000-8000-000000000107', 'github', '9000000000000107', 'コハル', 0, 'simple_dark', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
 
-INSERT INTO workspaces (id, organization_id, name, timezone, vocabulary, created_by, created_at, updated_at) VALUES
-  ('019a0000-0000-7000-8000-000000000403', '019a0000-0000-7000-8000-000000000203', '保守', 'Asia/Tokyo', 'scrum', '019a0000-0000-7000-8000-000000000305', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
+INSERT INTO workspaces (id, organization_id, name, timezone, created_by, created_at, updated_at) VALUES
+  ('019a0000-0000-7000-8000-000000000403', '019a0000-0000-7000-8000-000000000203', '保守', 'Asia/Tokyo', '019a0000-0000-7000-8000-000000000305', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
 
 INSERT INTO workspace_point_rates (workspace_id, effective_month, hours_per_point, created_at) VALUES
   ('019a0000-0000-7000-8000-000000000403', '2026-10', 4, '2026-10-01T00:00:00.000Z');
@@ -407,9 +407,9 @@ INSERT INTO change_logs (id, organization_id, workspace_id, actor_user_id, opera
 -- ツムギはゆず書房だけ、アオイはゆず書房とみなも舎の管理者。どちらもアカウントと account_logins を持たず、初めてのログインで作る。
 -- password_hash は seed/passwords.ts のパスワードを hashPassword（src/server/auth/password-hash.ts、反復回数 100,000）で作った値。
 -- パスワードもハッシュも開発用の公開した値なので、本番の D1 には入れない
-INSERT INTO organizations (id, slug, name, vocabulary, created_by_operator, created_at, updated_at) VALUES
-  ('019a0000-0000-7000-8000-000000000204', 'yuzu', 'ゆず書房', 'scrum', 'github:9000000000000001', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
-  ('019a0000-0000-7000-8000-000000000205', 'minamo', 'みなも舎', 'scrum', 'github:9000000000000001', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
+INSERT INTO organizations (id, slug, name, created_by_operator, created_at, updated_at) VALUES
+  ('019a0000-0000-7000-8000-000000000204', 'yuzu', 'ゆず書房', 'github:9000000000000001', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
+  ('019a0000-0000-7000-8000-000000000205', 'minamo', 'みなも舎', 'github:9000000000000001', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
 
 INSERT INTO password_credentials (login_subject, email, password_hash, display_name, password_changed_at, created_at, updated_at) VALUES
   ('019a0000-0000-7000-8000-0000000f0001', 'tsumugi@example.test', 'pbkdf2-sha256$100000$fkmcTUXL_X2skpzAHbspOA$0F4k5qfHZqUcbdlAEyQU4xj2kPT02lpsHeZig65VvAc', 'ツムギ', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z'),
@@ -427,12 +427,12 @@ INSERT INTO account_logins (login_provider, login_subject, account_id, login_nam
   ('github', '9000000000000115', '019a0000-0000-7000-8000-000000000115', 'yuzuki--seed', 'ユズキ', NULL, '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
 INSERT INTO account_consents (account_id, terms_version, privacy_version, consented_at) VALUES
   ('019a0000-0000-7000-8000-000000000115', '2026-11-02', '2026-11-08', '2026-10-20T00:00:00.000Z');
-INSERT INTO organizations (id, slug, name, kind, vocabulary, created_by_operator, created_by_account_id, member_limit, attachment_quota_bytes, created_at, updated_at) VALUES
-  ('019a0000-0000-7000-8000-000000000207', 'personal', '自分用', 'personal', 'scrum', 'self-service', '019a0000-0000-7000-8000-000000000115', 1, 1073741824, '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
+INSERT INTO organizations (id, slug, name, kind, created_by_operator, created_by_account_id, member_limit, attachment_quota_bytes, created_at, updated_at) VALUES
+  ('019a0000-0000-7000-8000-000000000207', 'personal', '自分用', 'personal', 'self-service', '019a0000-0000-7000-8000-000000000115', 1, 1073741824, '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
 INSERT INTO users (id, organization_id, account_id, login_provider, login_subject, name, is_admin, created_at, updated_at) VALUES
   ('019a0000-0000-7000-8000-000000000316', '019a0000-0000-7000-8000-000000000207', '019a0000-0000-7000-8000-000000000115', 'github', '9000000000000115', 'ユズキ', 1, '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
-INSERT INTO workspaces (id, organization_id, name, timezone, vocabulary, created_by, created_at, updated_at) VALUES
-  ('019a0000-0000-7000-8000-000000000406', '019a0000-0000-7000-8000-000000000207', '個人の仕事', 'Asia/Tokyo', 'scrum', '019a0000-0000-7000-8000-000000000316', '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
+INSERT INTO workspaces (id, organization_id, name, timezone, created_by, created_at, updated_at) VALUES
+  ('019a0000-0000-7000-8000-000000000406', '019a0000-0000-7000-8000-000000000207', '個人の仕事', 'Asia/Tokyo', '019a0000-0000-7000-8000-000000000316', '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
 INSERT INTO memberships (id, workspace_id, user_id, role, joined_on, joined_at) VALUES
   ('019a0000-0000-7000-8000-00000000070c', '019a0000-0000-7000-8000-000000000406', '019a0000-0000-7000-8000-000000000316', 'leader', '2026-10-20', '2026-10-20T00:00:00.000Z');
 INSERT INTO workspace_point_rates (workspace_id, effective_month, hours_per_point, created_at) VALUES
@@ -465,13 +465,13 @@ INSERT INTO account_consents (account_id, terms_version, privacy_version, consen
   ('019a0000-0000-7000-8000-000000000113', '2026-11-02', '2026-11-08', '2026-10-20T00:00:00.000Z'),
   ('019a0000-0000-7000-8000-000000000114', '2026-11-02', '2026-11-08', '2026-10-20T00:00:00.000Z');
 -- 固定の日付で手元の確認が期限切れにならないよう、お試しの期限は seed を流した UTC の日付から数える。
-INSERT INTO organizations (id, slug, name, vocabulary, created_by_operator, created_by_account_id, trial_ends_on, created_at, updated_at) VALUES
-  ('019a0000-0000-7000-8000-000000000206', 'kaze', 'かぜラボ', 'scrum', 'self-service', '019a0000-0000-7000-8000-000000000113', date('now', '+30 days'), '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
+INSERT INTO organizations (id, slug, name, created_by_operator, created_by_account_id, trial_ends_on, created_at, updated_at) VALUES
+  ('019a0000-0000-7000-8000-000000000206', 'kaze', 'かぜラボ', 'self-service', '019a0000-0000-7000-8000-000000000113', date('now', '+30 days'), '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
 INSERT INTO users (id, organization_id, account_id, login_provider, login_subject, name, is_admin, created_at, updated_at) VALUES
   ('019a0000-0000-7000-8000-000000000314', '019a0000-0000-7000-8000-000000000206', '019a0000-0000-7000-8000-000000000113', 'github', '9000000000000113', 'イツキ', 1, '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z'),
   ('019a0000-0000-7000-8000-000000000315', '019a0000-0000-7000-8000-000000000206', '019a0000-0000-7000-8000-000000000114', 'github', '9000000000000114', 'フウカ', 0, '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
-INSERT INTO workspaces (id, organization_id, name, timezone, vocabulary, created_by, created_at, updated_at) VALUES
-  ('019a0000-0000-7000-8000-000000000405', '019a0000-0000-7000-8000-000000000206', 'お試しチーム', 'Asia/Tokyo', 'scrum', '019a0000-0000-7000-8000-000000000314', '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
+INSERT INTO workspaces (id, organization_id, name, timezone, created_by, created_at, updated_at) VALUES
+  ('019a0000-0000-7000-8000-000000000405', '019a0000-0000-7000-8000-000000000206', 'お試しチーム', 'Asia/Tokyo', '019a0000-0000-7000-8000-000000000314', '2026-10-20T00:00:00.000Z', '2026-10-20T00:00:00.000Z');
 INSERT INTO memberships (id, workspace_id, user_id, role, joined_on, joined_at) VALUES
   ('019a0000-0000-7000-8000-00000000070a', '019a0000-0000-7000-8000-000000000405', '019a0000-0000-7000-8000-000000000314', 'leader', '2026-10-20', '2026-10-20T00:00:00.000Z'),
   ('019a0000-0000-7000-8000-00000000070b', '019a0000-0000-7000-8000-000000000405', '019a0000-0000-7000-8000-000000000315', 'member', '2026-10-20', '2026-10-20T00:00:00.000Z');

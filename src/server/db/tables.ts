@@ -72,7 +72,6 @@ export const commonTableColumns = {
     id: text,
     slug: text,
     name: text,
-    vocabulary: textDefault,
     // migrations/0017_add_organization_kind.sql で足す。'team' か 'personal'（自分用）
     kind: textDefault,
     suspended_at: textOrNull,
@@ -172,7 +171,6 @@ export const organizationTableColumns = {
     name: text,
     timezone: text,
     week_start: integerDefault,
-    vocabulary: textDefault,
     definition_of_done_md: textOrNull,
     closed_at: textOrNull,
     created_by: text,

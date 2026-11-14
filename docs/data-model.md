@@ -283,7 +283,6 @@
 | id | TEXT | PK | |
 | slug | TEXT | NOT NULL、UNIQUE、`CHECK (slug GLOB '[a-z0-9]*' AND slug NOT GLOB '*[^a-z0-9-]*' AND length(slug) BETWEEN 2 AND 40)` | URL の先頭に入れる名前。後から変えない |
 | name | TEXT | NOT NULL | 組織の表示名 |
-| vocabulary | TEXT | NOT NULL、`game` か `scrum`、既定 `game` | 使わない列（言葉づかいは選べず、画面はスクラムの言葉に固定）。API は読まず、返さない。組織を作るすべての文は列を指定せず、既定の `game` に任せる。seed は `scrum` を入れる。書き込みを止めた版を含む Release を本番に出してから、別の PR（#599）で列を削除する |
 | kind | TEXT | NOT NULL、`team` か `personal`、既定 `team`（`CHECK (kind IN ('team', 'personal'))`） | 組織の種類。`team` はチーム用、`personal` は会員が自分だけで使う自分用。自分用は人数が本人1人（`member_limit` 1）、添付ファイルが 1GB、`trial_ends_on` が空で、招待と管理者の指名ができない。名前は固定の「自分用」。後から変えない（マイグレーション `0017_add_organization_kind.sql`。既存の行は `team`） |
 | suspended_at | TEXT | | 停止した日時。入っていれば誰も入れず、定期処理も止める |
 | purge_on | TEXT | | 解約で停止したときの、データを消す予定日（解約で停止した日か、停止中に解約へ切り替えた日の30日後）。一時的な停止では空 |
@@ -451,7 +450,6 @@
 | name | TEXT | NOT NULL | |
 | timezone | TEXT | NOT NULL | IANA のタイムゾーン名。作った人のブラウザの値を既定にする。時差の表記（`+09:00` など）は受けず、`Intl.DateTimeFormat` で作れる名前を `resolvedOptions().timeZone` にそろえて保存する（`asia/tokyo` は `Asia/Tokyo`）。正式名の一覧とは突き合わせない。ブラウザが旧名（`Asia/Calcutta` など）を返すことがあるため |
 | week_start | INTEGER | NOT NULL、0〜6、既定 1 | 週の始まり。0 が日曜 |
-| vocabulary | TEXT | NOT NULL、`game` か `scrum`、既定 `game` | 使わない列（言葉づかいは選べず、画面はスクラムの言葉に固定）。API は読まず、返さない。ワークスペースを作る文は列を指定せず、既定の `game` に任せる。書き込みを止めた版を含む Release を本番に出してから、別の PR（#599）で列を削除する |
 | definition_of_done_md | TEXT | 10 万字まで | 完成の定義（Markdown）。空なら `NULL` で、出さない。書くのは `workspace-dod-update`（下の「書き込みの単位」の「完成の定義の変更」）、読むのは `workspace` の操作 |
 | closed_at | TEXT | | 閉じた日時。入っていれば読み取り専用 |
 | created_by | TEXT | NOT NULL、FK users | |
@@ -459,7 +457,7 @@
 
 - 索引: `(organization_id)`。組織のワークスペースの一覧に使う。
 - 索引: `(created_by)`。外部キーの検査。
-- 既存のワークスペースの `vocabulary` の保存値は移行しない。既存の `game`・`scrum` と、書き込みを止めた版以降の既定の `game` は混在するが、アプリでは使わない。列（`board_columns`）と決まった欄（`detail_fields`）の名前も移行せず、保存した名前を使う。ベータの前は DB を作り直してよい（`docs/development.md` の「DB を作り直してよい期間」）ので、作り直せば列と決まった欄にはスクラムの名前が付く。
+- 言葉づかいの `vocabulary` 列は、書き込みを止めた v0.4.1 の本番反映後、0031 のマイグレーションで組織とワークスペースから削除する。列（`board_columns`）と決まった欄（`detail_fields`）の名前は移行せず、保存した名前を使う。ベータの前は DB を作り直してよい（`docs/development.md` の「DB を作り直してよい期間」）ので、作り直せば列と決まった欄にはスクラムの名前が付く。
 - 閉じることと開き直すことを、画面では「終了する」「再開する」と呼ぶ（`docs/design.md` の組織の管理の画面）。この文書と API の操作の名前（`workspace-close`、`workspace-reopen`）は、閉じると開き直すのままにする。
 - 組織の種類（`organizations.kind`）ごとに、ワークスペースの個数の上限がある（`src/shared/organization-kind.ts` の `WORKSPACE_LIMITS`。自分用は 3、チーム用は無制限）。数えるのは同じ組織の利用中の `workspaces`（`closed_at IS NULL`）だけ。閉じると枠が空き、作成・開き直しのどちらにも空き枠が必要。終了したもののタスク・履歴・添付ファイルは残し、添付ファイルは容量に引き続き含める。上限で断る手順は、下の「書き込みの単位」のワークスペースの作成・開き直し。
 - 閉じても、そのワークスペースの接続（`connections`）の行は書き換えない。接続の同期（#67 で作る）は、`closed_at` の入ったワークスペースを飛ばす。開き直せば、次の同期から元に戻る。

@@ -140,7 +140,6 @@ describe('invitation-list', () => {
   test('この組織の、自分のログインに当たる承諾待ちの招待だけを、招待した日の順に返す', async () => {
     const { organization, owner, workspace } = await organizationWithOwner({
       name: 'ひばり工房',
-      vocabulary: 'scrum',
     });
     const closedWorkspace = await createWorkspace(organization, owner.id, {
       name: '旧サイト改修',

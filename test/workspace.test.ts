@@ -158,7 +158,6 @@ describe('workspace-create', () => {
       name: '保守チーム',
       timezone: 'Asia/Tokyo',
       week_start: 1,
-      vocabulary: 'game',
       definition_of_done_md: null,
       closed_at: null,
       created_by: target.admin.userId,
@@ -222,7 +221,7 @@ describe('workspace-create', () => {
     });
   });
 
-  test('入力に vocabulary を足して送っても捨てられ、DB の vocabulary 列は既定の game で、列と決まった欄の名前もスクラムの言葉になる', async () => {
+  test('入力に vocabulary を足して送っても捨てられ、列と決まった欄の名前もスクラムの言葉になる', async () => {
     const target = await createTarget();
     const res = await post(app, workspaceCreate, {
       slug: target.slug,
@@ -231,7 +230,7 @@ describe('workspace-create', () => {
     });
     const id = await created(res);
     const { workspace, columns, fields } = await readCreated(target.organization, id);
-    expect(workspace?.vocabulary).toBe('game');
+    expect(workspace).not.toHaveProperty('vocabulary');
     expect(columns.map((column) => column.name)).toEqual(['未着手', '作業中', 'レビュー', null]);
     expect(fields.map((field) => field.name)).toEqual(['受け入れ基準']);
   });
@@ -692,7 +691,6 @@ describe('workspace', () => {
     const target = await createTarget();
     const workspace = await createWorkspace(target.organization, target.admin.userId!, {
       name: '社内ツール',
-      vocabulary: 'scrum',
       closed_at: '2026-10-22T00:00:00.000Z',
     });
     await createMembership(target.organization, workspace.id, target.member.userId!, { role: 'member' });

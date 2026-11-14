@@ -56,12 +56,11 @@ describe('容量通知のスキーマ', () => {
 });
 
 describe('0029_drop_organization_theme', () => {
-  test('組織のテーマの列を持たず、ユーザーのテーマと組織の言葉づかいの列は残す', async () => {
+  test('組織のテーマの列を持たず、ユーザーのテーマの列は残す', async () => {
     const organizationColumns = await env.DB.prepare('PRAGMA table_info(organizations)').all<{ name: string }>();
     const userColumns = await env.DB.prepare('PRAGMA table_info(users)').all<{ name: string }>();
 
     expect(organizationColumns.results.map((column) => column.name)).not.toContain('theme');
-    expect(organizationColumns.results.map((column) => column.name)).toContain('vocabulary');
     expect(userColumns.results.map((column) => column.name)).toContain('theme');
   });
 });

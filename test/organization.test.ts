@@ -552,7 +552,7 @@ function watchUserUpdates(
 
 describe('organization', () => {
   test('組織の名前と、この組織での自分と所属するワークスペースを返す。言葉づかいと組織の既定のテーマは返さない', async () => {
-    const organization = await createOrganization({ name: '青葉工房', vocabulary: 'scrum' });
+    const organization = await createOrganization({ name: '青葉工房' });
     const person = await createPerson({ organization });
     const owner = await createUser(organization, { is_admin: 1 });
     const second = await createWorkspace(organization, owner.id, { name: 'う開発' });
