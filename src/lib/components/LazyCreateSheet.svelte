@@ -62,8 +62,17 @@
       Sheet = component;
       await tick();
       if (!alive || generation !== current || !trigger.isConnected) return;
-      if (!sheet) throw new Error('起票シートが初期化されていません');
-      await sheet.show(trigger);
+      if (!sheet) {
+        showToast(t('createSheetOpenFailed'), 'alert', { label: t('reloadPage'), run: () => location.reload() });
+        return;
+      }
+      try {
+        await sheet.show(trigger);
+      } catch {
+        if (alive && generation === current) {
+          showToast(t('createSheetOpenFailed'), 'alert', { label: t('reloadPage'), run: () => location.reload() });
+        }
+      }
     } finally {
       if (generation === current) {
         clearNotice();

@@ -104,6 +104,7 @@
     dueClear: "クリア",
     storyTitlePlaceholder: "どこまで進めば区切りか",
     createSheet: "起票",
+    createSheetOpenFailed: "起票を開けませんでした。画面を読み直して、もう一度試してください。",
     markdownToolbar: "本文の書式", slashBullet: "箇条書き", slashTodo: "チェックリスト", slashCode: "コード", slashQuote: "引用",
     createSheetReloadFailed: "作成済みですが、一覧を読み直せませんでした。画面を開き直してください。",
     createKind: "作る種類",

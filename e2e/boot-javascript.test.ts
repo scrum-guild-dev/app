@@ -98,6 +98,28 @@ for (const failure of ['network', '404'] as const) {
   });
 }
 
+test('起票の表示自体が失敗しても、取得失敗と区別して知らせる', async ({ page, context, baseURL }) => {
+  if (!baseURL) throw new Error('baseURL が無い');
+  await signIn(context, baseURL, 'admin');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    const showModal = HTMLDialogElement.prototype.showModal;
+    HTMLDialogElement.prototype.showModal = function () {
+      if (this.classList.contains('create-sheet')) throw new DOMException('表示を拒否するテスト', 'InvalidStateError');
+      showModal.call(this);
+    };
+  });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/aoba');
+  const trigger = page.getByRole('button', { name: '起票', exact: true });
+  await trigger.click();
+  await expect(page.getByRole('status').filter({ hasText: '起票を開けませんでした' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '起票', exact: true })).not.toBeVisible();
+  await expect(trigger).not.toHaveAttribute('aria-busy', 'true');
+  expect(errors).toEqual([]);
+});
+
 test('起票の読み込み中に連打して別画面へ移っても、古いシートを開かない', async ({ page, context, baseURL }) => {
   if (!baseURL) throw new Error('baseURL が無い');
   await signIn(context, baseURL, 'admin');
