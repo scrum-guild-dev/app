@@ -19,6 +19,12 @@
   let { data }: PageProps = $props();
 
   const organization = $derived(data.organization);
+  // プランの節が読み直した応答のお試しの期限。組織の枠の値は管理画面へ入る前に読んだものなので、運用者が契約を付けて
+  // お試しが終わっても残る。読み直せたら、同じ組織の間はこちらを使う
+  let freshTrial = $state<{ slug: string; trial: NonNullable<typeof organization>['trial'] } | null>(null);
+  const trial = $derived(
+    freshTrial !== null && freshTrial.slug === data.slug ? freshTrial.trial : (organization?.trial ?? null),
+  );
   let workspacesSetting = $state<ReturnType<typeof WorkspacesSetting>>();
   // ユーザーの節が読んだ、無効でないユーザーと管理者の数。読めるまでは null で、集計を出さない
   let userCounts = $state<{ users: number; admins: number } | null>(null);
@@ -62,8 +68,12 @@
   </PageHead>
 
   <div class="settings">
-    {#if organization.trial !== null}<TrialSetting trial={organization.trial} />{/if}
-    <PlanSetting slug={data.slug} kind={organization.organization.kind} />
+    {#if trial !== null}<TrialSetting {trial} />{/if}
+    <PlanSetting
+      slug={data.slug}
+      kind={organization.organization.kind}
+      ontrial={(value) => (freshTrial = { slug: data.slug, trial: value })}
+    />
     <UsersSetting
       slug={data.slug}
       meId={organization.me.id}
