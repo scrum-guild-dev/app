@@ -94,6 +94,25 @@ function stat(pid: number, ppid: number, name: string) {
   return `${pid} (${name}) ${fields.join(' ')}\n`;
 }
 
+test(
+  '採取途中の syscall 変更や取得失敗はファイルとの対応を捨てる',
+  { skip: !['x64', 'arm64'].includes(process.arch) },
+  async () => {
+    const before = syscallLine(process.arch === 'arm64' ? 82 : 74);
+    for (const after of [syscallLine(process.arch === 'arm64' ? 83 : 75), null]) {
+      let count = 0;
+      const sampled = await sampleIoWait(30, 2200, '/not-a-proc', async (path) => {
+        if (path.endsWith('/stat')) return stat(30, 10, 'workerd');
+        return count++ === 0 ? before : after;
+      });
+      assert.equal(count, 2);
+      assert.equal(sampled.status, 'changed');
+      assert.ok(!('file' in sampled));
+      assert.ok(!('fd' in sampled));
+    }
+  },
+);
+
 test('stat の括弧や空白を含む名前と、単位の異なる計数値を読む', () => {
   assert.deepEqual(parseProcessStat(stat(123, 45, 'node (test)')), {
     pid: 123,

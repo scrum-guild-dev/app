@@ -92,17 +92,17 @@ export function identifyD1File(path: string) {
   return match?.[1] ?? null;
 }
 
-export async function sampleIoWait(pid: number, startTicks: number, procRoot = '/proc') {
+export async function sampleIoWait(pid: number, startTicks: number, procRoot = '/proc', readProc = optionalRead) {
   const base = `${procRoot}/${pid}`;
   const startedAt = new Date().toISOString();
-  const before = await optionalRead(`${base}/syscall`);
+  const before = await readProc(`${base}/syscall`);
   if (before === null) return { startedAt, status: 'unavailable' as const };
   const syscall = parseIoSyscall(before);
   if (syscall.status !== 'io') return { startedAt, ...syscall };
   // fd は再利用されうる。採取の前後で syscall とプロセスの世代が同じか確認する。
   const target = await readlink(`${base}/fd/${syscall.fd}`).catch(() => null);
-  const after = await optionalRead(`${base}/syscall`);
-  const stat = await optionalRead(`${base}/stat`);
+  const after = await readProc(`${base}/syscall`);
+  const stat = await readProc(`${base}/stat`);
   let sameProcess = false;
   try {
     sameProcess = stat !== null && parseProcessStat(stat).startTicks === startTicks;
