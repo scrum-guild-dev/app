@@ -1,6 +1,6 @@
 # Scrum Guild データモデル
 
-状態: 確定。要件定義（`requirements.md`）を D1（SQLite）のテーブルに落としたもの。最初のマイグレーション（`migrations/0001_create_initial_tables.sql`）で、共通の6表と、一本道に要る組織の中の16表を作った。`organization_holidays` は `migrations/0004_add_organization_holidays.sql` で、`comments` は `migrations/0006_add_comments.sql` で、`sprint_entries` と `completions.previous_column_id` は `migrations/0008_add_sprint_entries.sql` で、`epic_party_members` と `thanks` は `migrations/0009_add_epic_party_members_and_thanks.sql` で、共通の表の `password_credentials` は `migrations/0010_add_password_credentials.sql`、`api_tokens` は `migrations/0012_add_api_tokens.sql`、`account_consents` は `migrations/0013_add_account_consents.sql` で足した（ここまでで共通の表は9表になった）。`account_profiles` は `migrations/0023_add_account_profiles.sql` で足した（共通の表は10表）。`organization_contracts` は `migrations/0027_add_organization_contracts.sql` で足した（共通の表は11表）。残りの表は、使う機能の Issue でマイグレーションを足して作る
+状態: 確定。要件定義（`requirements.md`）を D1（SQLite）のテーブルに落としたもの。最初のマイグレーション（`migrations/0001_create_initial_tables.sql`）で、共通の6表と、一本道に要る組織の中の16表を作った。`organization_holidays` は `migrations/0004_add_organization_holidays.sql` で、`comments` は `migrations/0006_add_comments.sql` で、`sprint_entries` と `completions.previous_column_id` は `migrations/0008_add_sprint_entries.sql` で、`epic_party_members` と `thanks` は `migrations/0009_add_epic_party_members_and_thanks.sql` で、共通の表の `password_credentials` は `migrations/0010_add_password_credentials.sql`、`api_tokens` は `migrations/0012_add_api_tokens.sql`、`account_consents` は `migrations/0013_add_account_consents.sql` で足した（ここまでで共通の表は9表になった）。`account_profiles` は `migrations/0023_add_account_profiles.sql` で足した（共通の表は10表）。`organization_contracts` は `migrations/0028_add_organization_contracts.sql` で足した（共通の表は11表）。残りの表は、使う機能の Issue でマイグレーションを足して作る
 
 ## 決まりごと
 
@@ -317,7 +317,7 @@
 
 ### organization_contracts
 
-組織の契約（プラン、支払いの周期、追加容量の口数）。組織と1対1の共通の表で、行が無い組織は未契約（お試し中の組織、運用者が作って契約を付けていない組織、追加容量の無い自分用の組織）。ベータの間は決済サービスとつながず、支払いはアプリの外で受け、運用者が運用者の画面で書く（`business.md` の「契約と支払いの管理」）。決済サービスの ID や支払いの状態、契約の更新日は、連携するときに列を足す（マイグレーション `0027_add_organization_contracts.sql`）。
+組織の契約（プラン、支払いの周期、追加容量の口数）。組織と1対1の共通の表で、行が無い組織は未契約（お試し中の組織、運用者が作って契約を付けていない組織、追加容量の無い自分用の組織）。ベータの間は決済サービスとつながず、支払いはアプリの外で受け、運用者が運用者の画面で書く（`business.md` の「契約と支払いの管理」）。決済サービスの ID や支払いの状態、契約の更新日は、連携するときに列を足す（マイグレーション `0028_add_organization_contracts.sql`）。
 
 | 列 | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |

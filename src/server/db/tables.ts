@@ -92,7 +92,7 @@ export const commonTableColumns = {
     created_at: text,
     updated_at: text,
   },
-  // migrations/0027_add_organization_contracts.sql で足した。組織と1対1の契約。行が無い組織は未契約
+  // migrations/0028_add_organization_contracts.sql で足した。組織と1対1の契約。行が無い組織は未契約
   organization_contracts: {
     organization_id: text,
     plan: text,
