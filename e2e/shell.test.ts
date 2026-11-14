@@ -927,6 +927,8 @@ test('組織の画面の右下に、画面の build の版を出し、スクロ�
   await expect(page.getByRole('heading', { level: 1, name: '今日やること' })).toBeVisible();
   const badge = page.locator('.app-version');
   await expect(badge).toHaveText(`版 ${version}`);
+  // 空白の正規化に頼らず、読み上げ用のラベルと版の間の区切りも確かめる
+  await expect(badge).toHaveJSProperty('textContent', `版 ${version}`);
   // 「版」は読み上げにだけ添え、目には版だけを出す
   await expect(badge.locator('.visually-hidden')).toHaveText('版');
   // 右下の角に置く（右は 16px の余白、下は 1px の余白）
