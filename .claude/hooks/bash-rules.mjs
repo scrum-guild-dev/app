@@ -2658,7 +2658,7 @@ function shellCommandBody(tool, args) {
       continue;
     }
     // fish の初期化本文は fishCommands で別に判定する。
-    if (tool === 'fish' && ['-C', '--init-command', '--command'].includes(longName)) {
+    if (tool === 'fish' && (a === '-C' || ['--init-command', '--command'].includes(longName))) {
       if (!a.includes('=')) i++;
       continue;
     }
