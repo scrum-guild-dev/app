@@ -63,4 +63,8 @@ test('契約の無い自分用の組織は「パーソナル」と出し、「�
   expect(body).not.toContain('未契約');
   expect(body).toContain('1 人');
   expect(body).toContain('1 GB');
+  // プランは固定で運用者も変えないので、プランを変える案内は出さず、容量を足す案内だけを出す
+  expect(body).toContain('自分用の組織は、人数が本人1人のパーソナルに決まっています。');
+  expect(body).toContain('容量を足すときは、運用者に問い合わせてください。');
+  expect(body).not.toContain('プラン、支払いの周期');
 });

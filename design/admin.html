@@ -36,10 +36,15 @@ const AUDIT = {
 const TRIAL_STATE = new URLSearchParams(location.search).get("trial");
 // プランの節の状態。既定はお試し中の未契約の組織。?plan=team で契約のある組織にする（有料のプランにするとお試しは終わるので、お試しの節を出さない）。
 // 本番は PlanSetting.svelte が organization の plan で出し分ける
-const PLAN_CONTRACTED = new URLSearchParams(location.search).get("plan") === "team";
-const PLAN = PLAN_CONTRACTED
-  ? { terms: "チーム・月払い", extra: "+10&nbsp;GB × 2&nbsp;口", members: 15, quota: "50&nbsp;GB" }
-  : { terms: null, extra: null, members: 15, quota: "30&nbsp;GB" };
+// ?plan=team-plain は追加容量の無い契約（「なし」）。?personal（自分用の組織の見本）は「パーソナル」、1 人、1 GB で、容量を足す案内だけを出す
+const PLAN_PARAM = new URLSearchParams(location.search).get("plan");
+const PLAN_PERSONAL = new URLSearchParams(location.search).has("personal");
+const PLAN_CONTRACTED = PLAN_PARAM === "team" || PLAN_PARAM === "team-plain";
+const PLAN = PLAN_PERSONAL
+  ? { terms: "パーソナル", extra: null, members: 1, quota: "1&nbsp;GB" }
+  : PLAN_CONTRACTED
+    ? { terms: "チーム・月払い", extra: PLAN_PARAM === "team" ? "+10&nbsp;GB&nbsp;×&nbsp;2&nbsp;口" : "なし", members: 15, quota: PLAN_PARAM === "team" ? "50&nbsp;GB" : "30&nbsp;GB" }
+    : { terms: null, extra: null, members: 15, quota: "30&nbsp;GB" };
 function setting(title, desc, body) {
   return `<section class="setting"><div class="setting-head"><h2 class="setting-title">${title}</h2><p class="setting-desc">${desc}</p></div><div class="setting-body">${body}</div></section>`;
 }
@@ -51,22 +56,22 @@ SQ.mount("admin", () => `
     ["", "", `進行中の${t("workspace")}`, A.workspaces.filter((w) => !w.closed).length],
   ], `<button class="btn is-primary" type="button" data-dialog="createWorkspace">${icon("plus")}${t("workspace")}を作る</button>`)}
   <div class="settings">
-    ${PLAN_CONTRACTED ? "" : setting("お試し", "継続して使うには、運用者に問い合わせてください。", `
+    ${PLAN_CONTRACTED || PLAN_PERSONAL ? "" : setting("お試し", "継続して使うには、運用者に問い合わせてください。", `
       <p class="mono">${esc(SQ.formatTrialStopDateTime("2026-11-19"))} ごろに止まります</p>
       ${TRIAL_STATE === "expired"
         ? `<p><span class="chip is-danger">${icon("alert")}お試しの期限を過ぎています</span></p>`
         : TRIAL_STATE === "lastday"
           ? `<p class="props-note">今日までです</p>`
           : `<p class="props-note">残り 30 日</p>`}`)}
-    ${setting("プラン", "人数と添付ファイルの上限は、プランと追加容量で決まります。", `
+    ${setting("プラン", "今の契約と、人数と添付ファイルの上限です。", `
       <dl class="props">
         <div><dt>契約</dt><dd>${PLAN.terms === null ? `<span class="chip">未契約</span>` : esc(PLAN.terms)}</dd></div>
-        ${PLAN.terms === null ? "" : `<div><dt>追加容量</dt><dd>${PLAN.extra}</dd></div>`}
+        ${PLAN_CONTRACTED ? `<div><dt>追加容量</dt><dd>${PLAN.extra}</dd></div>` : ""}
         <div><dt>人数の上限</dt><dd>${PLAN.members}&nbsp;人</dd></div>
-        <div><dt>添付ファイルの上限</dt><dd>${PLAN.quota}</dd></div>
+        <div><dt>容量の上限</dt><dd>${PLAN.quota}</dd></div>
       </dl>
-      ${PLAN.terms === null ? `<p class="props-note">まだ契約していません。上限は運用者が決めた値です。</p>` : ""}
-      <div class="callout is-info">${icon("mail")}<span>プラン、支払いの周期、追加容量を変えるときは、運用者に問い合わせてください。</span></div>`)}
+      ${PLAN_PERSONAL ? `<p class="props-note">自分用の${t("organization")}は、人数が本人1人のパーソナルに決まっています。</p>` : PLAN.terms === null ? `<p class="props-note">まだ契約していません。上限は運用者が決めた値です。</p>` : ""}
+      <div class="callout is-info">${icon("mail")}<span>${PLAN_PERSONAL ? "容量を足すときは、運用者に問い合わせてください。" : "プラン、支払いの周期、追加容量を変えるときは、運用者に問い合わせてください。"}</span></div>`)}
     ${setting("ユーザー", `${t("admin")}は他のユーザーを${t("admin")}に指名でき、解除もできます。最後の${t("admin")}は解除できません。無効にした人は${t("organization")}に入れず、すべての${t("workspace")}から外れます。名前、完了の記録、経験値は残ります。`, `
       <div class="table-wrap"><table class="table is-stacked" aria-label="${t("organization")}のユーザーの一覧"><thead><tr><th class="is-name">名前</th><th>${t("admin")}</th><th class="is-num">所属</th><th>最後に入った日</th><th class="is-actions"><span class="visually-hidden">操作</span></th></tr></thead>
         <tbody>${A.users.map((r) => {

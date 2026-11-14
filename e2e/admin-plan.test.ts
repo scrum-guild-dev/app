@@ -48,7 +48,7 @@ test('契約のある組織の管理者には、契約、追加容量の口数�
   await page.goto('/aoba/admin');
   const section = page.getByRole('region', { name: 'プラン', exact: true });
   await expect(section.locator('dd').first()).toHaveText('ビジネス・年払い');
-  await expect(section).toContainText('+50 GB × 1 口');
+  await expect(section).toContainText('+50 GB × 1 口');
   await expect(section).toContainText('50 人');
   await expect(section).toContainText('150 GB');
   await expect(section).not.toContainText('未契約');

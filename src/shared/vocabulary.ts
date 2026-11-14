@@ -1690,18 +1690,21 @@ export const dictionary = defineDictionary({
 
   // プランの節（組織の管理の画面）。契約の語は運用者の画面と同じ（planTerms、operatorPlanNone）。見るだけで、変えるのは運用者
   orgPlanTitle: 'プラン',
-  orgPlanDesc: '人数と添付ファイルの上限は、プランと追加容量で決まります。',
+  orgPlanDesc: '今の契約と、人数と添付ファイルの上限です。',
   orgPlanTermsLabel: '契約',
   orgPlanExtraLabel: '追加容量',
   // 追加容量の口数。{size} は1口の容量（GB）、{units} は口数
-  orgPlanExtraUnits: '+{size} GB × {units} 口',
+  orgPlanExtraUnits: '+{size} GB × {units} 口',
   orgPlanExtraNone: 'なし',
   orgPlanMemberLimitLabel: '人数の上限',
   orgPlanMemberLimit: '{count} 人',
-  orgPlanQuotaLabel: '添付ファイルの上限',
+  orgPlanQuotaLabel: '容量の上限',
   // 未契約の組織（契約の行が無い）。上限は運用者が組織を作ったときか「人数と容量の上限を変える」で決めた値
   orgPlanNoneNote: 'まだ契約していません。上限は運用者が決めた値です。',
   orgPlanContact: 'プラン、支払いの周期、追加容量を変えるときは、運用者に問い合わせてください。',
+  // 自分用の組織。プランはパーソナルに固定で、運用者も変えない（organization-plan-update は 409）。追加容量だけは足せる（docs/business.md の「追加容量」）
+  orgPlanPersonalNote: '自分用の{organization}は、人数が本人1人のパーソナルに決まっています。',
+  orgPlanContactPersonal: '容量を足すときは、運用者に問い合わせてください。',
 
   // ワークスペースを終了する、再開する（組織の管理の画面。API の操作の名前は workspace-close と workspace-reopen のまま）。
   // {workspace} は、辞書の言葉を画面が渡す。{name} はワークスペースの名前

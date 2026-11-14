@@ -8,7 +8,7 @@
   import Setting from '../Setting.svelte';
 
   // プランの節（admin.html）。組織の枠が読んだ organization の plan（管理者にだけ返る）を出すだけで、変える操作は持たない。
-  // 変えるのは運用者（docs/requirements.md の「組織と運用者」）なので、問い合わせの案内を出す
+  // 変えるのは運用者（docs/requirements.md の「組織と運用者」）なので、問い合わせの案内を出す。自分用はプランが固定なので、容量を足す案内だけにする
   type Plan = NonNullable<OutputOf<typeof organizationInfo>['plan']>;
   let { plan, kind }: { plan: Plan; kind: 'team' | 'personal' } = $props();
 
@@ -56,6 +56,9 @@
       <dd>{sizeText(plan.attachment_quota_bytes)}</dd>
     </div>
   </dl>
-  {#if contract === null && kind === 'team'}<p class="props-note">{t('orgPlanNoneNote')}</p>{/if}
-  <div class="callout is-info"><Icon name="mail" /><span>{t('orgPlanContact')}</span></div>
+  {#if kind === 'personal'}<p class="props-note">{t('orgPlanPersonalNote', { organization: t('organization') })}</p>
+  {:else if contract === null}<p class="props-note">{t('orgPlanNoneNote')}</p>{/if}
+  <div class="callout is-info">
+    <Icon name="mail" /><span>{t(kind === 'personal' ? 'orgPlanContactPersonal' : 'orgPlanContact')}</span>
+  </div>
 </Setting>
