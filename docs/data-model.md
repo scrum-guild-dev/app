@@ -284,7 +284,6 @@
 | slug | TEXT | NOT NULL、UNIQUE、`CHECK (slug GLOB '[a-z0-9]*' AND slug NOT GLOB '*[^a-z0-9-]*' AND length(slug) BETWEEN 2 AND 40)` | URL の先頭に入れる名前。後から変えない |
 | name | TEXT | NOT NULL | 組織の表示名 |
 | vocabulary | TEXT | NOT NULL、`game` か `scrum`、既定 `game` | 使わない列（言葉づかいは選べず、画面はスクラムの言葉に固定）。API は読まず、返さない。組織を作る文（`insertOrganization`）と seed が `scrum` を入れる（列の既定は、マイグレーションを足すだけにするため `game` のまま）。列の削除は、使わなくなった版を出した後の別の PR で行う |
-| theme | TEXT | NOT NULL、`CHECK` は `simple`、`simple_light`、`simple_dark`、`medieval`、`modern` のどれか、既定 `simple` | 使わない列（前は組織の既定のテーマ。テーマは各ユーザーが `users.theme` で選ぶだけにした）。API は読まず、書かず、返さない。列の削除は、使わなくなった版を出した後の別の PR で行う |
 | kind | TEXT | NOT NULL、`team` か `personal`、既定 `team`（`CHECK (kind IN ('team', 'personal'))`） | 組織の種類。`team` はチーム用、`personal` は会員が自分だけで使う自分用。自分用は人数が本人1人（`member_limit` 1）、添付ファイルが 1GB、`trial_ends_on` が空で、招待と管理者の指名ができない。名前は固定の「自分用」。後から変えない（マイグレーション `0017_add_organization_kind.sql`。既存の行は `team`） |
 | suspended_at | TEXT | | 停止した日時。入っていれば誰も入れず、定期処理も止める |
 | purge_on | TEXT | | 解約で停止したときの、データを消す予定日（解約で停止した日か、停止中に解約へ切り替えた日の30日後）。一時的な停止では空 |

@@ -51,7 +51,6 @@ export async function createOrganization(overrides: Partial<Row<CommonTables, 'o
     kind: 'team',
     // 列は残っているので、言葉づかいを選べた頃の 'game' の行を模す（画面も API もこの値を読まない）
     vocabulary: 'game',
-    theme: 'simple',
     suspended_at: null,
     purge_on: null,
     member_limit: 15,
