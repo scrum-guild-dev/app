@@ -63,10 +63,17 @@ const PREFIX_JUDGED_SEPARATELY = new Set(['find', 'gfind', 'curl', 'wget', 'http
 function tarHasCommandOption(args) {
   const end = args.indexOf('--');
   const options = end === -1 ? args : sliceWords(args, 0, end);
-  return options.some((a, i) =>
-    /^--(checkpoint-action|to-command|use-compress-program|rsh-command|info-script|new-volume-script)(=|$)/.test(a) ||
-    /^-[^-]*[IF]/.test(a) || (i === 0 && /^[a-zA-Z]+$/.test(a) && /[IF]/.test(a)),
-  );
+  const commandOptions = ['checkpoint-action', 'to-command', 'use-compress-program', 'rsh-command', 'info-script', 'new-volume-script'];
+  return options.some((a, i) => {
+    const long = /^--([^=]+)(=|$)/.exec(a);
+    if (long && commandOptions.some((name) => abbreviates(long[1], name))) return true;
+    // オプション名が実行時に決まる語は、コマンドを指定するものにもなりうる。
+    // src/* のように固定のパスで始まる対象はフラグにならない。
+    const head = shapeAt(options, i).split('=')[0];
+    const dynamicFlag = head.includes(DYNAMIC) && (head.startsWith(DYNAMIC) || head.startsWith('-'));
+    const globFlag = expandsAt(options, i) && /^[-*?\[{]/.test(head);
+    return dynamicFlag || globFlag || /^-[^-]*[IF]/.test(a) || (i === 0 && /^[a-zA-Z]+$/.test(a) && /[IF]/.test(a));
+  });
 }
 
 function unknownPrefixNeedsReview(words, ci, args, manager, ctx) {
