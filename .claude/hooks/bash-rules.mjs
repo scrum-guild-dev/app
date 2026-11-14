@@ -2684,7 +2684,16 @@ function shellCommandBody(tool, args) {
     const dynamicOption = isUnresolved(args, i) && (shape.startsWith(DYNAMIC) || /^[-+]/.test(shape) ||
       (expandsAt(args, i) && /^[*?\[{]/.test(shape)));
     if (dynamicOption || /^[-+]/.test(a)) return { uncertain: true };
-    if (command) return { body: a };
+    if (command) {
+      // fish は -c を複数回実行する。-- より後ろは本文へ渡す argv なので数えない。
+      // 本文が複数あるときは先頭だけの解析で通さず、人が全体を確かめる。
+      if (tool === 'fish') {
+        const end = args.indexOf('--', i + 1);
+        const rest = sliceWords(args, i + 1, end === -1 ? undefined : end);
+        if (rest.some((word) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(word))) return { uncertain: true };
+      }
+      return { body: a };
+    }
     // 未引用の展開は、nullglob などで消えたり別の argv に分かれたりするので位置を確定しない。
     if (expandsAt(args, i)) return { uncertain: true };
     // 確定したスクリプトファイルより後ろは、そのスクリプトへ渡す引数。-c を再解釈しない。
