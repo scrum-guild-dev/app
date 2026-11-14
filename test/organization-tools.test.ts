@@ -76,6 +76,15 @@ const inviteeReadsOrganization = defineOperation({
   output: z.object({ member_limit: z.number() }),
 });
 
+const inviteeReadsOrganizationPlan = defineOperation({
+  name: 'tools-invitee-organization-plan',
+  description: '承諾待ちの招待だけの人の操作から、組織の契約と上限を読もうとする',
+  mode: 'read',
+  permission: 'invitee',
+  input: z.object({}),
+  output: z.object({ member_limit: z.number() }),
+});
+
 const myLogins = defineOperation({
   name: 'tools-my-logins',
   description: '呼んだ人のアカウントに結んだログインを返す',
@@ -106,6 +115,9 @@ const app = createApp(
     }),
     implement(inviteeReadsOrganization, async ({ tools }) => ({
       member_limit: (await tools.readOrganization()).memberLimit,
+    })),
+    implement(inviteeReadsOrganizationPlan, async ({ tools }) => ({
+      member_limit: (await tools.readOrganizationPlan()).member_limit,
     })),
     implement(myLogins, async ({ tools }) => ({
       logins: (await tools.myLogins()).map((login) => ({
@@ -155,6 +167,9 @@ describe('道具を使える人', () => {
 
     const res = await post(app, inviteeReadsOrganization, { slug: own.slug, token: invitee.token });
     expect(res.status).toBe(500);
+    // 契約と上限の道具（#1190）も同じく使えない
+    const plan = await post(app, inviteeReadsOrganizationPlan, { slug: own.slug, token: invitee.token });
+    expect(plan.status).toBe(500);
   });
 });
 
