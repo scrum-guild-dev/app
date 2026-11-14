@@ -597,43 +597,8 @@ html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-col) {
 html[data-theme='simple_dark'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
   border-color: #37373d;
 }
-/* 中世風と現代風を覚えた人にも、読み込んだ後と同じ地と色で出す（値は design/tokens.css の各テーマの --color-bg、--color-surface、
-   --color-sunken、--color-line と --rule-double）。枠の外の紙（.boot-skeleton）も同じテーマの面と線にする */
-html[data-theme='medieval'] #boot-loading {
-  --boot-shine: rgba(255, 255, 255, 0.7);
-  --boot-fg: #1c2633;
-  --boot-accent: #1f3a5f;
-  --boot-on-accent: #ffffff;
-  --boot-warn: #9a5208;
-  background: #f3f4f1;
-  color: #5b6672;
-}
-html[data-theme='medieval'] #boot-loading :is(.boot-binding, .boot-col) {
-  background: #e9ebe6;
-}
-html[data-theme='medieval'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head, .boot-col) {
-  border-color: #c9cfd3;
-}
-html[data-theme='medieval'] #boot-loading :is(.boot-binding, .boot-corner, .boot-topbar, .boot-head) {
-  border-style: double;
-  border-width: 0;
-}
-html[data-theme='medieval'] #boot-loading .boot-binding {
-  border-right-width: 3px;
-}
-html[data-theme='medieval'] #boot-loading :is(.boot-corner, .boot-topbar, .boot-head) {
-  border-bottom-width: 3px;
-}
-html[data-theme='medieval'] #boot-loading .boot-frame i {
-  background: #c9cfd3;
-}
-html[data-theme='medieval'] #boot-loading :is(.boot-skeleton, .boot-failed) {
-  background: #fbfbf8;
-  border-color: #c9cfd3;
-}
-html[data-theme='medieval'] #boot-loading .boot-skeleton i {
-  background: #c9cfd3;
-}
+/* ネオンを覚えた人にも、読み込んだ後と同じ地と色で出す（値は design/tokens.css の --color-bg、--color-surface、
+   --color-sunken、--color-line）。枠の外の紙（.boot-skeleton）も同じテーマの面と線にする */
 html[data-theme='modern'] #boot-loading {
   --boot-shine: rgba(72, 78, 90, 0.7);
   --boot-fg: #dce9f7;
@@ -658,10 +623,4 @@ html[data-theme='modern'] #boot-loading :is(.boot-skeleton, .boot-failed) {
 }
 html[data-theme='modern'] #boot-loading .boot-skeleton i {
   background: #1f3b5c;
-}
-@media (max-width: 760px) {
-  html[data-theme='medieval'] #boot-loading .boot-binding {
-    border-right-width: 0;
-    border-bottom-width: 3px;
-  }
 }

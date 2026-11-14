@@ -40,7 +40,7 @@ function invitation(overrides: Partial<InboxInvitation> = {}): InboxInvitation {
 
 // 招待だけの人として、ひばり工房の枠と招待の一覧を差し替える。invitations は呼ぶたびに今の値を返す。
 // 招待が残っていなければ、本物と同じく組織の選択の読み取りが 401（入れる組織も招待も無い人はセッションが消える）
-async function stubInvitedOnly(page: Page, state: { invitations: InboxInvitation[]; theme?: string }): Promise<void> {
+async function stubInvitedOnly(page: Page, state: { invitations: InboxInvitation[] }): Promise<void> {
   await page.route('**/api/hibari/organization', (route) =>
     route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'not found' } } }),
   );
@@ -59,7 +59,7 @@ async function stubInvitedOnly(page: Page, state: { invitations: InboxInvitation
   await page.route('**/api/hibari/invitation-list', (route) =>
     route.fulfill({
       json: {
-        organization: { name: 'ひばり工房', theme: state.theme ?? 'simple' },
+        organization: { name: 'ひばり工房' },
         invitations: state.invitations,
       },
     }),
@@ -112,12 +112,13 @@ test.describe('招待だけが届いた人（ヒナタ）', () => {
     }
   });
 
-  test('組織の直下を開いても招待の画面になり、組織のテーマが当たる。終了したワークスペースは承諾できない', async ({
+  test('組織の直下を開いても招待の画面になり、テーマは今のまま。終了したワークスペースは承諾できない', async ({
     page,
   }) => {
     const collect = await watchViolations(page);
+    // 自分のテーマを覚えた人。招待の画面は組織のテーマを持たず、今当たっているテーマのまま
+    await page.addInitScript(() => localStorage.setItem('sg-theme', 'modern'));
     await stubInvitedOnly(page, {
-      theme: 'medieval',
       invitations: [
         invitation({ role: 'leader' }),
         invitation({
@@ -131,9 +132,8 @@ test.describe('招待だけが届いた人（ヒナタ）', () => {
     await page.goto('/hibari');
     await expect(page).toHaveURL(/\/hibari$/);
     await expect(page.getByRole('heading', { level: 1, name: '届いた招待' })).toBeVisible();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'medieval');
-    // まだ入っていない組織のテーマは、属性だけで覚えない
-    expect(await page.evaluate(() => localStorage.getItem('sg-theme'))).not.toBe('medieval');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'modern');
+    expect(await page.evaluate(() => localStorage.getItem('sg-theme'))).toBe('modern');
     await expect(
       page.getByText('ひばり工房から届いた招待です。承諾すると、そのワークスペースに入れます。'),
     ).toBeVisible();

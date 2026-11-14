@@ -4,6 +4,7 @@
   import { navigating, page } from '$app/state';
   import { resolve } from '$app/paths';
   import Avatar from '../../../../../../lib/components/Avatar.svelte';
+  import ConfirmDialog from '../../../../../../lib/components/ConfirmDialog.svelte';
   import ClearCelebration from '../../../../../../lib/components/ClearCelebration.svelte';
   import DefinitionChip from '../../../../../../lib/components/DefinitionChip.svelte';
   import DueChip from '../../../../../../lib/components/DueChip.svelte';
@@ -27,6 +28,8 @@
   import { showToast } from '../../../../../../lib/toast.svelte.ts';
   import { t } from '../../../../../../lib/vocabulary.svelte.ts';
   import {
+    epicCancel,
+    epicUncancel,
     epicClearConflictReasonOf,
     epicComplete,
     epicPartyJoin,
@@ -43,7 +46,7 @@
   // リーダー（can_change_requester）には「<依頼主>を替える」（EpicRequesterDialog）を出す。どれも済んだら画面の値を読み直す。
   // 依頼主とリーダー（can_manage）には、討伐隊の面の下に「<クリア>」と「<完了>を取り消す」の面も出す（クリアできない理由は押せない操作の横に出し、
   // 配下のストーリーの完了から数える）。クリアしたら演出（ClearCelebration。動きを減らす設定ではトーストだけ）、取り消しには演出を出さない。
-  // 中止、添付ファイルは、後の Issue で足す。
+  // 中止は確認してから送り、取り消しはその場で送る。添付ファイルは後の Issue で足す。
   // 見出しの横の「直す」は、エピックの引き出し（EpicDrawer。`?epic_id=<ID>`。ワークスペースの枠が置く）を開く。書き込めるときだけ出し、終了したワークスペースでは出さない
   // （引き出しの欄は、この画面がすべて読み取りで出している）。直したら画面の値を読み直し（引き出しが `app:epic-detail` を読み直す）、
   // 削除したか消えていたらバックログへ戻る（枠が戻す）。
@@ -96,6 +99,9 @@
   let celebrateReward = $state('');
   // クリアか取り消しを送っている間。押しても無視する
   let clearBusy = $state(false);
+  let cancelBusy = $state(false);
+  let cancelConfirm = $state<ReturnType<typeof ConfirmDialog>>();
+  const showCancel = $derived(canWrite && detail !== null && detail.can_manage && detail.epic.completed_at === null);
   // 受注か抜けるを送っている間。押しても無視する
   let partyBusy = $state(false);
   // 受注は討伐隊に入れる人（can_join）だけ。抜けるは、討伐隊にいれば（joined）入れる人でなくなっていても出す
@@ -164,6 +170,46 @@
     else focusPageHeading();
   }
 
+  async function runCancel(trigger: HTMLElement): Promise<void> {
+    if (cancelBusy || clearBusy || workspace === null || detail === null) return;
+    const epicId = detail.epic.id;
+    const targetKey = `${slug}/${workspace.id}/${epicId}`;
+    const canceling = detail.epic.canceled_at === null;
+    const input = { workspace_id: workspace.id, epic_id: epicId };
+    // 確認中に別のエピックへ移った場合は、古い確認から書き込まない。
+    if (canceling && !(await cancelConfirm?.ask(trigger))) return;
+    if (`${slug}/${workspace?.id}/${detail?.epic.id}` !== targetKey || !showCancel || cancelBusy || clearBusy) return;
+    cancelBusy = true;
+    const words = { epic: t('epic'), requester: t('requester'), leader: t('leader'), workspace: t('workspace') };
+    try {
+      const result = canceling
+        ? await callOperation(epicCancel, input, { slug })
+        : await callOperation(epicUncancel, input, { slug });
+      if (!result.ok && isUnauthenticated(result)) {
+        window.location.assign(loginUrl(page.url));
+        return;
+      }
+      if (result.ok) showToast(t(canceling ? 'epicCanceledToast' : 'epicUncanceledToast', words), 'check');
+      else if (result.status === 403) {
+        showToast(t('epicCancelForbidden', words), 'alert');
+        await invalidate('app:workspace');
+      } else if (result.error?.code === 'workspace_closed') {
+        showToast(t('workspaceClosedReadOnly', words), 'alert');
+        await invalidate('app:workspace');
+      } else if (result.error?.code === 'epic_finished') showToast(t('epicCancelFinished', words), 'alert');
+      else if (result.error?.code === 'conflict') showToast(t('epicCancelConflict', words), 'alert');
+      else if (result.status === 404) showToast(t('epicCancelGone', words), 'alert');
+      else showToast(t(canceling ? 'epicCancelFailed' : 'epicUncancelFailed', words), 'alert');
+      await saved();
+    } finally {
+      cancelBusy = false;
+    }
+    await tick();
+    const button = document.querySelector<HTMLElement>('[data-epic-cancel]');
+    if (button) button.focus();
+    else focusPageHeading();
+  }
+
   // 演出を閉じたら、クリアの面の「取り消す」へ（押した主ボタンは読み直しで替わっている）。無ければ見出しへ
   function focusClearControl(): void {
     const button = document.querySelector<HTMLElement>('[data-epic-reopen], [data-epic-clear]');
@@ -173,7 +219,7 @@
 
   // クリアと取り消し。断られた理由ごとに知らせ、どれも読み直す。クリアは成功したら演出（動きを減らす設定ではトーストだけ）
   async function runClear(clearing: boolean, trigger: HTMLElement): Promise<void> {
-    if (clearBusy || workspace === null || detail === null) return;
+    if (clearBusy || cancelBusy || workspace === null || detail === null) return;
     const input = { workspace_id: workspace.id, epic_id: detail.epic.id };
     const words = {
       epic: t('epic'),
@@ -371,8 +417,6 @@
                 left={detail.requester.left}
                 decorative
               />{detail.requester.name}{#if detail.requester.left}<span class="props-note">{t('leftMember')}</span>{/if}
-              <!-- 朱の印は飾り。中世風のテーマだけに出る（components.css の .seal） -->
-              <span class="seal" aria-hidden="true">印</span>
             </dd>
           </div>
           <div>
@@ -490,7 +534,7 @@
                 class="btn"
                 type="button"
                 data-epic-reopen
-                aria-disabled={clearBusy}
+                aria-disabled={clearBusy || cancelBusy}
                 aria-describedby="epic-clear-note"
                 onclick={(event) => void runClear(false, event.currentTarget)}
               >
@@ -501,7 +545,7 @@
                 class="btn is-primary"
                 type="button"
                 data-epic-clear
-                aria-disabled={clearBusy || clearBlocked}
+                aria-disabled={clearBusy || cancelBusy || clearBlocked}
                 aria-describedby="epic-clear-note"
                 onclick={(event) => {
                   if (!clearBlocked) void runClear(true, event.currentTarget);
@@ -518,8 +562,38 @@
           >
         </section>
       {/if}
+      {#if showCancel}
+        <section class="panel" aria-labelledby="epic-cancel-title">
+          <div class="panel-title"><h2 id="epic-cancel-title">{t('epicCancelPanel', { epic: t('epic') })}</h2></div>
+          <p class="panel-note" id="epic-cancel-note">
+            {t(epic.canceled_at === null ? 'epicCancelNote' : 'epicUncancelNote', { reward: t('reward') })}
+          </p>
+          <div class="actions-col">
+            <button
+              class="btn is-quiet"
+              type="button"
+              data-epic-cancel
+              aria-disabled={cancelBusy || clearBusy}
+              aria-describedby="epic-cancel-note"
+              onclick={(event) => void runCancel(event.currentTarget)}
+            >
+              {t(epic.canceled_at === null ? 'epicCancel' : 'epicUncancel', { epic: t('epic') })}
+            </button>
+          </div>
+          <span class="visually-hidden" role="status">{cancelBusy ? t('epicCancelUpdating') : ''}</span>
+        </section>
+      {/if}
     </aside>
   </div>
+
+  <ConfirmDialog
+    bind:this={cancelConfirm}
+    title={t('epicCancel', { epic: t('epic') })}
+    confirmLabel={t('epicCancelSubmit')}
+    cancelLabel={t('cancel')}
+  >
+    <p>{t('epicCancelConfirm', { epic: t('epic'), reward: t('reward') })}</p>
+  </ConfirmDialog>
 
   <ClearCelebration
     bind:open={celebrating}

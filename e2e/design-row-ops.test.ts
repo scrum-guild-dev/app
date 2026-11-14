@@ -469,7 +469,7 @@ test('見本のチップ: ロックの理由、読み込み中、再試行と離
   await expect(left.locator('.chip-btn .avatar')).toHaveCount(0);
 });
 
-for (const theme of ['simple_light', 'simple_dark', 'medieval', 'modern']) {
+for (const theme of ['simple_light', 'simple_dark', 'modern']) {
   test(`見本のチップ: ${theme}、320px・文字150%で長い担当名が収まる`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 900 });
     await openSample(page, 'backlog.html');

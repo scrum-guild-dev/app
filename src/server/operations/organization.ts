@@ -1,11 +1,12 @@
 import { now } from '../../shared/clock.ts';
 import { levelOf } from '../../shared/experience.ts';
 import { myOrganizations, organizationInfo } from '../../shared/operations/organization/index.ts';
-import type { Theme } from '../../shared/theme.ts';
+import { themeOf } from '../../shared/theme.ts';
 import { ApiError } from '../errors.ts';
 import { readOrganizationStorageUsage } from '../db/index.ts';
 import { amountOf, userExperienceTotalStatement } from './experience.ts';
 import { implement } from './implement.ts';
+import { contractOf } from './organization-contract.ts';
 
 // users.last_seen_at を書き直す間隔。組織の枠を開くたびに書かないための上限
 const LAST_SEEN_INTERVAL_MS = 60 * 60 * 1000;
@@ -81,21 +82,30 @@ export const organizationInfoOperation = implement(
           }
         : null;
 
+    // 契約は、管理画面のプランの節が明示した管理者の呼び出しでだけ読む。組織の枠とメンバーの呼び出しでは契約の表を引かない
+    const planRow = actor.isAdmin && input.include_plan === true ? await tools.readOrganizationPlan() : null;
+    const plan =
+      planRow === null
+        ? null
+        : {
+            contract: contractOf(planRow),
+            member_limit: planRow.member_limit,
+            attachment_quota_bytes: planRow.attachment_quota_bytes,
+          };
+
     return {
       storage,
-      // theme の形は出力のスキーマ（z.enum）が検証する
+      plan,
       organization: {
         name: organization.name,
         kind: organization.kind,
-        theme: organization.theme,
         has_workspaces: anyWorkspaceResult.rows.length > 0,
       },
       me: {
         id: user.id,
         name: user.name,
         is_admin: actor.isAdmin,
-        // 列の CHECK が守る値（組織の theme と同じ列挙）
-        theme: user.theme as Theme | null,
+        theme: themeOf(user.theme),
         level: levelOf(amountOf(experienceResult.rows[0]?.total)),
       },
       trial:

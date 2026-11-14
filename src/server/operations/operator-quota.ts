@@ -11,21 +11,28 @@ import { logOperatorChange } from './operator-change-log.ts';
 
 type CommonDb = ReturnType<typeof commonDb>;
 
-// slug の組織の今の上限。無ければ 404（別の組織と存在しないものを分けない）
+// slug の組織の今の上限と、契約のプラン（未契約なら null）。無ければ 404（別の組織と存在しないものを分けない）
 async function readQuota(db: CommonDb, slug: string) {
   const row = await db.first(
     db.statement((q) =>
       q
         .selectFrom('organizations')
-        .select(['id', 'member_limit', 'attachment_quota_bytes', 'attachment_quota_warned_at'])
-        .where('slug', '=', slug),
+        .leftJoin('organization_contracts', 'organization_contracts.organization_id', 'organizations.id')
+        .select([
+          'organizations.id',
+          'organizations.member_limit',
+          'organizations.attachment_quota_bytes',
+          'organizations.attachment_quota_warned_at',
+          'organization_contracts.plan',
+        ])
+        .where('organizations.slug', '=', slug),
     ),
   );
   if (row === undefined) throw new ApiError(404, 'not_found');
   return row;
 }
 
-// 順: 1. 組織を slug で引く（無ければ 404）。今の値が送った値と同じなら何も書かずに今の値を返す
+// 順: 1. 組織を slug で引く（無ければ 404）。契約のある組織は 409（reason: plan_managed）。今の値が送った値と同じなら何も書かずに今の値を返す
 // 2. 今の値が画面の見ていた前の値（expected）と違えば 409（ダイアログを開いた後に別の運用者が変えた）
 // 3. organizations を、expected のままであることを条件に書く（読んだ後に別の運用者が先に変えて外れたら 409）。
 //    添付ファイルの上限を上げたときだけ attachment_quota_warned_at を空に戻す（80% の通知をやり直す）。そのときは
@@ -33,6 +40,8 @@ async function readQuota(db: CommonDb, slug: string) {
 // 4. 組織の DB の change_logs に、変わった列だけの前後の値で残す（失敗しても成功として返す）
 export const organizationQuotaUpdateOperation = implement(organizationQuotaUpdate, async ({ db, operator, input }) => {
   const current = await readQuota(db, input.slug);
+  // 契約のある組織の上限は契約から決める（organization-plan-update）。値で変えると契約とずれる
+  if (current.plan !== null) throw new ApiError(409, 'conflict', { reason: 'plan_managed' });
   const memberLimitChanged = current.member_limit !== input.member_limit;
   const quotaChanged = current.attachment_quota_bytes !== input.attachment_quota_bytes;
   if (!memberLimitChanged && !quotaChanged) {
@@ -65,7 +74,18 @@ export const organizationQuotaUpdateOperation = implement(organizationQuotaUpdat
         })
         .where('id', '=', current.id)
         .where('member_limit', '=', expected.member_limit)
-        .where('attachment_quota_bytes', '=', expected.attachment_quota_bytes);
+        .where('attachment_quota_bytes', '=', expected.attachment_quota_bytes)
+        // 読んだ後に別の運用者が契約を付けていたら書かない（409）
+        .where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom('organization_contracts')
+                .select('organization_contracts.organization_id')
+                .where('organization_contracts.organization_id', '=', current.id),
+            ),
+          ),
+        );
       if (!raised) return update;
       return current.attachment_quota_warned_at === null
         ? update.where('attachment_quota_warned_at', 'is', null)

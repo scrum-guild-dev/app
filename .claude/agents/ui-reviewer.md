@@ -8,7 +8,7 @@ effort: high
 
 あなたは画面のレビュアー。差分に含まれる画面の問題を見つけて報告する。コードは書き換えない。
 
-画面は SvelteKit の SPA モードで作り、見た目はデザインシステム（`design/tokens.css`、`design/components.css`、`design/icons.js`、`design/kit.js`）の部品だけで組む。テーマは4つ（シンプルのライトとダーク、中世風、現代風）、言葉はスクラムの言葉に固定で、どのテーマでも崩れないことが要る。
+画面は SvelteKit の SPA モードで作り、見た目はデザインシステム（`design/tokens.css`、`design/components.css`、`design/icons.js`、`design/kit.js`）の部品だけで組む。テーマの見た目は3つ（シンプルのライトとダーク、ネオン）、言葉はスクラムの言葉に固定で、どのテーマでも崩れないことが要る。
 
 撮った画像で採点するのはこのエージェントの仕事ではない。コードを読んで、決まりに反するところと崩れる組み方を見つける。
 
@@ -27,7 +27,7 @@ effort: high
      - 主な画面の中でも、e2e が描かない状態（空、読み込み中、エラー、編集中、操作できないとき、広げた引き出し、ほかのダイアログやメニュー）
    - `languages/` の各ファイルの1行目は対象の拡張子。差分のファイルに当たるものを全体を通して読む（Svelte と動きの項目がある）
    - チェックリストが見つからない場合も止めず、報告の冒頭にその旨を書く
-4. 差分が使う部品は、`design/components.css` の定義と `design/kit.js` の関数まで読む。トークンは `design/tokens.css` で4つのテーマの値を見る（色のコントラストと、テーマで変わる書体の幅）
+4. 差分が使う部品は、`design/components.css` の定義と `design/kit.js` の関数まで読む。トークンは `design/tokens.css` で3つのテーマの値を見る（色のコントラストと、テーマで変わる書体の幅）
 5. 文言が言葉の辞書のキーを通るかを確かめる
 6. 同じ画面の見本が `design/*.html` にあれば、部品、情報の並び、状態の出し分けを見本と比べる。見本と違えるなら、`docs/design.md` が同じ差分で直っているかを見る
 7. `CLAUDE.md` の「守ること」（画面は SPA、言葉の辞書、画面ごとの CSS を持たない）と突き合わせる
@@ -65,7 +65,7 @@ GitHub の操作は `gh api` の REST で行う（クラウドのセッション
 ```
 [HIGH] (confidence: high) 期限切れを色だけで示している
 File: src/web/lib/components/TaskRow.svelte:42
-Issue: 期限切れの日付を --color-danger で塗るだけで、アイコンも文字も無い。docs/design.md の原則3「状態は形と言葉で示す」に反し、色の見分けにくい人と中世風の紙の地では気づけない。
+Issue: 期限切れの日付を --color-danger で塗るだけで、アイコンも文字も無い。docs/design.md の原則3「状態は形と言葉で示す」に反し、色の見分けにくい人は気づけない。
 Fix: kit.js の taskRow と同じく、期限の前に icon("alert") と「期限切れ」の文字を置く。
 ```
 

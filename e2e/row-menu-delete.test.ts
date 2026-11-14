@@ -217,7 +217,7 @@ test('幅 390px で、削除の項目の押せる範囲が足りている', asyn
   expect(box!.width).toBeGreaterThanOrEqual(TARGET_SIZE);
 });
 
-test('「⋯」の削除の項目の上に区切りの罫線があり、4つのテーマで axe の違反が出ない', async ({ page }) => {
+test('「⋯」の削除の項目の上に区切りの罫線があり、3つのテーマで axe の違反が出ない', async ({ page }) => {
   await createWorkspace(page, '行の削除の区切り');
   await addTaskRow(page, '区切りの行');
   await rowMenuToggle(page, '区切りの行').click();

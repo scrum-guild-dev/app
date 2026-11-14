@@ -36,7 +36,7 @@ async function run(replies: Record<string, Reply>) {
 
 const ok = (body: unknown): Reply => ({ status: 200, body });
 const tokens = { can_create: false, tokens: [{ id: 'a'.repeat(64), name: 'n', scope: 'read' }] };
-const inbox = { organization: { name: 'あおば開発', theme: 'simple' }, invitations: [] };
+const inbox = { organization: { name: 'あおば開発' }, invitations: [] };
 
 test('API トークンの一覧は組織の slug を付けない組織の外のパスで読む', () => {
   expect(tokenPath).not.toContain('aoba');

@@ -1,4 +1,4 @@
-// 開いた状態（タスクの引き出し、ストーリーの引き出し、エピックの引き出し、Dialog のダイアログ、ConfirmDialog、運用の画面の管理者の指名し直し）を axe で確かめる（#334）。4つのテーマ × スクラムの言葉。
+// 開いた状態（タスクの引き出し、ストーリーの引き出し、エピックの引き出し、Dialog のダイアログ、ConfirmDialog、運用の画面の管理者の指名し直し）を axe で確かめる（#334）。3つのテーマ × スクラムの言葉。
 // 主な画面は e2e/a11y-screens.test.ts、除外は e2e/ui-exclusions.ts。
 // seed のセッション（seed/sessions.ts）の Cookie で開く。あおば開発の管理者はミナト。受託開発チームも社内ツールもスクラムの言葉。
 // 開くだけで、作る、外すは押さない。seed の行もテーマの設定も書き換えない（ほかのファイルと並べて走るため）
@@ -136,6 +136,7 @@ test('管理者の指名し直しのダイアログを開いた状態に axe の
             self_created: false,
             trial_ends_on: null,
             trial_expired: false,
+            contract: null,
             created_at: '2026-10-01T09:30:00.000Z',
             admin_status: 'none',
             seats: { used: 2, limit: 15 },

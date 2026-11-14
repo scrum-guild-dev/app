@@ -45,7 +45,6 @@
   "operations.test.ts": 1,
   "operator.test.ts": 74,
   "organization-credentials.test.ts": 9,
-  "organization-look.test.ts": 13,
   "organizations.test.ts": 58,
   "password-login.test.ts": 1,
   "plan.test.ts": 31,
