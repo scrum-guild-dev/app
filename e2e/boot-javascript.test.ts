@@ -15,11 +15,18 @@ function createSheetPath(): string {
   return `/${sheet.file}`;
 }
 
-for (const theme of themes) {
-  test(`${theme}: 今日の初回表示はJSが50件以内で、起票シートは押すまで読まない`, async ({ page, context, baseURL }) => {
+for (const { theme, width } of [
+  ...themes.map((theme) => ({ theme, width: 390 })),
+  { theme: 'simple_light' as const, width: 1280 },
+]) {
+  test(`${theme} ${width}px: 今日の初回表示はJSが50件以内で、起票シートは押すまで読まない`, async ({
+    page,
+    context,
+    baseURL,
+  }) => {
     if (!baseURL) throw new Error('baseURL が無い');
     await signIn(context, baseURL, 'admin');
-    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setViewportSize({ width, height: width === 1280 ? 900 : 844 });
     await page.addInitScript((value) => localStorage.setItem('sg-theme', value), theme);
     await rewriteOperation(page, organizationInfo, { slug: 'aoba' }, (body) => {
       body.me.theme = theme;
@@ -38,6 +45,7 @@ for (const theme of themes) {
     expect(scripts.has(sheetPath)).toBe(false);
     // 開発時の警告を含む build は、本番の本数とは比べない。
     if (!isDevBuild(process.env)) expect(scripts.size).toBeLessThanOrEqual(50);
+    if (width === 1280) await page.setViewportSize({ width: 390, height: 844 });
     const trigger = page.getByRole('button', { name: '起票', exact: true });
     const controlledId = await trigger.getAttribute('aria-controls');
     expect(controlledId).toBeTruthy();
