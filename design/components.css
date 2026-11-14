@@ -1844,7 +1844,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 [data-drop="after"]::before { bottom: -1px; }
 [data-drop="after"]::after { bottom: -4px; }
 .tree-row[data-drop="into"] { background: var(--color-accent-soft); outline: 1px solid var(--color-accent); outline-offset: -1px; }
-.is-dragging { opacity: 0.4; transition: opacity var(--duration-fast); }
+.is-dragging { opacity: 0.95; transition: opacity var(--duration-fast); }
 /* 地の色と accent-soft の差が小さいテーマ（シンプルの暗など）でも見えるよう、光る間は accent の細い枠も同じ長さで出す */
 @keyframes drop-flash {
   from { background-color: var(--color-accent-soft); outline-color: var(--color-accent); }
@@ -1939,7 +1939,7 @@ a.choice:hover > .ico, a.choice:focus-visible > .ico { color: var(--color-accent
 
 /* ===== 月の積載量の小さなセル ===== */
 .mini-cap { display: grid; gap: 4px; min-width: 130px; }
-.mini-cap.is-none { color: var(--color-faint); font-size: var(--text-xs); min-width: 0; }
+.mini-cap.is-none { color: var(--color-muted); font-size: var(--text-xs); min-width: 0; }
 .mini-cap-num { font-family: var(--font-stat); font-weight: 600; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 .mini-cap-num small { color: var(--color-muted); font-weight: 500; }
 .cap.is-mini { height: 8px; }
