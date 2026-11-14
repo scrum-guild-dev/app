@@ -47,12 +47,13 @@ describe('チーム導入のワークスペース準備', () => {
       db.statement((q) =>
         q
           .selectFrom('workspaces')
-          .select('id')
+          .selectAll()
           .where('organization_id', '=', target.organization.id)
           .where('id', '=', result.workspace_id),
       ),
     );
-    expect(workspace).toEqual({ id: result.workspace_id });
+    expect(workspace).toMatchObject({ id: result.workspace_id });
+    expect(workspace).not.toHaveProperty('vocabulary');
     const columns = await db.rows(
       db.statement((q) =>
         q

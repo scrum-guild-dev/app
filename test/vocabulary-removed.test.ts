@@ -102,12 +102,14 @@ describe('ワークスペースの作成の入力の境界', () => {
       db.statement((q) =>
         q
           .selectFrom('workspaces')
-          .select('name')
+          .selectAll()
           .where('organization_id', '=', target.organization.id)
           .where('name', '=', '保守チーム'),
       ),
     );
-    expect(rows).toEqual([{ name: '保守チーム' }]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: '保守チーム' });
+    expect(rows[0]).not.toHaveProperty('vocabulary');
   });
 });
 
@@ -133,10 +135,9 @@ describe('運用者の組織の作成の入力の境界', () => {
     expect(res.status, await res.clone().text()).toBe(200);
     expect(vocabularyPaths(await res.json())).toEqual([]);
     const db = commonDb(env);
-    const row = await db.first(
-      db.statement((q) => q.selectFrom('organizations').select('name').where('slug', '=', slug)),
-    );
-    expect(row).toEqual({ name: '言葉の確認' });
+    const row = await db.first(db.statement((q) => q.selectFrom('organizations').selectAll().where('slug', '=', slug)));
+    expect(row).toMatchObject({ name: '言葉の確認' });
+    expect(row).not.toHaveProperty('vocabulary');
   });
 });
 
