@@ -6,7 +6,7 @@ import { storyMove } from '../src/shared/operations/story/index.ts';
 import { taskMove } from '../src/shared/operations/task/index.ts';
 import { createApp } from '../src/server/app.ts';
 import { orgDb, verifyWorkspace } from '../src/server/db/index.ts';
-import { envWithD1Hooks } from '../src/server/db/testing.ts';
+import { envWithD1Hooks, queryPlanForCapturedSql } from '../src/server/db/testing.ts';
 import { implementedOperations } from '../src/server/operations/index.ts';
 import { MAX_TIES } from '../src/server/operations/move-position.ts';
 import { taskMoveOperation } from '../src/server/operations/task.ts';
@@ -174,6 +174,42 @@ describe('task-move の並べ替え', () => {
     expect(await taskOrder(target, null)).toEqual([b, d, a, c]);
 
     for (const id of [a!, b!, c!, d!]) expect(await logsOf(target, id)).toEqual([]);
+  });
+
+  test('移動の UPDATE は、移すタスクと直前のタスクをそれぞれ主キーで引く', async () => {
+    const target = await createTarget();
+    const owner = target.admin.userId!;
+    const story = await createStory(target.organization, target.workspace.id, owner);
+    const after = await createTask(target.organization, target.workspace.id, owner, {
+      story_id: story.id,
+      position: 'a0',
+    });
+    const moving = await createTask(target.organization, target.workspace.id, owner, {
+      story_id: story.id,
+      position: 'a2',
+    });
+    let statement: Parameters<typeof queryPlanForCapturedSql>[1] | undefined;
+    const requestEnv = envWithD1Hooks(testEnv, {
+      beforeBatch: (_, queries) => {
+        statement = queries.find(
+          ({ sql }) => sql.startsWith('update "tasks"') && sql.includes('exists (select "tasks"."id"'),
+        );
+      },
+    });
+
+    const res = await moveTask(
+      target,
+      { task_id: moving.id, story_id: story.id, after_task_id: after.id },
+      target.member,
+      requestEnv,
+    );
+    expect(res.status).toBe(200);
+    if (!statement) throw new Error('直前のタスクを照合する UPDATE が見つからなかった');
+    const plan = await queryPlanForCapturedSql(env, statement);
+    expect(
+      plan.filter((detail) => /^SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 \(id=\?\)/.test(detail)),
+      plan.join('\n'),
+    ).toHaveLength(2);
   });
 
   test('完了したタスクも並びに残っているので、直前の行に指せる', async () => {

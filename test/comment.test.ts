@@ -308,12 +308,14 @@ describe('comment-list', () => {
     expect(comment).toMatchObject({ can_edit: false, can_delete: false });
   });
 
-  test('一覧の文は comments_task の索引で引き、表を走査しない', async () => {
+  test('一覧の文は索引で対象のタスクに絞る', async () => {
     const target = await createTarget();
     const db = orgDb(env, target.organization.verified);
     for (const before of [undefined, { created_at: AT, id: '019a0000-0000-7000-8000-000000000001' }]) {
       const plan = (await queryPlanForTest(env, commentPageStatement(db, target.workspace.id, 'x', before))).join('\n');
-      expect(plan).toMatch(/SEARCH comments USING INDEX comments_task \(task_id=\?/);
+      expect(plan).toMatch(
+        /SEARCH comments USING (?:COVERING )?INDEX comments_(?:task \(task_id=\?|workspace_task_fk \(workspace_id=\? AND task_id=\?)/,
+      );
       expect(plan).not.toMatch(/SCAN comments\b/);
     }
   });

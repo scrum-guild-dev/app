@@ -78,6 +78,17 @@ function log(options: LogOptions) {
   });
 }
 
+function expectCommentListLookups(list: string, count: string) {
+  const byTask = /SEARCH comments USING (?:COVERING )?INDEX comments_task \(task_id=\?\)/;
+  const byWorkspaceAndTask =
+    /SEARCH comments USING (?:COVERING )?INDEX comments_workspace_task_fk \(workspace_id=\? AND task_id=\?\)/;
+  const lookup = new RegExp(`${byTask.source}|${byWorkspaceAndTask.source}`);
+  expect(list, list).toMatch(lookup);
+  expect(list, list).not.toMatch(/TEMP B-TREE|comments_workspace_created/);
+  expect(count, count).toMatch(lookup);
+  expect(count, count).not.toMatch(/comments_workspace_created/);
+}
+
 describe('recent-activity', () => {
   test('変更とコメントを新しい順に混ぜ、した人の今の名前、ワークスペース名、対象の題、内容の種類を返す', async () => {
     const target = await createTarget();
@@ -733,7 +744,7 @@ describe('recent-activity', () => {
     }
   });
 
-  test('前の版の comment-list の一覧と件数の文は、新しい部分索引に取られず comments_task を使う', async () => {
+  test('前の版の comment-list の一覧と件数の文は、索引で対象のタスクに絞る', async () => {
     const target = await createTarget();
     const db = orgDb(env, target.organization.verified);
     const workspaceId = target.workspace.id;
@@ -763,11 +774,10 @@ describe('recent-activity', () => {
         .where('comments.workspace_id', '=', workspaceId)
         .where('comments.deleted_at', 'is', null),
     );
-    for (const statement of [list, count]) {
-      const plan = (await queryPlanForTest(env, statement)).join('\n');
-      expect(plan, plan).toMatch(/SEARCH comments USING (COVERING )?INDEX comments_task \(task_id=\?/);
-      expect(plan, plan).not.toMatch(/comments_workspace_created/);
-    }
+    expectCommentListLookups(
+      (await queryPlanForTest(env, list)).join('\n'),
+      (await queryPlanForTest(env, count)).join('\n'),
+    );
   });
 
   test('行を入れて ANALYZE した後も、ワークスペースの行数が偏っていても、変更とコメントの文は同じ部分索引を使い、ほかの文は取られない', async () => {
@@ -808,7 +818,7 @@ describe('recent-activity', () => {
       }
     }
 
-    // 前の版（この PR の前の main）の comment-list の一覧と件数の文は、ANALYZE の後も comments_task を使う。
+    // 前の版の comment-list の一覧と件数の文は、ANALYZE の後も索引で対象のタスクに絞る。
     // 文の写しは、上のテストと同じ（commentPageStatement と、comment-list の処理の中の件数の文）
     const workspaceId = target.workspace.id;
     const taskId = tasks[0]!.id;
@@ -836,11 +846,10 @@ describe('recent-activity', () => {
         .where('comments.workspace_id', '=', workspaceId)
         .where('comments.deleted_at', 'is', null),
     );
-    for (const statement of [list, count]) {
-      const plan = (await queryPlanForTest(env, statement)).join('\n');
-      expect(plan, plan).toMatch(/SEARCH comments USING (COVERING )?INDEX comments_task \(task_id=\?/);
-      expect(plan, plan).not.toMatch(/comments_workspace_created/);
-    }
+    expectCommentListLookups(
+      (await queryPlanForTest(env, list)).join('\n'),
+      (await queryPlanForTest(env, count)).join('\n'),
+    );
 
     // task-history と organization-history の文は、新しい部分索引に取られない
     for (const statement of [

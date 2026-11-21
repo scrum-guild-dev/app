@@ -12,6 +12,7 @@ import { implementedOperations } from '../src/server/operations/index.ts';
 import {
   lastPositionStatement,
   openStoryTasksStatement,
+  storyTaskCountsStatement,
   rootCompletedCountStatement,
   rootOpenTasksStatement,
   siblingStatements,
@@ -601,20 +602,27 @@ describe('実行計画', () => {
     ['依頼先なし', { delegatee: null }],
     ['検索', { words: ['請求'] }],
   ] as const)(
-    'ストーリーの下の未完了のタスクは、絞り込み（%s）によらず tasks_story_open で引き、担当と依頼先の索引をストーリーごとに引かない',
+    'ストーリーの下の未完了のタスクは、絞り込み（%s）によらずストーリーごとの未完了行を索引で引く',
     async (_name, filter) => {
       const target = await createTarget();
       const db = orgDb(env, target.organization.verified);
       const plan = (
         await queryPlanForTest(env, openStoryTasksStatement(db, target.workspace.id, { words: [], ...filter }))
       ).join('\n');
-      expect(plan).toContain('stories_workspace_epic');
+      expect(plan).toMatch(/SEARCH stories USING INDEX stories_workspace_(?:epic|fk) \(workspace_id=\?/);
       expect(plan).toMatch(/SEARCH tasks USING INDEX tasks_story_open \(story_id=\?\)/);
       expect(plan).not.toContain('tasks_assignee_user');
       expect(plan).not.toContain('tasks_delegatee_completed');
       expect(plan).not.toMatch(/^\s*SCAN tasks\b/m);
     },
   );
+
+  test('完了件数とポイントはストーリーごとのタスクを索引で集計する', async () => {
+    const target = await createTarget();
+    const db = orgDb(env, target.organization.verified);
+    const plan = (await queryPlanForTest(env, storyTaskCountsStatement(db, target.workspace.id))).join('\n');
+    expect(plan).toMatch(/SEARCH tasks USING INDEX tasks_story \(story_id=\?\)/);
+  });
 
   // ANALYZE の後、tasks_story の統計は story_id の NULL を別々の値と数える。ストーリーごとの行が少なく、全組織の親なしの行が多い形にして、
   // 親なしの文が story_id を索引に使わせず tasks_workspace_tray で引くことを確かめる
@@ -715,7 +723,7 @@ describe('実行計画', () => {
     );
 
     // ストーリーの削除（keep）で配下のタスクを親なしの末尾へ移す文。末尾の位置を読む副問い合わせは別名なしの tasks で、
-    // 移されるタスク（別名 t）は tasks_story で引く
+    // 移されるタスク（別名 t）は story_id の索引で引く
     test('ストーリーの削除（keep）で、親のないタスクの末尾の位置を決める文', async () => {
       const { db, workspaceId, target } = await analyzedWorld();
       const owner = target.admin.userId!;
@@ -737,14 +745,43 @@ describe('実行計画', () => {
       if (plan === undefined) return;
       expect(plan).toMatch(/SEARCH tasks USING (COVERING )?INDEX tasks_workspace_tray/);
       expect(plan).not.toMatch(/\btasks USING (COVERING )?INDEX tasks_story\b/);
-      expect(plan).toMatch(/SEARCH t USING (COVERING )?INDEX tasks_story \(story_id=\?\)/);
+      expect(plan).not.toMatch(/SEARCH t USING (?:COVERING )?INDEX tasks_workspace_/);
+      // 末尾の検索とは別に、UPDATE は移す行を n.id から主キーで引く。
+      expect(plan).toMatch(/SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 \(id=\?\)/);
+      expect(plan).toMatch(
+        /SEARCH t USING (COVERING )?INDEX tasks_story(?: \(story_id=\?\)|_fk \(story_id=\? AND deleted_at=\?\))/,
+      );
     });
 
-    test('ストーリーの配下を引く文は、tasks_story で引く', async () => {
+    test('並べ替えで、ストーリー配下の兄弟を位置順の索引で引く', async () => {
+      const { db, workspaceId, target } = await analyzedWorld();
+      const owner = target.admin.userId!;
+      const story = await createStory(target.organization, workspaceId, owner);
+      const moving = await createTask(target.organization, workspaceId, owner, { story_id: story.id, position: 'a2' });
+      const after = await createTask(target.organization, workspaceId, owner, { story_id: story.id, position: 'a0' });
+      await createTask(target.organization, workspaceId, owner, { story_id: story.id, position: 'a1' });
+      const siblings = siblingStatements(db, workspaceId, story.id, moving.id);
+
+      for (const statement of [siblings.last(), siblings.first(), siblings.next(after)]) {
+        const plan = await planOf(statement);
+        expect(plan, plan).toMatch(/SEARCH tasks USING INDEX tasks_story \(story_id=\?/);
+        // position の順を索引で得る。id が第2ソートキーなので同じ position 内の並べ替えは許容する。
+        const sorts = plan.split('\n').filter((detail) => detail.includes('TEMP B-TREE'));
+        for (const sort of sorts) {
+          expect(sort).toMatch(/FOR (?:RIGHT PART|LAST TERM) OF (?:THE )?ORDER BY/);
+        }
+      }
+      expect(await planOf(siblings.ties(after))).toMatch(/USING INDEX tasks_story \(story_id=\? AND position=\?\)/);
+      expect(await planOf(siblings.byId(after.id))).toMatch(/USING INDEX sqlite_autoindex_tasks_1 \(id=\?\)/);
+      expect(await db.first(siblings.byId(after.id))).toEqual({ id: after.id, position: after.position });
+    });
+
+    test('ストーリー配下の末尾は tasks_story の位置順で引く', async () => {
       const { db, workspaceId, target } = await analyzedWorld();
       const story = await createStory(target.organization, workspaceId, target.admin.userId!);
       const plan = await planOf(lastPositionStatement(db, workspaceId, story.id));
-      expect(plan).toMatch(/USING (COVERING )?INDEX tasks_story \(story_id=\?\)/);
+      expect(plan).toMatch(/USING INDEX tasks_story \(story_id=\?\)/);
+      expect(plan).not.toMatch(/TEMP B-TREE/);
     });
   });
 });

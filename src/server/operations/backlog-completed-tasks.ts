@@ -11,7 +11,7 @@ import { implement } from './implement.ts';
 // storyId が null なら親のないタスク。tasks_story は story_id が NULL の行を全組織のぶん持ち、ANALYZE の後は
 // SQLite が NULL を別々の値と数えて tasks_story を選び、全組織の親のないタスクを読む計画に変わる。
 // 親なしの分岐は列を索引に使わせず（unindexed）、tasks_workspace_tray で引かせる。
-// ストーリーの分岐は story_id の等号で tasks_story を使う（docs/data-model.md の「バックログの木」）
+// ストーリーの分岐は story_id の等号条件で引く（docs/data-model.md の「バックログの木」）
 export function completedTasksStatement(
   db: OrganizationDb,
   workspaceId: string,

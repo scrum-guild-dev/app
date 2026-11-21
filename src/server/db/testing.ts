@@ -42,27 +42,29 @@ export { compiledQueryOf as compiledQueryForTest };
 // D1 の呼び出しに割り込む口。テストが、並行した処理の実行の順を固定したり、書き込みを失敗させたりするのに使う。
 // env の取り出しの Proxy で DB を包むので、入口（commonDb、orgDb）はそのまま包まれた D1 に問い合わせる。
 //   afterQuery: 問い合わせ（rows、first、run）が答えを返した直後にSQLと読み書きした行数を渡す。その間、結果は呼び出し元に返らない
-//   beforeBatch: batch() を送る前に、文の SQL の並びを渡して呼ぶ。投げると、batch() は何も書かずに失敗する
+//   beforeBatch: batch() を送る前に、文の SQL と束縛値を渡して呼ぶ。投げると、batch() は何も書かずに失敗する
 //   afterBatch: batch() が書き終えた直後に、文の SQL の並びを渡して呼ぶ。投げると、書き込みはコミットされたまま、呼び出し元には失敗が返る
 //     （応答だけが失敗した場合）。別の処理を割り込ませて、書いた直後の状態を変えるのにも使う
+type BoundQuery = { sql: string; parameters: readonly unknown[] };
+
 export type D1Hooks = {
   afterQuery?: (sql: string, meta: Pick<D1Meta, 'rows_read' | 'rows_written'>) => Promise<void>;
-  beforeBatch?: (sqls: readonly string[]) => void;
+  beforeBatch?: (sqls: readonly string[], queries: readonly BoundQuery[]) => void;
   afterBatch?: (sqls: readonly string[]) => Promise<void> | void;
 };
 
 export function envWithD1Hooks(base: Env, hooks: D1Hooks): Env {
   // batch() には包む前の文を渡す（D1 の本物の文でないと受け取らない）
   const rawOf = new WeakMap<object, D1PreparedStatement>();
-  const sqlOf = new WeakMap<object, string>();
+  const queryOf = new WeakMap<object, BoundQuery>();
 
-  const wrapBound = (bound: D1PreparedStatement, text: string): D1PreparedStatement => {
+  const wrapBound = (bound: D1PreparedStatement, query: BoundQuery): D1PreparedStatement => {
     const wrapped = new Proxy(bound, {
       get(target, name) {
         if (name === 'all') {
           return async (...args: []) => {
             const result = await target.all(...args);
-            await hooks.afterQuery?.(text, result.meta);
+            await hooks.afterQuery?.(query.sql, result.meta);
             return result;
           };
         }
@@ -71,14 +73,15 @@ export function envWithD1Hooks(base: Env, hooks: D1Hooks): Env {
       },
     });
     rawOf.set(wrapped, bound);
-    sqlOf.set(wrapped, text);
+    queryOf.set(wrapped, query);
     return wrapped;
   };
 
   const wrapStatement = (statement: D1PreparedStatement, text: string) =>
     new Proxy(statement, {
       get(target, name) {
-        if (name === 'bind') return (...values: unknown[]) => wrapBound(target.bind(...values), text);
+        if (name === 'bind')
+          return (...values: unknown[]) => wrapBound(target.bind(...values), { sql: text, parameters: values });
         const member = Reflect.get(target, name);
         return typeof member === 'function' ? member.bind(target) : member;
       },
@@ -91,8 +94,9 @@ export function envWithD1Hooks(base: Env, hooks: D1Hooks): Env {
         if (name === 'prepare') return (text: string) => wrapStatement(target.prepare(text), text);
         if (name === 'batch') {
           return async (statements: D1PreparedStatement[]) => {
-            const sqls = statements.map((statement) => sqlOf.get(statement) ?? '');
-            hooks.beforeBatch?.(sqls);
+            const queries = statements.map((statement) => queryOf.get(statement) ?? { sql: '', parameters: [] });
+            const sqls = queries.map(({ sql }) => sql);
+            hooks.beforeBatch?.(sqls, queries);
             const results = await target.batch(statements.map((statement) => rawOf.get(statement) ?? statement));
             await hooks.afterBatch?.(sqls);
             return results;
@@ -224,6 +228,11 @@ export function pendingClaimStatementsForTest(env: Env, tokenHash: string) {
 // 文の実行計画（EXPLAIN QUERY PLAN の detail の列）。索引に乗るかを確かめるのに使う
 export function queryPlanForTest(env: Env, statement: Statement<Scope>): Promise<string[]> {
   return explainQueryPlan(commonDatabase(env), compiledQueryOf(statement));
+}
+
+// テスト用フックで捕捉した文を実行せず、計画だけを読む。
+export function queryPlanForCapturedSql(env: Env, query: BoundQuery): Promise<string[]> {
+  return explainQueryPlan(commonDatabase(env), query);
 }
 
 // 組織をまたいで読む関数が組み立てる文。実行計画の確認に使う

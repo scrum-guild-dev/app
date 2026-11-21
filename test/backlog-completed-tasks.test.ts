@@ -134,7 +134,7 @@ describe('backlog-completed-tasks', () => {
     else expect(output.next).toEqual({ completed_at: output.tasks.at(-1)!.completed_at, id: output.tasks.at(-1)!.id });
   });
 
-  test('ANALYZE の後も、親なしは tasks_workspace_tray、ストーリーの配下は tasks_story で引く', async () => {
+  test('ANALYZE の後も、親なしは tasks_workspace_tray、ストーリーの配下は story_id の索引で引く', async () => {
     const target = await createTarget();
     const owner = target.admin.userId!;
     // ストーリーごとの行が少なく、親なしの行が多い形。ANALYZE の後、tasks_story の統計は story_id の NULL を別々の値と数える
@@ -157,7 +157,9 @@ describe('backlog-completed-tasks', () => {
     const storyPlan = (
       await queryPlanForTest(env, completedTasksStatement(db, target.workspace.id, story.id, undefined, 20))
     ).join('\n');
-    expect(storyPlan).toMatch(/USING INDEX tasks_story \(story_id=\?\)/);
+    expect(storyPlan).toMatch(
+      /USING INDEX tasks_story(?: \(story_id=\?\)|_fk \(story_id=\? AND deleted_at=\? AND completed_at>\?\))/,
+    );
     expect(storyPlan).not.toContain('tasks_workspace_tray');
   });
 

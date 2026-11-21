@@ -349,40 +349,52 @@ describe('外部キー', () => {
     await expect(insertUser(id()).result).rejects.toThrow(/FOREIGN KEY/);
   });
 
-  // 待っていた users の行を消すとき（Google の招待で同じ sub の行と統合する）、外部キーの検査が子の表を全件読まないこと
-  test('users の行を消す文は、users を指すどの列も索引で引く', async () => {
+  test('親の行を消す文は、外部キーの検査で子の行を索引で引く', async () => {
     // D1 は pragma_foreign_key_list を表の列で結合すると断るので、表ごとに引く
     const { results: tables } = await env.DB.prepare(
       `SELECT name FROM sqlite_master WHERE type = 'table' AND substr(name, 1, 7) <> 'sqlite_' AND substr(name, 1, 4) <> '_cf_'`,
     ).all<{ name: string }>();
-    const children: string[] = [];
+    const childrenByParent = new Map<string, string[]>();
     for (const { name } of tables) {
-      const { results: keys } = await env.DB.prepare(`SELECT "table" AS parent FROM pragma_foreign_key_list(?)`)
+      const { results: keys } = await env.DB.prepare(
+        `SELECT "table" AS parent, "from" AS child_column, "to" AS parent_column, seq FROM pragma_foreign_key_list(?)`,
+      )
         .bind(name)
-        .all<{ parent: string }>();
-      children.push(...keys.filter((key) => key.parent === 'users').map(() => name));
+        .all<{ parent: string; child_column: string; parent_column: string; seq: number }>();
+      for (const { parent, child_column, parent_column, seq } of keys) {
+        // 親の DELETE は単列の id を条件にする。別の参照先や複合外部キーを足すときは検査も広げる。
+        expect([parent_column, seq], `${name}.${child_column} → ${parent}`).toEqual(['id', 0]);
+        const children = childrenByParent.get(parent) ?? [];
+        children.push(`${name}.${child_column}`);
+        childrenByParent.set(parent, children);
+      }
     }
-    const { results: plan } = await env.DB.prepare(`EXPLAIN QUERY PLAN DELETE FROM users WHERE id = ?`)
-      .bind(id())
-      .all<{ detail: string }>();
-    const details = plan.map((row) => row.detail);
 
-    expect(details).toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(
-          /^SEARCH xp_grants USING (COVERING )?INDEX xp_grants_user_(workspace_amount|confirmed) \(user_id=\?\)$/,
-        ),
-      ]),
-    );
-    expect(details.filter((detail) => detail.startsWith('SCAN '))).toEqual([]);
-    // その場で作る索引（AUTOMATIC）でなく、張った索引で引くこと
-    expect(details.filter((detail) => !/^SEARCH \w+ USING (COVERING )?INDEX \w+ /.test(detail))).toEqual([]);
-    // 外部キーの列ごとに1行ずつ SEARCH が出る。実行計画が検査を載せなくなったら、上の確かめが空振りするので数も見る
-    const searched = details
-      .map((detail) => /^SEARCH (\w+) /.exec(detail)?.[1])
-      .filter((table) => table !== undefined && table !== 'users');
-    expect(children.length).toBeGreaterThan(0);
-    expect(searched.sort()).toEqual(children.sort());
+    expect(childrenByParent.has('users')).toBe(true);
+    for (const [parent, children] of childrenByParent) {
+      const { results: plan } = await env.DB.prepare(
+        `EXPLAIN QUERY PLAN DELETE FROM "${parent.replaceAll('"', '""')}" WHERE id = ?`,
+      )
+        .bind(id())
+        .all<{ detail: string }>();
+      const details = plan.map((row) => row.detail);
+      // 全件走査や一時索引ではなく、親の主キーと子の各外部キーを既存の索引で引くこと。
+      // 表名と列名を照合し、実行計画に検査が出なくなった場合も拾う。
+      const searched = details.map((detail) =>
+        /^SEARCH (\w+) USING (?:COVERING )?INDEX \w+ \((\w+)=\?\)$/.exec(detail)?.slice(1).join('.'),
+      );
+      expect(searched.sort(), details.join('\n')).toEqual([`${parent}.id`, ...children].sort());
+
+      if (parent === 'users') {
+        expect(details).toEqual(
+          expect.arrayContaining([
+            expect.stringMatching(
+              /^SEARCH xp_grants USING (COVERING )?INDEX xp_grants_user_(workspace_amount|confirmed) \(user_id=\?\)$/,
+            ),
+          ]),
+        );
+      }
+    }
   });
 
   // 外部キーの検査の索引が、担当の未完了のタスク（今日やること、積載量）も引く。完了した行と消した行を読まないこと

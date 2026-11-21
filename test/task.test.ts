@@ -319,16 +319,21 @@ describe('task-create の親のストーリー', () => {
     });
     const first = await create(target, { story_id: story.id });
     const second = await create(target, { story_id: story.id, title: '請求書を出す' });
+    const third = await create(target, { story_id: story.id, title: '入金を確かめる' });
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
+    expect(third.status).toBe(200);
     const firstId = ((await first.json()) as { task: { id: string } }).task.id;
     const secondId = ((await second.json()) as { task: { id: string } }).task.id;
 
+    const thirdId = ((await third.json()) as { task: { id: string } }).task.id;
+
     // 別のストーリーの position の影響を受けず、親ごとに a0 から並ぶ
     const under = await tasksUnder(target, story.id);
-    expect(under.map((row) => row.id)).toEqual([firstId, secondId]);
+    expect(under.map((row) => row.id)).toEqual([firstId, secondId, thirdId]);
     expect(under[0]!.position).toBe('a0');
     expect(under[1]!.position > under[0]!.position).toBe(true);
+    expect(under[2]!.position > under[1]!.position).toBe(true);
     expect(await tasksUnder(target, null)).toEqual([]);
 
     const logs = (await recordsOf(target, firstId)).logs;
