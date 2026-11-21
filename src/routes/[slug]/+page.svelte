@@ -272,7 +272,7 @@
 
 <!-- 依頼中の行（delegated）は、人に振ったものを確かめる行なので、今日やるの印のボタンを出さず、依頼先の名前を注記に出す -->
 {#snippet rows(list: TodayTask[], options: { done?: boolean; markDueToday?: boolean; delegated?: boolean } = {})}
-  <div class="book">
+  <div class="book is-compact">
     {#each list as task (task.id)}<TaskEntry
         task={taskOf(task)}
         done={options.done ?? false}

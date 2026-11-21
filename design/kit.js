@@ -771,7 +771,7 @@
   // opts.empty があれば、空のときに台帳の代わりに出す（emptyState で作る）
   function book(list, opts = {}) {
     if (!list.length && opts.empty) return opts.empty;
-    return `<div class="book">${list.length ? list.map((x) => entry(x, opts)).join("") : `<div class="book-empty">ありません</div>`}</div>`;
+    return `<div class="book${opts.compact ? " is-compact" : ""}">${list.length ? list.map((x) => entry(x, opts)).join("") : `<div class="book-empty">ありません</div>`}</div>`;
   }
   // 空の状態。何が出る場所かと、次に何をすればよいかを書く。actions は押す操作の HTML。
   // title と text も HTML として埋め込むので、利用者のデータは esc してから渡す

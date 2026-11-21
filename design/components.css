@@ -1506,6 +1506,16 @@ label.pick-row:hover { background: var(--color-accent-soft); }
   .content { gap: var(--space-6); }
   .page-head { padding-bottom: var(--space-4); }
   .entry { padding-block: var(--space-2); min-height: 48px; }
+  /* 組織ホームの台帳は、題に 12rem を取り、操作は右の列の中で折り返す。
+     左の印・余白・列の間の 80px に加え、右の印と文字に 2rem、印の内側の余白などに 24px を見込む。
+     文字を拡大してこれらの幅を取れない場合は、操作を題の下に置く。 */
+  @container book (440px < width <= 520px) and (min-width: calc(14rem + 104px)) {
+    .book.is-compact > .entry {
+      grid-template-columns: var(--grip-col, ) 32px minmax(12rem, 1fr) minmax(0, max-content);
+    }
+    .book.is-compact > .entry .entry-end { grid-column: auto; justify-content: flex-end; }
+    .book.is-compact > .entry .entry-end .chip { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  }
   .tree-row { padding-block: var(--space-2); }
   .table th, .table td { padding-block: var(--space-2); }
   .board-col { padding-block: var(--space-2); }

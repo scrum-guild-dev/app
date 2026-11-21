@@ -7,24 +7,26 @@ test.beforeEach(async ({ context, baseURL }) => {
   await signIn(context, baseURL, 'admin');
 });
 
-test('今日の行は広い幅で横に並び、390pxでは折り返す（#1003）', async ({ page }) => {
+test('組織ホームの今日の行は1280pxでも横に並び、390pxでは折り返す（#1372）', async ({ page }) => {
   await page.goto('/aoba');
   const row = page.locator('.book .entry').first();
   await expect(row).toBeVisible();
   for (const theme of A11Y_THEMES) {
     await applyTheme(page, theme);
     for (const width of [1440, 1280, 900, 390]) {
-      await page.setViewportSize({ width, height: 900 });
+      await page.setViewportSize({ width, height: 800 });
       const main = await row.locator('.entry-main').boundingBox();
       const end = await row.locator('.entry-end').boundingBox();
       expect(main).not.toBeNull();
       expect(end).not.toBeNull();
-      // 今日の行は、組織のホームの左の列（ダッシュボードの左3、右2の左。面の内側は --space-6）に入る。右の列の幅を空けるので、
-      // メニューを開いた状態では、幅が約 1284px を下回ると台帳の内側が折り返しの境（520px）を下回り、操作が題の下へ折り返す。
-      // 1280px（PC の代表幅）の折り返しは、人が見本で判断する前の今の状態を固定する期待で、直すと決めたらこの期待を変える。
-      // 境に近い幅（1300px など）の余裕は、余白の段や字形で数 px 動くので確かめない（脆いテストになる）。
-      // 横並びの確かめは、余裕のある 1440px（台帳 612px）で行う
-      if (width >= 1440) {
+      if (width >= 1280) {
+        if (width === 1280) {
+          const minimum = await page.evaluate(
+            () => parseFloat(getComputedStyle(document.documentElement).fontSize) * 12,
+          );
+          expect(main!.width, `${theme}/${width}: 題の幅`).toBeGreaterThanOrEqual(minimum);
+          await expect(row.locator('.entry-end')).toHaveCSS('flex-wrap', 'wrap');
+        }
         expect(end!.x, `${theme}/${width}: 操作が題の右に並ぶ`).toBeGreaterThanOrEqual(main!.x + main!.width);
         expect(end!.y).toBeLessThan(main!.y + main!.height);
       } else {
@@ -35,9 +37,10 @@ test('今日の行は広い幅で横に並び、390pxでは折り返す（#1003�
   }
 });
 
-test('台帳は520px、木は640pxを境にタスクの右端を折り返す（#1003）', async ({ page }) => {
+test('組織ホームの台帳、通常の台帳、木はそれぞれの境界で右端を折り返す', async ({ page }) => {
   for (const [path, selector, boundary] of [
-    ['/aoba', '.book', 520],
+    ['/aoba', '.book.is-compact', 440],
+    [`${WORKSPACE}/inbox`, '.book', 520],
     [WORKSPACE, '.tree', 640],
   ] as const) {
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -56,8 +59,31 @@ test('台帳は520px、木は640pxを境にタスクの右端を折り返す（#
       expect(main).not.toBeNull();
       expect(end).not.toBeNull();
       expect(end!.y >= main!.y + main!.height).toBe(width === boundary);
+      if (path === '/aoba' && width > boundary) {
+        const minimum = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize) * 12);
+        expect(main!.width).toBeGreaterThanOrEqual(minimum);
+        expect(end!.x).toBeGreaterThanOrEqual(main!.x + main!.width);
+      }
     }
   }
+});
+
+test('文字を200%に拡大して題と操作が収まらないときは、操作を題の下に置く', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/aoba');
+  const list = page.locator('.book.is-compact').first();
+  const row = list.locator('.entry').first();
+  await expect(row).toBeVisible();
+  await list.evaluate((el) => {
+    document.documentElement.style.fontSize = '200%';
+    el.style.boxSizing = 'content-box';
+    el.style.width = '504px';
+  });
+  const main = await row.locator('.entry-main').boundingBox();
+  const end = await row.locator('.entry-end').boundingBox();
+  expect(main).not.toBeNull();
+  expect(end).not.toBeNull();
+  expect(end!.y).toBeGreaterThanOrEqual(main!.y + main!.height);
 });
 
 for (const path of ['/aoba', '/aoba/me', '/aoba/wiki']) {

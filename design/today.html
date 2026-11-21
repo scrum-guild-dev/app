@@ -41,6 +41,7 @@ SQ.mount("today", () => {
   const restList = open.filter((x) => !x.todayOn && !isOverdue(x) && !inWeek(x) && x.sprint && D.sprints[x.sprint].status === "active").sort(byDue);
   const doneList = mine.filter((x) => x.doneAt && x.doneAt.startsWith("10/20")).sort(byDue);
   const opts = {
+    compact: true,
     showWs: true, showSprint: true, showAssignee: { labelled: true },
     showParent: false, showStatus: false, showCarry: false, showCategory: false,
     meta: (x) => carryDays(x) ? `<span class="props-note">${carryDays(x)}日前に印を付けた</span>` : "",
