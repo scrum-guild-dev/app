@@ -529,8 +529,8 @@ async function expectDrawerToolsApart(
         closeBox!.y + closeBox!.h <= other.y;
       expect(apart, `${theme}: 閉じるボタンと隣のボタンの箱が交わる`).toBe(true);
     }
-    // 閉じるは帯の 1 段目（先頭の印と同じ段）の右端に残る（前後と開き方が 2 段目に落ちても、閉じるを探さない）
-    await expect(drawer.locator('.drawer-top .chip').first()).toBeVisible();
+    // 閉じるは帯の先頭にあるお気に入りか状態の印と同じ段の右端に残る
+    await expect(drawer.locator('.drawer-top > :first-child')).toBeVisible();
     const rows = await drawer.evaluate((root) => {
       const close = root.querySelector('.drawer-close')!.getBoundingClientRect();
       const first = root.querySelector('.drawer-top > :first-child')!.getBoundingClientRect();

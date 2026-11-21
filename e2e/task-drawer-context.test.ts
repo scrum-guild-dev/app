@@ -133,7 +133,7 @@ test('今日やるの遅い応答で担当変更後の印を戻さない', async
 });
 
 for (const width of [390, 1280]) {
-  test(`長い列名が引き出しからはみ出さない（${width}px）`, async ({ page }) => {
+  test(`本文が属性より上にあり、長い列名が属性の行に収まる（${width}px）`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await createWorkspace(page, '引き出しの長い列');
     await addTaskRow(page, '長い列を読む');
@@ -143,10 +143,35 @@ for (const width of [390, 1280]) {
     }));
     await page.getByRole('link', { name: '長い列を読む', exact: true }).click();
     const drawer = page.getByRole('dialog', { name: '長い列を読む' });
-    await expect(drawer.locator('.status-dot')).toHaveText('長い列の名前'.repeat(5));
+    const title = drawer.getByRole('heading', { name: /長い列を読む/ });
+    const body = drawer.getByRole('button', { name: '本文を書く', exact: true });
+    const label = drawer.locator('.props dt').filter({ hasText: /^列$/ });
+    const value = drawer.locator('.props .status-dot');
+    await expect(value).toHaveText('長い列の名前'.repeat(5));
+
+    const [titleBox, bodyBox, labelBox, valueBox] = await Promise.all(
+      [title, body, label, value].map((element) => element.boundingBox()),
+    );
+    if (!titleBox || !bodyBox || !labelBox || !valueBox) throw new Error('タスクの詳細が表示されていません');
+    expect(titleBox.y + titleBox.height).toBeLessThan(bodyBox.y);
+    expect(bodyBox.y + bodyBox.height).toBeLessThan(labelBox.y);
+    expect(labelBox.x + labelBox.width).toBeLessThan(valueBox.x);
+    expect(labelBox.y).toBeLessThan(valueBox.y + valueBox.height);
+    expect(valueBox.y).toBeLessThan(labelBox.y + labelBox.height);
     await expect
       .poll(() => drawer.locator('.props').evaluate((element) => element.scrollWidth - element.clientWidth))
       .toBeLessThanOrEqual(1);
+    // 空欄には編集面の点線を残し、本文リンクのフォーカスの輪郭が入る余白を取る。
+    const editSurface = drawer
+      .locator('.edit-surface')
+      .filter({ has: page.getByRole('button', { name: '本文を書く', exact: true }) });
+    await expect(editSurface).toHaveCSS('border-top-style', 'dashed');
+    await expect(editSurface).not.toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+    await expect(editSurface.locator('.doc-box')).toHaveCSS('padding-left', '4px');
+    await expect(editSurface.locator('.doc-box')).toHaveCSS('padding-right', '4px');
+    // 鉛筆を添えた欄名からも本文を書き始められる。
+    await body.click({ position: { x: 8, y: 8 } });
+    await expect(drawer.getByRole('textbox', { name: '本文', exact: true })).toBeFocused();
   });
 }
 

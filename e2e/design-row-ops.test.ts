@@ -396,6 +396,23 @@ test('見本のバックログ: 下の行を先に、上の行を後に消し、
   expect(errors).toEqual([]);
 });
 
+test('見本の引き出し: タスクの本文だけを枠なしにし、欄名に鉛筆を添える', async ({ page }) => {
+  const errors = await openCatalog(page, 'backlog.html?task=t1');
+  const drawer = page.locator('#drawer');
+  const body = drawer.locator('.field:has(#drawer-edit-body)');
+  const pen = body.locator('label[for="drawer-edit-body"] use[href="#i-pen"]');
+  await expect(body).toHaveClass(/is-unboxed/);
+  await expect(pen).toHaveCount(1);
+
+  for (const query of ['story=s4', 'epic_id=e1']) {
+    await page.goto(`/__design-catalog/backlog.html?${query}`);
+    await expect(drawer.locator('#drawer-edit-body')).toBeVisible();
+    await expect(body).toHaveClass('field');
+    await expect(pen).toHaveCount(0);
+  }
+  expect(errors).toEqual([]);
+});
+
 test('見本のバックログ: ?story=<ID> で、ストーリーの引き出しが直接開く', async ({ page }) => {
   const errors = await openCatalog(page, 'backlog.html');
   await page.goto('/__design-catalog/backlog.html?story=s4');

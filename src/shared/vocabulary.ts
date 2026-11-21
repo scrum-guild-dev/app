@@ -2167,7 +2167,6 @@ export const dictionary = defineDictionary({
   drawerAtLast: '最後です',
   // ストーリーの引き出しから親（エピック）を移した知らせ
   storyParentMoved: '{story}の親を移しました',
-  taskManualChip: '手で作った{task}',
   taskImportedChip: '取り込んだ{task}',
   taskDrawerLoadFailed: 'この{task}を読み込めませんでした。もう一度試してください。',
   // タイトルとリンクの値のボタンの、読み上げに添える文（押すと入力欄になる）

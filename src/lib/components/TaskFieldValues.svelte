@@ -138,7 +138,7 @@
 {/snippet}
 
 {#each fields as field (field.id)}
-  <div class="field" data-field-id={field.id}>
+  <div class="field is-unboxed" data-field-id={field.id}>
     {#if canWrite}
       <AutoSaveEdit
         value={field.value_md ?? ''}
@@ -153,7 +153,6 @@
         onbegin={(started) => bases.begin(field.id, normalizeLongText(started))}
       >
         {#snippet view(begin)}
-          {@render label(field)}
           <!-- 描いた値そのものを押せば書ける。面いっぱいに透明なボタンを敷き、キーボードと読み上げの入口にする（値の中のリンクは上に重なり、押せるまま） -->
           <div class="edit-surface" onclick={(event) => beginFromSurface(event, begin)} role="presentation">
             <button class="edit-surface-button" type="button" onclick={begin}
@@ -161,7 +160,10 @@
                 ? t('fieldValueWriteLabel', { field: field.name })
                 : t('fieldValueRewriteLabel', { field: field.name })}</button
             >
-            <div class="edit-surface-body">{@render valueView(field)}</div>
+            <div class="edit-surface-body">
+              {@render label(field)}
+              {@render valueView(field)}
+            </div>
           </div>
         {/snippet}
       </AutoSaveEdit>
