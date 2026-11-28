@@ -17,10 +17,21 @@ major="${version%%.*}"
 [[ "$major" =~ ^[0-9]+$ ]] || exit 0
 
 bin="${root}/node${major}/bin"
-# 固まった node でセッションの開始を止めないよう、timeout があれば 5 秒で切る（macOS には標準で無いので、無ければそのまま走らせる）
-limit=()
-command -v timeout >/dev/null 2>&1 && limit=(timeout 5)
-got=$("${limit[@]}" "${bin}/node" --version 2>/dev/null) || exit 0
+# 固まった node でセッションの開始を止めないよう、5 秒で切る。timeout があればそれを使い、
+# 無ければ（macOS には標準で無い）bash の組み込みだけで切る（read -t で待ち、過ぎたら node を止める。bash 3.2 でも動く）
+if command -v timeout >/dev/null 2>&1; then
+  got=$(timeout 5 "${bin}/node" --version 2>/dev/null) || exit 0
+else
+  # 裏の副シェルが node を走らせ、1行目に node の PID、2行目に版を書く
+  exec 3< <(exec 2>/dev/null; "${bin}/node" --version & echo "$!"; wait)
+  pid=""
+  got=""
+  read -r -t 5 -u 3 pid || { exec 3<&-; exit 0; }
+  read -r -t 5 -u 3 got
+  # 終了コードで切れたかを見分けない（bash 3.2 は切れても 128 以下を返しうる）。終わっていれば kill は何もしない
+  kill "$pid" 2>/dev/null
+  exec 3<&-
+fi
 [[ "$got" == "v${major}."* ]] || exit 0
 
 # 同じ行を二重に書かない（再開や clear でもう一度走る）

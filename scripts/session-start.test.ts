@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -163,6 +164,77 @@ describe('session-start.sh', () => {
     assert.equal(r.status, 0);
     assert.ok(Date.now() - start < 15000);
     assert.equal(existsSync(f.envFile), false);
+  });
+
+  // timeout の無い環境（macOS の標準）。PATH から timeout を外し、bash の組み込みだけの上限が働くことを確かめる
+  describe('timeout が PATH に無いとき', () => {
+    // PATH から外す前に、bash の場所を絶対パスで引く
+    const bashPath = spawnSync('sh', ['-c', 'command -v bash'], { encoding: 'utf8' }).stdout.trim();
+
+    function pathWithoutTimeout() {
+      const dir = mkdtempSync(join(tmpdir(), 'session-start-path-'));
+      dirs.push(dir);
+      for (const name of ['sh', 'head', 'tr', 'tail', 'grep', 'dirname', 'sleep']) {
+        const found = (process.env.PATH ?? '')
+          .split(':')
+          .map((p) => join(p, name))
+          .find((p) => existsSync(p));
+        assert.ok(found, `${name} が PATH に無い`);
+        symlinkSync(found, join(dir, name));
+      }
+      for (const name of ['timeout', 'gtimeout']) assert.equal(existsSync(join(dir, name)), false);
+      return dir;
+    }
+
+    function runWithoutTimeout(f: { project: string; root: string; envFile: string }, timeout?: number) {
+      const env = {
+        PATH: pathWithoutTimeout(),
+        CLAUDE_PROJECT_DIR: f.project,
+        BANMEN_NODE_ROOT: f.root,
+        CLAUDE_ENV_FILE: f.envFile,
+      };
+      const probe = spawnSync('sh', ['-c', 'command -v timeout'], { env, encoding: 'utf8' });
+      assert.notEqual(probe.status, 0, 'timeout が PATH に残っている');
+      return spawnSync(bashPath, [script], { env, encoding: 'utf8', timeout });
+    }
+
+    test('動く node なら、PATH の行を書く', () => {
+      const f = fixture({ nodeVersion: '26', fakeNode: { major: '26', prints: 'v26.13.1' } });
+      const r = runWithoutTimeout(f);
+      assert.equal(r.status, 0);
+      assert.equal(readFileSync(f.envFile, 'utf8'), `export PATH="${f.root}/node26/bin:$PATH"\n`);
+    });
+
+    test('版が合わなければ何も書かない', () => {
+      const f = fixture({ nodeVersion: '26', fakeNode: { major: '26', prints: 'v22.23.5' } });
+      assert.equal(runWithoutTimeout(f).status, 0);
+      assert.equal(existsSync(f.envFile), false);
+    });
+
+    test('node が固まっても、5 秒前後で戻り、何も書かず、node を止める', () => {
+      const f = fixture({ nodeVersion: '26', fakeNode: { major: '26', prints: 'v26.13.1' } });
+      const pidFile = join(f.root, 'node.pid');
+      writeFileSync(join(f.root, 'node26', 'bin', 'node'), `#!/bin/sh\necho $$ > '${pidFile}'\nexec sleep 30\n`);
+      const start = Date.now();
+      const r = runWithoutTimeout(f, 20000);
+      const elapsed = Date.now() - start;
+      assert.equal(r.status, 0);
+      assert.equal(r.stderr, '');
+      assert.ok(elapsed >= 4500 && elapsed < 12000, `${elapsed}ms`);
+      assert.equal(existsSync(f.envFile), false);
+      // 上限で node を止めている（止めていなければ、30 秒の sleep が生きている）
+      const pid = Number(readFileSync(pidFile, 'utf8'));
+      let alive = true;
+      for (let i = 0; i < 20 && alive; i++) {
+        try {
+          process.kill(pid, 0);
+          spawnSync('sleep', ['0.1']);
+        } catch {
+          alive = false;
+        }
+      }
+      assert.equal(alive, false, 'node が残っている');
+    });
   });
 
   // settings.json の command そのものを sh -c で走らせる（綴りやクォートの誤りも落とす）
