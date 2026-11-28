@@ -23,15 +23,14 @@ if command -v timeout >/dev/null 2>&1; then
   got=$(timeout 5 "${bin}/node" --version 2>/dev/null) || exit 0
 else
   # 裏の副シェルが node を走らせ、1行目に node の PID、2行目に版を書く
-  exec 3< <("${bin}/node" --version 2>/dev/null & echo "$!"; wait)
+  exec 3< <(exec 2>/dev/null; "${bin}/node" --version & echo "$!"; wait)
   pid=""
   got=""
-  read -r -t 5 -u 3 pid || exit 0
+  read -r -t 5 -u 3 pid || { exec 3<&-; exit 0; }
   read -r -t 5 -u 3 got
-  if [ $? -gt 128 ]; then
-    kill "$pid" 2>/dev/null
-    exit 0
-  fi
+  # 終了コードで切れたかを見分けない（bash 3.2 は切れても 128 以下を返しうる）。終わっていれば kill は何もしない
+  kill "$pid" 2>/dev/null
+  exec 3<&-
 fi
 [[ "$got" == "v${major}."* ]] || exit 0
 

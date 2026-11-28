@@ -179,13 +179,14 @@ describe('session-start.sh', () => {
           .split(':')
           .map((p) => join(p, name))
           .find((p) => existsSync(p));
-        if (found) symlinkSync(found, join(dir, name));
+        assert.ok(found, `${name} が PATH に無い`);
+        symlinkSync(found, join(dir, name));
       }
       for (const name of ['timeout', 'gtimeout']) assert.equal(existsSync(join(dir, name)), false);
       return dir;
     }
 
-    function runWithoutTimeout(f: { project: string; root: string; envFile: string }) {
+    function runWithoutTimeout(f: { project: string; root: string; envFile: string }, timeout?: number) {
       const env = {
         PATH: pathWithoutTimeout(),
         CLAUDE_PROJECT_DIR: f.project,
@@ -194,7 +195,7 @@ describe('session-start.sh', () => {
       };
       const probe = spawnSync('sh', ['-c', 'command -v timeout'], { env, encoding: 'utf8' });
       assert.notEqual(probe.status, 0, 'timeout が PATH に残っている');
-      return spawnSync(bashPath, [script], { env, encoding: 'utf8' });
+      return spawnSync(bashPath, [script], { env, encoding: 'utf8', timeout });
     }
 
     test('動く node なら、PATH の行を書く', () => {
@@ -210,14 +211,29 @@ describe('session-start.sh', () => {
       assert.equal(existsSync(f.envFile), false);
     });
 
-    test('node が固まっても、上限で戻り何も書かない', () => {
+    test('node が固まっても、5 秒前後で戻り、何も書かず、node を止める', () => {
       const f = fixture({ nodeVersion: '26', fakeNode: { major: '26', prints: 'v26.13.1' } });
-      writeFileSync(join(f.root, 'node26', 'bin', 'node'), '#!/bin/sh\nsleep 30\n');
+      const pidFile = join(f.root, 'node.pid');
+      writeFileSync(join(f.root, 'node26', 'bin', 'node'), `#!/bin/sh\necho $$ > '${pidFile}'\nexec sleep 30\n`);
       const start = Date.now();
-      const r = runWithoutTimeout(f);
+      const r = runWithoutTimeout(f, 20000);
+      const elapsed = Date.now() - start;
       assert.equal(r.status, 0);
-      assert.ok(Date.now() - start < 15000);
+      assert.equal(r.stderr, '');
+      assert.ok(elapsed >= 4500 && elapsed < 12000, `${elapsed}ms`);
       assert.equal(existsSync(f.envFile), false);
+      // 上限で node を止めている（止めていなければ、30 秒の sleep が生きている）
+      const pid = Number(readFileSync(pidFile, 'utf8'));
+      let alive = true;
+      for (let i = 0; i < 20 && alive; i++) {
+        try {
+          process.kill(pid, 0);
+          spawnSync('sleep', ['0.1']);
+        } catch {
+          alive = false;
+        }
+      }
+      assert.equal(alive, false, 'node が残っている');
     });
   });
 
